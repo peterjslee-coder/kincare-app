@@ -16,8 +16,8 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       <section className="hero-section" style={{ position: 'relative', overflow: 'hidden', minHeight: '600px' }}>
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundImage: 'url(https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=1600&q=80)',
-          backgroundSize: 'cover', backgroundPosition: 'center 30%',
+          backgroundImage: 'url(https://images.unsplash.com/photo-1556911220-bff31c812dba?w=1600&q=80)',
+          backgroundSize: 'cover', backgroundPosition: 'center 40%',
           filter: 'brightness(0.35)',
         }}></div>
         <div className="hero-content" style={{ position: 'relative', zIndex: 1, maxWidth: '900px' }}>
@@ -68,15 +68,15 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       {/* ── Photo Strip ── */}
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0', height: '300px', overflow: 'hidden' }}>
         <div style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1447005497901-b3e9ee359928?w=600&q=80)',
+          backgroundImage: 'url(https://images.unsplash.com/photo-1577368211130-4bbd0181ddf0?w=600&q=80)',
           backgroundSize: 'cover', backgroundPosition: 'center',
         }}></div>
         <div style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1517483000871-1dbf64a6e1c6?w=600&q=80)',
-          backgroundSize: 'cover', backgroundPosition: 'center',
+          backgroundImage: 'url(https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=600&q=80)',
+          backgroundSize: 'cover', backgroundPosition: 'center 30%',
         }}></div>
         <div style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1476900164809-ff19b8ae5968?w=600&q=80)',
+          backgroundImage: 'url(https://images.unsplash.com/photo-1559234938-b60fff04894d?w=600&q=80)',
           backgroundSize: 'cover', backgroundPosition: 'center 20%',
         }}></div>
       </section>
@@ -162,7 +162,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         <div style={{ maxWidth: '800px', margin: '0 auto', display: 'grid', gridTemplateColumns: '200px 1fr', gap: '48px', alignItems: 'center' }}>
           <div style={{
             width: '200px', height: '200px', borderRadius: '50%', overflow: 'hidden',
-            backgroundImage: 'url(https://images.unsplash.com/photo-1581579438747-104c53d7fbc4?w=400&q=80)',
+            backgroundImage: 'url(https://images.unsplash.com/photo-1543269865-cbf427effbad?w=400&q=80)',
             backgroundSize: 'cover', backgroundPosition: 'center',
             border: '4px solid #1b6b5a',
           }}></div>
