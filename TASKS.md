@@ -45,6 +45,9 @@
 
 ## Done
 
+### Splash Page Redesign (v0.3.2)
+- [x] **Investor pitch landing page:** Rewrote splash page to read like an elevator pitch — market stats ($470B, 53M, 10K boomers/day), problem/solution framing, business model (20% commission, $45-85 sessions), personal story, vision (operating system for aging in place), Unsplash photos of seniors at home.
+
 ### Batch 2: UI & Scheduling (v0.3.1)
 - [x] **Multiple emergency contacts:** CRUD for emergency contacts on care profiles. Betty has 4: Pete (primary), Susan Lee-Park, David Lee, Dr. Anita Sharma. Add/edit/delete inline.
 - [x] **Calendar view with saturation shading:** Month grid with teal heat map based on care hours. Legend, month navigation, summary bar.

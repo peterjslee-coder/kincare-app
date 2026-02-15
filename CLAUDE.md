@@ -4,154 +4,159 @@
 
 KinCare is an on-demand care coordination platform connecting families with professional caregivers for elderly/parent care. Think "Uber for home caregiving." The primary user is Pete Lee, who is managing care for his mother Betty Lee (78, early-stage dementia, mild arthritis) in Blacksburg, VA.
 
-## Production Direction
-
-**The goal is a real app on a phone for beta testing.** Everything we build should move toward this. Specifically:
-
-- **Real users:** Beta will start with family/friends — possibly a real caretaker or one of us under a pseudonym. Accounts must persist across deploys and future iterations. No more throwaway demo-only data patterns.
-- **Secure auth:** Current JWT + bcrypt is a reasonable starting point, but needs to graduate to a production auth service (e.g., Auth0, Clerk, Supabase Auth, or Firebase Auth) before real users touch it. Password reset, email verification, and session management are non-negotiable.
-- **Payments:** Must integrate a real payment processor (Stripe Connect is the likely choice — supports marketplace payouts to caregivers). The `payments` table exists but nothing is wired yet.
-- **Location services:** Leaflet/OpenStreetMap is fine for display, but real caregiver matching needs geocoding (Mapbox or Google Maps API) and distance calculation.
-- **Mobile-first:** The app needs to work on phones. Current sidebar layout won't cut it. Plan for either a PWA (progressive web app) or React Native wrapper. The backend API is already phone-ready — it's the frontend that needs to adapt.
-- **Database migration:** SQLite works for dev/demo but won't survive concurrent users. PostgreSQL migration is on the horizon (Railway supports it natively).
-
-**Guiding principle:** Don't build shiny demo features that require complete overhaul. Every decision should be compatible with — or at least not block — the production path above.
-
-## Tech Stack
-
-- **Backend:** Node.js + Express (v4), port 3001
-- **Database:** SQLite via sql.js (zero native deps, file-based at `./kincare.db`) — will migrate to PostgreSQL for production
-- **Auth:** JWT tokens (7-day expiry), bcryptjs for password hashing — will migrate to production auth service
-- **Frontend:** Modular React SPA (via CDN — React 18, ReactDOM, Babel standalone). No build step — Babel compiles JSX in-browser.
-- **Maps:** Leaflet.js + OpenStreetMap (CDN) for interactive maps
-- **Deployment:** Railway.app (NIXPACKS builder), auto-deploys on push to main
-- **IDs:** UUID v4 for all entities
-
 ## Live Demo
 
 https://kincare-app-production.up.railway.app
 
-Demo logins: pete@kincare.app / maria@kincare.app / betty@kincare.app (all use `kincare123`)
+## Tech Stack
+
+- **Backend:** Node.js + Express (v4), port 3001
+- **Database:** SQLite via sql.js (zero native deps, file-based at `./kincare.db`)
+- **Auth:** JWT tokens (7-day expiry), bcryptjs for password hashing
+- **Frontend:** Modular React SPA (via CDN — React 18, ReactDOM, Babel standalone). No build step — Babel compiles JSX in-browser.
+- **Deployment:** Railway.app (NIXPACKS builder)
+- **IDs:** UUID v4 for all entities
 
 ## Project Structure
 
 ```
 kincare-repo/
-├── CLAUDE.md                  ← You are here — project context & production direction
-├── TASKS.md                   ← Task tracking (bugs, features, done)
-├── ROADMAP.md                 ← Development roadmap & phases
+├── CLAUDE.md                  ← You are here
+├── ROADMAP.md                 ← Development roadmap & task tracking (read this for what's done and what's next)
 ├── README.md                  ← API docs, demo credentials, examples
 ├── package.json               ← Dependencies & scripts
 ├── .env.example               ← Config template (copy to .env for local dev)
+├── .env                       ← Local config (gitignored — auto-created for dev)
 ├── railway.json               ← Railway deployment config
 ├── public/
-│   ├── index.html             ← Shell — loads CSS, Leaflet, React CDN, compiles all JS via Babel
+│   ├── index.html             ← Slim shell (~60 lines) — loads CSS, React CDN, then fetches & compiles all JS
 │   ├── css/
 │   │   └── styles.css         ← All CSS (~1,600 lines)
 │   └── js/
-│       ├── utils.js           ← Shared: apiFetch, setAuthToken, scheduling helpers, caregiver data
-│       ├── app.js             ← Root component: role-based routing, sidebar, page switching
+│       ├── utils.js           ← Shared utilities: apiFetch, setAuthToken, scheduling helpers, caregiver data
+│       ├── app.js             ← App root component: routing, sidebar, page switching, modal management
 │       └── components/
 │           ├── KinCareIcon.js          ← SVG logo component
-│           ├── SplashPage.js           ← Landing page
-│           ├── LoginPage.js            ← Login with demo quick-switch (Pete/Maria/Betty)
-│           ├── RegisterPage.js         ← Multi-step registration wizard
-│           ├── Dashboard.js            ← Pete's family dashboard (API-driven)
-│           ├── CaretakerHub.js         ← Maria's caregiver dashboard
-│           ├── CaredForView.js         ← Betty's limited view (calendar + notes)
-│           ├── AreaMap.js              ← Leaflet/OpenStreetMap with family pins
-│           ├── CareProfile.js          ← Care recipient profile + emergency contacts
-│           ├── Schedule.js             ← Calendar heat map with saturation shading
-│           ├── Caregivers.js           ← Assign/unassign/favorite caregivers
-│           ├── CareRecipients.js       ← Add/edit care recipients
-│           ├── ActivityFeed.js         ← Notification stream
-│           ├── Messages.js             ← Real messaging (database-backed)
-│           ├── MyAccount.js            ← Settings (UI only, not persisted)
-│           ├── RequestCareModal.js     ← Care request wizard
-│           └── CaregiverScheduleModal.js ← Book from caregiver schedule
+│           ├── SplashPage.js           ← Investor pitch landing page (market stats, problem/solution, business model, vision)
+│           ├── LoginPage.js            ← Email/password login form
+│           ├── RegisterPage.js         ← Multi-step registration wizard (family or caregiver)
+│           ├── Dashboard.js            ← Stats cards, upcoming sessions, recent activity
+│           ├── CareProfile.js          ← Editable care recipient profile (Betty's details)
+│           ├── Schedule.js             ← Calendar view of care sessions
+│           ├── Caregivers.js           ← Browse/search caregivers, trigger scheduling modal
+│           ├── CareRecipients.js       ← Add/edit care recipients (CRUD)
+│           ├── ActivityFeed.js         ← Notification stream with mark-as-read
+│           ├── Messages.js             ← Chat UI (client-side mock, no backend yet)
+│           ├── MyAccount.js            ← Settings & notification preferences (UI only)
+│           ├── CaretakerHub.js         ← Caregiver-side dashboard (placeholder)
+│           ├── RequestCareModal.js     ← 5-step care request wizard with caregiver matching
+│           └── CaregiverScheduleModal.js ← View caregiver availability, book from schedule
 └── src/
-    ├── server.js              ← Express app, route mounting, auto-seed on empty DB
-    ├── seed.js                ← Demo data (7 users, 4 caregivers, 19 sessions, 8 emergency contacts)
+    ├── server.js              ← Express app, route mounting, static file serving, auto-seed on empty DB
+    ├── seed.js                ← Demo data (5 users, 4 caregivers, 13 sessions)
     ├── models/
-    │   └── database.js        ← SQLite schema (13 tables), sql.js wrapper
+    │   └── database.js        ← SQLite schema (10 tables), sql.js wrapper
     ├── middleware/
     │   └── auth.js            ← generateToken, authenticate, requireRole
     └── routes/
-        ├── auth.js            ← Register, login, profile
-        ├── careRecipients.js  ← Care recipient CRUD
-        ├── emergencyContacts.js ← Emergency contact CRUD (nested under care-recipients)
-        ├── sessions.js        ← Session booking, matching (favorites-weighted), status
-        ├── caregivers.js      ← Search, profiles
-        ├── assignments.js     ← Caregiver assignments + favorite toggle
-        ├── activity.js        ← Activity feed, visit logs
-        ├── dashboard.js       ← Role-aware aggregated stats
-        ├── messages.js        ← Conversations + send/receive
-        └── notes.js           ← Recipient notes CRUD
+        ├── auth.js            ← POST register, POST login, GET /me
+        ├── careRecipients.js  ← CRUD for care recipients (parents)
+        ├── sessions.js        ← Care session booking, matching, status updates
+        ├── caregivers.js      ← Caregiver search, profiles, profile creation
+        ├── activity.js        ← Activity feed, mark-read, visit log submission
+        └── dashboard.js       ← Aggregated stats & upcoming sessions
 ```
-
-## Three User Roles
-
-| Role | User | Sidebar | Key Features |
-|------|------|---------|-------------|
-| `family` | Pete Lee | Dashboard, Care Profile, Schedule, Caregivers, Activity, Recipients, Messages, Account | Full management — books sessions, assigns caregivers, manages contacts |
-| `caregiver` | Maria Santos | Dashboard, Area Map, Schedule, Messages, Account | Sees assigned families, logs visits, views map, earns payments |
-| `care_for` | Betty Lee | Home, Messages, Account | Calendar of sessions, personal notes, limited access |
-
-## Database Tables (13)
-
-users, care_recipients, caregiver_profiles, availability, care_sessions, visit_logs, visit_photos, activity_feed, reviews, payments, messages, recipient_notes, caregiver_assignments, emergency_contacts
-
-All tables use TEXT primary keys (UUIDs). Timestamps via `datetime('now')`. JSON fields stored as strings — parse with `JSON.parse()` on read.
 
 ## Frontend Architecture
 
-Babel standalone for in-browser JSX transpilation (no build step). `index.html` fetches all JS in parallel, concatenates in dependency order, Babel compiles once. All files share one scope.
+The frontend uses **Babel standalone** for in-browser JSX transpilation (no build step, no bundler). The `index.html` shell fetches all JS files in parallel via `fetch()`, concatenates them in dependency order, and has Babel compile the combined source once. This means all files share one scope after compilation.
 
-**Component pattern:**
+**Pattern for component files:**
 ```javascript
-const MyComponent = window.MyComponent = ({ prop1 }) => { /* ... */ };
+// Each component declares itself AND assigns to window (for individual-file testing)
+const MyComponent = window.MyComponent = ({ prop1, prop2 }) => {
+  // component body using useState, useEffect, apiFetch, etc.
+};
 ```
 
-**Dependency order:** utils.js → KinCareIcon → other components → app.js
+**Dependency order matters:** utils.js → KinCareIcon → other components → app.js. When adding a new component, add it to the `scripts` array in `index.html` before `app.js`.
+
+## Database Tables
+
+users, care_recipients, caregiver_profiles, availability, care_sessions, visit_logs, visit_photos, activity_feed, reviews, payments
+
+All tables use TEXT primary keys (UUIDs). Timestamps are TEXT via `datetime('now')`. JSON fields (health_conditions, medications, specialties, certifications, tasks_completed) are stored as JSON strings — parse with `JSON.parse()` on read.
 
 ## Design System
 
-- Primary: `#1b6b5a` (teal) / Accent: `#e8724a` (orange)
+- Primary color: `#1b6b5a` (teal)
+- Accent color: `#e8724a` (orange)
 - Font: System fonts (-apple-system, BlinkMacSystemFont, Segoe UI, Roboto)
-- Layout: Sidebar (240px) + scrollable main — not yet mobile-responsive
+- Layout: Sidebar (240px) + scrollable main content
+- Mobile: Not currently responsive
+
+## API Patterns
+
+All API responses follow `{ fieldName: value }` or `{ collectionName: [...] }` format. Routes use `authenticate` middleware from `src/middleware/auth.js`. The `req.user` object contains `{ id, email, role }` from the JWT payload.
+
+## Demo Credentials
+
+- **Email:** pete@kincare.app
+- **Password:** kincare123
+- **Role:** family
 
 ## Local Development
 
 ```bash
-npm install          # One time
-npm run dev          # Backend auto-restarts, frontend just refresh browser
-npm run seed         # Reset & populate demo data
+npm install          # Install dependencies (one time)
+npm run dev          # Start server with --watch (auto-restarts on backend changes)
 ```
 
-## Deploying
+Then open `http://localhost:3001` in a browser. That's it — no build step.
 
-Railway auto-deploys on `git push origin main`. Environment variables set in Railway dashboard.
+**Editing frontend:** Change any file in `public/js/` or `public/css/`, then refresh the browser. Babel recompiles on every page load.
 
-**After every push:** Update CLAUDE.md (project structure, version history, known limitations) and TASKS.md (mark completed items, add new bugs/features discovered during development). These files are the project's memory across sessions — if they're stale, the next session starts confused.
+**Editing backend:** Change any file in `src/`, the server auto-restarts via `--watch`.
 
-## Known Limitations (Production Blockers)
+**Resetting demo data:** Run `npm run seed` to wipe the database and repopulate with demo data.
 
-1. **Auth is demo-grade** — No password reset, no email verification, no session invalidation. JWT secret is static.
-2. **SQLite won't scale** — Single-file DB, no concurrent write support. Must migrate to PostgreSQL.
-3. **No payment processing** — Payments table exists but nothing is wired to Stripe or any processor.
-4. **Not mobile-responsive** — Sidebar layout only works on desktop.
-5. **No input validation or rate limiting** — API routes accept anything, no brute-force protection.
-6. **No tests** — Zero test coverage.
-7. **No real-time updates** — Polling only, no WebSocket/SSE.
-8. **MyAccount doesn't persist** — UI only.
-9. **No file uploads** — Visit photos table exists but no upload endpoint.
-10. **Frontend is CDN/Babel** — Works but won't scale to large apps. May need build step eventually.
+**Adding a new component:** Create `public/js/components/NewComponent.js` using the pattern below, then add its path to the `scripts` array in `index.html` (before `app.js`), and reference it in `app.js`.
 
-## Version History
+```javascript
+const NewComponent = window.NewComponent = ({ prop1 }) => {
+  // component body
+};
+```
 
-| Version | Date | Summary |
-|---------|------|---------|
-| 0.1.0 | 2026-02-15 | Initial release — full API, monolithic SPA |
-| 0.2.0 | 2026-02-15 | Frontend modularized — 17 files from 1 |
-| 0.3.0 | 2026-02-15 | Batch 1: Role foundation — 3 logins, messaging, assignments, area map |
-| 0.3.1 | 2026-02-15 | Batch 2: Calendar heat map, emergency contacts, favorites, past sessions |
+## Deploying to Railway
+
+Railway auto-deploys on every `git push origin main`. No build config needed — it runs `npm start`.
+
+Environment variables on Railway are set in the Railway dashboard (not in `.env`). The production JWT_SECRET is different from the local dev one.
+
+```bash
+git add -A && git commit -m "description" && git push origin main
+```
+
+## Scripts
+
+- `npm start` — Production server
+- `npm run dev` — Dev with --watch (backend auto-restart, frontend just refresh browser)
+- `npm run seed` — Reset & populate demo data
+- `npm run setup` — Seed + start combined
+
+## Archive
+
+The `archive/` folder (gitignored) contains previous versions of files for local reference. Currently holds `index-monolithic-v0.1.html` — the original single-file frontend before modularization.
+
+## Known Limitations
+
+1. Messages page is client-side mock only (no backend routes)
+2. MyAccount settings don't persist
+3. CaretakerHub is a placeholder
+4. No input validation or rate limiting
+5. No tests
+6. No real-time updates (polling only)
+7. Not mobile-responsive
+8. Payments table exists but no payment processing
+9. Visit photos table exists but no file upload support
