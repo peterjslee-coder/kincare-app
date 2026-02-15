@@ -2157,215 +2157,346 @@
     // Dashboard Component
     const Dashboard = () => {
       const [sessions, setSessions] = useState([]);
-      const [activity, setActivity] = useState([]);
+      const [activities, setActivities] = useState([]);
 
       useEffect(() => {
         const fetchData = async () => {
-          const sessRes = await apiFetch('/api/sessions');
-          if (sessRes?.ok) setSessions((await sessRes.json()).slice(0, 3));
-          const actRes = await apiFetch('/api/activity');
-          if (actRes?.ok) setActivity((await actRes.json()).slice(0, 5));
-        };
-        fetchData();
-      }, []);
-
-      return (
-        <div>
-          <h1 className="greeting">Welcome back, Pete! 👋</h1>
-          <div className="betty-card">
-            <div className="betty-name">👵 Betty Lee</div>
-            <div className="betty-info">Your mother • Living in Blacksburg, VA</div>
-          </div>
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-number">{sessions.length}</div>
-              <div className="stat-label">Upcoming Sessions</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">2</div>
-              <div className="stat-label">Assigned Caregivers</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">4.8</div>
-              <div className="stat-label">Average Rating</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">$1,240</div>
-              <div className="stat-label">Monthly Budget</div>
-            </div>
-          </div>
-          <div className="card">
-            <div className="card-header">📅 Upcoming Sessions</div>
-            <div className="sessions-list">
-              {sessions.length > 0 ? sessions.map((s, i) => (
-                <div key={i} className="session-item">
-                  <div className="session-time">{new Date(s.startTime).toLocaleDateString()} at {new Date(s.startTime).toLocaleTimeString()}</div>
-                  <div className="session-caregiver">{s.caregiver}</div>
-                  <div className="session-type">{s.serviceType}</div>
-                </div>
-              )) : <p className="text-muted" style={{ padding: '20px' }}>No upcoming sessions</p>}
-            </div>
-          </div>
-          <div className="card">
-            <div className="card-header">📢 Recent Activity</div>
-            {activity.length > 0 ? activity.map((a, i) => (
-              <div key={i} className="activity-item">
-                <div className="activity-title">{a.title}</div>
-                <div className="activity-time">{new Date(a.timestamp).toLocaleDateString()}</div>
-              </div>
-            )) : <p className="text-muted" style={{ padding: '20px' }}>No recent activity</p>}
-          </div>
-        </div>
-      );
-    };
-
-    // CareProfile Component
-    const CareProfile = () => {
-      const [recipient, setRecipient] = useState(null);
-
-      useEffect(() => {
-        const fetchData = async () => {
-          const res = await apiFetch('/api/care-recipients');
-          if (res?.ok) {
-            const data = await res.json();
-            if (data.length > 0) setRecipient(data[0]);
+          try {
+            const [sessionsRes, activitiesRes] = await Promise.all([
+              apiFetch('/api/sessions'),
+              apiFetch('/api/activity'),
+            ]);
+            if (sessionsRes?.ok) {
+              const sessionsData = await sessionsRes.json();
+              setSessions(sessionsData.sessions || []);
+            }
+            if (activitiesRes?.ok) {
+              const activitiesData = await activitiesRes.json();
+              setActivities(activitiesData.activities || []);
+            }
+          } catch (error) {
+            console.error('Error fetching data:', error);
           }
         };
         fetchData();
       }, []);
 
-      if (!recipient) return <div className="section-coming-soon"><h2>Loading...</h2></div>;
+      const upcomingSessions = sessions.slice(0, 3);
 
-      const healthConditions = typeof recipient.healthConditions === 'string'
-        ? recipient.healthConditions.split(',').map(h => h.trim())
-        : recipient.healthConditions || [];
-      const medications = typeof recipient.medications === 'string'
-        ? recipient.medications.split(',').map(m => m.trim())
-        : recipient.medications || [];
+      const formatActivityTime = (createdAt) => {
+        const dateStr = createdAt.replace(' ', 'T') + 'Z';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return date.toLocaleDateString();
+      };
 
       return (
-        <div>
-          <div className="care-profile-header">
-            <div className="care-profile-avatar">👵</div>
-            <div>
-              <div className="care-profile-name">{recipient.name}</div>
-              <div className="care-profile-subtitle">Primary Care Recipient</div>
+        <>
+          <div className="page-header">
+            <h1 className="greeting">Welcome back, Pete!</h1>
+          </div>
+          <div className="betty-card">
+            <div style={{ fontSize: 40 }}>👵</div>
+            <div className="betty-name">Betty Lee</div>
+            <div className="betty-info">Your mother • Living in Blacksburg, VA</div>
+          </div>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div style={{ fontSize: 28 }}>📅</div>
+              <div className="stat-number">{sessions.length}</div>
+              <div className="stat-label">Scheduled Sessions</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ fontSize: 28 }}>👨‍💼</div>
+              <div className="stat-number">2</div>
+              <div className="stat-label">Assigned Caregivers</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ fontSize: 28 }}>⭐</div>
+              <div className="stat-number">4.8</div>
+              <div className="stat-label">Average Rating</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ fontSize: 28 }}>💰</div>
+              <div className="stat-number">$1,240</div>
+              <div className="stat-label">Monthly Budget</div>
             </div>
           </div>
           <div className="card">
-            <div className="card-header">📋 Basic Information</div>
+            <div className="card-header"><span className="card-icon">📅</span>Upcoming Sessions</div>
+            <ul className="sessions-list">
+              {upcomingSessions.length > 0 ? upcomingSessions.map((session, idx) => (
+                <li key={idx} className="session-item">
+                  <div className="session-time">{session.scheduled_date} at {session.scheduled_time}</div>
+                  <div className="session-caregiver">{session.caregiver_name}</div>
+                  <span className="session-type">{session.service_type}</span>
+                </li>
+              )) : <li style={{ color: '#999', padding: '16px' }}>No upcoming sessions</li>}
+            </ul>
+          </div>
+          <div className="card">
+            <div className="card-header"><span className="card-icon">📢</span>Recent Activity</div>
+            <div>
+              {activities.slice(0, 5).map((activity, idx) => (
+                <div key={idx} className="activity-item">
+                  <div className="activity-title">{activity.title}</div>
+                  <div className="activity-time">{formatActivityTime(activity.created_at)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      );
+    };
+
+    // CareProfile Component
+    const CareProfile = () => {
+      const [profile, setProfile] = useState(null);
+
+      useEffect(() => {
+        const fetchProfile = async () => {
+          try {
+            const response = await apiFetch('/api/care-recipients');
+            if (response?.ok) {
+              const data = await response.json();
+              if (data.careRecipients && data.careRecipients.length > 0) {
+                setProfile(data.careRecipients[0]);
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching profile:', error);
+          }
+        };
+        fetchProfile();
+      }, []);
+
+      if (!profile) return <div className="page-header"><h1 className="page-title">Care Profile</h1></div>;
+
+      const healthConditions = (() => {
+        try {
+          return typeof profile.health_conditions === 'string'
+            ? JSON.parse(profile.health_conditions)
+            : profile.health_conditions || [];
+        } catch { return []; }
+      })();
+
+      const medications = (() => {
+        try {
+          return typeof profile.medications === 'string'
+            ? JSON.parse(profile.medications)
+            : profile.medications || [];
+        } catch { return []; }
+      })();
+
+      return (
+        <>
+          <div className="page-header"><h1 className="page-title">Care Profile</h1></div>
+          <div className="care-profile-header">
+            <div className="care-profile-avatar">👵</div>
+            <div className="care-profile-name">{profile.first_name} {profile.last_name}</div>
+            <div className="care-profile-subtitle">Primary Care Recipient</div>
+          </div>
+          <div className="card">
+            <div className="card-header"><span className="card-icon">ℹ️</span>Basic Information</div>
             <div className="info-grid">
               <div className="info-item">
-                <div className="info-label">Age</div>
-                <div className="info-value">{recipient.age}</div>
+                <div className="info-label">🎂 Age</div>
+                <div className="info-value">{profile.age} years old</div>
               </div>
               <div className="info-item">
-                <div className="info-label">Location</div>
-                <div className="info-value">{recipient.location}</div>
+                <div className="info-label">📍 Location</div>
+                <div className="info-value">{profile.location_city}, {profile.location_state}</div>
               </div>
             </div>
           </div>
-          {healthConditions.length > 0 && (
-            <div>
-              <div className="card-header">🏥 Health Conditions</div>
-              <div className="health-list">
-                {healthConditions.map((h, i) => <div key={i} className="health-item">{h}</div>)}
+          <div className="card">
+            <div className="card-header"><span className="card-icon">⚕️</span>Health Conditions</div>
+            {healthConditions.length > 0 ? (
+              <ul className="health-list">
+                {healthConditions.map((condition, idx) => (
+                  <li key={idx} className="health-item">{condition}</li>
+                ))}
+              </ul>
+            ) : <p style={{ color: '#999' }}>No health conditions listed</p>}
+          </div>
+          <div className="card">
+            <div className="card-header"><span className="card-icon">💊</span>Medications</div>
+            {medications.length > 0 ? (
+              <ul className="health-list">
+                {medications.map((med, idx) => (
+                  <li key={idx} className="med-item">{med}</li>
+                ))}
+              </ul>
+            ) : <p style={{ color: '#999' }}>No medications listed</p>}
+          </div>
+          <div className="card">
+            <div className="card-header"><span className="card-icon">💛</span>Preferences</div>
+            <p>{profile.preferences || 'No preferences listed'}</p>
+          </div>
+          <div className="card">
+            <div className="card-header"><span className="card-icon">🚨</span>Emergency Contact</div>
+            <div className="info-grid">
+              <div className="info-item">
+                <div className="info-label">Name</div>
+                <div className="info-value">{profile.emergency_contact_name}</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Phone</div>
+                <div className="info-value">{profile.emergency_contact_phone}</div>
               </div>
             </div>
-          )}
-          {medications.length > 0 && (
-            <div>
-              <div className="card-header">💊 Medications</div>
-              <div className="health-list">
-                {medications.map((m, i) => <div key={i} className="med-item">{m}</div>)}
-              </div>
-            </div>
-          )}
+          </div>
           <div className="ai-insights">
-            <div className="ai-insights-header">🤖 AI Care Insights</div>
-            <div className="ai-insights-list">
-              <div className="ai-insights-item">Regular cognitive activities like puzzles have shown to improve engagement and mood</div>
-              <div className="ai-insights-item">Flexible scheduling with consistent caregivers builds trust and routine</div>
-              <div className="ai-insights-item">Afternoon visits tend to have higher activity levels for senior care recipients</div>
-              <div className="ai-insights-item">Peer companionship with structured activities yields better outcomes</div>
-            </div>
+            <div className="ai-insights-header"><span className="card-icon">🧠</span>AI Care Insights</div>
+            <ul className="ai-insights-list">
+              <li className="ai-insights-item">Betty responds best to visual cues and gentle reminders for meals</li>
+              <li className="ai-insights-item">Morning hours (9-11 AM) show highest engagement and alertness</li>
+              <li className="ai-insights-item">Photo albums and gardening activities reduce anxiety episodes</li>
+              <li className="ai-insights-item">Consistent daily routines help maintain cognitive function</li>
+            </ul>
           </div>
-        </div>
+        </>
       );
     };
 
     // Schedule Component
     const Schedule = () => {
       const [sessions, setSessions] = useState([]);
-      const [expandedId, setExpandedId] = useState(null);
+      const [expandedSession, setExpandedSession] = useState(null);
 
       useEffect(() => {
-        const fetchData = async () => {
-          const res = await apiFetch('/api/sessions');
-          if (res?.ok) {
-            const data = await res.json();
-            const futureSessionsWithFake = [
-              ...data,
-              { id: 'future1', startTime: new Date(Date.now() + 7*24*60*60*1000).toISOString(), caregiver: 'Maria Santos', serviceType: 'Companionship', duration: 2, specialInstructions: 'She likes to watch gardening shows', estimatedCost: 50 },
-              { id: 'future2', startTime: new Date(Date.now() + 14*24*60*60*1000).toISOString(), caregiver: 'James Okafor', serviceType: 'Personal Care', duration: 3, specialInstructions: 'Morning preference', estimatedCost: 75 },
-              { id: 'future3', startTime: new Date(Date.now() + 21*24*60*60*1000).toISOString(), caregiver: 'Sarah Chen', serviceType: 'Health & Wellness', duration: 1.5, specialInstructions: 'Blood pressure check needed', estimatedCost: 40 },
-              { id: 'future4', startTime: new Date(Date.now() + 28*24*60*60*1000).toISOString(), caregiver: 'Maria Santos', serviceType: 'Meal Preparation', duration: 2, specialInstructions: 'Low sodium', estimatedCost: 45 },
-              { id: 'future5', startTime: new Date(Date.now() + 35*24*60*60*1000).toISOString(), caregiver: 'James Okafor', serviceType: 'Companionship', duration: 2, specialInstructions: 'Puzzle activities', estimatedCost: 50 }
-            ];
-            setSessions(futureSessionsWithFake);
+        const fetchSessions = async () => {
+          try {
+            const response = await apiFetch('/api/sessions');
+            if (response?.ok) {
+              const data = await response.json();
+              const allSessions = data.sessions || [];
+              const futureSessions = [
+                ...allSessions,
+                { id: 'future-1', scheduled_date: '2026-02-21', scheduled_time: '10:00 AM', service_type: 'Companionship', caregiver_name: 'Mary Johnson', status: 'confirmed', duration_hours: 2, special_instructions: 'Garden walk if weather permits', estimated_cost: '$60' },
+                { id: 'future-2', scheduled_date: '2026-02-25', scheduled_time: '2:00 PM', service_type: 'Light Housekeeping', caregiver_name: 'Sarah Williams', status: 'pending', duration_hours: 2, special_instructions: 'Focus on kitchen and living room', estimated_cost: '$60' },
+                { id: 'future-3', scheduled_date: '2026-02-28', scheduled_time: '11:00 AM', service_type: 'Personal Care', caregiver_name: 'Mary Johnson', status: 'confirmed', duration_hours: 3, special_instructions: 'Help with shower and breakfast', estimated_cost: '$90' },
+                { id: 'future-4', scheduled_date: '2026-03-03', scheduled_time: '3:00 PM', service_type: 'Companionship', caregiver_name: 'Sarah Williams', status: 'confirmed', duration_hours: 2, special_instructions: 'Movie afternoon', estimated_cost: '$60' },
+                { id: 'future-5', scheduled_date: '2026-03-05', scheduled_time: '10:00 AM', service_type: 'Medication Management', caregiver_name: 'Mary Johnson', status: 'pending', duration_hours: 1, special_instructions: 'Review medications and set up organizer', estimated_cost: '$30' },
+              ];
+              setSessions(futureSessions.sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date)));
+            }
+          } catch (error) {
+            console.error('Error fetching sessions:', error);
           }
         };
-        fetchData();
+        fetchSessions();
       }, []);
 
+      const getStatusBadgeClass = (status) => {
+        switch (status) {
+          case 'confirmed': return 'badge-confirmed';
+          case 'pending': return 'badge-pending';
+          case 'completed': return 'badge-completed';
+          default: return 'badge-confirmed';
+        }
+      };
+
       return (
-        <div>
-          <h1 className="greeting">📅 Care Schedule</h1>
-          <div className="schedule-list">
-            {sessions.map(s => (
-              <div key={s.id} className={`schedule-session ${expandedId === s.id ? 'expanded' : ''}`} onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}>
-                <div className="schedule-date">{new Date(s.startTime).toLocaleDateString()} at {new Date(s.startTime).toLocaleTimeString()}</div>
-                <div className="session-caregiver">{s.caregiver}</div>
-                <div className="schedule-details">
-                  <p><strong>Service Type:</strong> {s.serviceType || 'N/A'}</p>
-                  <p><strong>Duration:</strong> {s.duration || 'N/A'} hours</p>
-                  <p><strong>Special Instructions:</strong> {s.specialInstructions || 'None'}</p>
-                  <p><strong>Estimated Cost:</strong> ${s.estimatedCost || 'N/A'}</p>
-                </div>
-              </div>
-            ))}
+        <>
+          <div className="page-header">
+            <h1 className="page-title">Schedule</h1>
+            <p className="page-subtitle">Betty's upcoming care sessions</p>
           </div>
-        </div>
+          <div className="card">
+            <ul className="schedule-list">
+              {sessions.map((session) => (
+                <li key={session.id} className={`schedule-session ${expandedSession === session.id ? 'expanded' : ''}`} onClick={() => setExpandedSession(expandedSession === session.id ? null : session.id)}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div className="schedule-date">{session.scheduled_date} at {session.scheduled_time}</div>
+                      <div style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>{session.caregiver_name}</div>
+                      <div>
+                        <span className={`badge ${getStatusBadgeClass(session.status)}`}>{session.status ? session.status.charAt(0).toUpperCase() + session.status.slice(1) : 'Confirmed'}</span>
+                        <span style={{ marginLeft: 8, fontSize: 13, color: '#999' }}>{session.service_type}</span>
+                      </div>
+                    </div>
+                    <div style={{ color: '#1b6b5a', fontSize: 20 }}>{expandedSession === session.id ? '−' : '+'}</div>
+                  </div>
+                  <div className="schedule-details">
+                    <div className="schedule-detail-row"><div className="schedule-detail-label">Duration</div><div className="schedule-detail-value">{session.duration_hours} hour(s)</div></div>
+                    <div className="schedule-detail-row"><div className="schedule-detail-label">Service Type</div><div className="schedule-detail-value">{session.service_type}</div></div>
+                    <div className="schedule-detail-row"><div className="schedule-detail-label">Special Instructions</div><div className="schedule-detail-value">{session.special_instructions}</div></div>
+                    <div className="schedule-detail-row"><div className="schedule-detail-label">Estimated Cost</div><div className="schedule-detail-value">{session.estimated_cost}</div></div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
       );
     };
 
     // ActivityFeed Component
     const ActivityFeed = () => {
       const [activities, setActivities] = useState([]);
-      const [expandedId, setExpandedId] = useState(null);
+      const [expandedActivity, setExpandedActivity] = useState(null);
 
       useEffect(() => {
-        const fetchData = async () => {
-          const res = await apiFetch('/api/activity');
-          if (res?.ok) setActivities(await res.json());
+        const fetchActivities = async () => {
+          try {
+            const response = await apiFetch('/api/activity');
+            if (response?.ok) {
+              const data = await response.json();
+              setActivities(data.activities || []);
+            }
+          } catch (error) {
+            console.error('Error fetching activities:', error);
+          }
         };
-        fetchData();
+        fetchActivities();
       }, []);
 
+      const formatActivityTime = (createdAt) => {
+        const dateStr = createdAt.replace(' ', 'T') + 'Z';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return date.toLocaleDateString();
+      };
+
       return (
-        <div>
-          <h1 className="greeting">📢 Activity Feed</h1>
-          <div>
-            {activities.map((a, i) => (
-              <div key={i} className={`activity-item ${a.unread ? 'unread' : ''} ${expandedId === i ? 'expanded' : ''}`} onClick={() => setExpandedId(expandedId === i ? null : i)}>
-                <div className="activity-title">{a.title}</div>
-                <div className="activity-time">{new Date(a.timestamp).toLocaleDateString()}</div>
-                <div className="activity-message">{a.message}</div>
-                {a.eventType && <div className="activity-badge">{a.eventType}</div>}
-              </div>
-            ))}
+        <>
+          <div className="page-header">
+            <h1 className="page-title">Activity Feed</h1>
+            <p className="page-subtitle">Recent updates about Betty's care</p>
           </div>
-        </div>
+          <div className="card">
+            <div>
+              {activities.map((activity, idx) => (
+                <div key={idx} className={`activity-item ${expandedActivity === idx ? 'expanded' : ''} ${!activity.is_read ? 'unread' : ''}`} onClick={() => setExpandedActivity(expandedActivity === idx ? null : idx)} style={{ cursor: 'pointer' }}>
+                  <div className="activity-title">{activity.title}</div>
+                  <div className="activity-time">{formatActivityTime(activity.created_at)}</div>
+                  {expandedActivity === idx && (
+                    <>
+                      <div className="activity-message">{activity.message}</div>
+                      <div className="activity-badge">{activity.event_type}</div>
+                      {!activity.is_read && <div style={{ marginTop: 12, fontSize: 12, color: '#2563eb' }}>● Unread</div>}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       );
     };
 
@@ -2374,31 +2505,47 @@
       const [caregivers, setCaregivers] = useState([]);
 
       useEffect(() => {
-        const fetchData = async () => {
-          const res = await apiFetch('/api/caregivers');
-          if (res?.ok) setCaregivers(await res.json());
+        const fetchCaregivers = async () => {
+          try {
+            const response = await apiFetch('/api/caregivers');
+            if (response?.ok) {
+              const data = await response.json();
+              setCaregivers(data.caregivers || []);
+            }
+          } catch (error) {
+            console.error('Error fetching caregivers:', error);
+          }
         };
-        fetchData();
+        fetchCaregivers();
       }, []);
 
       return (
-        <div>
-          <h1 className="greeting">👨‍⚕️ Your Caregivers</h1>
-          <div>
-            {caregivers.map((c, i) => (
-              <div key={i} className="caregiver-item">
-                <div className="caregiver-name">{c.name}</div>
-                <div className="caregiver-details">
-                  <div className="caregiver-detail">⭐ {c.rating || 'N/A'} - {c.reviews || 0} reviews</div>
-                  <div className="caregiver-detail">{c.bio || 'Professional caregiver'}</div>
-                </div>
-                <div className="caregiver-badges">
-                  {c.specialties && c.specialties.map((s, j) => <div key={j} className="caregiver-badge">{s}</div>)}
-                </div>
-              </div>
-            ))}
+        <>
+          <div className="page-header">
+            <h1 className="page-title">Caregivers</h1>
+            <p className="page-subtitle">Our trusted care professionals</p>
           </div>
-        </div>
+          <div className="card">
+            {caregivers.length > 0 ? (
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {caregivers.map((caregiver, idx) => (
+                  <li key={idx} className="caregiver-item">
+                    <div className="caregiver-name">{caregiver.name}</div>
+                    <div className="caregiver-details">
+                      <div className="caregiver-detail">⭐ {caregiver.rating || '4.9'} • {caregiver.reviews || 8} reviews</div>
+                      <div className="caregiver-detail">👨‍⚕️ {caregiver.specialties || 'Companionship, Personal Care'}</div>
+                      <div className="caregiver-detail">✓ Background checked • CPR certified</div>
+                    </div>
+                    <div className="caregiver-badges">
+                      <span className="caregiver-badge">{caregiver.service_type || 'Companionship'}</span>
+                      <span className="caregiver-badge">{caregiver.availability || 'Flexible'}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : <p style={{ color: '#999' }}>Loading caregivers...</p>}
+          </div>
+        </>
       );
     };
 
