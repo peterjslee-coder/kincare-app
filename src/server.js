@@ -35,7 +35,7 @@ app.use("/api/dashboard", require("./routes/dashboard"));
 app.use("/api/messages", require("./routes/messages"));
 app.use("/api/notes", require("./routes/notes"));
 app.use("/api/assignments", require("./routes/assignments"));
-app.use("/api/care-recipients", require("./routes/emergencyContacts"));
+app.use("/api/waitlist", require("./routes/waitlist"));
 
 // ─── Health check ───
 app.get("/api/health", (req, res) => {

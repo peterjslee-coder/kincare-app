@@ -1,4 +1,36 @@
 const SplashPage = window.SplashPage = ({ onNavigate }) => {
+  const [waitlistEmail, setWaitlistEmail] = React.useState('');
+  const [waitlistName, setWaitlistName] = React.useState('');
+  const [waitlistStatus, setWaitlistStatus] = React.useState(null); // 'success' | 'exists' | 'error'
+  const [waitlistMsg, setWaitlistMsg] = React.useState('');
+  const [waitlistSubmitting, setWaitlistSubmitting] = React.useState(false);
+
+  const handleWaitlistSubmit = async (e) => {
+    e.preventDefault();
+    if (!waitlistEmail) return;
+    setWaitlistSubmitting(true);
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: waitlistEmail, name: waitlistName }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWaitlistStatus(data.alreadyExists ? 'exists' : 'success');
+        setWaitlistMsg(data.message);
+        if (!data.alreadyExists) { setWaitlistEmail(''); setWaitlistName(''); }
+      } else {
+        setWaitlistStatus('error');
+        setWaitlistMsg(data.error || 'Something went wrong.');
+      }
+    } catch {
+      setWaitlistStatus('error');
+      setWaitlistMsg('Network error. Please try again.');
+    }
+    setWaitlistSubmitting(false);
+  };
+
   return (
     <div className="splash-page">
       <nav className="splash-nav">
@@ -228,6 +260,56 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
           <div className="demo-credentials">
             <strong>Demo Credentials:</strong> pete@kincare.app / kincare123
           </div>
+        </div>
+      </section>
+
+      {/* ── Email Capture / Waitlist ── */}
+      <section style={{ padding: '64px 32px', background: 'linear-gradient(135deg, #1b6b5a 0%, #0f4238 100%)', color: 'white', textAlign: 'center' }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '30px', marginBottom: '12px', color: 'white' }}>Get Early Access</h2>
+          <p style={{ fontSize: '16px', opacity: 0.9, marginBottom: '32px' }}>
+            We're opening beta to families in select metro areas. Drop your email and we'll let you know when it's your turn.
+          </p>
+          {waitlistStatus === 'success' || waitlistStatus === 'exists' ? (
+            <div style={{
+              background: 'rgba(255,255,255,0.15)', borderRadius: '10px', padding: '24px',
+              border: '1px solid rgba(255,255,255,0.25)', fontSize: '16px',
+            }}>
+              {waitlistMsg}
+            </div>
+          ) : (
+            <form onSubmit={handleWaitlistSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '12px', width: '100%', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <input
+                  type="text" placeholder="Your name (optional)" value={waitlistName}
+                  onChange={(e) => setWaitlistName(e.target.value)}
+                  style={{
+                    flex: '1 1 180px', maxWidth: '220px', padding: '14px 16px', borderRadius: '8px', border: 'none',
+                    fontSize: '15px', outline: 'none', color: '#333',
+                  }}
+                />
+                <input
+                  type="email" placeholder="Your email" value={waitlistEmail} required
+                  onChange={(e) => setWaitlistEmail(e.target.value)}
+                  style={{
+                    flex: '1 1 220px', maxWidth: '280px', padding: '14px 16px', borderRadius: '8px', border: 'none',
+                    fontSize: '15px', outline: 'none', color: '#333',
+                  }}
+                />
+                <button type="submit" disabled={waitlistSubmitting} style={{
+                  padding: '14px 28px', background: '#e8724a', color: 'white', border: 'none',
+                  borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+                  opacity: waitlistSubmitting ? 0.7 : 1, transition: 'all 0.3s',
+                }}>
+                  {waitlistSubmitting ? 'Joining...' : 'Join Waitlist'}
+                </button>
+              </div>
+              {waitlistStatus === 'error' && (
+                <div style={{ color: '#ffb4a0', fontSize: '14px', marginTop: '4px' }}>{waitlistMsg}</div>
+              )}
+              <div style={{ fontSize: '12px', opacity: 0.6, marginTop: '4px' }}>No spam. Just an update when beta opens in your area.</div>
+            </form>
+          )}
         </div>
       </section>
 
