@@ -37,7 +37,7 @@ kincare-repo/
 │       ├── app.js             ← App root component: routing, sidebar, page switching, modal management
 │       └── components/
 │           ├── KinCareIcon.js          ← SVG logo component
-│           ├── SplashPage.js           ← Investor pitch landing page (market stats, problem/solution, business model, vision)
+│           ├── SplashPage.js           ← Investor pitch landing page (market stats, problem/solution, business model, vision, waitlist capture)
 │           ├── LoginPage.js            ← Email/password login form
 │           ├── RegisterPage.js         ← Multi-step registration wizard (family or caregiver)
 │           ├── Dashboard.js            ← Stats cards, upcoming sessions, recent activity
@@ -64,7 +64,8 @@ kincare-repo/
         ├── sessions.js        ← Care session booking, matching, status updates
         ├── caregivers.js      ← Caregiver search, profiles, profile creation
         ├── activity.js        ← Activity feed, mark-read, visit log submission
-        └── dashboard.js       ← Aggregated stats & upcoming sessions
+        ├── dashboard.js       ← Aggregated stats & upcoming sessions
+        └── waitlist.js        ← POST signup, GET count (no auth required)
 ```
 
 ## Frontend Architecture

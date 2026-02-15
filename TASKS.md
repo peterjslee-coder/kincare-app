@@ -45,8 +45,13 @@
 
 ## Done
 
+### Waitlist & Splash Updates (v0.3.3)
+- [x] **Email capture / waitlist:** "Get Early Access" form on splash page. Writes to `waitlist` table via `/api/waitlist` (no auth). Dedupes by email, shows success/already-exists messages inline. Public `/api/waitlist/count` endpoint.
+- [x] **Splash page stat corrections:** Fixed to match elevator pitch — 63M caregivers, $200B market, 11,200 boomers/day.
+- [x] **Center-justified stat bubbles:** All card grids use flexbox centering so orphan items don't sit left-aligned.
+
 ### Splash Page Redesign (v0.3.2)
-- [x] **Investor pitch landing page:** Rewrote splash page to read like an elevator pitch — market stats ($470B, 53M, 10K boomers/day), problem/solution framing, business model (20% commission, $45-85 sessions), personal story, vision (operating system for aging in place), Unsplash photos of seniors at home.
+- [x] **Investor pitch landing page:** Rewrote splash page to read like an elevator pitch — market stats ($200B, 63M, 11.2K boomers/day), problem/solution framing, business model (20% commission, $45-85 sessions), personal story, vision (operating system for aging in place), Unsplash photos of seniors at home.
 
 ### Batch 2: UI & Scheduling (v0.3.1)
 - [x] **Multiple emergency contacts:** CRUD for emergency contacts on care profiles. Betty has 4: Pete (primary), Susan Lee-Park, David Lee, Dr. Anita Sharma. Add/edit/delete inline.
