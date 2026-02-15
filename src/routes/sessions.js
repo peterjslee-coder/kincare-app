@@ -145,14 +145,18 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
   // In production: use location, specialties, ratings, availability windows
   const recipient = db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
 
+  // Prefer favorite caregivers — they appear first in the list
   const caregivers = db.prepare(`
-    SELECT cp.*, u.first_name, u.last_name
+    SELECT cp.*, u.first_name, u.last_name,
+      COALESCE(ca.is_favorite, 0) AS is_favorite
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
+    LEFT JOIN caregiver_assignments ca ON ca.caregiver_profile_id = cp.id
+      AND ca.family_user_id = ? AND ca.is_active = 1
     WHERE cp.is_available = 1 AND cp.is_background_checked = 1
-    ORDER BY cp.rating_avg DESC, cp.years_experience DESC
+    ORDER BY COALESCE(ca.is_favorite, 0) DESC, cp.rating_avg DESC, cp.years_experience DESC
     LIMIT 5
-  `).all();
+  `).all(req.user.id);
 
   if (caregivers.length === 0) {
     return res.status(404).json({ error: "No available caregivers found" });

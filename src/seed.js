@@ -17,7 +17,7 @@ async function seed() {
 
   // Clear existing data
   const tables = [
-    "caregiver_assignments", "recipient_notes", "messages",
+    "emergency_contacts", "caregiver_assignments", "recipient_notes", "messages",
     "visit_photos", "visit_logs", "activity_feed", "reviews",
     "payments", "care_sessions", "availability",
     "caregiver_profiles", "care_recipients", "users",
@@ -142,6 +142,30 @@ async function seed() {
   );
 
   console.log("✅ Care recipients created (3 — Betty, Dorothy, Arun)");
+
+  // ─── Emergency Contacts ───
+  const emergencyContacts = [
+    // Betty's contacts
+    [uuid(), bettyId, "Pete Lee", "Son (Primary)", "(626) 555-0142", "pete@kincare.app", 1, 0],
+    [uuid(), bettyId, "Susan Lee-Park", "Daughter", "(310) 555-0188", "susan.leepark@gmail.com", 0, 1],
+    [uuid(), bettyId, "David Lee", "Son", "(415) 555-0199", "david.lee@gmail.com", 0, 2],
+    [uuid(), bettyId, "Dr. Anita Sharma", "Primary Physician", "(540) 555-0400", null, 0, 3],
+    // Dorothy's contacts
+    [uuid(), dorothyId, "Linda Henderson", "Daughter (Primary)", "(540) 555-0301", "linda@kincare.app", 1, 0],
+    [uuid(), dorothyId, "Mark Henderson", "Son", "(540) 555-0310", "mark.henderson@gmail.com", 0, 1],
+    // Arun's contacts
+    [uuid(), arunId, "Raj Patel", "Son (Primary)", "(540) 555-0302", "raj@kincare.app", 1, 0],
+    [uuid(), arunId, "Priya Patel", "Daughter-in-law", "(540) 555-0303", "priya.patel@gmail.com", 0, 1],
+  ];
+
+  for (const [id, recipientId, name, relationship, phone, email, isPrimary, sortOrder] of emergencyContacts) {
+    db.prepare(`
+      INSERT INTO emergency_contacts (id, care_recipient_id, name, relationship, phone, email, is_primary, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, recipientId, name, relationship, phone, email, isPrimary, sortOrder);
+  }
+
+  console.log("✅ Emergency contacts created (8 — 4 for Betty, 2 for Dorothy, 2 for Arun)");
 
   // ─── Caregiver Profiles ───
   const mariaId = uuid();
