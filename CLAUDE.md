@@ -132,6 +132,8 @@ npm run seed         # Reset & populate demo data
 
 Railway auto-deploys on `git push origin main`. Environment variables set in Railway dashboard.
 
+**After every push:** Update CLAUDE.md (project structure, version history, known limitations) and TASKS.md (mark completed items, add new bugs/features discovered during development). These files are the project's memory across sessions — if they're stale, the next session starts confused.
+
 ## Known Limitations (Production Blockers)
 
 1. **Auth is demo-grade** — No password reset, no email verification, no session invalidation. JWT secret is static.
