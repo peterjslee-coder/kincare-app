@@ -2416,7 +2416,11 @@
       useEffect(() => {
         const fetchData = async () => {
           const res = await apiFetch('/api/care-recipients');
-          if (res?.ok) setRecipients(await res.json());
+          if (res?.ok) {
+            const data = await res.json();
+            const list = data.careRecipients || data || [];
+            setRecipients(Array.isArray(list) ? list : []);
+          }
         };
         fetchData();
       }, []);
@@ -2442,25 +2446,25 @@
             {recipients.map(r => (
               <div key={r.id} className={`recipient-card ${selectedId === r.id ? 'selected' : ''}`} onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}>
                 <div style={{ fontSize: '40px', marginBottom: '12px' }}>👵</div>
-                <div className="recipient-card-name">{r.name || `${r.firstName} ${r.lastName}`}</div>
+                <div className="recipient-card-name">{r.name || r.first_name ? `${r.first_name} ${r.last_name}` : `${r.firstName} ${r.lastName}`}</div>
                 <p className="text-muted" style={{ fontSize: '13px' }}>{r.age} years old</p>
                 <p className="text-muted" style={{ fontSize: '13px' }}>{r.relationship}</p>
-                {r.location && <p className="text-muted" style={{ fontSize: '13px' }}>{r.location}</p>}
+                {(r.location_city || r.city) && <p className="text-muted" style={{ fontSize: '13px' }}>{r.location_city ? `${r.location_city}, ${r.location_state}` : r.city}</p>}
               </div>
             ))}
           </div>
           {selected && (
             <div className="card" style={{ marginTop: '32px' }}>
-              <div className="card-header">👵 {selected.name || `${selected.firstName} ${selected.lastName}`}</div>
+              <div className="card-header">👵 {selected.name || (selected.first_name ? `${selected.first_name} ${selected.last_name}` : `${selected.firstName} ${selected.lastName}`)}</div>
               <div className="info-grid">
                 <div className="info-item"><div className="info-label">Age</div><div className="info-value">{selected.age}</div></div>
                 <div className="info-item"><div className="info-label">Relationship</div><div className="info-value">{selected.relationship}</div></div>
-                <div className="info-item"><div className="info-label">Location</div><div className="info-value">{selected.location || selected.city}</div></div>
+                <div className="info-item"><div className="info-label">Location</div><div className="info-value">{selected.location_city ? `${selected.location_city}, ${selected.location_state}` : (selected.city || 'N/A')}</div></div>
               </div>
-              {selected.healthConditions && (
+              {(selected.healthConditions || selected.health_conditions) && (
                 <div style={{ marginTop: '16px' }}>
                   <strong>Health Conditions:</strong>
-                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.healthConditions}</p>
+                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.healthConditions || (typeof selected.health_conditions === 'string' ? selected.health_conditions : JSON.stringify(selected.health_conditions))}</p>
                 </div>
               )}
               {selected.medications && (
