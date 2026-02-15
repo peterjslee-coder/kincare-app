@@ -883,6 +883,17 @@
     const { useState, useEffect } = React;
     const API_BASE = window.location.origin;
 
+    // Auth token storage
+    let AUTH_TOKEN = null;
+    const setAuthToken = (token) => { AUTH_TOKEN = token; };
+    const apiFetch = (url, options = {}) => {
+      const headers = { ...(options.headers || {}) };
+      if (AUTH_TOKEN) {
+        headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+      }
+      return fetch(url, { ...options, headers });
+    };
+
     // SVG Logo Component
     const KinCareIcon = ({ width = 40, height = 40 }) => (
       <svg viewBox="0 0 100 100" width={width} height={height} xmlns="http://www.w3.org/2000/svg">
@@ -910,16 +921,17 @@
         e.preventDefault();
         setLoading(true);
         try {
-          const response = await fetch(`${API_BASE}/api/login`, {
+          const response = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
           });
           const data = await response.json();
-          if (data.success) {
+          if (data.token && data.user) {
+            setAuthToken(data.token);
             onLogin(data.user);
           } else {
-            alert('Login failed');
+            alert(data.error || 'Login failed');
           }
         } catch (error) {
           console.error('Login error:', error);
@@ -974,8 +986,8 @@
         const fetchData = async () => {
           try {
             const [sessionsRes, activitiesRes] = await Promise.all([
-              fetch(`${API_BASE}/api/sessions`),
-              fetch(`${API_BASE}/api/activity`),
+              apiFetch(`${API_BASE}/api/sessions`),
+              apiFetch(`${API_BASE}/api/activity`),
             ]);
             const sessionsData = await sessionsRes.json();
             const activitiesData = await activitiesRes.json();
@@ -1087,7 +1099,7 @@
       useEffect(() => {
         const fetchProfile = async () => {
           try {
-            const response = await fetch(`${API_BASE}/api/care-recipients`);
+            const response = await apiFetch(`${API_BASE}/api/care-recipients`);
             const data = await response.json();
             if (data.careRecipients && data.careRecipients.length > 0) {
               setProfile(data.careRecipients[0]);
@@ -1239,7 +1251,7 @@
       useEffect(() => {
         const fetchSessions = async () => {
           try {
-            const response = await fetch(`${API_BASE}/api/sessions`);
+            const response = await apiFetch(`${API_BASE}/api/sessions`);
             const data = await response.json();
             const allSessions = data.sessions || [];
 
@@ -1396,7 +1408,7 @@
       useEffect(() => {
         const fetchActivities = async () => {
           try {
-            const response = await fetch(`${API_BASE}/api/activity`);
+            const response = await apiFetch(`${API_BASE}/api/activity`);
             const data = await response.json();
             setActivities(data.activities || []);
           } catch (error) {
@@ -1468,7 +1480,7 @@
       useEffect(() => {
         const fetchCaregivers = async () => {
           try {
-            const response = await fetch(`${API_BASE}/api/caregivers`);
+            const response = await apiFetch(`${API_BASE}/api/caregivers`);
             const data = await response.json();
             setCaregivers(data.caregivers || []);
           } catch (error) {
@@ -1543,7 +1555,7 @@
 
       const handleSubmit = async () => {
         try {
-          const response = await fetch(`${API_BASE}/api/request-care`, {
+          const response = await apiFetch(`${API_BASE}/api/request-care`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData),
