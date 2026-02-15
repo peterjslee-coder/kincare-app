@@ -71,7 +71,26 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
     WHERE cs.family_user_id = ? AND cs.status = 'completed'
   `).get(userId);
 
+  // Build parent object for the frontend (first care recipient)
+  const primary = recipients[0];
+  const parent = primary
+    ? {
+        id: primary.id,
+        name: `${primary.first_name} ${primary.last_name}`,
+        age: primary.age,
+        location: `${primary.location_city}, ${primary.location_state}`,
+        healthConditions: JSON.parse(primary.health_conditions || "[]"),
+        medications: JSON.parse(primary.medications || "[]"),
+        preferences: primary.preferences,
+        emergencyContact: {
+          name: primary.emergency_contact_name,
+          phone: primary.emergency_contact_phone,
+        },
+      }
+    : null;
+
   res.json({
+    parent,
     careRecipients: recipients.map((r) => ({
       ...r,
       healthConditions: JSON.parse(r.health_conditions || "[]"),
@@ -84,8 +103,27 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
       avgCaregiverRating: Math.round((avgRating.avg || 0) * 10) / 10,
       unreadNotifications: unreadCount.count,
     },
-    upcomingSessions: upcoming,
-    recentActivity,
+    upcomingSessions: upcoming.map((s) => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      status: s.status,
+      durationHours: s.duration_hours,
+      caregiverName: s.caregiver_name,
+      caregiverRating: s.caregiver_rating,
+      recipientName: s.recipient_name,
+      specialInstructions: s.special_instructions,
+      estimatedCost: s.estimated_cost,
+    })),
+    recentActivity: recentActivity.map((a) => ({
+      id: a.id,
+      eventType: a.event_type,
+      title: a.title,
+      message: a.message,
+      isRead: a.is_read,
+      createdAt: a.created_at,
+    })),
   });
 });
 
