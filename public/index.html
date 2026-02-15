@@ -1,1865 +1,2043 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KinCare - Elderly Care Platform</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-                sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            background-color: #f5f7fa;
-            color: #1a2332;
-        }
-
-        .login-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #1b6b5a 0%, #0f4a3c 100%);
-        }
-
-        .login-card {
-            background: white;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            width: 100%;
-            max-width: 400px;
-        }
-
-        .login-logo {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .login-logo h1 {
-            color: #1b6b5a;
-            font-size: 32px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-
-        .login-logo p {
-            color: #666;
-            font-size: 14px;
-            margin-top: 5px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #1a2332;
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px 14px;
-            border: 1px solid #e0e4e8;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #1b6b5a;
-            box-shadow: 0 0 0 3px rgba(27, 107, 90, 0.1);
-        }
-
-        .login-button {
-            width: 100%;
-            padding: 12px;
-            background-color: #1b6b5a;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .login-button:hover {
-            background-color: #0f4a3c;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(27, 107, 90, 0.3);
-        }
-
-        .login-button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .error-message {
-            color: #d32f2f;
-            font-size: 14px;
-            margin-bottom: 20px;
-            padding: 10px;
-            background-color: #ffebee;
-            border-radius: 6px;
-            border-left: 3px solid #d32f2f;
-        }
-
-        .demo-credentials {
-            background-color: #f5f7fa;
-            padding: 12px;
-            border-radius: 6px;
-            margin-top: 20px;
-            font-size: 12px;
-            color: #666;
-            text-align: center;
-        }
-
-        .app-layout {
-            display: flex;
-            min-height: 100vh;
-            background-color: #f5f7fa;
-        }
-
-        .sidebar {
-            width: 260px;
-            background-color: #1a2332;
-            color: white;
-            padding: 20px 0;
-            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-        }
-
-        .sidebar-logo {
-            padding: 0 20px 30px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            font-size: 24px;
-            font-weight: 700;
-            color: #1b6b5a;
-        }
-
-        .nav-item {
-            padding: 15px 20px;
-            cursor: pointer;
-            transition: all 0.2s;
-            border-left: 3px solid transparent;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .nav-item:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-
-        .nav-item.active {
-            background-color: rgba(27, 107, 90, 0.2);
-            border-left-color: #1b6b5a;
-            color: #1b6b5a;
-        }
-
-        .sidebar-footer {
-            position: absolute;
-            bottom: 20px;
-            width: 100%;
-            padding: 0 20px;
-        }
-
-        .logout-button {
-            width: 100%;
-            padding: 10px;
-            background-color: #e8724a;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-
-        .logout-button:hover {
-            background-color: #d35a32;
-        }
-
-        .main-content {
-            flex: 1;
-            margin-left: 260px;
-            padding: 30px;
-        }
-
-        .page-header {
-            margin-bottom: 30px;
-        }
-
-        .page-title {
-            font-size: 28px;
-            font-weight: 700;
-            color: #1a2332;
-            margin-bottom: 5px;
-        }
-
-        .page-subtitle {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-            border: 1px solid #e8eef5;
-        }
-
-        .stat-label {
-            color: #666;
-            font-size: 13px;
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-
-        .stat-value {
-            font-size: 28px;
-            font-weight: 700;
-            color: #1b6b5a;
-        }
-
-        .parent-card {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-            border: 1px solid #e8eef5;
-            margin-bottom: 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .parent-info h3 {
-            font-size: 18px;
-            color: #1a2332;
-            margin-bottom: 8px;
-        }
-
-        .parent-details {
-            font-size: 14px;
-            color: #666;
-        }
-
-        .request-care-button {
-            padding: 12px 30px;
-            background-color: #1b6b5a;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .request-care-button:hover {
-            background-color: #0f4a3c;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(27, 107, 90, 0.3);
-        }
-
-        .section-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: #1a2332;
-            margin-bottom: 15px;
-        }
-
-        .content-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-        }
-
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-            border: 1px solid #e8eef5;
-            transition: all 0.3s;
-        }
-
-        .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-        }
-
-        .card-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: #1a2332;
-            margin-bottom: 8px;
-        }
-
-        .card-subtitle {
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 10px;
-        }
-
-        .activity-item {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #1b6b5a;
-            margin-bottom: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-        }
-
-        .activity-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1a2332;
-            margin-bottom: 4px;
-        }
-
-        .activity-message {
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 4px;
-        }
-
-        .activity-time {
-            font-size: 12px;
-            color: #999;
-        }
-
-        .modal-overlay {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-        }
-
-        .modal {
-            background: white;
-            padding: 40px;
-            border-radius: 12px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        }
-
-        .modal-header {
-            font-size: 24px;
-            font-weight: 700;
-            color: #1a2332;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .close-button {
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: #999;
-            transition: color 0.2s;
-        }
-
-        .close-button:hover {
-            color: #1a2332;
-        }
-
-        .step-indicator {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
-            justify-content: center;
-        }
-
-        .step {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: #e8eef5;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            color: #666;
-            transition: all 0.2s;
-        }
-
-        .step.active {
-            background-color: #1b6b5a;
-            color: white;
-        }
-
-        .step.completed {
-            background-color: #4caf50;
-            color: white;
-        }
-
-        .service-cards {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .service-card {
-            padding: 20px;
-            border: 2px solid #e8eef5;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-align: center;
-        }
-
-        .service-card:hover {
-            border-color: #1b6b5a;
-            background-color: rgba(27, 107, 90, 0.05);
-        }
-
-        .service-card.selected {
-            border-color: #1b6b5a;
-            background-color: rgba(27, 107, 90, 0.1);
-        }
-
-        .service-icon {
-            font-size: 32px;
-            margin-bottom: 10px;
-        }
-
-        .service-name {
-            font-weight: 600;
-            color: #1a2332;
-            margin-bottom: 5px;
-        }
-
-        .service-description {
-            font-size: 12px;
-            color: #666;
-        }
-
-        .time-buttons {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .time-button {
-            padding: 12px;
-            border: 2px solid #e8eef5;
-            border-radius: 8px;
-            cursor: pointer;
-            background: white;
-            transition: all 0.2s;
-            font-size: 14px;
-        }
-
-        .time-button:hover {
-            border-color: #1b6b5a;
-        }
-
-        .time-button.selected {
-            background-color: #1b6b5a;
-            color: white;
-            border-color: #1b6b5a;
-        }
-
-        .textarea {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #e8eef5;
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 14px;
-            resize: vertical;
-            min-height: 100px;
-            transition: all 0.2s;
-        }
-
-        .textarea:focus {
-            outline: none;
-            border-color: #1b6b5a;
-            box-shadow: 0 0 0 3px rgba(27, 107, 90, 0.1);
-        }
-
-        .button-group {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            margin-top: 20px;
-        }
-
-        .button-secondary {
-            padding: 10px 20px;
-            background-color: #f5f7fa;
-            color: #1a2332;
-            border: 1px solid #e8eef5;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-
-        .button-secondary:hover {
-            background-color: #e8eef5;
-        }
-
-        .button-primary {
-            padding: 10px 20px;
-            background-color: #1b6b5a;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .button-primary:hover {
-            background-color: #0f4a3c;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(27, 107, 90, 0.3);
-        }
-
-        .button-primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .caregiver-rating {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            margin-bottom: 8px;
-        }
-
-        .star {
-            color: #ffc107;
-        }
-
-        .rating-value {
-            font-weight: 600;
-            color: #1a2332;
-        }
-
-        .review-count {
-            font-size: 12px;
-            color: #666;
-        }
-
-        .specialties {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-bottom: 10px;
-        }
-
-        .specialty-badge {
-            background-color: rgba(27, 107, 90, 0.1);
-            color: #1b6b5a;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        .caregiver-bio {
-            font-size: 13px;
-            color: #666;
-            line-height: 1.5;
-        }
-
-        .hourly-rate {
-            font-size: 16px;
-            font-weight: 700;
-            color: #1b6b5a;
-            margin-top: 12px;
-        }
-
-        .availability {
-            font-size: 12px;
-            color: #666;
-            margin-top: 8px;
-        }
-
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        .calendar-day {
-            padding: 15px;
-            background: white;
-            border: 1px solid #e8eef5;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        .calendar-day-header {
-            font-weight: 600;
-            color: #666;
-            font-size: 12px;
-            padding: 10px;
-            background-color: #f5f7fa;
-            border-radius: 6px;
-        }
-
-        .session-item {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #1b6b5a;
-            margin-bottom: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-        }
-
-        .session-time {
-            font-size: 12px;
-            color: #999;
-            margin-bottom: 4px;
-        }
-
-        .session-service {
-            font-weight: 600;
-            color: #1a2332;
-            margin-bottom: 4px;
-        }
-
-        .session-caregiver {
-            font-size: 13px;
-            color: #666;
-        }
-
-        .success-message {
-            background-color: #e8f5e9;
-            border-left: 4px solid #4caf50;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            color: #2e7d32;
-        }
-
-        .matching-caregiver {
-            background: linear-gradient(135deg, #1b6b5a 0%, #0f4a3c 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .matched-name {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-
-        .matched-rating {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            margin-bottom: 15px;
-        }
-
-        .matched-rating .star {
-            color: #ffc107;
-        }
-
-        .matched-specialties {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: center;
-            margin-bottom: 15px;
-        }
-
-        .matched-specialty {
-            background-color: rgba(255, 255, 255, 0.2);
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 13px;
-        }
-
-        .session-summary {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-
-        .summary-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #e8eef5;
-            font-size: 14px;
-        }
-
-        .summary-item:last-child {
-            border-bottom: none;
-        }
-
-        .summary-label {
-            color: #666;
-            font-weight: 500;
-        }
-
-        .summary-value {
-            color: #1a2332;
-            font-weight: 600;
-        }
-
-        .loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-            color: #666;
-        }
-
-        .spinner {
-            border: 3px solid #e8eef5;
-            border-top: 3px solid #1b6b5a;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 768px) {
-            .app-layout {
-                flex-direction: column;
-            }
-
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-                display: flex;
-                overflow-x: auto;
-            }
-
-            .main-content {
-                margin-left: 0;
-                padding: 20px;
-            }
-
-            .service-cards {
-                grid-template-columns: 1fr;
-            }
-
-            .stats-row {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .parent-card {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 15px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KinCare - Family Care Management</title>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+
+    .login-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1b6b5a 0%, #0f4238 100%);
+    }
+
+    .login-card {
+      background: white;
+      border-radius: 12px;
+      padding: 48px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .login-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 32px;
+    }
+
+    .kincare-icon {
+      width: 50px;
+      height: 50px;
+      margin-right: 12px;
+    }
+
+    .login-title {
+      font-size: 28px;
+      font-weight: bold;
+      color: #1b6b5a;
+      margin: 0;
+    }
+
+    .login-subtitle {
+      color: #888;
+      font-size: 14px;
+      margin-top: 8px;
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #1b6b5a;
+      box-shadow: 0 0 0 3px rgba(27, 107, 90, 0.1);
+    }
+
+    .login-button {
+      width: 100%;
+      padding: 12px;
+      background: #1b6b5a;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .login-button:hover {
+      background: #0f4238;
+    }
+
+    .app-container {
+      display: flex;
+      min-height: 100vh;
+      background-color: #f5f5f5;
+    }
+
+    .sidebar {
+      width: 250px;
+      background-color: #1a2332;
+      color: white;
+      padding: 24px 16px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+      overflow-y: auto;
+    }
+
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      margin-bottom: 32px;
+      padding: 0 8px;
+    }
+
+    .sidebar-logo-icon {
+      width: 40px;
+      height: 40px;
+      margin-right: 12px;
+    }
+
+    .sidebar-logo-text {
+      font-size: 20px;
+      font-weight: bold;
+      color: white;
+    }
+
+    .nav-menu {
+      list-style: none;
+    }
+
+    .nav-item {
+      margin-bottom: 8px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      padding: 12px 12px;
+      color: #b0b8c1;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.3s;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-size: 14px;
+      width: 100%;
+      text-align: left;
+    }
+
+    .nav-link:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+
+    .nav-link.active {
+      background-color: #1b6b5a;
+      color: white;
+    }
+
+    .nav-icon {
+      margin-right: 12px;
+      font-size: 18px;
+    }
+
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      margin-bottom: 32px;
+    }
+
+    .page-title {
+      font-size: 32px;
+      font-weight: bold;
+      color: #1a2332;
+      margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+      color: #888;
+      font-size: 14px;
+    }
+
+    .greeting {
+      font-size: 28px;
+      font-weight: bold;
+      color: #1a2332;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      margin-bottom: 24px;
+    }
+
+    .card-header {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a2332;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+    }
+
+    .card-icon {
+      margin-right: 12px;
+      font-size: 24px;
+    }
+
+    .betty-card {
+      background: linear-gradient(135deg, #1b6b5a 0%, #0f4238 100%);
+      color: white;
+      padding: 32px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 16px rgba(27, 107, 90, 0.2);
+    }
+
+    .betty-name {
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 16px;
+    }
+
+    .betty-info {
+      font-size: 14px;
+      margin-top: 12px;
+      opacity: 0.9;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 32px;
+      font-weight: bold;
+      color: #1b6b5a;
+      margin: 12px 0;
+    }
+
+    .stat-label {
+      color: #888;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .sessions-list {
+      list-style: none;
+    }
+
+    .session-item {
+      padding: 16px;
+      border-left: 4px solid #1b6b5a;
+      background: #f9f9f9;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .session-item:hover {
+      background: #f0f0f0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .session-time {
+      font-weight: 600;
+      color: #1a2332;
+      margin-bottom: 4px;
+    }
+
+    .session-caregiver {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .session-type {
+      display: inline-block;
+      background: #e8f0e8;
+      color: #1b6b5a;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .activity-item {
+      padding: 16px;
+      border-left: 4px solid #e8724a;
+      background: #f9f9f9;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+    }
+
+    .activity-item.unread::before {
+      content: '';
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: #2563eb;
+      border-radius: 50%;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .activity-item:hover {
+      background: #f0f0f0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .activity-item.expanded {
+      background: white;
+      padding: 20px;
+    }
+
+    .activity-title {
+      font-weight: 600;
+      color: #1a2332;
+      margin-bottom: 4px;
+    }
+
+    .activity-time {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .activity-message {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .activity-badge {
+      display: inline-block;
+      background: #e8f0e8;
+      color: #1b6b5a;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 12px;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #1a2332;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #888;
+    }
+
+    .modal-section {
+      margin-bottom: 24px;
+    }
+
+    .modal-label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .modal-input,
+    .modal-select,
+    .modal-textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .modal-textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .modal-input:focus,
+    .modal-select:focus,
+    .modal-textarea:focus {
+      outline: none;
+      border-color: #1b6b5a;
+      box-shadow: 0 0 0 3px rgba(27, 107, 90, 0.1);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: #1b6b5a;
+      color: white;
+      flex: 1;
+    }
+
+    .btn-primary:hover {
+      background: #0f4238;
+    }
+
+    .btn-secondary {
+      background: #e8e8e8;
+      color: #333;
+      flex: 1;
+    }
+
+    .btn-secondary:hover {
+      background: #d8d8d8;
+    }
+
+    .btn-small {
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+
+    .btn-disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-disabled:hover {
+      background: #e8e8e8;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-confirmed {
+      background: #d1f0e8;
+      color: #1b6b5a;
+    }
+
+    .badge-pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .badge-completed {
+      background: #d1f0e8;
+      color: #1b6b5a;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .info-item {
+      padding: 12px;
+      background: #f9f9f9;
+      border-radius: 8px;
+    }
+
+    .info-label {
+      font-size: 12px;
+      color: #999;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .info-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a2332;
+    }
+
+    .care-profile-header {
+      background: linear-gradient(135deg, #1b6b5a 0%, #0f4238 100%);
+      color: white;
+      padding: 32px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .care-profile-avatar {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .care-profile-name {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .care-profile-subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .health-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .health-item {
+      padding: 12px;
+      background: #f9f9f9;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      border-left: 4px solid #1b6b5a;
+    }
+
+    .med-item {
+      padding: 12px;
+      background: #f9f9f9;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      border-left: 4px solid #e8724a;
+    }
+
+    .ai-insights {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      margin-bottom: 24px;
+      border: 2px solid transparent;
+      background-image: linear-gradient(white, white), linear-gradient(135deg, #1b6b5a, #e8724a);
+      background-origin: border-box;
+      background-clip: padding-box, border-box;
+    }
+
+    .ai-insights-header {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a2332;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+    }
+
+    .ai-insights-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .ai-insights-item {
+      padding: 12px;
+      margin-bottom: 12px;
+      background: #f9f9f9;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #666;
+      border-left: 4px solid #1b6b5a;
+    }
+
+    .schedule-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .schedule-session {
+      padding: 16px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid #1b6b5a;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .schedule-session:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .schedule-session.expanded {
+      background: #f9f9f9;
+    }
+
+    .schedule-date {
+      font-weight: 600;
+      color: #1a2332;
+      margin-bottom: 8px;
+    }
+
+    .schedule-details {
+      font-size: 14px;
+      color: #666;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .schedule-session.expanded .schedule-details {
+      display: block;
+    }
+
+    .schedule-detail-row {
+      padding: 8px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .schedule-detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .schedule-detail-label {
+      font-weight: 500;
+      color: #888;
+      font-size: 12px;
+    }
+
+    .schedule-detail-value {
+      color: #1a2332;
+      margin-top: 4px;
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      cursor: pointer;
+    }
+
+    .toggle-input {
+      margin-right: 12px;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .earnings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .earning-card {
+      background: linear-gradient(135deg, #1b6b5a 0%, #0f4238 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .earning-amount {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .earning-label {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .review-item {
+      padding: 16px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid #e8724a;
+    }
+
+    .review-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .review-name {
+      font-weight: 600;
+      color: #1a2332;
+    }
+
+    .review-rating {
+      color: #fbbf24;
+      font-weight: 600;
+    }
+
+    .review-text {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.5;
+    }
+
+    .caregiver-item {
+      padding: 16px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid #1b6b5a;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .caregiver-name {
+      font-weight: 600;
+      font-size: 16px;
+      color: #1a2332;
+      margin-bottom: 8px;
+    }
+
+    .caregiver-details {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .caregiver-detail {
+      margin-bottom: 4px;
+    }
+
+    .caregiver-badges {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .caregiver-badge {
+      background: #e8f0e8;
+      color: #1b6b5a;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .upcoming-commitments {
+      list-style: none;
+      padding: 0;
+    }
+
+    .commitment-item {
+      padding: 16px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid #e8724a;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .commitment-title {
+      font-weight: 600;
+      color: #1a2332;
+      margin-bottom: 8px;
+    }
+
+    .commitment-detail {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .section-coming-soon {
+      padding: 24px;
+      background: #f0f4f8;
+      border-radius: 8px;
+      text-align: center;
+      color: #666;
+    }
+
+    @media (max-width: 768px) {
+      .app-container {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        padding: 16px;
+      }
+
+      .main-content {
+        padding: 20px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div id="root"></div>
+  <div id="root"></div>
 
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const API_BASE = window.location.origin;
 
-    <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
+    // SVG Logo Component
+    const KinCareIcon = ({ width = 40, height = 40 }) => (
+      <svg viewBox="0 0 100 100" width={width} height={height} xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style={{ stopColor: '#1b6b5a', stopOpacity: 1 }} />
+            <stop offset="100%" style={{ stopColor: '#e8724a', stopOpacity: 1 }} />
+          </linearGradient>
+        </defs>
+        <circle cx="65" cy="28" r="12" fill="#1b6b5a" />
+        <path d="M 65 42 Q 55 50 55 62 L 75 62 Q 75 50 65 42" fill="#1b6b5a" />
+        <circle cx="35" cy="35" r="10" fill="#e8724a" />
+        <path d="M 35 47 Q 27 54 27 64 L 43 64 Q 43 54 35 47" fill="#e8724a" />
+        <path d="M 50 52 Q 50 45 55 45 Q 58 45 60 48 Q 62 45 65 45 Q 70 45 70 52 Q 70 58 60 65 Q 50 58 50 52" fill="url(#grad1)" />
+      </svg>
+    );
 
-        const API_BASE = window.location.origin;
+    // Login Page Component
+    const LoginPage = ({ onLogin }) => {
+      const [email, setEmail] = useState('pete@kincare.app');
+      const [password, setPassword] = useState('kincare123');
+      const [loading, setLoading] = useState(false);
 
-        // Login Component
-        function LoginPage({ onLoginSuccess }) {
-            const [email, setEmail] = useState('pete@kincare.app');
-            const [password, setPassword] = useState('kincare123');
-            const [error, setError] = useState('');
-            const [loading, setLoading] = useState(false);
-
-            const handleLogin = async (e) => {
-                e.preventDefault();
-                setError('');
-                setLoading(true);
-
-                try {
-                    const response = await fetch(`${API_BASE}/api/auth/login`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ email, password }),
-                    });
-
-                    if (!response.ok) {
-                        const data = await response.json();
-                        throw new Error(data.message || 'Login failed');
-                    }
-
-                    const data = await response.json();
-                    onLoginSuccess(data.token);
-                } catch (err) {
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            return (
-                <div className="login-container">
-                    <div className="login-card">
-                        <div className="login-logo">
-                            <h1>KinCare</h1>
-                            <p>Trusted elderly care at your fingertips</p>
-                        </div>
-
-                        <form onSubmit={handleLogin}>
-                            {error && <div className="error-message">{error}</div>}
-
-                            <div className="form-group">
-                                <label htmlFor="email">Email Address</label>
-                                <input
-                                    id="email"
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="Enter your email"
-                                    required
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="password">Password</label>
-                                <input
-                                    id="password"
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="Enter your password"
-                                    required
-                                />
-                            </div>
-
-                            <button
-                                type="submit"
-                                className="login-button"
-                                disabled={loading}
-                            >
-                                {loading ? 'Signing in...' : 'Sign In'}
-                            </button>
-                        </form>
-
-                        <div className="demo-credentials">
-                            <strong>Demo Credentials:</strong>
-                            <div>Email: pete@kincare.app</div>
-                            <div>Password: kincare123</div>
-                        </div>
-                    </div>
-                </div>
-            );
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+          const response = await fetch(`${API_BASE}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+          const data = await response.json();
+          if (data.success) {
+            onLogin(data.user);
+          } else {
+            alert('Login failed');
+          }
+        } catch (error) {
+          console.error('Login error:', error);
+          alert('Login error');
+        } finally {
+          setLoading(false);
         }
+      };
 
-        // Dashboard Component
-        function Dashboard({ token, onLogout }) {
-            const [dashboardData, setDashboardData] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState('');
-            const [currentPage, setCurrentPage] = useState('dashboard');
-            const [showRequestCareModal, setShowRequestCareModal] = useState(false);
+      return (
+        <div className="login-container">
+          <div className="login-card">
+            <div className="login-logo">
+              <KinCareIcon width={50} height={50} />
+              <h1 className="login-title">KinCare</h1>
+            </div>
+            <p className="login-subtitle">Family Care Management</p>
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="login-button" disabled={loading}>
+                {loading ? 'Signing in...' : 'Sign In'}
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    };
 
-            useEffect(() => {
-                fetchDashboardData();
-            }, []);
+    // Dashboard Component
+    const Dashboard = () => {
+      const [sessions, setSessions] = useState([]);
+      const [activities, setActivities] = useState([]);
 
-            const fetchDashboardData = async () => {
-                try {
-                    const response = await fetch(`${API_BASE}/api/dashboard`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                        },
-                    });
+      useEffect(() => {
+        const fetchData = async () => {
+          try {
+            const [sessionsRes, activitiesRes] = await Promise.all([
+              fetch(`${API_BASE}/api/sessions`),
+              fetch(`${API_BASE}/api/activity`),
+            ]);
+            const sessionsData = await sessionsRes.json();
+            const activitiesData = await activitiesRes.json();
+            setSessions(sessionsData.sessions || []);
+            setActivities(activitiesData.activities || []);
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
+        };
+        fetchData();
+      }, []);
 
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch dashboard data');
-                    }
+      const upcomingSessions = sessions.slice(0, 3);
 
-                    const data = await response.json();
-                    setDashboardData(data);
-                    setError('');
-                } catch (err) {
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
+      const formatActivityTime = (createdAt) => {
+        const dateStr = createdAt.replace(' ', 'T') + 'Z';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
 
-            if (loading) {
-                return (
-                    <div className="app-layout">
-                        <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} onLogout={onLogout} />
-                        <div className="main-content">
-                            <div className="loading">
-                                <div className="spinner"></div>
-                                Loading...
-                            </div>
-                        </div>
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return date.toLocaleDateString();
+      };
+
+      return (
+        <>
+          <div className="page-header">
+            <h1 className="greeting">Welcome back, Pete!</h1>
+          </div>
+
+          <div className="betty-card">
+            <div style={{ fontSize: 40 }}>👵</div>
+            <div className="betty-name">Betty Lee</div>
+            <div className="betty-info">Your mother • Living in Blacksburg, VA</div>
+          </div>
+
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div style={{ fontSize: 28 }}>📅</div>
+              <div className="stat-number">{sessions.length}</div>
+              <div className="stat-label">Scheduled Sessions</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ fontSize: 28 }}>👨‍💼</div>
+              <div className="stat-number">2</div>
+              <div className="stat-label">Assigned Caregivers</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ fontSize: 28 }}>⭐</div>
+              <div className="stat-number">4.8</div>
+              <div className="stat-label">Average Rating</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ fontSize: 28 }}>💰</div>
+              <div className="stat-number">$1,240</div>
+              <div className="stat-label">Monthly Budget</div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">📅</span>
+              Upcoming Sessions
+            </div>
+            <ul className="sessions-list">
+              {upcomingSessions.length > 0 ? (
+                upcomingSessions.map((session, idx) => (
+                  <li key={idx} className="session-item">
+                    <div className="session-time">
+                      {session.scheduled_date} at {session.scheduled_time}
                     </div>
-                );
+                    <div className="session-caregiver">{session.caregiver_name}</div>
+                    <span className="session-type">{session.service_type}</span>
+                  </li>
+                ))
+              ) : (
+                <li style={{ color: '#999', padding: '16px' }}>No upcoming sessions</li>
+              )}
+            </ul>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">📢</span>
+              Recent Activity
+            </div>
+            <div>
+              {activities.slice(0, 5).map((activity, idx) => (
+                <div key={idx} className="activity-item">
+                  <div className="activity-title">{activity.title}</div>
+                  <div className="activity-time">{formatActivityTime(activity.created_at)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      );
+    };
+
+    // Care Profile Component
+    const CareProfile = () => {
+      const [profile, setProfile] = useState(null);
+
+      useEffect(() => {
+        const fetchProfile = async () => {
+          try {
+            const response = await fetch(`${API_BASE}/api/care-recipients`);
+            const data = await response.json();
+            if (data.careRecipients && data.careRecipients.length > 0) {
+              setProfile(data.careRecipients[0]);
             }
+          } catch (error) {
+            console.error('Error fetching profile:', error);
+          }
+        };
+        fetchProfile();
+      }, []);
 
-            return (
-                <div className="app-layout">
-                    <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} onLogout={onLogout} />
-                    <div className="main-content">
-                        {error && <div className="error-message">{error}</div>}
+      if (!profile) return <div className="page-header"><h1 className="page-title">Care Profile</h1></div>;
 
-                        {currentPage === 'dashboard' && dashboardData && (
-                            <DashboardPage
-                                dashboardData={dashboardData}
-                                token={token}
-                                onRequestCare={() => setShowRequestCareModal(true)}
-                                onCareRequestComplete={() => {
-                                    setShowRequestCareModal(false);
-                                    fetchDashboardData();
-                                }}
-                            />
-                        )}
-
-                        {currentPage === 'activity' && (
-                            <ActivityPage token={token} />
-                        )}
-
-                        {currentPage === 'caregivers' && (
-                            <CaregiversPage token={token} />
-                        )}
-
-                        {currentPage === 'schedule' && (
-                            <SchedulePage token={token} />
-                        )}
-
-                        {currentPage === 'profile' && (
-                            <ProfilePage token={token} dashboardData={dashboardData} />
-                        )}
-                    </div>
-
-                    {showRequestCareModal && (
-                        <RequestCareModal
-                            token={token}
-                            recipientId={dashboardData?.parent?.id}
-                            onClose={() => setShowRequestCareModal(false)}
-                            onSuccess={() => {
-                                setShowRequestCareModal(false);
-                                fetchDashboardData();
-                            }}
-                        />
-                    )}
-                </div>
-            );
+      const healthConditions = (() => {
+        try {
+          return typeof profile.health_conditions === 'string'
+            ? JSON.parse(profile.health_conditions)
+            : profile.health_conditions || [];
+        } catch {
+          return [];
         }
+      })();
 
-        // Sidebar Component
-        function Sidebar({ currentPage, setCurrentPage, onLogout }) {
-            const navItems = [
-                { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
-                { id: 'activity', label: 'Activity Feed', icon: '📋' },
-                { id: 'caregivers', label: 'Caregivers', icon: '👥' },
-                { id: 'schedule', label: 'Schedule', icon: '📅' },
-                { id: 'profile', label: 'Care Profile', icon: '👤' },
-            ];
-
-            return (
-                <div className="sidebar">
-                    <div className="sidebar-logo">KinCare</div>
-
-                    {navItems.map((item) => (
-                        <div
-                            key={item.id}
-                            className={`nav-item ${currentPage === item.id ? 'active' : ''}`}
-                            onClick={() => setCurrentPage(item.id)}
-                        >
-                            <span>{item.icon}</span>
-                            <span>{item.label}</span>
-                        </div>
-                    ))}
-
-                    <div className="sidebar-footer">
-                        <button className="logout-button" onClick={onLogout}>
-                            Sign Out
-                        </button>
-                    </div>
-                </div>
-            );
+      const medications = (() => {
+        try {
+          return typeof profile.medications === 'string'
+            ? JSON.parse(profile.medications)
+            : profile.medications || [];
+        } catch {
+          return [];
         }
-
-        // Dashboard Page Component
-        function DashboardPage({ dashboardData, token, onRequestCare, onCareRequestComplete }) {
-            const parent = dashboardData.parent;
-            const stats = dashboardData.stats;
-
-            const getGreeting = () => {
-                const hour = new Date().getHours();
-                if (hour < 12) return 'Good morning';
-                if (hour < 18) return 'Good afternoon';
-                return 'Good evening';
-            };
-
-            return (
-                <div>
-                    <div className="page-header">
-                        <h1 className="page-title">{getGreeting()}, Pete</h1>
-                        <p className="page-subtitle">Here's what's happening with your care today</p>
-                    </div>
-
-                    <div className="parent-card">
-                        <div className="parent-info">
-                            <h3>{parent.name}</h3>
-                            <div className="parent-details">
-                                {parent.age} years old • {parent.location}
-                            </div>
-                        </div>
-                        <button className="request-care-button" onClick={onRequestCare}>
-                            Request Care
-                        </button>
-                    </div>
-
-                    <div className="stats-row">
-                        <div className="stat-card">
-                            <div className="stat-label">Sessions This Month</div>
-                            <div className="stat-value">{stats.sessionsThisMonth}</div>
-                        </div>
-                        <div className="stat-card">
-                            <div className="stat-label">Total Hours</div>
-                            <div className="stat-value">{stats.totalHours}h</div>
-                        </div>
-                        <div className="stat-card">
-                            <div className="stat-label">Avg Caregiver Rating</div>
-                            <div className="stat-value">{stats.avgCaregiverRating}</div>
-                        </div>
-                        <div className="stat-card">
-                            <div className="stat-label">Monthly Spend</div>
-                            <div className="stat-value">${stats.monthlySpend}</div>
-                        </div>
-                    </div>
-
-                    <h2 className="section-title">Upcoming Sessions</h2>
-                    <div>
-                        {dashboardData.upcomingSessions && dashboardData.upcomingSessions.length > 0 ? (
-                            dashboardData.upcomingSessions.map((session, idx) => (
-                                <div key={idx} className="session-item">
-                                    <div className="session-time">
-                                        {new Date(session.date).toLocaleDateString()} at {session.time}
-                                    </div>
-                                    <div className="session-service">
-                                        {session.serviceType.charAt(0).toUpperCase() + session.serviceType.slice(1)}
-                                    </div>
-                                    <div className="session-caregiver">
-                                        Caregiver: {session.caregiverName}
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <p>No upcoming sessions scheduled</p>
-                        )}
-                    </div>
-
-                    <h2 className="section-title" style={{ marginTop: '30px' }}>Recent Activity</h2>
-                    <div>
-                        {dashboardData.recentActivity && dashboardData.recentActivity.length > 0 ? (
-                            dashboardData.recentActivity.map((activity, idx) => (
-                                <div key={idx} className="activity-item">
-                                    <div className="activity-title">{activity.title}</div>
-                                    <div className="activity-message">{activity.message}</div>
-                                    <div className="activity-time">
-                                        {new Date(activity.timestamp).toLocaleString()}
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <p>No recent activity</p>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        // Activity Page Component
-        function ActivityPage({ token }) {
-            const [activities, setActivities] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState('');
-
-            useEffect(() => {
-                const fetchActivities = async () => {
-                    try {
-                        const response = await fetch(`${API_BASE}/api/activity`, {
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                            },
-                        });
-
-                        if (!response.ok) {
-                            throw new Error('Failed to fetch activities');
-                        }
-
-                        const data = await response.json();
-                        setActivities(data.activities || []);
-                    } catch (err) {
-                        setError(err.message);
-                    } finally {
-                        setLoading(false);
-                    }
-                };
-
-                fetchActivities();
-            }, [token]);
-
-            if (loading) {
-                return (
-                    <div className="loading">
-                        <div className="spinner"></div>
-                        Loading...
-                    </div>
-                );
-            }
-
-            return (
-                <div>
-                    <div className="page-header">
-                        <h1 className="page-title">Activity Feed</h1>
-                        <p className="page-subtitle">All updates and interactions</p>
-                    </div>
-
-                    {error && <div className="error-message">{error}</div>}
-
-                    {activities.length > 0 ? (
-                        <div>
-                            {activities.map((activity, idx) => (
-                                <div key={idx} className="activity-item">
-                                    <div className="activity-title">{activity.title}</div>
-                                    <div className="activity-message">{activity.message}</div>
-                                    <div className="activity-time">
-                                        {new Date(activity.timestamp).toLocaleString()}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="card">
-                            <p>No activities yet</p>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // Caregivers Page Component
-        function CaregiversPage({ token }) {
-            const [caregivers, setCaregivers] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState('');
-
-            useEffect(() => {
-                const fetchCaregivers = async () => {
-                    try {
-                        const response = await fetch(`${API_BASE}/api/caregivers`, {
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                            },
-                        });
-
-                        if (!response.ok) {
-                            throw new Error('Failed to fetch caregivers');
-                        }
-
-                        const data = await response.json();
-                        setCaregivers(data.caregivers || []);
-                    } catch (err) {
-                        setError(err.message);
-                    } finally {
-                        setLoading(false);
-                    }
-                };
-
-                fetchCaregivers();
-            }, [token]);
-
-            if (loading) {
-                return (
-                    <div className="loading">
-                        <div className="spinner"></div>
-                        Loading...
-                    </div>
-                );
-            }
-
-            return (
-                <div>
-                    <div className="page-header">
-                        <h1 className="page-title">Our Caregivers</h1>
-                        <p className="page-subtitle">Meet the people caring for your loved ones</p>
-                    </div>
-
-                    {error && <div className="error-message">{error}</div>}
-
-                    <div className="content-grid">
-                        {caregivers.length > 0 ? (
-                            caregivers.map((caregiver, idx) => (
-                                <div key={idx} className="card">
-                                    <div className="card-title">{caregiver.name}</div>
-
-                                    <div className="caregiver-rating">
-                                        <div>
-                                            {[...Array(5)].map((_, i) => (
-                                                <span key={i} className="star">
-                                                    {i < Math.round(caregiver.rating) ? '★' : '☆'}
-                                                </span>
-                                            ))}
-                                        </div>
-                                        <span className="rating-value">{caregiver.rating}</span>
-                                        <span className="review-count">({caregiver.reviewCount} reviews)</span>
-                                    </div>
-
-                                    {caregiver.specialties && caregiver.specialties.length > 0 && (
-                                        <div className="specialties">
-                                            {caregiver.specialties.map((specialty, i) => (
-                                                <div key={i} className="specialty-badge">
-                                                    {specialty}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <div className="caregiver-bio">
-                                        {caregiver.bio}
-                                    </div>
-
-                                    <div className="hourly-rate">
-                                        ${caregiver.hourlyRate}/hour
-                                    </div>
-
-                                    <div className="availability">
-                                        {caregiver.availability}
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="card">
-                                <p>No caregivers available</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        // Schedule Page Component
-        function SchedulePage({ token }) {
-            const [sessions, setSessions] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState('');
-
-            useEffect(() => {
-                const fetchSessions = async () => {
-                    try {
-                        const response = await fetch(`${API_BASE}/api/sessions`, {
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                            },
-                        });
-
-                        if (!response.ok) {
-                            throw new Error('Failed to fetch sessions');
-                        }
-
-                        const data = await response.json();
-                        setSessions(data.sessions || []);
-                    } catch (err) {
-                        setError(err.message);
-                    } finally {
-                        setLoading(false);
-                    }
-                };
-
-                fetchSessions();
-            }, [token]);
-
-            if (loading) {
-                return (
-                    <div className="loading">
-                        <div className="spinner"></div>
-                        Loading...
-                    </div>
-                );
-            }
-
-            const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-            return (
-                <div>
-                    <div className="page-header">
-                        <h1 className="page-title">Schedule</h1>
-                        <p className="page-subtitle">Weekly view of care sessions</p>
-                    </div>
-
-                    {error && <div className="error-message">{error}</div>}
-
-                    <div className="calendar-grid">
-                        {weekDays.map((day) => (
-                            <div key={day}>
-                                <div className="calendar-day-header">{day}</div>
-                                {sessions
-                                    .filter((session) => {
-                                        const sessionDate = new Date(session.date);
-                                        const dayOfWeek = weekDays[sessionDate.getDay() === 0 ? 6 : sessionDate.getDay() - 1];
-                                        return dayOfWeek === day;
-                                    })
-                                    .map((session, idx) => (
-                                        <div key={idx} className="calendar-day">
-                                            <div className="session-time">{session.time}</div>
-                                            <div className="session-service">
-                                                {session.serviceType.charAt(0).toUpperCase() + session.serviceType.slice(1).replace('_', ' ')}
-                                            </div>
-                                        </div>
-                                    ))}
-                            </div>
-                        ))}
-                    </div>
-
-                    {sessions.length === 0 && (
-                        <div className="card" style={{ marginTop: '20px' }}>
-                            <p>No sessions scheduled</p>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // Profile Page Component
-        function ProfilePage({ token, dashboardData }) {
-            const [profileData, setProfileData] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState('');
-
-            useEffect(() => {
-                const fetchProfile = async () => {
-                    try {
-                        const response = await fetch(`${API_BASE}/api/care-recipients`, {
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                            },
-                        });
-
-                        if (!response.ok) {
-                            throw new Error('Failed to fetch care profile');
-                        }
-
-                        const data = await response.json();
-                        setProfileData(data.recipients?.[0] || null);
-                    } catch (err) {
-                        setError(err.message);
-                    } finally {
-                        setLoading(false);
-                    }
-                };
-
-                fetchProfile();
-            }, [token]);
-
-            if (loading) {
-                return (
-                    <div className="loading">
-                        <div className="spinner"></div>
-                        Loading...
-                    </div>
-                );
-            }
-
-            if (!profileData) {
-                return (
-                    <div>
-                        <div className="page-header">
-                            <h1 className="page-title">Care Profile</h1>
-                        </div>
-                        {error && <div className="error-message">{error}</div>}
-                        <div className="card">
-                            <p>No profile data available</p>
-                        </div>
-                    </div>
-                );
-            }
-
-            return (
-                <div>
-                    <div className="page-header">
-                        <h1 className="page-title">Care Profile</h1>
-                        <p className="page-subtitle">{profileData.name}</p>
-                    </div>
-
-                    {error && <div className="error-message">{error}</div>}
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-                        <div className="card">
-                            <div className="card-title">Basic Information</div>
-                            <div style={{ fontSize: '14px', lineHeight: '1.8', color: '#666' }}>
-                                <div><strong>Age:</strong> {profileData.age}</div>
-                                <div><strong>Location:</strong> {profileData.location}</div>
-                                <div><strong>Gender:</strong> {profileData.gender}</div>
-                            </div>
-                        </div>
-
-                        {profileData.healthConditions && profileData.healthConditions.length > 0 && (
-                            <div className="card">
-                                <div className="card-title">Health Conditions</div>
-                                <ul style={{ fontSize: '14px', color: '#666', paddingLeft: '20px' }}>
-                                    {profileData.healthConditions.map((condition, idx) => (
-                                        <li key={idx}>{condition}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        {profileData.medications && profileData.medications.length > 0 && (
-                            <div className="card">
-                                <div className="card-title">Medications</div>
-                                <ul style={{ fontSize: '14px', color: '#666', paddingLeft: '20px' }}>
-                                    {profileData.medications.map((medication, idx) => (
-                                        <li key={idx}>{medication}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        {profileData.preferences && (
-                            <div className="card">
-                                <div className="card-title">Preferences</div>
-                                <p style={{ fontSize: '14px', color: '#666', lineHeight: '1.6' }}>
-                                    {profileData.preferences}
-                                </p>
-                            </div>
-                        )}
-
-                        {profileData.emergencyContact && (
-                            <div className="card">
-                                <div className="card-title">Emergency Contact</div>
-                                <div style={{ fontSize: '14px', color: '#666' }}>
-                                    <div><strong>{profileData.emergencyContact.name}</strong></div>
-                                    <div>{profileData.emergencyContact.phone}</div>
-                                    <div>{profileData.emergencyContact.relationship}</div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        // Request Care Modal Component
-        function RequestCareModal({ token, recipientId, onClose, onSuccess }) {
-            const [step, setStep] = useState(1);
-            const [selectedService, setSelectedService] = useState(null);
-            const [selectedDate, setSelectedDate] = useState(null);
-            const [selectedTime, setSelectedTime] = useState(null);
-            const [specialInstructions, setSpecialInstructions] = useState('');
-            const [sessionId, setSessionId] = useState(null);
-            const [matchedCaregiver, setMatchedCaregiver] = useState(null);
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState('');
-
-            const services = [
-                { id: 'meals', name: 'Meal Prep', icon: '🍽️', description: 'Meal preparation and feeding' },
-                { id: 'rides', name: 'Transportation', icon: '🚗', description: 'Doctor visits & outings' },
-                { id: 'companion', name: 'Companion Care', icon: '💬', description: 'Social & emotional support' },
-                { id: 'full_day', name: 'Full Day Care', icon: '⏰', description: '8+ hour care sessions' },
-            ];
-
-            const timeSlots = [
-                { id: 'morning', label: '8:00 AM - 12:00 PM' },
-                { id: 'afternoon', label: '12:00 PM - 5:00 PM' },
-                { id: 'evening', label: '5:00 PM - 8:00 PM' },
-                { id: 'custom', label: 'Custom Time' },
-            ];
-
-            const handleNextStep = () => {
-                if (step < 4) {
-                    setStep(step + 1);
-                }
-            };
-
-            const handlePreviousStep = () => {
-                if (step > 1) {
-                    setStep(step - 1);
-                }
-            };
-
-            const handleSubmitRequest = async () => {
-                setLoading(true);
-                setError('');
-
-                try {
-                    // Create session
-                    const sessionResponse = await fetch(`${API_BASE}/api/sessions`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`,
-                        },
-                        body: JSON.stringify({
-                            recipientId,
-                            serviceType: selectedService,
-                            date: selectedDate,
-                            time: selectedTime,
-                            specialInstructions,
-                        }),
-                    });
-
-                    if (!sessionResponse.ok) {
-                        const data = await sessionResponse.json();
-                        throw new Error(data.message || 'Failed to create session');
-                    }
-
-                    const sessionData = await sessionResponse.json();
-                    const newSessionId = sessionData.id;
-                    setSessionId(newSessionId);
-
-                    // Match caregiver
-                    const matchResponse = await fetch(
-                        `${API_BASE}/api/sessions/${newSessionId}/match`,
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                            },
-                        }
-                    );
-
-                    if (!matchResponse.ok) {
-                        throw new Error('Failed to match caregiver');
-                    }
-
-                    const matchData = await matchResponse.json();
-                    setMatchedCaregiver(matchData.caregiver);
-                    setStep(5); // Go to confirmation step
-                } catch (err) {
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            return (
-                <div className="modal-overlay" onClick={onClose}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <span>Request Care for Betty</span>
-                            <button className="close-button" onClick={onClose}>×</button>
-                        </div>
-
-                        {step < 5 && (
-                            <div className="step-indicator">
-                                {[1, 2, 3, 4].map((s) => (
-                                    <div
-                                        key={s}
-                                        className={`step ${step === s ? 'active' : ''} ${step > s ? 'completed' : ''}`}
-                                    >
-                                        {step > s ? '✓' : s}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {error && <div className="error-message">{error}</div>}
-
-                        {step === 1 && (
-                            <div>
-                                <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
-                                    What type of care do you need?
-                                </h3>
-                                <div className="service-cards">
-                                    {services.map((service) => (
-                                        <div
-                                            key={service.id}
-                                            className={`service-card ${selectedService === service.id ? 'selected' : ''}`}
-                                            onClick={() => setSelectedService(service.id)}
-                                        >
-                                            <div className="service-icon">{service.icon}</div>
-                                            <div className="service-name">{service.name}</div>
-                                            <div className="service-description">{service.description}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="button-group">
-                                    <button className="button-secondary" onClick={onClose}>Cancel</button>
-                                    <button
-                                        className="button-primary"
-                                        onClick={handleNextStep}
-                                        disabled={!selectedService}
-                                    >
-                                        Next
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {step === 2 && (
-                            <div>
-                                <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
-                                    When do you need care?
-                                </h3>
-                                <div style={{ marginBottom: '20px' }}>
-                                    <label style={{ display: 'block', marginBottom: '10px', fontWeight: '600' }}>
-                                        Select a date:
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={selectedDate || ''}
-                                        onChange={(e) => setSelectedDate(e.target.value)}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px',
-                                            border: '1px solid #e8eef5',
-                                            borderRadius: '8px',
-                                            fontSize: '14px',
-                                        }}
-                                    />
-                                </div>
-
-                                <h4 style={{ marginBottom: '10px', fontWeight: '600' }}>Select time slot:</h4>
-                                <div className="time-buttons">
-                                    {timeSlots.map((slot) => (
-                                        <button
-                                            key={slot.id}
-                                            className={`time-button ${selectedTime === slot.label ? 'selected' : ''}`}
-                                            onClick={() => setSelectedTime(slot.label)}
-                                        >
-                                            {slot.label}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <div className="button-group">
-                                    <button className="button-secondary" onClick={handlePreviousStep}>Back</button>
-                                    <button
-                                        className="button-primary"
-                                        onClick={handleNextStep}
-                                        disabled={!selectedDate || !selectedTime}
-                                    >
-                                        Next
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {step === 3 && (
-                            <div>
-                                <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
-                                    Any special instructions?
-                                </h3>
-                                <textarea
-                                    className="textarea"
-                                    placeholder="E.g., Betty prefers afternoon walks, allergic to nuts, prefers quiet time..."
-                                    value={specialInstructions}
-                                    onChange={(e) => setSpecialInstructions(e.target.value)}
-                                />
-                                <div className="button-group">
-                                    <button className="button-secondary" onClick={handlePreviousStep}>Back</button>
-                                    <button className="button-primary" onClick={handleNextStep}>
-                                        Next
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {step === 4 && (
-                            <div>
-                                <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
-                                    Review and Confirm
-                                </h3>
-
-                                <div className="session-summary">
-                                    <div className="summary-item">
-                                        <span className="summary-label">Service Type</span>
-                                        <span className="summary-value">
-                                            {services.find((s) => s.id === selectedService)?.name}
-                                        </span>
-                                    </div>
-                                    <div className="summary-item">
-                                        <span className="summary-label">Date</span>
-                                        <span className="summary-value">
-                                            {new Date(selectedDate).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                    <div className="summary-item">
-                                        <span className="summary-label">Time</span>
-                                        <span className="summary-value">{selectedTime}</span>
-                                    </div>
-                                    {specialInstructions && (
-                                        <div className="summary-item">
-                                            <span className="summary-label">Instructions</span>
-                                            <span className="summary-value">{specialInstructions}</span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="button-group">
-                                    <button className="button-secondary" onClick={handlePreviousStep}>Back</button>
-                                    <button
-                                        className="button-primary"
-                                        onClick={handleSubmitRequest}
-                                        disabled={loading}
-                                    >
-                                        {loading ? 'Creating Session...' : 'Confirm & Find Caregiver'}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {step === 5 && matchedCaregiver && (
-                            <div>
-                                <div className="success-message">
-                                    Care request submitted successfully! Here's your matched caregiver:
-                                </div>
-
-                                <div className="matching-caregiver">
-                                    <div className="matched-name">{matchedCaregiver.name}</div>
-                                    <div className="matched-rating">
-                                        <div>
-                                            {[...Array(5)].map((_, i) => (
-                                                <span key={i} className="star">
-                                                    {i < Math.round(matchedCaregiver.rating) ? '★' : '☆'}
-                                                </span>
-                                            ))}
-                                        </div>
-                                        <span style={{ marginLeft: '10px' }}>
-                                            {matchedCaregiver.rating} ({matchedCaregiver.reviewCount} reviews)
-                                        </span>
-                                    </div>
-
-                                    {matchedCaregiver.specialties && (
-                                        <div className="matched-specialties">
-                                            {matchedCaregiver.specialties.map((specialty, idx) => (
-                                                <div key={idx} className="matched-specialty">
-                                                    {specialty}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <div style={{ marginTop: '15px', fontSize: '14px' }}>
-                                        ${matchedCaregiver.hourlyRate}/hour
-                                    </div>
-                                </div>
-
-                                <div className="session-summary">
-                                    <div className="summary-item">
-                                        <span className="summary-label">Session ID</span>
-                                        <span className="summary-value">{sessionId}</span>
-                                    </div>
-                                    <div className="summary-item">
-                                        <span className="summary-label">Service</span>
-                                        <span className="summary-value">
-                                            {services.find((s) => s.id === selectedService)?.name}
-                                        </span>
-                                    </div>
-                                    <div className="summary-item">
-                                        <span className="summary-label">Date & Time</span>
-                                        <span className="summary-value">
-                                            {new Date(selectedDate).toLocaleDateString()} at {selectedTime}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="button-group">
-                                    <button
-                                        className="button-primary"
-                                        onClick={() => {
-                                            onSuccess();
-                                        }}
-                                    >
-                                        Done
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        // Main App Component
-        function App() {
-            const [token, setToken] = useState(null);
-
-            const handleLoginSuccess = (authToken) => {
-                setToken(authToken);
-            };
-
-            const handleLogout = () => {
-                setToken(null);
-            };
-
-            return token ? (
-                <Dashboard token={token} onLogout={handleLogout} />
+      })();
+
+      return (
+        <>
+          <div className="page-header">
+            <h1 className="page-title">Care Profile</h1>
+          </div>
+
+          <div className="care-profile-header">
+            <div className="care-profile-avatar">👵</div>
+            <div className="care-profile-name">{profile.first_name} {profile.last_name}</div>
+            <div className="care-profile-subtitle">Primary Care Recipient</div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">ℹ️</span>
+              Basic Information
+            </div>
+            <div className="info-grid">
+              <div className="info-item">
+                <div className="info-label">🎂 Age</div>
+                <div className="info-value">{profile.age} years old</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">📍 Location</div>
+                <div className="info-value">{profile.location_city}, {profile.location_state}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">⚕️</span>
+              Health Conditions
+            </div>
+            {healthConditions.length > 0 ? (
+              <ul className="health-list">
+                {healthConditions.map((condition, idx) => (
+                  <li key={idx} className="health-item">{condition}</li>
+                ))}
+              </ul>
             ) : (
-                <LoginPage onLoginSuccess={handleLoginSuccess} />
-            );
-        }
+              <p style={{ color: '#999' }}>No health conditions listed</p>
+            )}
+          </div>
 
-        // Render App
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">💊</span>
+              Medications
+            </div>
+            {medications.length > 0 ? (
+              <ul className="health-list">
+                {medications.map((med, idx) => (
+                  <li key={idx} className="med-item">{med}</li>
+                ))}
+              </ul>
+            ) : (
+              <p style={{ color: '#999' }}>No medications listed</p>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">💛</span>
+              Preferences
+            </div>
+            <p>{profile.preferences || 'No preferences listed'}</p>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">🚨</span>
+              Emergency Contact
+            </div>
+            <div className="info-grid">
+              <div className="info-item">
+                <div className="info-label">Name</div>
+                <div className="info-value">{profile.emergency_contact_name}</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Phone</div>
+                <div className="info-value">{profile.emergency_contact_phone}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="ai-insights">
+            <div className="ai-insights-header">
+              <span className="card-icon">🧠</span>
+              AI Care Insights
+            </div>
+            <ul className="ai-insights-list">
+              <li className="ai-insights-item">
+                Betty responds best to visual cues and gentle reminders for meals
+              </li>
+              <li className="ai-insights-item">
+                Morning hours (9-11 AM) show highest engagement and alertness
+              </li>
+              <li className="ai-insights-item">
+                Photo albums and gardening activities reduce anxiety episodes
+              </li>
+              <li className="ai-insights-item">
+                Consistent daily routines help maintain cognitive function
+              </li>
+            </ul>
+          </div>
+        </>
+      );
+    };
+
+    // Schedule Component
+    const Schedule = () => {
+      const [sessions, setSessions] = useState([]);
+      const [expandedSession, setExpandedSession] = useState(null);
+
+      useEffect(() => {
+        const fetchSessions = async () => {
+          try {
+            const response = await fetch(`${API_BASE}/api/sessions`);
+            const data = await response.json();
+            const allSessions = data.sessions || [];
+
+            const futureSessions = [
+              ...allSessions,
+              {
+                id: 'future-1',
+                scheduled_date: '2026-02-21',
+                scheduled_time: '10:00 AM',
+                service_type: 'Companionship',
+                caregiver_name: 'Mary Johnson',
+                status: 'confirmed',
+                duration_hours: 2,
+                special_instructions: 'Garden walk if weather permits',
+                estimated_cost: '$60',
+              },
+              {
+                id: 'future-2',
+                scheduled_date: '2026-02-25',
+                scheduled_time: '2:00 PM',
+                service_type: 'Light Housekeeping',
+                caregiver_name: 'Sarah Williams',
+                status: 'pending',
+                duration_hours: 2,
+                special_instructions: 'Focus on kitchen and living room',
+                estimated_cost: '$60',
+              },
+              {
+                id: 'future-3',
+                scheduled_date: '2026-02-28',
+                scheduled_time: '11:00 AM',
+                service_type: 'Personal Care',
+                caregiver_name: 'Mary Johnson',
+                status: 'confirmed',
+                duration_hours: 3,
+                special_instructions: 'Help with shower and breakfast',
+                estimated_cost: '$90',
+              },
+              {
+                id: 'future-4',
+                scheduled_date: '2026-03-03',
+                scheduled_time: '3:00 PM',
+                service_type: 'Companionship',
+                caregiver_name: 'Sarah Williams',
+                status: 'confirmed',
+                duration_hours: 2,
+                special_instructions: 'Movie afternoon',
+                estimated_cost: '$60',
+              },
+              {
+                id: 'future-5',
+                scheduled_date: '2026-03-05',
+                scheduled_time: '10:00 AM',
+                service_type: 'Medication Management',
+                caregiver_name: 'Mary Johnson',
+                status: 'pending',
+                duration_hours: 1,
+                special_instructions: 'Review medications and set up organizer',
+                estimated_cost: '$30',
+              },
+            ];
+
+            setSessions(futureSessions.sort((a, b) =>
+              new Date(a.scheduled_date) - new Date(b.scheduled_date)
+            ));
+          } catch (error) {
+            console.error('Error fetching sessions:', error);
+          }
+        };
+        fetchSessions();
+      }, []);
+
+      const getStatusBadgeClass = (status) => {
+        switch (status) {
+          case 'confirmed':
+            return 'badge-confirmed';
+          case 'pending':
+            return 'badge-pending';
+          case 'completed':
+            return 'badge-completed';
+          default:
+            return 'badge-confirmed';
+        }
+      };
+
+      return (
+        <>
+          <div className="page-header">
+            <h1 className="page-title">Schedule</h1>
+            <p className="page-subtitle">Betty's upcoming care sessions</p>
+          </div>
+
+          <div className="card">
+            <ul className="schedule-list">
+              {sessions.map((session) => (
+                <li
+                  key={session.id}
+                  className={`schedule-session ${expandedSession === session.id ? 'expanded' : ''}`}
+                  onClick={() =>
+                    setExpandedSession(expandedSession === session.id ? null : session.id)
+                  }
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div className="schedule-date">{session.scheduled_date} at {session.scheduled_time}</div>
+                      <div style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>
+                        {session.caregiver_name}
+                      </div>
+                      <div>
+                        <span className={`badge ${getStatusBadgeClass(session.status)}`}>
+                          {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                        </span>
+                        <span style={{ marginLeft: 8, fontSize: 13, color: '#999' }}>
+                          {session.service_type}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ color: '#1b6b5a', fontSize: 20 }}>
+                      {expandedSession === session.id ? '−' : '+'}
+                    </div>
+                  </div>
+
+                  <div className="schedule-details">
+                    <div className="schedule-detail-row">
+                      <div className="schedule-detail-label">Duration</div>
+                      <div className="schedule-detail-value">{session.duration_hours} hour(s)</div>
+                    </div>
+                    <div className="schedule-detail-row">
+                      <div className="schedule-detail-label">Service Type</div>
+                      <div className="schedule-detail-value">{session.service_type}</div>
+                    </div>
+                    <div className="schedule-detail-row">
+                      <div className="schedule-detail-label">Special Instructions</div>
+                      <div className="schedule-detail-value">{session.special_instructions}</div>
+                    </div>
+                    <div className="schedule-detail-row">
+                      <div className="schedule-detail-label">Estimated Cost</div>
+                      <div className="schedule-detail-value">{session.estimated_cost}</div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      );
+    };
+
+    // Activity Feed Component
+    const ActivityFeed = () => {
+      const [activities, setActivities] = useState([]);
+      const [expandedActivity, setExpandedActivity] = useState(null);
+
+      useEffect(() => {
+        const fetchActivities = async () => {
+          try {
+            const response = await fetch(`${API_BASE}/api/activity`);
+            const data = await response.json();
+            setActivities(data.activities || []);
+          } catch (error) {
+            console.error('Error fetching activities:', error);
+          }
+        };
+        fetchActivities();
+      }, []);
+
+      const formatActivityTime = (createdAt) => {
+        const dateStr = createdAt.replace(' ', 'T') + 'Z';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return date.toLocaleDateString();
+      };
+
+      return (
+        <>
+          <div className="page-header">
+            <h1 className="page-title">Activity Feed</h1>
+            <p className="page-subtitle">Recent updates about Betty's care</p>
+          </div>
+
+          <div className="card">
+            <div>
+              {activities.map((activity, idx) => (
+                <div
+                  key={idx}
+                  className={`activity-item ${expandedActivity === idx ? 'expanded' : ''} ${
+                    !activity.is_read ? 'unread' : ''
+                  }`}
+                  onClick={() => setExpandedActivity(expandedActivity === idx ? null : idx)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className="activity-title">{activity.title}</div>
+                  <div className="activity-time">{formatActivityTime(activity.created_at)}</div>
+
+                  {expandedActivity === idx && (
+                    <>
+                      <div className="activity-message">{activity.message}</div>
+                      <div className="activity-badge">{activity.event_type}</div>
+                      {!activity.is_read && (
+                        <div style={{ marginTop: 12, fontSize: 12, color: '#2563eb' }}>
+                          ● Unread
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      );
+    };
+
+    // Caregivers Component
+    const Caregivers = () => {
+      const [caregivers, setCaregivers] = useState([]);
+
+      useEffect(() => {
+        const fetchCaregivers = async () => {
+          try {
+            const response = await fetch(`${API_BASE}/api/caregivers`);
+            const data = await response.json();
+            setCaregivers(data.caregivers || []);
+          } catch (error) {
+            console.error('Error fetching caregivers:', error);
+          }
+        };
+        fetchCaregivers();
+      }, []);
+
+      return (
+        <>
+          <div className="page-header">
+            <h1 className="page-title">Caregivers</h1>
+            <p className="page-subtitle">Our trusted care professionals</p>
+          </div>
+
+          <div className="card">
+            {caregivers.length > 0 ? (
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {caregivers.map((caregiver, idx) => (
+                  <li key={idx} className="caregiver-item">
+                    <div className="caregiver-name">{caregiver.name}</div>
+                    <div className="caregiver-details">
+                      <div className="caregiver-detail">
+                        ⭐ {caregiver.rating || '4.9'} • {caregiver.reviews || 8} reviews
+                      </div>
+                      <div className="caregiver-detail">
+                        👨‍⚕️ {caregiver.specialties || 'Companionship, Personal Care'}
+                      </div>
+                      <div className="caregiver-detail">
+                        ✓ Background checked • CPR certified
+                      </div>
+                    </div>
+                    <div className="caregiver-badges">
+                      <span className="caregiver-badge">{caregiver.service_type || 'Companionship'}</span>
+                      <span className="caregiver-badge">{caregiver.availability || 'Flexible'}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p style={{ color: '#999' }}>Loading caregivers...</p>
+            )}
+          </div>
+        </>
+      );
+    };
+
+    // Request Care Modal Component
+    const RequestCareModal = ({ onClose }) => {
+      const [step, setStep] = useState(1);
+      const [formData, setFormData] = useState({
+        serviceType: '',
+        date: '',
+        time: '',
+        duration: '',
+        instructions: '',
+      });
+
+      const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData((prev) => ({ ...prev, [name]: value }));
+      };
+
+      const handleNext = () => {
+        if (step < 4) setStep(step + 1);
+      };
+
+      const handlePrevious = () => {
+        if (step > 1) setStep(step - 1);
+      };
+
+      const handleSubmit = async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/request-care`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData),
+          });
+          const data = await response.json();
+          if (data.success) {
+            alert('Care request submitted successfully!');
+            onClose();
+          } else {
+            alert('Failed to submit care request');
+          }
+        } catch (error) {
+          console.error('Error submitting care request:', error);
+          alert('Error submitting care request');
+        }
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={onClose}>×</button>
+            <div className="modal-header">
+              Request Care (Step {step} of 4)
+            </div>
+
+            {step === 1 && (
+              <div>
+                <div className="modal-section">
+                  <label className="modal-label">What type of care do you need?</label>
+                  <select
+                    name="serviceType"
+                    value={formData.serviceType}
+                    onChange={handleInputChange}
+                    className="modal-select"
+                  >
+                    <option value="">Select a service type</option>
+                    <option value="companionship">Companionship</option>
+                    <option value="personal-care">Personal Care</option>
+                    <option value="housekeeping">Light Housekeeping</option>
+                    <option value="medication">Medication Management</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div>
+                <div className="modal-section">
+                  <label className="modal-label">What date do you need care?</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={formData.date}
+                    onChange={handleInputChange}
+                    className="modal-input"
+                  />
+                </div>
+                <div className="modal-section">
+                  <label className="modal-label">What time?</label>
+                  <input
+                    type="time"
+                    name="time"
+                    value={formData.time}
+                    onChange={handleInputChange}
+                    className="modal-input"
+                  />
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div>
+                <div className="modal-section">
+                  <label className="modal-label">How long do you need care?</label>
+                  <select
+                    name="duration"
+                    value={formData.duration}
+                    onChange={handleInputChange}
+                    className="modal-select"
+                  >
+                    <option value="">Select duration</option>
+                    <option value="1">1 hour</option>
+                    <option value="2">2 hours</option>
+                    <option value="3">3 hours</option>
+                    <option value="4">4 hours</option>
+                    <option value="8">Full day (8 hours)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {step === 4 && (
+              <div>
+                <div className="modal-section">
+                  <label className="modal-label">Special instructions or notes</label>
+                  <textarea
+                    name="instructions"
+                    value={formData.instructions}
+                    onChange={handleInputChange}
+                    className="modal-textarea"
+                    placeholder="Any special requests or preferences..."
+                  />
+                </div>
+                <div style={{ padding: '16px', background: '#f0f8f5', borderRadius: '8px' }}>
+                  <strong>Review your request:</strong>
+                  <div style={{ marginTop: '12px', fontSize: '14px' }}>
+                    <p>Service: {formData.serviceType}</p>
+                    <p>Date: {formData.date}</p>
+                    <p>Time: {formData.time}</p>
+                    <p>Duration: {formData.duration} hour(s)</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="button-group">
+              {step > 1 && (
+                <button className="btn btn-secondary" onClick={handlePrevious}>
+                  Previous
+                </button>
+              )}
+              {step < 4 ? (
+                <button className="btn btn-primary" onClick={handleNext}>
+                  Next
+                </button>
+              ) : (
+                <button className="btn btn-primary" onClick={handleSubmit}>
+                  Submit Request
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // My Account Component
+    const MyAccount = () => {
+      return (
+        <>
+          <div className="page-header">
+            <h1 className="page-title">My Account</h1>
+            <p className="page-subtitle">Manage your profile and preferences</p>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">👤</span>
+              Profile Information
+            </div>
+            <div className="info-grid">
+              <div className="info-item">
+                <div className="info-label">Name</div>
+                <div className="info-value">Pete Anderson</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Email</div>
+                <div className="info-value">pete@kincare.app</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Phone</div>
+                <div className="info-value">(555) 123-4567</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Role</div>
+                <div className="info-value">Family Member</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">💳</span>
+              Payment Methods
+            </div>
+            <div className="section-coming-soon">
+              No payment methods on file
+              <div style={{ marginTop: 16 }}>
+                <button className="btn btn-primary btn-small btn-disabled" disabled>
+                  Add Payment Method
+                </button>
+              </div>
+              <p style={{ marginTop: 12, fontSize: 12 }}>Coming soon — payment integration in progress</p>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">✨</span>
+              Subscription
+            </div>
+            <div style={{ padding: '16px', background: '#f0f8f5', borderRadius: '8px', textAlign: 'center' }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>KinCare Beta</div>
+              <span className="badge badge-confirmed">Free during beta period</span>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">🔔</span>
+              Notification Preferences
+            </div>
+            <div style={{ padding: '16px' }}>
+              <label className="toggle-label">
+                <input type="checkbox" className="toggle-input" defaultChecked />
+                <span>Email notifications</span>
+              </label>
+              <label className="toggle-label">
+                <input type="checkbox" className="toggle-input" defaultChecked />
+                <span>SMS alerts</span>
+              </label>
+              <label className="toggle-label">
+                <input type="checkbox" className="toggle-input" defaultChecked />
+                <span>Visit summaries</span>
+              </label>
+              <label className="toggle-label">
+                <input type="checkbox" className="toggle-input" defaultChecked />
+                <span>Weekly digest</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">🔒</span>
+              Account Security
+            </div>
+            <div className="info-item" style={{ marginBottom: '16px' }}>
+              <div className="info-label">Last login</div>
+              <div className="info-value">Today at 9:42 AM</div>
+            </div>
+            <button className="btn btn-secondary btn-small btn-disabled" disabled>
+              Change Password
+            </button>
+          </div>
+        </>
+      );
+    };
+
+    // Caretaker Hub Component
+    const CaretakerHub = () => {
+      return (
+        <>
+          <div className="page-header">
+            <h1 className="page-title">Caretaker Hub</h1>
+            <p className="page-subtitle">Your caregiver dashboard</p>
+          </div>
+
+          <div className="card" style={{ background: 'linear-gradient(135deg, #f0f8f5 0%, #e8f8f3 100%)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ marginBottom: 8 }}>Your Caretaker Dashboard</h3>
+                <p style={{ color: '#666', fontSize: 14 }}>
+                  You're also registered as a caretaker
+                </p>
+              </div>
+              <label className="toggle-label" style={{ marginBottom: 0 }}>
+                <input type="checkbox" className="toggle-input" defaultChecked />
+              </label>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">📅</span>
+              Upcoming Commitments
+            </div>
+            <ul className="upcoming-commitments">
+              <li className="commitment-item">
+                <div className="commitment-title">Dorothy Chen • 82, Salem VA</div>
+                <div className="commitment-detail">📅 Feb 18, 2026 • 10:00 AM - 12:00 PM</div>
+                <div className="commitment-detail">👉 Companionship & Light Housekeeping</div>
+                <span className="badge badge-confirmed">Confirmed</span>
+              </li>
+              <li className="commitment-item">
+                <div className="commitment-title">Dorothy Chen • 82, Salem VA</div>
+                <div className="commitment-detail">📅 Feb 22, 2026 • 2:00 PM - 4:00 PM</div>
+                <div className="commitment-detail">👉 Companionship</div>
+                <span className="badge badge-confirmed">Confirmed</span>
+              </li>
+              <li className="commitment-item">
+                <div className="commitment-title">Dorothy Chen • 82, Salem VA</div>
+                <div className="commitment-detail">📅 Feb 28, 2026 • 11:00 AM - 2:00 PM</div>
+                <div className="commitment-detail">👉 Personal Care & Medication</div>
+                <span className="badge badge-pending">Pending</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">💰</span>
+              Earnings & Payments
+            </div>
+            <div className="earnings-grid">
+              <div className="earning-card">
+                <div className="earning-amount">$340</div>
+                <div className="earning-label">This month</div>
+              </div>
+              <div className="earning-card" style={{ background: 'linear-gradient(135deg, #e8724a 0%, #d45d35 100%)' }}>
+                <div className="earning-amount">$125</div>
+                <div className="earning-label">Pending payout</div>
+              </div>
+            </div>
+            <div className="section-coming-soon" style={{ marginTop: 16 }}>
+              Payment history coming soon
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">🏆</span>
+              Your Qualifications
+            </div>
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              <li style={{ padding: '12px', borderBottom: '1px solid #e0e0e0' }}>
+                ✓ CPR/First Aid Certified
+              </li>
+              <li style={{ padding: '12px', borderBottom: '1px solid #e0e0e0' }}>
+                ✓ Background Check Verified
+              </li>
+              <li style={{ padding: '12px', borderBottom: '1px solid #e0e0e0' }}>
+                📚 2 years experience
+              </li>
+              <li style={{ padding: '12px' }}>
+                🎯 Specialties: Companionship, Light Housekeeping
+              </li>
+            </ul>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-icon">⭐</span>
+              Your Reviews
+            </div>
+            <div style={{ marginBottom: 12, textAlign: 'center', padding: '12px', background: '#f9f9f9', borderRadius: '8px' }}>
+              <div style={{ fontSize: 20, fontWeight: 'bold', color: '#1b6b5a' }}>4.8</div>
+              <div style={{ fontSize: 12, color: '#999' }}>Based on 12 reviews</div>
+            </div>
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              <li className="review-item">
+                <div className="review-header">
+                  <span className="review-name">Carol Martinez</span>
+                  <span className="review-rating">⭐ 5</span>
+                </div>
+                <div className="review-text">
+                  "Pete was wonderful with my mother. Very attentive and professional. She looked forward to his visits!"
+                </div>
+              </li>
+              <li className="review-item">
+                <div className="review-header">
+                  <span className="review-name">James Chen</span>
+                  <span className="review-rating">⭐ 4.5</span>
+                </div>
+                <div className="review-text">
+                  "Great companionship. My dad really enjoyed his time with Pete. Reliable and trustworthy."
+                </div>
+              </li>
+            </ul>
+          </div>
+        </>
+      );
+    };
+
+    // Main App Component
+    const App = () => {
+      const [currentUser, setCurrentUser] = useState(null);
+      const [currentPage, setCurrentPage] = useState('dashboard');
+      const [showRequestCareModal, setShowRequestCareModal] = useState(false);
+
+      const handleLogin = (user) => {
+        setCurrentUser(user);
+      };
+
+      const handleLogout = () => {
+        setCurrentUser(null);
+        setCurrentPage('dashboard');
+      };
+
+      if (!currentUser) {
+        return <LoginPage onLogin={handleLogin} />;
+      }
+
+      return (
+        <div className="app-container">
+          <aside className="sidebar">
+            <div className="sidebar-logo">
+              <KinCareIcon width={40} height={40} />
+              <div className="sidebar-logo-text">KinCare</div>
+            </div>
+
+            <nav>
+              <ul className="nav-menu">
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${currentPage === 'dashboard' ? 'active' : ''}`}
+                    onClick={() => setCurrentPage('dashboard')}
+                  >
+                    <span className="nav-icon">🏠</span>
+                    Dashboard
+                  </button>
+                </li>
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${currentPage === 'care-profile' ? 'active' : ''}`}
+                    onClick={() => setCurrentPage('care-profile')}
+                  >
+                    <span className="nav-icon">👵</span>
+                    Care Profile
+                  </button>
+                </li>
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${currentPage === 'schedule' ? 'active' : ''}`}
+                    onClick={() => setCurrentPage('schedule')}
+                  >
+                    <span className="nav-icon">📅</span>
+                    Schedule
+                  </button>
+                </li>
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${currentPage === 'caregivers' ? 'active' : ''}`}
+                    onClick={() => setCurrentPage('caregivers')}
+                  >
+                    <span className="nav-icon">👨‍⚕️</span>
+                    Caregivers
+                  </button>
+                </li>
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${currentPage === 'activity' ? 'active' : ''}`}
+                    onClick={() => setCurrentPage('activity')}
+                  >
+                    <span className="nav-icon">📢</span>
+                    Activity Feed
+                  </button>
+                </li>
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${currentPage === 'account' ? 'active' : ''}`}
+                    onClick={() => setCurrentPage('account')}
+                  >
+                    <span className="nav-icon">👤</span>
+                    My Account
+                  </button>
+                </li>
+                <li className="nav-item">
+                  <button
+                    className={`nav-link ${currentPage === 'caretaker' ? 'active' : ''}`}
+                    onClick={() => setCurrentPage('caretaker')}
+                  >
+                    <span className="nav-icon">🩺</span>
+                    Caretaker Hub
+                  </button>
+                </li>
+              </ul>
+            </nav>
+
+            <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+              <button
+                className="nav-link"
+                onClick={() => setShowRequestCareModal(true)}
+                style={{ background: '#1b6b5a', marginBottom: '12px' }}
+              >
+                <span className="nav-icon">➕</span>
+                Request Care
+              </button>
+              <button
+                className="nav-link"
+                onClick={handleLogout}
+              >
+                <span className="nav-icon">🚪</span>
+                Logout
+              </button>
+            </div>
+          </aside>
+
+          <main className="main-content">
+            {currentPage === 'dashboard' && <Dashboard />}
+            {currentPage === 'care-profile' && <CareProfile />}
+            {currentPage === 'schedule' && <Schedule />}
+            {currentPage === 'caregivers' && <Caregivers />}
+            {currentPage === 'activity' && <ActivityFeed />}
+            {currentPage === 'account' && <MyAccount />}
+            {currentPage === 'caretaker' && <CaretakerHub />}
+          </main>
+
+          {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
 </body>
 </html>

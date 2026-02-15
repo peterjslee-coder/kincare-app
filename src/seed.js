@@ -134,6 +134,11 @@ async function seed() {
     [uuid(), bettyId, peteId, jamesId, "companion", "confirmed", "2026-02-15", "10:00", 3, "She loves looking at photo albums.", 75],
     [uuid(), bettyId, peteId, mariaId, "rides", "pending", "2026-02-19", "09:00", 1.5, "Doctor appointment at 9:30. Pickup prescriptions after.", 42],
     [uuid(), bettyId, peteId, jamesId, "companion", "confirmed", "2026-02-21", "11:00", 2, null, 50],
+    [uuid(), bettyId, peteId, mariaId, "meals", "confirmed", "2026-02-25", "12:00", 2, "Betty requested her favorite tomato soup.", 56],
+    [uuid(), bettyId, peteId, sarahId, "companion", "pending", "2026-02-28", "10:00", 3, "First visit with Sarah — introduce slowly, show photo albums.", 96],
+    [uuid(), bettyId, peteId, jamesId, "rides", "confirmed", "2026-03-03", "09:30", 1.5, "Follow-up appointment with Dr. Patel. Bring medication list.", 37],
+    [uuid(), bettyId, peteId, mariaId, "meals", "confirmed", "2026-03-05", "12:00", 2, "Prepare meals for the week and label with dates.", 56],
+    [uuid(), bettyId, peteId, davidId, "companion", "pending", "2026-03-07", "14:00", 2, "Afternoon gardening and light walk around the neighborhood.", 44],
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of sessions) {
@@ -164,7 +169,7 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost, cost);
   }
 
-  console.log("✅ Care sessions created (8)");
+  console.log("✅ Care sessions created (13)");
 
   // ─── Visit Logs ───
   const visitLogs = [
@@ -196,26 +201,30 @@ async function seed() {
   // ─── Activity Feed ───
   const activities = [
     [uuid(), peteId, bettyId, "visit_complete", "Visit completed",
-      "Maria prepared chicken soup. Betty ate well and was in good spirits."],
+      "Maria prepared chicken soup. Betty ate well and was in good spirits.", "-5 days"],
     [uuid(), peteId, bettyId, "session_confirmed", "Caregiver matched: James Okafor",
-      "James will arrive tomorrow at 10:00 AM for companionship."],
+      "James will arrive tomorrow at 10:00 AM for companionship.", "-3 days"],
     [uuid(), peteId, bettyId, "visit_complete", "Visit completed",
-      "James and Betty looked through photo albums and took a short walk."],
+      "James and Betty looked through photo albums and took a short walk.", "-2 days"],
     [uuid(), peteId, bettyId, "session_booked", "Rides & Errands requested",
-      "Session booked for Feb 19 at 9:00 AM — doctor appointment."],
+      "Session booked for Feb 19 at 9:00 AM — doctor appointment.", "-1 day"],
     [uuid(), peteId, bettyId, "visit_complete", "Grocery run completed",
-      "Maria picked up groceries from Kroger and stocked the fridge."],
+      "Maria picked up groceries from Kroger and stocked the fridge.", "-12 hours"],
+    [uuid(), peteId, bettyId, "session_confirmed", "Meal Prep confirmed for Feb 25",
+      "Maria Santos will prepare Betty's favorite tomato soup and meals for the week.", "-6 hours"],
+    [uuid(), peteId, bettyId, "session_booked", "New caregiver introduction scheduled",
+      "Sarah Chen will visit Betty on Feb 28 for a companionship session. First visit — please ensure a warm welcome.", "-2 hours"],
   ];
 
-  for (const [id, famId, recipId, type, title, msg] of activities) {
+  for (const [id, famId, recipId, type, title, msg, timeOffset] of activities) {
     db.prepare(`
       INSERT INTO activity_feed
-      (id, family_user_id, care_recipient_id, event_type, title, message)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, famId, recipId, type, title, msg);
+      (id, family_user_id, care_recipient_id, event_type, title, message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))
+    `).run(id, famId, recipId, type, title, msg, timeOffset);
   }
 
-  console.log("✅ Activity feed populated (5)");
+  console.log("✅ Activity feed populated (7)");
 
   // ─── Reviews ───
   const reviews = [
