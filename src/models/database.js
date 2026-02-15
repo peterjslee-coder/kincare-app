@@ -110,4 +110,8 @@ async function initializeDatabase() {
   return db;
 }
 
-module.exports = { getDb, initializeDatabase };
+function resetDb() {
+  db = null;
+}
+
+module.exports = { getDb, initializeDatabase, resetDb };

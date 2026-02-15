@@ -101,7 +101,8 @@ async function start() {
   await initializeDatabase();
 
   // Auto-seed if database is empty (first deploy)
-  const db = await require("./models/database").getDb();
+  const { getDb: fetchDb, resetDb } = require("./models/database");
+  const db = await fetchDb();
   const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get();
   if (userCount.count === 0) {
     console.log("  Empty database detected — running seed...");
@@ -109,6 +110,9 @@ async function start() {
       stdio: "inherit",
       env: { ...process.env },
     });
+    // Reload database from disk after seed child process wrote to it
+    resetDb();
+    console.log("  Database reloaded after seeding");
   }
 
   app.listen(PORT, "0.0.0.0", () => {
