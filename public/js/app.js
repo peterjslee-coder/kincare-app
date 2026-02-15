@@ -40,6 +40,7 @@ const App = () => {
     if (role === 'caregiver') {
       return [
         { id: 'dashboard', icon: '🩺', label: 'My Dashboard' },
+        { id: 'area-map', icon: '🗺️', label: 'Area Map' },
         { id: 'schedule', icon: '📅', label: 'Schedule' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'account', icon: '👤', label: 'My Account' },
@@ -79,6 +80,7 @@ const App = () => {
       if (role === 'care_for') return <CaredForView />;
       return <Dashboard onNavigate={setCurrentPage} />;
     }
+    if (currentPage === 'area-map') return <AreaMap />;
     if (currentPage === 'care-profile') return <CareProfile />;
     if (currentPage === 'schedule') return <Schedule />;
     if (currentPage === 'caregivers') return <Caregivers />;

@@ -64,7 +64,6 @@ const CaretakerHub = window.CaretakerHub = () => {
   const tabs = [
     { id: 'schedule', label: 'Schedule', icon: '📅' },
     { id: 'families', label: 'My Families', icon: '👪' },
-    { id: 'map', label: 'Area Map', icon: '🗺️' },
     { id: 'earnings', label: 'Earnings', icon: '💰' },
     { id: 'reviews', label: 'Reviews', icon: '⭐' },
   ];
@@ -216,70 +215,6 @@ const CaretakerHub = window.CaretakerHub = () => {
               </div>
             </div>
           )) : <div style={{ padding: '20px', color: '#999', textAlign: 'center' }}>No assigned families</div>}
-        </div>
-      )}
-
-      {activeTab === 'map' && (
-        <div className="card">
-          <div className="card-header"><span className="card-icon">🗺️</span>Blacksburg, VA Area</div>
-          <div style={{
-            position: 'relative', height: '400px', background: '#e8f0e8', borderRadius: '8px',
-            overflow: 'hidden', border: '1px solid #ccc',
-          }}>
-            {/* Notional map background */}
-            <div style={{
-              position: 'absolute', inset: 0,
-              background: 'linear-gradient(135deg, #d4e8d4 0%, #c5dbc5 30%, #b8d0b8 50%, #c8dcc8 70%, #d0e0d0 100%)',
-            }}></div>
-            {/* Road grid */}
-            <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-              <line x1="20%" y1="0" x2="20%" y2="100%" stroke="#bbb" strokeWidth="1.5" />
-              <line x1="50%" y1="0" x2="50%" y2="100%" stroke="#aaa" strokeWidth="2" />
-              <line x1="80%" y1="0" x2="80%" y2="100%" stroke="#bbb" strokeWidth="1.5" />
-              <line x1="0" y1="30%" x2="100%" y2="30%" stroke="#bbb" strokeWidth="1.5" />
-              <line x1="0" y1="55%" x2="100%" y2="55%" stroke="#aaa" strokeWidth="2" />
-              <line x1="0" y1="80%" x2="100%" y2="80%" stroke="#bbb" strokeWidth="1.5" />
-              <text x="50%" y="52%" textAnchor="middle" fill="#777" fontSize="11" fontFamily="sans-serif">Main St</text>
-              <text x="18%" y="96%" fill="#777" fontSize="10" fontFamily="sans-serif">Prices Fork Rd</text>
-              <text x="72%" y="12%" fill="#777" fontSize="10" fontFamily="sans-serif">S Main St</text>
-            </svg>
-            {/* Assignment pins */}
-            {assignments.map((a, idx) => {
-              // Spread pins across the map based on index
-              const positions = [
-                { left: '35%', top: '40%' },
-                { left: '65%', top: '25%' },
-                { left: '25%', top: '70%' },
-                { left: '70%', top: '65%' },
-              ];
-              const pos = positions[idx % positions.length];
-              return (
-                <div key={idx} style={{
-                  position: 'absolute', left: pos.left, top: pos.top, transform: 'translate(-50%, -100%)',
-                  zIndex: 10,
-                }}>
-                  <div style={{
-                    background: '#1b6b5a', color: '#fff', padding: '4px 8px', borderRadius: '8px 8px 8px 0',
-                    fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-                  }}>
-                    📍 {a.recipient_first_name} {a.recipient_last_name}
-                    <div style={{ fontSize: '9px', fontWeight: 400, opacity: 0.8 }}>{a.location_city}</div>
-                  </div>
-                </div>
-              );
-            })}
-            {/* Center label */}
-            <div style={{
-              position: 'absolute', bottom: '12px', left: '50%', transform: 'translateX(-50%)',
-              background: 'rgba(255,255,255,0.9)', padding: '6px 16px', borderRadius: '20px',
-              fontSize: '12px', color: '#555', boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
-            }}>
-              Blacksburg, VA &bull; New River Valley
-            </div>
-          </div>
-          <div style={{ marginTop: '12px', fontSize: '12px', color: '#999', textAlign: 'center' }}>
-            Notional map view — live mapping coming soon
-          </div>
         </div>
       )}
 
