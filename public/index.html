@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KinCare - Elderly Care Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f5f7fa;
+            color: #1a2332;
+        }
+
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1b6b5a 0%, #0f4a3c 100%);
+        }
+
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-logo h1 {
+            color: #1b6b5a;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .login-logo p {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #1a2332;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #e0e4e8;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #1b6b5a;
+            box-shadow: 0 0 0 3px rgba(27, 107, 90, 0.1);
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            background-color: #1b6b5a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .login-button:hover {
+            background-color: #0f4a3c;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(27, 107, 90, 0.3);
+        }
+
+        .login-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            color: #d32f2f;
+            font-size: 14px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #ffebee;
+            border-radius: 6px;
+            border-left: 3px solid #d32f2f;
+        }
+
+        .demo-credentials {
+            background-color: #f5f7fa;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
+            background-color: #f5f7fa;
+        }
+
+        .sidebar {
+            width: 260px;
+            background-color: #1a2332;
+            color: white;
+            padding: 20px 0;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-logo {
+            padding: 0 20px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 24px;
+            font-weight: 700;
+            color: #1b6b5a;
+        }
+
+        .nav-item {
+            padding: 15px 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-item.active {
+            background-color: rgba(27, 107, 90, 0.2);
+            border-left-color: #1b6b5a;
+            color: #1b6b5a;
+        }
+
+        .sidebar-footer {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            padding: 0 20px;
+        }
+
+        .logout-button {
+            width: 100%;
+            padding: 10px;
+            background-color: #e8724a;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .logout-button:hover {
+            background-color: #d35a32;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            padding: 30px;
+        }
+
+        .page-header {
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a2332;
+            margin-bottom: 5px;
+        }
+
+        .page-subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e8eef5;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1b6b5a;
+        }
+
+        .parent-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e8eef5;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .parent-info h3 {
+            font-size: 18px;
+            color: #1a2332;
+            margin-bottom: 8px;
+        }
+
+        .parent-details {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .request-care-button {
+            padding: 12px 30px;
+            background-color: #1b6b5a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .request-care-button:hover {
+            background-color: #0f4a3c;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(27, 107, 90, 0.3);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a2332;
+            margin-bottom: 15px;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e8eef5;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a2332;
+            margin-bottom: 8px;
+        }
+
+        .card-subtitle {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .activity-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #1b6b5a;
+            margin-bottom: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .activity-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a2332;
+            margin-bottom: 4px;
+        }
+
+        .activity-message {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .activity-time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .modal-overlay {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a2332;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+            transition: color 0.2s;
+        }
+
+        .close-button:hover {
+            color: #1a2332;
+        }
+
+        .step-indicator {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+
+        .step {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #e8eef5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .step.active {
+            background-color: #1b6b5a;
+            color: white;
+        }
+
+        .step.completed {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .service-cards {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .service-card {
+            padding: 20px;
+            border: 2px solid #e8eef5;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .service-card:hover {
+            border-color: #1b6b5a;
+            background-color: rgba(27, 107, 90, 0.05);
+        }
+
+        .service-card.selected {
+            border-color: #1b6b5a;
+            background-color: rgba(27, 107, 90, 0.1);
+        }
+
+        .service-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .service-name {
+            font-weight: 600;
+            color: #1a2332;
+            margin-bottom: 5px;
+        }
+
+        .service-description {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .time-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .time-button {
+            padding: 12px;
+            border: 2px solid #e8eef5;
+            border-radius: 8px;
+            cursor: pointer;
+            background: white;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .time-button:hover {
+            border-color: #1b6b5a;
+        }
+
+        .time-button.selected {
+            background-color: #1b6b5a;
+            color: white;
+            border-color: #1b6b5a;
+        }
+
+        .textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e8eef5;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 100px;
+            transition: all 0.2s;
+        }
+
+        .textarea:focus {
+            outline: none;
+            border-color: #1b6b5a;
+            box-shadow: 0 0 0 3px rgba(27, 107, 90, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .button-secondary {
+            padding: 10px 20px;
+            background-color: #f5f7fa;
+            color: #1a2332;
+            border: 1px solid #e8eef5;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .button-secondary:hover {
+            background-color: #e8eef5;
+        }
+
+        .button-primary {
+            padding: 10px 20px;
+            background-color: #1b6b5a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .button-primary:hover {
+            background-color: #0f4a3c;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(27, 107, 90, 0.3);
+        }
+
+        .button-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .caregiver-rating {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+
+        .star {
+            color: #ffc107;
+        }
+
+        .rating-value {
+            font-weight: 600;
+            color: #1a2332;
+        }
+
+        .review-count {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .specialties {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .specialty-badge {
+            background-color: rgba(27, 107, 90, 0.1);
+            color: #1b6b5a;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .caregiver-bio {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .hourly-rate {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1b6b5a;
+            margin-top: 12px;
+        }
+
+        .availability {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .calendar-day {
+            padding: 15px;
+            background: white;
+            border: 1px solid #e8eef5;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .calendar-day-header {
+            font-weight: 600;
+            color: #666;
+            font-size: 12px;
+            padding: 10px;
+            background-color: #f5f7fa;
+            border-radius: 6px;
+        }
+
+        .session-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #1b6b5a;
+            margin-bottom: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .session-time {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
+        .session-service {
+            font-weight: 600;
+            color: #1a2332;
+            margin-bottom: 4px;
+        }
+
+        .session-caregiver {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .success-message {
+            background-color: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            color: #2e7d32;
+        }
+
+        .matching-caregiver {
+            background: linear-gradient(135deg, #1b6b5a 0%, #0f4a3c 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .matched-name {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .matched-rating {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+
+        .matched-rating .star {
+            color: #ffc107;
+        }
+
+        .matched-specialties {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .matched-specialty {
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+        }
+
+        .session-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e8eef5;
+            font-size: 14px;
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .summary-label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .summary-value {
+            color: #1a2332;
+            font-weight: 600;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #e8eef5;
+            border-top: 3px solid #1b6b5a;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .app-layout {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+                display: flex;
+                overflow-x: auto;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+
+            .service-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .parent-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        const API_BASE = window.location.origin;
+
+        // Login Component
+        function LoginPage({ onLoginSuccess }) {
+            const [email, setEmail] = useState('pete@kincare.app');
+            const [password, setPassword] = useState('kincare123');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+
+                try {
+                    const response = await fetch(`${API_BASE}/api/auth/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ email, password }),
+                    });
+
+                    if (!response.ok) {
+                        const data = await response.json();
+                        throw new Error(data.message || 'Login failed');
+                    }
+
+                    const data = await response.json();
+                    onLoginSuccess(data.token);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="login-container">
+                    <div className="login-card">
+                        <div className="login-logo">
+                            <h1>KinCare</h1>
+                            <p>Trusted elderly care at your fingertips</p>
+                        </div>
+
+                        <form onSubmit={handleLogin}>
+                            {error && <div className="error-message">{error}</div>}
+
+                            <div className="form-group">
+                                <label htmlFor="email">Email Address</label>
+                                <input
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="Enter your email"
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="password">Password</label>
+                                <input
+                                    id="password"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter your password"
+                                    required
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="login-button"
+                                disabled={loading}
+                            >
+                                {loading ? 'Signing in...' : 'Sign In'}
+                            </button>
+                        </form>
+
+                        <div className="demo-credentials">
+                            <strong>Demo Credentials:</strong>
+                            <div>Email: pete@kincare.app</div>
+                            <div>Password: kincare123</div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Dashboard Component
+        function Dashboard({ token, onLogout }) {
+            const [dashboardData, setDashboardData] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+            const [currentPage, setCurrentPage] = useState('dashboard');
+            const [showRequestCareModal, setShowRequestCareModal] = useState(false);
+
+            useEffect(() => {
+                fetchDashboardData();
+            }, []);
+
+            const fetchDashboardData = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/api/dashboard`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                        },
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch dashboard data');
+                    }
+
+                    const data = await response.json();
+                    setDashboardData(data);
+                    setError('');
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="app-layout">
+                        <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} onLogout={onLogout} />
+                        <div className="main-content">
+                            <div className="loading">
+                                <div className="spinner"></div>
+                                Loading...
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="app-layout">
+                    <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} onLogout={onLogout} />
+                    <div className="main-content">
+                        {error && <div className="error-message">{error}</div>}
+
+                        {currentPage === 'dashboard' && dashboardData && (
+                            <DashboardPage
+                                dashboardData={dashboardData}
+                                token={token}
+                                onRequestCare={() => setShowRequestCareModal(true)}
+                                onCareRequestComplete={() => {
+                                    setShowRequestCareModal(false);
+                                    fetchDashboardData();
+                                }}
+                            />
+                        )}
+
+                        {currentPage === 'activity' && (
+                            <ActivityPage token={token} />
+                        )}
+
+                        {currentPage === 'caregivers' && (
+                            <CaregiversPage token={token} />
+                        )}
+
+                        {currentPage === 'schedule' && (
+                            <SchedulePage token={token} />
+                        )}
+
+                        {currentPage === 'profile' && (
+                            <ProfilePage token={token} dashboardData={dashboardData} />
+                        )}
+                    </div>
+
+                    {showRequestCareModal && (
+                        <RequestCareModal
+                            token={token}
+                            recipientId={dashboardData?.parent?.id}
+                            onClose={() => setShowRequestCareModal(false)}
+                            onSuccess={() => {
+                                setShowRequestCareModal(false);
+                                fetchDashboardData();
+                            }}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Sidebar Component
+        function Sidebar({ currentPage, setCurrentPage, onLogout }) {
+            const navItems = [
+                { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
+                { id: 'activity', label: 'Activity Feed', icon: '📋' },
+                { id: 'caregivers', label: 'Caregivers', icon: '👥' },
+                { id: 'schedule', label: 'Schedule', icon: '📅' },
+                { id: 'profile', label: 'Care Profile', icon: '👤' },
+            ];
+
+            return (
+                <div className="sidebar">
+                    <div className="sidebar-logo">KinCare</div>
+
+                    {navItems.map((item) => (
+                        <div
+                            key={item.id}
+                            className={`nav-item ${currentPage === item.id ? 'active' : ''}`}
+                            onClick={() => setCurrentPage(item.id)}
+                        >
+                            <span>{item.icon}</span>
+                            <span>{item.label}</span>
+                        </div>
+                    ))}
+
+                    <div className="sidebar-footer">
+                        <button className="logout-button" onClick={onLogout}>
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Dashboard Page Component
+        function DashboardPage({ dashboardData, token, onRequestCare, onCareRequestComplete }) {
+            const parent = dashboardData.parent;
+            const stats = dashboardData.stats;
+
+            const getGreeting = () => {
+                const hour = new Date().getHours();
+                if (hour < 12) return 'Good morning';
+                if (hour < 18) return 'Good afternoon';
+                return 'Good evening';
+            };
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <h1 className="page-title">{getGreeting()}, Pete</h1>
+                        <p className="page-subtitle">Here's what's happening with your care today</p>
+                    </div>
+
+                    <div className="parent-card">
+                        <div className="parent-info">
+                            <h3>{parent.name}</h3>
+                            <div className="parent-details">
+                                {parent.age} years old • {parent.location}
+                            </div>
+                        </div>
+                        <button className="request-care-button" onClick={onRequestCare}>
+                            Request Care
+                        </button>
+                    </div>
+
+                    <div className="stats-row">
+                        <div className="stat-card">
+                            <div className="stat-label">Sessions This Month</div>
+                            <div className="stat-value">{stats.sessionsThisMonth}</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-label">Total Hours</div>
+                            <div className="stat-value">{stats.totalHours}h</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-label">Avg Caregiver Rating</div>
+                            <div className="stat-value">{stats.avgCaregiverRating}</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-label">Monthly Spend</div>
+                            <div className="stat-value">${stats.monthlySpend}</div>
+                        </div>
+                    </div>
+
+                    <h2 className="section-title">Upcoming Sessions</h2>
+                    <div>
+                        {dashboardData.upcomingSessions && dashboardData.upcomingSessions.length > 0 ? (
+                            dashboardData.upcomingSessions.map((session, idx) => (
+                                <div key={idx} className="session-item">
+                                    <div className="session-time">
+                                        {new Date(session.date).toLocaleDateString()} at {session.time}
+                                    </div>
+                                    <div className="session-service">
+                                        {session.serviceType.charAt(0).toUpperCase() + session.serviceType.slice(1)}
+                                    </div>
+                                    <div className="session-caregiver">
+                                        Caregiver: {session.caregiverName}
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <p>No upcoming sessions scheduled</p>
+                        )}
+                    </div>
+
+                    <h2 className="section-title" style={{ marginTop: '30px' }}>Recent Activity</h2>
+                    <div>
+                        {dashboardData.recentActivity && dashboardData.recentActivity.length > 0 ? (
+                            dashboardData.recentActivity.map((activity, idx) => (
+                                <div key={idx} className="activity-item">
+                                    <div className="activity-title">{activity.title}</div>
+                                    <div className="activity-message">{activity.message}</div>
+                                    <div className="activity-time">
+                                        {new Date(activity.timestamp).toLocaleString()}
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <p>No recent activity</p>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Activity Page Component
+        function ActivityPage({ token }) {
+            const [activities, setActivities] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+
+            useEffect(() => {
+                const fetchActivities = async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/activity`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                            },
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch activities');
+                        }
+
+                        const data = await response.json();
+                        setActivities(data.activities || []);
+                    } catch (err) {
+                        setError(err.message);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+
+                fetchActivities();
+            }, [token]);
+
+            if (loading) {
+                return (
+                    <div className="loading">
+                        <div className="spinner"></div>
+                        Loading...
+                    </div>
+                );
+            }
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <h1 className="page-title">Activity Feed</h1>
+                        <p className="page-subtitle">All updates and interactions</p>
+                    </div>
+
+                    {error && <div className="error-message">{error}</div>}
+
+                    {activities.length > 0 ? (
+                        <div>
+                            {activities.map((activity, idx) => (
+                                <div key={idx} className="activity-item">
+                                    <div className="activity-title">{activity.title}</div>
+                                    <div className="activity-message">{activity.message}</div>
+                                    <div className="activity-time">
+                                        {new Date(activity.timestamp).toLocaleString()}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="card">
+                            <p>No activities yet</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Caregivers Page Component
+        function CaregiversPage({ token }) {
+            const [caregivers, setCaregivers] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+
+            useEffect(() => {
+                const fetchCaregivers = async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/caregivers`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                            },
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch caregivers');
+                        }
+
+                        const data = await response.json();
+                        setCaregivers(data.caregivers || []);
+                    } catch (err) {
+                        setError(err.message);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+
+                fetchCaregivers();
+            }, [token]);
+
+            if (loading) {
+                return (
+                    <div className="loading">
+                        <div className="spinner"></div>
+                        Loading...
+                    </div>
+                );
+            }
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <h1 className="page-title">Our Caregivers</h1>
+                        <p className="page-subtitle">Meet the people caring for your loved ones</p>
+                    </div>
+
+                    {error && <div className="error-message">{error}</div>}
+
+                    <div className="content-grid">
+                        {caregivers.length > 0 ? (
+                            caregivers.map((caregiver, idx) => (
+                                <div key={idx} className="card">
+                                    <div className="card-title">{caregiver.name}</div>
+
+                                    <div className="caregiver-rating">
+                                        <div>
+                                            {[...Array(5)].map((_, i) => (
+                                                <span key={i} className="star">
+                                                    {i < Math.round(caregiver.rating) ? '★' : '☆'}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <span className="rating-value">{caregiver.rating}</span>
+                                        <span className="review-count">({caregiver.reviewCount} reviews)</span>
+                                    </div>
+
+                                    {caregiver.specialties && caregiver.specialties.length > 0 && (
+                                        <div className="specialties">
+                                            {caregiver.specialties.map((specialty, i) => (
+                                                <div key={i} className="specialty-badge">
+                                                    {specialty}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="caregiver-bio">
+                                        {caregiver.bio}
+                                    </div>
+
+                                    <div className="hourly-rate">
+                                        ${caregiver.hourlyRate}/hour
+                                    </div>
+
+                                    <div className="availability">
+                                        {caregiver.availability}
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="card">
+                                <p>No caregivers available</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Schedule Page Component
+        function SchedulePage({ token }) {
+            const [sessions, setSessions] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+
+            useEffect(() => {
+                const fetchSessions = async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/sessions`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                            },
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch sessions');
+                        }
+
+                        const data = await response.json();
+                        setSessions(data.sessions || []);
+                    } catch (err) {
+                        setError(err.message);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+
+                fetchSessions();
+            }, [token]);
+
+            if (loading) {
+                return (
+                    <div className="loading">
+                        <div className="spinner"></div>
+                        Loading...
+                    </div>
+                );
+            }
+
+            const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <h1 className="page-title">Schedule</h1>
+                        <p className="page-subtitle">Weekly view of care sessions</p>
+                    </div>
+
+                    {error && <div className="error-message">{error}</div>}
+
+                    <div className="calendar-grid">
+                        {weekDays.map((day) => (
+                            <div key={day}>
+                                <div className="calendar-day-header">{day}</div>
+                                {sessions
+                                    .filter((session) => {
+                                        const sessionDate = new Date(session.date);
+                                        const dayOfWeek = weekDays[sessionDate.getDay() === 0 ? 6 : sessionDate.getDay() - 1];
+                                        return dayOfWeek === day;
+                                    })
+                                    .map((session, idx) => (
+                                        <div key={idx} className="calendar-day">
+                                            <div className="session-time">{session.time}</div>
+                                            <div className="session-service">
+                                                {session.serviceType.charAt(0).toUpperCase() + session.serviceType.slice(1).replace('_', ' ')}
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
+                        ))}
+                    </div>
+
+                    {sessions.length === 0 && (
+                        <div className="card" style={{ marginTop: '20px' }}>
+                            <p>No sessions scheduled</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Profile Page Component
+        function ProfilePage({ token, dashboardData }) {
+            const [profileData, setProfileData] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+
+            useEffect(() => {
+                const fetchProfile = async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/care-recipients`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                            },
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch care profile');
+                        }
+
+                        const data = await response.json();
+                        setProfileData(data.recipients?.[0] || null);
+                    } catch (err) {
+                        setError(err.message);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+
+                fetchProfile();
+            }, [token]);
+
+            if (loading) {
+                return (
+                    <div className="loading">
+                        <div className="spinner"></div>
+                        Loading...
+                    </div>
+                );
+            }
+
+            if (!profileData) {
+                return (
+                    <div>
+                        <div className="page-header">
+                            <h1 className="page-title">Care Profile</h1>
+                        </div>
+                        {error && <div className="error-message">{error}</div>}
+                        <div className="card">
+                            <p>No profile data available</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <h1 className="page-title">Care Profile</h1>
+                        <p className="page-subtitle">{profileData.name}</p>
+                    </div>
+
+                    {error && <div className="error-message">{error}</div>}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                        <div className="card">
+                            <div className="card-title">Basic Information</div>
+                            <div style={{ fontSize: '14px', lineHeight: '1.8', color: '#666' }}>
+                                <div><strong>Age:</strong> {profileData.age}</div>
+                                <div><strong>Location:</strong> {profileData.location}</div>
+                                <div><strong>Gender:</strong> {profileData.gender}</div>
+                            </div>
+                        </div>
+
+                        {profileData.healthConditions && profileData.healthConditions.length > 0 && (
+                            <div className="card">
+                                <div className="card-title">Health Conditions</div>
+                                <ul style={{ fontSize: '14px', color: '#666', paddingLeft: '20px' }}>
+                                    {profileData.healthConditions.map((condition, idx) => (
+                                        <li key={idx}>{condition}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {profileData.medications && profileData.medications.length > 0 && (
+                            <div className="card">
+                                <div className="card-title">Medications</div>
+                                <ul style={{ fontSize: '14px', color: '#666', paddingLeft: '20px' }}>
+                                    {profileData.medications.map((medication, idx) => (
+                                        <li key={idx}>{medication}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {profileData.preferences && (
+                            <div className="card">
+                                <div className="card-title">Preferences</div>
+                                <p style={{ fontSize: '14px', color: '#666', lineHeight: '1.6' }}>
+                                    {profileData.preferences}
+                                </p>
+                            </div>
+                        )}
+
+                        {profileData.emergencyContact && (
+                            <div className="card">
+                                <div className="card-title">Emergency Contact</div>
+                                <div style={{ fontSize: '14px', color: '#666' }}>
+                                    <div><strong>{profileData.emergencyContact.name}</strong></div>
+                                    <div>{profileData.emergencyContact.phone}</div>
+                                    <div>{profileData.emergencyContact.relationship}</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Request Care Modal Component
+        function RequestCareModal({ token, recipientId, onClose, onSuccess }) {
+            const [step, setStep] = useState(1);
+            const [selectedService, setSelectedService] = useState(null);
+            const [selectedDate, setSelectedDate] = useState(null);
+            const [selectedTime, setSelectedTime] = useState(null);
+            const [specialInstructions, setSpecialInstructions] = useState('');
+            const [sessionId, setSessionId] = useState(null);
+            const [matchedCaregiver, setMatchedCaregiver] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            const services = [
+                { id: 'meals', name: 'Meal Prep', icon: '🍽️', description: 'Meal preparation and feeding' },
+                { id: 'rides', name: 'Transportation', icon: '🚗', description: 'Doctor visits & outings' },
+                { id: 'companion', name: 'Companion Care', icon: '💬', description: 'Social & emotional support' },
+                { id: 'full_day', name: 'Full Day Care', icon: '⏰', description: '8+ hour care sessions' },
+            ];
+
+            const timeSlots = [
+                { id: 'morning', label: '8:00 AM - 12:00 PM' },
+                { id: 'afternoon', label: '12:00 PM - 5:00 PM' },
+                { id: 'evening', label: '5:00 PM - 8:00 PM' },
+                { id: 'custom', label: 'Custom Time' },
+            ];
+
+            const handleNextStep = () => {
+                if (step < 4) {
+                    setStep(step + 1);
+                }
+            };
+
+            const handlePreviousStep = () => {
+                if (step > 1) {
+                    setStep(step - 1);
+                }
+            };
+
+            const handleSubmitRequest = async () => {
+                setLoading(true);
+                setError('');
+
+                try {
+                    // Create session
+                    const sessionResponse = await fetch(`${API_BASE}/api/sessions`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({
+                            recipientId,
+                            serviceType: selectedService,
+                            date: selectedDate,
+                            time: selectedTime,
+                            specialInstructions,
+                        }),
+                    });
+
+                    if (!sessionResponse.ok) {
+                        const data = await sessionResponse.json();
+                        throw new Error(data.message || 'Failed to create session');
+                    }
+
+                    const sessionData = await sessionResponse.json();
+                    const newSessionId = sessionData.id;
+                    setSessionId(newSessionId);
+
+                    // Match caregiver
+                    const matchResponse = await fetch(
+                        `${API_BASE}/api/sessions/${newSessionId}/match`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                            },
+                        }
+                    );
+
+                    if (!matchResponse.ok) {
+                        throw new Error('Failed to match caregiver');
+                    }
+
+                    const matchData = await matchResponse.json();
+                    setMatchedCaregiver(matchData.caregiver);
+                    setStep(5); // Go to confirmation step
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <span>Request Care for Betty</span>
+                            <button className="close-button" onClick={onClose}>×</button>
+                        </div>
+
+                        {step < 5 && (
+                            <div className="step-indicator">
+                                {[1, 2, 3, 4].map((s) => (
+                                    <div
+                                        key={s}
+                                        className={`step ${step === s ? 'active' : ''} ${step > s ? 'completed' : ''}`}
+                                    >
+                                        {step > s ? '✓' : s}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {error && <div className="error-message">{error}</div>}
+
+                        {step === 1 && (
+                            <div>
+                                <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
+                                    What type of care do you need?
+                                </h3>
+                                <div className="service-cards">
+                                    {services.map((service) => (
+                                        <div
+                                            key={service.id}
+                                            className={`service-card ${selectedService === service.id ? 'selected' : ''}`}
+                                            onClick={() => setSelectedService(service.id)}
+                                        >
+                                            <div className="service-icon">{service.icon}</div>
+                                            <div className="service-name">{service.name}</div>
+                                            <div className="service-description">{service.description}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="button-group">
+                                    <button className="button-secondary" onClick={onClose}>Cancel</button>
+                                    <button
+                                        className="button-primary"
+                                        onClick={handleNextStep}
+                                        disabled={!selectedService}
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 2 && (
+                            <div>
+                                <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
+                                    When do you need care?
+                                </h3>
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '10px', fontWeight: '600' }}>
+                                        Select a date:
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={selectedDate || ''}
+                                        onChange={(e) => setSelectedDate(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            border: '1px solid #e8eef5',
+                                            borderRadius: '8px',
+                                            fontSize: '14px',
+                                        }}
+                                    />
+                                </div>
+
+                                <h4 style={{ marginBottom: '10px', fontWeight: '600' }}>Select time slot:</h4>
+                                <div className="time-buttons">
+                                    {timeSlots.map((slot) => (
+                                        <button
+                                            key={slot.id}
+                                            className={`time-button ${selectedTime === slot.label ? 'selected' : ''}`}
+                                            onClick={() => setSelectedTime(slot.label)}
+                                        >
+                                            {slot.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="button-group">
+                                    <button className="button-secondary" onClick={handlePreviousStep}>Back</button>
+                                    <button
+                                        className="button-primary"
+                                        onClick={handleNextStep}
+                                        disabled={!selectedDate || !selectedTime}
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 3 && (
+                            <div>
+                                <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
+                                    Any special instructions?
+                                </h3>
+                                <textarea
+                                    className="textarea"
+                                    placeholder="E.g., Betty prefers afternoon walks, allergic to nuts, prefers quiet time..."
+                                    value={specialInstructions}
+                                    onChange={(e) => setSpecialInstructions(e.target.value)}
+                                />
+                                <div className="button-group">
+                                    <button className="button-secondary" onClick={handlePreviousStep}>Back</button>
+                                    <button className="button-primary" onClick={handleNextStep}>
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 4 && (
+                            <div>
+                                <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
+                                    Review and Confirm
+                                </h3>
+
+                                <div className="session-summary">
+                                    <div className="summary-item">
+                                        <span className="summary-label">Service Type</span>
+                                        <span className="summary-value">
+                                            {services.find((s) => s.id === selectedService)?.name}
+                                        </span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Date</span>
+                                        <span className="summary-value">
+                                            {new Date(selectedDate).toLocaleDateString()}
+                                        </span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Time</span>
+                                        <span className="summary-value">{selectedTime}</span>
+                                    </div>
+                                    {specialInstructions && (
+                                        <div className="summary-item">
+                                            <span className="summary-label">Instructions</span>
+                                            <span className="summary-value">{specialInstructions}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="button-group">
+                                    <button className="button-secondary" onClick={handlePreviousStep}>Back</button>
+                                    <button
+                                        className="button-primary"
+                                        onClick={handleSubmitRequest}
+                                        disabled={loading}
+                                    >
+                                        {loading ? 'Creating Session...' : 'Confirm & Find Caregiver'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 5 && matchedCaregiver && (
+                            <div>
+                                <div className="success-message">
+                                    Care request submitted successfully! Here's your matched caregiver:
+                                </div>
+
+                                <div className="matching-caregiver">
+                                    <div className="matched-name">{matchedCaregiver.name}</div>
+                                    <div className="matched-rating">
+                                        <div>
+                                            {[...Array(5)].map((_, i) => (
+                                                <span key={i} className="star">
+                                                    {i < Math.round(matchedCaregiver.rating) ? '★' : '☆'}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <span style={{ marginLeft: '10px' }}>
+                                            {matchedCaregiver.rating} ({matchedCaregiver.reviewCount} reviews)
+                                        </span>
+                                    </div>
+
+                                    {matchedCaregiver.specialties && (
+                                        <div className="matched-specialties">
+                                            {matchedCaregiver.specialties.map((specialty, idx) => (
+                                                <div key={idx} className="matched-specialty">
+                                                    {specialty}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div style={{ marginTop: '15px', fontSize: '14px' }}>
+                                        ${matchedCaregiver.hourlyRate}/hour
+                                    </div>
+                                </div>
+
+                                <div className="session-summary">
+                                    <div className="summary-item">
+                                        <span className="summary-label">Session ID</span>
+                                        <span className="summary-value">{sessionId}</span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Service</span>
+                                        <span className="summary-value">
+                                            {services.find((s) => s.id === selectedService)?.name}
+                                        </span>
+                                    </div>
+                                    <div className="summary-item">
+                                        <span className="summary-label">Date & Time</span>
+                                        <span className="summary-value">
+                                            {new Date(selectedDate).toLocaleDateString()} at {selectedTime}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="button-group">
+                                    <button
+                                        className="button-primary"
+                                        onClick={() => {
+                                            onSuccess();
+                                        }}
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Main App Component
+        function App() {
+            const [token, setToken] = useState(null);
+
+            const handleLoginSuccess = (authToken) => {
+                setToken(authToken);
+            };
+
+            const handleLogout = () => {
+                setToken(null);
+            };
+
+            return token ? (
+                <Dashboard token={token} onLogout={handleLogout} />
+            ) : (
+                <LoginPage onLoginSuccess={handleLoginSuccess} />
+            );
+        }
+
+        // Render App
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
