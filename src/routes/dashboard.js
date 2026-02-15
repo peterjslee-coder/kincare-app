@@ -98,8 +98,8 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
     })),
     stats: {
       sessionsThisMonth: monthlyStats.total_sessions || 0,
-      hoursThisMonth: Math.round((monthlyStats.total_hours || 0) * 10) / 10,
-      spendThisMonth: Math.round((monthlyStats.total_spend || 0) * 100) / 100,
+      totalHours: Math.round((monthlyStats.total_hours || 0) * 10) / 10,
+      monthlySpend: Math.round((monthlyStats.total_spend || 0) * 100) / 100,
       avgCaregiverRating: Math.round((avgRating.avg || 0) * 10) / 10,
       unreadNotifications: unreadCount.count,
     },
@@ -122,7 +122,7 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
       title: a.title,
       message: a.message,
       isRead: a.is_read,
-      createdAt: a.created_at,
+      timestamp: a.created_at,
     })),
   });
 });
