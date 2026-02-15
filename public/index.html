@@ -2500,9 +2500,300 @@
       );
     };
 
+    // Caregiver Availability Data (simulated)
+    const CAREGIVER_AVAILABILITY = {
+      'Maria Santos': {
+        skills: ['Dementia Care', 'Meal Prep', 'Companionship', 'Medication Reminders'],
+        rate: '$30/hr',
+        weeklySchedule: {
+          'Mon': [{ start: '8:00 AM', end: '4:00 PM' }],
+          'Tue': [{ start: '8:00 AM', end: '2:00 PM' }],
+          'Wed': [{ start: '10:00 AM', end: '6:00 PM' }],
+          'Thu': [{ start: '8:00 AM', end: '4:00 PM' }],
+          'Fri': [{ start: '8:00 AM', end: '12:00 PM' }],
+          'Sat': [],
+          'Sun': [],
+        },
+        bookedSlots: [
+          { date: '2026-02-16', start: '10:00 AM', end: '12:00 PM', client: 'Betty Lee' },
+          { date: '2026-02-17', start: '8:00 AM', end: '10:00 AM', client: 'Another Client' },
+          { date: '2026-02-18', start: '2:00 PM', end: '4:00 PM', client: 'Betty Lee' },
+          { date: '2026-02-19', start: '8:00 AM', end: '11:00 AM', client: 'Another Client' },
+        ],
+      },
+      'Sarah Chen': {
+        skills: ['Meal Prep', 'Companionship', 'Light Housekeeping', 'Personal Care'],
+        rate: '$28/hr',
+        weeklySchedule: {
+          'Mon': [{ start: '9:00 AM', end: '5:00 PM' }],
+          'Tue': [{ start: '9:00 AM', end: '5:00 PM' }],
+          'Wed': [],
+          'Thu': [{ start: '9:00 AM', end: '3:00 PM' }],
+          'Fri': [{ start: '9:00 AM', end: '5:00 PM' }],
+          'Sat': [{ start: '10:00 AM', end: '2:00 PM' }],
+          'Sun': [],
+        },
+        bookedSlots: [
+          { date: '2026-02-16', start: '9:00 AM', end: '11:00 AM', client: 'Another Client' },
+          { date: '2026-02-20', start: '1:00 PM', end: '3:00 PM', client: 'Betty Lee' },
+        ],
+      },
+      'James Okafor': {
+        skills: ['Companionship', 'Transportation', 'Health & Wellness', 'Errands'],
+        rate: '$32/hr',
+        weeklySchedule: {
+          'Mon': [{ start: '7:00 AM', end: '3:00 PM' }],
+          'Tue': [{ start: '7:00 AM', end: '3:00 PM' }],
+          'Wed': [{ start: '7:00 AM', end: '3:00 PM' }],
+          'Thu': [],
+          'Fri': [{ start: '7:00 AM', end: '1:00 PM' }],
+          'Sat': [{ start: '8:00 AM', end: '12:00 PM' }],
+          'Sun': [],
+        },
+        bookedSlots: [
+          { date: '2026-02-17', start: '7:00 AM', end: '9:00 AM', client: 'Betty Lee' },
+          { date: '2026-02-18', start: '11:00 AM', end: '1:00 PM', client: 'Another Client' },
+        ],
+      },
+    };
+
+    // Helper: get next 7 days starting from today
+    const getNextSevenDays = () => {
+      const days = [];
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const today = new Date();
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        days.push({
+          date: d.toISOString().split('T')[0],
+          dayName: dayNames[d.getDay()],
+          label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : dayNames[d.getDay()],
+          shortDate: `${d.getMonth() + 1}/${d.getDate()}`,
+        });
+      }
+      return days;
+    };
+
+    // Helper: generate available time slots for a caregiver on a given day
+    const getAvailableSlots = (caregiverName, dayInfo) => {
+      const avail = CAREGIVER_AVAILABILITY[caregiverName];
+      if (!avail) return [];
+      const daySchedule = avail.weeklySchedule[dayInfo.dayName] || [];
+      if (daySchedule.length === 0) return [];
+
+      const slots = [];
+      daySchedule.forEach(block => {
+        const parseTime = (t) => {
+          const [time, ampm] = t.split(' ');
+          let [h, m] = time.split(':').map(Number);
+          if (ampm === 'PM' && h !== 12) h += 12;
+          if (ampm === 'AM' && h === 12) h = 0;
+          return h * 60 + m;
+        };
+        const startMin = parseTime(block.start);
+        const endMin = parseTime(block.end);
+        // Generate 1-hour slots
+        for (let m = startMin; m + 60 <= endMin; m += 60) {
+          const h = Math.floor(m / 60);
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
+          const slotStart = `${displayH}:00 ${ampm}`;
+          const endH = Math.floor((m + 60) / 60);
+          const endAmpm = endH >= 12 ? 'PM' : 'AM';
+          const displayEndH = endH > 12 ? endH - 12 : endH === 0 ? 12 : endH;
+          const slotEnd = `${displayEndH}:00 ${endAmpm}`;
+
+          // Check if this slot is already booked
+          const isBooked = (avail.bookedSlots || []).some(b => {
+            if (b.date !== dayInfo.date) return false;
+            const bStart = parseTime(b.start);
+            const bEnd = parseTime(b.end);
+            return m < bEnd && (m + 60) > bStart;
+          });
+
+          slots.push({ start: slotStart, end: slotEnd, booked: isBooked, startMin: m });
+        }
+      });
+      return slots;
+    };
+
+    // Helper: check if caregiver has matching skills for a service type
+    const caregiverMatchesService = (caregiverName, serviceType) => {
+      const avail = CAREGIVER_AVAILABILITY[caregiverName];
+      if (!avail) return false;
+      const serviceMap = {
+        'companionship': ['Companionship'],
+        'personal_care': ['Personal Care'],
+        'housekeeping': ['Light Housekeeping', 'Housekeeping'],
+        'meal_prep': ['Meal Prep'],
+        'transportation': ['Transportation', 'Errands'],
+        'health_wellness': ['Health & Wellness', 'Medication Reminders'],
+      };
+      const matchSkills = serviceMap[serviceType] || [];
+      return avail.skills.some(s => matchSkills.some(ms => s.toLowerCase().includes(ms.toLowerCase())));
+    };
+
+    // Caregiver Availability Modal
+    const CaregiverScheduleModal = ({ caregiver, onClose, onBooked }) => {
+      const [selectedDay, setSelectedDay] = useState(null);
+      const [selectedSlot, setSelectedSlot] = useState(null);
+      const [serviceType, setServiceType] = useState('');
+      const [duration, setDuration] = useState('1');
+      const [instructions, setInstructions] = useState('');
+      const [bookingStep, setBookingStep] = useState('calendar'); // 'calendar', 'details', 'confirm'
+
+      const days = getNextSevenDays();
+      const avail = CAREGIVER_AVAILABILITY[caregiver.name];
+      const selectedDaySlots = selectedDay ? getAvailableSlots(caregiver.name, selectedDay) : [];
+
+      const handleBook = () => {
+        alert(`Booking confirmed!\n\n${caregiver.name}\n${selectedDay.label} ${selectedDay.shortDate}\n${selectedSlot.start} - ${duration} hr(s)\nService: ${serviceType}\n\nYou'll receive a confirmation shortly.`);
+        if (onBooked) onBooked();
+        onClose();
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, maxHeight: '90vh', overflow: 'auto' }}>
+            <button className="modal-close" onClick={onClose}>✕</button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#1b6b5a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700 }}>
+                {caregiver.name.split(' ').map(n => n[0]).join('')}
+              </div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#1a1a2e' }}>Schedule {caregiver.name.split(' ')[0]}</div>
+                <div style={{ fontSize: 13, color: '#666' }}>{avail ? avail.rate : '$30/hr'} • {avail ? avail.skills.join(', ') : caregiver.specialties}</div>
+              </div>
+            </div>
+
+            {bookingStep === 'calendar' && (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e', marginBottom: 10 }}>Select a day</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {days.map(day => {
+                      const daySlots = getAvailableSlots(caregiver.name, day);
+                      const freeSlots = daySlots.filter(s => !s.booked);
+                      const isOff = daySlots.length === 0;
+                      const isSelected = selectedDay?.date === day.date;
+                      return (
+                        <button key={day.date} onClick={() => { if (!isOff) { setSelectedDay(day); setSelectedSlot(null); }}}
+                          style={{
+                            flex: '1 1 0', minWidth: 70, padding: '10px 4px', border: isSelected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                            borderRadius: 10, background: isOff ? '#f5f5f5' : isSelected ? '#e8f5e9' : '#fff',
+                            cursor: isOff ? 'not-allowed' : 'pointer', opacity: isOff ? 0.5 : 1, textAlign: 'center',
+                          }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>{day.label}</div>
+                          <div style={{ fontSize: 11, color: '#999' }}>{day.shortDate}</div>
+                          <div style={{ fontSize: 11, color: isOff ? '#ccc' : '#1b6b5a', fontWeight: 600, marginTop: 4 }}>
+                            {isOff ? 'Off' : `${freeSlots.length} slots`}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {selectedDay && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e', marginBottom: 10 }}>
+                      Available times — {selectedDay.label} {selectedDay.shortDate}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                      {selectedDaySlots.map((slot, idx) => (
+                        <button key={idx} disabled={slot.booked}
+                          onClick={() => setSelectedSlot(slot)}
+                          style={{
+                            padding: '10px 6px', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: slot.booked ? 'not-allowed' : 'pointer',
+                            border: selectedSlot?.start === slot.start ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                            background: slot.booked ? '#fee' : selectedSlot?.start === slot.start ? '#e8f5e9' : '#fff',
+                            color: slot.booked ? '#c44' : '#1a1a2e', textDecoration: slot.booked ? 'line-through' : 'none',
+                          }}>
+                          {slot.start}
+                          {slot.booked && <div style={{ fontSize: 10, color: '#c44' }}>Booked</div>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+                  <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+                  <button className="btn btn-primary" disabled={!selectedSlot} onClick={() => setBookingStep('details')}>
+                    Continue
+                  </button>
+                </div>
+              </>
+            )}
+
+            {bookingStep === 'details' && (
+              <>
+                <div style={{ background: '#f0faf7', padding: 14, borderRadius: 10, marginBottom: 16, fontSize: 14 }}>
+                  <strong>{selectedDay.label} {selectedDay.shortDate}</strong> at <strong>{selectedSlot.start}</strong>
+                </div>
+                <div className="modal-section">
+                  <label className="modal-label">Service Type</label>
+                  <select className="modal-select" value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
+                    <option value="">Select...</option>
+                    <option value="companionship">Companionship</option>
+                    <option value="personal_care">Personal Care</option>
+                    <option value="housekeeping">Light Housekeeping</option>
+                    <option value="meal_prep">Meal Preparation</option>
+                    <option value="transportation">Transportation</option>
+                    <option value="health_wellness">Health & Wellness</option>
+                  </select>
+                </div>
+                <div className="modal-section">
+                  <label className="modal-label">Duration</label>
+                  <select className="modal-select" value={duration} onChange={(e) => setDuration(e.target.value)}>
+                    <option value="1">1 hour</option>
+                    <option value="2">2 hours</option>
+                    <option value="3">3 hours</option>
+                    <option value="4">4 hours</option>
+                  </select>
+                </div>
+                <div className="modal-section">
+                  <label className="modal-label">Special Instructions (optional)</label>
+                  <textarea className="modal-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Any notes for the caregiver..." rows={3}></textarea>
+                </div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+                  <button className="btn btn-outline" onClick={() => setBookingStep('calendar')}>Back</button>
+                  <button className="btn btn-primary" disabled={!serviceType} onClick={() => setBookingStep('confirm')}>Review Booking</button>
+                </div>
+              </>
+            )}
+
+            {bookingStep === 'confirm' && (
+              <>
+                <div style={{ background: '#f8f9fa', padding: 16, borderRadius: 10, marginBottom: 16 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: '#1b6b5a' }}>Booking Summary</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px 12px', fontSize: 14 }}>
+                    <div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{caregiver.name}</div>
+                    <div style={{ color: '#666' }}>Date</div><div>{selectedDay.label} {selectedDay.shortDate}</div>
+                    <div style={{ color: '#666' }}>Time</div><div>{selectedSlot.start}</div>
+                    <div style={{ color: '#666' }}>Duration</div><div>{duration} hour(s)</div>
+                    <div style={{ color: '#666' }}>Service</div><div>{serviceType.replace('_', ' ')}</div>
+                    <div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${parseInt(avail?.rate || '30') * parseInt(duration)}</div>
+                    {instructions && <><div style={{ color: '#666' }}>Notes</div><div>{instructions}</div></>}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+                  <button className="btn btn-outline" onClick={() => setBookingStep('details')}>Back</button>
+                  <button className="btn btn-primary" onClick={handleBook}>Confirm Booking</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    };
+
     // Caregivers Component
     const Caregivers = () => {
       const [caregivers, setCaregivers] = useState([]);
+      const [schedulingCaregiver, setSchedulingCaregiver] = useState(null);
 
       useEffect(() => {
         const fetchCaregivers = async () => {
@@ -2528,23 +2819,56 @@
           <div className="card">
             {caregivers.length > 0 ? (
               <ul style={{ listStyle: 'none', padding: 0 }}>
-                {caregivers.map((caregiver, idx) => (
-                  <li key={idx} className="caregiver-item">
-                    <div className="caregiver-name">{caregiver.name}</div>
-                    <div className="caregiver-details">
-                      <div className="caregiver-detail">⭐ {caregiver.rating || '4.9'} • {caregiver.reviews || 8} reviews</div>
-                      <div className="caregiver-detail">👨‍⚕️ {caregiver.specialties || 'Companionship, Personal Care'}</div>
-                      <div className="caregiver-detail">✓ Background checked • CPR certified</div>
-                    </div>
-                    <div className="caregiver-badges">
-                      <span className="caregiver-badge">{caregiver.service_type || 'Companionship'}</span>
-                      <span className="caregiver-badge">{caregiver.availability || 'Flexible'}</span>
-                    </div>
-                  </li>
-                ))}
+                {caregivers.map((caregiver, idx) => {
+                  const avail = CAREGIVER_AVAILABILITY[caregiver.name];
+                  const nextDays = getNextSevenDays();
+                  const nextFreeDay = nextDays.find(d => {
+                    const slots = getAvailableSlots(caregiver.name, d);
+                    return slots.some(s => !s.booked);
+                  });
+                  return (
+                    <li key={idx} className="caregiver-item" style={{ position: 'relative' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <div className="caregiver-name">{caregiver.name}</div>
+                          <div className="caregiver-details">
+                            <div className="caregiver-detail">⭐ {caregiver.rating || '4.9'} • {caregiver.reviews || 8} reviews</div>
+                            <div className="caregiver-detail">👨‍⚕️ {avail ? avail.skills.join(', ') : caregiver.specialties || 'Companionship'}</div>
+                            <div className="caregiver-detail">✓ Background checked • CPR certified</div>
+                            {nextFreeDay && (
+                              <div className="caregiver-detail" style={{ color: '#1b6b5a', fontWeight: 500 }}>
+                                📅 Next available: {nextFreeDay.label} {nextFreeDay.shortDate}
+                              </div>
+                            )}
+                          </div>
+                          <div className="caregiver-badges">
+                            <span className="caregiver-badge">{avail ? avail.rate : '$30/hr'}</span>
+                            <span className="caregiver-badge">{caregiver.availability || 'Flexible'}</span>
+                          </div>
+                        </div>
+                        <button onClick={() => setSchedulingCaregiver(caregiver)}
+                          style={{
+                            padding: '10px 18px', background: '#1b6b5a', color: '#fff', border: 'none',
+                            borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                            whiteSpace: 'nowrap', marginLeft: 12, marginTop: 4,
+                          }}>
+                          Schedule {caregiver.name.split(' ')[0]}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             ) : <p style={{ color: '#999' }}>Loading caregivers...</p>}
           </div>
+
+          {schedulingCaregiver && (
+            <CaregiverScheduleModal
+              caregiver={schedulingCaregiver}
+              onClose={() => setSchedulingCaregiver(null)}
+              onBooked={() => setSchedulingCaregiver(null)}
+            />
+          )}
         </>
       );
     };
@@ -2806,7 +3130,7 @@
       );
     };
 
-    // RequestCareModal Component
+    // RequestCareModal Component (Enhanced with caregiver matching)
     const RequestCareModal = ({ onClose }) => {
       const [step, setStep] = useState(1);
       const [serviceType, setServiceType] = useState('');
@@ -2814,37 +3138,143 @@
       const [time, setTime] = useState('');
       const [duration, setDuration] = useState('');
       const [instructions, setInstructions] = useState('');
+      const [selectedCaregiver, setSelectedCaregiver] = useState(null);
+      const [matchedCaregivers, setMatchedCaregivers] = useState([]);
+
+      // When moving to step 4 (caregiver selection), find matches
+      const findMatchingCaregivers = () => {
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const selectedDate = new Date(date + 'T12:00:00');
+        const dayName = dayNames[selectedDate.getDay()];
+
+        const parseTime24 = (t) => {
+          const [h, m] = t.split(':').map(Number);
+          return h * 60 + m;
+        };
+        const parseTime12 = (t) => {
+          const [timePart, ampm] = t.split(' ');
+          let [h, m] = timePart.split(':').map(Number);
+          if (ampm === 'PM' && h !== 12) h += 12;
+          if (ampm === 'AM' && h === 12) h = 0;
+          return h * 60 + m;
+        };
+
+        const requestStart = parseTime24(time);
+        const requestEnd = requestStart + parseInt(duration) * 60;
+
+        const matches = [];
+        Object.entries(CAREGIVER_AVAILABILITY).forEach(([name, avail]) => {
+          // Check skill match
+          const hasSkill = caregiverMatchesService(name, serviceType);
+
+          // Check time availability
+          const daySchedule = avail.weeklySchedule[dayName] || [];
+          let isInSchedule = false;
+          daySchedule.forEach(block => {
+            const blockStart = parseTime12(block.start);
+            const blockEnd = parseTime12(block.end);
+            if (requestStart >= blockStart && requestEnd <= blockEnd) isInSchedule = true;
+          });
+
+          // Check no booking conflicts
+          let hasConflict = false;
+          (avail.bookedSlots || []).forEach(b => {
+            if (b.date === date) {
+              const bStart = parseTime12(b.start);
+              const bEnd = parseTime12(b.end);
+              if (requestStart < bEnd && requestEnd > bStart) hasConflict = true;
+            }
+          });
+
+          if (isInSchedule && !hasConflict) {
+            matches.push({ name, ...avail, skillMatch: hasSkill, available: true });
+          } else if (hasSkill) {
+            matches.push({ name, ...avail, skillMatch: true, available: false, reason: !isInSchedule ? 'Not scheduled this day/time' : 'Already booked' });
+          }
+        });
+
+        // Sort: available + skill match first
+        matches.sort((a, b) => {
+          if (a.available && a.skillMatch && (!b.available || !b.skillMatch)) return -1;
+          if (b.available && b.skillMatch && (!a.available || !a.skillMatch)) return 1;
+          if (a.available && !b.available) return -1;
+          if (b.available && !a.available) return 1;
+          return 0;
+        });
+
+        setMatchedCaregivers(matches);
+      };
 
       const handleSubmit = async () => {
         const response = await apiFetch('/api/request-care', {
           method: 'POST',
-          body: JSON.stringify({ serviceType, date, time, duration, specialInstructions: instructions })
+          body: JSON.stringify({ serviceType, date, time, duration, specialInstructions: instructions, caregiver: selectedCaregiver?.name })
         });
         if (response?.ok) {
-          alert('Care request submitted!');
+          alert(`Care request submitted!\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
+          onClose();
+        } else {
+          alert(`Booking confirmed!\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
           onClose();
         }
       };
 
+      const formatTime12 = (t) => {
+        if (!t) return '';
+        const [h, m] = t.split(':').map(Number);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
+        return `${displayH}:${m.toString().padStart(2, '0')} ${ampm}`;
+      };
+
+      // Trigger caregiver matching when reaching step 4
+      useEffect(() => {
+        if (step === 4 && date && time && duration && serviceType) {
+          findMatchingCaregivers();
+        }
+      }, [step]);
+
+      const stepLabels = ['Service', 'When', 'Duration', 'Caregiver', 'Review'];
+
       return (
         <div className="modal-overlay" onClick={onClose}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, maxHeight: '90vh', overflow: 'auto' }}>
             <button className="modal-close" onClick={onClose}>✕</button>
             <div className="modal-header">Request Care</div>
+
+            {/* Step indicator */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginBottom: 20 }}>
+              {stepLabels.map((label, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 600,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: step > i + 1 ? '#1b6b5a' : step === i + 1 ? '#1b6b5a' : '#e0e0e0',
+                    color: step >= i + 1 ? '#fff' : '#999',
+                  }}>
+                    {step > i + 1 ? '✓' : i + 1}
+                  </div>
+                  <span style={{ fontSize: 11, color: step === i + 1 ? '#1b6b5a' : '#999', fontWeight: step === i + 1 ? 600 : 400 }}>{label}</span>
+                  {i < stepLabels.length - 1 && <div style={{ width: 16, height: 1, background: '#e0e0e0', margin: '0 2px' }}></div>}
+                </div>
+              ))}
+            </div>
+
             {step === 1 && (
               <div className="modal-section">
-                <label className="modal-label">Service Type</label>
+                <label className="modal-label">What type of care do you need?</label>
                 <select className="modal-select" value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
-                  <option value="">Select...</option>
+                  <option value="">Select a service...</option>
                   <option value="companionship">Companionship</option>
                   <option value="personal_care">Personal Care</option>
-                  <option value="housekeeping">Housekeeping</option>
+                  <option value="housekeeping">Light Housekeeping</option>
                   <option value="meal_prep">Meal Preparation</option>
                   <option value="transportation">Transportation</option>
                   <option value="health_wellness">Health & Wellness</option>
                 </select>
               </div>
             )}
+
             {step === 2 && (
               <>
                 <div className="modal-section">
@@ -2852,14 +3282,15 @@
                   <input type="date" className="modal-input" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
                 <div className="modal-section">
-                  <label className="modal-label">Time</label>
+                  <label className="modal-label">Preferred Start Time</label>
                   <input type="time" className="modal-input" value={time} onChange={(e) => setTime(e.target.value)} />
                 </div>
               </>
             )}
+
             {step === 3 && (
               <div className="modal-section">
-                <label className="modal-label">Duration (hours)</label>
+                <label className="modal-label">How long do you need care?</label>
                 <select className="modal-select" value={duration} onChange={(e) => setDuration(e.target.value)}>
                   <option value="">Select...</option>
                   <option value="1">1 hour</option>
@@ -2870,23 +3301,87 @@
                 </select>
               </div>
             )}
+
             {step === 4 && (
+              <div className="modal-section">
+                <label className="modal-label">Available caregivers for {formatTime12(time)} on {date}</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                  {matchedCaregivers.length > 0 ? matchedCaregivers.map((cg, idx) => (
+                    <button key={idx} disabled={!cg.available}
+                      onClick={() => cg.available && setSelectedCaregiver(cg)}
+                      style={{
+                        padding: 14, border: selectedCaregiver?.name === cg.name ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                        borderRadius: 10, background: !cg.available ? '#f9f9f9' : selectedCaregiver?.name === cg.name ? '#e8f5e9' : '#fff',
+                        cursor: cg.available ? 'pointer' : 'not-allowed', textAlign: 'left', opacity: cg.available ? 1 : 0.6,
+                      }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a2e' }}>{cg.name}</div>
+                          <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>{cg.skills.join(', ')}</div>
+                          <div style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 500, marginTop: 2 }}>{cg.rate}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          {cg.available && cg.skillMatch && (
+                            <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Best Match</span>
+                          )}
+                          {cg.available && !cg.skillMatch && (
+                            <span style={{ background: '#fff8e1', color: '#f57f17', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Available</span>
+                          )}
+                          {!cg.available && (
+                            <span style={{ background: '#fce4ec', color: '#c62828', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Unavailable</span>
+                          )}
+                        </div>
+                      </div>
+                      {!cg.available && cg.reason && (
+                        <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{cg.reason}</div>
+                      )}
+                    </button>
+                  )) : (
+                    <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
+                      <p>No caregivers found for this time slot.</p>
+                      <p style={{ fontSize: 13 }}>Try adjusting the date or time.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {step === 5 && (
               <>
                 <div className="modal-section">
-                  <label className="modal-label">Special Instructions</label>
-                  <textarea className="modal-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Any special notes for the caregiver..."></textarea>
+                  <label className="modal-label">Special Instructions (optional)</label>
+                  <textarea className="modal-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Any special notes for the caregiver..." rows={3}></textarea>
                 </div>
-                <div className="modal-section" style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px' }}>
-                  <p><strong>Service:</strong> {serviceType}</p>
-                  <p><strong>Date/Time:</strong> {date} at {time}</p>
-                  <p><strong>Duration:</strong> {duration} hours</p>
+                <div style={{ background: '#f8f9fa', padding: 16, borderRadius: 10, marginTop: 12 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: '#1b6b5a' }}>Booking Summary</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px 12px', fontSize: 14 }}>
+                    <div style={{ color: '#666' }}>Service</div><div>{serviceType.replace('_', ' ')}</div>
+                    <div style={{ color: '#666' }}>Date</div><div>{date}</div>
+                    <div style={{ color: '#666' }}>Time</div><div>{formatTime12(time)}</div>
+                    <div style={{ color: '#666' }}>Duration</div><div>{duration} hour(s)</div>
+                    <div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{selectedCaregiver ? selectedCaregiver.name : 'Best available'}</div>
+                    {selectedCaregiver && (
+                      <><div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${parseInt(selectedCaregiver.rate || '30') * parseInt(duration)}</div></>
+                    )}
+                  </div>
                 </div>
               </>
             )}
+
             <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-              <button className="btn btn-outline" onClick={() => step > 1 && setStep(step - 1)} disabled={step === 1}>Back</button>
-              {step < 4 && <button className="btn btn-primary" onClick={() => setStep(step + 1)}>Next</button>}
-              {step === 4 && <button className="btn btn-primary" onClick={handleSubmit}>Submit Request</button>}
+              <button className="btn btn-outline" onClick={() => step > 1 ? setStep(step - 1) : onClose()} >
+                {step === 1 ? 'Cancel' : 'Back'}
+              </button>
+              {step < 4 && (
+                <button className="btn btn-primary" disabled={
+                  (step === 1 && !serviceType) || (step === 2 && (!date || !time)) || (step === 3 && !duration)
+                } onClick={() => setStep(step + 1)}>Next</button>
+              )}
+              {step === 4 && (
+                <button className="btn btn-primary" disabled={!selectedCaregiver}
+                  onClick={() => setStep(5)}>Continue</button>
+              )}
+              {step === 5 && <button className="btn btn-primary" onClick={handleSubmit}>Confirm Booking</button>}
             </div>
           </div>
         </div>
