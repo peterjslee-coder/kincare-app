@@ -48,16 +48,16 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
           <p style={{ fontSize: '20px', color: '#333', lineHeight: 1.7, marginBottom: '48px' }}>
             There is no Uber for elder care. Families needing help with an aging parent face two options: expensive agencies charging $5,000 to $10,000 per month, or the impossible task of doing it all themselves. The middle ground — affordable, flexible, on-demand care — simply does not exist.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '32px' }}>
-            <div style={{ padding: '32px', background: '#fef3f0', borderRadius: '12px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '32px', justifyContent: 'center' }}>
+            <div style={{ padding: '32px', background: '#fef3f0', borderRadius: '12px', flex: '1 1 220px', maxWidth: '320px', textAlign: 'center' }}>
               <div style={{ fontSize: '42px', fontWeight: 700, color: '#e8724a' }}>$5-10K</div>
               <div style={{ fontSize: '14px', color: '#666', marginTop: '8px' }}>Monthly cost of traditional home care agencies</div>
             </div>
-            <div style={{ padding: '32px', background: '#fef3f0', borderRadius: '12px' }}>
+            <div style={{ padding: '32px', background: '#fef3f0', borderRadius: '12px', flex: '1 1 220px', maxWidth: '320px', textAlign: 'center' }}>
               <div style={{ fontSize: '42px', fontWeight: 700, color: '#e8724a' }}>3-6 wks</div>
               <div style={{ fontSize: '14px', color: '#666', marginTop: '8px' }}>Average wait time to place a caregiver through an agency</div>
             </div>
-            <div style={{ padding: '32px', background: '#fef3f0', borderRadius: '12px' }}>
+            <div style={{ padding: '32px', background: '#fef3f0', borderRadius: '12px', flex: '1 1 220px', maxWidth: '320px', textAlign: 'center' }}>
               <div style={{ fontSize: '42px', fontWeight: 700, color: '#e8724a' }}>60%</div>
               <div style={{ fontSize: '14px', color: '#666', marginTop: '8px' }}>Of family caregivers also hold down a full-time job</div>
             </div>
@@ -115,20 +115,20 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
           <p style={{ fontSize: '18px', opacity: 0.85, marginBottom: '56px', maxWidth: '700px', margin: '0 auto 56px' }}>
             Every single day, 11,200 Americans turn 65. The home care market is massive, fragmented, and ripe for a platform that puts families first.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '32px' }}>
-            <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '32px', justifyContent: 'center' }}>
+            <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)', flex: '1 1 200px', maxWidth: '240px', textAlign: 'center' }}>
               <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>$200B</div>
               <div style={{ fontSize: '14px', opacity: 0.85, marginTop: '8px' }}>U.S. home care market size</div>
             </div>
-            <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
+            <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)', flex: '1 1 200px', maxWidth: '240px', textAlign: 'center' }}>
               <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>63M</div>
               <div style={{ fontSize: '14px', opacity: 0.85, marginTop: '8px' }}>Americans caring for an aging parent</div>
             </div>
-            <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
+            <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)', flex: '1 1 200px', maxWidth: '240px', textAlign: 'center' }}>
               <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>11.2K</div>
               <div style={{ fontSize: '14px', opacity: 0.85, marginTop: '8px' }}>Boomers turning 65 every day</div>
             </div>
-            <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
+            <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)', flex: '1 1 200px', maxWidth: '240px', textAlign: 'center' }}>
               <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>70%</div>
               <div style={{ fontSize: '14px', opacity: 0.85, marginTop: '8px' }}>Of seniors prefer to age at home</div>
             </div>
@@ -140,14 +140,14 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       <section style={{ padding: '80px 32px', background: '#fff' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '36px', color: '#1b6b5a', textAlign: 'center', marginBottom: '48px' }}>How KinCare Makes Money</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '40px' }}>
-            <div style={{ padding: '40px', background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', justifyContent: 'center' }}>
+            <div style={{ padding: '40px', background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
               <div style={{ fontSize: '16px', fontWeight: 600, color: '#1b6b5a', marginBottom: '12px' }}>Pay-Per-Use, Not Subscription</div>
               <p style={{ fontSize: '15px', color: '#555', lineHeight: 1.6 }}>
                 Families pay per session — $45 to $85 depending on service type and duration. No monthly minimums, no long-term contracts. Just care when you need it.
               </p>
             </div>
-            <div style={{ padding: '40px', background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3' }}>
+            <div style={{ padding: '40px', background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
               <div style={{ fontSize: '16px', fontWeight: 600, color: '#1b6b5a', marginBottom: '12px' }}>Platform Commission</div>
               <p style={{ fontSize: '15px', color: '#555', lineHeight: 1.6 }}>
                 KinCare takes a 20% commission on each transaction. Caregivers keep 80% and get paid within 48 hours. Both sides get a better deal than traditional agencies.
@@ -185,7 +185,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
           <p style={{ fontSize: '18px', opacity: 0.92, lineHeight: 1.7, marginBottom: '40px' }}>
             Today, KinCare matches families with caregivers. Tomorrow, it becomes the coordination layer for everything an aging parent needs — care scheduling, medication tracking, doctor coordination, family communication, and AI-powered health insights. One platform. One family. Complete peace of mind.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '24px', marginTop: '40px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginTop: '40px', justifyContent: 'center' }}>
             {[
               { icon: '👩‍⚕️', label: 'Caregiver Matching' },
               { icon: '💊', label: 'Medication Tracking' },
@@ -196,7 +196,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             ].map((item, i) => (
               <div key={i} style={{
                 padding: '20px', background: 'rgba(255,255,255,0.1)', borderRadius: '10px',
-                border: '1px solid rgba(255,255,255,0.15)', fontSize: '14px'
+                border: '1px solid rgba(255,255,255,0.15)', fontSize: '14px', flex: '1 1 150px', maxWidth: '180px', textAlign: 'center'
               }}>
                 <div style={{ fontSize: '28px', marginBottom: '8px' }}>{item.icon}</div>
                 {item.label}
