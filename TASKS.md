@@ -4,7 +4,7 @@
 
 ## Bugs
 
-(none yet)
+- [ ] **Calendar heat map sometimes stale on tab switch:** Navigating away from Schedule and back occasionally shows a blank calendar until logout/login. Likely a React re-mount issue — component state may not reset on page switch. Fix: add `key={currentPage}` to force unmount, or add navigation dependency to useEffect.
 
 
 ## Features — Up Next
