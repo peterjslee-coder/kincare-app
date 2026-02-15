@@ -2775,7 +2775,7 @@
                     <div style={{ color: '#666' }}>Time</div><div>{selectedSlot.start}</div>
                     <div style={{ color: '#666' }}>Duration</div><div>{duration} hour(s)</div>
                     <div style={{ color: '#666' }}>Service</div><div>{serviceType.replace('_', ' ')}</div>
-                    <div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${parseInt(avail?.rate || '30') * parseInt(duration)}</div>
+                    <div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${parseInt((avail?.rate || '$30').replace(/[^0-9]/g, '')) * parseInt(duration)}</div>
                     {instructions && <><div style={{ color: '#666' }}>Notes</div><div>{instructions}</div></>}
                   </div>
                 </div>
@@ -3361,7 +3361,7 @@
                     <div style={{ color: '#666' }}>Duration</div><div>{duration} hour(s)</div>
                     <div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{selectedCaregiver ? selectedCaregiver.name : 'Best available'}</div>
                     {selectedCaregiver && (
-                      <><div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${parseInt(selectedCaregiver.rate || '30') * parseInt(duration)}</div></>
+                      <><div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${parseInt((selectedCaregiver.rate || '$30').replace(/[^0-9]/g, '')) * parseInt(duration)}</div></>
                     )}
                   </div>
                 </div>
