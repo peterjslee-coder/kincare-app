@@ -20,6 +20,20 @@
 - [ ] **Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.).
 
 
+## Production Path — Beta on Phone
+
+> These are the infrastructure changes needed before real users (even family/friends) can use the app. Order roughly reflects dependencies. See CLAUDE.md "Production Direction" for the full picture.
+
+- [ ] **PostgreSQL migration:** Replace SQLite with PostgreSQL on Railway. Accounts and data must persist across deploys. This unblocks everything else.
+- [ ] **Production auth:** Migrate from hand-rolled JWT to a real auth service (Auth0, Clerk, Supabase Auth, or Firebase Auth). Must support: password reset, email verification, session invalidation, persistent accounts across iterations.
+- [ ] **Mobile-responsive UI:** Sidebar → bottom nav on phone. This is the single biggest UX blocker for phone beta. Consider PWA (add-to-homescreen) as the first mobile path — avoids app store review.
+- [ ] **Stripe Connect integration:** Wire payments table to Stripe Connect for marketplace payouts. Families pay, caregivers get paid, platform takes a fee.
+- [ ] **Input validation & rate limiting:** Lock down API routes before real users touch them. Validate all inputs, add rate limiting on auth endpoints.
+- [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox or Google Maps API. Caregiver matching by actual driving distance, not just city name.
+- [ ] **Build step for frontend:** Babel-in-browser won't scale. Move to Vite or similar when the component count or bundle size demands it. Not urgent yet.
+- [ ] **Tests:** At minimum: auth flow, session booking, payment flow. Needed before any deploy that touches real money.
+
+
 ## Demo Credentials
 
 | Role | Email | Password | Notes |
