@@ -25,7 +25,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             The Future of Home Care
           </div>
           <h1 className="hero-title" style={{ fontSize: '52px', lineHeight: 1.15 }}>
-            53 Million Americans Are Caring for an Aging Parent.<br/>
+            63 Million Americans Are Caring for an Aging Parent.<br/>
             <span style={{ color: '#e8724a' }}>Most of Them Are Doing It Alone.</span>
           </h1>
           <p className="hero-subtitle" style={{ fontSize: '20px', maxWidth: '700px', margin: '0 auto 40px', opacity: 0.92 }}>
@@ -111,21 +111,21 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       {/* ── The Market ── */}
       <section style={{ padding: '80px 32px', background: '#0f4238', color: 'white' }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '36px', marginBottom: '16px', color: 'white' }}>A $470 Billion Market — and Growing</h2>
+          <h2 style={{ fontSize: '36px', marginBottom: '16px', color: 'white' }}>A $200 Billion Market — and Growing</h2>
           <p style={{ fontSize: '18px', opacity: 0.85, marginBottom: '56px', maxWidth: '700px', margin: '0 auto 56px' }}>
-            Every single day, 10,000 Americans turn 65. The home care market is massive, fragmented, and ripe for a platform that puts families first.
+            Every single day, 11,200 Americans turn 65. The home care market is massive, fragmented, and ripe for a platform that puts families first.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '32px' }}>
             <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>$470B</div>
+              <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>$200B</div>
               <div style={{ fontSize: '14px', opacity: 0.85, marginTop: '8px' }}>U.S. home care market size</div>
             </div>
             <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>53M</div>
-              <div style={{ fontSize: '14px', opacity: 0.85, marginTop: '8px' }}>Americans caring for aging parents</div>
+              <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>63M</div>
+              <div style={{ fontSize: '14px', opacity: 0.85, marginTop: '8px' }}>Americans caring for an aging parent</div>
             </div>
             <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>10K</div>
+              <div style={{ fontSize: '48px', fontWeight: 700, color: '#e8724a' }}>11.2K</div>
               <div style={{ fontSize: '14px', opacity: 0.85, marginTop: '8px' }}>Boomers turning 65 every day</div>
             </div>
             <div style={{ padding: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
