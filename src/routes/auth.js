@@ -15,8 +15,8 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields: email, password, firstName, lastName" });
     }
 
-    if (!["family", "caregiver"].includes(role)) {
-      return res.status(400).json({ error: "Role must be 'family' or 'caregiver'" });
+    if (!["family", "caregiver", "care_for"].includes(role)) {
+      return res.status(400).json({ error: "Role must be 'family', 'caregiver', or 'care_for'" });
     }
 
     const db = await getDb();

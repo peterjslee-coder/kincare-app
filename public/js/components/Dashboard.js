@@ -1,32 +1,25 @@
-const Dashboard = window.Dashboard = () => {
-  const [sessions, setSessions] = useState([]);
-  const [activities, setActivities] = useState([]);
+const Dashboard = window.Dashboard = ({ onNavigate }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchDashboard = async () => {
       try {
-        const [sessionsRes, activitiesRes] = await Promise.all([
-          apiFetch('/api/sessions'),
-          apiFetch('/api/activity'),
-        ]);
-        if (sessionsRes?.ok) {
-          const sessionsData = await sessionsRes.json();
-          setSessions(sessionsData.sessions || []);
+        const res = await apiFetch('/api/dashboard');
+        if (res?.ok) {
+          const d = await res.json();
+          setData(d);
         }
-        if (activitiesRes?.ok) {
-          const activitiesData = await activitiesRes.json();
-          setActivities(activitiesData.activities || []);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
+      } catch (err) {
+        console.error('Dashboard fetch error:', err);
       }
+      setLoading(false);
     };
-    fetchData();
+    fetchDashboard();
   }, []);
 
-  const upcomingSessions = sessions.slice(0, 3);
-
   const formatActivityTime = (createdAt) => {
+    if (!createdAt) return '';
     const dateStr = createdAt.replace(' ', 'T') + 'Z';
     const date = new Date(dateStr);
     const now = new Date();
@@ -40,59 +33,101 @@ const Dashboard = window.Dashboard = () => {
     return date.toLocaleDateString();
   };
 
+  if (loading) {
+    return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading dashboard...</div>;
+  }
+
+  if (!data) {
+    return <div style={{ padding: '40px', textAlign: 'center', color: '#c00' }}>Failed to load dashboard</div>;
+  }
+
+  const stats = data.stats || {};
+  const parent = data.parent;
+  const upcoming = data.upcomingSessions || [];
+  const activity = data.recentActivity || [];
+
   return (
     <>
       <div className="page-header">
         <h1 className="greeting">Welcome back, Pete!</h1>
       </div>
-      <div className="betty-card">
-        <div style={{ fontSize: 40 }}>👵</div>
-        <div className="betty-name">Betty Lee</div>
-        <div className="betty-info">Your mother • Living in Blacksburg, VA</div>
-      </div>
+
+      {parent && (
+        <div className="betty-card">
+          <div style={{ fontSize: 40 }}>👵</div>
+          <div className="betty-name">{parent.name}</div>
+          <div className="betty-info">Your mother &bull; Living in {parent.location}</div>
+          {parent.healthConditions && parent.healthConditions.length > 0 && (
+            <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+              {parent.healthConditions.join(' · ')}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="stats-grid">
         <div className="stat-card">
           <div style={{ fontSize: 28 }}>📅</div>
-          <div className="stat-number">{sessions.length}</div>
-          <div className="stat-label">Scheduled Sessions</div>
+          <div className="stat-number">{stats.sessionsThisMonth || 0}</div>
+          <div className="stat-label">Sessions This Month</div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => onNavigate && onNavigate('caregivers')}>
           <div style={{ fontSize: 28 }}>👨‍💼</div>
-          <div className="stat-number">2</div>
+          <div className="stat-number">{stats.assignedCaregivers || 0}</div>
           <div className="stat-label">Assigned Caregivers</div>
+          <div style={{ fontSize: '10px', color: '#1b6b5a', marginTop: '4px' }}>View &rarr;</div>
         </div>
         <div className="stat-card">
           <div style={{ fontSize: 28 }}>⭐</div>
-          <div className="stat-number">4.8</div>
-          <div className="stat-label">Average Rating</div>
+          <div className="stat-number">{stats.avgCaregiverRating || '—'}</div>
+          <div className="stat-label">Avg Rating</div>
         </div>
         <div className="stat-card">
           <div style={{ fontSize: 28 }}>💰</div>
-          <div className="stat-number">$1,240</div>
-          <div className="stat-label">Monthly Budget</div>
+          <div className="stat-number">${stats.monthlySpend || 0}</div>
+          <div className="stat-label">Monthly Spend</div>
         </div>
       </div>
+
+      {stats.unreadNotifications > 0 && (
+        <div style={{ background: '#fff3e0', border: '1px solid #ffe0b2', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+          onClick={() => onNavigate && onNavigate('activity')}>
+          <span style={{ fontSize: '20px' }}>🔔</span>
+          <span style={{ fontSize: '14px', color: '#e65100' }}>{stats.unreadNotifications} unread notification{stats.unreadNotifications > 1 ? 's' : ''}</span>
+        </div>
+      )}
+
       <div className="card">
         <div className="card-header"><span className="card-icon">📅</span>Upcoming Sessions</div>
         <ul className="sessions-list">
-          {upcomingSessions.length > 0 ? upcomingSessions.map((session, idx) => (
+          {upcoming.length > 0 ? upcoming.map((s, idx) => (
             <li key={idx} className="session-item">
-              <div className="session-time">{session.scheduled_date} at {session.scheduled_time}</div>
-              <div className="session-caregiver">{session.caregiver_name}</div>
-              <span className="session-type">{session.service_type}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div className="session-time">{s.date} at {s.time}</div>
+                  <div className="session-caregiver">{s.caregiverName} — {s.recipientName}</div>
+                  <span className="session-type">{s.serviceType}</span>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '12px' }}>
+                  <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : '#e8724a', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>
+                  {s.estimatedCost && <div style={{ color: '#666', marginTop: '2px' }}>${s.estimatedCost}</div>}
+                </div>
+              </div>
             </li>
           )) : <li style={{ color: '#999', padding: '16px' }}>No upcoming sessions</li>}
         </ul>
       </div>
+
       <div className="card">
         <div className="card-header"><span className="card-icon">📢</span>Recent Activity</div>
         <div>
-          {activities.slice(0, 5).map((activity, idx) => (
+          {activity.length > 0 ? activity.map((a, idx) => (
             <div key={idx} className="activity-item">
-              <div className="activity-title">{activity.title}</div>
-              <div className="activity-time">{formatActivityTime(activity.created_at)}</div>
+              <div className="activity-title">{a.title}</div>
+              {a.message && <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>{a.message}</div>}
+              <div className="activity-time">{formatActivityTime(a.timestamp)}</div>
             </div>
-          ))}
+          )) : <div style={{ color: '#999', padding: '16px' }}>No recent activity</div>}
         </div>
       </div>
     </>

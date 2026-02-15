@@ -1,22 +1,34 @@
 const express = require("express");
 const { getDb } = require("../models/database");
-const { authenticate, requireRole } = require("../middleware/auth");
+const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 router.use(authenticate);
 
 // ─── GET /api/dashboard ───
-// Aggregated dashboard data for the family view
-router.get("/", requireRole("family", "admin"), async (req, res) => {
+// Role-aware dashboard data
+router.get("/", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
+  const role = req.user.role;
 
-  // Care recipients
+  if (role === "family") {
+    return familyDashboard(db, userId, res);
+  } else if (role === "caregiver") {
+    return caregiverDashboard(db, userId, res);
+  } else if (role === "care_for") {
+    return careForDashboard(db, userId, res);
+  }
+
+  res.status(403).json({ error: "Unknown role" });
+});
+
+// ─── Family Dashboard (Pete's view) ───
+async function familyDashboard(db, userId, res) {
   const recipients = db.prepare(
     "SELECT * FROM care_recipients WHERE family_user_id = ?"
   ).all(userId);
 
-  // This month's stats
   const monthStart = new Date();
   monthStart.setDate(1);
   const monthStr = monthStart.toISOString().split("T")[0];
@@ -25,13 +37,11 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
     SELECT
       COUNT(*) as total_sessions,
       SUM(duration_hours) as total_hours,
-      SUM(COALESCE(actual_cost, estimated_cost)) as total_spend,
-      AVG(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completion_rate
+      SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
     FROM care_sessions
     WHERE family_user_id = ? AND scheduled_date >= ?
   `).get(userId, monthStr);
 
-  // Upcoming sessions (next 7 days)
   const today = new Date().toISOString().split("T")[0];
   const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
@@ -52,7 +62,6 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
     LIMIT 5
   `).all(userId, today, nextWeek);
 
-  // Recent activity
   const recentActivity = db.prepare(`
     SELECT * FROM activity_feed
     WHERE family_user_id = ?
@@ -63,7 +72,6 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
     "SELECT COUNT(*) as count FROM activity_feed WHERE family_user_id = ? AND is_read = 0"
   ).get(userId);
 
-  // Average caregiver rating across completed sessions
   const avgRating = db.prepare(`
     SELECT AVG(cp.rating_avg) as avg
     FROM care_sessions cs
@@ -71,7 +79,13 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
     WHERE cs.family_user_id = ? AND cs.status = 'completed'
   `).get(userId);
 
-  // Build parent object for the frontend (first care recipient)
+  // Assigned caregiver count
+  const assignedCount = db.prepare(`
+    SELECT COUNT(DISTINCT caregiver_profile_id) as count
+    FROM caregiver_assignments
+    WHERE family_user_id = ? AND is_active = 1
+  `).get(userId);
+
   const primary = recipients[0];
   const parent = primary
     ? {
@@ -90,6 +104,7 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
     : null;
 
   res.json({
+    role: "family",
     parent,
     careRecipients: recipients.map((r) => ({
       ...r,
@@ -102,6 +117,7 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
       monthlySpend: Math.round((monthlyStats.total_spend || 0) * 100) / 100,
       avgCaregiverRating: Math.round((avgRating.avg || 0) * 10) / 10,
       unreadNotifications: unreadCount.count,
+      assignedCaregivers: assignedCount.count,
     },
     upcomingSessions: upcoming.map((s) => ({
       id: s.id,
@@ -125,6 +141,178 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
       timestamp: a.created_at,
     })),
   });
-});
+}
+
+// ─── Caregiver Dashboard (Maria's view) ───
+async function caregiverDashboard(db, userId, res) {
+  const profile = db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  const user = db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+
+  // Assigned families
+  const assignments = db.prepare(`
+    SELECT ca.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+      cr.location_address, cr.location_city, cr.location_state, cr.latitude, cr.longitude,
+      cr.health_conditions, cr.preferences,
+      fu.first_name AS family_first_name, fu.last_name AS family_last_name
+    FROM caregiver_assignments ca
+    JOIN care_recipients cr ON ca.care_recipient_id = cr.id
+    JOIN users fu ON ca.family_user_id = fu.id
+    WHERE ca.caregiver_profile_id = ? AND ca.is_active = 1
+  `).all(profile.id);
+
+  // Upcoming sessions
+  const today = new Date().toISOString().split("T")[0];
+  const upcoming = db.prepare(`
+    SELECT cs.*,
+      cr.first_name || ' ' || cr.last_name AS recipient_name,
+      cr.location_address, cr.location_city,
+      cr.preferences AS recipient_preferences
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    WHERE cs.caregiver_id = ? AND cs.scheduled_date >= ? AND cs.status IN ('pending', 'confirmed')
+    ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+    LIMIT 10
+  `).all(profile.id, today);
+
+  // Monthly stats
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  const monthStr = monthStart.toISOString().split("T")[0];
+
+  const monthlyStats = db.prepare(`
+    SELECT COUNT(*) as completed_sessions,
+      SUM(COALESCE(actual_cost, estimated_cost)) as total_earnings,
+      SUM(duration_hours) as total_hours
+    FROM care_sessions
+    WHERE caregiver_id = ? AND scheduled_date >= ? AND status = 'completed'
+  `).get(profile.id, monthStr);
+
+  const pending = db.prepare(`
+    SELECT SUM(estimated_cost) as pending_earnings
+    FROM care_sessions
+    WHERE caregiver_id = ? AND status IN ('confirmed', 'pending') AND scheduled_date >= ?
+  `).get(profile.id, today);
+
+  // Recent reviews
+  const reviews = db.prepare(`
+    SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
+    FROM reviews r JOIN users u ON r.family_user_id = u.id
+    WHERE r.caregiver_id = ?
+    ORDER BY r.created_at DESC LIMIT 5
+  `).all(profile.id);
+
+  res.json({
+    role: "caregiver",
+    profile: {
+      id: profile.id,
+      name: `${user.first_name} ${user.last_name}`,
+      bio: profile.bio,
+      rating: profile.rating_avg,
+      reviewCount: profile.rating_count,
+      hourlyRate: profile.hourly_rate,
+      specialties: JSON.parse(profile.specialties || "[]"),
+      certifications: JSON.parse(profile.certifications || "[]"),
+      isAvailable: !!profile.is_available,
+      city: profile.location_city,
+      state: profile.location_state,
+    },
+    assignments: assignments.map(a => ({
+      ...a,
+      health_conditions: a.health_conditions ? JSON.parse(a.health_conditions) : [],
+    })),
+    upcomingSessions: upcoming.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      status: s.status,
+      durationHours: s.duration_hours,
+      recipientName: s.recipient_name,
+      location: s.location_address ? `${s.location_address}, ${s.location_city}` : s.location_city,
+      specialInstructions: s.special_instructions,
+      recipientPreferences: s.recipient_preferences,
+      estimatedCost: s.estimated_cost,
+    })),
+    reviews: reviews.map(r => ({
+      id: r.id,
+      rating: r.rating,
+      comment: r.comment,
+      reviewerName: r.reviewer_name,
+      createdAt: r.created_at,
+    })),
+    stats: {
+      completedThisMonth: monthlyStats.completed_sessions || 0,
+      monthlyEarnings: Math.round((monthlyStats.total_earnings || 0) * 100) / 100,
+      hoursThisMonth: Math.round((monthlyStats.total_hours || 0) * 10) / 10,
+      pendingEarnings: Math.round((pending.pending_earnings || 0) * 100) / 100,
+      assignedFamilies: assignments.length,
+    },
+  });
+}
+
+// ─── Cared-For Dashboard (Betty's view) ───
+async function careForDashboard(db, userId, res) {
+  const user = db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+
+  // Find care recipient matching this user's name
+  const recipient = db.prepare(`
+    SELECT cr.* FROM care_recipients cr
+    WHERE cr.first_name = ? AND cr.last_name = ?
+    LIMIT 1
+  `).get(user.first_name, user.last_name);
+
+  if (!recipient) {
+    return res.json({ role: "care_for", userName: `${user.first_name} ${user.last_name}`, sessions: [], notes: [] });
+  }
+
+  // All future sessions (calendar data)
+  const today = new Date().toISOString().split("T")[0];
+  const sessions = db.prepare(`
+    SELECT cs.*,
+      u.first_name || ' ' || u.last_name AS caregiver_name
+    FROM care_sessions cs
+    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    LEFT JOIN users u ON cp.user_id = u.id
+    WHERE cs.care_recipient_id = ? AND cs.scheduled_date >= ?
+      AND cs.status IN ('pending', 'confirmed')
+    ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+  `).all(recipient.id, today);
+
+  // Notes
+  const notes = db.prepare(`
+    SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
+    FROM recipient_notes rn
+    JOIN users u ON rn.author_id = u.id
+    WHERE rn.care_recipient_id = ?
+    ORDER BY rn.created_at DESC
+  `).all(recipient.id);
+
+  res.json({
+    role: "care_for",
+    userName: `${user.first_name} ${user.last_name}`,
+    careRecipientId: recipient.id,
+    sessions: sessions.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      status: s.status,
+      durationHours: s.duration_hours,
+      caregiverName: s.caregiver_name,
+      specialInstructions: s.special_instructions,
+    })),
+    notes: notes.map(n => ({
+      id: n.id,
+      content: n.content,
+      noteType: n.note_type,
+      authorName: `${n.author_first_name} ${n.author_last_name}`,
+      authorRole: n.author_role,
+      createdAt: n.created_at,
+      updatedAt: n.updated_at,
+    })),
+  });
+}
 
 module.exports = router;

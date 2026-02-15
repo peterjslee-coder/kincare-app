@@ -8,7 +8,7 @@ router.use(authenticate);
 
 // ─── GET /api/activity ───
 // Activity feed for the logged-in family user
-router.get("/", requireRole("family", "admin"), async (req, res) => {
+router.get("/", async (req, res) => {
   const db = await getDb();
   const { unreadOnly, limit = 30 } = req.query;
 

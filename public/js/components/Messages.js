@@ -1,84 +1,159 @@
 const Messages = window.Messages = () => {
-  const [contacts] = useState([
-    { id: 'maria', name: 'Maria Santos', status: 'online', preview: 'She had a wonderful lunch today!' },
-    { id: 'james', name: 'James Okafor', status: 'online', preview: 'I\'ll bring the puzzle book tomorrow' },
-    { id: 'sarah', name: 'Sarah Chen', status: 'offline', preview: 'Her blood pressure was good today' }
-  ]);
-
-  const [messages] = useState({
-    maria: [
-      { id: 1, sender: 'Maria', type: 'received', text: 'Good morning! Betty is in great spirits today. We just finished breakfast - she had oatmeal with blueberries, her favorite!' },
-      { id: 2, sender: 'You', type: 'sent', text: 'That\'s wonderful to hear! How was she feeling this morning?' },
-      { id: 3, sender: 'Maria', type: 'received', text: 'She was very alert and chatty. We looked through her photo album and she told me stories about her garden.' },
-      { id: 4, sender: 'You', type: 'sent', text: 'She loves that album! Thank you for spending time with her on that.' },
-      { id: 5, sender: 'Maria', type: 'received', text: 'She had a wonderful lunch today! We made sandwiches together. She really enjoys helping in the kitchen.' },
-      { id: 6, sender: 'You', type: 'sent', text: 'How was mom today? Thank you so much for your help, Maria.' }
-    ],
-    james: [
-      { id: 1, sender: 'James', type: 'received', text: 'Hi Pete! Just arrived at Betty\'s. She seems to be doing well today.' },
-      { id: 2, sender: 'You', type: 'sent', text: 'Great, thanks James! She mentioned wanting to do puzzles.' },
-      { id: 3, sender: 'James', type: 'received', text: 'Yes! We worked on a 500-piece puzzle of a garden scene. She was really focused.' },
-      { id: 4, sender: 'You', type: 'sent', text: 'That\'s great for her cognitive stimulation. Thanks!' },
-      { id: 5, sender: 'James', type: 'received', text: 'I\'ll bring the puzzle book tomorrow. She really liked the crossword we started.' }
-    ],
-    sarah: [
-      { id: 1, sender: 'Sarah', type: 'received', text: 'Just finished helping Betty with her afternoon medications. Everything went smoothly.' },
-      { id: 2, sender: 'You', type: 'sent', text: 'Thank you Sarah. Did she take everything without any issues?' },
-      { id: 3, sender: 'Sarah', type: 'received', text: 'Yes, no problems at all. Her blood pressure was good today - 128/82.' },
-      { id: 4, sender: 'You', type: 'sent', text: 'That\'s encouraging! The doctor will be happy to hear that.' },
-      { id: 5, sender: 'Sarah', type: 'received', text: 'I also helped her with some light stretching exercises. She\'s getting more flexible!' }
-    ]
-  });
-
-  const [activeContactId, setActiveContactId] = useState('maria');
+  const [conversations, setConversations] = useState([]);
+  const [activePartnerId, setActivePartnerId] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [chatMessages, setChatMessages] = useState(messages.maria);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef(null);
 
-  const handleContactChange = (contactId) => {
-    setActiveContactId(contactId);
-    setChatMessages(messages[contactId] || []);
+  // Fetch conversations list
+  const fetchConversations = async () => {
+    try {
+      const res = await apiFetch('/api/messages/conversations');
+      if (res?.ok) {
+        const data = await res.json();
+        setConversations(data.conversations || []);
+        // Auto-select first conversation if none selected
+        if (!activePartnerId && data.conversations?.length > 0) {
+          const first = data.conversations[0];
+          setActivePartnerId(first.partnerId);
+          fetchMessages(first.partnerId);
+        }
+      }
+    } catch (err) {
+      console.error('Fetch conversations error:', err);
+    }
+    setLoading(false);
   };
 
-  const handleSendMessage = () => {
-    if (inputText.trim()) {
-      setChatMessages([...chatMessages, { id: Date.now(), sender: 'You', type: 'sent', text: inputText }]);
-      setInputText('');
+  // Fetch messages for a partner
+  const fetchMessages = async (partnerId) => {
+    try {
+      const res = await apiFetch(`/api/messages/${partnerId}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setMessages(data.messages || []);
+      }
+    } catch (err) {
+      console.error('Fetch messages error:', err);
     }
   };
 
-  const activeContact = contacts.find(c => c.id === activeContactId);
+  useEffect(() => { fetchConversations(); }, []);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  const handleSelectConversation = (partnerId) => {
+    setActivePartnerId(partnerId);
+    fetchMessages(partnerId);
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputText.trim() || !activePartnerId) return;
+    setSending(true);
+    try {
+      const res = await apiFetch('/api/messages', {
+        method: 'POST',
+        body: JSON.stringify({ recipientId: activePartnerId, content: inputText }),
+      });
+      if (res?.ok) {
+        setInputText('');
+        await fetchMessages(activePartnerId);
+        await fetchConversations();
+      }
+    } catch (err) {
+      console.error('Send message error:', err);
+    }
+    setSending(false);
+  };
+
+  const activeConv = conversations.find(c => c.partnerId === activePartnerId);
+
+  const formatTime = (ts) => {
+    if (!ts) return '';
+    const dateStr = ts.replace(' ', 'T') + 'Z';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  if (loading) {
+    return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading messages...</div>;
+  }
 
   return (
     <div style={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
-      <h1 className="greeting" style={{ marginBottom: '16px' }}>💬 Messages</h1>
+      <h1 className="greeting" style={{ marginBottom: '16px' }}>Messages</h1>
       <div className="chat-container">
         <div className="chat-sidebar">
-          {contacts.map(c => (
-            <div key={c.id} className={`chat-contact ${activeContactId === c.id ? 'active' : ''}`} onClick={() => handleContactChange(c.id)}>
-              <div className="chat-contact-name">{c.name}</div>
-              <div className="chat-contact-preview">{c.preview}</div>
-              <div className={`chat-contact-status ${c.status}`}>{c.status === 'online' ? '🟢 Online' : '⚫ Offline'}</div>
+          {conversations.length > 0 ? conversations.map(c => (
+            <div key={c.partnerId}
+              className={`chat-contact ${activePartnerId === c.partnerId ? 'active' : ''}`}
+              onClick={() => handleSelectConversation(c.partnerId)}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="chat-contact-name">{c.partnerName}</div>
+                {c.unreadCount > 0 && (
+                  <span style={{
+                    background: '#e8724a', color: '#fff', borderRadius: '10px',
+                    padding: '1px 7px', fontSize: '11px', fontWeight: 600,
+                  }}>{c.unreadCount}</span>
+                )}
+              </div>
+              <div className="chat-contact-preview">{c.lastMessage}</div>
+              <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>{formatTime(c.lastMessageAt)}</div>
             </div>
-          ))}
+          )) : (
+            <div style={{ padding: '20px', color: '#999', textAlign: 'center', fontSize: '13px' }}>
+              No conversations yet
+            </div>
+          )}
         </div>
         <div className="chat-main">
-          {activeContact && (
+          {activeConv ? (
             <>
               <div className="chat-header">
-                <h3>{activeContact.name}</h3>
+                <h3>{activeConv.partnerName}</h3>
               </div>
               <div className="chat-messages">
-                {chatMessages.map(m => (
+                {messages.map(m => (
                   <div key={m.id} className={`chat-message ${m.type}`}>
-                    <div className="chat-message-bubble">{m.text}</div>
+                    <div className="chat-message-bubble">
+                      {m.content}
+                      <div style={{ fontSize: '10px', color: m.type === 'sent' ? 'rgba(255,255,255,0.7)' : '#aaa', marginTop: '4px' }}>
+                        {formatTime(m.created_at)}
+                      </div>
+                    </div>
                   </div>
                 ))}
+                <div ref={messagesEndRef} />
               </div>
               <div className="chat-input-area">
-                <input type="text" className="chat-input" placeholder="Type a message..." value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} />
-                <button className="chat-send-btn" onClick={handleSendMessage}>Send</button>
+                <input type="text" className="chat-input"
+                  placeholder="Type a message..."
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  disabled={sending}
+                />
+                <button className="chat-send-btn" onClick={handleSendMessage} disabled={sending || !inputText.trim()}>
+                  {sending ? '...' : 'Send'}
+                </button>
               </div>
             </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' }}>
+              Select a conversation to start messaging
+            </div>
           )}
         </div>
       </div>

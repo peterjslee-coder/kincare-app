@@ -32,6 +32,9 @@ app.use("/api/sessions", require("./routes/sessions"));
 app.use("/api/caregivers", require("./routes/caregivers"));
 app.use("/api/activity", require("./routes/activity"));
 app.use("/api/dashboard", require("./routes/dashboard"));
+app.use("/api/messages", require("./routes/messages"));
+app.use("/api/notes", require("./routes/notes"));
+app.use("/api/assignments", require("./routes/assignments"));
 
 // ─── Health check ───
 app.get("/api/health", (req, res) => {
