@@ -25,11 +25,11 @@
 
 > These layer on top of the role system from Batch 1.
 
-- [ ] **Multiple emergency contacts:** Ability to add more than one emergency contact to a care profile. These contacts become part of the Care Team visually. Contact info only for now — no logins yet.
+- [x] **Multiple emergency contacts:** Ability to add more than one emergency contact to a care profile. These contacts become part of the Care Team visually. Contact info only for now — no logins yet.
   - _Future: Add sibling logins (Pete's brother and sister) with generic credentials so they can see activity and use messaging. Build this when messaging is ready._
-- [ ] **Calendar view with saturation shading:** Replace the upcoming appointments list with a calendar. Days with scheduled care are shaded blue — 1 hour = 25% saturation, scaling to 75% saturation + white text at 10+ hours. Goal: visual heat map of care intensity at a glance.
-- [ ] **Favorite caretakers:** Mark caretakers as favorites for easier scheduling and weighted preference. Maria = first favorite for testing. Favorites influence default caregiver suggestions when booking.
-- [ ] **Grey out past appointments:** Previous appointments appear greyed out but remain clickable to view result, cost, notes, and caretaker feedback.
+- [x] **Calendar view with saturation shading:** Replace the upcoming appointments list with a calendar. Days with scheduled care are shaded teal — 1 hour = 25% saturation, scaling to 75% saturation + white text at 10+ hours. Goal: visual heat map of care intensity at a glance.
+- [x] **Favorite caretakers:** Mark caretakers as favorites for easier scheduling and weighted preference. Maria = first favorite for testing. Favorites influence default caregiver suggestions when booking.
+- [x] **Grey out past appointments:** Previous appointments appear greyed out but remain clickable to view result, cost, notes, and caretaker feedback.
 
 
 ## Demo Credentials
