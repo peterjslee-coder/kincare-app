@@ -93,8 +93,8 @@ const App = () => {
     <div className="app-container">
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <InPlaceIcon width={40} height={40} />
-          <div className="sidebar-logo-text">InPlace</div>
+          <InPlaceIcon width={36} height={36} />
+          <div className="sidebar-logo-text"><span className="logo-in">in</span><span className="logo-place">Place</span></div>
         </div>
         <div style={{ padding: '0 16px 12px', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px' }}>
           {getRoleLabel()}

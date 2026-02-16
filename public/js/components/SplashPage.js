@@ -35,8 +35,8 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
     <div className="splash-page">
       <nav className="splash-nav">
         <div className="splash-nav-logo">
-          <InPlaceIcon width={40} height={40} />
-          InPlace
+          <InPlaceIcon width={36} height={36} />
+          <span><span className="logo-in">in</span><span className="logo-place">Place</span></span>
         </div>
         <div className="splash-nav-links">
           <button onClick={() => onNavigate('login')}>Sign In</button>
@@ -314,7 +314,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       </section>
 
       <footer className="splash-footer">
-        <p>&copy; 2025 InPlace. All rights reserved. | Privacy Policy | Terms of Service</p>
+        <p>&copy; 2026 InPlace. All rights reserved. | Privacy Policy | Terms of Service</p>
       </footer>
     </div>
   );

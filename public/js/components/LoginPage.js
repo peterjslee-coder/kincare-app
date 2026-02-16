@@ -57,9 +57,12 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate }) => {
     <div className="login-container">
       <div className="login-card">
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <InPlaceIcon width={50} height={50} />
+          <InPlaceIcon width={48} height={48} />
+          <div style={{ marginTop: '12px', fontFamily: "'DM Sans', sans-serif", fontSize: '28px', letterSpacing: '-1.5px', lineHeight: 1 }}>
+            <span style={{ fontWeight: 200, color: '#999' }}>in</span><span style={{ fontWeight: 800, color: '#1b6b5a' }}>Place</span>
+          </div>
         </div>
-        <h2>Welcome to InPlace</h2>
+        <h2>Welcome Back</h2>
         <p className="login-subtitle">Sign in to manage care for your loved ones</p>
 
         {/* Demo Quick-Switch */}

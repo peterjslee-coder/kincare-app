@@ -4,7 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InPlace - On-Demand Care for Your Loved Ones</title>
-  <link rel="stylesheet" href="/css/styles.css?v=0.4.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,200;9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='2' y='2' width='96' height='96' rx='22' fill='%231b6b5a'/%3E%3Ctext x='50' y='66' text-anchor='middle' font-family='sans-serif' font-weight='800' font-size='52' letter-spacing='-3' fill='white'%3EiP%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/css/styles.css?v=0.5.0">
 </head>
 <body>
   <div id="root"></div>
@@ -43,7 +47,7 @@
       ];
       try {
         var sources = await Promise.all(
-          scripts.map(function(url) { return fetch(url + '?v=0.4.0').then(function(r) { return r.text(); }); })
+          scripts.map(function(url) { return fetch(url + '?v=0.5.0').then(function(r) { return r.text(); }); })
         );
         var combined = sources.join('\n;\n');
         var compiled = Babel.transform(combined, { presets: ['react'] }).code;
