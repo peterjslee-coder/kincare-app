@@ -37,7 +37,6 @@ https://yourinplace.com
 │       ├── app.js             ← App root component: routing, sidebar, page switching, modal management
 │       └── components/
 │           ├── InPlaceIcon.js          ← SVG logo component ("iP" monogram)
-│           ├── KinCareIcon.js          ← DEPRECATED alias (kept for backwards compat, not loaded)
 │           ├── SplashPage.js           ← Investor pitch landing page (market stats, problem/solution, business model, vision, waitlist capture)
 │           ├── LoginPage.js            ← Email/password login with demo account quick-select
 │           ├── RegisterPage.js         ← Multi-step registration wizard (family or caregiver)
