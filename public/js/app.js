@@ -4,6 +4,7 @@ const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token');
@@ -27,6 +28,11 @@ const App = () => {
 
   const handleNavigate = (page) => {
     setAppState(page);
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    setSidebarOpen(false);
   };
 
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} />;
@@ -91,10 +97,12 @@ const App = () => {
 
   return (
     <div className="app-container">
-      <aside className="sidebar">
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-logo">
           <InPlaceIcon width={36} height={36} />
           <div className="sidebar-logo-text"><span className="logo-in">in</span><span className="logo-place">Place</span></div>
+          <button className="sidebar-close" onClick={() => setSidebarOpen(false)} aria-label="Close menu">&times;</button>
         </div>
         <div style={{ padding: '0 16px 12px', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px' }}>
           {getRoleLabel()}
@@ -103,7 +111,7 @@ const App = () => {
           <ul className="nav-menu">
             {getNavItems().map(item => (
               <li key={item.id} className="nav-item">
-                <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={() => setCurrentPage(item.id)}>
+                <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)}>
                   <span className="nav-icon">{item.icon}</span>
                   {item.label}
                 </button>
@@ -113,7 +121,7 @@ const App = () => {
         </nav>
         <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           {role === 'family' && (
-            <button className="nav-link" onClick={() => setShowRequestCareModal(true)} style={{ background: '#1b6b5a', marginBottom: '12px' }}>
+            <button className="nav-link" onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ background: '#1b6b5a', marginBottom: '12px' }}>
               <span className="nav-icon">➕</span> Request Care
             </button>
           )}
@@ -126,6 +134,9 @@ const App = () => {
         </div>
       </aside>
       <main className="main-content">
+        <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
         {renderPage()}
       </main>
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
