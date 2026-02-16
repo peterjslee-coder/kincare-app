@@ -3,6 +3,11 @@ const router = express.Router();
 const { v4: uuidv4 } = require("uuid");
 const { getDb } = require("../models/database");
 const nodemailer = require("nodemailer");
+const dns = require("dns");
+
+// Force IPv4 DNS resolution — Railway doesn't support IPv6 and Gmail
+// resolves to IPv6 by default, causing ENETUNREACH errors
+dns.setDefaultResultOrder("ipv4first");
 
 // Email notification helper — sends signup alert to Pete
 async function notifyNewSignup({ email, name, role, count }) {
