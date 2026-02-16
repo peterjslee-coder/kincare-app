@@ -4,141 +4,85 @@
 
 1. **Ease of change first** — Every structural decision should make the next change cheaper and safer. Modular files, clear naming, separated concerns.
 2. **Expand future capabilities** — Build the foundation (validation, tests, real-time) that makes advanced features possible without rewrites.
-3. **Demo-ready at all times** — The Railway deployment at `https://yourinplace.com` must always work as a polished demo for investors and employees. No broken deploys.
+3. **Demo-ready at all times** — The deployment at `https://yourinplace.com` must always work as a polished demo for investors and employees. No broken deploys.
 
 ---
 
-## Completed (v0.1 — Current)
+## Completed
 
-- [x] Express API with JWT auth (register, login, profile)
-- [x] SQLite database with 10-table schema
-- [x] Care recipient CRUD (add/edit parents)
-- [x] Caregiver search with availability filtering
-- [x] Care session booking with caregiver matching
-- [x] Session status lifecycle (pending → confirmed → in-progress → completed)
-- [x] Visit logs with mood tracking and task lists
-- [x] Activity feed with read/unread notifications
-- [x] Dashboard with aggregated stats
-- [x] Demo seed data (Pete + Betty + 4 caregivers)
-- [x] Railway.app deployment config
-- [x] Frontend SPA with splash, login, registration
-- [x] Sidebar navigation with 9 pages
-- [x] Request Care modal with caregiver schedule matching
-- [x] Editable Care Profile and Care Recipients pages
-- [x] CLAUDE.md context file for development continuity
-- [x] ROADMAP.md development roadmap
+### v0.1.0 — Initial Release (2026-02-15)
+- Express API with JWT auth (register, login, profile)
+- SQLite database with 10-table schema
+- Care recipient CRUD, caregiver search, session booking with matching
+- Session status lifecycle (pending → confirmed → in-progress → completed)
+- Visit logs, activity feed, dashboard
+- Demo seed data (Pete + Betty + 4 caregivers)
+- Railway.app deployment
+- Frontend SPA (monolithic) with splash, login, registration, 9 sidebar pages
 
----
+### v0.2.0 — Frontend Modularization (2026-02-15)
+- Split monolithic index.html (3,900 lines) into 17 modular component files
+- Zero-build-step CDN approach preserved (Babel standalone)
+- CLAUDE.md + ROADMAP.md added
 
-## Phase 1 — Frontend Modularity (Ease of Change)
+### v0.3.0 — Role Foundation (Batch 1)
+- Three user roles: Care Team (Pete), Caregiver (Maria), Care Recipient (Betty)
+- Maria login with full caregiver dashboard, area map (Leaflet/OpenStreetMap)
+- Betty login with calendar view and personal notes
+- Database-backed messaging (send/receive between all users)
+- Caregiver assignments with favorite toggle
+- 6 new backend routes: messages, notes, assignments, emergencyContacts, plus schema additions
 
-Priority: **HIGH** — This unblocks all other frontend work and makes every future change safer.
+### v0.3.1 — UI & Scheduling (Batch 2)
+- Calendar heat map with teal saturation shading by care hours
+- Emergency contacts CRUD on care profiles
+- Favorite caretakers sort first in booking
+- Past appointments greyed out, clickable for detail
 
-The entire frontend lived in a single `public/index.html` (3,900 lines). Split into maintainable pieces while keeping the zero-build-step CDN approach.
+### v0.3.2 — Investor Pitch Splash Page
+- Full splash page rewrite as elevator pitch
+- Market stats ($200B, 63M caregivers, 11.2K boomers/day)
+- Problem/solution framing, business model, personal story, vision section
 
-- [x] Split CSS into `public/css/styles.css`
-- [x] Extract shared utilities into `public/js/utils.js` (apiFetch, auth helpers, scheduling data & helpers)
-- [x] Extract each component into `public/js/components/<ComponentName>.js`
-- [x] Create slim `index.html` shell with script imports
-- [ ] Verify all pages still render and API calls still work
-- [ ] Update CLAUDE.md with new file structure
+### v0.3.3 — Waitlist & Polish
+- Email capture form on splash page (waitlist table + API)
+- Stat corrections to match elevator pitch
+- Centered stat bubbles (flexbox layout fix)
 
-Target structure:
-```
-public/
-├── index.html              (shell: <div id="root">, script imports)
-├── css/
-│   └── styles.css          (~1,600 lines of CSS)
-└── js/
-    ├── utils.js            (apiFetch, setAuthToken, scheduling helpers, data)
-    ├── app.js              (App root component, routing, sidebar)
-    └── components/
-        ├── SplashPage.js
-        ├── LoginPage.js
-        ├── RegisterPage.js
-        ├── Dashboard.js
-        ├── CareProfile.js
-        ├── Schedule.js
-        ├── Caregivers.js
-        ├── CareRecipients.js
-        ├── ActivityFeed.js
-        ├── Messages.js
-        ├── MyAccount.js
-        ├── CaretakerHub.js
-        ├── RequestCareModal.js
-        ├── CaregiverScheduleModal.js
-        └── InPlaceIcon.js
-```
+### v0.4.0 — InPlace Rebrand
+- Full rebrand from KinCare to InPlace (26 files)
+- New domain: yourinplace.com (Cloudflare DNS)
+- New logo: "iP" monogram in rounded teal square
+- Cache-busting system for Cloudflare proxy (`?v=X.Y.Z` on all JS/CSS fetches)
 
-Notes: Since we use Babel standalone (in-browser transpilation), each .js file uses `type="text/babel"` and components are attached to `window` so they can reference each other across files. No bundler needed.
+### v0.4.1 — Schedule Fix
+- Restored calendar heat map (accidentally lost during rebrand sync)
 
 ---
 
-## Phase 2 — Demo Polish (Demo-Ready)
+## Next Up — Demo Polish & Infrastructure
 
-Priority: **HIGH** — The Railway demo needs to feel complete for investor/employee walkthroughs.
+Priority: **HIGH** — Make the demo bulletproof and prepare for real users.
 
-- [ ] Fix MyAccount to show correct user data (currently hardcoded "Pete Anderson" instead of "Pete Lee")
-- [ ] Wire Messages to real backend (add messages table, API routes, connect to component)
-- [ ] Build CaretakerHub with real data (caregiver's own sessions, earnings from payments table)
-- [ ] Add loading spinners and empty states so nothing looks broken
-- [ ] Update splash page copyright from 2025 to 2026
-- [ ] Ensure demo seed data has sessions spanning current dates (not stale past dates)
-
----
-
-## Phase 3 — Complete Existing Features (Future Capabilities)
-
-Priority: **MEDIUM** — Fill in the backend gaps so features work end-to-end.
-
-- [ ] **MyAccount persistence:** Wire notification preferences and profile edits to API (PUT /api/auth/me)
-- [ ] **Visit photos:** Add file upload endpoint (multipart/form-data → local storage or S3), display photos in visit logs
-- [ ] **Payment processing:** Stripe Connect integration for caregiver payouts
-- [ ] **Recurring sessions:** Allow scheduling weekly/biweekly repeating care sessions
+- [ ] **PostgreSQL migration:** Replace SQLite with PostgreSQL on Railway for persistent data across deploys
+- [ ] **Production auth:** Migrate to real auth service (Auth0, Clerk, or Supabase Auth) for password reset, email verification, persistent accounts
+- [ ] **Mobile-responsive UI:** Sidebar → bottom nav on phone, PWA add-to-homescreen
+- [ ] **Loading spinners & empty states:** No blank screens during API fetches
+- [ ] **Toast notifications:** Success/error feedback on actions
+- [ ] **MyAccount persistence:** Wire settings to API
 
 ---
 
-## Phase 4 — Data Integrity & Reliability (Ease of Change)
+## Future — Production Path
 
-Priority: **MEDIUM** — Protect against regressions as the codebase grows.
+Priority: **MEDIUM** — After infrastructure is solid.
 
-- [ ] Input validation on all API routes (required fields, types, ranges)
-- [ ] Rate limiting on auth endpoints (prevent brute force)
-- [ ] Error handling improvements (consistent error response format across all routes)
-- [ ] API tests (at minimum: auth flow, session booking flow, caregiver search)
-- [ ] Database migrations strategy (for schema changes without data loss)
-- [ ] Frontend error boundaries (catch component crashes gracefully)
-
----
-
-## Phase 5 — UX & Mobile (Demo-Ready)
-
-Priority: **MEDIUM** — Make the demo shine on any device.
-
-- [ ] Mobile-responsive layout (sidebar → bottom nav on mobile)
-- [ ] Toast notifications for success/error feedback
-- [ ] Form validation with inline error messages
-- [ ] Skeleton loading screens
-- [ ] Accessibility audit (ARIA labels, keyboard navigation, contrast)
-
----
-
-## Phase 6 — Scale & Advanced Features (Future Capabilities)
-
-Priority: **LOW** — Growth features for production.
-
-- [ ] Real-time updates (WebSocket or SSE for activity feed, session status changes)
-- [ ] Location-based caregiver matching (distance calculation, map view)
-- [ ] Push notifications (Firebase or web push)
-- [ ] Caregiver onboarding flow (background check integration, document uploads)
-- [ ] Family sharing (multiple family members on one care recipient)
-- [ ] PostgreSQL migration (for production scale)
-
----
-
-## Version History
-
-| Version | Date       | Summary |
-|---------|------------|---------|
-| 0.1.0   | 2026-02-15 | Initial release — full API, monolithic SPA frontend |
-| 0.2.0   | 2026-02-15 | Frontend modularized — 17 files from 1, CLAUDE.md + ROADMAP.md added |
+- [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
+- [ ] **Input validation & rate limiting:** Lock down API routes
+- [ ] **Geocoding & distance:** Real address → lat/lng for caregiver matching
+- [ ] **Recurring sessions:** Weekly/biweekly repeating care sessions
+- [ ] **Visit photos:** File upload for visit documentation
+- [ ] **Tests:** Auth flow, session booking, payment flow
+- [ ] **Real-time updates:** WebSocket or SSE for activity feed
+- [ ] **Sibling logins:** Add David and Susan Lee with generic credentials
+- [ ] **Build step for frontend:** Move to Vite when component count demands it

@@ -1,24 +1,23 @@
-# InPlace API v0.1
+# InPlace
 
-On-demand care coordination backend for the InPlace app.
+On-demand care coordination platform connecting families with professional caregivers. Live at **https://yourinplace.com**
 
 ## Quick Start
 
 ```bash
 npm install
-cp .env.example .env
-npm run seed     # populate with demo data
-npm start        # start on port 3001
+npm run dev          # starts on http://localhost:3001
 ```
 
-Open http://localhost:3001/api to see all endpoints.
+The server auto-seeds demo data on first run. No build step — Babel compiles JSX in-browser.
 
-## Demo Login
+## Demo Accounts
 
-```
-Email:    pete@inplace.care
-Password: inplace123
-```
+| Role | Email | Password | View |
+|------|-------|----------|------|
+| Care Team | pete@inplace.care | inplace123 | Full dashboard — manages Betty's care |
+| Caregiver | maria@inplace.care | inplace123 | Caregiver hub — schedule, families, earnings |
+| Care Recipient | betty@inplace.care | inplace123 | Limited view — calendar & personal notes |
 
 ## API Endpoints
 
@@ -30,7 +29,7 @@ All authenticated routes require: `Authorization: Bearer <token>`
 - `GET /api/auth/me` — Current user profile
 
 ### Care Recipients
-- `GET /api/care-recipients` — List your parents/care recipients
+- `GET /api/care-recipients` — List your care recipients
 - `POST /api/care-recipients` — Add a care recipient
 - `GET /api/care-recipients/:id` — Detail view
 - `PUT /api/care-recipients/:id` — Update profile
@@ -47,6 +46,23 @@ All authenticated routes require: `Authorization: Bearer <token>`
 - `GET /api/caregivers/:id` — Profile + reviews
 - `POST /api/caregivers/profile` — Create/update caregiver profile
 
+### Messages
+- `GET /api/messages/conversations` — List conversations
+- `GET /api/messages/conversation/:userId` — Messages with a specific user
+- `POST /api/messages` — Send a message
+
+### Assignments
+- `GET /api/assignments` — List caregiver assignments
+- `POST /api/assignments` — Assign caregiver to care recipient
+- `PUT /api/assignments/:id` — Update assignment (favorite toggle)
+- `DELETE /api/assignments/:id` — Remove assignment
+
+### Notes
+- `GET /api/notes/:recipientId` — Get notes for a care recipient
+- `POST /api/notes` — Create a note
+- `PUT /api/notes/:id` — Update a note
+- `DELETE /api/notes/:id` — Delete a note
+
 ### Activity Feed
 - `GET /api/activity` — Notifications (query: `?unreadOnly=true`)
 - `PUT /api/activity/:id/read` — Mark as read
@@ -56,73 +72,25 @@ All authenticated routes require: `Authorization: Bearer <token>`
 ### Dashboard
 - `GET /api/dashboard` — Aggregated stats, upcoming sessions, recent activity
 
+### Waitlist (no auth)
+- `POST /api/waitlist` — Email signup
+- `GET /api/waitlist/count` — Total signups
+
 ## Tech Stack
 
 - **Runtime:** Node.js + Express
 - **Database:** SQLite via sql.js (zero native dependencies)
 - **Auth:** JWT (jsonwebtoken + bcryptjs)
-- **IDs:** UUIDs
+- **Frontend:** React 18 + Babel standalone (no build step)
+- **Deployment:** Railway.app + Cloudflare
 
-## Project Structure
+## Scripts
 
-```
-inplace-api/
-├── src/
-│   ├── server.js              # Express app + startup
-│   ├── seed.js                # Demo data seeder
-│   ├── models/
-│   │   └── database.js        # SQLite schema + connection
-│   ├── routes/
-│   │   ├── auth.js            # Register, login, profile
-│   │   ├── careRecipients.js  # Parent/care recipient CRUD
-│   │   ├── sessions.js        # Care session booking + matching
-│   │   ├── caregivers.js      # Caregiver search + profiles
-│   │   ├── activity.js        # Activity feed + visit logs
-│   │   └── dashboard.js       # Aggregated dashboard
-│   └── middleware/
-│       └── auth.js            # JWT authentication
-├── package.json
-└── .env.example
-```
+- `npm start` — Production server
+- `npm run dev` — Dev with --watch
+- `npm run seed` — Reset & populate demo data
+- `npm run setup` — Seed + start combined
 
-## Example: Book a Care Session
+## Deploying
 
-```bash
-# 1. Login
-TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"pete@inplace.care","password":"inplace123"}' \
-  | jq -r '.token')
-
-# 2. Get care recipient ID
-RECIPIENT=$(curl -s http://localhost:3001/api/care-recipients \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.careRecipients[0].id')
-
-# 3. Create a care request
-curl -s -X POST http://localhost:3001/api/sessions \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"careRecipientId\": \"$RECIPIENT\",
-    \"serviceType\": \"meals\",
-    \"scheduledDate\": \"2026-02-20\",
-    \"scheduledTime\": \"12:00\",
-    \"durationHours\": 2,
-    \"specialInstructions\": \"Mom likes chicken soup\"
-  }" | jq
-
-# 4. Match a caregiver
-SESSION_ID=<id from step 3>
-curl -s -X POST http://localhost:3001/api/sessions/$SESSION_ID/match \
-  -H "Authorization: Bearer $TOKEN" | jq
-```
-
-## Production Notes
-
-This beta uses SQLite for simplicity. For production, migrate to PostgreSQL and add:
-- Real-time notifications (WebSockets or SSE)
-- Payment processing (Stripe Connect)
-- Location-based caregiver matching (PostGIS)
-- File uploads for visit photos (S3)
-- Rate limiting and input validation
-- Push notifications (Firebase)
+Railway auto-deploys on `git push origin main`. After pushing frontend changes, bump the `?v=X.Y.Z` cache-bust parameter in `index.html` to bust Cloudflare's cache.

@@ -22,7 +22,7 @@
 
 ## Production Path — Beta on Phone
 
-> These are the infrastructure changes needed before real users (even family/friends) can use the app. Order roughly reflects dependencies. See CLAUDE.md "Production Direction" for the full picture.
+> These are the infrastructure changes needed before real users (even family/friends) can use the app. Order roughly reflects dependencies. See ROADMAP.md for the full picture.
 
 - [ ] **PostgreSQL migration:** Replace SQLite with PostgreSQL on Railway. Accounts and data must persist across deploys. This unblocks everything else.
 - [ ] **Production auth:** Migrate from hand-rolled JWT to a real auth service (Auth0, Clerk, Supabase Auth, or Firebase Auth). Must support: password reset, email verification, session invalidation, persistent accounts across iterations.
@@ -44,6 +44,9 @@
 
 
 ## Done
+
+### Schedule Fix (v0.4.1)
+- [x] **Restored calendar heat map:** Full 294-line Schedule.js with calendar grid, saturation shading, and session detail panel was accidentally replaced during rebrand sync. Restored from git history.
 
 ### Rebrand & Cache Fix (v0.4.0)
 - [x] **KinCare → InPlace rebrand:** All user-facing text, emails (@inplace.care), passwords (inplace123), DB filename (inplace.db), JWT secrets, component names (InPlaceIcon), package metadata. 26 files changed.
