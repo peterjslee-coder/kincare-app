@@ -105,7 +105,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div className="session-time">{s.date} at {s.time}</div>
-                  <div className="session-caregiver">{s.isFavorite ? '⭐ ' : ''}{s.caregiverName} — {s.recipientName}</div>
+                  <div className="session-caregiver">{s.caregiverName} — {s.recipientName}</div>
                   <span className="session-type">{s.serviceType}</span>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: '12px' }}>

@@ -15,7 +15,7 @@ const MyAccount = window.MyAccount = () => {
           </div>
           <div className="info-item">
             <div className="info-label">Email</div>
-            <div className="info-value">pete@kincare.app</div>
+            <div className="info-value">pete@inplace.care</div>
           </div>
           <div className="info-item">
             <div className="info-label">Phone</div>
@@ -32,7 +32,7 @@ const MyAccount = window.MyAccount = () => {
         <div className="info-grid">
           <div className="info-item">
             <div className="info-label">Plan</div>
-            <div className="info-value">KinCare Beta - Free</div>
+            <div className="info-value">InPlace Beta - Free</div>
           </div>
           <div className="info-item">
             <div className="info-label">Status</div>

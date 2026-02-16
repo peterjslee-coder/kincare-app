@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KinCare - On-Demand Care for Your Loved Ones</title>
+  <title>InPlace - On-Demand Care for Your Loved Ones</title>
   <link rel="stylesheet" href="/css/styles.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
   <div id="root"></div>
@@ -25,7 +23,7 @@
     (async function() {
       var scripts = [
         '/js/utils.js',
-        '/js/components/KinCareIcon.js',
+        '/js/components/InPlaceIcon.js',
         '/js/components/SplashPage.js',
         '/js/components/LoginPage.js',
         '/js/components/RegisterPage.js',
@@ -40,7 +38,6 @@
         '/js/components/RequestCareModal.js',
         '/js/components/MyAccount.js',
         '/js/components/CaredForView.js',
-        '/js/components/AreaMap.js',
         '/js/components/CaretakerHub.js',
         '/js/app.js'
       ];
@@ -54,7 +51,7 @@
         scriptEl.textContent = compiled;
         document.body.appendChild(scriptEl);
       } catch (err) {
-        console.error('KinCare load error:', err);
+        console.error('InPlace load error:', err);
         document.getElementById('root').innerHTML =
           '<div style="padding:40px;text-align:center;color:#c00">' +
           '<h2>Loading Error</h2><p>' + err.message + '</p></div>';

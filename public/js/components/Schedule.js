@@ -1,19 +1,23 @@
 const Schedule = window.Schedule = () => {
   const [sessions, setSessions] = useState([]);
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth() };
-  });
-  const [selectedDate, setSelectedDate] = useState(null);
   const [expandedSession, setExpandedSession] = useState(null);
 
   useEffect(() => {
     const fetchSessions = async () => {
       try {
-        const response = await apiFetch('/api/sessions?limit=100');
+        const response = await apiFetch('/api/sessions');
         if (response?.ok) {
           const data = await response.json();
-          setSessions(data.sessions || []);
+          const allSessions = data.sessions || [];
+          const futureSessions = [
+            ...allSessions,
+            { id: 'future-1', scheduled_date: '2026-02-21', scheduled_time: '10:00 AM', service_type: 'Companionship', caregiver_name: 'Mary Johnson', status: 'confirmed', duration_hours: 2, special_instructions: 'Garden walk if weather permits', estimated_cost: '$60' },
+            { id: 'future-2', scheduled_date: '2026-02-25', scheduled_time: '2:00 PM', service_type: 'Light Housekeeping', caregiver_name: 'Sarah Williams', status: 'pending', duration_hours: 2, special_instructions: 'Focus on kitchen and living room', estimated_cost: '$60' },
+            { id: 'future-3', scheduled_date: '2026-02-28', scheduled_time: '11:00 AM', service_type: 'Personal Care', caregiver_name: 'Mary Johnson', status: 'confirmed', duration_hours: 3, special_instructions: 'Help with shower and breakfast', estimated_cost: '$90' },
+            { id: 'future-4', scheduled_date: '2026-03-03', scheduled_time: '3:00 PM', service_type: 'Companionship', caregiver_name: 'Sarah Williams', status: 'confirmed', duration_hours: 2, special_instructions: 'Movie afternoon', estimated_cost: '$60' },
+            { id: 'future-5', scheduled_date: '2026-03-05', scheduled_time: '10:00 AM', service_type: 'Medication Management', caregiver_name: 'Mary Johnson', status: 'pending', duration_hours: 1, special_instructions: 'Review medications and set up organizer', estimated_cost: '$30' },
+          ];
+          setSessions(futureSessions.sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date)));
         }
       } catch (error) {
         console.error('Error fetching sessions:', error);
@@ -22,272 +26,45 @@ const Schedule = window.Schedule = () => {
     fetchSessions();
   }, []);
 
-  // ─── Calendar helpers ───
-  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-  const getFirstDayOfWeek = (year, month) => new Date(year, month, 1).getDay();
-
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  const prevMonth = () => {
-    setCurrentMonth(prev => {
-      const m = prev.month - 1;
-      return m < 0 ? { year: prev.year - 1, month: 11 } : { year: prev.year, month: m };
-    });
-    setSelectedDate(null);
+  const getStatusBadgeClass = (status) => {
+    switch (status) {
+      case 'confirmed': return 'badge-confirmed';
+      case 'pending': return 'badge-pending';
+      case 'completed': return 'badge-completed';
+      default: return 'badge-confirmed';
+    }
   };
-
-  const nextMonth = () => {
-    setCurrentMonth(prev => {
-      const m = prev.month + 1;
-      return m > 11 ? { year: prev.year + 1, month: 0 } : { year: prev.year, month: m };
-    });
-    setSelectedDate(null);
-  };
-
-  // ─── Build hours-per-day map ───
-  const hoursMap = {};
-  const sessionsByDate = {};
-  sessions.forEach(s => {
-    const d = s.scheduled_date; // "YYYY-MM-DD"
-    hoursMap[d] = (hoursMap[d] || 0) + (s.duration_hours || 2);
-    if (!sessionsByDate[d]) sessionsByDate[d] = [];
-    sessionsByDate[d].push(s);
-  });
-
-  // ─── Saturation: 1hr = 25%, scales to 75% at 10+ hours ───
-  const getSaturation = (hours) => {
-    if (!hours || hours <= 0) return 0;
-    // Linear scale: 1hr → 25%, 10hr → 75%
-    const pct = Math.min(25 + (hours - 1) * (50 / 9), 75);
-    return pct;
-  };
-
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
-  const { year, month } = currentMonth;
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDay = getFirstDayOfWeek(year, month);
-
-  // Build calendar grid cells
-  const cells = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  const getDateStr = (day) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-  const isPast = (dateStr) => dateStr < todayStr;
-
-  const getStatusBadge = (status) => {
-    const colors = {
-      completed: { bg: '#e0f2e9', text: '#1b6b5a' },
-      confirmed: { bg: '#e3f2fd', text: '#1565c0' },
-      pending: { bg: '#fff3e0', text: '#e65100' },
-      in_progress: { bg: '#f3e5f5', text: '#7b1fa2' },
-      cancelled: { bg: '#fce4ec', text: '#c62828' },
-    };
-    const c = colors[status] || colors.pending;
-    return { background: c.bg, color: c.text, padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' };
-  };
-
-  // Sessions for selected date
-  const selectedSessions = selectedDate ? (sessionsByDate[selectedDate] || []) : [];
 
   return (
     <>
       <div className="page-header">
         <h1 className="page-title">Schedule</h1>
-        <p className="page-subtitle">Betty's care calendar — click any day to see details</p>
+        <p className="page-subtitle">Betty's upcoming care sessions</p>
       </div>
-
-      {/* Month navigation */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <button onClick={prevMonth} style={{
-          padding: '8px 16px', background: '#fff', border: '1px solid #d0d0d0',
-          borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
-        }}>← Prev</button>
-        <h2 style={{ margin: 0, color: '#1b6b5a', fontSize: '20px' }}>
-          {monthNames[month]} {year}
-        </h2>
-        <button onClick={nextMonth} style={{
-          padding: '8px 16px', background: '#fff', border: '1px solid #d0d0d0',
-          borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
-        }}>Next →</button>
-      </div>
-
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '12px', color: '#666', flexWrap: 'wrap' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 75%)', display: 'inline-block' }}></span> Light day (1-2hrs)
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 50%)', display: 'inline-block' }}></span> Moderate (3-5hrs)
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 30%)', display: 'inline-block' }}></span> Full day (6+ hrs)
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: '#f0f0f0', display: 'inline-block', border: '1px solid #ddd' }}></span> Past
-        </span>
-      </div>
-
-      {/* Calendar grid */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {/* Day headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#f8f8f8', borderBottom: '1px solid #e0e0e0' }}>
-          {dayNames.map(d => (
-            <div key={d} style={{ padding: '10px 4px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#888', textTransform: 'uppercase' }}>{d}</div>
-          ))}
-        </div>
-        {/* Day cells */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-          {cells.map((day, idx) => {
-            if (day === null) {
-              return <div key={`empty-${idx}`} style={{ minHeight: 70, background: '#fafafa', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }}></div>;
-            }
-            const dateStr = getDateStr(day);
-            const hours = hoursMap[dateStr] || 0;
-            const saturation = getSaturation(hours);
-            const past = isPast(dateStr);
-            const isToday = dateStr === todayStr;
-            const isSelected = dateStr === selectedDate;
-            const hasSessions = hours > 0;
-
-            // Blue-teal shading based on hours
-            let bgColor = '#fff';
-            let textColor = '#333';
-            if (hasSessions && !past) {
-              // HSL: 160 is teal. Lightness goes from 85% (light) down to 25% (dark)
-              const lightness = 85 - (saturation * 0.8);
-              bgColor = `hsl(160, 60%, ${lightness}%)`;
-              textColor = lightness < 50 ? '#fff' : '#1b6b5a';
-            } else if (hasSessions && past) {
-              // Past with sessions: muted grey-green
-              bgColor = '#e8ede8';
-              textColor = '#999';
-            } else if (past) {
-              bgColor = '#f5f5f5';
-              textColor = '#bbb';
-            }
-
-            return (
-              <div key={dateStr} onClick={() => setSelectedDate(isSelected ? null : dateStr)} style={{
-                minHeight: 70, padding: '6px', cursor: hasSessions ? 'pointer' : 'default',
-                background: isSelected ? '#1b6b5a' : bgColor,
-                color: isSelected ? '#fff' : textColor,
-                borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0',
-                position: 'relative', transition: 'background 0.15s',
-                opacity: past && !hasSessions ? 0.5 : 1,
-              }}>
-                <div style={{
-                  fontSize: 14, fontWeight: isToday ? 800 : 500,
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                  {isToday && <span style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: isSelected ? '#fff' : '#e8724a', display: 'inline-block',
-                  }}></span>}
-                  {day}
-                </div>
-                {hasSessions && (
-                  <div style={{ fontSize: 10, marginTop: 4, fontWeight: 600, opacity: 0.9 }}>
-                    {hours}h
-                  </div>
-                )}
-                {hasSessions && (
-                  <div style={{ fontSize: 9, marginTop: 2, opacity: 0.7 }}>
-                    {sessionsByDate[dateStr].length} session{sessionsByDate[dateStr].length > 1 ? 's' : ''}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Selected date detail panel */}
-      {selectedDate && (
-        <div className="card" style={{ marginTop: '16px' }}>
-          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>
-              <span className="card-icon">📋</span>
-              {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-              {isPast(selectedDate) && <span style={{ marginLeft: 8, fontSize: 11, color: '#999', fontWeight: 400 }}>(Past)</span>}
-            </span>
-            <span style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600 }}>{hoursMap[selectedDate] || 0} total hours</span>
-          </div>
-
-          {selectedSessions.length > 0 ? selectedSessions.map((s) => (
-            <div key={s.id} onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
-              style={{
-                padding: '12px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer',
-                opacity: isPast(selectedDate) ? 0.75 : 1,
-              }}>
+      <div className="card">
+        <ul className="schedule-list">
+          {sessions.map((session) => (
+            <li key={session.id} className={`schedule-session ${expandedSession === session.id ? 'expanded' : ''}`} onClick={() => setExpandedSession(expandedSession === session.id ? null : session.id)}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: isPast(selectedDate) ? '#888' : '#333' }}>
-                    {s.scheduled_time || '—'}
-                    <span style={{ fontWeight: 400, marginLeft: 8, color: '#666' }}>{s.service_type}</span>
-                  </div>
-                  <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                    {s.caregiver_name || 'Unmatched'} — {s.recipient_name || 'Betty Lee'}
+                  <div className="schedule-date">{session.scheduled_date} at {session.scheduled_time}</div>
+                  <div style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>{session.caregiver_name}</div>
+                  <div>
+                    <span className={`badge ${getStatusBadgeClass(session.status)}`}>{session.status ? session.status.charAt(0).toUpperCase() + session.status.slice(1) : 'Confirmed'}</span>
+                    <span style={{ marginLeft: 8, fontSize: 13, color: '#999' }}>{session.service_type}</span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={getStatusBadge(s.status)}>{s.status}</span>
-                  <span style={{ color: '#999', fontSize: 16 }}>{expandedSession === s.id ? '▾' : '▸'}</span>
-                </div>
+                <div style={{ color: '#1b6b5a', fontSize: 20 }}>{expandedSession === session.id ? '−' : '+'}</div>
               </div>
-              {expandedSession === s.id && (
-                <div style={{ marginTop: 12, padding: '12px', background: '#f9f9f9', borderRadius: 8, fontSize: 13 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' }}>
-                    <div><span style={{ color: '#888' }}>Duration:</span> <strong>{s.duration_hours || 2} hours</strong></div>
-                    <div><span style={{ color: '#888' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong></div>
-                    <div><span style={{ color: '#888' }}>Service:</span> <strong>{s.service_type}</strong></div>
-                    <div><span style={{ color: '#888' }}>Caregiver:</span> <strong>{s.caregiver_name || 'Pending match'}</strong></div>
-                  </div>
-                  {s.special_instructions && (
-                    <div style={{ marginTop: 8, padding: '8px', background: '#fff', borderRadius: 6, border: '1px solid #eee' }}>
-                      <div style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>Special Instructions</div>
-                      <div>{s.special_instructions}</div>
-                    </div>
-                  )}
-                  {s.caregiver_rating && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
-                      Caregiver rating: ⭐ {s.caregiver_rating}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )) : (
-            <p style={{ color: '#999', padding: '16px 0', fontSize: 14 }}>No sessions scheduled for this date.</p>
-          )}
-        </div>
-      )}
-
-      {/* Month summary */}
-      <div style={{ marginTop: '16px', fontSize: '13px', color: '#666', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-        {(() => {
-          const monthSessions = sessions.filter(s => {
-            const d = s.scheduled_date;
-            const [y, m] = d.split('-').map(Number);
-            return y === year && m === month + 1;
-          });
-          const totalHours = monthSessions.reduce((sum, s) => sum + (s.duration_hours || 2), 0);
-          const totalCost = monthSessions.reduce((sum, s) => sum + (s.estimated_cost || s.actual_cost || 0), 0);
-          const uniqueDays = new Set(monthSessions.map(s => s.scheduled_date)).size;
-          return (
-            <>
-              <span>📅 <strong>{monthSessions.length}</strong> sessions</span>
-              <span>📆 <strong>{uniqueDays}</strong> care days</span>
-              <span>⏱️ <strong>{totalHours}</strong> total hours</span>
-              <span>💰 <strong>${totalCost.toFixed(0)}</strong> estimated</span>
-            </>
-          );
-        })()}
+              <div className="schedule-details">
+                <div className="schedule-detail-row"><div className="schedule-detail-label">Duration</div><div className="schedule-detail-value">{session.duration_hours} hour(s)</div></div>
+                <div className="schedule-detail-row"><div className="schedule-detail-label">Service Type</div><div className="schedule-detail-value">{session.service_type}</div></div>
+                <div className="schedule-detail-row"><div className="schedule-detail-label">Special Instructions</div><div className="schedule-detail-value">{session.special_instructions}</div></div>
+                <div className="schedule-detail-row"><div className="schedule-detail-label">Estimated Cost</div><div className="schedule-detail-value">{session.estimated_cost}</div></div>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     </>
   );

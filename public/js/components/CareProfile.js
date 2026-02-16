@@ -4,21 +4,6 @@ const CareProfile = window.CareProfile = () => {
   const [editData, setEditData] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
-  const [contacts, setContacts] = useState([]);
-  const [editingContact, setEditingContact] = useState(null);
-  const [newContact, setNewContact] = useState(null);
-
-  const fetchContacts = async (recipientId) => {
-    try {
-      const res = await apiFetch(`/api/care-recipients/${recipientId}/emergency-contacts`);
-      if (res?.ok) {
-        const d = await res.json();
-        setContacts(d.contacts || []);
-      }
-    } catch (err) {
-      console.error('Error fetching contacts:', err);
-    }
-  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -27,9 +12,7 @@ const CareProfile = window.CareProfile = () => {
         if (response?.ok) {
           const data = await response.json();
           if (data.careRecipients && data.careRecipients.length > 0) {
-            const p = data.careRecipients[0];
-            setProfile(p);
-            fetchContacts(p.id);
+            setProfile(data.careRecipients[0]);
           }
         }
       } catch (error) {
@@ -117,31 +100,6 @@ const CareProfile = window.CareProfile = () => {
       setSaveMsg('Error saving — please try again.');
     }
     setSaving(false);
-  };
-
-  const saveContact = async (contact) => {
-    try {
-      if (contact.id) {
-        // Update existing
-        const res = await apiFetch(`/api/care-recipients/${profile.id}/emergency-contacts/${contact.id}`, {
-          method: 'PUT', body: JSON.stringify(contact),
-        });
-        if (res?.ok) { fetchContacts(profile.id); setEditingContact(null); }
-      } else {
-        // Create new
-        const res = await apiFetch(`/api/care-recipients/${profile.id}/emergency-contacts`, {
-          method: 'POST', body: JSON.stringify(contact),
-        });
-        if (res?.ok) { fetchContacts(profile.id); setNewContact(null); }
-      }
-    } catch (err) { console.error('Save contact error:', err); }
-  };
-
-  const deleteContact = async (contactId) => {
-    try {
-      const res = await apiFetch(`/api/care-recipients/${profile.id}/emergency-contacts/${contactId}`, { method: 'DELETE' });
-      if (res?.ok) fetchContacts(profile.id);
-    } catch (err) { console.error('Delete contact error:', err); }
   };
 
   const ed = (field, val) => setEditData({ ...editData, [field]: val });
@@ -267,77 +225,27 @@ const CareProfile = window.CareProfile = () => {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span><span className="card-icon">🚨</span>Emergency Contacts ({contacts.length})</span>
-          {!newContact && (
-            <button onClick={() => setNewContact({ name: '', relationship: '', phone: '', email: '' })} style={{
-              padding: '4px 12px', background: '#1b6b5a', color: '#fff', border: 'none',
-              borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 600,
-            }}>+ Add Contact</button>
-          )}
-        </div>
-        {contacts.length > 0 ? contacts.map((c) => (
-          editingContact === c.id ? (
-            <div key={c.id} style={{ padding: '12px 0', borderBottom: '1px solid #eee' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                <input style={inputStyle} placeholder="Name" defaultValue={c.name} id={`ec-name-${c.id}`} />
-                <input style={inputStyle} placeholder="Relationship" defaultValue={c.relationship} id={`ec-rel-${c.id}`} />
-                <input style={inputStyle} placeholder="Phone" defaultValue={c.phone} id={`ec-phone-${c.id}`} />
-                <input style={inputStyle} placeholder="Email" defaultValue={c.email} id={`ec-email-${c.id}`} />
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => saveContact({
-                  id: c.id,
-                  name: document.getElementById(`ec-name-${c.id}`).value,
-                  relationship: document.getElementById(`ec-rel-${c.id}`).value,
-                  phone: document.getElementById(`ec-phone-${c.id}`).value,
-                  email: document.getElementById(`ec-email-${c.id}`).value,
-                })} style={{ padding: '4px 12px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Save</button>
-                <button onClick={() => setEditingContact(null)} style={{ padding: '4px 12px', background: '#fff', color: '#666', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
-              </div>
+        <div className="card-header"><span className="card-icon">🚨</span>Emergency Contact</div>
+        {editing ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <div style={fieldLabel}>Name</div>
+              <input style={inputStyle} value={editData.emergency_contact_name} onChange={(e) => ed('emergency_contact_name', e.target.value)} />
             </div>
-          ) : (
-            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {c.name}
-                  {c.is_primary ? (
-                    <span style={{ padding: '1px 6px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 8, fontSize: 10, fontWeight: 700 }}>PRIMARY</span>
-                  ) : null}
-                </div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{c.relationship}</div>
-                <div style={{ fontSize: 13, color: '#555', marginTop: 4 }}>
-                  {c.phone && <span>📞 {c.phone}</span>}
-                  {c.phone && c.email && <span> &bull; </span>}
-                  {c.email && <span>✉️ {c.email}</span>}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button onClick={() => setEditingContact(c.id)} style={{ padding: '4px 10px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>Edit</button>
-                <button onClick={() => deleteContact(c.id)} style={{ padding: '4px 10px', background: '#fff', color: '#c00', border: '1px solid #fcc', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>✕</button>
-              </div>
+            <div>
+              <div style={fieldLabel}>Phone</div>
+              <input type="tel" style={inputStyle} value={editData.emergency_contact_phone} onChange={(e) => ed('emergency_contact_phone', e.target.value)} />
             </div>
-          )
-        )) : (
-          <p style={{ color: '#999', fontSize: 14 }}>No emergency contacts added yet.</p>
-        )}
-        {newContact && (
-          <div style={{ padding: '12px 0', borderTop: contacts.length > 0 ? '1px solid #eee' : 'none', marginTop: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#1b6b5a' }}>New Contact</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-              <input style={inputStyle} placeholder="Name *" id="ec-new-name" />
-              <input style={inputStyle} placeholder="Relationship" id="ec-new-rel" />
-              <input style={inputStyle} placeholder="Phone" id="ec-new-phone" />
-              <input style={inputStyle} placeholder="Email" id="ec-new-email" />
+          </div>
+        ) : (
+          <div className="info-grid">
+            <div className="info-item">
+              <div className="info-label">Name</div>
+              <div className="info-value">{profile.emergency_contact_name}</div>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => saveContact({
-                name: document.getElementById('ec-new-name').value,
-                relationship: document.getElementById('ec-new-rel').value,
-                phone: document.getElementById('ec-new-phone').value,
-                email: document.getElementById('ec-new-email').value,
-              })} style={{ padding: '4px 12px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Save</button>
-              <button onClick={() => setNewContact(null)} style={{ padding: '4px 12px', background: '#fff', color: '#666', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+            <div className="info-item">
+              <div className="info-label">Phone</div>
+              <div className="info-value">{profile.emergency_contact_phone}</div>
             </div>
           </div>
         )}

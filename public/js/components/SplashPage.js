@@ -35,8 +35,8 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
     <div className="splash-page">
       <nav className="splash-nav">
         <div className="splash-nav-logo">
-          <KinCareIcon width={40} height={40} />
-          KinCare
+          <InPlaceIcon width={40} height={40} />
+          InPlace
         </div>
         <div className="splash-nav-links">
           <button onClick={() => onNavigate('login')}>Sign In</button>
@@ -61,14 +61,14 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             <span style={{ color: '#e8724a' }}>Most of Them Are Doing It Alone.</span>
           </h1>
           <p className="hero-subtitle" style={{ fontSize: '20px', maxWidth: '700px', margin: '0 auto 40px', opacity: 0.92 }}>
-            KinCare is on-demand home care that matches families with vetted caregivers in hours, not weeks. Think of it as the missing infrastructure for aging in place.
+            InPlace is on-demand home care that matches families with vetted caregivers in hours, not weeks. Think of it as the missing infrastructure for aging in place.
           </p>
           <div className="hero-cta">
             <button onClick={() => onNavigate('login')}>View Live Demo</button>
             <button onClick={() => onNavigate('register')}>Get Started</button>
           </div>
           <div style={{ marginTop: '24px', fontSize: '13px', opacity: 0.7 }}>
-            Demo login: pete@kincare.app / kincare123
+            Demo login: pete@inplace.care / inplace123
           </div>
         </div>
       </section>
@@ -118,7 +118,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '20px' }}>The Solution</h2>
           <p style={{ fontSize: '20px', color: '#333', lineHeight: 1.7, marginBottom: '48px' }}>
-            KinCare is an on-demand platform that matches families with vetted, background-checked caregivers — by the hour, by the visit, on your schedule. Families set the terms. Caregivers get fair pay and flexible work. Everyone gets transparency.
+            InPlace is an on-demand platform that matches families with vetted, background-checked caregivers — by the hour, by the visit, on your schedule. Families set the terms. Caregivers get fair pay and flexible work. Everyone gets transparency.
           </p>
           <div className="step-grid" style={{ maxWidth: '900px' }}>
             <div className="step-card">
@@ -171,7 +171,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       {/* ── The Business Model ── */}
       <section style={{ padding: '80px 32px', background: '#fff' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <h2 style={{ fontSize: '36px', color: '#1b6b5a', textAlign: 'center', marginBottom: '48px' }}>How KinCare Makes Money</h2>
+          <h2 style={{ fontSize: '36px', color: '#1b6b5a', textAlign: 'center', marginBottom: '48px' }}>How InPlace Makes Money</h2>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', justifyContent: 'center' }}>
             <div style={{ padding: '40px', background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
               <div style={{ fontSize: '16px', fontWeight: 600, color: '#1b6b5a', marginBottom: '12px' }}>Pay-Per-Use, Not Subscription</div>
@@ -182,7 +182,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             <div style={{ padding: '40px', background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
               <div style={{ fontSize: '16px', fontWeight: 600, color: '#1b6b5a', marginBottom: '12px' }}>Platform Commission</div>
               <p style={{ fontSize: '15px', color: '#555', lineHeight: 1.6 }}>
-                KinCare takes a 20% commission on each transaction. Caregivers keep 80% and get paid within 48 hours. Both sides get a better deal than traditional agencies.
+                InPlace takes a 20% commission on each transaction. Caregivers keep 80% and get paid within 48 hours. Both sides get a better deal than traditional agencies.
               </p>
             </div>
           </div>
@@ -201,7 +201,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
           <div>
             <h2 style={{ fontSize: '28px', color: '#1b6b5a', marginBottom: '16px' }}>Built from Lived Experience</h2>
             <p style={{ fontSize: '16px', color: '#555', lineHeight: 1.8, marginBottom: '16px' }}>
-              KinCare was not born on a whiteboard. It was born from the exhaustion of coordinating care for an aging parent — the late-night calls, the agency runaround, the impossible juggle of work and caregiving.
+              InPlace was not born on a whiteboard. It was born from the exhaustion of coordinating care for an aging parent — the late-night calls, the agency runaround, the impossible juggle of work and caregiving.
             </p>
             <p style={{ fontSize: '16px', color: '#555', lineHeight: 1.8 }}>
               This is not a hypothetical problem. It is a deeply personal one. And the solution has to be just as personal — practical, affordable, and built by someone who has been in the trenches.
@@ -215,7 +215,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{ fontSize: '36px', marginBottom: '24px', color: 'white' }}>The Operating System for Aging in Place</h2>
           <p style={{ fontSize: '18px', opacity: 0.92, lineHeight: 1.7, marginBottom: '40px' }}>
-            Today, KinCare matches families with caregivers. Tomorrow, it becomes the coordination layer for everything an aging parent needs — care scheduling, medication tracking, doctor coordination, family communication, and AI-powered health insights. One platform. One family. Complete peace of mind.
+            Today, InPlace matches families with caregivers. Tomorrow, it becomes the coordination layer for everything an aging parent needs — care scheduling, medication tracking, doctor coordination, family communication, and AI-powered health insights. One platform. One family. Complete peace of mind.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginTop: '40px', justifyContent: 'center' }}>
             {[
@@ -243,7 +243,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         <div style={{ maxWidth: '700px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '16px' }}>This Is Not a Deck. It Is a Working App.</h2>
           <p style={{ fontSize: '18px', color: '#555', lineHeight: 1.7, marginBottom: '40px' }}>
-            KinCare is live today with three working logins — family, caregiver, and care recipient. Real scheduling, real messaging, real caregiver matching. See it for yourself.
+            InPlace is live today with three working logins — family, caregiver, and care recipient. Real scheduling, real messaging, real caregiver matching. See it for yourself.
           </p>
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
             <button onClick={() => onNavigate('login')} style={{
@@ -258,7 +258,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             }}>Create an Account</button>
           </div>
           <div className="demo-credentials">
-            <strong>Demo Credentials:</strong> pete@kincare.app / kincare123
+            <strong>Demo Credentials:</strong> pete@inplace.care / inplace123
           </div>
         </div>
       </section>
@@ -314,7 +314,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       </section>
 
       <footer className="splash-footer">
-        <p>&copy; 2025 KinCare. All rights reserved. | Privacy Policy | Terms of Service</p>
+        <p>&copy; 2025 InPlace. All rights reserved. | Privacy Policy | Terms of Service</p>
       </footer>
     </div>
   );

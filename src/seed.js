@@ -1,5 +1,5 @@
 /**
- * KinCare — Seed Script
+ * InPlace — Seed Script
  * Populates the database with realistic demo data
  * Run with: npm run seed
  */
@@ -10,14 +10,14 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 async function seed() {
-  console.log("🌱 Seeding KinCare database...\n");
+  console.log("🌱 Seeding InPlace database...\n");
 
   await initializeDatabase();
   const db = await getDb();
 
   // Clear existing data
   const tables = [
-    "emergency_contacts", "caregiver_assignments", "recipient_notes", "messages",
+    "caregiver_assignments", "recipient_notes", "messages",
     "visit_photos", "visit_logs", "activity_feed", "reviews",
     "payments", "care_sessions", "availability",
     "caregiver_profiles", "care_recipients", "users",
@@ -27,7 +27,7 @@ async function seed() {
   }
 
   // ─── Users ───
-  const passwordHash = await bcrypt.hash("kincare123", 10);
+  const passwordHash = await bcrypt.hash("inplace123", 10);
 
   const peteId = uuid();
   const mariaUserId = uuid();
@@ -40,14 +40,14 @@ async function seed() {
   db.prepare(`
     INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(peteId, "pete@kincare.app", passwordHash, "family", "Pete", "Lee", "(626) 555-0142");
+  `).run(peteId, "pete@inplace.care", passwordHash, "family", "Pete", "Lee", "(626) 555-0142");
 
   // Caregiver users
   const caregiverUsers = [
-    [mariaUserId, "maria@kincare.app", "Maria", "Santos", "(540) 555-0201"],
-    [jamesUserId, "james@kincare.app", "James", "Okafor", "(540) 555-0202"],
-    [sarahUserId, "sarah@kincare.app", "Sarah", "Chen", "(540) 555-0203"],
-    [davidUserId, "david@kincare.app", "David", "Kim", "(540) 555-0204"],
+    [mariaUserId, "maria@inplace.care", "Maria", "Santos", "(540) 555-0201"],
+    [jamesUserId, "james@inplace.care", "James", "Okafor", "(540) 555-0202"],
+    [sarahUserId, "sarah@inplace.care", "Sarah", "Chen", "(540) 555-0203"],
+    [davidUserId, "david@inplace.care", "David", "Kim", "(540) 555-0204"],
   ];
 
   for (const [id, email, first, last, phone] of caregiverUsers) {
@@ -61,7 +61,7 @@ async function seed() {
   db.prepare(`
     INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
     VALUES (?, ?, ?, 'care_for', ?, ?, ?)
-  `).run(bettyUserId, "betty@kincare.app", passwordHash, "Betty", "Lee", "(540) 555-0100");
+  `).run(bettyUserId, "betty@inplace.care", passwordHash, "Betty", "Lee", "(540) 555-0100");
 
   console.log("✅ Users created (7 — Pete, 4 caregivers, Betty)");
 
@@ -72,12 +72,12 @@ async function seed() {
   db.prepare(`
     INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
     VALUES (?, ?, ?, 'family', ?, ?, ?)
-  `).run(hendersonFamilyId, "linda@kincare.app", passwordHash, "Linda", "Henderson", "(540) 555-0301");
+  `).run(hendersonFamilyId, "linda@inplace.care", passwordHash, "Linda", "Henderson", "(540) 555-0301");
 
   db.prepare(`
     INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
     VALUES (?, ?, ?, 'family', ?, ?, ?)
-  `).run(patelFamilyId, "raj@kincare.app", passwordHash, "Raj", "Patel", "(540) 555-0302");
+  `).run(patelFamilyId, "raj@inplace.care", passwordHash, "Raj", "Patel", "(540) 555-0302");
 
   console.log("✅ Additional family users created (2 — Henderson, Patel)");
 
@@ -142,30 +142,6 @@ async function seed() {
   );
 
   console.log("✅ Care recipients created (3 — Betty, Dorothy, Arun)");
-
-  // ─── Emergency Contacts ───
-  const emergencyContacts = [
-    // Betty's contacts
-    [uuid(), bettyId, "Pete Lee", "Son (Primary)", "(626) 555-0142", "pete@kincare.app", 1, 0],
-    [uuid(), bettyId, "Susan Lee-Park", "Daughter", "(310) 555-0188", "susan.leepark@gmail.com", 0, 1],
-    [uuid(), bettyId, "David Lee", "Son", "(415) 555-0199", "david.lee@gmail.com", 0, 2],
-    [uuid(), bettyId, "Dr. Anita Sharma", "Primary Physician", "(540) 555-0400", null, 0, 3],
-    // Dorothy's contacts
-    [uuid(), dorothyId, "Linda Henderson", "Daughter (Primary)", "(540) 555-0301", "linda@kincare.app", 1, 0],
-    [uuid(), dorothyId, "Mark Henderson", "Son", "(540) 555-0310", "mark.henderson@gmail.com", 0, 1],
-    // Arun's contacts
-    [uuid(), arunId, "Raj Patel", "Son (Primary)", "(540) 555-0302", "raj@kincare.app", 1, 0],
-    [uuid(), arunId, "Priya Patel", "Daughter-in-law", "(540) 555-0303", "priya.patel@gmail.com", 0, 1],
-  ];
-
-  for (const [id, recipientId, name, relationship, phone, email, isPrimary, sortOrder] of emergencyContacts) {
-    db.prepare(`
-      INSERT INTO emergency_contacts (id, care_recipient_id, name, relationship, phone, email, is_primary, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, recipientId, name, relationship, phone, email, isPrimary, sortOrder);
-  }
-
-  console.log("✅ Emergency contacts created (8 — 4 for Betty, 2 for Dorothy, 2 for Arun)");
 
   // ─── Caregiver Profiles ───
   const mariaId = uuid();
@@ -443,9 +419,9 @@ async function seed() {
 
   console.log("\n🎉 Seed complete! Database ready.\n");
   console.log("Demo logins:");
-  console.log("  Care Team:  pete@kincare.app  / kincare123");
-  console.log("  Caretaker:  maria@kincare.app / kincare123");
-  console.log("  Cared-For:  betty@kincare.app / kincare123\n");
+  console.log("  Care Team:  pete@inplace.care  / inplace123");
+  console.log("  Caretaker:  maria@inplace.care / inplace123");
+  console.log("  Cared-For:  betty@inplace.care / inplace123\n");
 }
 
 seed().catch(console.error);

@@ -1,17 +1,17 @@
-# KinCare — Project Context
+# InPlace — Project Context
 
 ## What This Is
 
-KinCare is an on-demand care coordination platform connecting families with professional caregivers for elderly/parent care. Think "Uber for home caregiving." The primary user is Pete Lee, who is managing care for his mother Betty Lee (78, early-stage dementia, mild arthritis) in Blacksburg, VA.
+InPlace is an on-demand care coordination platform connecting families with professional caregivers for elderly/parent care. Think "Uber for home caregiving." The primary user is Pete Lee, who is managing care for his mother Betty Lee (78, early-stage dementia, mild arthritis) in Blacksburg, VA.
 
 ## Live Demo
 
-https://kincare-app-production.up.railway.app
+https://yourinplace.com
 
 ## Tech Stack
 
 - **Backend:** Node.js + Express (v4), port 3001
-- **Database:** SQLite via sql.js (zero native deps, file-based at `./kincare.db`)
+- **Database:** SQLite via sql.js (zero native deps, file-based at `./inplace.db`)
 - **Auth:** JWT tokens (7-day expiry), bcryptjs for password hashing
 - **Frontend:** Modular React SPA (via CDN — React 18, ReactDOM, Babel standalone). No build step — Babel compiles JSX in-browser.
 - **Deployment:** Railway.app (NIXPACKS builder)
@@ -36,7 +36,7 @@ kincare-repo/
 │       ├── utils.js           ← Shared utilities: apiFetch, setAuthToken, scheduling helpers, caregiver data
 │       ├── app.js             ← App root component: routing, sidebar, page switching, modal management
 │       └── components/
-│           ├── KinCareIcon.js          ← SVG logo component
+│           ├── InPlaceIcon.js          ← SVG logo component
 │           ├── SplashPage.js           ← Investor pitch landing page (market stats, problem/solution, business model, vision, waitlist capture)
 │           ├── LoginPage.js            ← Email/password login form
 │           ├── RegisterPage.js         ← Multi-step registration wizard (family or caregiver)
@@ -80,7 +80,7 @@ const MyComponent = window.MyComponent = ({ prop1, prop2 }) => {
 };
 ```
 
-**Dependency order matters:** utils.js → KinCareIcon → other components → app.js. When adding a new component, add it to the `scripts` array in `index.html` before `app.js`.
+**Dependency order matters:** utils.js → InPlaceIcon → other components → app.js. When adding a new component, add it to the `scripts` array in `index.html` before `app.js`.
 
 ## Database Tables
 
@@ -102,8 +102,8 @@ All API responses follow `{ fieldName: value }` or `{ collectionName: [...] }` f
 
 ## Demo Credentials
 
-- **Email:** pete@kincare.app
-- **Password:** kincare123
+- **Email:** pete@inplace.care
+- **Password:** inplace123
 - **Role:** family
 
 ## Local Development

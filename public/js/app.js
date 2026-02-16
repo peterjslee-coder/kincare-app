@@ -40,7 +40,6 @@ const App = () => {
     if (role === 'caregiver') {
       return [
         { id: 'dashboard', icon: '🩺', label: 'My Dashboard' },
-        { id: 'area-map', icon: '🗺️', label: 'Area Map' },
         { id: 'schedule', icon: '📅', label: 'Schedule' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'account', icon: '👤', label: 'My Account' },
@@ -80,7 +79,6 @@ const App = () => {
       if (role === 'care_for') return <CaredForView />;
       return <Dashboard onNavigate={setCurrentPage} />;
     }
-    if (currentPage === 'area-map') return <AreaMap />;
     if (currentPage === 'care-profile') return <CareProfile />;
     if (currentPage === 'schedule') return <Schedule />;
     if (currentPage === 'caregivers') return <Caregivers />;
@@ -95,8 +93,8 @@ const App = () => {
     <div className="app-container">
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <KinCareIcon width={40} height={40} />
-          <div className="sidebar-logo-text">KinCare</div>
+          <InPlaceIcon width={40} height={40} />
+          <div className="sidebar-logo-text">InPlace</div>
         </div>
         <div style={{ padding: '0 16px 12px', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px' }}>
           {getRoleLabel()}

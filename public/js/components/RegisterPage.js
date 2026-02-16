@@ -34,7 +34,7 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
   };
 
   const handleComplete = () => {
-    alert('Registration coming soon — please use demo credentials: pete@kincare.app / kincare123');
+    alert('Registration coming soon — please use demo credentials: pete@inplace.care / inplace123');
   };
 
   if (!track) {
@@ -43,10 +43,10 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
         <div className="register-card">
           <div className="register-header">
             <div style={{ marginBottom: '16px' }}>
-              <KinCareIcon width={50} height={50} />
+              <InPlaceIcon width={50} height={50} />
             </div>
-            <h1>Join KinCare</h1>
-            <p>What brings you to KinCare?</p>
+            <h1>Join InPlace</h1>
+            <p>What brings you to InPlace?</p>
           </div>
           <div className="track-selection">
             <div className="track-option" onClick={() => { setTrack('family'); setStep(1); }}>

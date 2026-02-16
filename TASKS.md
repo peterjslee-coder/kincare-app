@@ -1,4 +1,4 @@
-# KinCare Tasks
+# InPlace Tasks
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
@@ -38,9 +38,9 @@
 
 | Role | Email | Password | Notes |
 |------|-------|----------|-------|
-| Care Team | pete@kincare.app | kincare123 | Primary — manages Betty's care |
-| Caretaker | maria@kincare.app | kincare123 | Assigned to Betty + 1 other family |
-| Cared-For | betty@kincare.app | kincare123 | Limited view, controlled by Pete |
+| Care Team | pete@inplace.care | inplace123 | Primary — manages Betty's care |
+| Caretaker | maria@inplace.care | inplace123 | Assigned to Betty + 1 other family |
+| Cared-For | betty@inplace.care | inplace123 | Limited view, controlled by Pete |
 
 
 ## Done

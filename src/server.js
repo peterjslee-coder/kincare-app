@@ -41,7 +41,7 @@ app.use("/api/waitlist", require("./routes/waitlist"));
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
-    service: "KinCare API",
+    service: "InPlace API",
     version: "0.1.0",
     timestamp: new Date().toISOString(),
   });
@@ -50,7 +50,7 @@ app.get("/api/health", (req, res) => {
 // ─── API docs overview ───
 app.get("/api", (req, res) => {
   res.json({
-    name: "KinCare API",
+    name: "InPlace API",
     version: "0.1.0",
     endpoints: {
       auth: {
@@ -120,7 +120,7 @@ async function start() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n  KinCare API v0.1 running on port ${PORT}\n`);
+    console.log(`\n  InPlace API v0.1 running on port ${PORT}\n`);
   });
 }
 

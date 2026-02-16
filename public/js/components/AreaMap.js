@@ -73,7 +73,7 @@ const AreaMap = window.AreaMap = () => {
 
     // Custom pin icon
     const pinIcon = L.divIcon({
-      className: 'kincare-map-pin',
+      className: 'inplace-map-pin',
       html: '<div style="background:#1b6b5a;color:#fff;padding:4px 10px;border-radius:8px 8px 8px 0;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;"></div>',
       iconSize: [0, 0],
       iconAnchor: [0, 0],

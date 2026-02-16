@@ -1,13 +1,13 @@
 const LoginPage = window.LoginPage = ({ onLogin, onNavigate }) => {
-  const [email, setEmail] = useState('pete@kincare.app');
-  const [password, setPassword] = useState('kincare123');
+  const [email, setEmail] = useState('pete@inplace.care');
+  const [password, setPassword] = useState('inplace123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const demoAccounts = [
-    { label: 'Pete (Family)', email: 'pete@kincare.app', icon: '👨‍👩‍👦', desc: 'Care coordinator' },
-    { label: 'Maria (Caregiver)', email: 'maria@kincare.app', icon: '🩺', desc: 'Professional caregiver' },
-    { label: 'Betty (Cared-For)', email: 'betty@kincare.app', icon: '👵', desc: 'Care recipient' },
+    { label: 'Pete (Family)', email: 'pete@inplace.care', icon: '👨‍👩‍👦', desc: 'Care coordinator' },
+    { label: 'Maria (Caregiver)', email: 'maria@inplace.care', icon: '🩺', desc: 'Professional caregiver' },
+    { label: 'Betty (Cared-For)', email: 'betty@inplace.care', icon: '👵', desc: 'Care recipient' },
   ];
 
   const handleSubmit = async (e) => {
@@ -33,13 +33,13 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate }) => {
 
   const handleQuickLogin = async (acct) => {
     setEmail(acct.email);
-    setPassword('kincare123');
+    setPassword('inplace123');
     setLoading(true);
     setError(null);
     try {
       const response = await apiFetch('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email: acct.email, password: 'kincare123' })
+        body: JSON.stringify({ email: acct.email, password: 'inplace123' })
       });
       if (!response || !response.ok) throw new Error('Login failed');
       const data = await response.json();
@@ -57,9 +57,9 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate }) => {
     <div className="login-container">
       <div className="login-card">
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <KinCareIcon width={50} height={50} />
+          <InPlaceIcon width={50} height={50} />
         </div>
-        <h2>Welcome to KinCare</h2>
+        <h2>Welcome to InPlace</h2>
         <p className="login-subtitle">Sign in to manage care for your loved ones</p>
 
         {/* Demo Quick-Switch */}

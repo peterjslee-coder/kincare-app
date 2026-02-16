@@ -1,10 +1,10 @@
-# KinCare Development Roadmap
+# InPlace Development Roadmap
 
 ## Guiding Principles
 
 1. **Ease of change first** — Every structural decision should make the next change cheaper and safer. Modular files, clear naming, separated concerns.
 2. **Expand future capabilities** — Build the foundation (validation, tests, real-time) that makes advanced features possible without rewrites.
-3. **Demo-ready at all times** — The Railway deployment at `https://kincare-app-production.up.railway.app` must always work as a polished demo for investors and employees. No broken deploys.
+3. **Demo-ready at all times** — The Railway deployment at `https://yourinplace.com` must always work as a polished demo for investors and employees. No broken deploys.
 
 ---
 
@@ -67,7 +67,7 @@ public/
         ├── CaretakerHub.js
         ├── RequestCareModal.js
         ├── CaregiverScheduleModal.js
-        └── KinCareIcon.js
+        └── InPlaceIcon.js
 ```
 
 Notes: Since we use Babel standalone (in-browser transpilation), each .js file uses `type="text/babel"` and components are attached to `window` so they can reference each other across files. No bundler needed.

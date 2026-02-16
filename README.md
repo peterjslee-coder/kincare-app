@@ -1,6 +1,6 @@
-# KinCare API v0.1
+# InPlace API v0.1
 
-On-demand care coordination backend for the KinCare app.
+On-demand care coordination backend for the InPlace app.
 
 ## Quick Start
 
@@ -16,8 +16,8 @@ Open http://localhost:3001/api to see all endpoints.
 ## Demo Login
 
 ```
-Email:    pete@kincare.app
-Password: kincare123
+Email:    pete@inplace.care
+Password: inplace123
 ```
 
 ## API Endpoints
@@ -66,7 +66,7 @@ All authenticated routes require: `Authorization: Bearer <token>`
 ## Project Structure
 
 ```
-kincare-api/
+inplace-api/
 ├── src/
 │   ├── server.js              # Express app + startup
 │   ├── seed.js                # Demo data seeder
@@ -91,7 +91,7 @@ kincare-api/
 # 1. Login
 TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"pete@kincare.app","password":"kincare123"}' \
+  -d '{"email":"pete@inplace.care","password":"inplace123"}' \
   | jq -r '.token')
 
 # 2. Get care recipient ID

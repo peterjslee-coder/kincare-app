@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "kincare-dev-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
 
 function generateToken(user) {
   return jwt.sign(

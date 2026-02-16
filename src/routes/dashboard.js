@@ -49,14 +49,11 @@ async function familyDashboard(db, userId, res) {
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       u.first_name || ' ' || u.last_name AS caregiver_name,
-      cp.rating_avg AS caregiver_rating,
-      COALESCE(ca.is_favorite, 0) AS is_favorite
+      cp.rating_avg AS caregiver_rating
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     LEFT JOIN users u ON cp.user_id = u.id
-    LEFT JOIN caregiver_assignments ca ON ca.caregiver_profile_id = cp.id
-      AND ca.family_user_id = cs.family_user_id AND ca.is_active = 1
     WHERE cs.family_user_id = ?
       AND cs.scheduled_date >= ?
       AND cs.scheduled_date <= ?
@@ -131,7 +128,6 @@ async function familyDashboard(db, userId, res) {
       durationHours: s.duration_hours,
       caregiverName: s.caregiver_name,
       caregiverRating: s.caregiver_rating,
-      isFavorite: !!s.is_favorite,
       recipientName: s.recipient_name,
       specialInstructions: s.special_instructions,
       estimatedCost: s.estimated_cost,
