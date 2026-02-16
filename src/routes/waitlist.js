@@ -13,13 +13,16 @@ async function notifyNewSignup({ email, name, role, count }) {
   }
 
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.office365.com",
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
     port: parseInt(process.env.SMTP_PORT || "587"),
     secure: false, // STARTTLS
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    connectionTimeout: 5000, // 5s to connect
+    greetingTimeout: 5000,   // 5s for server greeting
+    socketTimeout: 10000,    // 10s for socket inactivity
   });
 
   const roleName = role === "caregiver" ? "Caregiver" : "Family";
