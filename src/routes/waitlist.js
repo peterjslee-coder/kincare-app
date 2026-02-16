@@ -2,52 +2,26 @@ const express = require("express");
 const router = express.Router();
 const { v4: uuidv4 } = require("uuid");
 const { getDb } = require("../models/database");
-const nodemailer = require("nodemailer");
-const dns = require("dns");
+const { Resend } = require("resend");
 
-// Force IPv4 DNS resolution — Railway doesn't support IPv6 and Gmail
-// resolves to IPv6 by default, causing ENETUNREACH errors
-dns.setDefaultResultOrder("ipv4first");
-
-// Email notification helper — sends signup alert to Pete
+// Email notification helper — sends signup alert via Resend (HTTP API)
+// Railway blocks outbound SMTP ports, so we use Resend's HTTP API instead
 async function notifyNewSignup({ email, name, role, count }) {
-  // Only send if SMTP credentials are configured
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.log("  [email] SMTP not configured, skipping notification");
+  if (!process.env.RESEND_API_KEY) {
+    console.log("  [email] RESEND_API_KEY not configured, skipping notification");
     return;
   }
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: parseInt(process.env.SMTP_PORT || "465"),
-    secure: true, // Direct SSL on port 465
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    connectionTimeout: 10000, // 10s to connect
-    greetingTimeout: 10000,   // 10s for server greeting
-    socketTimeout: 15000,     // 15s for socket inactivity
-  });
-
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const notifyEmail = process.env.NOTIFY_EMAIL || "peterjslee@gmail.com";
   const roleName = role === "caregiver" ? "Caregiver" : "Family";
   const nameStr = name ? `${name} (${email})` : email;
 
   try {
-    await transporter.sendMail({
-      from: `"InPlace" <${process.env.SMTP_USER}>`,
-      to: process.env.NOTIFY_EMAIL || process.env.SMTP_USER,
+    await resend.emails.send({
+      from: "InPlace <onboarding@resend.dev>",
+      to: notifyEmail,
       subject: `New InPlace signup (#${count}): ${nameStr}`,
-      text: [
-        `New waitlist signup on yourinplace.com!`,
-        ``,
-        `Name:  ${name || "(not provided)"}`,
-        `Email: ${email}`,
-        `Role:  ${roleName}`,
-        `Total signups: ${count}`,
-        ``,
-        `— InPlace notifications`,
-      ].join("\n"),
       html: [
         `<div style="font-family: -apple-system, sans-serif; max-width: 480px;">`,
         `<h2 style="color: #1b6b5a; margin-bottom: 4px;">New Waitlist Signup</h2>`,
