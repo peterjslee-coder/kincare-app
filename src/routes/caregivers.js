@@ -27,7 +27,7 @@ router.get("/", async (req, res) => {
   query += " ORDER BY cp.rating_avg DESC LIMIT ?";
   params.push(parseInt(limit));
 
-  let caregivers = db.prepare(query).all(...params);
+  let caregivers = await db.prepare(query).all(...params);
 
   // Filter by specialty in JS (JSON field)
   if (specialty) {
@@ -59,7 +59,7 @@ router.get("/", async (req, res) => {
 // ─── GET /api/caregivers/:id ───
 router.get("/:id", async (req, res) => {
   const db = await getDb();
-  const cg = db.prepare(`
+  const cg = await db.prepare(`
     SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
@@ -69,7 +69,7 @@ router.get("/:id", async (req, res) => {
   if (!cg) return res.status(404).json({ error: "Caregiver not found" });
 
   // Get recent reviews
-  const reviews = db.prepare(`
+  const reviews = await db.prepare(`
     SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
     FROM reviews r
     JOIN users u ON r.family_user_id = u.id
@@ -78,7 +78,7 @@ router.get("/:id", async (req, res) => {
   `).all(req.params.id);
 
   // Get completed session count
-  const stats = db.prepare(`
+  const stats = await db.prepare(`
     SELECT COUNT(*) as total_sessions,
            AVG(duration_hours) as avg_duration
     FROM care_sessions
@@ -120,13 +120,13 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     return res.status(400).json({ error: "hourlyRate is required" });
   }
 
-  const existing = db.prepare(
+  const existing = await db.prepare(
     "SELECT id FROM caregiver_profiles WHERE user_id = ?"
   ).get(req.user.id);
 
   if (existing) {
     // Update
-    db.prepare(`
+    await db.prepare(`
       UPDATE caregiver_profiles SET
         bio = COALESCE(?, bio),
         years_experience = COALESCE(?, years_experience),
@@ -136,7 +136,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
         max_travel_miles = COALESCE(?, max_travel_miles),
         location_city = COALESCE(?, location_city),
         location_state = COALESCE(?, location_state),
-        updated_at = datetime('now')
+        updated_at = NOW()
       WHERE user_id = ?
     `).run(
       bio, yearsExperience, hourlyRate,
@@ -146,13 +146,13 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       req.user.id
     );
 
-    const updated = db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     return res.json({ profile: updated });
   }
 
   // Create
   const id = uuid();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO caregiver_profiles
     (id, user_id, bio, years_experience, hourly_rate, specialties,
      certifications, max_travel_miles, location_city, location_state)
@@ -164,7 +164,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     maxTravelMiles || 10, city || null, state || null
   );
 
-  const profile = db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);
+  const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);
   res.status(201).json({ profile });
 });
 

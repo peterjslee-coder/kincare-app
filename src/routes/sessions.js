@@ -29,7 +29,7 @@ router.get("/", async (req, res) => {
     params = [req.user.id];
   } else {
     // Caregiver view
-    const profile = db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
     query = `
@@ -59,7 +59,7 @@ router.get("/", async (req, res) => {
   query += " ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC LIMIT ?";
   params.push(parseInt(limit));
 
-  const sessions = db.prepare(query).all(...params);
+  const sessions = await db.prepare(query).all(...params);
   res.json({ sessions });
 });
 
@@ -80,7 +80,7 @@ router.post("/", requireRole("family"), async (req, res) => {
   const db = await getDb();
 
   // Verify the care recipient belongs to this family
-  const recipient = db.prepare(
+  const recipient = await db.prepare(
     "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
   ).get(careRecipientId, req.user.id);
 
@@ -95,7 +95,7 @@ router.post("/", requireRole("family"), async (req, res) => {
 
   const id = uuid();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO care_sessions
     (id, care_recipient_id, family_user_id, service_type, status,
      scheduled_date, scheduled_time, duration_hours,
@@ -115,7 +115,7 @@ router.post("/", requireRole("family"), async (req, res) => {
     full_day: "Full Day Care",
   };
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message)
     VALUES (?, ?, ?, 'session_booked', ?, ?)
   `).run(
@@ -124,7 +124,7 @@ router.post("/", requireRole("family"), async (req, res) => {
     `Session booked for ${scheduledDate} at ${scheduledTime}`
   );
 
-  const session = db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(id);
+  const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(id);
   res.status(201).json({ session });
 });
 
@@ -132,7 +132,7 @@ router.post("/", requireRole("family"), async (req, res) => {
 // Match a caregiver to a pending session
 router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
   const db = await getDb();
-  const session = db.prepare(
+  const session = await db.prepare(
     "SELECT * FROM care_sessions WHERE id = ? AND family_user_id = ?"
   ).get(req.params.id, req.user.id);
 
@@ -143,9 +143,9 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
 
   // Find available caregivers
   // In production: use location, specialties, ratings, availability windows
-  const recipient = db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+  const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
 
-  const caregivers = db.prepare(`
+  const caregivers = await db.prepare(`
     SELECT cp.*, u.first_name, u.last_name
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
@@ -164,14 +164,14 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
     ? caregivers.find((c) => c.id === caregiverId) || caregivers[0]
     : caregivers[0];
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE care_sessions
-    SET caregiver_id = ?, status = 'confirmed', updated_at = datetime('now')
+    SET caregiver_id = ?, status = 'confirmed', updated_at = NOW()
     WHERE id = ?
   `).run(matched.id, req.params.id);
 
   // Activity feed
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message)
     VALUES (?, ?, ?, 'session_confirmed', ?, ?)
   `).run(
@@ -180,7 +180,7 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
     `${matched.first_name} will arrive on ${session.scheduled_date} at ${session.scheduled_time}`
   );
 
-  const updatedSession = db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+  const updatedSession = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
   res.json({
     session: updatedSession,
     caregiver: {
@@ -212,7 +212,7 @@ router.put("/:id/status", async (req, res) => {
   };
 
   const db = await getDb();
-  const session = db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+  const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
 
   if (!session) return res.status(404).json({ error: "Session not found" });
 
@@ -223,18 +223,18 @@ router.put("/:id/status", async (req, res) => {
     });
   }
 
-  db.prepare(
-    "UPDATE care_sessions SET status = ?, updated_at = datetime('now') WHERE id = ?"
+  await db.prepare(
+    "UPDATE care_sessions SET status = ?, updated_at = NOW() WHERE id = ?"
   ).run(status, req.params.id);
 
-  const updated = db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+  const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
   res.json({ session: updated });
 });
 
 // ─── GET /api/sessions/:id ───
 router.get("/:id", async (req, res) => {
   const db = await getDb();
-  const session = db.prepare(`
+  const session = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       u.first_name || ' ' || u.last_name AS caregiver_name,
@@ -249,12 +249,12 @@ router.get("/:id", async (req, res) => {
   if (!session) return res.status(404).json({ error: "Session not found" });
 
   // Get visit log if exists
-  const visitLog = db.prepare(
+  const visitLog = await db.prepare(
     "SELECT * FROM visit_logs WHERE session_id = ?"
   ).get(req.params.id);
 
   const photos = visitLog
-    ? db.prepare("SELECT * FROM visit_photos WHERE visit_log_id = ?").all(visitLog.id)
+    ? await db.prepare("SELECT * FROM visit_photos WHERE visit_log_id = ?").all(visitLog.id)
     : [];
 
   res.json({ session, visitLog, photos });

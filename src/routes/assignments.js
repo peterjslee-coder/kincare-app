@@ -30,7 +30,7 @@ router.get("/", async (req, res) => {
       params.push(careRecipientId);
     }
   } else if (req.user.role === "caregiver") {
-    const profile = db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
     query = `
       SELECT ca.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
@@ -46,7 +46,7 @@ router.get("/", async (req, res) => {
     return res.json({ assignments: [] });
   }
 
-  const assignments = db.prepare(query).all(...params);
+  const assignments = await db.prepare(query).all(...params);
   res.json({
     assignments: assignments.map(a => ({
       ...a,
@@ -66,7 +66,7 @@ router.post("/", requireRole("family"), async (req, res) => {
   }
 
   // Check not already assigned
-  const existing = db.prepare(`
+  const existing = await db.prepare(`
     SELECT id FROM caregiver_assignments
     WHERE care_recipient_id = ? AND caregiver_profile_id = ? AND family_user_id = ? AND is_active = 1
   `).get(careRecipientId, caregiverProfileId, req.user.id);
@@ -74,7 +74,7 @@ router.post("/", requireRole("family"), async (req, res) => {
   if (existing) return res.status(409).json({ error: "Caregiver already assigned" });
 
   const id = uuid();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_favorite)
     VALUES (?, ?, ?, ?, ?)
   `).run(id, careRecipientId, req.user.id, caregiverProfileId, isFavorite ? 1 : 0);
@@ -85,7 +85,7 @@ router.post("/", requireRole("family"), async (req, res) => {
 // DELETE /api/assignments/:id — unassign a caregiver
 router.delete("/:id", requireRole("family"), async (req, res) => {
   const db = await getDb();
-  db.prepare("UPDATE caregiver_assignments SET is_active = 0 WHERE id = ? AND family_user_id = ?")
+  await db.prepare("UPDATE caregiver_assignments SET is_active = 0 WHERE id = ? AND family_user_id = ?")
     .run(req.params.id, req.user.id);
   res.json({ success: true });
 });
@@ -94,10 +94,10 @@ router.delete("/:id", requireRole("family"), async (req, res) => {
 router.put("/:id/favorite", requireRole("family"), async (req, res) => {
   const db = await getDb();
   // Toggle: flip current value
-  const current = db.prepare("SELECT is_favorite FROM caregiver_assignments WHERE id = ? AND family_user_id = ?")
+  const current = await db.prepare("SELECT is_favorite FROM caregiver_assignments WHERE id = ? AND family_user_id = ?")
     .get(req.params.id, req.user.id);
   const newVal = current && current.is_favorite ? 0 : 1;
-  db.prepare("UPDATE caregiver_assignments SET is_favorite = ? WHERE id = ? AND family_user_id = ?")
+  await db.prepare("UPDATE caregiver_assignments SET is_favorite = ? WHERE id = ? AND family_user_id = ?")
     .run(newVal, req.params.id, req.user.id);
   res.json({ success: true, isFavorite: !!newVal });
 });

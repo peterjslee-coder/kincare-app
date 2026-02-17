@@ -20,7 +20,7 @@ router.post("/register", async (req, res) => {
     }
 
     const db = await getDb();
-    const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
     if (existing) {
       return res.status(409).json({ error: "Email already registered" });
     }
@@ -28,7 +28,7 @@ router.post("/register", async (req, res) => {
     const id = uuid();
     const passwordHash = await bcrypt.hash(password, 10);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, email, passwordHash, role, firstName, lastName, phone || null);
@@ -53,7 +53,7 @@ router.post("/login", async (req, res) => {
     }
 
     const db = await getDb();
-    const user = db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(email);
+    const user = await db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(email);
 
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -80,7 +80,7 @@ router.post("/login", async (req, res) => {
 // ─── GET /api/auth/me ───
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
-  const user = db.prepare(
+  const user = await db.prepare(
     "SELECT id, email, role, first_name, last_name, phone, avatar_url, created_at FROM users WHERE id = ?"
   ).get(req.user.id);
 

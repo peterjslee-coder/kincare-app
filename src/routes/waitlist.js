@@ -53,18 +53,18 @@ router.post("/", async (req, res) => {
     }
 
     // Check if already on waitlist
-    const existing = db.prepare("SELECT id FROM waitlist WHERE email = ?").get(email.toLowerCase().trim());
+    const existing = await db.prepare("SELECT id FROM waitlist WHERE email = ?").get(email.toLowerCase().trim());
     if (existing) {
       return res.json({ message: "You're already on the list! We'll be in touch soon.", alreadyExists: true });
     }
 
     const id = uuidv4();
-    db.prepare(
+    await db.prepare(
       "INSERT INTO waitlist (id, email, name, role) VALUES (?, ?, ?, ?)"
     ).run(id, email.toLowerCase().trim(), name || null, role || "family");
 
     // Log the count
-    const count = db.prepare("SELECT COUNT(*) as count FROM waitlist").get();
+    const count = await db.prepare("SELECT COUNT(*) as count FROM waitlist").get();
     console.log(`  Waitlist signup: ${email} (#${count.count})`);
 
     // Send email notification (fire-and-forget, don't block response)
@@ -81,7 +81,7 @@ router.post("/", async (req, res) => {
 router.get("/count", async (req, res) => {
   try {
     const db = await getDb();
-    const result = db.prepare("SELECT COUNT(*) as count FROM waitlist").get();
+    const result = await db.prepare("SELECT COUNT(*) as count FROM waitlist").get();
     res.json({ count: result.count });
   } catch (err) {
     res.status(500).json({ error: "Failed to get count" });

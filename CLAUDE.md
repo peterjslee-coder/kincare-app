@@ -11,7 +11,7 @@ https://yourinplace.com
 ## Tech Stack
 
 - **Backend:** Node.js + Express (v4), port 3001
-- **Database:** SQLite via sql.js (zero native deps, file-based at `./inplace.db`)
+- **Database:** PostgreSQL via `pg` (connection pooling, persistent data across deploys)
 - **Auth:** JWT tokens (7-day expiry), bcryptjs for password hashing
 - **Frontend:** Modular React SPA (via CDN — React 18, ReactDOM, Babel standalone). No build step — Babel compiles JSX in-browser.
 - **Deployment:** Railway.app (NIXPACKS builder), Cloudflare DNS/proxy for yourinplace.com
@@ -57,7 +57,7 @@ https://yourinplace.com
     ├── server.js              ← Express app, route mounting, static file serving, auto-seed on empty DB
     ├── seed.js                ← Demo data (5 users, 4 caregivers, 13 sessions, messages, assignments)
     ├── models/
-    │   └── database.js        ← SQLite schema (16 tables), sql.js wrapper
+    │   └── database.js        ← PostgreSQL schema (16 tables), pg Pool wrapper
     ├── middleware/
     │   └── auth.js            ← generateToken, authenticate, requireRole
     └── routes/
@@ -105,7 +105,7 @@ All demo passwords: `inplace123`
 
 users, care_recipients, caregiver_profiles, availability, care_sessions, visit_logs, visit_photos, activity_feed, reviews, payments, messages, recipient_notes, caregiver_assignments, waitlist
 
-All tables use TEXT primary keys (UUIDs). Timestamps are TEXT via `datetime('now')`. JSON fields (health_conditions, medications, specialties, certifications, tasks_completed) are stored as JSON strings — parse with `JSON.parse()` on read.
+All tables use TEXT primary keys (UUIDs). Timestamps are TIMESTAMPTZ via `NOW()`. JSON fields (health_conditions, medications, specialties, certifications, tasks_completed) are stored as TEXT JSON strings — parse with `JSON.parse()` on read. The database wrapper auto-converts `?` placeholders to `$1, $2, ...` for PostgreSQL compatibility.
 
 ## Design System
 
@@ -124,10 +124,17 @@ All API responses follow `{ fieldName: value }` or `{ collectionName: [...] }` f
 
 ```bash
 npm install          # Install dependencies (one time)
+
+# Set up PostgreSQL:
+# 1. Install PostgreSQL locally (brew install postgresql, or apt install postgresql)
+# 2. Create a database: createdb inplace
+# 3. Copy .env.example to .env and set DATABASE_URL=postgresql://user:password@localhost:5432/inplace
+
 npm run dev          # Start server with --watch (auto-restarts on backend changes)
 ```
 
 Then open `http://localhost:3001` in a browser. That's it — no build step.
+The database auto-seeds with demo data on first run if empty.
 
 **Editing frontend:** Change any file in `public/js/` or `public/css/`, then refresh the browser. Babel recompiles on every page load.
 
@@ -145,7 +152,7 @@ Environment variables on Railway are set in the Railway dashboard (not in `.env`
 
 **Important:** After pushing frontend changes, bump the `?v=X.Y.Z` cache-bust parameter in `index.html` so Cloudflare serves fresh files. Without this, the live site may show stale JS/CSS.
 
-The production DB auto-seeds when empty. If the DB filename changes (e.g., during a rebrand), Railway creates a fresh DB and seeds it automatically on first request.
+The production PostgreSQL database is a Railway service. The `DATABASE_URL` env var is set in the Railway dashboard (provided by the PostgreSQL service). The DB auto-seeds when empty on first deploy.
 
 ## Scripts
 
@@ -156,10 +163,11 @@ The production DB auto-seeds when empty. If the DB filename changes (e.g., durin
 
 ## Known Limitations
 
-1. MyAccount settings don't persist (UI only)
-2. No input validation or rate limiting
-3. No tests
-4. No real-time updates (polling only)
-5. Not mobile-responsive
-6. Payments table exists but no payment processing
-7. Visit photos table exists but no file upload support
+1. Registration wizard UI exists but doesn't create real accounts yet (shows alert)
+2. No password reset flow
+3. No input validation or rate limiting
+4. No tests
+5. No real-time updates (polling only)
+6. Not mobile-responsive
+7. Payments table exists but no payment processing
+8. Visit photos table exists but no file upload support

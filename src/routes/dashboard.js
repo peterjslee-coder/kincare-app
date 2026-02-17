@@ -25,7 +25,7 @@ router.get("/", async (req, res) => {
 
 // ─── Family Dashboard (Pete's view) ───
 async function familyDashboard(db, userId, res) {
-  const recipients = db.prepare(
+  const recipients = await db.prepare(
     "SELECT * FROM care_recipients WHERE family_user_id = ?"
   ).all(userId);
 
@@ -33,7 +33,7 @@ async function familyDashboard(db, userId, res) {
   monthStart.setDate(1);
   const monthStr = monthStart.toISOString().split("T")[0];
 
-  const monthlyStats = db.prepare(`
+  const monthlyStats = await db.prepare(`
     SELECT
       COUNT(*) as total_sessions,
       SUM(duration_hours) as total_hours,
@@ -45,7 +45,7 @@ async function familyDashboard(db, userId, res) {
   const today = new Date().toISOString().split("T")[0];
   const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
-  const upcoming = db.prepare(`
+  const upcoming = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       u.first_name || ' ' || u.last_name AS caregiver_name,
@@ -62,17 +62,17 @@ async function familyDashboard(db, userId, res) {
     LIMIT 5
   `).all(userId, today, nextWeek);
 
-  const recentActivity = db.prepare(`
+  const recentActivity = await db.prepare(`
     SELECT * FROM activity_feed
     WHERE family_user_id = ?
     ORDER BY created_at DESC LIMIT 5
   `).all(userId);
 
-  const unreadCount = db.prepare(
+  const unreadCount = await db.prepare(
     "SELECT COUNT(*) as count FROM activity_feed WHERE family_user_id = ? AND is_read = 0"
   ).get(userId);
 
-  const avgRating = db.prepare(`
+  const avgRating = await db.prepare(`
     SELECT AVG(cp.rating_avg) as avg
     FROM care_sessions cs
     JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
@@ -80,7 +80,7 @@ async function familyDashboard(db, userId, res) {
   `).get(userId);
 
   // Assigned caregiver count
-  const assignedCount = db.prepare(`
+  const assignedCount = await db.prepare(`
     SELECT COUNT(DISTINCT caregiver_profile_id) as count
     FROM caregiver_assignments
     WHERE family_user_id = ? AND is_active = 1
@@ -145,13 +145,13 @@ async function familyDashboard(db, userId, res) {
 
 // ─── Caregiver Dashboard (Maria's view) ───
 async function caregiverDashboard(db, userId, res) {
-  const profile = db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
+  const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
-  const user = db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+  const user = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
 
   // Assigned families
-  const assignments = db.prepare(`
+  const assignments = await db.prepare(`
     SELECT ca.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
       cr.location_address, cr.location_city, cr.location_state, cr.latitude, cr.longitude,
       cr.health_conditions, cr.preferences,
@@ -164,7 +164,7 @@ async function caregiverDashboard(db, userId, res) {
 
   // Upcoming sessions
   const today = new Date().toISOString().split("T")[0];
-  const upcoming = db.prepare(`
+  const upcoming = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       cr.location_address, cr.location_city,
@@ -181,7 +181,7 @@ async function caregiverDashboard(db, userId, res) {
   monthStart.setDate(1);
   const monthStr = monthStart.toISOString().split("T")[0];
 
-  const monthlyStats = db.prepare(`
+  const monthlyStats = await db.prepare(`
     SELECT COUNT(*) as completed_sessions,
       SUM(COALESCE(actual_cost, estimated_cost)) as total_earnings,
       SUM(duration_hours) as total_hours
@@ -189,14 +189,14 @@ async function caregiverDashboard(db, userId, res) {
     WHERE caregiver_id = ? AND scheduled_date >= ? AND status = 'completed'
   `).get(profile.id, monthStr);
 
-  const pending = db.prepare(`
+  const pending = await db.prepare(`
     SELECT SUM(estimated_cost) as pending_earnings
     FROM care_sessions
     WHERE caregiver_id = ? AND status IN ('confirmed', 'pending') AND scheduled_date >= ?
   `).get(profile.id, today);
 
   // Recent reviews
-  const reviews = db.prepare(`
+  const reviews = await db.prepare(`
     SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
     FROM reviews r JOIN users u ON r.family_user_id = u.id
     WHERE r.caregiver_id = ?
@@ -254,10 +254,10 @@ async function caregiverDashboard(db, userId, res) {
 
 // ─── Cared-For Dashboard (Betty's view) ───
 async function careForDashboard(db, userId, res) {
-  const user = db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+  const user = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
 
   // Find care recipient matching this user's name
-  const recipient = db.prepare(`
+  const recipient = await db.prepare(`
     SELECT cr.* FROM care_recipients cr
     WHERE cr.first_name = ? AND cr.last_name = ?
     LIMIT 1
@@ -269,7 +269,7 @@ async function careForDashboard(db, userId, res) {
 
   // All future sessions (calendar data)
   const today = new Date().toISOString().split("T")[0];
-  const sessions = db.prepare(`
+  const sessions = await db.prepare(`
     SELECT cs.*,
       u.first_name || ' ' || u.last_name AS caregiver_name
     FROM care_sessions cs
@@ -281,7 +281,7 @@ async function careForDashboard(db, userId, res) {
   `).all(recipient.id, today);
 
   // Notes
-  const notes = db.prepare(`
+  const notes = await db.prepare(`
     SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
     FROM recipient_notes rn
     JOIN users u ON rn.author_id = u.id

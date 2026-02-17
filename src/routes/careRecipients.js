@@ -12,7 +12,7 @@ router.use(authenticate);
 // List care recipients for the logged-in family user
 router.get("/", requireRole("family", "admin"), async (req, res) => {
   const db = await getDb();
-  const recipients = db.prepare(
+  const recipients = await db.prepare(
     "SELECT * FROM care_recipients WHERE family_user_id = ? ORDER BY created_at DESC"
   ).all(req.user.id);
 
@@ -42,7 +42,7 @@ router.post("/", requireRole("family"), async (req, res) => {
   const db = await getDb();
   const id = uuid();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO care_recipients
     (id, family_user_id, first_name, last_name, age,
      location_address, location_city, location_state, location_zip,
@@ -58,14 +58,14 @@ router.post("/", requireRole("family"), async (req, res) => {
     emergencyContactName || null, emergencyContactPhone || null
   );
 
-  const recipient = db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);
+  const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);
   res.status(201).json({ careRecipient: recipient });
 });
 
 // ─── GET /api/care-recipients/:id ───
 router.get("/:id", requireRole("family", "admin"), async (req, res) => {
   const db = await getDb();
-  const recipient = db.prepare(
+  const recipient = await db.prepare(
     "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
   ).get(req.params.id, req.user.id);
 
@@ -83,7 +83,7 @@ router.get("/:id", requireRole("family", "admin"), async (req, res) => {
 // ─── PUT /api/care-recipients/:id ───
 router.put("/:id", requireRole("family"), async (req, res) => {
   const db = await getDb();
-  const existing = db.prepare(
+  const existing = await db.prepare(
     "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
   ).get(req.params.id, req.user.id);
 
@@ -95,7 +95,7 @@ router.put("/:id", requireRole("family"), async (req, res) => {
     emergencyContactName, emergencyContactPhone,
   } = req.body;
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE care_recipients SET
       first_name = COALESCE(?, first_name),
       last_name = COALESCE(?, last_name),
@@ -109,7 +109,7 @@ router.put("/:id", requireRole("family"), async (req, res) => {
       preferences = COALESCE(?, preferences),
       emergency_contact_name = COALESCE(?, emergency_contact_name),
       emergency_contact_phone = COALESCE(?, emergency_contact_phone),
-      updated_at = datetime('now')
+      updated_at = NOW()
     WHERE id = ?
   `).run(
     firstName, lastName, age,
@@ -121,7 +121,7 @@ router.put("/:id", requireRole("family"), async (req, res) => {
     req.params.id
   );
 
-  const updated = db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
+  const updated = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
   res.json({ careRecipient: updated });
 });
 

@@ -12,7 +12,7 @@ router.get("/:careRecipientId", async (req, res) => {
   const db = await getDb();
   const recipientId = req.params.careRecipientId;
 
-  const notes = db.prepare(`
+  const notes = await db.prepare(`
     SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
     FROM recipient_notes rn
     JOIN users u ON rn.author_id = u.id
@@ -33,12 +33,12 @@ router.post("/", async (req, res) => {
   }
 
   const id = uuid();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type)
     VALUES (?, ?, ?, ?, ?)
   `).run(id, careRecipientId, req.user.id, content, noteType);
 
-  const note = db.prepare(`
+  const note = await db.prepare(`
     SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
     FROM recipient_notes rn JOIN users u ON rn.author_id = u.id WHERE rn.id = ?
   `).get(id);
@@ -50,7 +50,7 @@ router.put("/:id", async (req, res) => {
   const db = await getDb();
   const { content, noteType } = req.body;
 
-  const existing = db.prepare("SELECT * FROM recipient_notes WHERE id = ?").get(req.params.id);
+  const existing = await db.prepare("SELECT * FROM recipient_notes WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ error: "Note not found" });
 
   // Author can edit their own, family can edit any (for spelling/clarity)
@@ -58,12 +58,12 @@ router.put("/:id", async (req, res) => {
     return res.status(403).json({ error: "Not authorized to edit this note" });
   }
 
-  db.prepare(`
-    UPDATE recipient_notes SET content = COALESCE(?, content), note_type = COALESCE(?, note_type), updated_at = datetime('now')
+  await db.prepare(`
+    UPDATE recipient_notes SET content = COALESCE(?, content), note_type = COALESCE(?, note_type), updated_at = NOW()
     WHERE id = ?
   `).run(content, noteType, req.params.id);
 
-  const note = db.prepare(`
+  const note = await db.prepare(`
     SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
     FROM recipient_notes rn JOIN users u ON rn.author_id = u.id WHERE rn.id = ?
   `).get(req.params.id);
@@ -73,14 +73,14 @@ router.put("/:id", async (req, res) => {
 // DELETE /api/notes/:id — delete a note
 router.delete("/:id", async (req, res) => {
   const db = await getDb();
-  const existing = db.prepare("SELECT * FROM recipient_notes WHERE id = ?").get(req.params.id);
+  const existing = await db.prepare("SELECT * FROM recipient_notes WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ error: "Note not found" });
 
   if (existing.author_id !== req.user.id && req.user.role !== "family") {
     return res.status(403).json({ error: "Not authorized" });
   }
 
-  db.prepare("DELETE FROM recipient_notes WHERE id = ?").run(req.params.id);
+  await db.prepare("DELETE FROM recipient_notes WHERE id = ?").run(req.params.id);
   res.json({ success: true });
 });
 

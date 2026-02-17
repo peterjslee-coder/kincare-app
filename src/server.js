@@ -3,7 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const { initializeDatabase } = require("./models/database");
+const { initializeDatabase, getDb } = require("./models/database");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -42,7 +42,7 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     service: "InPlace API",
-    version: "0.1.0",
+    version: "0.2.0",
     timestamp: new Date().toISOString(),
   });
 });
@@ -51,7 +51,7 @@ app.get("/api/health", (req, res) => {
 app.get("/api", (req, res) => {
   res.json({
     name: "InPlace API",
-    version: "0.1.0",
+    version: "0.2.0",
     endpoints: {
       auth: {
         "POST /api/auth/register": "Create a new account",
@@ -105,22 +105,18 @@ async function start() {
   await initializeDatabase();
 
   // Auto-seed if database is empty (first deploy)
-  const { getDb: fetchDb, resetDb } = require("./models/database");
-  const db = await fetchDb();
-  const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get();
+  const db = await getDb();
+  const userCount = await db.prepare("SELECT COUNT(*) as count FROM users").get();
   if (userCount.count === 0) {
     console.log("  Empty database detected — running seed...");
-    require("child_process").execSync("node " + path.join(__dirname, "seed.js"), {
-      stdio: "inherit",
-      env: { ...process.env },
-    });
-    // Reload database from disk after seed child process wrote to it
-    resetDb();
-    console.log("  Database reloaded after seeding");
+    // Run seed in-process (PostgreSQL is shared, no need for child process)
+    const { seed } = require("./seed");
+    await seed();
+    console.log("  Seed complete");
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n  InPlace API v0.1 running on port ${PORT}\n`);
+    console.log(`\n  InPlace API v0.2.0 running on port ${PORT}\n`);
   });
 }
 

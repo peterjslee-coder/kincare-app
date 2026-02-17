@@ -12,7 +12,7 @@ router.get("/conversations", async (req, res) => {
   const userId = req.user.id;
 
   // Get all messages involving this user
-  const allMessages = db.prepare(`
+  const allMessages = await db.prepare(`
     SELECT m.*,
       CASE WHEN m.sender_id = ? THEN m.recipient_id ELSE m.sender_id END AS partner_id
     FROM messages m
@@ -20,7 +20,7 @@ router.get("/conversations", async (req, res) => {
     ORDER BY m.created_at DESC
   `).all(userId, userId, userId);
 
-  // Build conversations from messages in JS (more reliable than sql.js GROUP BY)
+  // Build conversations from messages in JS
   const convMap = {};
   for (const m of allMessages) {
     if (!convMap[m.partner_id]) {
@@ -34,7 +34,7 @@ router.get("/conversations", async (req, res) => {
   // Fetch partner info
   const conversations = [];
   for (const [partnerId, info] of Object.entries(convMap)) {
-    const partner = db.prepare("SELECT id, first_name, last_name, role FROM users WHERE id = ?").get(partnerId);
+    const partner = await db.prepare("SELECT id, first_name, last_name, role FROM users WHERE id = ?").get(partnerId);
     if (partner) {
       conversations.push({
         partnerId: partner.id,
@@ -59,8 +59,8 @@ router.get("/:partnerId", async (req, res) => {
   const userId = req.user.id;
   const partnerId = req.params.partnerId;
 
-  const messages = db.prepare(`
-    SELECT m.*, 
+  const messages = await db.prepare(`
+    SELECT m.*,
       su.first_name AS sender_first_name, su.last_name AS sender_last_name,
       ru.first_name AS recipient_first_name, ru.last_name AS recipient_last_name
     FROM messages m
@@ -72,8 +72,8 @@ router.get("/:partnerId", async (req, res) => {
   `).all(userId, partnerId, partnerId, userId);
 
   // Mark as read
-  db.prepare(`
-    UPDATE messages SET is_read = 1 
+  await db.prepare(`
+    UPDATE messages SET is_read = 1
     WHERE sender_id = ? AND recipient_id = ? AND is_read = 0
   `).run(partnerId, userId);
 
@@ -97,12 +97,12 @@ router.post("/", async (req, res) => {
   }
 
   const id = uuid();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO messages (id, sender_id, recipient_id, content)
     VALUES (?, ?, ?, ?)
   `).run(id, req.user.id, recipientId, content);
 
-  const message = db.prepare("SELECT * FROM messages WHERE id = ?").get(id);
+  const message = await db.prepare("SELECT * FROM messages WHERE id = ?").get(id);
   res.status(201).json({ message });
 });
 

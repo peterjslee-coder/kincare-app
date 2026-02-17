@@ -28,10 +28,10 @@ router.get("/", async (req, res) => {
   query += " ORDER BY af.created_at DESC LIMIT ?";
   params.push(parseInt(limit));
 
-  const activities = db.prepare(query).all(...params);
+  const activities = await db.prepare(query).all(...params);
 
   // Unread count
-  const unreadCount = db.prepare(
+  const unreadCount = await db.prepare(
     "SELECT COUNT(*) as count FROM activity_feed WHERE family_user_id = ? AND is_read = 0"
   ).get(req.user.id);
 
@@ -41,7 +41,7 @@ router.get("/", async (req, res) => {
 // ─── PUT /api/activity/:id/read ───
 router.put("/:id/read", requireRole("family"), async (req, res) => {
   const db = await getDb();
-  db.prepare(
+  await db.prepare(
     "UPDATE activity_feed SET is_read = 1 WHERE id = ? AND family_user_id = ?"
   ).run(req.params.id, req.user.id);
   res.json({ success: true });
@@ -50,7 +50,7 @@ router.put("/:id/read", requireRole("family"), async (req, res) => {
 // ─── PUT /api/activity/read-all ───
 router.put("/read-all", requireRole("family"), async (req, res) => {
   const db = await getDb();
-  db.prepare(
+  await db.prepare(
     "UPDATE activity_feed SET is_read = 1 WHERE family_user_id = ? AND is_read = 0"
   ).run(req.user.id);
   res.json({ success: true });
@@ -66,13 +66,13 @@ router.post("/visit-log", requireRole("caregiver"), async (req, res) => {
     return res.status(400).json({ error: "sessionId and summary required" });
   }
 
-  const profile = db.prepare(
+  const profile = await db.prepare(
     "SELECT id FROM caregiver_profiles WHERE user_id = ?"
   ).get(req.user.id);
 
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
-  const session = db.prepare(
+  const session = await db.prepare(
     "SELECT * FROM care_sessions WHERE id = ? AND caregiver_id = ?"
   ).get(sessionId, profile.id);
 
@@ -80,11 +80,11 @@ router.post("/visit-log", requireRole("caregiver"), async (req, res) => {
 
   const logId = uuid();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO visit_logs
     (id, session_id, caregiver_id, check_in_time, check_out_time,
      summary, mood_rating, tasks_completed, notes)
-    VALUES (?, ?, ?, datetime('now', '-2 hours'), datetime('now'), ?, ?, ?, ?)
+    VALUES (?, ?, ?, NOW() - INTERVAL '2 hours', NOW(), ?, ?, ?, ?)
   `).run(
     logId, sessionId, profile.id,
     summary, moodRating || null,
@@ -93,7 +93,7 @@ router.post("/visit-log", requireRole("caregiver"), async (req, res) => {
   );
 
   // Notify the family
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO activity_feed
     (id, family_user_id, care_recipient_id, event_type, title, message, metadata)
     VALUES (?, ?, ?, 'visit_complete', ?, ?, ?)
@@ -105,11 +105,11 @@ router.post("/visit-log", requireRole("caregiver"), async (req, res) => {
   );
 
   // Update session status
-  db.prepare(
-    "UPDATE care_sessions SET status = 'completed', updated_at = datetime('now') WHERE id = ?"
+  await db.prepare(
+    "UPDATE care_sessions SET status = 'completed', updated_at = NOW() WHERE id = ?"
   ).run(sessionId);
 
-  const log = db.prepare("SELECT * FROM visit_logs WHERE id = ?").get(logId);
+  const log = await db.prepare("SELECT * FROM visit_logs WHERE id = ?").get(logId);
   res.status(201).json({ visitLog: log });
 });
 

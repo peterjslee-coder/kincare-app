@@ -15,15 +15,15 @@ async function seed() {
   await initializeDatabase();
   const db = await getDb();
 
-  // Clear existing data
+  // Clear existing data (reverse dependency order)
   const tables = [
     "caregiver_assignments", "recipient_notes", "messages",
     "visit_photos", "visit_logs", "activity_feed", "reviews",
     "payments", "care_sessions", "availability",
-    "caregiver_profiles", "care_recipients", "users",
+    "caregiver_profiles", "care_recipients", "users", "waitlist",
   ];
   for (const table of tables) {
-    db.prepare(`DELETE FROM ${table}`).run();
+    await db.prepare(`DELETE FROM ${table}`).run();
   }
 
   // ─── Users ───
@@ -37,7 +37,7 @@ async function seed() {
   const bettyUserId = uuid();
 
   // Family user (Pete — Care Team primary)
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(peteId, "pete@inplace.care", passwordHash, "family", "Pete", "Lee", "(626) 555-0142");
@@ -51,14 +51,14 @@ async function seed() {
   ];
 
   for (const [id, email, first, last, phone] of caregiverUsers) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
       VALUES (?, ?, ?, 'caregiver', ?, ?, ?)
     `).run(id, email, passwordHash, first, last, phone);
   }
 
   // Cared-For user (Betty — limited access, controlled by Pete)
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
     VALUES (?, ?, ?, 'care_for', ?, ?, ?)
   `).run(bettyUserId, "betty@inplace.care", passwordHash, "Betty", "Lee", "(540) 555-0100");
@@ -69,12 +69,12 @@ async function seed() {
   const hendersonFamilyId = uuid();
   const patelFamilyId = uuid();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
     VALUES (?, ?, ?, 'family', ?, ?, ?)
   `).run(hendersonFamilyId, "linda@inplace.care", passwordHash, "Linda", "Henderson", "(540) 555-0301");
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
     VALUES (?, ?, ?, 'family', ?, ?, ?)
   `).run(patelFamilyId, "raj@inplace.care", passwordHash, "Raj", "Patel", "(540) 555-0302");
@@ -83,7 +83,7 @@ async function seed() {
 
   // ─── Care Recipient (Betty — Pete's mother) ───
   const bettyId = uuid();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO care_recipients
     (id, family_user_id, first_name, last_name, age,
      location_address, location_city, location_state, location_zip,
@@ -103,7 +103,7 @@ async function seed() {
 
   // ─── Care Recipient (Dorothy Henderson — Linda's mother) ───
   const dorothyId = uuid();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO care_recipients
     (id, family_user_id, first_name, last_name, age,
      location_address, location_city, location_state, location_zip,
@@ -123,7 +123,7 @@ async function seed() {
 
   // ─── Care Recipient (Arun Patel — Raj's father) ───
   const arunId = uuid();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO care_recipients
     (id, family_user_id, first_name, last_name, age,
      location_address, location_city, location_state, location_zip,
@@ -165,7 +165,7 @@ async function seed() {
   ];
 
   for (const [id, userId, bio, years, rate, specs, certs, avail, rating, count, city, state, lat, lng] of profiles) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO caregiver_profiles
       (id, user_id, bio, years_experience, hourly_rate, specialties, certifications,
        is_background_checked, is_available, rating_avg, rating_count,
@@ -178,47 +178,24 @@ async function seed() {
   console.log("✅ Caregiver profiles created (4)");
 
   // ─── Caregiver Assignments ───
-  // Betty's assigned caregivers: Maria (favorite) and James
-  db.prepare(`
-    INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite)
-    VALUES (?, ?, ?, ?, 1, 1)
-  `).run(uuid(), bettyId, peteId, mariaId);
-
-  db.prepare(`
-    INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite)
-    VALUES (?, ?, ?, ?, 1, 0)
-  `).run(uuid(), bettyId, peteId, jamesId);
-
-  // Dorothy's assigned caregivers: Maria and Sarah
-  db.prepare(`
-    INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite)
-    VALUES (?, ?, ?, ?, 1, 1)
-  `).run(uuid(), dorothyId, hendersonFamilyId, mariaId);
-
-  db.prepare(`
-    INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite)
-    VALUES (?, ?, ?, ?, 1, 0)
-  `).run(uuid(), dorothyId, hendersonFamilyId, sarahId);
-
-  // Arun's assigned caregiver: James
-  db.prepare(`
-    INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite)
-    VALUES (?, ?, ?, ?, 1, 0)
-  `).run(uuid(), arunId, patelFamilyId, jamesId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 1)`).run(uuid(), bettyId, peteId, mariaId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), bettyId, peteId, jamesId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 1)`).run(uuid(), dorothyId, hendersonFamilyId, mariaId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), dorothyId, hendersonFamilyId, sarahId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), arunId, patelFamilyId, jamesId);
 
   console.log("✅ Caregiver assignments created (5)");
 
   // ─── Availability Windows ───
   for (const cgId of [mariaId, jamesId, davidId]) {
-    for (let day = 1; day <= 5; day++) {  // Mon–Fri
-      db.prepare(`
+    for (let day = 1; day <= 5; day++) {
+      await db.prepare(`
         INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time)
         VALUES (?, ?, ?, '08:00', '17:00')
       `).run(uuid(), cgId, day);
     }
   }
-  // James also does Saturdays
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time)
     VALUES (?, ?, 6, '09:00', '14:00')
   `).run(uuid(), jamesId);
@@ -239,7 +216,7 @@ async function seed() {
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of sessions) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO care_sessions
       (id, care_recipient_id, family_user_id, caregiver_id, service_type,
        status, scheduled_date, scheduled_time, duration_hours,
@@ -257,7 +234,7 @@ async function seed() {
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of pastSessions) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO care_sessions
       (id, care_recipient_id, family_user_id, caregiver_id, service_type,
        status, scheduled_date, scheduled_time, duration_hours,
@@ -266,7 +243,7 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost, cost);
   }
 
-  // ─── Care Sessions (Henderson/Dorothy — Maria's other client) ───
+  // ─── Care Sessions (Henderson/Dorothy) ───
   const hendersonSessions = [
     [uuid(), dorothyId, hendersonFamilyId, mariaId, "meals", "confirmed", "2026-02-17", "09:00", 2, "Dorothy likes her eggs scrambled, toast lightly done.", 56],
     [uuid(), dorothyId, hendersonFamilyId, mariaId, "companion", "confirmed", "2026-02-20", "14:00", 3, "Card games and afternoon tea. She enjoys rummy.", 84],
@@ -275,7 +252,7 @@ async function seed() {
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of hendersonSessions) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO care_sessions
       (id, care_recipient_id, family_user_id, caregiver_id, service_type,
        status, scheduled_date, scheduled_time, duration_hours,
@@ -284,14 +261,14 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
   }
 
-  // ─── Care Sessions (Patel/Arun — James's other client) ───
+  // ─── Care Sessions (Patel/Arun) ───
   const patelSessions = [
     [uuid(), arunId, patelFamilyId, jamesId, "companion", "confirmed", "2026-02-18", "10:00", 2, "Chess and conversation. Arun prefers quiet activities.", 50],
     [uuid(), arunId, patelFamilyId, jamesId, "rides", "pending", "2026-02-22", "09:00", 1.5, "Physical therapy appointment at 9:30 AM.", 37],
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of patelSessions) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO care_sessions
       (id, care_recipient_id, family_user_id, caregiver_id, service_type,
        status, scheduled_date, scheduled_time, duration_hours,
@@ -319,11 +296,11 @@ async function seed() {
   ];
 
   for (const [id, sessionId, cgId, summary, mood, tasks] of visitLogs) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO visit_logs
       (id, session_id, caregiver_id, check_in_time, check_out_time,
        summary, mood_rating, tasks_completed)
-      VALUES (?, ?, ?, datetime('now', '-2 hours'), datetime('now'), ?, ?, ?)
+      VALUES (?, ?, ?, NOW() - INTERVAL '2 hours', NOW(), ?, ?, ?)
     `).run(id, sessionId, cgId, summary, mood, JSON.stringify(tasks));
   }
 
@@ -348,10 +325,10 @@ async function seed() {
   ];
 
   for (const [id, famId, recipId, type, title, msg, timeOffset] of activities) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO activity_feed
       (id, family_user_id, care_recipient_id, event_type, title, message, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))
+      VALUES (?, ?, ?, ?, ?, ?, NOW() + ?::interval)
     `).run(id, famId, recipId, type, title, msg, timeOffset);
   }
 
@@ -366,7 +343,7 @@ async function seed() {
   ];
 
   for (const [id, sessionId, famId, cgId, rating, comment] of reviews) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO reviews (id, session_id, family_user_id, caregiver_id, rating, comment)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(id, sessionId, famId, cgId, rating, comment);
@@ -376,31 +353,28 @@ async function seed() {
 
   // ─── Messages ───
   const msgs = [
-    // Pete ↔ Maria
     [uuid(), mariaUserId, peteId, "Good morning! Betty is in great spirits today. We just finished breakfast — she had oatmeal with blueberries!", "-4 hours"],
     [uuid(), peteId, mariaUserId, "That's wonderful to hear! How was she feeling this morning?", "-3 hours"],
     [uuid(), mariaUserId, peteId, "She was very alert and chatty. We looked through her photo album and she told me stories about her garden.", "-2 hours"],
     [uuid(), peteId, mariaUserId, "She loves that album! Thank you for spending time with her on that.", "-1 hour"],
-    // Pete ↔ James
     [uuid(), jamesUserId, peteId, "Hi Pete! Just arrived at Betty's. She seems to be doing well today.", "-6 hours"],
     [uuid(), peteId, jamesUserId, "Great, thanks James! She mentioned wanting to do puzzles.", "-5 hours"],
     [uuid(), jamesUserId, peteId, "Yes! We worked on a 500-piece puzzle of a garden scene. She was really focused.", "-4 hours"],
-    // Maria ↔ Betty (caretaker ↔ cared-for)
     [uuid(), mariaUserId, bettyUserId, "Hi Betty! Looking forward to seeing you tomorrow. Is there anything special you'd like for lunch?", "-8 hours"],
     [uuid(), bettyUserId, mariaUserId, "Oh Maria dear, could you make that tomato soup again? It was so good last time!", "-7 hours"],
     [uuid(), mariaUserId, bettyUserId, "Of course! I'll pick up fresh tomatoes on my way. See you at noon! 🍅", "-6 hours"],
   ];
 
   for (const [id, senderId, recipientId, content, timeOffset] of msgs) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO messages (id, sender_id, recipient_id, content, is_read, created_at)
-      VALUES (?, ?, ?, ?, 1, datetime('now', ?))
+      VALUES (?, ?, ?, ?, 1, NOW() + ?::interval)
     `).run(id, senderId, recipientId, content, timeOffset);
   }
 
   console.log("✅ Messages created (10)");
 
-  // ─── Recipient Notes (Betty's notes for upcoming appointments) ───
+  // ─── Recipient Notes ───
   const notes = [
     [uuid(), bettyId, bettyUserId, "Need to pick up: sourdough bread, yogurt, bananas, and cat food for Whiskers", "grocery", "-2 days"],
     [uuid(), bettyId, bettyUserId, "Ask doctor about the new knee pain — started last Tuesday", "medical", "-1 day"],
@@ -409,9 +383,9 @@ async function seed() {
   ];
 
   for (const [id, recipId, authorId, content, noteType, timeOffset] of notes) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now', ?), datetime('now', ?))
+      VALUES (?, ?, ?, ?, ?, NOW() + ?::interval, NOW() + ?::interval)
     `).run(id, recipId, authorId, content, noteType, timeOffset, timeOffset);
   }
 
@@ -422,6 +396,18 @@ async function seed() {
   console.log("  Care Team:  pete@inplace.care  / inplace123");
   console.log("  Caretaker:  maria@inplace.care / inplace123");
   console.log("  Cared-For:  betty@inplace.care / inplace123\n");
+
 }
 
-seed().catch(console.error);
+// Export for in-process seeding from server.js
+module.exports = { seed };
+
+// Run directly if called from CLI (npm run seed)
+if (require.main === module) {
+  seed()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("Seed failed:", err);
+      process.exit(1);
+    });
+}
