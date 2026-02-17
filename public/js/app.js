@@ -107,6 +107,32 @@ const App = () => {
     return <Dashboard onNavigate={setCurrentPage} />;
   };
 
+  // Bottom nav items (max 5 for mobile)
+  const getBottomNavItems = () => {
+    if (role === 'caregiver') {
+      return [
+        { id: 'dashboard', icon: '🩺', label: 'Home' },
+        { id: 'schedule', icon: '📅', label: 'Schedule' },
+        { id: 'messages', icon: '💬', label: 'Messages' },
+        { id: 'account', icon: '👤', label: 'Account' },
+      ];
+    }
+    if (role === 'care_for') {
+      return [
+        { id: 'dashboard', icon: '🏠', label: 'Home' },
+        { id: 'messages', icon: '💬', label: 'Messages' },
+        { id: 'account', icon: '👤', label: 'Account' },
+      ];
+    }
+    return [
+      { id: 'dashboard', icon: '🏠', label: 'Home' },
+      { id: 'schedule', icon: '📅', label: 'Schedule' },
+      { id: 'caregivers', icon: '👨‍⚕️', label: 'Care' },
+      { id: 'messages', icon: '💬', label: 'Messages' },
+      { id: 'account', icon: '👤', label: 'More' },
+    ];
+  };
+
   return (
     <div className="app-container">
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
@@ -151,6 +177,15 @@ const App = () => {
         </button>
         {renderPage()}
       </main>
+      {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
+      <nav className="bottom-nav">
+        {getBottomNavItems().map(item => (
+          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)}>
+            <span className="bottom-nav-icon">{item.icon}</span>
+            <span className="bottom-nav-label">{item.label}</span>
+          </button>
+        ))}
+      </nav>
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
     </div>
   );
