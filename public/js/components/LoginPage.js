@@ -112,6 +112,9 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate }) => {
           </div>
           <button type="submit" className="login-button" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</button>
         </form>
+        <div style={{ textAlign: 'right', marginTop: '8px' }}>
+          <a onClick={() => onNavigate('forgot-password')} style={{ fontSize: '13px', color: '#1b6b5a', cursor: 'pointer' }}>Forgot password?</a>
+        </div>
         <div className="login-back-link">
           <a onClick={() => onNavigate('splash')}>← Back to home</a>
         </div>

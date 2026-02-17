@@ -36,6 +36,7 @@ app.use("/api/messages", require("./routes/messages"));
 app.use("/api/notes", require("./routes/notes"));
 app.use("/api/assignments", require("./routes/assignments"));
 app.use("/api/waitlist", require("./routes/waitlist"));
+app.use("/api/password-reset", require("./routes/passwordReset"));
 
 // ─── Health check ───
 app.get("/api/health", (req, res) => {

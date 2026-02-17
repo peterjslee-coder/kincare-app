@@ -5,11 +5,21 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [resetToken, setResetToken] = useState(null);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token');
     if (savedToken) {
       AUTH_TOKEN = savedToken;
+    }
+    // Check for password reset token in URL
+    const params = new URLSearchParams(window.location.search);
+    const rt = params.get('reset');
+    if (rt) {
+      setResetToken(rt);
+      setAppState('reset-password');
+      // Clean URL without reload
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
@@ -38,6 +48,8 @@ const App = () => {
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} />;
   if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
   if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} />;
+  if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;
+  if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
 
   const role = currentUser?.role || 'family';
 
