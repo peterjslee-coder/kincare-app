@@ -4,6 +4,11 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
   const [waitlistStatus, setWaitlistStatus] = React.useState(null); // 'success' | 'exists' | 'error'
   const [waitlistMsg, setWaitlistMsg] = React.useState('');
   const [waitlistSubmitting, setWaitlistSubmitting] = React.useState(false);
+  const [showInstallTip, setShowInstallTip] = React.useState(false);
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  const showInstallBtn = !isStandalone; // show on all non-installed contexts
 
   const handleWaitlistSubmit = async (e) => {
     e.preventDefault();
@@ -40,6 +45,47 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         </div>
         <div className="splash-nav-links">
           <button onClick={() => document.getElementById('caregivers-join').scrollIntoView({ behavior: 'smooth' })} style={{ background: 'transparent', color: '#e8724a', border: '2px solid #e8724a' }}>For Caregivers</button>
+          {showInstallBtn && (
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => {
+                if (isIOS) {
+                  setShowInstallTip(!showInstallTip);
+                } else if (window.__pwaInstallPrompt) {
+                  window.__pwaInstallPrompt.prompt();
+                } else {
+                  setShowInstallTip(!showInstallTip);
+                }
+              }} style={{ background: 'transparent', color: '#1b6b5a', border: '2px solid #1b6b5a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Install App
+              </button>
+              {showInstallTip && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: '8px',
+                  background: 'white', borderRadius: '12px', padding: '16px 20px',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.15)', width: '280px', zIndex: 1000,
+                  fontSize: '14px', color: '#333', lineHeight: 1.6,
+                }}>
+                  <div style={{ fontWeight: 600, marginBottom: '8px', color: '#1b6b5a' }}>
+                    {isIOS ? 'Install on iPhone/iPad' : 'Install InPlace'}
+                  </div>
+                  {isIOS ? (
+                    <div>
+                      <p style={{ margin: '0 0 8px' }}>1. Tap the <strong>Share</strong> button <span style={{ fontSize: '16px' }}>⬆</span> at the bottom of Safari</p>
+                      <p style={{ margin: '0 0 8px' }}>2. Scroll down and tap <strong>"Add to Home Screen"</strong></p>
+                      <p style={{ margin: 0 }}>3. Tap <strong>"Add"</strong> in the top right</p>
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0 }}>Tap the menu (three dots) in your browser and select <strong>"Install app"</strong> or <strong>"Add to Home Screen"</strong>.</p>
+                  )}
+                  <button onClick={() => setShowInstallTip(false)} style={{
+                    marginTop: '12px', padding: '6px 16px', background: '#f0f0f0', border: 'none',
+                    borderRadius: '6px', fontSize: '13px', cursor: 'pointer', color: '#666',
+                  }}>Got it</button>
+                </div>
+              )}
+            </div>
+          )}
           <button onClick={() => onNavigate('login')}>Sign In</button>
           <button onClick={() => onNavigate('register')}>Get Started</button>
         </div>
@@ -99,7 +145,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       </section>
 
       {/* ── Photo Strip ── */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0', height: '300px', overflow: 'hidden' }}>
+      <section className="photo-strip">
         <div style={{
           backgroundImage: 'url(https://images.unsplash.com/photo-1577368211130-4bbd0181ddf0?w=600&q=80)',
           backgroundSize: 'cover', backgroundPosition: 'center',
@@ -192,7 +238,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
 
       {/* ── Personal Story ── */}
       <section style={{ padding: '80px 32px', background: '#f8f9fa' }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto', display: 'grid', gridTemplateColumns: '200px 1fr', gap: '48px', alignItems: 'center' }}>
+        <div className="personal-story-grid" style={{ maxWidth: '800px', margin: '0 auto' }}>
           <div style={{
             width: '200px', height: '200px', borderRadius: '50%', overflow: 'hidden',
             backgroundImage: 'url(https://images.unsplash.com/photo-1543269865-cbf427effbad?w=400&q=80)',
@@ -298,8 +344,8 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             ))}
           </div>
 
-          {/* Two-Column: Benefits + Photo */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center', marginBottom: '56px' }}>
+          {/* Benefits + Photo */}
+          <div className="caregiver-benefits-grid" style={{ marginBottom: '56px' }}>
             <div>
               <h3 style={{ fontSize: '24px', color: '#1b6b5a', marginBottom: '24px' }}>Why Caregivers Choose inPlace</h3>
               {[
@@ -319,9 +365,9 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
               ))}
             </div>
             <div style={{
-              borderRadius: '16px', overflow: 'hidden', height: '500px',
-              backgroundImage: 'url(https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?w=600&q=80)',
-              backgroundSize: 'cover', backgroundPosition: 'center',
+              borderRadius: '16px', overflow: 'hidden', minHeight: '360px',
+              backgroundImage: 'url(https://images.unsplash.com/photo-1516733725897-1aa73b87c8e8?w=800&q=80)',
+              backgroundSize: 'cover', backgroundPosition: 'center 30%',
               boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
             }}></div>
           </div>

@@ -54,6 +54,27 @@ router.get("/conversations", async (req, res) => {
   res.json({ conversations });
 });
 
+// GET /api/messages/contacts — list users available to message
+// NOTE: must be before /:partnerId to avoid route collision
+router.get("/contacts", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+
+  // Return all users except the current user
+  const users = await db.prepare(`
+    SELECT id, first_name, last_name, role FROM users WHERE id != ?
+    ORDER BY first_name ASC
+  `).all(userId);
+
+  const contacts = users.map(u => ({
+    id: u.id,
+    name: `${u.first_name} ${u.last_name}`,
+    role: u.role,
+  }));
+
+  res.json({ contacts });
+});
+
 // GET /api/messages/:partnerId — get messages with a specific user
 router.get("/:partnerId", async (req, res) => {
   const db = await getDb();

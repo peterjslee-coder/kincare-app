@@ -126,6 +126,15 @@
 - Mock database layer for tests — no PostgreSQL needed to run `npm test`
 - Server.js refactored: `require.main === module` guard so tests don't auto-listen
 
+### v0.7.1 — Messages Redesign & Mobile Polish (2026-02-17)
+- Complete Messages redesign: iMessage/WhatsApp-style UI with conversation list → chat → back
+- Mobile-first: shows either conversation list or chat (not both side-by-side on phones)
+- "New Message" button (+) with contacts endpoint to start chats with anyone in care network
+- Colored avatar initials, unread badges, relative timestamps, SVG send button
+- "For Caregivers" splash section: responsive grid, warmer caregiver photo
+- Photo strip, personal story, hero section: all responsive on mobile
+- PWA "Install App" button in splash nav with iOS-specific Share instructions
+
 ### v0.7.0 — Recurring Sessions (2026-02-17)
 - Weekly and biweekly recurring care session booking
 - `recurrence_rule` and `recurrence_group_id` columns on `care_sessions` table
