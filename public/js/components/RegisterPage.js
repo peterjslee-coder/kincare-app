@@ -1,4 +1,4 @@
-const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
+const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate }) => {
   const [track, setTrack] = useState(null);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -55,8 +55,36 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
     if (step > 1) setStep(step - 1);
   };
 
-  const handleComplete = () => {
-    alert('Registration coming soon — please use demo credentials: pete@inplace.care / inplace123');
+  const [registering, setRegistering] = useState(false);
+  const [regError, setRegError] = useState('');
+
+  const handleComplete = async () => {
+    setRegistering(true);
+    setRegError('');
+    try {
+      const role = track === 'caregiver' ? 'caregiver' : 'family';
+      const res = await apiFetch('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          role
+        })
+      });
+      if (res.error) {
+        setRegError(res.error);
+        setRegistering(false);
+        return;
+      }
+      setAuthToken(res.token);
+      onLogin(res.user);
+    } catch (err) {
+      setRegError(err.message || 'Registration failed. Please try again.');
+      setRegistering(false);
+    }
   };
 
   if (!track) {
@@ -199,7 +227,8 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
                   <p><strong>Loved One:</strong> {formData.lovedOneName}, {formData.lovedOneAge}</p>
                   <p><strong>Care Needs:</strong> {Object.keys(formData.careNeeds).filter(k => formData.careNeeds[k]).join(', ') || 'None selected'}</p>
                 </div>
-                <button type="button" className="btn btn-primary" onClick={handleComplete} style={{ width: '100%' }}>Complete Registration</button>
+                {regError && <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{regError}</div>}
+                <button type="button" className="btn btn-primary" onClick={handleComplete} disabled={registering} style={{ width: '100%', opacity: registering ? 0.6 : 1 }}>{registering ? 'Creating Account...' : 'Complete Registration'}</button>
               </div>
             )}
           </>
@@ -309,7 +338,8 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
                   <p><strong>Certification:</strong> {formData.certType}</p>
                   <p><strong>Available Days:</strong> {Object.keys(formData.availability).filter(k => formData.availability[k]).join(', ') || 'None selected'}</p>
                 </div>
-                <button type="button" className="btn btn-primary" onClick={handleComplete} style={{ width: '100%' }}>Submit Application</button>
+                {regError && <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{regError}</div>}
+                <button type="button" className="btn btn-primary" onClick={handleComplete} disabled={registering} style={{ width: '100%', opacity: registering ? 0.6 : 1 }}>{registering ? 'Creating Account...' : 'Submit Application'}</button>
               </div>
             )}
           </>

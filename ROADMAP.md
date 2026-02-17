@@ -58,27 +58,54 @@
 ### v0.4.1 — Schedule Fix
 - Restored calendar heat map (accidentally lost during rebrand sync)
 
+### v0.4.2 — Mobile Sidebar
+- Responsive hamburger menu sidebar for mobile screens
+- Sidebar collapses to overlay on narrow viewports
+
+### v0.4.3 — Notifications & Polish (2026-02-16)
+- Waitlist email notifications via Resend HTTP API
+- MyAccount page now displays actual logged-in user data (was showing hardcoded)
+- Caregiver recruitment section added to splash page
+- Registration wizard: back navigation between steps + form validation
+
+### v0.5.0 — PostgreSQL Migration (2026-02-17)
+- Replaced SQLite with PostgreSQL (pg library + connection pooling)
+- Custom query wrapper: auto-converts `?` placeholders to `$1, $2, ...` for PostgreSQL compatibility
+- All 10 route files updated with `await` on every DB call + PostgreSQL datetime syntax
+- Seed runs in-process on empty database (no child process needed)
+- Railway Postgres service wired via `${{Postgres.DATABASE_URL}}`
+- Data now persists across deploys — no more losing accounts/sessions on redeploy
+
 ---
 
-## Next Up — Demo Polish & Infrastructure
+## Next Up — Onboarding & User Accounts
 
-Priority: **HIGH** — Make the demo bulletproof and prepare for real users.
+Priority: **HIGH** — Let real people create accounts and use the app.
 
-- [ ] **PostgreSQL migration:** Replace SQLite with PostgreSQL on Railway for persistent data across deploys
-- [ ] **Production auth:** Migrate to real auth service (Auth0, Clerk, or Supabase Auth) for password reset, email verification, persistent accounts
-- [ ] **Mobile-responsive UI:** Sidebar → bottom nav on phone, PWA add-to-homescreen
+### Phase 1: Wire Registration (next)
+The registration wizard UI already exists (multi-step form with family/caregiver tracks, form validation, back navigation). It just needs to be wired to the backend `/api/auth/register` route.
+
+- [ ] **Wire registration to API:** Connect RegisterPage form submission to `POST /api/auth/register`. Auto-login after successful registration and redirect to dashboard.
+- [ ] **Password reset flow:** Forgot password link on login page → email with reset token via Resend → reset password page. Requires a `password_reset_tokens` table.
+- [ ] **Email verification (optional):** Send verification email on registration. Can be deferred — not blocking for family beta.
+
+### Phase 2: Demo Polish
 - [ ] **Loading spinners & empty states:** No blank screens during API fetches
-- [ ] **Toast notifications:** Success/error feedback on actions
-- [ ] **MyAccount persistence:** Wire settings to API
+- [ ] **Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.)
+- [ ] **MyAccount persistence:** Wire notification preferences and profile edits to API (PUT /api/auth/me)
+
+### Phase 3: Mobile-First
+- [ ] **Mobile-responsive UI:** Sidebar → bottom nav on phone, PWA add-to-homescreen
+- [ ] **Touch-friendly interactions:** Larger tap targets, swipe gestures for navigation
 
 ---
 
 ## Future — Production Path
 
-Priority: **MEDIUM** — After infrastructure is solid.
+Priority: **MEDIUM** — After onboarding and mobile are solid.
 
 - [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
-- [ ] **Input validation & rate limiting:** Lock down API routes
+- [ ] **Input validation & rate limiting:** Lock down API routes before real users touch them
 - [ ] **Geocoding & distance:** Real address → lat/lng for caregiver matching
 - [ ] **Recurring sessions:** Weekly/biweekly repeating care sessions
 - [ ] **Visit photos:** File upload for visit documentation

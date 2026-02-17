@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InPlace - On-Demand Care for Your Loved Ones</title>
-  <link rel="stylesheet" href="/css/styles.css?v=0.4.4">
+  <link rel="stylesheet" href="/css/styles.css?v=0.5.1">
 </head>
 <body>
   <div id="root"></div>
@@ -43,7 +43,7 @@
       ];
       try {
         var sources = await Promise.all(
-          scripts.map(function(url) { return fetch(url + '?v=0.4.4').then(function(r) { return r.text(); }); })
+          scripts.map(function(url) { return fetch(url + '?v=0.5.1').then(function(r) { return r.text(); }); })
         );
         var combined = sources.join('\n;\n');
         var compiled = Babel.transform(combined, { presets: ['react'] }).code;

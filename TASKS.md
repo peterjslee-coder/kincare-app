@@ -24,8 +24,9 @@
 
 > These are the infrastructure changes needed before real users (even family/friends) can use the app. Order roughly reflects dependencies. See ROADMAP.md for the full picture.
 
-- [ ] **PostgreSQL migration:** Replace SQLite with PostgreSQL on Railway. Accounts and data must persist across deploys. This unblocks everything else.
-- [ ] **Production auth:** Migrate from hand-rolled JWT to a real auth service (Auth0, Clerk, Supabase Auth, or Firebase Auth). Must support: password reset, email verification, session invalidation, persistent accounts across iterations.
+- [x] **PostgreSQL migration:** ✅ Done (v0.5.0). PostgreSQL on Railway with persistent data across deploys.
+- [ ] **Wire registration to API:** Registration wizard UI exists but `handleComplete` just shows an alert. Wire it to `POST /api/auth/register`, auto-login after success. This is the #1 blocker for real users.
+- [ ] **Password reset flow:** Forgot password link → email reset token via Resend → reset page. Needs `password_reset_tokens` table.
 - [ ] **Mobile-responsive UI:** Sidebar → bottom nav on phone. This is the single biggest UX blocker for phone beta. Consider PWA (add-to-homescreen) as the first mobile path — avoids app store review.
 - [ ] **Stripe Connect integration:** Wire payments table to Stripe Connect for marketplace payouts. Families pay, caregivers get paid, platform takes a fee.
 - [ ] **Input validation & rate limiting:** Lock down API routes before real users touch them. Validate all inputs, add rate limiting on auth endpoints.
@@ -44,6 +45,16 @@
 
 
 ## Done
+
+### PostgreSQL Migration (v0.5.0)
+- [x] **PostgreSQL on Railway:** Replaced SQLite with PostgreSQL via `pg` library. Custom query wrapper auto-converts `?` to `$1, $2, ...` placeholders. All 10 route files updated with async/await + PostgreSQL datetime syntax. Data persists across deploys.
+- [x] **Waitlist email notifications:** Resend HTTP API sends notification email when someone joins the waitlist.
+- [x] **MyAccount shows real user data:** MyAccount page now displays logged-in user's actual data instead of hardcoded values.
+- [x] **Caregiver recruitment on splash:** Added "For Caregivers" section to the splash page.
+- [x] **Registration wizard improvements:** Back navigation between steps + form validation on all fields.
+
+### Mobile Sidebar (v0.4.2)
+- [x] **Responsive hamburger menu:** Sidebar collapses to hamburger overlay on mobile screens.
 
 ### Schedule Fix (v0.4.1)
 - [x] **Restored calendar heat map:** Full 294-line Schedule.js with calendar grid, saturation shading, and session detail panel was accidentally replaced during rebrand sync. Restored from git history.

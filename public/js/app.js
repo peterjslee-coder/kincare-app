@@ -37,7 +37,7 @@ const App = () => {
 
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} />;
   if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
-  if (appState === 'register') return <RegisterPage onNavigate={handleNavigate} />;
+  if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} />;
 
   const role = currentUser?.role || 'family';
 
