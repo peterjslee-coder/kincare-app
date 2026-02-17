@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { validateSession } = require("../middleware/validate");
 
 const router = express.Router();
 router.use(authenticate);
@@ -65,7 +66,7 @@ router.get("/", async (req, res) => {
 
 // ─── POST /api/sessions ───
 // Create a new care request
-router.post("/", requireRole("family"), async (req, res) => {
+router.post("/", requireRole("family"), validateSession, async (req, res) => {
   const {
     careRecipientId, serviceType, scheduledDate, scheduledTime,
     durationHours = 2, specialInstructions,

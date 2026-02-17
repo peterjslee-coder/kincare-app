@@ -172,19 +172,20 @@ const App = () => {
 
   const renderPage = () => {
     // Role-aware page rendering
+    // key={currentPage} forces full remount on page switch — fixes stale state bugs (e.g., calendar heat map)
     if (currentPage === 'dashboard') {
-      if (role === 'caregiver') return <CaretakerHub />;
-      if (role === 'care_for') return <CaredForView />;
-      return <Dashboard onNavigate={setCurrentPage} />;
+      if (role === 'caregiver') return <CaretakerHub key={currentPage} />;
+      if (role === 'care_for') return <CaredForView key={currentPage} />;
+      return <Dashboard key={currentPage} onNavigate={setCurrentPage} />;
     }
-    if (currentPage === 'care-profile') return <CareProfile />;
-    if (currentPage === 'schedule') return <Schedule />;
-    if (currentPage === 'caregivers') return <Caregivers />;
-    if (currentPage === 'activity') return <ActivityFeed />;
-    if (currentPage === 'recipients') return <CareRecipients />;
-    if (currentPage === 'messages') return <Messages />;
-    if (currentPage === 'account') return <MyAccount />;
-    return <Dashboard onNavigate={setCurrentPage} />;
+    if (currentPage === 'care-profile') return <CareProfile key={currentPage} />;
+    if (currentPage === 'schedule') return <Schedule key={currentPage} />;
+    if (currentPage === 'caregivers') return <Caregivers key={currentPage} />;
+    if (currentPage === 'activity') return <ActivityFeed key={currentPage} />;
+    if (currentPage === 'recipients') return <CareRecipients key={currentPage} />;
+    if (currentPage === 'messages') return <Messages key={currentPage} />;
+    if (currentPage === 'account') return <MyAccount key={currentPage} />;
+    return <Dashboard key={currentPage} onNavigate={setCurrentPage} />;
   };
 
   // Bottom nav items (max 5 for mobile)

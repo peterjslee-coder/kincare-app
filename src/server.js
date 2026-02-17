@@ -3,14 +3,38 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const rateLimit = require("express-rate-limit");
 const { initializeDatabase, getDb } = require("./models/database");
+const { limitBodySize } = require("./middleware/validate");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── Middleware ───
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
+app.use(limitBodySize(100000));
+
+// ─── Rate Limiting ───
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,                   // 20 attempts per window
+  message: { error: "Too many attempts — please try again in 15 minutes" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
+app.use("/api/password-reset", authLimiter);
+
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,  // 1 minute
+  max: 120,                  // 120 requests per minute
+  message: { error: "Too many requests — please slow down" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/", apiLimiter);
 
 // ─── Serve Frontend ───
 app.use(express.static(path.join(__dirname, "../public")));
@@ -117,7 +141,7 @@ async function start() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n  InPlace API v0.2.0 running on port ${PORT}\n`);
+    console.log(`\n  InPlace API v0.6.1 running on port ${PORT}\n`);
   });
 }
 

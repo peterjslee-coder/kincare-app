@@ -3,11 +3,12 @@ const bcrypt = require("bcryptjs");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { generateToken, authenticate } = require("../middleware/auth");
+const { validateRegister, validateLogin, validateProfileUpdate } = require("../middleware/validate");
 
 const router = express.Router();
 
 // ─── POST /api/auth/register ───
-router.post("/register", async (req, res) => {
+router.post("/register", validateRegister, async (req, res) => {
   try {
     const { email, password, firstName, lastName, phone, role = "family" } = req.body;
 
@@ -44,13 +45,9 @@ router.post("/register", async (req, res) => {
 });
 
 // ─── POST /api/auth/login ───
-router.post("/login", async (req, res) => {
+router.post("/login", validateLogin, async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password required" });
-    }
 
     const db = await getDb();
     const user = await db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(email);
@@ -90,7 +87,7 @@ router.get("/me", authenticate, async (req, res) => {
 });
 
 // ─── PUT /api/auth/me ───
-router.put("/me", authenticate, async (req, res) => {
+router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
   try {
     const { firstName, lastName, phone, notificationPrefs } = req.body;
     const db = await getDb();

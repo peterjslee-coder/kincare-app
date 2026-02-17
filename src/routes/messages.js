@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { validateMessage } = require("../middleware/validate");
 
 const router = express.Router();
 router.use(authenticate);
@@ -88,7 +89,7 @@ router.get("/:partnerId", async (req, res) => {
 });
 
 // POST /api/messages — send a message
-router.post("/", async (req, res) => {
+router.post("/", validateMessage, async (req, res) => {
   const db = await getDb();
   const { recipientId, content } = req.body;
 

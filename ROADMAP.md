@@ -106,13 +106,19 @@
 - Sibling logins: David Lee + Susan Lee as family users with Betty care, sessions, assignments, messages
 - Quick-login buttons for siblings on LoginPage
 
+### v0.6.1 — Production Hardening (2026-02-17)
+- Calendar heat map stale bug fixed (`key={currentPage}` on all page components)
+- Input validation middleware: email format, password strength, phone format, length limits, sanitization
+- Rate limiting: auth endpoints (20/15min), general API (120/min)
+- JSON body size limit (100KB)
+- Validators wired to: register, login, profile update, messages, sessions
+
 ---
 
-## Next Up — Production Hardening
+## Next Up — Beta Readiness
 
-Priority: **HIGH** — Lock down for real users.
+Priority: **HIGH** — Final steps before real users.
 
-- [ ] **Input validation & rate limiting:** Validate all inputs, rate limit auth endpoints
 - [ ] **Email verification:** Send verification email on registration
 - [ ] **Tests:** Auth flow, session booking, critical paths
 

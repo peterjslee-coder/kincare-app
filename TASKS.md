@@ -4,7 +4,7 @@
 
 ## Bugs
 
-- [ ] **Calendar heat map sometimes stale on tab switch:** Navigating away from Schedule and back occasionally shows a blank calendar until logout/login. Likely a React re-mount issue — component state may not reset on page switch. Fix: add `key={currentPage}` to force unmount, or add navigation dependency to useEffect.
+- [x] ~~**Calendar heat map sometimes stale on tab switch:** Fixed in v0.6.1 by adding `key={currentPage}` to all page components in renderPage(), forcing full remount on navigation.~~
 
 
 ## Features — Up Next
@@ -29,7 +29,7 @@
 - [x] **Password reset flow:** ✅ Done (v0.5.1). Forgot password → email via Resend → reset page. password_reset_tokens table, ForgotPasswordPage & ResetPasswordPage components.
 - [x] **Mobile-responsive UI:** ✅ Done (v0.5.2). Bottom nav bar replaces sidebar on mobile (≤768px). Role-aware icons, safe-area padding for notched phones.
 - [ ] **Stripe Connect integration:** Wire payments table to Stripe Connect for marketplace payouts. Families pay, caregivers get paid, platform takes a fee.
-- [ ] **Input validation & rate limiting:** Lock down API routes before real users touch them. Validate all inputs, add rate limiting on auth endpoints.
+- [x] **Input validation & rate limiting:** ✅ Done (v0.6.1). express-rate-limit on auth (20/15min) + general API (120/min). Validation middleware for register, login, profile update, messages, sessions.
 - [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox or Google Maps API. Caregiver matching by actual driving distance, not just city name.
 - [ ] **Build step for frontend:** Babel-in-browser won't scale. Move to Vite or similar when the component count or bundle size demands it. Not urgent yet.
 - [ ] **Tests:** At minimum: auth flow, session booking, payment flow. Needed before any deploy that touches real money.
@@ -47,6 +47,11 @@
 
 
 ## Done
+
+### Production Hardening (v0.6.1)
+- [x] **Calendar heat map stale bug:** Added `key={currentPage}` to all page components in renderPage(), forcing full React remount on navigation. Fixes blank calendar on tab switch.
+- [x] **Input validation:** New `src/middleware/validate.js` with validators for register, login, profile update, messages, sessions. Email format, password strength (8-128 chars), phone format, string length limits, input sanitization (trim + null byte removal).
+- [x] **Rate limiting:** `express-rate-limit` — auth endpoints (20 attempts per 15 min), general API (120 req/min). JSON body size limit (100KB).
 
 ### PWA & Mobile Polish (v0.6.0)
 - [x] **PWA add-to-homescreen:** Web app manifest, service worker (cache-first for static, network-first for API), install banner with `beforeinstallprompt`, offline indicator, Apple meta tags. Icons: 192x192, 512x512, apple-touch-icon.
