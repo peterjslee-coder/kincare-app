@@ -2,8 +2,10 @@ const Caregivers = window.Caregivers = () => {
   const [caregivers, setCaregivers] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [recipients, setRecipients] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [schedulingCaregiver, setSchedulingCaregiver] = useState(null);
   const [activeTab, setActiveTab] = useState('assigned');
+  const { showToast } = useToast();
 
   const fetchData = async () => {
     try {
@@ -27,6 +29,7 @@ const Caregivers = window.Caregivers = () => {
     } catch (err) {
       console.error('Fetch caregivers error:', err);
     }
+    setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -37,25 +40,28 @@ const Caregivers = window.Caregivers = () => {
         method: 'POST',
         body: JSON.stringify({ caregiverProfileId, careRecipientId: recipientId }),
       });
-      if (res?.ok) await fetchData();
+      if (res?.ok) { await fetchData(); showToast('Caregiver assigned', 'success'); }
+      else showToast('Failed to assign caregiver', 'error');
     } catch (err) {
       console.error('Assign error:', err);
+      showToast('Failed to assign caregiver', 'error');
     }
   };
 
   const handleUnassign = async (assignmentId) => {
     try {
       const res = await apiFetch(`/api/assignments/${assignmentId}`, { method: 'DELETE' });
-      if (res?.ok) await fetchData();
+      if (res?.ok) { await fetchData(); showToast('Caregiver removed', 'success'); }
     } catch (err) {
       console.error('Unassign error:', err);
+      showToast('Failed to remove caregiver', 'error');
     }
   };
 
   const handleToggleFavorite = async (assignmentId) => {
     try {
       const res = await apiFetch(`/api/assignments/${assignmentId}/favorite`, { method: 'PUT' });
-      if (res?.ok) await fetchData();
+      if (res?.ok) { await fetchData(); showToast('Favorite updated', 'success'); }
     } catch (err) {
       console.error('Favorite toggle error:', err);
     }
@@ -69,6 +75,8 @@ const Caregivers = window.Caregivers = () => {
   });
 
   const assignedCaregiverIds = [...new Set(assignments.map(a => a.caregiver_profile_id))];
+
+  if (loading) return <LoadingSpinner text="Loading caregivers..." />;
 
   return (
     <>

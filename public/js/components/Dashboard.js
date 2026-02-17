@@ -34,11 +34,11 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   };
 
   if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading dashboard...</div>;
+    return <LoadingSpinner text="Loading dashboard..." />;
   }
 
   if (!data) {
-    return <div style={{ padding: '40px', textAlign: 'center', color: '#c00' }}>Failed to load dashboard</div>;
+    return <EmptyState icon="⚠️" title="Couldn't load dashboard" text="Please try refreshing the page." />;
   }
 
   const stats = data.stats || {};

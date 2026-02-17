@@ -1,5 +1,6 @@
 const Schedule = window.Schedule = () => {
   const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -18,6 +19,7 @@ const Schedule = window.Schedule = () => {
       } catch (error) {
         console.error('Error fetching sessions:', error);
       }
+      setLoading(false);
     };
     fetchSessions();
   }, []);
@@ -94,6 +96,8 @@ const Schedule = window.Schedule = () => {
 
   // Sessions for selected date
   const selectedSessions = selectedDate ? (sessionsByDate[selectedDate] || []) : [];
+
+  if (loading) return <LoadingSpinner text="Loading schedule..." />;
 
   return (
     <>

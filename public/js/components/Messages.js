@@ -88,7 +88,7 @@ const Messages = window.Messages = () => {
   };
 
   if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading messages...</div>;
+    return <LoadingSpinner text="Loading messages..." />;
   }
 
   return (

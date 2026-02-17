@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useCallback, createContext, useContext } = React;
 const API_BASE = window.location.origin;
 
 let AUTH_TOKEN = null;
@@ -146,4 +146,65 @@ const caregiverMatchesService = window.caregiverMatchesService = (caregiverName,
   };
   const matchSkills = serviceMap[serviceType] || [];
   return avail.skills.some(s => matchSkills.some(ms => s.toLowerCase().includes(ms.toLowerCase())));
+};
+
+// ─── Loading Spinner Component ───
+const LoadingSpinner = window.LoadingSpinner = ({ text = 'Loading...' }) => {
+  return React.createElement('div', { className: 'loading-spinner-container' },
+    React.createElement('div', { className: 'loading-spinner' }),
+    React.createElement('div', { className: 'loading-spinner-text' }, text)
+  );
+};
+
+// ─── Empty State Component ───
+const EmptyState = window.EmptyState = ({ icon = '📭', title, text }) => {
+  return React.createElement('div', { className: 'empty-state' },
+    React.createElement('div', { className: 'empty-state-icon' }, icon),
+    title && React.createElement('div', { className: 'empty-state-title' }, title),
+    text && React.createElement('div', { className: 'empty-state-text' }, text)
+  );
+};
+
+// ─── Toast Notification System ───
+const ToastContext = window.ToastContext = createContext(null);
+
+const useToast = window.useToast = () => {
+  const ctx = useContext(ToastContext);
+  if (!ctx) {
+    // Fallback: return a no-op if context is not available
+    return { showToast: () => {} };
+  }
+  return ctx;
+};
+
+const ToastProvider = window.ToastProvider = ({ children }) => {
+  const [toasts, setToasts] = useState([]);
+  const toastId = useRef(0);
+
+  const showToast = useCallback((message, type = 'success') => {
+    const id = ++toastId.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3500);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const icons = { success: '✓', error: '✕', info: 'ℹ' };
+
+  return React.createElement(ToastContext.Provider, { value: { showToast } },
+    children,
+    React.createElement('div', { className: 'toast-container' },
+      toasts.map(t =>
+        React.createElement('div', { key: t.id, className: `toast toast-${t.type}` },
+          React.createElement('span', { className: 'toast-icon' }, icons[t.type] || icons.info),
+          React.createElement('span', { className: 'toast-message' }, t.message),
+          React.createElement('button', { className: 'toast-close', onClick: () => removeToast(t.id) }, '×')
+        )
+      )
+    )
+  );
 };

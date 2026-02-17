@@ -1,6 +1,8 @@
 const ActivityFeed = window.ActivityFeed = () => {
   const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [expandedActivity, setExpandedActivity] = useState(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const fetchActivities = async () => {
@@ -13,6 +15,7 @@ const ActivityFeed = window.ActivityFeed = () => {
       } catch (error) {
         console.error('Error fetching activities:', error);
       }
+      setLoading(false);
     };
     fetchActivities();
   }, []);
@@ -46,9 +49,12 @@ const ActivityFeed = window.ActivityFeed = () => {
       const response = await apiFetch('/api/activity/read-all', { method: 'PUT' });
       if (response?.ok) {
         setActivities(prev => prev.map(a => ({ ...a, is_read: 1 })));
+        showToast('All notifications marked as read', 'success');
       }
     } catch (err) { console.error('Error marking all as read:', err); }
   };
+
+  if (loading) return <LoadingSpinner text="Loading activity feed..." />;
 
   const unreadCount = activities.filter(a => !a.is_read).length;
 
@@ -65,6 +71,9 @@ const ActivityFeed = window.ActivityFeed = () => {
           </button>
         )}
       </div>
+      {activities.length === 0 ? (
+        <EmptyState icon="📢" title="No activity yet" text="Activity updates will appear here as care sessions are scheduled and completed." />
+      ) : (
       <div className="card">
         <div>
           {activities.map((activity, idx) => (
@@ -93,6 +102,7 @@ const ActivityFeed = window.ActivityFeed = () => {
           ))}
         </div>
       </div>
+      )}
     </>
   );
 };

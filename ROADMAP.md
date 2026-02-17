@@ -89,21 +89,23 @@
 - Safe-area padding for notched phones (iPhone X+)
 - Desktop sidebar completely unchanged
 
+### v0.5.3 — Demo Polish (2026-02-17)
+- Loading spinners: Animated CSS spinner component on all pages during API fetches
+- Empty states: Friendly messages and icons when no data exists (activity feed, caregivers, etc.)
+- Toast notifications: Global success/error/info toasts with auto-dismiss. ToastProvider + useToast hook.
+- MyAccount persistence: PUT /api/auth/me endpoint for profile edits (name, phone) and notification preferences
+- MyAccount edit mode: Inline form with Cancel/Save, auto-saving notification toggles
+
 ---
 
-## Next Up — Demo Polish & PWA
+## Next Up — PWA & Mobile Polish
 
-Priority: **HIGH** — Polish the experience before sharing with family.
+Priority: **HIGH** — Make the app installable on phones.
 
-### Phase 1: Demo Polish (next)
-- [ ] **Loading spinners & empty states:** No blank screens during API fetches
-- [ ] **Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.)
-- [ ] **MyAccount persistence:** Wire notification preferences and profile edits to API (PUT /api/auth/me)
-- [ ] **Email verification (optional):** Send verification email on registration. Can be deferred.
-
-### Phase 2: PWA & Mobile Polish
+### Phase 1: PWA
 - [ ] **PWA add-to-homescreen:** Web app manifest, service worker, home screen icon
 - [ ] **Touch-friendly interactions:** Larger tap targets, swipe gestures for navigation
+- [ ] **Email verification (optional):** Send verification email on registration. Can be deferred.
 
 ---
 

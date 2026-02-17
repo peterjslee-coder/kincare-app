@@ -1,5 +1,6 @@
 const CareRecipients = window.CareRecipients = () => {
   const [recipients, setRecipients] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -9,6 +10,7 @@ const CareRecipients = window.CareRecipients = () => {
     emergencyContactName: '', emergencyContactPhone: ''
   });
   const [saveMsg, setSaveMsg] = useState('');
+  const { showToast } = useToast();
 
   const fetchRecipients = async () => {
     const res = await apiFetch('/api/care-recipients');
@@ -17,6 +19,7 @@ const CareRecipients = window.CareRecipients = () => {
       const list = data.careRecipients || data || [];
       setRecipients(Array.isArray(list) ? list : []);
     }
+    setLoading(false);
   };
 
   useEffect(() => { fetchRecipients(); }, []);
@@ -82,15 +85,19 @@ const CareRecipients = window.CareRecipients = () => {
         response = await apiFetch('/api/care-recipients', { method: 'POST', body: JSON.stringify(payload) });
       }
       if (response?.ok) {
-        setSaveMsg(editingId ? 'Recipient updated!' : 'Recipient added!');
+        const msg = editingId ? 'Recipient updated!' : 'Recipient added!';
+        setSaveMsg(msg);
+        showToast(msg, 'success');
         await fetchRecipients();
         setTimeout(() => { setShowAddForm(false); setEditingId(null); resetForm(); setSaveMsg(''); }, 1500);
       } else {
         setSaveMsg('Error saving — please try again.');
+        showToast('Error saving recipient', 'error');
       }
     } catch (err) {
       console.error('Save error:', err);
       setSaveMsg('Error saving — please try again.');
+      showToast('Error saving recipient', 'error');
     }
   };
 
@@ -104,6 +111,8 @@ const CareRecipients = window.CareRecipients = () => {
       return Array.isArray(parsed) ? parsed.join(', ') : (val || '');
     } catch { return val || ''; }
   };
+
+  if (loading) return <LoadingSpinner text="Loading care recipients..." />;
 
   return (
     <div>

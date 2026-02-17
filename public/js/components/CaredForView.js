@@ -68,8 +68,8 @@ const CaredForView = window.CaredForView = () => {
     }
   };
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading...</div>;
-  if (!data) return <div style={{ padding: '40px', textAlign: 'center', color: '#c00' }}>Failed to load</div>;
+  if (loading) return <LoadingSpinner text="Loading your view..." />;
+  if (!data) return <EmptyState icon="⚠️" title="Couldn't load your page" text="Please try refreshing." />;
 
   const sessions = data.sessions || [];
   const notes = data.notes || [];

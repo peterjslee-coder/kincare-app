@@ -1,9 +1,11 @@
 const CareProfile = window.CareProfile = () => {
   const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const { showToast } = useToast();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -18,6 +20,7 @@ const CareProfile = window.CareProfile = () => {
       } catch (error) {
         console.error('Error fetching profile:', error);
       }
+      setLoading(false);
     };
     fetchProfile();
   }, []);
@@ -91,20 +94,24 @@ const CareProfile = window.CareProfile = () => {
         });
         setEditing(false);
         setSaveMsg('Profile saved successfully!');
+        showToast('Profile saved successfully!', 'success');
         setTimeout(() => setSaveMsg(''), 3000);
       } else {
         setSaveMsg('Error saving — please try again.');
+        showToast('Error saving profile', 'error');
       }
     } catch (err) {
       console.error('Save error:', err);
       setSaveMsg('Error saving — please try again.');
+      showToast('Error saving profile', 'error');
     }
     setSaving(false);
   };
 
   const ed = (field, val) => setEditData({ ...editData, [field]: val });
 
-  if (!profile) return <div className="page-header"><h1 className="page-title">Care Profile</h1><p>Loading...</p></div>;
+  if (loading) return <LoadingSpinner text="Loading care profile..." />;
+  if (!profile) return <EmptyState icon="👵" title="No care recipient found" text="Add a care recipient to get started." />;
 
   const healthConditions = parseJsonField(profile.health_conditions);
   const medications = parseJsonField(profile.medications);

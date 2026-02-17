@@ -191,4 +191,7 @@ const App = () => {
   );
 };
 
-ReactDOM.render(<App />, document.getElementById('root'));
+ReactDOM.render(
+  React.createElement(ToastProvider, null, React.createElement(App)),
+  document.getElementById('root')
+);

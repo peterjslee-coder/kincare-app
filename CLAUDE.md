@@ -114,7 +114,7 @@ All tables use TEXT primary keys (UUIDs). Timestamps are TIMESTAMPTZ via `NOW()`
 - Logo: "iP" monogram in rounded teal square (DM Sans 800)
 - Font: System fonts (-apple-system, BlinkMacSystemFont, Segoe UI, Roboto)
 - Layout: Sidebar (240px) + scrollable main content
-- Mobile: Not currently responsive
+- Mobile: Bottom nav bar on ≤768px, sidebar on desktop
 
 ## API Patterns
 
@@ -163,11 +163,9 @@ The production PostgreSQL database is a Railway service. The `DATABASE_URL` env 
 
 ## Known Limitations
 
-1. Registration wizard UI exists but doesn't create real accounts yet (shows alert)
-2. No password reset flow
-3. No input validation or rate limiting
-4. No tests
-5. No real-time updates (polling only)
-6. Not mobile-responsive
-7. Payments table exists but no payment processing
-8. Visit photos table exists but no file upload support
+1. No input validation or rate limiting on API routes
+2. No tests
+3. No real-time updates (polling only)
+4. Payments table exists but no payment processing (Stripe Connect planned)
+5. Visit photos table exists but no file upload support
+6. No PWA / add-to-homescreen yet

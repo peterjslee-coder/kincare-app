@@ -81,12 +81,49 @@ router.post("/login", async (req, res) => {
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
   const user = await db.prepare(
-    "SELECT id, email, role, first_name, last_name, phone, avatar_url, created_at FROM users WHERE id = ?"
+    "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, created_at FROM users WHERE id = ?"
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
 
   res.json({ user });
+});
+
+// ─── PUT /api/auth/me ───
+router.put("/me", authenticate, async (req, res) => {
+  try {
+    const { firstName, lastName, phone, notificationPrefs } = req.body;
+    const db = await getDb();
+
+    // Build dynamic update
+    const fields = [];
+    const values = [];
+
+    if (firstName !== undefined) { fields.push("first_name = ?"); values.push(firstName); }
+    if (lastName !== undefined) { fields.push("last_name = ?"); values.push(lastName); }
+    if (phone !== undefined) { fields.push("phone = ?"); values.push(phone || null); }
+    if (notificationPrefs !== undefined) {
+      fields.push("notification_prefs = ?");
+      values.push(JSON.stringify(notificationPrefs));
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    values.push(req.user.id);
+    await db.prepare(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`).run(...values);
+
+    // Return updated user
+    const user = await db.prepare(
+      "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, created_at FROM users WHERE id = ?"
+    ).get(req.user.id);
+
+    res.json({ user });
+  } catch (err) {
+    console.error("Update profile error:", err);
+    res.status(500).json({ error: "Failed to update profile" });
+  }
 });
 
 module.exports = router;

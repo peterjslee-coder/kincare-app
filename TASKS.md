@@ -12,12 +12,12 @@
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
 - [ ] **Sibling logins:** Add Pete's brother (David) and sister (Susan) with generic credentials so they can see activity and use messaging. Emergency contacts for both already exist in the system.
-- [ ] **Loading spinners & empty states:** Add loading indicators and empty-state messages so nothing looks broken during API fetches.
-- [ ] **MyAccount persistence:** Wire notification preferences and profile edits to API (PUT /api/auth/me). Currently UI-only.
+- [x] ~~**Loading spinners & empty states:** Animated spinner + empty states on all pages.~~ Done in v0.5.3.
+- [x] ~~**MyAccount persistence:** Profile edits and notification prefs wired to PUT /api/auth/me.~~ Done in v0.5.3.
 - [ ] **Visit photos:** Add file upload endpoint (multipart/form-data → local storage or S3), display photos in visit logs.
 - [ ] **Recurring sessions:** Allow scheduling weekly/biweekly repeating care sessions.
 - [x] ~~**Mobile responsive layout:** Sidebar → bottom nav on mobile.~~ Done in v0.5.2.
-- [ ] **Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.).
+- [x] ~~**Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.).~~ Done in v0.5.3.
 
 
 ## Production Path — Beta on Phone
@@ -45,6 +45,11 @@
 
 
 ## Done
+
+### Demo Polish (v0.5.3)
+- [x] **Loading spinners & empty states:** Animated CSS spinner on every page during API fetches. Empty-state illustrations with helpful messages when no data exists. Consistent pattern across Dashboard, CareProfile, Schedule, Caregivers, Activity Feed, Messages, CareRecipients, MyAccount, CaretakerHub, CaredForView.
+- [x] **Toast notifications:** Global toast notification system (success/error/info). ToastProvider wraps the app, `useToast()` hook available in all components. Toasts for profile saves, caregiver assign/unassign, mark-all-read, recipient save, notification prefs. Auto-dismiss after 3.5s, mobile-friendly positioning.
+- [x] **MyAccount persistence:** PUT /api/auth/me endpoint for updating profile (name, phone) and notification preferences. MyAccount page now has Edit Profile mode with inline form. Notification toggles auto-save to database. New `notification_prefs` column on users table.
 
 ### Onboarding & Mobile (v0.5.1–v0.5.2)
 - [x] **Wire registration to API:** RegisterPage handleComplete() now calls POST /api/auth/register, auto-logs in on success, shows inline errors. Both family and caregiver tracks supported.

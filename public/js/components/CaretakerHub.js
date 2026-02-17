@@ -52,8 +52,8 @@ const CaretakerHub = window.CaretakerHub = () => {
     setSubmittingLog(false);
   };
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading...</div>;
-  if (!data) return <div style={{ padding: '40px', textAlign: 'center', color: '#c00' }}>Failed to load dashboard</div>;
+  if (loading) return <LoadingSpinner text="Loading your dashboard..." />;
+  if (!data) return <EmptyState icon="⚠️" title="Couldn't load dashboard" text="Please try refreshing the page." />;
 
   const profile = data.profile || {};
   const assignments = data.assignments || [];
