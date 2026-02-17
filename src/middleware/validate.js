@@ -172,13 +172,17 @@ function validateMessage(req, res, next) {
  * Middleware: validate session creation input
  */
 function validateSession(req, res, next) {
-  const { careRecipientId, serviceType, scheduledDate, scheduledTime, durationHours } = req.body;
+  const { careRecipientId, serviceType, scheduledDate, scheduledTime, durationHours, recurrenceRule, recurrenceWeeks } = req.body;
 
   if (!careRecipientId) {
     return res.status(400).json({ error: "Care recipient required" });
   }
 
-  const validTypes = ["meals", "companion", "rides", "errands", "medical", "personal_care", "housekeeping"];
+  const validTypes = [
+    "meals", "companion", "rides", "errands", "medical",
+    "personal_care", "housekeeping", "companionship",
+    "meal_prep", "transportation", "health_wellness", "full_day",
+  ];
   if (!serviceType || !validTypes.includes(serviceType)) {
     return res.status(400).json({ error: `Service type must be one of: ${validTypes.join(", ")}` });
   }
@@ -193,6 +197,21 @@ function validateSession(req, res, next) {
 
   if (durationHours !== undefined && (typeof durationHours !== "number" || durationHours < 0.5 || durationHours > 24)) {
     return res.status(400).json({ error: "Duration must be between 0.5 and 24 hours" });
+  }
+
+  // Validate recurrence fields
+  if (recurrenceRule !== undefined) {
+    const validRules = ["weekly", "biweekly"];
+    if (!validRules.includes(recurrenceRule)) {
+      return res.status(400).json({ error: "Recurrence rule must be 'weekly' or 'biweekly'" });
+    }
+  }
+
+  if (recurrenceWeeks !== undefined) {
+    const weeks = parseInt(recurrenceWeeks);
+    if (isNaN(weeks) || weeks < 2 || weeks > 12) {
+      return res.status(400).json({ error: "Recurrence weeks must be between 2 and 12" });
+    }
   }
 
   if (req.body.specialInstructions) {

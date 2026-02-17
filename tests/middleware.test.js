@@ -89,7 +89,7 @@ describe('Auth Middleware', () => {
 });
 
 describe('Validation Middleware', () => {
-  const { validateRegister, validateLogin, validateMessage } = require('../src/middleware/validate');
+  const { validateRegister, validateLogin, validateMessage, validateSession } = require('../src/middleware/validate');
 
   function mockReqRes(body) {
     return {
@@ -188,6 +188,82 @@ describe('Validation Middleware', () => {
         content: 'Hello!',
       });
       validateMessage(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  describe('validateSession', () => {
+    const validSession = {
+      careRecipientId: 'cr-1',
+      serviceType: 'companionship',
+      scheduledDate: '2026-03-01',
+      scheduledTime: '09:00',
+      durationHours: 2,
+    };
+
+    it('should pass valid session without recurrence', () => {
+      const { req, res, next } = mockReqRes({ ...validSession });
+      validateSession(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should pass valid session with weekly recurrence', () => {
+      const { req, res, next } = mockReqRes({
+        ...validSession,
+        recurrenceRule: 'weekly',
+        recurrenceWeeks: 4,
+      });
+      validateSession(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should pass valid session with biweekly recurrence', () => {
+      const { req, res, next } = mockReqRes({
+        ...validSession,
+        recurrenceRule: 'biweekly',
+        recurrenceWeeks: 8,
+      });
+      validateSession(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should reject invalid recurrence rule', () => {
+      const { req, res, next } = mockReqRes({
+        ...validSession,
+        recurrenceRule: 'monthly',
+      });
+      validateSession(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should reject recurrence weeks out of range', () => {
+      const { req, res, next } = mockReqRes({
+        ...validSession,
+        recurrenceRule: 'weekly',
+        recurrenceWeeks: 20,
+      });
+      validateSession(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should accept all new service types', () => {
+      const types = ['companionship', 'personal_care', 'meal_prep', 'transportation', 'health_wellness', 'full_day'];
+      types.forEach(serviceType => {
+        const { req, res, next } = mockReqRes({ ...validSession, serviceType });
+        validateSession(req, res, next);
+        expect(next).toHaveBeenCalled();
+      });
+    });
+
+    it('should reject missing care recipient', () => {
+      const { req, res, next } = mockReqRes({ ...validSession, careRecipientId: undefined });
+      validateSession(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should reject invalid date format', () => {
+      const { req, res, next } = mockReqRes({ ...validSession, scheduledDate: 'March 1' });
+      validateSession(req, res, next);
       expect(res.status).toHaveBeenCalledWith(400);
     });
   });

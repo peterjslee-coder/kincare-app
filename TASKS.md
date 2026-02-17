@@ -15,7 +15,7 @@
 - [x] ~~**Loading spinners & empty states:** Animated spinner + empty states on all pages.~~ Done in v0.5.3.
 - [x] ~~**MyAccount persistence:** Profile edits and notification prefs wired to PUT /api/auth/me.~~ Done in v0.5.3.
 - [ ] **Visit photos:** Add file upload endpoint (multipart/form-data → local storage or S3), display photos in visit logs.
-- [ ] **Recurring sessions:** Allow scheduling weekly/biweekly repeating care sessions.
+- [x] ~~**Recurring sessions:** Allow scheduling weekly/biweekly repeating care sessions.~~ Done in v0.7.0.
 - [x] ~~**Mobile responsive layout:** Sidebar → bottom nav on mobile.~~ Done in v0.5.2.
 - [x] ~~**Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.).~~ Done in v0.5.3.
 
@@ -33,7 +33,7 @@
 - [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox or Google Maps API. Caregiver matching by actual driving distance, not just city name.
 - [ ] **Build step for frontend:** Babel-in-browser won't scale. Move to Vite or similar when the component count or bundle size demands it. Not urgent yet.
 - [x] ~~**Email verification:** ✅ Done (v0.6.2). Verification email sent on registration via Resend. Verify endpoint, resend endpoint, frontend banner for unverified users. Centralized email utility (`src/utils/email.js`) replaces direct Resend usage across all routes.~~
-- [x] ~~**Tests:** ✅ Done (v0.6.2). Jest + supertest — 45 tests across 4 suites: auth (register, login, profile, email verification), waitlist, health/API, middleware (auth, validation).~~
+- [x] ~~**Tests:** ✅ Done (v0.6.2, expanded v0.7.0). Jest + supertest — 53 tests across 4 suites: auth (register, login, profile, email verification), waitlist, health/API, middleware (auth, validation, session recurrence).~~
 
 
 ## Demo Credentials
@@ -48,6 +48,11 @@
 
 
 ## Done
+
+### Recurring Sessions (v0.7.0)
+- [x] **Recurring session booking:** Weekly and biweekly repeating care sessions. `recurrence_rule` and `recurrence_group_id` columns on care_sessions. `generateRecurringDates()` helper. POST /api/sessions creates multiple linked sessions. DELETE /api/sessions/recurring/:groupId cancels future sessions in a series.
+- [x] **Recurring UI:** RequestCareModal step 2 has One-time / Weekly / Every 2 weeks toggle + weeks selector (2-12). Review step shows recurrence summary. Schedule shows 🔁 badge on recurring session cards.
+- [x] **Expanded validation:** validateSession now accepts all frontend service types (companionship, personal_care, meal_prep, transportation, health_wellness, full_day) and validates recurrence fields. 8 new tests (53 total).
 
 ### Email Verification & Tests (v0.6.2)
 - [x] **Centralized email utility:** New `src/utils/email.js` with `sendEmail()` and `brandedHtml()`. All routes (auth, password reset, waitlist) now use shared utility. Sandbox mode detection with clear warnings. FROM_EMAIL env var support for verified domain senders.

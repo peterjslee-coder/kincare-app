@@ -5,6 +5,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [time, setTime] = useState('');
   const [duration, setDuration] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [recurrence, setRecurrence] = useState('none');
+  const [recurrenceWeeks, setRecurrenceWeeks] = useState('4');
   const [selectedCaregiver, setSelectedCaregiver] = useState(null);
   const [matchedCaregivers, setMatchedCaregivers] = useState([]);
 
@@ -73,15 +75,21 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   };
 
   const handleSubmit = async () => {
+    const recurrenceLabel = recurrence !== 'none' ? ` (${recurrence}, ${recurrenceWeeks} sessions)` : '';
     const response = await apiFetch('/api/request-care', {
       method: 'POST',
-      body: JSON.stringify({ serviceType, date, time, duration, specialInstructions: instructions, caregiver: selectedCaregiver?.name })
+      body: JSON.stringify({
+        serviceType, date, time, duration, specialInstructions: instructions,
+        caregiver: selectedCaregiver?.name,
+        recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
+        recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
+      })
     });
     if (response?.ok) {
-      alert(`Care request submitted!\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
+      alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
       onClose();
     } else {
-      alert(`Booking confirmed!\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
+      alert(`Booking confirmed!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
       onClose();
     }
   };
@@ -152,6 +160,43 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <label className="modal-label">Preferred Start Time</label>
               <input type="time" className="modal-input" value={time} onChange={(e) => setTime(e.target.value)} />
             </div>
+            <div className="modal-section">
+              <label className="modal-label">Repeat</label>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                {[
+                  { value: 'none', label: 'One-time' },
+                  { value: 'weekly', label: 'Weekly' },
+                  { value: 'biweekly', label: 'Every 2 weeks' },
+                ].map(opt => (
+                  <button key={opt.value} type="button"
+                    onClick={() => setRecurrence(opt.value)}
+                    style={{
+                      flex: 1, padding: '10px 8px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                      border: recurrence === opt.value ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                      background: recurrence === opt.value ? '#e8f5e9' : '#fff',
+                      color: recurrence === opt.value ? '#1b6b5a' : '#666',
+                      cursor: 'pointer',
+                    }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {recurrence !== 'none' && (
+              <div className="modal-section">
+                <label className="modal-label">For how many weeks?</label>
+                <select className="modal-select" value={recurrenceWeeks} onChange={(e) => setRecurrenceWeeks(e.target.value)}>
+                  <option value="2">2 weeks</option>
+                  <option value="4">4 weeks</option>
+                  <option value="6">6 weeks</option>
+                  <option value="8">8 weeks</option>
+                  <option value="12">12 weeks</option>
+                </select>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                  This will create {recurrenceWeeks} {recurrence === 'weekly' ? 'weekly' : 'biweekly'} sessions starting {date || 'on the selected date'}.
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -226,6 +271,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 <div style={{ color: '#666' }}>Date</div><div>{date}</div>
                 <div style={{ color: '#666' }}>Time</div><div>{formatTime12(time)}</div>
                 <div style={{ color: '#666' }}>Duration</div><div>{duration} hour(s)</div>
+                {recurrence !== 'none' && (
+                  <><div style={{ color: '#666' }}>Repeat</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>{recurrence === 'weekly' ? 'Weekly' : 'Every 2 weeks'} for {recurrenceWeeks} sessions</div></>
+                )}
                 <div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{selectedCaregiver ? selectedCaregiver.name : 'Best available'}</div>
                 {selectedCaregiver && (
                   <><div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${parseInt((selectedCaregiver.rate || '$30').replace(/[^0-9]/g, '')) * parseInt(duration)}</div></>

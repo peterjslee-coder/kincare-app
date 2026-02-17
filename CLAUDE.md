@@ -167,7 +167,7 @@ The production PostgreSQL database is a Railway service. The `DATABASE_URL` env 
 - `npm run dev` — Dev with --watch (backend auto-restart, frontend just refresh browser)
 - `npm run seed` — Reset & populate demo data
 - `npm run setup` — Seed + start combined
-- `npm test` — Run Jest test suite (45 tests, no database needed)
+- `npm test` — Run Jest test suite (53 tests, no database needed)
 
 ## Known Limitations
 

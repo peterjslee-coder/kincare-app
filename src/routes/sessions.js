@@ -64,12 +64,27 @@ router.get("/", async (req, res) => {
   res.json({ sessions });
 });
 
+// ─── Helper: generate recurring dates ───
+function generateRecurringDates(startDate, rule, weeks) {
+  const dates = [];
+  const start = new Date(startDate + "T12:00:00");
+  const interval = rule === "biweekly" ? 14 : 7; // weekly or biweekly
+
+  for (let i = 0; i < weeks; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i * interval);
+    dates.push(d.toISOString().split("T")[0]);
+  }
+  return dates;
+}
+
 // ─── POST /api/sessions ───
-// Create a new care request
+// Create a new care request (single or recurring)
 router.post("/", requireRole("family"), validateSession, async (req, res) => {
   const {
     careRecipientId, serviceType, scheduledDate, scheduledTime,
     durationHours = 2, specialInstructions,
+    recurrenceRule, recurrenceWeeks,
   } = req.body;
 
   if (!careRecipientId || !serviceType || !scheduledDate || !scheduledTime) {
@@ -94,39 +109,92 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   const baseRate = rates[serviceType] || 28;
   const estimatedCost = baseRate * durationHours;
 
-  const id = uuid();
+  // Determine dates to create
+  const validRules = ["weekly", "biweekly"];
+  const isRecurring = recurrenceRule && validRules.includes(recurrenceRule);
+  const weeks = Math.min(Math.max(parseInt(recurrenceWeeks) || 4, 2), 12);
+  const dates = isRecurring
+    ? generateRecurringDates(scheduledDate, recurrenceRule, weeks)
+    : [scheduledDate];
 
-  await db.prepare(`
-    INSERT INTO care_sessions
-    (id, care_recipient_id, family_user_id, service_type, status,
-     scheduled_date, scheduled_time, duration_hours,
-     special_instructions, estimated_cost)
-    VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
-  `).run(
-    id, careRecipientId, req.user.id, serviceType,
-    scheduledDate, scheduledTime, durationHours,
-    specialInstructions || null, estimatedCost
-  );
+  const recurrenceGroupId = isRecurring ? uuid() : null;
+  const createdSessions = [];
+
+  for (const sessionDate of dates) {
+    const id = uuid();
+    await db.prepare(`
+      INSERT INTO care_sessions
+      (id, care_recipient_id, family_user_id, service_type, status,
+       scheduled_date, scheduled_time, duration_hours,
+       special_instructions, estimated_cost, recurrence_rule, recurrence_group_id)
+      VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, careRecipientId, req.user.id, serviceType,
+      sessionDate, scheduledTime, durationHours,
+      specialInstructions || null, estimatedCost,
+      isRecurring ? recurrenceRule : null,
+      recurrenceGroupId
+    );
+    createdSessions.push(id);
+  }
 
   // Create activity feed entry
   const serviceLabels = {
     meals: "Meals & Groceries",
     rides: "Rides & Errands",
     companion: "Companionship",
+    companionship: "Companionship",
+    personal_care: "Personal Care",
+    housekeeping: "Light Housekeeping",
+    meal_prep: "Meal Preparation",
+    transportation: "Transportation",
+    health_wellness: "Health & Wellness",
     full_day: "Full Day Care",
   };
 
+  const recurrenceLabel = isRecurring ? ` (${recurrenceRule}, ${dates.length} sessions)` : "";
   await db.prepare(`
     INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message)
     VALUES (?, ?, ?, 'session_booked', ?, ?)
   `).run(
     uuid(), req.user.id, careRecipientId,
-    `${serviceLabels[serviceType]} requested`,
-    `Session booked for ${scheduledDate} at ${scheduledTime}`
+    `${serviceLabels[serviceType] || serviceType} requested${recurrenceLabel}`,
+    isRecurring
+      ? `Recurring ${recurrenceRule} sessions booked starting ${scheduledDate} at ${scheduledTime} (${dates.length} sessions)`
+      : `Session booked for ${scheduledDate} at ${scheduledTime}`
   );
 
-  const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(id);
-  res.status(201).json({ session });
+  // Return first session for single bookings, all for recurring
+  if (isRecurring) {
+    const sessions = [];
+    for (const sid of createdSessions) {
+      const s = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(sid);
+      sessions.push(s);
+    }
+    res.status(201).json({ sessions, recurrenceGroupId, count: sessions.length });
+  } else {
+    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(createdSessions[0]);
+    res.status(201).json({ session });
+  }
+});
+
+// ─── DELETE /api/sessions/recurring/:groupId ───
+// Cancel all future sessions in a recurring group
+router.delete("/recurring/:groupId", requireRole("family"), async (req, res) => {
+  const db = await getDb();
+  const today = new Date().toISOString().split("T")[0];
+
+  // Only cancel future pending/confirmed sessions in this group belonging to this user
+  const result = await db.prepare(`
+    UPDATE care_sessions
+    SET status = 'cancelled', cancellation_reason = 'Recurring series cancelled', updated_at = NOW()
+    WHERE recurrence_group_id = ?
+      AND family_user_id = ?
+      AND scheduled_date >= ?
+      AND status IN ('pending', 'confirmed')
+  `).run(req.params.groupId, req.user.id, today);
+
+  res.json({ cancelled: result.changes, recurrenceGroupId: req.params.groupId });
 });
 
 // ─── POST /api/sessions/:id/match ───

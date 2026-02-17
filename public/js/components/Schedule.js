@@ -240,6 +240,11 @@ const Schedule = window.Schedule = () => {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {s.recurrence_rule && (
+                    <span style={{ background: '#ede7f6', color: '#5e35b1', padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>
+                      {s.recurrence_rule === 'weekly' ? '🔁 Weekly' : '🔁 Biweekly'}
+                    </span>
+                  )}
                   <span style={getStatusBadge(s.status)}>{s.status}</span>
                   <span style={{ color: '#999', fontSize: 16 }}>{expandedSession === s.id ? '▾' : '▸'}</span>
                 </div>

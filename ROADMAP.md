@@ -126,6 +126,17 @@
 - Mock database layer for tests — no PostgreSQL needed to run `npm test`
 - Server.js refactored: `require.main === module` guard so tests don't auto-listen
 
+### v0.7.0 — Recurring Sessions (2026-02-17)
+- Weekly and biweekly recurring care session booking
+- `recurrence_rule` and `recurrence_group_id` columns on `care_sessions` table
+- `generateRecurringDates()` helper generates session dates at weekly/biweekly intervals
+- POST /api/sessions creates multiple sessions with shared `recurrence_group_id` for recurring bookings
+- DELETE /api/sessions/recurring/:groupId cancels all future pending/confirmed sessions in a series
+- RequestCareModal step 2: One-time / Weekly / Every 2 weeks toggle + weeks selector (2-12)
+- Schedule calendar: 🔁 Weekly / 🔁 Biweekly badge on recurring session cards
+- Expanded service types in validation (companionship, meal_prep, transportation, health_wellness, full_day)
+- Test suite expanded to 53 tests (8 new session validation tests including recurrence)
+
 ---
 
 ## Next Up — Marketplace & Growth
@@ -140,7 +151,6 @@ Priority: **MEDIUM** — Build out marketplace capabilities.
 
 - [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
 - [ ] **Geocoding & distance:** Real address → lat/lng for caregiver matching
-- [ ] **Recurring sessions:** Weekly/biweekly repeating care sessions
 - [ ] **Visit photos:** File upload for visit documentation
 - [ ] **Real-time updates:** WebSocket or SSE for activity feed
 - [ ] **Build step for frontend:** Move to Vite when component count demands it
