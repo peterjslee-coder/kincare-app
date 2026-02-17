@@ -39,6 +39,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
           <span><span className="logo-in">in</span><span className="logo-place">Place</span></span>
         </div>
         <div className="splash-nav-links">
+          <button onClick={() => document.getElementById('caregivers-join').scrollIntoView({ behavior: 'smooth' })} style={{ background: 'transparent', color: '#e8724a', border: '2px solid #e8724a' }}>For Caregivers</button>
           <button onClick={() => onNavigate('login')}>Sign In</button>
           <button onClick={() => onNavigate('register')}>Get Started</button>
         </div>
@@ -61,7 +62,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             <span style={{ color: '#e8724a' }}>Most of Them Are Doing It Alone.</span>
           </h1>
           <p className="hero-subtitle" style={{ fontSize: '20px', maxWidth: '700px', margin: '0 auto 40px', opacity: 0.92 }}>
-            InPlace is on-demand home care that matches families with vetted caregivers in hours, not weeks. Think of it as the missing infrastructure for aging in place.
+            inPlace is on-demand home care that matches families with vetted caregivers in hours, not weeks. Think of it as the missing infrastructure for aging in place.
           </p>
           <div className="hero-cta">
             <button onClick={() => onNavigate('login')}>View Live Demo</button>
@@ -118,7 +119,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '20px' }}>The Solution</h2>
           <p style={{ fontSize: '20px', color: '#333', lineHeight: 1.7, marginBottom: '48px' }}>
-            InPlace is an on-demand platform that matches families with vetted, background-checked caregivers — by the hour, by the visit, on your schedule. Families set the terms. Caregivers get fair pay and flexible work. Everyone gets transparency.
+            inPlace is an on-demand platform that matches families with vetted, background-checked caregivers — by the hour, by the visit, on your schedule. Families set the terms. Caregivers get fair pay and flexible work. Everyone gets transparency.
           </p>
           <div className="step-grid" style={{ maxWidth: '900px' }}>
             <div className="step-card">
@@ -171,7 +172,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       {/* ── The Business Model ── */}
       <section style={{ padding: '80px 32px', background: '#fff' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <h2 style={{ fontSize: '36px', color: '#1b6b5a', textAlign: 'center', marginBottom: '48px' }}>How InPlace Makes Money</h2>
+          <h2 style={{ fontSize: '36px', color: '#1b6b5a', textAlign: 'center', marginBottom: '48px' }}>How inPlace Makes Money</h2>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', justifyContent: 'center' }}>
             <div style={{ padding: '40px', background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
               <div style={{ fontSize: '16px', fontWeight: 600, color: '#1b6b5a', marginBottom: '12px' }}>Pay-Per-Use, Not Subscription</div>
@@ -182,7 +183,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             <div style={{ padding: '40px', background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
               <div style={{ fontSize: '16px', fontWeight: 600, color: '#1b6b5a', marginBottom: '12px' }}>Platform Commission</div>
               <p style={{ fontSize: '15px', color: '#555', lineHeight: 1.6 }}>
-                InPlace takes a 20% commission on each transaction. Caregivers keep 80% and get paid within 48 hours. Both sides get a better deal than traditional agencies.
+                inPlace takes a 20% commission on each transaction. Caregivers keep 80% and get paid within 48 hours. Both sides get a better deal than traditional agencies.
               </p>
             </div>
           </div>
@@ -201,7 +202,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
           <div>
             <h2 style={{ fontSize: '28px', color: '#1b6b5a', marginBottom: '16px' }}>Built from Lived Experience</h2>
             <p style={{ fontSize: '16px', color: '#555', lineHeight: 1.8, marginBottom: '16px' }}>
-              InPlace was not born on a whiteboard. It was born from the exhaustion of coordinating care for an aging parent — the late-night calls, the agency runaround, the impossible juggle of work and caregiving.
+              inPlace was not born on a whiteboard. It was born from the exhaustion of coordinating care for an aging parent — the late-night calls, the agency runaround, the impossible juggle of work and caregiving.
             </p>
             <p style={{ fontSize: '16px', color: '#555', lineHeight: 1.8 }}>
               This is not a hypothetical problem. It is a deeply personal one. And the solution has to be just as personal — practical, affordable, and built by someone who has been in the trenches.
@@ -215,7 +216,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{ fontSize: '36px', marginBottom: '24px', color: 'white' }}>The Operating System for Aging in Place</h2>
           <p style={{ fontSize: '18px', opacity: 0.92, lineHeight: 1.7, marginBottom: '40px' }}>
-            Today, InPlace matches families with caregivers. Tomorrow, it becomes the coordination layer for everything an aging parent needs — care scheduling, medication tracking, doctor coordination, family communication, and AI-powered health insights. One platform. One family. Complete peace of mind.
+            Today, inPlace matches families with caregivers. Tomorrow, it becomes the coordination layer for everything an aging parent needs — care scheduling, medication tracking, doctor coordination, family communication, and AI-powered health insights. One platform. One family. Complete peace of mind.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginTop: '40px', justifyContent: 'center' }}>
             {[
@@ -243,7 +244,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         <div style={{ maxWidth: '700px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '16px' }}>This Is Not a Deck. It Is a Working App.</h2>
           <p style={{ fontSize: '18px', color: '#555', lineHeight: 1.7, marginBottom: '40px' }}>
-            InPlace is live today with three working logins — family, caregiver, and care recipient. Real scheduling, real messaging, real caregiver matching. See it for yourself.
+            inPlace is live today with three working logins — family, caregiver, and care recipient. Real scheduling, real messaging, real caregiver matching. See it for yourself.
           </p>
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
             <button onClick={() => onNavigate('login')} style={{
@@ -259,6 +260,115 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
           </div>
           <div className="demo-credentials">
             <strong>Demo Credentials:</strong> pete@inplace.care / inplace123
+          </div>
+        </div>
+      </section>
+
+      {/* ── Caregiver Recruitment ── */}
+      <section id="caregivers-join" style={{ padding: '80px 32px', background: '#f8f9fa' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+            <div style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '16px', color: '#e8724a', fontWeight: 600 }}>
+              For Caregivers
+            </div>
+            <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '16px' }}>
+              A Better Place to Work
+            </h2>
+            <p style={{ fontSize: '18px', color: '#555', maxWidth: '700px', margin: '0 auto', lineHeight: 1.7 }}>
+              Traditional agencies take up to 40% of what families pay. You deserve more. inPlace caregivers keep 80% of every dollar, set their own schedules, and build a reputation that follows them.
+            </p>
+          </div>
+
+          {/* Stats Row */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', justifyContent: 'center', marginBottom: '56px' }}>
+            {[
+              { stat: '80%', desc: 'You keep 80 cents of every dollar families pay' },
+              { stat: '$25-35/hr', desc: 'Typical caregiver earnings on inPlace' },
+              { stat: 'You Choose', desc: 'Pick your own hours, clients, and services' },
+              { stat: '48 hrs', desc: 'Get paid within 48 hours of each visit' },
+            ].map((item, i) => (
+              <div key={i} style={{
+                flex: '1 1 200px', maxWidth: '240px', padding: '28px 20px',
+                background: 'white', borderRadius: '12px', textAlign: 'center',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e8e8e8',
+              }}>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: '#1b6b5a', marginBottom: '8px' }}>{item.stat}</div>
+                <div style={{ fontSize: '13px', color: '#666', lineHeight: 1.5 }}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Two-Column: Benefits + Photo */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center', marginBottom: '56px' }}>
+            <div>
+              <h3 style={{ fontSize: '24px', color: '#1b6b5a', marginBottom: '24px' }}>Why Caregivers Choose inPlace</h3>
+              {[
+                { icon: '💰', title: 'Higher Pay, Transparent Pricing', desc: 'See exactly what families pay and what you earn. No hidden fees, no surprise deductions.' },
+                { icon: '📅', title: 'Flexible Scheduling', desc: 'Work when you want. Accept visits that fit your life — mornings, evenings, weekends, or full days.' },
+                { icon: '⭐', title: 'Build Your Reputation', desc: 'Every visit builds your profile with ratings, reviews, and verified experience that attract more clients.' },
+                { icon: '🛡️', title: 'Background-Checked & Trusted', desc: 'Our vetting process protects you and the families you serve. Be part of a trusted network.' },
+                { icon: '📱', title: 'Easy-to-Use App', desc: 'Manage your schedule, communicate with families, log visits, and track earnings — all in one place.' },
+              ].map((benefit, i) => (
+                <div key={i} style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '28px', flexShrink: 0, marginTop: '2px' }}>{benefit.icon}</div>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>{benefit.title}</div>
+                    <div style={{ fontSize: '14px', color: '#666', lineHeight: 1.6 }}>{benefit.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{
+              borderRadius: '16px', overflow: 'hidden', height: '500px',
+              backgroundImage: 'url(https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?w=600&q=80)',
+              backgroundSize: 'cover', backgroundPosition: 'center',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+            }}></div>
+          </div>
+
+          {/* How It Works for Caregivers */}
+          <div style={{ marginBottom: '48px' }}>
+            <h3 style={{ fontSize: '24px', color: '#1b6b5a', textAlign: 'center', marginBottom: '32px' }}>Getting Started Is Simple</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', justifyContent: 'center' }}>
+              {[
+                { step: '1', title: 'Apply Online', desc: 'Fill out a quick application with your experience, availability, and the services you offer.' },
+                { step: '2', title: 'Get Verified', desc: 'Complete a background check and identity verification. We handle the process and cover the cost.' },
+                { step: '3', title: 'Start Earning', desc: 'Browse available care requests in your area, accept visits that work for you, and get paid fast.' },
+              ].map((item, i) => (
+                <div key={i} style={{
+                  flex: '1 1 260px', maxWidth: '300px', padding: '32px 24px',
+                  background: 'white', borderRadius: '12px', textAlign: 'center',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                }}>
+                  <div style={{
+                    width: '48px', height: '48px', borderRadius: '50%', background: '#1b6b5a',
+                    color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '20px', fontWeight: 700, margin: '0 auto 16px',
+                  }}>{item.step}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>{item.title}</div>
+                  <div style={{ fontSize: '14px', color: '#666', lineHeight: 1.6 }}>{item.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div style={{
+            background: 'linear-gradient(135deg, #1b6b5a 0%, #0f4238 100%)',
+            borderRadius: '16px', padding: '48px 32px', textAlign: 'center', color: 'white',
+          }}>
+            <h3 style={{ fontSize: '28px', marginBottom: '12px', color: 'white' }}>Ready to Make a Difference?</h3>
+            <p style={{ fontSize: '16px', opacity: 0.9, marginBottom: '28px', maxWidth: '500px', margin: '0 auto 28px' }}>
+              Join a growing network of caregivers who earn more, work flexibly, and build meaningful relationships with the families they serve.
+            </p>
+            <button onClick={() => onNavigate('register')} style={{
+              padding: '16px 48px', fontSize: '18px', fontWeight: 600,
+              background: '#e8724a', color: 'white', border: 'none', borderRadius: '8px',
+              cursor: 'pointer', transition: 'all 0.3s',
+            }}>Apply to Be a Caregiver</button>
+            <div style={{ marginTop: '16px', fontSize: '13px', opacity: 0.7 }}>
+              No fees to join. Start earning within days of approval.
+            </div>
           </div>
         </div>
       </section>
@@ -314,7 +424,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
       </section>
 
       <footer className="splash-footer">
-        <p>&copy; 2026 InPlace. All rights reserved. | Privacy Policy | Terms of Service</p>
+        <p>&copy; 2026 inPlace. All rights reserved. | Privacy Policy | Terms of Service</p>
       </footer>
     </div>
   );
