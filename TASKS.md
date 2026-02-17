@@ -32,7 +32,8 @@
 - [x] **Input validation & rate limiting:** ✅ Done (v0.6.1). express-rate-limit on auth (20/15min) + general API (120/min). Validation middleware for register, login, profile update, messages, sessions.
 - [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox or Google Maps API. Caregiver matching by actual driving distance, not just city name.
 - [ ] **Build step for frontend:** Babel-in-browser won't scale. Move to Vite or similar when the component count or bundle size demands it. Not urgent yet.
-- [ ] **Tests:** At minimum: auth flow, session booking, payment flow. Needed before any deploy that touches real money.
+- [x] ~~**Email verification:** ✅ Done (v0.6.2). Verification email sent on registration via Resend. Verify endpoint, resend endpoint, frontend banner for unverified users. Centralized email utility (`src/utils/email.js`) replaces direct Resend usage across all routes.~~
+- [x] ~~**Tests:** ✅ Done (v0.6.2). Jest + supertest — 45 tests across 4 suites: auth (register, login, profile, email verification), waitlist, health/API, middleware (auth, validation).~~
 
 
 ## Demo Credentials
@@ -47,6 +48,11 @@
 
 
 ## Done
+
+### Email Verification & Tests (v0.6.2)
+- [x] **Centralized email utility:** New `src/utils/email.js` with `sendEmail()` and `brandedHtml()`. All routes (auth, password reset, waitlist) now use shared utility. Sandbox mode detection with clear warnings. FROM_EMAIL env var support for verified domain senders.
+- [x] **Email verification flow:** Verification email sent on registration. `email_verification_tokens` table with 24h expiry. GET /api/auth/verify?token=xxx validates and marks user verified. POST /api/auth/resend-verification sends new email. Frontend: ?verify= URL handling, dismissable success/error banner, EmailVerificationBanner component for unverified users.
+- [x] **Test suite:** Jest + supertest with mock database layer (no PostgreSQL needed). 45 tests across 4 suites: auth routes (register, login, profile, email verification), waitlist routes, health/API endpoints, middleware (auth tokens, role checks, validation). `npm test` script added.
 
 ### Production Hardening (v0.6.1)
 - [x] **Calendar heat map stale bug:** Added `key={currentPage}` to all page components in renderPage(), forcing full React remount on navigation. Fixes blank calendar on tab switch.

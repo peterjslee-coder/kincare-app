@@ -86,19 +86,33 @@ const App = () => {
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [resetToken, setResetToken] = useState(null);
+  const [verifyMessage, setVerifyMessage] = useState(null);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token');
     if (savedToken) {
       AUTH_TOKEN = savedToken;
     }
-    // Check for password reset token in URL
     const params = new URLSearchParams(window.location.search);
+
+    // Check for email verification token in URL
+    const vt = params.get('verify');
+    if (vt) {
+      window.history.replaceState({}, '', window.location.pathname);
+      apiFetch(`/api/auth/verify?token=${vt}`)
+        .then(r => r?.json())
+        .then(data => {
+          if (data?.message) setVerifyMessage({ type: 'success', text: data.message });
+          else setVerifyMessage({ type: 'error', text: data?.error || 'Verification failed' });
+        })
+        .catch(() => setVerifyMessage({ type: 'error', text: 'Verification failed' }));
+    }
+
+    // Check for password reset token in URL
     const rt = params.get('reset');
     if (rt) {
       setResetToken(rt);
       setAppState('reset-password');
-      // Clean URL without reload
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -256,6 +270,20 @@ const App = () => {
         <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
           <span></span><span></span><span></span>
         </button>
+        {verifyMessage && (
+          <div style={{
+            padding: '12px 16px', marginBottom: '16px', borderRadius: '8px', fontSize: '14px', fontWeight: 500,
+            background: verifyMessage.type === 'success' ? '#e0f2e9' : '#fce4ec',
+            color: verifyMessage.type === 'success' ? '#1b6b5a' : '#c62828',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <span>{verifyMessage.type === 'success' ? '✅ ' : '⚠️ '}{verifyMessage.text}</span>
+            <button onClick={() => setVerifyMessage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'inherit' }}>&times;</button>
+          </div>
+        )}
+        {currentUser && currentUser.emailVerified === false && !verifyMessage && (
+          <EmailVerificationBanner userId={currentUser.id} />
+        )}
         {renderPage()}
       </main>
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}

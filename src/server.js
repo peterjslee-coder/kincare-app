@@ -141,9 +141,13 @@ async function start() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n  InPlace API v0.6.1 running on port ${PORT}\n`);
+    console.log(`\n  InPlace API v0.6.2 running on port ${PORT}\n`);
   });
 }
 
-start().catch(console.error);
+// Only auto-start when run directly (not when imported by tests)
+if (require.main === module) {
+  start().catch(console.error);
+}
+
 module.exports = app;

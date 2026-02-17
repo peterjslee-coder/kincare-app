@@ -52,16 +52,20 @@ https://yourinplace.com
 │           ├── CaretakerHub.js         ← Caregiver dashboard (schedule, families, earnings, reviews)
 │           ├── AreaMap.js              ← Leaflet/OpenStreetMap with family location pins (caregiver view)
 │           ├── RequestCareModal.js     ← 5-step care request wizard with caregiver matching
-│           └── CaregiverScheduleModal.js ← View caregiver availability, book from schedule
+│           ├── CaregiverScheduleModal.js ← View caregiver availability, book from schedule
+│           └── EmailVerificationBanner.js ← Banner prompting unverified users to check email
 └── src/
     ├── server.js              ← Express app, route mounting, static file serving, auto-seed on empty DB
     ├── seed.js                ← Demo data (5 users, 4 caregivers, 13 sessions, messages, assignments)
     ├── models/
     │   └── database.js        ← PostgreSQL schema (16 tables), pg Pool wrapper
     ├── middleware/
-    │   └── auth.js            ← generateToken, authenticate, requireRole
+    │   ├── auth.js            ← generateToken, authenticate, requireRole
+    │   └── validate.js        ← Input validation (register, login, profile, messages, sessions)
+    ├── utils/
+    │   └── email.js           ← Centralized Resend email sending + branded HTML templates
     └── routes/
-        ├── auth.js            ← POST register, POST login, GET /me
+        ├── auth.js            ← Register, login, GET /me, email verification (verify + resend)
         ├── careRecipients.js  ← CRUD for care recipients (parents)
         ├── sessions.js        ← Care session booking, matching, status updates
         ├── caregivers.js      ← Caregiver search, profiles, profile creation
@@ -70,7 +74,8 @@ https://yourinplace.com
         ├── messages.js        ← Send/receive messages, conversation list
         ├── notes.js           ← Care recipient notes (Betty's personal notes)
         ├── assignments.js     ← Caregiver-to-recipient assignments, favorites
-        └── waitlist.js        ← POST signup, GET count (no auth required)
+        ├── waitlist.js        ← POST signup, GET count (no auth required)
+        └── passwordReset.js   ← Forgot password + reset (via Resend email)
 ```
 
 ## Frontend Architecture
@@ -162,11 +167,12 @@ The production PostgreSQL database is a Railway service. The `DATABASE_URL` env 
 - `npm run dev` — Dev with --watch (backend auto-restart, frontend just refresh browser)
 - `npm run seed` — Reset & populate demo data
 - `npm run setup` — Seed + start combined
+- `npm test` — Run Jest test suite (45 tests, no database needed)
 
 ## Known Limitations
 
-1. No tests
-2. No real-time updates (polling only)
-3. Payments table exists but no payment processing (Stripe Connect planned)
-4. Visit photos table exists but no file upload support
-5. Sibling users each have separate care_recipient records for Betty (no shared access model yet)
+1. No real-time updates (polling only)
+2. Payments table exists but no payment processing (Stripe Connect planned)
+3. Visit photos table exists but no file upload support
+4. Sibling users each have separate care_recipient records for Betty (no shared access model yet)
+5. Email delivery requires domain verification in Resend — sandbox sender only delivers to account owner

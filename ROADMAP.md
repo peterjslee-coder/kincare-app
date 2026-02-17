@@ -113,14 +113,24 @@
 - JSON body size limit (100KB)
 - Validators wired to: register, login, profile update, messages, sessions
 
+### v0.6.2 — Email Verification & Tests (2026-02-17)
+- Centralized email utility (`src/utils/email.js`) — all routes use shared `sendEmail()` + `brandedHtml()`
+- Sandbox mode detection: warns when using `onboarding@resend.dev` (can only deliver to account owner)
+- `FROM_EMAIL` env var support — set to `noreply@yourinplace.com` after domain verification in Resend dashboard
+- Email verification on registration: token generated, email sent, 24h expiry
+- `email_verification_tokens` table + `email_verified` / `email_verified_at` columns on users
+- GET /api/auth/verify?token=xxx — validates token, marks user verified
+- POST /api/auth/resend-verification — authenticated, sends new verification email
+- Frontend: `?verify=` URL handling in app.js, EmailVerificationBanner component for unverified users
+- Test suite: Jest + supertest, 45 tests across 4 suites (auth, waitlist, health, middleware)
+- Mock database layer for tests — no PostgreSQL needed to run `npm test`
+- Server.js refactored: `require.main === module` guard so tests don't auto-listen
+
 ---
 
-## Next Up — Beta Readiness
+## Next Up — Marketplace & Growth
 
-Priority: **HIGH** — Final steps before real users.
-
-- [ ] **Email verification:** Send verification email on registration
-- [ ] **Tests:** Auth flow, session booking, critical paths
+Priority: **HIGH** — Build out core marketplace features.
 
 ---
 
