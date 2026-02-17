@@ -107,7 +107,7 @@ async function start() {
   // Auto-seed if database is empty (first deploy)
   const db = await getDb();
   const userCount = await db.prepare("SELECT COUNT(*) as count FROM users").get();
-  if (userCount.count === 0) {
+  if (parseInt(userCount.count) === 0) {
     console.log("  Empty database detected — running seed...");
     // Run seed in-process (PostgreSQL is shared, no need for child process)
     const { seed } = require("./seed");
