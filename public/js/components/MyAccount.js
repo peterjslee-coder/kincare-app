@@ -1,7 +1,19 @@
 const MyAccount = window.MyAccount = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState({
     sessionUpdates: true, caregiverMessages: true, healthAlerts: true, reminderEmails: false
   });
+
+  useEffect(() => {
+    apiFetch('/api/auth/me')
+      .then(data => { setUser(data.user); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const roleLabels = { family: 'Family Member', caregiver: 'Caregiver', care_for: 'Care Recipient' };
+
+  if (loading) return <div><h1 className="greeting">👤 My Account</h1><p>Loading...</p></div>;
 
   return (
     <div>
@@ -11,19 +23,19 @@ const MyAccount = window.MyAccount = () => {
         <div className="info-grid">
           <div className="info-item">
             <div className="info-label">Name</div>
-            <div className="info-value">Pete Anderson</div>
+            <div className="info-value">{user ? `${user.first_name} ${user.last_name}` : '—'}</div>
           </div>
           <div className="info-item">
             <div className="info-label">Email</div>
-            <div className="info-value">pete@inplace.care</div>
+            <div className="info-value">{user ? user.email : '—'}</div>
           </div>
           <div className="info-item">
             <div className="info-label">Phone</div>
-            <div className="info-value">(555) 123-4567</div>
+            <div className="info-value">{user && user.phone ? user.phone : 'Not set'}</div>
           </div>
           <div className="info-item">
             <div className="info-label">Account Type</div>
-            <div className="info-value">Family Member</div>
+            <div className="info-value">{user ? (roleLabels[user.role] || user.role) : '—'}</div>
           </div>
         </div>
       </div>
