@@ -25,11 +25,33 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
     }));
   };
 
+  // Validation helpers
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const isValidPhone = (phone) => phone.replace(/\D/g, '').length === 10;
+
+  const isStepValid = () => {
+    if (track === 'family') {
+      if (step === 1) return formData.firstName.trim() && formData.lastName.trim() && isValidEmail(formData.email) && isValidPhone(formData.phone) && formData.password.length >= 6;
+      if (step === 2) return formData.lovedOneName.trim() && formData.lovedOneAge && formData.relationship;
+      if (step === 3) return Object.values(formData.careNeeds).some(v => v);
+      return true;
+    }
+    if (track === 'caregiver') {
+      if (step === 1) return formData.firstName.trim() && formData.lastName.trim() && isValidEmail(formData.email) && isValidPhone(formData.phone) && formData.password.length >= 6;
+      if (step === 2) return formData.bgCheckConsent;
+      if (step === 3) return !!formData.certType;
+      if (step === 4) return Object.values(formData.availability).some(v => v);
+      return true;
+    }
+    return true;
+  };
+
   const handleNext = () => {
-    if (step < maxStep) setStep(step + 1);
+    if (step < maxStep && isStepValid()) setStep(step + 1);
   };
 
   const handleBack = () => {
+    if (step === 1) { setTrack(null); return; }
     if (step > 1) setStep(step - 1);
   };
 
@@ -61,7 +83,8 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
             </div>
           </div>
           <div className="text-center">
-            <p style={{ fontSize: '14px', marginBottom: '16px' }}>Already have an account? <a onClick={() => onNavigate('login')}>Sign In</a></p>
+            <p style={{ fontSize: '14px', marginBottom: '8px' }}>Already have an account? <a onClick={() => onNavigate('login')}>Sign In</a></p>
+            <p style={{ fontSize: '14px' }}><a onClick={() => onNavigate('splash')} style={{ color: '#888', cursor: 'pointer' }}>← Back to home</a></p>
           </div>
         </div>
       </div>
@@ -91,23 +114,26 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
               <>
                 <div className="form-group">
                   <label>First Name</label>
-                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} />
+                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Jane" />
                 </div>
                 <div className="form-group">
                   <label>Last Name</label>
-                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} />
+                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Smith" />
                 </div>
                 <div className="form-group">
                   <label>Email</label>
-                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} />
+                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="jane@example.com" />
+                  {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
                 </div>
                 <div className="form-group">
                   <label>Phone</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} />
+                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" />
+                  {formData.phone && !isValidPhone(formData.phone) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a 10-digit phone number</div>}
                 </div>
                 <div className="form-group">
                   <label>Password</label>
-                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} />
+                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" />
+                  {formData.password && formData.password.length < 6 && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Password must be at least 6 characters</div>}
                 </div>
               </>
             )}
@@ -184,23 +210,26 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
               <>
                 <div className="form-group">
                   <label>First Name</label>
-                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} />
+                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Maria" />
                 </div>
                 <div className="form-group">
                   <label>Last Name</label>
-                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} />
+                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Garcia" />
                 </div>
                 <div className="form-group">
                   <label>Email</label>
-                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} />
+                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="maria@example.com" />
+                  {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
                 </div>
                 <div className="form-group">
                   <label>Phone</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} />
+                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" />
+                  {formData.phone && !isValidPhone(formData.phone) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a 10-digit phone number</div>}
                 </div>
                 <div className="form-group">
                   <label>Password</label>
-                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} />
+                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" />
+                  {formData.password && formData.password.length < 6 && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Password must be at least 6 characters</div>}
                 </div>
               </>
             )}
@@ -286,8 +315,8 @@ const RegisterPage = window.RegisterPage = ({ onNavigate }) => {
           </>
         )}
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'space-between' }}>
-          <button onClick={handleBack} className="btn btn-outline" disabled={step === 1}>← Back</button>
-          {step < maxStep && <button onClick={handleNext} className="btn btn-primary">Next →</button>}
+          <button onClick={handleBack} className="btn btn-outline">← Back</button>
+          {step < maxStep && <button onClick={handleNext} className="btn btn-primary" disabled={!isStepValid()} style={{ opacity: isStepValid() ? 1 : 0.5, cursor: isStepValid() ? 'pointer' : 'not-allowed' }}>Next →</button>}
         </div>
       </div>
     </div>
