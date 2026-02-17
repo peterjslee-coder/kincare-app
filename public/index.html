@@ -2,9 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>InPlace - On-Demand Care for Your Loved Ones</title>
-  <link rel="stylesheet" href="/css/styles.css?v=0.5.3">
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#1b6b5a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="InPlace">
+  <meta name="description" content="On-demand care coordination for your loved ones">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+
+  <link rel="stylesheet" href="/css/styles.css?v=0.6.0">
 </head>
 <body>
   <div id="root"></div>
@@ -41,11 +56,12 @@
         '/js/components/MyAccount.js',
         '/js/components/CaredForView.js',
         '/js/components/CaretakerHub.js',
+        '/js/components/AreaMap.js',
         '/js/app.js'
       ];
       try {
         var sources = await Promise.all(
-          scripts.map(function(url) { return fetch(url + '?v=0.5.3').then(function(r) { return r.text(); }); })
+          scripts.map(function(url) { return fetch(url + '?v=0.6.0').then(function(r) { return r.text(); }); })
         );
         var combined = sources.join('\n;\n');
         var compiled = Babel.transform(combined, { presets: ['react'] }).code;
@@ -59,6 +75,17 @@
           '<h2>Loading Error</h2><p>' + err.message + '</p></div>';
       }
     })();
+
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').then(function(reg) {
+          console.log('SW registered:', reg.scope);
+        }).catch(function(err) {
+          console.log('SW registration failed:', err);
+        });
+      });
+    }
   </script>
 </body>
 </html>

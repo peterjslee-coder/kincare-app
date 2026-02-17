@@ -96,29 +96,35 @@
 - MyAccount persistence: PUT /api/auth/me endpoint for profile edits (name, phone) and notification preferences
 - MyAccount edit mode: Inline form with Cancel/Save, auto-saving notification toggles
 
+### v0.6.0 — PWA & Mobile Polish (2026-02-17)
+- PWA manifest, service worker (cache-first static, network-first API), offline fallback
+- Install banner (`beforeinstallprompt`) + offline indicator
+- Icons: 192x192, 512x512, apple-touch-icon (180x180)
+- Apple meta tags (mobile-web-app-capable, status-bar-style)
+- Mobile touch polish: 44px min tap targets, font-size 16px (no iOS zoom), viewport-fit cover
+- `display-mode: standalone` CSS adjustments for installed PWA
+- Sibling logins: David Lee + Susan Lee as family users with Betty care, sessions, assignments, messages
+- Quick-login buttons for siblings on LoginPage
+
 ---
 
-## Next Up — PWA & Mobile Polish
+## Next Up — Production Hardening
 
-Priority: **HIGH** — Make the app installable on phones.
+Priority: **HIGH** — Lock down for real users.
 
-### Phase 1: PWA
-- [ ] **PWA add-to-homescreen:** Web app manifest, service worker, home screen icon
-- [ ] **Touch-friendly interactions:** Larger tap targets, swipe gestures for navigation
-- [ ] **Email verification (optional):** Send verification email on registration. Can be deferred.
+- [ ] **Input validation & rate limiting:** Validate all inputs, rate limit auth endpoints
+- [ ] **Email verification:** Send verification email on registration
+- [ ] **Tests:** Auth flow, session booking, critical paths
 
 ---
 
-## Future — Production Path
+## Future — Full Platform
 
-Priority: **MEDIUM** — After onboarding and mobile are solid.
+Priority: **MEDIUM** — Build out marketplace capabilities.
 
 - [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
-- [ ] **Input validation & rate limiting:** Lock down API routes before real users touch them
 - [ ] **Geocoding & distance:** Real address → lat/lng for caregiver matching
 - [ ] **Recurring sessions:** Weekly/biweekly repeating care sessions
 - [ ] **Visit photos:** File upload for visit documentation
-- [ ] **Tests:** Auth flow, session booking, payment flow
 - [ ] **Real-time updates:** WebSocket or SSE for activity feed
-- [ ] **Sibling logins:** Add David and Susan Lee with generic credentials
 - [ ] **Build step for frontend:** Move to Vite when component count demands it

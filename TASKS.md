@@ -11,7 +11,7 @@
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
-- [ ] **Sibling logins:** Add Pete's brother (David) and sister (Susan) with generic credentials so they can see activity and use messaging. Emergency contacts for both already exist in the system.
+- [x] ~~**Sibling logins:** Add Pete's brother (David) and sister (Susan) with generic credentials so they can see activity and use messaging.~~ Done in v0.6.0.
 - [x] ~~**Loading spinners & empty states:** Animated spinner + empty states on all pages.~~ Done in v0.5.3.
 - [x] ~~**MyAccount persistence:** Profile edits and notification prefs wired to PUT /api/auth/me.~~ Done in v0.5.3.
 - [ ] **Visit photos:** Add file upload endpoint (multipart/form-data → local storage or S3), display photos in visit logs.
@@ -40,11 +40,18 @@
 | Role | Email | Password | Notes |
 |------|-------|----------|-------|
 | Care Team | pete@inplace.care | inplace123 | Primary — manages Betty's care |
+| Sibling | david.lee@inplace.care | inplace123 | Pete's brother — coordinates Betty's care |
+| Sibling | susan.lee@inplace.care | inplace123 | Pete's sister — coordinates Betty's care |
 | Caretaker | maria@inplace.care | inplace123 | Assigned to Betty + 1 other family |
 | Cared-For | betty@inplace.care | inplace123 | Limited view, controlled by Pete |
 
 
 ## Done
+
+### PWA & Mobile Polish (v0.6.0)
+- [x] **PWA add-to-homescreen:** Web app manifest, service worker (cache-first for static, network-first for API), install banner with `beforeinstallprompt`, offline indicator, Apple meta tags. Icons: 192x192, 512x512, apple-touch-icon.
+- [x] **Mobile touch polish:** 44px minimum tap targets, `font-size: 16px` to prevent iOS auto-zoom, `viewport-fit=cover` for notched phones, `display-mode: standalone` CSS adjustments, 2-column stats grid on mobile, single-column info-grid.
+- [x] **Sibling logins:** David Lee (david.lee@inplace.care) and Susan Lee (susan.lee@inplace.care) added as family users. Both can see Betty's care, have caregiver assignments, sessions, messages, and activity feed items. Quick-login buttons on LoginPage.
 
 ### Demo Polish (v0.5.3)
 - [x] **Loading spinners & empty states:** Animated CSS spinner on every page during API fetches. Empty-state illustrations with helpful messages when no data exists. Consistent pattern across Dashboard, CareProfile, Schedule, Caregivers, Activity Feed, Messages, CareRecipients, MyAccount, CaretakerHub, CaredForView.

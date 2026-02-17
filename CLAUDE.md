@@ -47,7 +47,7 @@ https://yourinplace.com
 │           ├── CareRecipients.js       ← Add/edit care recipients (CRUD)
 │           ├── ActivityFeed.js         ← Notification stream with mark-as-read
 │           ├── Messages.js             ← Real-time chat (database-backed conversations)
-│           ├── MyAccount.js            ← Settings & notification preferences (UI only)
+│           ├── MyAccount.js            ← Settings & notification preferences (wired to PUT /api/auth/me)
 │           ├── CaredForView.js         ← Betty's limited view (calendar + personal notes)
 │           ├── CaretakerHub.js         ← Caregiver dashboard (schedule, families, earnings, reviews)
 │           ├── AreaMap.js              ← Leaflet/OpenStreetMap with family location pins (caregiver view)
@@ -96,7 +96,9 @@ The app supports three login roles, each with a different sidebar and dashboard:
 | Role | User | Email | View |
 |------|------|-------|------|
 | Care Team (family) | Pete Lee | pete@inplace.care | Full dashboard, scheduling, caregiver management, care profile |
-| Caretaker (caregiver) | Maria Garcia | maria@inplace.care | CaretakerHub with schedule, families, earnings, area map |
+| Sibling (family) | David Lee | david.lee@inplace.care | Same dashboard, manages Betty's care alongside Pete |
+| Sibling (family) | Susan Lee | susan.lee@inplace.care | Same dashboard, manages Betty's care alongside Pete |
+| Caretaker (caregiver) | Maria Santos | maria@inplace.care | CaretakerHub with schedule, families, earnings, area map |
 | Cared-For (recipient) | Betty Lee | betty@inplace.care | CaredForView with calendar and personal notes |
 
 All demo passwords: `inplace123`
@@ -168,4 +170,4 @@ The production PostgreSQL database is a Railway service. The `DATABASE_URL` env 
 3. No real-time updates (polling only)
 4. Payments table exists but no payment processing (Stripe Connect planned)
 5. Visit photos table exists but no file upload support
-6. No PWA / add-to-homescreen yet
+6. Sibling users each have separate care_recipient records for Betty (no shared access model yet)

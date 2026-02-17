@@ -9,6 +9,10 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate }) => {
     { label: 'Maria (Caregiver)', email: 'maria@inplace.care', icon: '🩺', desc: 'Professional caregiver' },
     { label: 'Betty (Cared-For)', email: 'betty@inplace.care', icon: '👵', desc: 'Care recipient' },
   ];
+  const siblingAccounts = [
+    { label: 'David (Brother)', email: 'david.lee@inplace.care', icon: '👨', desc: "Pete's brother" },
+    { label: 'Susan (Sister)', email: 'susan.lee@inplace.care', icon: '👩', desc: "Pete's sister" },
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,6 +94,29 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate }) => {
                 <div style={{ fontSize: '22px', marginBottom: '4px' }}>{acct.icon}</div>
                 <div style={{ fontSize: '12px', fontWeight: 600, color: '#333' }}>{acct.label}</div>
                 <div style={{ fontSize: '10px', color: '#888', marginTop: '2px' }}>{acct.desc}</div>
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px', justifyContent: 'center' }}>
+            {siblingAccounts.map(acct => (
+              <button
+                key={acct.email}
+                onClick={() => handleQuickLogin(acct)}
+                disabled={loading}
+                style={{
+                  flex: '0 1 calc(33.33% - 6px)',
+                  padding: '8px 6px',
+                  background: email === acct.email ? '#e8f5f1' : '#f8f9fa',
+                  border: email === acct.email ? '2px solid #1b6b5a' : '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ fontSize: '18px', marginBottom: '2px' }}>{acct.icon}</div>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#333' }}>{acct.label}</div>
+                <div style={{ fontSize: '9px', color: '#888', marginTop: '1px' }}>{acct.desc}</div>
               </button>
             ))}
           </div>

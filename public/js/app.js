@@ -1,3 +1,83 @@
+// ─── PWA Install Prompt ───
+const PWAInstallBanner = window.PWAInstallBanner = () => {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [dismissed, setDismissed] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+      setIsStandalone(true);
+      return;
+    }
+    // Check if previously dismissed
+    if (localStorage.getItem('pwa_dismissed')) {
+      setDismissed(true);
+      return;
+    }
+    const handler = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') setDeferredPrompt(null);
+  };
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    localStorage.setItem('pwa_dismissed', '1');
+  };
+
+  if (isStandalone || dismissed || !deferredPrompt) return null;
+
+  return (
+    <div className="pwa-install-banner">
+      <img src="/icons/icon-192.png" alt="InPlace" className="pwa-install-banner-icon" />
+      <div className="pwa-install-banner-text">
+        <div className="pwa-install-banner-title">Add InPlace to Home Screen</div>
+        <div className="pwa-install-banner-subtitle">Quick access to care coordination</div>
+      </div>
+      <button className="pwa-install-btn" onClick={handleInstall}>Install</button>
+      <button className="pwa-install-dismiss" onClick={handleDismiss}>&times;</button>
+    </div>
+  );
+};
+
+// ─── Offline Indicator ───
+const OfflineIndicator = window.OfflineIndicator = () => {
+  const [offline, setOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const goOffline = () => setOffline(true);
+    const goOnline = () => setOffline(false);
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
+
+  if (!offline) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+      background: '#e65100', color: '#fff', textAlign: 'center',
+      padding: '6px 12px', fontSize: '13px', fontWeight: 600,
+    }}>
+      You're offline — some features may be unavailable
+    </div>
+  );
+};
+
 // Main App Component — role-aware routing & sidebar
 const App = () => {
   const [appState, setAppState] = useState('splash');
@@ -187,6 +267,8 @@ const App = () => {
         ))}
       </nav>
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
+      <PWAInstallBanner />
+      <OfflineIndicator />
     </div>
   );
 };

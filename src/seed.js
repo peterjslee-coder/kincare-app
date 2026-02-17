@@ -63,7 +63,21 @@ async function seed() {
     VALUES (?, ?, ?, 'care_for', ?, ?, ?)
   `).run(bettyUserId, "betty@inplace.care", passwordHash, "Betty", "Lee", "(540) 555-0100");
 
-  console.log("✅ Users created (7 — Pete, 4 caregivers, Betty)");
+  // Sibling family users (Pete's siblings who also coordinate Betty's care)
+  const davidLeeId = uuid();
+  const susanLeeId = uuid();
+
+  await db.prepare(`
+    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
+    VALUES (?, ?, ?, 'family', ?, ?, ?)
+  `).run(davidLeeId, "david.lee@inplace.care", passwordHash, "David", "Lee", "(626) 555-0143");
+
+  await db.prepare(`
+    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
+    VALUES (?, ?, ?, 'family', ?, ?, ?)
+  `).run(susanLeeId, "susan.lee@inplace.care", passwordHash, "Susan", "Lee", "(626) 555-0144");
+
+  console.log("✅ Users created (9 — Pete, David, Susan, 4 caregivers, Betty)");
 
   // ─── Additional Family Users (Maria's other clients) ───
   const hendersonFamilyId = uuid();
@@ -141,7 +155,47 @@ async function seed() {
     "Raj Patel", "(540) 555-0302"
   );
 
-  console.log("✅ Care recipients created (3 — Betty, Dorothy, Arun)");
+  // ─── Care Recipient (Betty — David's view, same person) ───
+  const bettyForDavidId = uuid();
+  await db.prepare(`
+    INSERT INTO care_recipients
+    (id, family_user_id, first_name, last_name, age,
+     location_address, location_city, location_state, location_zip,
+     latitude, longitude,
+     health_conditions, medications, preferences,
+     emergency_contact_name, emergency_contact_phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    bettyForDavidId, davidLeeId, "Betty", "Lee", 78,
+    "123 Main Street", "Blacksburg", "VA", "24060",
+    37.2296, -80.4139,
+    JSON.stringify(["Early-stage dementia", "Mild arthritis"]),
+    JSON.stringify(["Donepezil 10mg", "Ibuprofen PRN"]),
+    "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals.",
+    "Pete Lee", "(626) 555-0142"
+  );
+
+  // ─── Care Recipient (Betty — Susan's view, same person) ───
+  const bettyForSusanId = uuid();
+  await db.prepare(`
+    INSERT INTO care_recipients
+    (id, family_user_id, first_name, last_name, age,
+     location_address, location_city, location_state, location_zip,
+     latitude, longitude,
+     health_conditions, medications, preferences,
+     emergency_contact_name, emergency_contact_phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    bettyForSusanId, susanLeeId, "Betty", "Lee", 78,
+    "123 Main Street", "Blacksburg", "VA", "24060",
+    37.2296, -80.4139,
+    JSON.stringify(["Early-stage dementia", "Mild arthritis"]),
+    JSON.stringify(["Donepezil 10mg", "Ibuprofen PRN"]),
+    "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals.",
+    "Pete Lee", "(626) 555-0142"
+  );
+
+  console.log("✅ Care recipients created (5 — Betty×3, Dorothy, Arun)");
 
   // ─── Caregiver Profiles ───
   const mariaId = uuid();
@@ -184,7 +238,12 @@ async function seed() {
   await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), dorothyId, hendersonFamilyId, sarahId);
   await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), arunId, patelFamilyId, jamesId);
 
-  console.log("✅ Caregiver assignments created (5)");
+  // Sibling assignments (David and Susan also have Maria and James for Betty)
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 1)`).run(uuid(), bettyForDavidId, davidLeeId, mariaId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), bettyForDavidId, davidLeeId, jamesId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 1)`).run(uuid(), bettyForSusanId, susanLeeId, mariaId);
+
+  console.log("✅ Caregiver assignments created (8)");
 
   // ─── Availability Windows ───
   for (const cgId of [mariaId, jamesId, davidId]) {
@@ -277,7 +336,38 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
   }
 
-  console.log("✅ Care sessions created (19 — 13 for Betty, 4 for Dorothy, 2 for Arun)");
+  // ─── Care Sessions (David Lee / Betty) ───
+  const davidSessions = [
+    [uuid(), bettyForDavidId, davidLeeId, mariaId, "meals", "confirmed", "2026-02-20", "12:00", 2, "Mom likes her soup warm, not hot. David coordinating this week.", 56],
+    [uuid(), bettyForDavidId, davidLeeId, jamesId, "companion", "pending", "2026-02-26", "10:00", 3, "Puzzles and light gardening. David will check in after.", 75],
+  ];
+
+  for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of davidSessions) {
+    await db.prepare(`
+      INSERT INTO care_sessions
+      (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+       status, scheduled_date, scheduled_time, duration_hours,
+       special_instructions, estimated_cost)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
+  }
+
+  // ─── Care Sessions (Susan Lee / Betty) ───
+  const susanSessions = [
+    [uuid(), bettyForSusanId, susanLeeId, mariaId, "companion", "confirmed", "2026-02-22", "14:00", 2, "Susan requested a garden walk if weather permits.", 56],
+  ];
+
+  for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of susanSessions) {
+    await db.prepare(`
+      INSERT INTO care_sessions
+      (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+       status, scheduled_date, scheduled_time, duration_hours,
+       special_instructions, estimated_cost)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
+  }
+
+  console.log("✅ Care sessions created (22 — 13 Pete/Betty, 2 David/Betty, 1 Susan/Betty, 4 Dorothy, 2 Arun)");
 
   // ─── Visit Logs ───
   const visitLogs = [
@@ -332,7 +422,19 @@ async function seed() {
     `).run(id, famId, recipId, type, title, msg, timeOffset);
   }
 
-  console.log("✅ Activity feed populated (7)");
+  // Activity feed for David Lee
+  await db.prepare(`
+    INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, created_at)
+    VALUES (?, ?, ?, 'session_confirmed', 'Meal Prep confirmed for Feb 20', 'Maria Santos will prepare lunch for Betty.', NOW() - INTERVAL '4 hours')
+  `).run(uuid(), davidLeeId, bettyForDavidId);
+
+  // Activity feed for Susan Lee
+  await db.prepare(`
+    INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, created_at)
+    VALUES (?, ?, ?, 'session_confirmed', 'Companionship confirmed for Feb 22', 'Maria Santos will visit Betty for an afternoon garden walk.', NOW() - INTERVAL '3 hours')
+  `).run(uuid(), susanLeeId, bettyForSusanId);
+
+  console.log("✅ Activity feed populated (9)");
 
   // ─── Reviews ───
   const reviews = [
@@ -372,7 +474,22 @@ async function seed() {
     `).run(id, senderId, recipientId, content, timeOffset);
   }
 
-  console.log("✅ Messages created (10)");
+  // Messages between siblings and caregivers
+  const siblingMsgs = [
+    [uuid(), davidLeeId, mariaUserId, "Hi Maria, this is David — Pete's brother. I'll be coordinating Mom's care this week while Pete is traveling.", "-10 hours"],
+    [uuid(), mariaUserId, davidLeeId, "Hi David! No problem at all. Betty and I have our routine down. I'll send you updates after each visit.", "-9 hours"],
+    [uuid(), susanLeeId, mariaUserId, "Maria, it's Susan. Could you check if Mom has enough of her Donepezil? I want to make sure we're not running low.", "-7 hours"],
+    [uuid(), mariaUserId, susanLeeId, "Hi Susan! I'll check her pill organizer tomorrow and let you know. She had about a week's supply last time I looked.", "-6 hours"],
+  ];
+
+  for (const [id, senderId, recipientId, content, timeOffset] of siblingMsgs) {
+    await db.prepare(`
+      INSERT INTO messages (id, sender_id, recipient_id, content, is_read, created_at)
+      VALUES (?, ?, ?, ?, 1, NOW() + ?::interval)
+    `).run(id, senderId, recipientId, content, timeOffset);
+  }
+
+  console.log("✅ Messages created (14)");
 
   // ─── Recipient Notes ───
   const notes = [
@@ -393,9 +510,11 @@ async function seed() {
 
   console.log("\n🎉 Seed complete! Database ready.\n");
   console.log("Demo logins:");
-  console.log("  Care Team:  pete@inplace.care  / inplace123");
-  console.log("  Caretaker:  maria@inplace.care / inplace123");
-  console.log("  Cared-For:  betty@inplace.care / inplace123\n");
+  console.log("  Care Team:       pete@inplace.care       / inplace123");
+  console.log("  Sibling (David): david.lee@inplace.care  / inplace123");
+  console.log("  Sibling (Susan): susan.lee@inplace.care  / inplace123");
+  console.log("  Caretaker:       maria@inplace.care      / inplace123");
+  console.log("  Cared-For:       betty@inplace.care      / inplace123\n");
 
 }
 

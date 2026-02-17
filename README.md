@@ -16,6 +16,8 @@ The server auto-seeds demo data on first run. No build step — Babel compiles J
 | Role | Email | Password | View |
 |------|-------|----------|------|
 | Care Team | pete@inplace.care | inplace123 | Full dashboard — manages Betty's care |
+| Sibling | david.lee@inplace.care | inplace123 | Pete's brother — coordinates Betty's care |
+| Sibling | susan.lee@inplace.care | inplace123 | Pete's sister — coordinates Betty's care |
 | Caregiver | maria@inplace.care | inplace123 | Caregiver hub — schedule, families, earnings |
 | Care Recipient | betty@inplace.care | inplace123 | Limited view — calendar & personal notes |
 
@@ -79,7 +81,7 @@ All authenticated routes require: `Authorization: Bearer <token>`
 ## Tech Stack
 
 - **Runtime:** Node.js + Express
-- **Database:** SQLite via sql.js (zero native dependencies)
+- **Database:** PostgreSQL via pg (connection pooling)
 - **Auth:** JWT (jsonwebtoken + bcryptjs)
 - **Frontend:** React 18 + Babel standalone (no build step)
 - **Deployment:** Railway.app + Cloudflare

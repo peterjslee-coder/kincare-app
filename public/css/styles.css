@@ -1993,4 +1993,136 @@
         min-width: auto;
         max-width: none;
       }
+
+      /* Touch-friendly: larger tap targets */
+      .btn, button {
+        min-height: 44px;
+        min-width: 44px;
+      }
+
+      .nav-link {
+        min-height: 44px;
+        padding: 12px 16px;
+      }
+
+      .session-item, .activity-item, .caregiver-item {
+        padding: 14px 16px;
+      }
+
+      .chat-contact {
+        padding: 14px 12px;
+      }
+
+      .chat-input {
+        min-height: 44px;
+        font-size: 16px !important; /* prevent iOS zoom on focus */
+      }
+
+      input, textarea, select {
+        font-size: 16px !important; /* prevent iOS auto-zoom */
+        min-height: 44px;
+      }
+
+      /* Stats grid: 2-col on mobile */
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .stat-card {
+        padding: 14px 12px;
+      }
+
+      /* Swipe hint on cards */
+      .card {
+        border-radius: 12px;
+      }
+
+      /* Info grid responsive */
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ===== PWA Install Banner ===== */
+    .pwa-install-banner {
+      position: fixed;
+      bottom: 72px;
+      left: 12px;
+      right: 12px;
+      background: #1b6b5a;
+      color: #fff;
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+      z-index: 1200;
+      animation: slideUp 0.3s ease;
+    }
+
+    .pwa-install-banner-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+
+    .pwa-install-banner-text {
+      flex: 1;
+    }
+
+    .pwa-install-banner-title {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .pwa-install-banner-subtitle {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .pwa-install-btn {
+      padding: 8px 18px;
+      background: #fff;
+      color: #1b6b5a;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .pwa-install-dismiss {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.6);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* ===== Standalone PWA: adjust for no browser chrome ===== */
+    @media all and (display-mode: standalone) {
+      .splash-page {
+        padding-top: env(safe-area-inset-top, 20px);
+      }
+
+      .main-content {
+        padding-top: max(16px, env(safe-area-inset-top, 0px));
+      }
+
+      .bottom-nav {
+        height: calc(64px + env(safe-area-inset-bottom, 0px));
+      }
     }
