@@ -76,26 +76,33 @@
 - Railway Postgres service wired via `${{Postgres.DATABASE_URL}}`
 - Data now persists across deploys — no more losing accounts/sessions on redeploy
 
+### v0.5.1 — Onboarding (2026-02-17)
+- Registration wizard wired to POST /api/auth/register (both family and caregiver tracks)
+- Auto-login on successful registration, inline error display on failure
+- Password reset flow: ForgotPasswordPage → email via Resend → ResetPasswordPage
+- New `password_reset_tokens` table with 1-hour expiry
+- "Forgot password?" link on login page
+
+### v0.5.2 — Mobile Bottom Navigation (2026-02-17)
+- Bottom nav bar replaces hamburger sidebar on mobile (≤768px)
+- Role-aware nav items: Home, Schedule, Care, Messages, More (family); Home, Schedule, Messages, Account (caregiver); Home, Messages, Account (care recipient)
+- Safe-area padding for notched phones (iPhone X+)
+- Desktop sidebar completely unchanged
+
 ---
 
-## Next Up — Onboarding & User Accounts
+## Next Up — Demo Polish & PWA
 
-Priority: **HIGH** — Let real people create accounts and use the app.
+Priority: **HIGH** — Polish the experience before sharing with family.
 
-### Phase 1: Wire Registration (next)
-The registration wizard UI already exists (multi-step form with family/caregiver tracks, form validation, back navigation). It just needs to be wired to the backend `/api/auth/register` route.
-
-- [ ] **Wire registration to API:** Connect RegisterPage form submission to `POST /api/auth/register`. Auto-login after successful registration and redirect to dashboard.
-- [ ] **Password reset flow:** Forgot password link on login page → email with reset token via Resend → reset password page. Requires a `password_reset_tokens` table.
-- [ ] **Email verification (optional):** Send verification email on registration. Can be deferred — not blocking for family beta.
-
-### Phase 2: Demo Polish
+### Phase 1: Demo Polish (next)
 - [ ] **Loading spinners & empty states:** No blank screens during API fetches
 - [ ] **Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.)
 - [ ] **MyAccount persistence:** Wire notification preferences and profile edits to API (PUT /api/auth/me)
+- [ ] **Email verification (optional):** Send verification email on registration. Can be deferred.
 
-### Phase 3: Mobile-First
-- [ ] **Mobile-responsive UI:** Sidebar → bottom nav on phone, PWA add-to-homescreen
+### Phase 2: PWA & Mobile Polish
+- [ ] **PWA add-to-homescreen:** Web app manifest, service worker, home screen icon
 - [ ] **Touch-friendly interactions:** Larger tap targets, swipe gestures for navigation
 
 ---

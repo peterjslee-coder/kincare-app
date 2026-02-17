@@ -16,7 +16,7 @@
 - [ ] **MyAccount persistence:** Wire notification preferences and profile edits to API (PUT /api/auth/me). Currently UI-only.
 - [ ] **Visit photos:** Add file upload endpoint (multipart/form-data → local storage or S3), display photos in visit logs.
 - [ ] **Recurring sessions:** Allow scheduling weekly/biweekly repeating care sessions.
-- [ ] **Mobile responsive layout:** Sidebar → bottom nav on mobile.
+- [x] ~~**Mobile responsive layout:** Sidebar → bottom nav on mobile.~~ Done in v0.5.2.
 - [ ] **Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.).
 
 
@@ -25,9 +25,9 @@
 > These are the infrastructure changes needed before real users (even family/friends) can use the app. Order roughly reflects dependencies. See ROADMAP.md for the full picture.
 
 - [x] **PostgreSQL migration:** ✅ Done (v0.5.0). PostgreSQL on Railway with persistent data across deploys.
-- [ ] **Wire registration to API:** Registration wizard UI exists but `handleComplete` just shows an alert. Wire it to `POST /api/auth/register`, auto-login after success. This is the #1 blocker for real users.
-- [ ] **Password reset flow:** Forgot password link → email reset token via Resend → reset page. Needs `password_reset_tokens` table.
-- [ ] **Mobile-responsive UI:** Sidebar → bottom nav on phone. This is the single biggest UX blocker for phone beta. Consider PWA (add-to-homescreen) as the first mobile path — avoids app store review.
+- [x] **Wire registration to API:** ✅ Done (v0.5.1). Registration wizard calls POST /api/auth/register, auto-logs in on success, shows inline errors on failure.
+- [x] **Password reset flow:** ✅ Done (v0.5.1). Forgot password → email via Resend → reset page. password_reset_tokens table, ForgotPasswordPage & ResetPasswordPage components.
+- [x] **Mobile-responsive UI:** ✅ Done (v0.5.2). Bottom nav bar replaces sidebar on mobile (≤768px). Role-aware icons, safe-area padding for notched phones.
 - [ ] **Stripe Connect integration:** Wire payments table to Stripe Connect for marketplace payouts. Families pay, caregivers get paid, platform takes a fee.
 - [ ] **Input validation & rate limiting:** Lock down API routes before real users touch them. Validate all inputs, add rate limiting on auth endpoints.
 - [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox or Google Maps API. Caregiver matching by actual driving distance, not just city name.
@@ -45,6 +45,11 @@
 
 
 ## Done
+
+### Onboarding & Mobile (v0.5.1–v0.5.2)
+- [x] **Wire registration to API:** RegisterPage handleComplete() now calls POST /api/auth/register, auto-logs in on success, shows inline errors. Both family and caregiver tracks supported.
+- [x] **Password reset flow:** ForgotPasswordPage + ResetPasswordPage components. New password_reset_tokens table. POST /api/password-reset/request sends branded email via Resend. POST /api/password-reset/confirm validates token and updates password. "Forgot password?" link on login page.
+- [x] **Mobile bottom navigation:** Replaced hamburger sidebar with fixed bottom nav bar on screens ≤768px. Role-aware icons (Home, Schedule, Care, Messages, More). Safe-area padding for notched phones. Desktop sidebar unchanged.
 
 ### PostgreSQL Migration (v0.5.0)
 - [x] **PostgreSQL on Railway:** Replaced SQLite with PostgreSQL via `pg` library. Custom query wrapper auto-converts `?` to `$1, $2, ...` placeholders. All 10 route files updated with async/await + PostgreSQL datetime syntax. Data persists across deploys.
