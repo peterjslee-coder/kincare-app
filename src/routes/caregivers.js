@@ -2,15 +2,23 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { geocodeAddress, buildAddressString, haversineDistance } = require("../utils/geocode");
 
 const router = express.Router();
 router.use(authenticate);
 
 // ─── GET /api/caregivers ───
-// Search/list available caregivers
+// Search/list available caregivers with optional location filtering
+// Query params:
+//   specialty  — filter by specialty string
+//   available  — "true" to show only available
+//   lat, lng   — center point for radius search
+//   radius     — max distance in miles (default 25)
+//   address    — address string to geocode (alternative to lat/lng)
+//   limit      — max results (default 20)
 router.get("/", async (req, res) => {
   const db = await getDb();
-  const { specialty, available, limit = 20 } = req.query;
+  const { specialty, available, limit = 20, lat, lng, radius = 25, address } = req.query;
 
   let query = `
     SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url
@@ -37,23 +45,119 @@ router.get("/", async (req, res) => {
     });
   }
 
-  const result = caregivers.map((c) => ({
-    id: c.id,
-    name: `${c.first_name} ${c.last_name}`,
-    bio: c.bio,
-    yearsExperience: c.years_experience,
-    hourlyRate: c.hourly_rate,
-    specialties: JSON.parse(c.specialties || "[]"),
-    certifications: JSON.parse(c.certifications || "[]"),
-    rating: c.rating_avg,
-    reviewCount: c.rating_count,
-    isAvailable: !!c.is_available,
-    isBackgroundChecked: !!c.is_background_checked,
-    city: c.location_city,
-    state: c.location_state,
-  }));
+  // Resolve search center: explicit lat/lng or geocode address
+  let searchLat = lat ? parseFloat(lat) : null;
+  let searchLng = lng ? parseFloat(lng) : null;
 
-  res.json({ caregivers: result });
+  if (!searchLat && address) {
+    const geo = await geocodeAddress(address);
+    if (geo) {
+      searchLat = geo.lat;
+      searchLng = geo.lng;
+    }
+  }
+
+  const maxRadius = parseFloat(radius);
+
+  const result = caregivers.map((c) => {
+    const entry = {
+      id: c.id,
+      name: `${c.first_name} ${c.last_name}`,
+      bio: c.bio,
+      yearsExperience: c.years_experience,
+      hourlyRate: c.hourly_rate,
+      specialties: JSON.parse(c.specialties || "[]"),
+      certifications: JSON.parse(c.certifications || "[]"),
+      rating: c.rating_avg,
+      reviewCount: c.rating_count,
+      isAvailable: !!c.is_available,
+      isBackgroundChecked: !!c.is_background_checked,
+      city: c.location_city,
+      state: c.location_state,
+      latitude: c.latitude,
+      longitude: c.longitude,
+      maxTravelMiles: c.max_travel_miles,
+    };
+
+    // Calculate distance if search center is provided
+    if (searchLat && searchLng && c.latitude && c.longitude) {
+      entry.distance = Math.round(haversineDistance(searchLat, searchLng, c.latitude, c.longitude) * 10) / 10;
+    }
+
+    return entry;
+  });
+
+  // Filter by radius if location search is active
+  let filtered = result;
+  if (searchLat && searchLng) {
+    filtered = result
+      .filter((c) => c.distance !== undefined && c.distance <= maxRadius)
+      .sort((a, b) => a.distance - b.distance);
+  }
+
+  res.json({
+    caregivers: filtered,
+    searchCenter: searchLat ? { lat: searchLat, lng: searchLng } : null,
+    radiusMiles: searchLat ? maxRadius : null,
+  });
+});
+
+// ─── GET /api/caregivers/nearby ───
+// Get caregivers near a specific care recipient
+router.get("/nearby/:careRecipientId", async (req, res) => {
+  const db = await getDb();
+  const { radius = 25 } = req.query;
+
+  const recipient = await db.prepare(
+    "SELECT latitude, longitude, location_city, location_state FROM care_recipients WHERE id = ?"
+  ).get(req.params.careRecipientId);
+
+  if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+
+  if (!recipient.latitude || !recipient.longitude) {
+    return res.status(400).json({ error: "Care recipient has no location set" });
+  }
+
+  const allCaregivers = await db.prepare(`
+    SELECT cp.*, u.first_name, u.last_name, u.avatar_url
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE u.is_active = 1 AND cp.is_available = 1
+      AND cp.latitude IS NOT NULL AND cp.longitude IS NOT NULL
+  `).all();
+
+  const maxRadius = parseFloat(radius);
+
+  const nearby = allCaregivers
+    .map((c) => ({
+      id: c.id,
+      name: `${c.first_name} ${c.last_name}`,
+      bio: c.bio,
+      yearsExperience: c.years_experience,
+      hourlyRate: c.hourly_rate,
+      specialties: JSON.parse(c.specialties || "[]"),
+      certifications: JSON.parse(c.certifications || "[]"),
+      rating: c.rating_avg,
+      reviewCount: c.rating_count,
+      isBackgroundChecked: !!c.is_background_checked,
+      city: c.location_city,
+      state: c.location_state,
+      latitude: c.latitude,
+      longitude: c.longitude,
+      maxTravelMiles: c.max_travel_miles,
+      distance: Math.round(
+        haversineDistance(recipient.latitude, recipient.longitude, c.latitude, c.longitude) * 10
+      ) / 10,
+    }))
+    .filter((c) => c.distance <= maxRadius)
+    .sort((a, b) => a.distance - b.distance);
+
+  res.json({
+    caregivers: nearby,
+    searchCenter: { lat: recipient.latitude, lng: recipient.longitude },
+    radiusMiles: maxRadius,
+    recipientLocation: `${recipient.location_city}, ${recipient.location_state}`,
+  });
 });
 
 // ─── GET /api/caregivers/:id ───
@@ -100,6 +204,9 @@ router.get("/:id", async (req, res) => {
       isBackgroundChecked: !!cg.is_background_checked,
       city: cg.location_city,
       state: cg.location_state,
+      latitude: cg.latitude,
+      longitude: cg.longitude,
+      maxTravelMiles: cg.max_travel_miles,
       totalSessions: stats.total_sessions,
       avgSessionDuration: stats.avg_duration,
     },
@@ -113,11 +220,23 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
   const {
     bio, yearsExperience, hourlyRate, specialties,
-    certifications, maxTravelMiles, city, state,
+    certifications, maxTravelMiles, city, state, address,
   } = req.body;
 
   if (!hourlyRate) {
     return res.status(400).json({ error: "hourlyRate is required" });
+  }
+
+  // Auto-geocode if city/state provided
+  let lat = null;
+  let lng = null;
+  if (city || address) {
+    const addrStr = buildAddressString({ address, city, state });
+    const geo = await geocodeAddress(addrStr);
+    if (geo) {
+      lat = geo.lat;
+      lng = geo.lng;
+    }
   }
 
   const existing = await db.prepare(
@@ -136,6 +255,8 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
         max_travel_miles = COALESCE(?, max_travel_miles),
         location_city = COALESCE(?, location_city),
         location_state = COALESCE(?, location_state),
+        latitude = COALESCE(?, latitude),
+        longitude = COALESCE(?, longitude),
         updated_at = NOW()
       WHERE user_id = ?
     `).run(
@@ -143,6 +264,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       specialties ? JSON.stringify(specialties) : null,
       certifications ? JSON.stringify(certifications) : null,
       maxTravelMiles, city, state,
+      lat, lng,
       req.user.id
     );
 
@@ -155,13 +277,15 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
   await db.prepare(`
     INSERT INTO caregiver_profiles
     (id, user_id, bio, years_experience, hourly_rate, specialties,
-     certifications, max_travel_miles, location_city, location_state)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     certifications, max_travel_miles, location_city, location_state,
+     latitude, longitude)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
     JSON.stringify(specialties || []),
     JSON.stringify(certifications || []),
-    maxTravelMiles || 10, city || null, state || null
+    maxTravelMiles || 10, city || null, state || null,
+    lat, lng
   );
 
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);

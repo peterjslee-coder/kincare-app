@@ -208,6 +208,21 @@
 - Seed data: 3 care teams (Betty with 3 members, Dorothy, Arun) with proper leader/member roles
 - 53 tests passing, cache version v1.0.0
 
+### v1.2.0 — Caregiver Search & Location (2026-02-18)
+
+**Phase 4: Location-Based Search**
+- Geocoding utility (`src/utils/geocode.js`) using OpenStreetMap Nominatim — thin abstraction with documented swap-path to Google Maps (change one function body)
+- `haversineDistance()` utility for radius-based filtering in miles
+- `GET /api/caregivers` now accepts `lat`, `lng`, `radius`, and `address` query params for location-based search, returns distance from search center
+- `GET /api/caregivers/nearby/:careRecipientId` endpoint — find available caregivers near a specific care recipient
+- Auto-geocoding on caregiver profile creation/update and care recipient creation/update — address → lat/lng automatically stored
+- Caregivers API returns lat/lng, maxTravelMiles, and distance in all caregiver list/detail responses
+- Caregivers page: new "Find Nearby" tab with address/zip search input, radius selector (5-50 miles), integrated Leaflet map with caregiver pins, distance badges on results
+- AreaMap.js (caregiver view): now uses real lat/lng from API instead of hardcoded demo offsets, service radius circle overlay, click-to-fly-to cards
+- Browse All tab: upgraded with bio, specialties, background check badges, and location info
+- Leaflet + OpenStreetMap tiles (free, no API key) — designed so tile provider and geocoder are each swappable in one line
+- Cache version bumped to v1.2.0, 53 tests passing
+
 ### v1.1.1 — Splash Page Rework (2026-02-18)
 - Splash page layout reorganized: pitch content (Problem → Solution → Market → Business Model → Personal Story → Vision → Working Product CTA) all pushed higher; audience sections (For Family, For Care Recipients, For Caregivers) grouped chronologically near the bottom
 - "For Caregivers" hero button styling fixed: now matches "For Family" and "For Care Recipients" (white text, transparent bg) instead of orange-tinted outlier
@@ -235,20 +250,21 @@
 
 ---
 
-## Next Up — v1.2.0: Caregiver Search & Location
+## Next Up — v1.3.0: Payments & Marketplace
 
-Priority: **HIGH** — Build out location-based search.
+Priority: **HIGH** — Enable real transactions.
 
-- [ ] **Caregiver search by location:** Mapbox integration, radius-based search, map view with filters
-- [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox. Caregiver matching by actual driving distance.
+- [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
+- [ ] **Caregiver earnings dashboard:** Payment history, pending payouts, tax summary
+- [ ] **Family billing:** Payment methods, invoices, spending history
 
 ---
 
 ## Future — Full Platform
 
-Priority: **MEDIUM** — Build out marketplace capabilities.
+Priority: **MEDIUM** — Scale and polish.
 
-- [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
+- [ ] **Google Maps geocoding upgrade:** Swap Nominatim for Google Maps for better residential address accuracy (one function change)
 - [ ] **Build step for frontend:** Move to Vite when component count demands it
 - [ ] **Apple Sign-In:** After Google OAuth is proven
 - [ ] **Admin dashboard:** User management, flagging accounts

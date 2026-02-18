@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 
 const router = express.Router();
 
@@ -57,16 +58,25 @@ router.post("/", requireRole("family"), async (req, res) => {
   const db = await getDb();
   const id = uuid();
 
+  // Auto-geocode address
+  let lat = null, lng = null;
+  if (address || city) {
+    const geo = await geocodeAddress(buildAddressString({ address, city, state, zip }));
+    if (geo) { lat = geo.lat; lng = geo.lng; }
+  }
+
   await db.prepare(`
     INSERT INTO care_recipients
     (id, family_user_id, first_name, last_name, age,
      location_address, location_city, location_state, location_zip,
+     latitude, longitude,
      health_conditions, medications, preferences,
      emergency_contact_name, emergency_contact_phone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.user.id, firstName, lastName, age || null,
     address || null, city || null, state || null, zip || null,
+    lat, lng,
     JSON.stringify(healthConditions || []),
     JSON.stringify(medications || []),
     preferences || null,
@@ -167,6 +177,19 @@ router.put("/:id", requireRole("family"), async (req, res) => {
     emergencyContactName, emergencyContactPhone,
   } = req.body;
 
+  // Re-geocode if address changed
+  let lat = null, lng = null;
+  if (address || city) {
+    const addrStr = buildAddressString({
+      address: address || existing.location_address,
+      city: city || existing.location_city,
+      state: state || existing.location_state,
+      zip: zip || existing.location_zip,
+    });
+    const geo = await geocodeAddress(addrStr);
+    if (geo) { lat = geo.lat; lng = geo.lng; }
+  }
+
   await db.prepare(`
     UPDATE care_recipients SET
       first_name = COALESCE(?, first_name),
@@ -176,6 +199,8 @@ router.put("/:id", requireRole("family"), async (req, res) => {
       location_city = COALESCE(?, location_city),
       location_state = COALESCE(?, location_state),
       location_zip = COALESCE(?, location_zip),
+      latitude = COALESCE(?, latitude),
+      longitude = COALESCE(?, longitude),
       health_conditions = COALESCE(?, health_conditions),
       medications = COALESCE(?, medications),
       preferences = COALESCE(?, preferences),
@@ -186,6 +211,7 @@ router.put("/:id", requireRole("family"), async (req, res) => {
   `).run(
     firstName, lastName, age,
     address, city, state, zip,
+    lat, lng,
     healthConditions ? JSON.stringify(healthConditions) : null,
     medications ? JSON.stringify(medications) : null,
     preferences,

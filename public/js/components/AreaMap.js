@@ -1,8 +1,11 @@
 const AreaMap = window.AreaMap = () => {
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
+  const markersRef = useRef([]);
+  const circleRef = useRef(null);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [radiusMiles, setRadiusMiles] = useState(10);
 
   useEffect(() => {
     const fetchAssignments = async () => {
@@ -20,26 +23,23 @@ const AreaMap = window.AreaMap = () => {
     fetchAssignments();
   }, []);
 
+  // Initialize Leaflet map
   useEffect(() => {
     if (!mapRef.current || leafletMap.current) return;
 
-    // Initialize Leaflet map centered on Blacksburg, VA
     const map = L.map(mapRef.current, {
-      center: [37.2296, -80.4139],
+      center: [37.2296, -80.4139], // Blacksburg default
       zoom: 13,
       zoomControl: true,
       scrollWheelZoom: true,
     });
 
-    // OpenStreetMap tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 18,
     }).addTo(map);
 
     leafletMap.current = map;
-
-    // Force a resize after mount (Leaflet quirk with hidden containers)
     setTimeout(() => map.invalidateSize(), 100);
 
     return () => {
@@ -50,43 +50,23 @@ const AreaMap = window.AreaMap = () => {
     };
   }, []);
 
-  // Add markers when assignments load
+  // Add markers when assignments load — use real lat/lng from API
   useEffect(() => {
     if (!leafletMap.current || assignments.length === 0) return;
-
     const map = leafletMap.current;
 
-    // Demo coordinates for Blacksburg-area families
-    // (In production these would come from real geocoded addresses)
-    const locationCoords = {
-      'Blacksburg': [37.2296, -80.4139],
-      'Christiansburg': [37.1299, -80.4089],
-    };
-
-    // Offset pins slightly so they don't stack
-    const offsets = [
-      [0.005, -0.003],
-      [-0.004, 0.006],
-      [0.007, 0.004],
-      [-0.006, -0.005],
-    ];
-
-    // Custom pin icon
-    const pinIcon = L.divIcon({
-      className: 'inplace-map-pin',
-      html: '<div style="background:#1b6b5a;color:#fff;padding:4px 10px;border-radius:8px 8px 8px 0;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;"></div>',
-      iconSize: [0, 0],
-      iconAnchor: [0, 0],
-    });
+    // Clear previous markers
+    markersRef.current.forEach(m => map.removeLayer(m));
+    markersRef.current = [];
 
     const bounds = [];
 
-    assignments.forEach((a, idx) => {
-      const city = a.location_city || 'Blacksburg';
-      const baseCoords = locationCoords[city] || locationCoords['Blacksburg'];
-      const offset = offsets[idx % offsets.length];
-      const lat = baseCoords[0] + offset[0];
-      const lng = baseCoords[1] + offset[1];
+    assignments.forEach((a) => {
+      const lat = a.latitude;
+      const lng = a.longitude;
+
+      // Skip assignments without coordinates
+      if (!lat || !lng) return;
 
       const icon = L.divIcon({
         className: '',
@@ -97,9 +77,9 @@ const AreaMap = window.AreaMap = () => {
           font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;
           transform:translate(-50%,-100%);
         ">
-          <div>📍 ${a.recipient_first_name} ${a.recipient_last_name}</div>
+          <div>${a.is_favorite ? '⭐' : '📍'} ${a.recipient_first_name} ${a.recipient_last_name}</div>
           <div style="font-size:10px;font-weight:400;opacity:0.85;margin-top:2px">
-            ${a.location_address ? a.location_address + ', ' : ''}${city}
+            ${a.location_address ? a.location_address + ', ' : ''}${a.location_city || 'Blacksburg'}
           </div>
         </div>`,
         iconSize: [0, 0],
@@ -117,12 +97,13 @@ const AreaMap = window.AreaMap = () => {
         <div style="min-width:180px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">
           <div style="font-weight:700;font-size:14px;margin-bottom:4px">${a.recipient_first_name} ${a.recipient_last_name}</div>
           <div style="font-size:12px;color:#666;margin-bottom:4px">Family: ${a.family_first_name} ${a.family_last_name}</div>
-          <div style="font-size:12px;color:#888;margin-bottom:6px">📍 ${a.location_address ? a.location_address + ', ' : ''}${city}, ${a.location_state || 'VA'}</div>
+          <div style="font-size:12px;color:#888;margin-bottom:6px">📍 ${a.location_address ? a.location_address + ', ' : ''}${a.location_city || 'Blacksburg'}, ${a.location_state || 'VA'}</div>
           ${healthBadges ? '<div style="margin-top:4px">' + healthBadges + '</div>' : ''}
           ${a.is_favorite ? '<div style="margin-top:6px;font-size:11px;color:#1b6b5a;font-weight:600">⭐ Favorite assignment</div>' : ''}
         </div>
       `);
 
+      markersRef.current.push(marker);
       bounds.push([lat, lng]);
     });
 
@@ -132,13 +113,65 @@ const AreaMap = window.AreaMap = () => {
     }
   }, [assignments]);
 
+  // Draw radius circle around the centroid of all assignments
+  useEffect(() => {
+    if (!leafletMap.current || assignments.length === 0) return;
+    const map = leafletMap.current;
+
+    // Remove old circle
+    if (circleRef.current) {
+      map.removeLayer(circleRef.current);
+      circleRef.current = null;
+    }
+
+    // Calculate centroid of all assignment locations
+    const validAssignments = assignments.filter(a => a.latitude && a.longitude);
+    if (validAssignments.length === 0) return;
+
+    const centerLat = validAssignments.reduce((s, a) => s + a.latitude, 0) / validAssignments.length;
+    const centerLng = validAssignments.reduce((s, a) => s + a.longitude, 0) / validAssignments.length;
+
+    // Draw radius circle (miles → meters: 1 mile = 1609.34m)
+    circleRef.current = L.circle([centerLat, centerLng], {
+      radius: radiusMiles * 1609.34,
+      color: '#1b6b5a',
+      fillColor: '#1b6b5a',
+      fillOpacity: 0.06,
+      weight: 2,
+      dashArray: '6 4',
+    }).addTo(map);
+  }, [assignments, radiusMiles]);
+
+  const flyToAssignment = (a) => {
+    if (leafletMap.current && a.latitude && a.longitude) {
+      leafletMap.current.flyTo([a.latitude, a.longitude], 15, { duration: 0.8 });
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>🗺️</span> Area Map
         </h1>
-        <p className="page-subtitle">Your assigned families in the Blacksburg area</p>
+        <p className="page-subtitle">Your assigned families in the area</p>
+      </div>
+
+      {/* Radius control */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px',
+        padding: '10px 16px', background: '#f0faf8', borderRadius: '8px', flexWrap: 'wrap',
+      }}>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: '#1b6b5a' }}>Service Radius:</span>
+        {[5, 10, 15, 25].map(r => (
+          <button key={r} onClick={() => setRadiusMiles(r)} style={{
+            padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+            border: radiusMiles === r ? '2px solid #1b6b5a' : '1px solid #ccc',
+            background: radiusMiles === r ? '#1b6b5a' : '#fff',
+            color: radiusMiles === r ? '#fff' : '#666',
+            cursor: 'pointer',
+          }}>{r} mi</button>
+        ))}
       </div>
 
       {/* Quick summary cards */}
@@ -147,17 +180,9 @@ const AreaMap = window.AreaMap = () => {
           <div key={idx} style={{
             flex: '1 1 200px', padding: '12px 16px', background: '#fff', borderRadius: '8px',
             border: a.is_favorite ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-            cursor: 'pointer',
+            cursor: 'pointer', transition: 'box-shadow 0.2s',
           }}
-            onClick={() => {
-              if (leafletMap.current) {
-                const city = a.location_city || 'Blacksburg';
-                const coords = city === 'Christiansburg' ? [37.1299, -80.4089] : [37.2296, -80.4139];
-                const offsets = [[0.005,-0.003],[-0.004,0.006],[0.007,0.004],[-0.006,-0.005]];
-                const off = offsets[idx % offsets.length];
-                leafletMap.current.flyTo([coords[0]+off[0], coords[1]+off[1]], 15, { duration: 0.8 });
-              }
-            }}
+            onClick={() => flyToAssignment(a)}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ fontSize: '16px' }}>{a.is_favorite ? '⭐' : '📍'}</span>
@@ -165,7 +190,9 @@ const AreaMap = window.AreaMap = () => {
                 <div style={{ fontWeight: 600, fontSize: '13px', color: '#333' }}>
                   {a.recipient_first_name} {a.recipient_last_name}
                 </div>
-                <div style={{ fontSize: '11px', color: '#888' }}>{a.location_city || 'Blacksburg'}</div>
+                <div style={{ fontSize: '11px', color: '#888' }}>
+                  {a.location_city || 'Blacksburg'}, {a.location_state || 'VA'}
+                </div>
               </div>
             </div>
           </div>
@@ -178,7 +205,7 @@ const AreaMap = window.AreaMap = () => {
       </div>
 
       <div style={{ marginTop: '10px', fontSize: '11px', color: '#aaa', textAlign: 'center' }}>
-        Map data &copy; OpenStreetMap contributors &bull; Pin locations are approximate for demo
+        Map data &copy; OpenStreetMap contributors &bull; Leaflet
       </div>
     </div>
   );

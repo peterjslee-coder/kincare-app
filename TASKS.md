@@ -11,8 +11,8 @@
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
-- [ ] **Caregiver search by location:** Mapbox integration, radius-based search, map view with filters
 - [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
+- [ ] **Upgrade to Google Maps geocoding:** Swap Nominatim → Google Maps for better residential accuracy when ready for production
 
 
 ## Production Path — Beta on Phone
@@ -29,7 +29,7 @@
 - [x] **Auth Foundation (v1.0.0):** ✅ Done. Google OAuth backend, TOTP 2FA, trusted devices, demo mode isolation, enhanced MyAccount.
 - [x] **Care Teams (v1.0.0):** ✅ Done. Care team CRUD, email invites, auto-creation, onboarding checklist, dashboard rework.
 - [ ] **Stripe Connect integration:** Wire payments table to Stripe Connect for marketplace payouts.
-- [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox. Caregiver matching by actual driving distance.
+- [x] **Geocoding & distance:** ✅ Done (v1.2.0). Nominatim geocoding + Haversine radius search. Swap to Google Maps = one function change.
 - [ ] **Build step for frontend:** Move to Vite when component count demands it. Not urgent yet.
 
 
@@ -45,6 +45,14 @@
 
 
 ## Done
+
+### Caregiver Search & Location (v1.2.0)
+- [x] **Geocoding utility:** `src/utils/geocode.js` — Nominatim geocoder with documented Google Maps swap path (one function body change). `haversineDistance()` for radius filtering. `buildAddressString()` helper.
+- [x] **Location-based caregiver search API:** `GET /api/caregivers` now accepts `lat`/`lng`/`radius`/`address` params. Returns distance from search center, sorted by proximity. `GET /api/caregivers/nearby/:recipientId` finds caregivers near a care recipient.
+- [x] **Auto-geocoding:** Caregiver profile create/update and care recipient create/update both auto-geocode address → lat/lng via Nominatim.
+- [x] **Caregivers "Find Nearby" tab:** Address/zip search input, radius selector (5-50 mi), integrated Leaflet map with caregiver pins + radius circle, distance badges on caregiver cards.
+- [x] **AreaMap real coordinates:** Caregiver AreaMap now uses real lat/lng from API instead of hardcoded demo offsets. Service radius circle overlay, click-to-fly-to cards.
+- [x] **Browse All tab upgrade:** Cards now show bio, specialties, background check badges, and location info.
 
 ### Splash Page Rework (v1.1.1)
 - [x] **Splash layout rearranged:** Pitch content (Problem, Solution, Market, Business Model, Personal Story, Vision, Working Product CTA) all higher up; audience sections (For Family, For Care Recipients, For Caregivers) grouped chronologically near the bottom.
