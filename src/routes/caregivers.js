@@ -20,13 +20,17 @@ router.get("/", async (req, res) => {
   const db = await getDb();
   const { specialty, available, limit = 20, lat, lng, radius = 25, address } = req.query;
 
+  // Demo isolation: demo users see demo caregivers, real users see real caregivers
+  const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+  const isDemo = me && me.is_demo ? 1 : 0;
+
   let query = `
     SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
-    WHERE u.is_active = 1
+    WHERE u.is_active = 1 AND COALESCE(u.is_demo, 0) = ?
   `;
-  const params = [];
+  const params = [isDemo];
 
   if (available === "true") {
     query += " AND cp.is_available = 1";
@@ -108,6 +112,10 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
   const db = await getDb();
   const { radius = 25 } = req.query;
 
+  // Demo isolation
+  const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+  const isDemo = me && me.is_demo ? 1 : 0;
+
   const recipient = await db.prepare(
     "SELECT latitude, longitude, location_city, location_state FROM care_recipients WHERE id = ?"
   ).get(req.params.careRecipientId);
@@ -124,7 +132,8 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
     JOIN users u ON cp.user_id = u.id
     WHERE u.is_active = 1 AND cp.is_available = 1
       AND cp.latitude IS NOT NULL AND cp.longitude IS NOT NULL
-  `).all();
+      AND COALESCE(u.is_demo, 0) = ?
+  `).all(isDemo);
 
   const maxRadius = parseFloat(radius);
 

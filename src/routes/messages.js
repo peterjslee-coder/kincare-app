@@ -165,14 +165,20 @@ router.post("/conversations", async (req, res) => {
 });
 
 // ─── GET /api/messages/contacts ─── List users available to message
+// Demo users only see demo users; real users only see real users
 router.get("/contacts", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
 
+  // Look up requesting user's demo flag
+  const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(userId);
+  const isDemo = me && me.is_demo ? 1 : 0;
+
   const users = await db.prepare(`
-    SELECT id, first_name, last_name, role FROM users WHERE id != ?
+    SELECT id, first_name, last_name, role FROM users
+    WHERE id != ? AND COALESCE(is_demo, 0) = ?
     ORDER BY first_name ASC
-  `).all(userId);
+  `).all(userId, isDemo);
 
   const contacts = users.map(u => ({
     id: u.id,
