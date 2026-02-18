@@ -66,6 +66,20 @@ const Messages = window.Messages = () => {
 
   useEffect(() => { fetchConversations(); }, []);
 
+  // Listen for real-time incoming messages
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const cleanup = onSocketEvent('new_message', (msg) => {
+      // If viewing this conversation, add message directly
+      if (msg.sender_id === activePartnerId) {
+        setMessages(prev => [...prev, msg]);
+      }
+      // Refresh conversation list to update previews & unread counts
+      fetchConversations();
+    });
+    return cleanup;
+  }, [activePartnerId]);
+
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });

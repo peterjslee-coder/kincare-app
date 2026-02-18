@@ -19,7 +19,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=0.8.0">
+  <link rel="stylesheet" href="/css/styles.css?v=0.9.0">
 </head>
 <body>
   <div id="root"></div>
@@ -28,6 +28,7 @@
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
   <!--
     Async loader: fetches all modular source files in parallel,
@@ -63,7 +64,7 @@
       ];
       try {
         var sources = await Promise.all(
-          scripts.map(function(url) { return fetch(url + '?v=0.8.0').then(function(r) { return r.text(); }); })
+          scripts.map(function(url) { return fetch(url + '?v=0.9.0').then(function(r) { return r.text(); }); })
         );
         var combined = sources.join('\n;\n');
         var compiled = Babel.transform(combined, { presets: ['react'] }).code;

@@ -6,7 +6,10 @@ const CaretakerHub = window.CaretakerHub = () => {
   const [logSummary, setLogSummary] = useState('');
   const [logMood, setLogMood] = useState('good');
   const [logNotes, setLogNotes] = useState('');
+  const [logPhotos, setLogPhotos] = useState([]);
+  const [photoPreviewUrls, setPhotoPreviewUrls] = useState([]);
   const [submittingLog, setSubmittingLog] = useState(false);
+  const photoInputRef = useRef(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -24,6 +27,22 @@ const CaretakerHub = window.CaretakerHub = () => {
     fetchData();
   }, []);
 
+  const handlePhotoSelect = (e) => {
+    const files = Array.from(e.target.files || []).slice(0, 5);
+    setLogPhotos(prev => [...prev, ...files].slice(0, 5));
+    // Generate preview URLs
+    const newUrls = files.map(f => URL.createObjectURL(f));
+    setPhotoPreviewUrls(prev => [...prev, ...newUrls].slice(0, 5));
+  };
+
+  const removePhoto = (idx) => {
+    setLogPhotos(prev => prev.filter((_, i) => i !== idx));
+    setPhotoPreviewUrls(prev => {
+      URL.revokeObjectURL(prev[idx]);
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
   const handleSubmitVisitLog = async () => {
     if (!visitLogSession || !logSummary.trim()) return;
     setSubmittingLog(true);
@@ -38,10 +57,24 @@ const CaretakerHub = window.CaretakerHub = () => {
         }),
       });
       if (res?.ok) {
+        const logData = await res.json();
+        // Upload photos if any
+        if (logPhotos.length > 0 && logData.visitLog?.id) {
+          const formData = new FormData();
+          logPhotos.forEach(f => formData.append('photos', f));
+          const token = localStorage.getItem('auth_token');
+          await fetch(`${API_BASE}/api/photos/visit/${logData.visitLog.id}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData,
+          });
+        }
         setVisitLogSession(null);
         setLogSummary('');
         setLogMood('good');
         setLogNotes('');
+        setLogPhotos([]);
+        setPhotoPreviewUrls([]);
         // Refresh data
         const refreshRes = await apiFetch('/api/dashboard');
         if (refreshRes?.ok) setData(await refreshRes.json());
@@ -397,8 +430,32 @@ const CaretakerHub = window.CaretakerHub = () => {
               />
             </div>
 
-            <div style={{ marginBottom: '16px', padding: '10px', background: '#f8f9fa', borderRadius: '6px', fontSize: '12px', color: '#888' }}>
-              📸 Photo uploads — coming soon
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>📸 Visit Photos (up to 5)</label>
+              <input type="file" ref={photoInputRef} accept="image/*" multiple onChange={handlePhotoSelect}
+                style={{ display: 'none' }} />
+              <button onClick={() => photoInputRef.current?.click()} style={{
+                padding: '8px 16px', background: '#f0f0f0', border: '1px dashed #ccc', borderRadius: '8px',
+                cursor: 'pointer', fontSize: '13px', color: '#666', width: '100%',
+              }}>
+                {logPhotos.length > 0 ? `${logPhotos.length} photo${logPhotos.length > 1 ? 's' : ''} selected — add more` : 'Tap to add photos'}
+              </button>
+              {photoPreviewUrls.length > 0 && (
+                <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                  {photoPreviewUrls.map((url, idx) => (
+                    <div key={idx} style={{ position: 'relative', width: '72px', height: '72px' }}>
+                      <img src={url} alt={`Photo ${idx + 1}`} style={{
+                        width: '72px', height: '72px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd',
+                      }} />
+                      <button onClick={() => removePhoto(idx)} style={{
+                        position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px',
+                        background: '#c62828', color: '#fff', border: 'none', borderRadius: '50%',
+                        fontSize: '12px', cursor: 'pointer', lineHeight: '20px', padding: 0,
+                      }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>

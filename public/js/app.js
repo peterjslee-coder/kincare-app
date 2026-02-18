@@ -93,6 +93,8 @@ const App = () => {
     const savedToken = localStorage.getItem('auth_token');
     if (savedToken) {
       AUTH_TOKEN = savedToken;
+      // Auto-connect WebSocket if returning user
+      if (typeof connectSocket === 'function') connectSocket(savedToken);
     }
     const params = new URLSearchParams(window.location.search);
 
@@ -126,6 +128,11 @@ const App = () => {
     if (typeof subscribeToPush === 'function') {
       subscribeToPush().catch(() => {});
     }
+    // Connect WebSocket for real-time updates
+    const token = localStorage.getItem('auth_token');
+    if (token && typeof connectSocket === 'function') {
+      connectSocket(token);
+    }
   };
 
   const handleLogout = () => {
@@ -133,6 +140,8 @@ const App = () => {
     setAuthToken(null);
     setCurrentPage('dashboard');
     setAppState('splash');
+    // Disconnect WebSocket
+    if (typeof disconnectSocket === 'function') disconnectSocket();
   };
 
   const handleNavigate = (page) => {

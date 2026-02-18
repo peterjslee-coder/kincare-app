@@ -2,20 +2,28 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const res = await apiFetch('/api/dashboard');
-        if (res?.ok) {
-          const d = await res.json();
-          setData(d);
-        }
-      } catch (err) {
-        console.error('Dashboard fetch error:', err);
+  const fetchDashboard = async () => {
+    try {
+      const res = await apiFetch('/api/dashboard');
+      if (res?.ok) {
+        const d = await res.json();
+        setData(d);
       }
-      setLoading(false);
-    };
-    fetchDashboard();
+    } catch (err) {
+      console.error('Dashboard fetch error:', err);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchDashboard(); }, []);
+
+  // Real-time: refresh dashboard on activity or session updates
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const c1 = onSocketEvent('activity_update', () => fetchDashboard());
+    const c2 = onSocketEvent('session_update', () => fetchDashboard());
+    const c3 = onSocketEvent('visit_photos', () => fetchDashboard());
+    return () => { c1(); c2(); c3(); };
   }, []);
 
   const formatActivityTime = (createdAt) => {

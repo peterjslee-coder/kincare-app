@@ -2,23 +2,44 @@ const ActivityFeed = window.ActivityFeed = () => {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedActivity, setExpandedActivity] = useState(null);
+  const [visitPhotos, setVisitPhotos] = useState({}); // visitLogId -> photos[]
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    const fetchActivities = async () => {
-      try {
-        const response = await apiFetch('/api/activity');
-        if (response?.ok) {
-          const data = await response.json();
-          setActivities(data.activities || []);
-        }
-      } catch (error) {
-        console.error('Error fetching activities:', error);
+  const fetchActivities = async () => {
+    try {
+      const response = await apiFetch('/api/activity');
+      if (response?.ok) {
+        const data = await response.json();
+        setActivities(data.activities || []);
       }
-      setLoading(false);
-    };
-    fetchActivities();
+    } catch (error) {
+      console.error('Error fetching activities:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchActivities(); }, []);
+
+  // Real-time: refresh on activity updates
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    return onSocketEvent('activity_update', () => fetchActivities());
   }, []);
+
+  // Fetch photos for a visit_complete activity when expanded
+  const loadVisitPhotos = async (visitLogId) => {
+    if (!visitLogId || visitPhotos[visitLogId]) return;
+    try {
+      const res = await apiFetch(`/api/photos/visit/${visitLogId}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setVisitPhotos(prev => ({ ...prev, [visitLogId]: data.photos || [] }));
+      }
+    } catch (err) {
+      console.error('Error loading visit photos:', err);
+    }
+  };
 
   const formatActivityTime = (createdAt) => {
     const dateStr = createdAt.replace(' ', 'T') + 'Z';
@@ -77,7 +98,17 @@ const ActivityFeed = window.ActivityFeed = () => {
       <div className="card">
         <div>
           {activities.map((activity, idx) => (
-            <div key={idx} className={`activity-item ${expandedActivity === idx ? 'expanded' : ''} ${!activity.is_read ? 'unread' : ''}`} onClick={() => setExpandedActivity(expandedActivity === idx ? null : idx)} style={{ cursor: 'pointer' }}>
+            <div key={idx} className={`activity-item ${expandedActivity === idx ? 'expanded' : ''} ${!activity.is_read ? 'unread' : ''}`} onClick={() => {
+              const isExpanding = expandedActivity !== idx;
+              setExpandedActivity(isExpanding ? idx : null);
+              // Load photos for visit_complete activities
+              if (isExpanding && activity.event_type === 'visit_complete' && activity.metadata) {
+                try {
+                  const meta = typeof activity.metadata === 'string' ? JSON.parse(activity.metadata) : activity.metadata;
+                  if (meta.visitLogId) loadVisitPhotos(meta.visitLogId);
+                } catch (e) {}
+              }
+            }} style={{ cursor: 'pointer' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div className="activity-title">
@@ -95,6 +126,29 @@ const ActivityFeed = window.ActivityFeed = () => {
               {expandedActivity === idx && (
                 <>
                   <div className="activity-message">{activity.message}</div>
+                  {/* Visit photos for visit_complete events */}
+                  {activity.event_type === 'visit_complete' && (() => {
+                    try {
+                      const meta = typeof activity.metadata === 'string' ? JSON.parse(activity.metadata) : activity.metadata;
+                      const photos = meta?.visitLogId ? (visitPhotos[meta.visitLogId] || []) : [];
+                      if (photos.length > 0) {
+                        return (
+                          <div style={{ marginTop: '10px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '6px' }}>📸 Visit Photos ({photos.length})</div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {photos.map((p, pi) => (
+                                <img key={pi} src={p.photo_url} alt={p.caption || `Visit photo ${pi + 1}`}
+                                  onClick={(e) => { e.stopPropagation(); setLightboxPhoto(p); }}
+                                  style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', cursor: 'pointer', border: '1px solid #ddd' }}
+                                  title={p.caption || ''} />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    } catch (e) { return null; }
+                  })()}
                   <div className="activity-badge">{activity.event_type}</div>
                 </>
               )}
@@ -102,6 +156,28 @@ const ActivityFeed = window.ActivityFeed = () => {
           ))}
         </div>
       </div>
+      )}
+      {/* Photo Lightbox */}
+      {lightboxPhoto && (
+        <div onClick={() => setLightboxPhoto(null)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 2000, cursor: 'pointer',
+        }}>
+          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+            <img src={lightboxPhoto.photo_url} alt={lightboxPhoto.caption || 'Visit photo'}
+              style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: '8px', objectFit: 'contain' }} />
+            {lightboxPhoto.caption && (
+              <div style={{ textAlign: 'center', color: '#fff', marginTop: '10px', fontSize: '14px' }}>
+                {lightboxPhoto.caption}
+              </div>
+            )}
+            <button onClick={() => setLightboxPhoto(null)} style={{
+              position: 'absolute', top: '-12px', right: '-12px', width: '32px', height: '32px',
+              background: '#fff', color: '#333', border: 'none', borderRadius: '50%',
+              fontSize: '18px', cursor: 'pointer', fontWeight: 700,
+            }}>×</button>
+          </div>
+        </div>
       )}
     </>
   );

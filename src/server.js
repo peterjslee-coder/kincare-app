@@ -1,14 +1,67 @@
 require("dotenv").config();
 
 const express = require("express");
+const http = require("http");
 const cors = require("cors");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
+const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
 const { initializeDatabase, getDb } = require("./models/database");
 const { limitBodySize } = require("./middleware/validate");
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
+
+// ─── Socket.io Setup ───
+const io = new Server(server, { cors: { origin: "*" } });
+
+// JWT auth middleware for socket connections
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error("Authentication required"));
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    socket.user = decoded;
+    next();
+  } catch (err) {
+    next(new Error("Invalid token"));
+  }
+});
+
+// Track connected users: userId -> Set of socket ids
+const connectedUsers = new Map();
+
+io.on("connection", (socket) => {
+  const userId = socket.user.id;
+  if (!connectedUsers.has(userId)) connectedUsers.set(userId, new Set());
+  connectedUsers.get(userId).add(socket.id);
+  console.log(`WS connected: ${socket.user.email} (${connectedUsers.get(userId).size} sockets)`);
+
+  socket.on("disconnect", () => {
+    const sockets = connectedUsers.get(userId);
+    if (sockets) {
+      sockets.delete(socket.id);
+      if (sockets.size === 0) connectedUsers.delete(userId);
+    }
+  });
+});
+
+// Helper: emit to a specific user (all their connected sockets)
+function emitToUser(userId, event, data) {
+  const sockets = connectedUsers.get(userId);
+  if (sockets) {
+    for (const socketId of sockets) {
+      io.to(socketId).emit(event, data);
+    }
+  }
+}
+
+// Make io and emitToUser available to routes
+app.set("io", io);
+app.set("emitToUser", emitToUser);
 
 // ─── Middleware ───
 app.use(cors());
@@ -61,6 +114,7 @@ app.use("/api/notes", require("./routes/notes"));
 app.use("/api/assignments", require("./routes/assignments"));
 app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/push", require("./routes/push"));
+app.use("/api/photos", require("./routes/photos"));
 app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 
@@ -142,8 +196,9 @@ async function start() {
     console.log("  Seed complete");
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n  InPlace API v0.6.2 running on port ${PORT}\n`);
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`\n  InPlace API v0.9.0 running on port ${PORT}\n`);
+    console.log(`  WebSocket server ready`);
   });
 }
 

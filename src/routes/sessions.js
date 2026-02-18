@@ -297,6 +297,16 @@ router.put("/:id/status", async (req, res) => {
   ).run(status, req.params.id);
 
   const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+
+  // Real-time: notify family user of session status change
+  const emitToUser = req.app.get("emitToUser");
+  if (emitToUser) {
+    emitToUser(session.family_user_id, "session_update", {
+      sessionId: req.params.id,
+      status,
+    });
+  }
+
   res.json({ session: updated });
 });
 

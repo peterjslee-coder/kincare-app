@@ -209,6 +209,39 @@ const ToastProvider = window.ToastProvider = ({ children }) => {
   );
 };
 
+// ─── WebSocket Real-Time Connection ───
+let _socket = null;
+const _socketListeners = new Map(); // event -> Set of callbacks
+
+const connectSocket = window.connectSocket = (token) => {
+  if (_socket) _socket.disconnect();
+  if (!token || typeof io === 'undefined') return;
+  _socket = io(API_BASE, { auth: { token }, transports: ['websocket', 'polling'] });
+  _socket.on('connect', () => console.log('WS connected'));
+  _socket.on('disconnect', () => console.log('WS disconnected'));
+  // Re-register all listeners
+  for (const [event, callbacks] of _socketListeners) {
+    for (const cb of callbacks) {
+      _socket.on(event, cb);
+    }
+  }
+};
+
+const disconnectSocket = window.disconnectSocket = () => {
+  if (_socket) { _socket.disconnect(); _socket = null; }
+};
+
+const onSocketEvent = window.onSocketEvent = (event, callback) => {
+  if (!_socketListeners.has(event)) _socketListeners.set(event, new Set());
+  _socketListeners.get(event).add(callback);
+  if (_socket) _socket.on(event, callback);
+  // Return cleanup function
+  return () => {
+    _socketListeners.get(event)?.delete(callback);
+    if (_socket) _socket.off(event, callback);
+  };
+};
+
 // ─── Push Notification Helpers ───
 // Subscribe to push notifications (call after login)
 const subscribeToPush = window.subscribeToPush = async () => {

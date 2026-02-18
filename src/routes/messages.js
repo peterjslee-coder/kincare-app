@@ -136,6 +136,16 @@ router.post("/", validateMessage, async (req, res) => {
     data: { type: "message", senderId: req.user.id },
   }).catch(() => {});
 
+  // Real-time: notify recipient via WebSocket
+  const emitToUser = req.app.get("emitToUser");
+  if (emitToUser) {
+    emitToUser(recipientId, "new_message", {
+      ...message,
+      senderName,
+      type: "received",
+    });
+  }
+
   res.status(201).json({ message });
 });
 

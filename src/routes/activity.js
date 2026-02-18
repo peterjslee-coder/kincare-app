@@ -109,6 +109,23 @@ router.post("/visit-log", requireRole("caregiver"), async (req, res) => {
     "UPDATE care_sessions SET status = 'completed', updated_at = NOW() WHERE id = ?"
   ).run(sessionId);
 
+  // Real-time: notify family that visit is complete
+  const emitToUser = req.app.get("emitToUser");
+  if (emitToUser) {
+    emitToUser(session.family_user_id, "activity_update", {
+      type: "visit_complete",
+      title: "Visit completed",
+      message: summary,
+      sessionId,
+      visitLogId: logId,
+      moodRating,
+    });
+    emitToUser(session.family_user_id, "session_update", {
+      sessionId,
+      status: "completed",
+    });
+  }
+
   const log = await db.prepare("SELECT * FROM visit_logs WHERE id = ?").get(logId);
   res.status(201).json({ visitLog: log });
 });
