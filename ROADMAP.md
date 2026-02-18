@@ -208,6 +208,13 @@
 - Seed data: 3 care teams (Betty with 3 members, Dorothy, Arun) with proper leader/member roles
 - 53 tests passing, cache version v1.0.0
 
+### v1.1.1 — Splash Page Rework (2026-02-18)
+- Splash page layout reorganized: pitch content (Problem → Solution → Market → Business Model → Personal Story → Vision → Working Product CTA) all pushed higher; audience sections (For Family, For Care Recipients, For Caregivers) grouped chronologically near the bottom
+- "For Caregivers" hero button styling fixed: now matches "For Family" and "For Care Recipients" (white text, transparent bg) instead of orange-tinted outlier
+- "For Caregivers" section label color changed from `#e8724a` (orange) to `#1b6b5a` (teal) to match "For Family" and "For Care Recipients"
+- Dev Login section added above footer: one-click login buttons for all 5 demo accounts (Pete, David, Susan, Maria, Betty) — calls `/api/auth/login` directly and navigates to dashboard
+- Cache version bumped to v1.1.1
+
 ### v1.1.0 — Group Messaging & Calendar for Real Users (2026-02-18)
 
 **Phase 3: Group Messaging**

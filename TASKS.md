@@ -46,6 +46,11 @@
 
 ## Done
 
+### Splash Page Rework (v1.1.1)
+- [x] **Splash layout rearranged:** Pitch content (Problem, Solution, Market, Business Model, Personal Story, Vision, Working Product CTA) all higher up; audience sections (For Family, For Care Recipients, For Caregivers) grouped chronologically near the bottom.
+- [x] **For Caregivers styling fixed:** Hero button now matches siblings (white text, transparent bg). Section label color changed to teal (`#1b6b5a`) to match other audience sections.
+- [x] **Dev Login button:** One-click login buttons for all 5 demo accounts added above footer. Calls `/api/auth/login` directly and navigates to dashboard. Cache version v1.1.1.
+
 ### Group Messaging & Calendar for Real Users (v1.1.0)
 - [x] **Phase 3 — Group Messaging:** New `conversations` and `conversation_members` tables. `conversation_id` column on messages. Full backend rewrite of `/api/messages` with conversation-centric endpoints (list, create, get messages, send). Legacy backward compatibility with auto-migration. Auto-created care team conversations on care recipient creation and invite acceptance. Frontend Messages.js rewrite with conversation list (direct + group), group chat with sender names, contact picker, group creation flow. WebSocket events include `conversationId`. Seed data: 5 direct conversations, 1 care team conversation with 6 group messages.
 - [x] **Phase 5 — Calendar for Real Users:** RequestCareModal 4-step wizard for real users (skips caregiver matching), `status: 'open'` for open care requests. Schedule.js empty state with "Request Care" CTA, `open` status badge. Sessions route accepts `open` status. Cache version v1.1.0.
