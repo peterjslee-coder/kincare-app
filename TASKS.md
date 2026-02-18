@@ -14,7 +14,7 @@
 - [x] ~~**Sibling logins:** Add Pete's brother (David) and sister (Susan) with generic credentials so they can see activity and use messaging.~~ Done in v0.6.0.
 - [x] ~~**Loading spinners & empty states:** Animated spinner + empty states on all pages.~~ Done in v0.5.3.
 - [x] ~~**MyAccount persistence:** Profile edits and notification prefs wired to PUT /api/auth/me.~~ Done in v0.5.3.
-- [ ] **Visit photos:** Add file upload endpoint (multipart/form-data → local storage or S3), display photos in visit logs.
+- [x] ~~**Visit photos:** Add file upload endpoint (multipart/form-data → base64 storage), display photos in visit logs.~~ Done in v0.9.0.
 - [x] ~~**Recurring sessions:** Allow scheduling weekly/biweekly repeating care sessions.~~ Done in v0.7.0.
 - [x] ~~**Mobile responsive layout:** Sidebar → bottom nav on mobile.~~ Done in v0.5.2.
 - [x] ~~**Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.).~~ Done in v0.5.3.
@@ -48,6 +48,12 @@
 
 
 ## Done
+
+### Real-Time WebSocket Updates & Visit Photos (v0.9.0)
+- [x] **Real-Time WebSocket Updates:** Socket.io integration with JWT-authenticated connections. Live message delivery (`new_message`), session status changes (`session_update`), activity feed updates (`activity_update`), and photo uploads (`visit_photos`). Connected users tracked in server-side Map. Frontend WebSocket manager with `connectSocket()`, `disconnectSocket()`, `onSocketEvent()`. Auto-connect on login and page load, auto-disconnect on logout. Dashboard, ActivityFeed, Messages, and CaretakerHub all listen for real-time events.
+- [x] **Visit Photo Uploads:** Multer-based file upload (5MB limit, image-only, max 5 per visit). Base64 storage in PostgreSQL `visit_photos` table. New `/api/photos` route with upload, retrieval by visit log ID and session ID. Caregiver photo upload UI in CaretakerHub visit log modal with preview thumbnails. Family-side photo viewer in ActivityFeed with expandable thumbnails and full-size lightbox modal.
+- [x] **Splash Page Cache-Bust Fix:** Previous deploy (v0.8.0) failed silently on Railway due to `package-lock.json` out of sync. Fixed by regenerating lock file. Cache-bust version bumped to v0.9.0 in index.html and sw.js.
+- [x] **Infrastructure:** Socket.io CDN added to index.html. 2 new npm dependencies (socket.io, multer). 1 new route file (photos.js). `http.createServer` wrapper for Express+Socket.io. Cache bumped to v0.9.0. 53 tests passing.
 
 ### Analytics, Push Notifications & Shared Care Recipients (v0.8.0)
 - [x] **Family Dashboard Analytics:** New `/api/analytics` endpoint with 6-month historical data (sessions, hours, spend per month), service type breakdown, and caregiver utilization stats. Frontend Analytics page with SVG bar charts (hours/spend/sessions monthly trends), donut chart for service types, caregiver utilization horizontal bars, summary stat cards. Tab switcher for different views.

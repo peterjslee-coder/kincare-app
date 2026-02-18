@@ -167,6 +167,23 @@
 - Expanded service types in validation (companionship, meal_prep, transportation, health_wellness, full_day)
 - Test suite expanded to 53 tests (8 new session validation tests including recurrence)
 
+### v0.9.0 — Real-Time WebSocket Updates & Visit Photos (2026-02-18)
+- Socket.io WebSocket server with JWT-authenticated connections
+- Real-time events: `new_message`, `session_update`, `activity_update`, `visit_photos`
+- Connected users tracked server-side (`Map<userId, Set<socketId>>`) with `emitToUser()` helper
+- Frontend WebSocket manager: `connectSocket()`, `disconnectSocket()`, `onSocketEvent()` in utils.js
+- Auto-connect on login and page load, auto-disconnect on logout
+- Dashboard, ActivityFeed, Messages, CaretakerHub all listen for real-time events
+- Visit photo uploads via Multer (memory storage, 5MB limit, image-only, max 5 per visit)
+- Base64 photo storage in PostgreSQL `visit_photos` table
+- New `/api/photos` route: upload by visit log ID, retrieve by visit log or session
+- Caregiver photo upload UI in CaretakerHub visit log modal with preview thumbnails
+- Family-side photo viewer in ActivityFeed with expandable thumbnails and lightbox modal
+- Socket.io CDN added to index.html, 2 new npm deps (socket.io, multer)
+- `http.createServer` wrapper for Express + Socket.io
+- Cache version bumped to v0.9.0
+- Fixed silent Railway build failure from v0.8.0 (package-lock.json out of sync)
+
 ---
 
 ## Next Up — Marketplace & Growth
@@ -181,6 +198,4 @@ Priority: **MEDIUM** — Build out marketplace capabilities.
 
 - [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
 - [ ] **Geocoding & distance:** Real address → lat/lng for caregiver matching
-- [ ] **Visit photos:** File upload for visit documentation
-- [ ] **Real-time updates:** WebSocket or SSE for activity feed
 - [ ] **Build step for frontend:** Move to Vite when component count demands it

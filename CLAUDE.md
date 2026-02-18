@@ -14,6 +14,8 @@ https://yourinplace.com
 - **Database:** PostgreSQL via `pg` (connection pooling, persistent data across deploys)
 - **Auth:** JWT tokens (7-day expiry), bcryptjs for password hashing
 - **Frontend:** Modular React SPA (via CDN — React 18, ReactDOM, Babel standalone). No build step — Babel compiles JSX in-browser.
+- **Real-Time:** Socket.io WebSocket server with JWT-authenticated connections. Events: `new_message`, `session_update`, `activity_update`, `visit_photos`.
+- **File Uploads:** Multer (memory storage, 5MB limit, image-only, max 5 files). Photos stored as base64 in PostgreSQL.
 - **Deployment:** Railway.app (NIXPACKS builder), Cloudflare DNS/proxy for yourinplace.com
 - **IDs:** UUID v4 for all entities
 
@@ -33,7 +35,7 @@ https://yourinplace.com
 │   ├── css/
 │   │   └── styles.css         ← All CSS (~1,600 lines)
 │   └── js/
-│       ├── utils.js           ← Shared utilities: apiFetch, setAuthToken, scheduling helpers, caregiver data
+│       ├── utils.js           ← Shared utilities: apiFetch, setAuthToken, WebSocket manager, scheduling helpers
 │       ├── app.js             ← App root component: routing, sidebar, page switching, modal management
 │       └── components/
 │           ├── InPlaceIcon.js          ← SVG logo component ("iP" monogram)
@@ -55,7 +57,7 @@ https://yourinplace.com
 │           ├── CaregiverScheduleModal.js ← View caregiver availability, book from schedule
 │           └── EmailVerificationBanner.js ← Banner prompting unverified users to check email
 └── src/
-    ├── server.js              ← Express app, route mounting, static file serving, auto-seed on empty DB
+    ├── server.js              ← Express app + Socket.io WebSocket server, route mounting, static file serving, auto-seed on empty DB
     ├── seed.js                ← Demo data (5 users, 4 caregivers, 13 sessions, messages, assignments)
     ├── models/
     │   └── database.js        ← PostgreSQL schema (16 tables), pg Pool wrapper
@@ -74,6 +76,7 @@ https://yourinplace.com
         ├── messages.js        ← Send/receive messages, conversation list
         ├── notes.js           ← Care recipient notes (Betty's personal notes)
         ├── assignments.js     ← Caregiver-to-recipient assignments, favorites
+        ├── photos.js          ← Visit photo upload (multer), retrieval by visit log or session
         ├── waitlist.js        ← POST signup, GET count (no auth required)
         └── passwordReset.js   ← Forgot password + reset (via Resend email)
 ```
@@ -169,10 +172,19 @@ The production PostgreSQL database is a Railway service. The `DATABASE_URL` env 
 - `npm run setup` — Seed + start combined
 - `npm test` — Run Jest test suite (53 tests, no database needed)
 
+## WebSocket Architecture
+
+The server uses Socket.io for real-time updates. Express is wrapped in `http.createServer(app)` and Socket.io attaches to that server. Connections require a JWT token via `socket.handshake.auth.token`. Connected users are tracked in a `Map<userId, Set<socketId>>` for targeted event delivery.
+
+**Server-side:** `app.set("io", io)` and `app.set("emitToUser", emitToUser)` make WebSocket accessible from any route. Routes call `req.app.get("emitToUser")(userId, event, data)` to push events.
+
+**Client-side:** `connectSocket(token)` in utils.js connects and auto-registers all listeners. `onSocketEvent(event, callback)` registers listeners and returns a cleanup function (call in useEffect return). Listeners persist across reconnects via `_socketListeners` Map.
+
+**Events:** `new_message` (Messages.js), `session_update` (Dashboard.js), `activity_update` (Dashboard.js, ActivityFeed.js), `visit_photos` (Dashboard.js).
+
 ## Known Limitations
 
-1. No real-time updates (polling only)
-2. Payments table exists but no payment processing (Stripe Connect planned)
-3. Visit photos table exists but no file upload support
-4. Sibling users each have separate care_recipient records for Betty (no shared access model yet)
-5. Email delivery requires domain verification in Resend — sandbox sender only delivers to account owner
+1. Payments table exists but no payment processing (Stripe Connect planned)
+2. Sibling users each have separate care_recipient records for Betty (no shared access model yet)
+3. Email delivery requires domain verification in Resend — sandbox sender only delivers to account owner
+4. Visit photos stored as base64 in PostgreSQL — works for demo but won't scale to production (use S3/R2 later)
