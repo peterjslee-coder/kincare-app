@@ -11,29 +11,28 @@
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
-- [x] ~~**Sibling logins:** Add Pete's brother (David) and sister (Susan) with generic credentials so they can see activity and use messaging.~~ Done in v0.6.0.
-- [x] ~~**Loading spinners & empty states:** Animated spinner + empty states on all pages.~~ Done in v0.5.3.
-- [x] ~~**MyAccount persistence:** Profile edits and notification prefs wired to PUT /api/auth/me.~~ Done in v0.5.3.
-- [x] ~~**Visit photos:** Add file upload endpoint (multipart/form-data → base64 storage), display photos in visit logs.~~ Done in v0.9.0.
-- [x] ~~**Recurring sessions:** Allow scheduling weekly/biweekly repeating care sessions.~~ Done in v0.7.0.
-- [x] ~~**Mobile responsive layout:** Sidebar → bottom nav on mobile.~~ Done in v0.5.2.
-- [x] ~~**Toast notifications:** Success/error feedback on actions (save, delete, assign, etc.).~~ Done in v0.5.3.
+- [ ] **Group messaging:** Conversations table, auto-created care team chat, custom group conversations
+- [ ] **Caregiver search by location:** Mapbox integration, radius-based search, map view with filters
+- [ ] **Calendar for real users:** Clean empty state, care request posts (status: `open`)
+- [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
 
 
 ## Production Path — Beta on Phone
 
 > These are the infrastructure changes needed before real users (even family/friends) can use the app. Order roughly reflects dependencies. See ROADMAP.md for the full picture.
 
-- [x] **PostgreSQL migration:** ✅ Done (v0.5.0). PostgreSQL on Railway with persistent data across deploys.
-- [x] **Wire registration to API:** ✅ Done (v0.5.1). Registration wizard calls POST /api/auth/register, auto-logs in on success, shows inline errors on failure.
-- [x] **Password reset flow:** ✅ Done (v0.5.1). Forgot password → email via Resend → reset page. password_reset_tokens table, ForgotPasswordPage & ResetPasswordPage components.
-- [x] **Mobile-responsive UI:** ✅ Done (v0.5.2). Bottom nav bar replaces sidebar on mobile (≤768px). Role-aware icons, safe-area padding for notched phones.
-- [ ] **Stripe Connect integration:** Wire payments table to Stripe Connect for marketplace payouts. Families pay, caregivers get paid, platform takes a fee.
-- [x] **Input validation & rate limiting:** ✅ Done (v0.6.1). express-rate-limit on auth (20/15min) + general API (120/min). Validation middleware for register, login, profile update, messages, sessions.
-- [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox or Google Maps API. Caregiver matching by actual driving distance, not just city name.
-- [ ] **Build step for frontend:** Babel-in-browser won't scale. Move to Vite or similar when the component count or bundle size demands it. Not urgent yet.
-- [x] ~~**Email verification:** ✅ Done (v0.6.2). Verification email sent on registration via Resend. Verify endpoint, resend endpoint, frontend banner for unverified users. Centralized email utility (`src/utils/email.js`) replaces direct Resend usage across all routes.~~
-- [x] ~~**Tests:** ✅ Done (v0.6.2, expanded v0.7.0). Jest + supertest — 53 tests across 4 suites: auth (register, login, profile, email verification), waitlist, health/API, middleware (auth, validation, session recurrence).~~
+- [x] **PostgreSQL migration:** ✅ Done (v0.5.0).
+- [x] **Wire registration to API:** ✅ Done (v0.5.1).
+- [x] **Password reset flow:** ✅ Done (v0.5.1).
+- [x] **Mobile-responsive UI:** ✅ Done (v0.5.2).
+- [x] **Input validation & rate limiting:** ✅ Done (v0.6.1).
+- [x] **Email verification:** ✅ Done (v0.6.2).
+- [x] **Tests:** ✅ Done (v0.6.2, expanded v0.7.0). 53 tests across 4 suites.
+- [x] **Auth Foundation (v1.0.0):** ✅ Done. Google OAuth backend, TOTP 2FA, trusted devices, demo mode isolation, enhanced MyAccount.
+- [x] **Care Teams (v1.0.0):** ✅ Done. Care team CRUD, email invites, auto-creation, onboarding checklist, dashboard rework.
+- [ ] **Stripe Connect integration:** Wire payments table to Stripe Connect for marketplace payouts.
+- [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox. Caregiver matching by actual driving distance.
+- [ ] **Build step for frontend:** Move to Vite when component count demands it. Not urgent yet.
 
 
 ## Demo Credentials
@@ -48,6 +47,10 @@
 
 
 ## Done
+
+### Auth Foundation & Care Teams (v1.0.0)
+- [x] **Phase 1 — Auth Foundation:** Google OAuth backend (Passport.js + passport-google-oauth20), TOTP 2FA (otplib + qrcode), "Remember This Device" (trusted_devices table, 30-day trust), temp password & forced change, demo mode isolation (is_demo flag, redesigned LoginPage), enhanced MyAccount (Profile | Security | Devices | Notifications tabs), TwoFactorSetup wizard component. 3 new DB tables: oauth_accounts, user_2fa, trusted_devices. 4 new npm packages.
+- [x] **Phase 2 — Care Teams:** 3 new DB tables (care_teams, care_team_members, care_team_invites). Full /api/care-teams CRUD with email invite flow (branded Resend email, 7-day token, handles existing + new users). Auto care team creation on care recipient add. CareTeamManage.js (member management, invite/resend/cancel, role changes). CareTeamPage.js (team listing, auto-select). Dashboard onboarding checklist (4 steps for non-demo users). Dynamic greeting. Invite token URL handling (?invite=TOKEN). Seed data with 3 care teams. Cache version v1.0.0.
 
 ### Real-Time WebSocket Updates & Visit Photos (v0.9.0)
 - [x] **Real-Time WebSocket Updates:** Socket.io integration with JWT-authenticated connections. Live message delivery (`new_message`), session status changes (`session_update`), activity feed updates (`activity_update`), and photo uploads (`visit_photos`). Connected users tracked in server-side Map. Frontend WebSocket manager with `connectSocket()`, `disconnectSocket()`, `onSocketEvent()`. Auto-connect on login and page load, auto-disconnect on logout. Dashboard, ActivityFeed, Messages, and CaretakerHub all listen for real-time events.

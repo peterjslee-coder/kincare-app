@@ -118,6 +118,7 @@ app.use("/api/push", require("./routes/push"));
 app.use("/api/photos", require("./routes/photos"));
 app.use("/api/auth/2fa", require("./routes/twoFactor"));
 app.use("/api/oauth", require("./routes/oauth"));
+app.use("/api/care-teams", require("./routes/careTeams"));
 app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 

@@ -18,6 +18,7 @@ async function seed() {
   // Clear existing data (reverse dependency order)
   const tables = [
     "trusted_devices", "user_2fa", "oauth_accounts",
+    "care_team_invites", "care_team_members", "care_teams",
     "care_recipient_shares", "push_subscriptions",
     "caregiver_assignments", "recipient_notes", "messages",
     "visit_photos", "visit_logs", "activity_feed", "reviews",
@@ -520,6 +521,43 @@ async function seed() {
   ).run(uuid(), bettyId, susanLeeId, peteId);
 
   console.log("✅ Care recipient sharing created (Betty shared with David & Susan)");
+
+  // ─── Care Teams ───
+  // Betty's Care Team (Pete is leader, David and Susan are members)
+  const bettyCareTeamId = uuid();
+  await db.prepare(
+    "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
+  ).run(bettyCareTeamId, "Betty Lee's Care Team", bettyId, peteId);
+
+  await db.prepare(
+    "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
+  ).run(uuid(), bettyCareTeamId, peteId, peteId);
+  await db.prepare(
+    "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'member', ?)"
+  ).run(uuid(), bettyCareTeamId, davidLeeId, peteId);
+  await db.prepare(
+    "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'member', ?)"
+  ).run(uuid(), bettyCareTeamId, susanLeeId, peteId);
+
+  // Dorothy's Care Team (Linda is leader)
+  const dorothyCareTeamId = uuid();
+  await db.prepare(
+    "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
+  ).run(dorothyCareTeamId, "Dorothy Henderson's Care Team", dorothyId, hendersonFamilyId);
+  await db.prepare(
+    "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
+  ).run(uuid(), dorothyCareTeamId, hendersonFamilyId, hendersonFamilyId);
+
+  // Arun's Care Team (Raj is leader)
+  const arunCareTeamId = uuid();
+  await db.prepare(
+    "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
+  ).run(arunCareTeamId, "Arun Patel's Care Team", arunId, patelFamilyId);
+  await db.prepare(
+    "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
+  ).run(uuid(), arunCareTeamId, patelFamilyId, patelFamilyId);
+
+  console.log("✅ Care teams created (3 — Betty with 3 members, Dorothy, Arun)");
 
   console.log("\n🎉 Seed complete! Database ready.\n");
   console.log("Demo logins:");

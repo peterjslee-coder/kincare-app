@@ -12,7 +12,7 @@ https://yourinplace.com
 
 - **Backend:** Node.js + Express (v4), port 3001
 - **Database:** PostgreSQL via `pg` (connection pooling, persistent data across deploys)
-- **Auth:** JWT tokens (7-day expiry), bcryptjs for password hashing
+- **Auth:** JWT tokens (7-day expiry), bcryptjs for password hashing, Google OAuth (Passport.js), TOTP 2FA (otplib), trusted devices
 - **Frontend:** Modular React SPA (via CDN — React 18, ReactDOM, Babel standalone). No build step — Babel compiles JSX in-browser.
 - **Real-Time:** Socket.io WebSocket server with JWT-authenticated connections. Events: `new_message`, `session_update`, `activity_update`, `visit_photos`.
 - **File Uploads:** Multer (memory storage, 5MB limit, image-only, max 5 files). Photos stored as base64 in PostgreSQL.
@@ -55,6 +55,9 @@ https://yourinplace.com
 │           ├── AreaMap.js              ← Leaflet/OpenStreetMap with family location pins (caregiver view)
 │           ├── RequestCareModal.js     ← 5-step care request wizard with caregiver matching
 │           ├── CaregiverScheduleModal.js ← View caregiver availability, book from schedule
+│           ├── TwoFactorSetup.js       ← 2FA setup wizard (QR code → verify → backup codes)
+│           ├── CareTeamManage.js       ← Care team member management (invite, remove, change roles)
+│           ├── CareTeamPage.js         ← Care team listing/navigation wrapper
 │           └── EmailVerificationBanner.js ← Banner prompting unverified users to check email
 └── src/
     ├── server.js              ← Express app + Socket.io WebSocket server, route mounting, static file serving, auto-seed on empty DB
@@ -77,6 +80,8 @@ https://yourinplace.com
         ├── notes.js           ← Care recipient notes (Betty's personal notes)
         ├── assignments.js     ← Caregiver-to-recipient assignments, favorites
         ├── photos.js          ← Visit photo upload (multer), retrieval by visit log or session
+        ├── careTeams.js       ← Care team CRUD, invite flow, member management
+        ├── twoFactor.js       ← TOTP 2FA setup/verify/disable, backup codes, trusted devices
         ├── waitlist.js        ← POST signup, GET count (no auth required)
         └── passwordReset.js   ← Forgot password + reset (via Resend email)
 ```
@@ -113,7 +118,7 @@ All demo passwords: `inplace123`
 
 ## Database Tables
 
-users, care_recipients, caregiver_profiles, availability, care_sessions, visit_logs, visit_photos, activity_feed, reviews, payments, messages, recipient_notes, caregiver_assignments, waitlist
+users, care_recipients, caregiver_profiles, availability, care_sessions, visit_logs, visit_photos, activity_feed, reviews, payments, messages, recipient_notes, caregiver_assignments, waitlist, care_recipient_shares, push_subscriptions, oauth_accounts, user_2fa, trusted_devices, care_teams, care_team_members, care_team_invites
 
 All tables use TEXT primary keys (UUIDs). Timestamps are TIMESTAMPTZ via `NOW()`. JSON fields (health_conditions, medications, specialties, certifications, tasks_completed) are stored as TEXT JSON strings — parse with `JSON.parse()` on read. The database wrapper auto-converts `?` placeholders to `$1, $2, ...` for PostgreSQL compatibility.
 

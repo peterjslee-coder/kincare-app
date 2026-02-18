@@ -184,11 +184,39 @@
 - Cache version bumped to v0.9.0
 - Fixed silent Railway build failure from v0.8.0 (package-lock.json out of sync)
 
+### v1.0.0 — Auth Foundation & Care Teams (2026-02-18)
+
+**Phase 1: Auth Foundation — Real Accounts & Security**
+- Google OAuth Sign-In backend: Passport.js + passport-google-oauth20, `oauth_accounts` table, GET /api/auth/google + callback routes, auto-link existing accounts by email
+- TOTP Two-Factor Authentication: `otplib` + `qrcode`, `user_2fa` table, setup/verify-setup/verify/disable/backup-codes routes with rate limiting (5 attempts/15min)
+- "Remember This Device" flow: `trusted_devices` table, device fingerprint (user-agent + screen + timezone hash), 30-day trust with skip-2FA on recognized devices
+- Temp password & forced password change: `must_change_password` flag on users, POST /api/auth/change-password endpoint
+- Demo mode isolation: `is_demo` flag on users, LoginPage redesigned with clean form + "Try Demo" toggle, demo accounts separated from real login
+- Enhanced MyAccount: Tabbed interface (Profile | Security | Devices | Notifications), change password, enable/disable 2FA with TwoFactorSetup wizard, trusted device management
+- Lazy-loaded otplib/qrcode to avoid Jest ESM parsing issues
+
+**Phase 2: Care Teams — Family Coordination**
+- New tables: `care_teams`, `care_team_members`, `care_team_invites` + `linked_user_id` migration on `care_recipients`
+- Full care team CRUD: `/api/care-teams` with list, detail, update name, invite, resend/cancel invite, accept invite (token-based), remove/change-role members
+- Auto care team creation: Adding a care recipient auto-creates a care team with the creator as leader
+- Email invite flow: Branded Resend email with 7-day token URL, handles existing + new users, backward-compatible with `care_recipient_shares`
+- CareTeamManage.js: Member list with role badges, invite form (email + role), resend/cancel invites, remove/change roles
+- CareTeamPage.js: Team listing with auto-select for single-team users, empty state with CTA
+- Dashboard onboarding checklist: 4-step getting started guide for non-demo users (profile, recipient, invite family, find caregivers)
+- Dynamic dashboard: Greeting uses user's actual first name, care teams summary section
+- Invite token URL handling: `?invite=TOKEN` auto-accepted after login
+- Seed data: 3 care teams (Betty with 3 members, Dorothy, Arun) with proper leader/member roles
+- 53 tests passing, cache version v1.0.0
+
 ---
 
-## Next Up — Marketplace & Growth
+## Next Up — v1.1.0: Group Messaging & Caregiver Search
 
-Priority: **HIGH** — Build out core marketplace features.
+Priority: **HIGH** — Build out group communication and location-based search.
+
+- [ ] **Group messaging:** Conversations table, auto-created care team chat, custom group conversations, Messages.js rework
+- [ ] **Caregiver search by location:** Mapbox integration, radius-based search, map view with filters
+- [ ] **Calendar for real users:** Clean empty state, care request posts (status: `open`)
 
 ---
 
@@ -197,5 +225,6 @@ Priority: **HIGH** — Build out core marketplace features.
 Priority: **MEDIUM** — Build out marketplace capabilities.
 
 - [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
-- [ ] **Geocoding & distance:** Real address → lat/lng for caregiver matching
 - [ ] **Build step for frontend:** Move to Vite when component count demands it
+- [ ] **Apple Sign-In:** After Google OAuth is proven
+- [ ] **Admin dashboard:** User management, flagging accounts

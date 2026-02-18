@@ -88,6 +88,8 @@ const App = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [resetToken, setResetToken] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState(null);
+  const [pendingInviteToken, setPendingInviteToken] = useState(null);
+  const [selectedCareTeamId, setSelectedCareTeamId] = useState(null);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token');
@@ -118,6 +120,13 @@ const App = () => {
       setAppState('reset-password');
       window.history.replaceState({}, '', window.location.pathname);
     }
+
+    // Check for care team invite token in URL
+    const inviteToken = params.get('invite');
+    if (inviteToken) {
+      setPendingInviteToken(inviteToken);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
   const handleLogin = (user) => {
@@ -132,6 +141,23 @@ const App = () => {
     const token = localStorage.getItem('auth_token');
     if (token && typeof connectSocket === 'function') {
       connectSocket(token);
+    }
+    // Accept pending care team invite if one exists
+    if (pendingInviteToken) {
+      apiFetch('/api/care-teams/accept-invite', {
+        method: 'POST',
+        body: JSON.stringify({ token: pendingInviteToken }),
+      }).then(async r => {
+        if (r?.ok) {
+          const data = await r.json();
+          setVerifyMessage({ type: 'success', text: data.message || 'You\'ve joined the care team!' });
+          if (data.careTeamId) { setSelectedCareTeamId(data.careTeamId); setCurrentPage('care-team'); }
+        } else {
+          const data = await r?.json();
+          setVerifyMessage({ type: 'error', text: data?.error || 'Failed to accept invite' });
+        }
+      }).catch(() => {});
+      setPendingInviteToken(null);
     }
   };
 
@@ -182,6 +208,7 @@ const App = () => {
     return [
       { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { id: 'care-profile', icon: '👵', label: 'Care Profile' },
+      { id: 'care-team', icon: '👪', label: 'Care Team' },
       { id: 'schedule', icon: '📅', label: 'Schedule' },
       { id: 'caregivers', icon: '👨‍⚕️', label: 'Caregivers' },
       { id: 'analytics', icon: '📊', label: 'Analytics' },
@@ -208,6 +235,7 @@ const App = () => {
       return <Dashboard key={currentPage} onNavigate={setCurrentPage} />;
     }
     if (currentPage === 'care-profile') return <CareProfile key={currentPage} />;
+    if (currentPage === 'care-team') return <CareTeamPage key={currentPage} selectedTeamId={selectedCareTeamId} onNavigate={setCurrentPage} />;
     if (currentPage === 'schedule') return <Schedule key={currentPage} />;
     if (currentPage === 'caregivers') return <Caregivers key={currentPage} />;
     if (currentPage === 'analytics') return <Analytics key={currentPage} />;

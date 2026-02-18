@@ -74,7 +74,20 @@ router.post("/", requireRole("family"), async (req, res) => {
   );
 
   const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);
-  res.status(201).json({ careRecipient: recipient });
+
+  // Auto-create a care team for this recipient
+  const teamId = uuid();
+  const teamName = `${firstName} ${lastName}'s Care Team`;
+  await db.prepare(
+    "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
+  ).run(teamId, teamName, id, req.user.id);
+
+  // Add the creator as the team leader
+  await db.prepare(
+    "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
+  ).run(uuid(), teamId, req.user.id, req.user.id);
+
+  res.status(201).json({ careRecipient: recipient, careTeamId: teamId });
 });
 
 // ─── Helper: check if user has access to a care recipient ───

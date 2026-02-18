@@ -1,6 +1,8 @@
 const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [careTeams, setCareTeams] = useState([]);
 
   const fetchDashboard = async () => {
     try {
@@ -15,7 +17,21 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchDashboard(); }, []);
+  const fetchUser = async () => {
+    try {
+      const res = await apiFetch('/api/auth/me');
+      if (res?.ok) { const d = await res.json(); setUser(d.user); }
+    } catch {}
+  };
+
+  const fetchCareTeams = async () => {
+    try {
+      const res = await apiFetch('/api/care-teams');
+      if (res?.ok) { const d = await res.json(); setCareTeams(d.careTeams || []); }
+    } catch {}
+  };
+
+  useEffect(() => { fetchDashboard(); fetchUser(); fetchCareTeams(); }, []);
 
   // Real-time: refresh dashboard on activity or session updates
   useEffect(() => {
@@ -41,24 +57,70 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     return date.toLocaleDateString();
   };
 
-  if (loading) {
-    return <LoadingSpinner text="Loading dashboard..." />;
-  }
-
-  if (!data) {
-    return <EmptyState icon="⚠️" title="Couldn't load dashboard" text="Please try refreshing the page." />;
-  }
+  if (loading) return <LoadingSpinner text="Loading dashboard..." />;
+  if (!data) return <EmptyState icon="⚠️" title="Couldn't load dashboard" text="Please try refreshing the page." />;
 
   const stats = data.stats || {};
   const parent = data.parent;
   const upcoming = data.upcomingSessions || [];
   const activity = data.recentActivity || [];
+  const isDemo = user?.is_demo || user?.isDemo;
+  const firstName = user?.first_name || user?.firstName || 'there';
+
+  // Onboarding checklist for real (non-demo) users
+  const hasProfile = user?.phone;
+  const hasRecipient = (data.parent || stats.assignedCaregivers > 0);
+  const hasCareTeam = careTeams.length > 0 && careTeams.some(t => t.memberCount > 1);
+  const onboardingSteps = [
+    { id: 'profile', label: 'Complete your profile', done: !!hasProfile, action: () => onNavigate && onNavigate('account'), actionText: 'Go to Profile' },
+    { id: 'recipient', label: 'Add a loved one to care for', done: !!hasRecipient, action: () => onNavigate && onNavigate('recipients'), actionText: 'Add Recipient' },
+    { id: 'team', label: 'Invite family to the care team', done: hasCareTeam, action: () => onNavigate && onNavigate('care-team'), actionText: 'Manage Team' },
+    { id: 'caregiver', label: 'Search for caregivers in your area', done: stats.assignedCaregivers > 0, action: () => onNavigate && onNavigate('caregivers'), actionText: 'Find Caregivers' },
+  ];
+  const onboardingComplete = onboardingSteps.every(s => s.done);
+  const showOnboarding = !isDemo && !onboardingComplete;
 
   return (
     <>
       <div className="page-header">
-        <h1 className="greeting">Welcome back, Pete!</h1>
+        <h1 className="greeting">Welcome back, {firstName}!</h1>
       </div>
+
+      {/* Onboarding Checklist (real users only) */}
+      {showOnboarding && (
+        <div className="card" style={{ borderLeft: '4px solid #e8724a', marginBottom: 16 }}>
+          <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 20 }}>🚀</span>
+            <span>Getting Started</span>
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#888' }}>
+              {onboardingSteps.filter(s => s.done).length} / {onboardingSteps.length} complete
+            </span>
+          </div>
+          <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
+            {onboardingSteps.map((step) => (
+              <div key={step.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0',
+                opacity: step.done ? 0.6 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 24, height: 24, borderRadius: '50%',
+                    background: step.done ? '#1b6b5a' : '#f0f0f0', color: step.done ? '#fff' : '#ccc',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
+                    {step.done ? '✓' : ''}
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: step.done ? 400 : 600, textDecoration: step.done ? 'line-through' : 'none', color: step.done ? '#888' : '#333' }}>
+                    {step.label}
+                  </span>
+                </div>
+                {!step.done && step.action && (
+                  <button onClick={step.action}
+                    style={{ padding: '4px 12px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {step.actionText}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {parent && (
         <div className="betty-card">
@@ -70,6 +132,25 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
               {parent.healthConditions.join(' · ')}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Care Teams Summary (non-demo) */}
+      {!isDemo && careTeams.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-header">Your Care Teams</div>
+          {careTeams.map(t => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
+              onClick={() => onNavigate && onNavigate('care-team')}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
+                <div style={{ fontSize: 12, color: '#888' }}>
+                  {t.memberCount} member{t.memberCount !== 1 ? 's' : ''} · You are {t.my_role}
+                </div>
+              </div>
+              <span style={{ color: '#1b6b5a', fontSize: 14 }}>→</span>
+            </div>
+          ))}
         </div>
       )}
 
