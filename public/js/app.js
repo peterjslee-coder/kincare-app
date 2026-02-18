@@ -86,6 +86,12 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Expose modal opener for child components (Schedule empty state CTA)
+  useEffect(() => {
+    window.__openRequestCareModal = () => setShowRequestCareModal(true);
+    return () => { delete window.__openRequestCareModal; };
+  }, []);
   const [resetToken, setResetToken] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState(null);
   const [pendingInviteToken, setPendingInviteToken] = useState(null);

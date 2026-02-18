@@ -85,6 +85,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     careRecipientId, serviceType, scheduledDate, scheduledTime,
     durationHours = 2, specialInstructions,
     recurrenceRule, recurrenceWeeks,
+    status: requestedStatus,
   } = req.body;
 
   if (!careRecipientId || !serviceType || !scheduledDate || !scheduledTime) {
@@ -117,6 +118,9 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     ? generateRecurringDates(scheduledDate, recurrenceRule, weeks)
     : [scheduledDate];
 
+  // Allow 'open' status for care requests without caregiver
+  const sessionStatus = requestedStatus === "open" ? "open" : "pending";
+
   const recurrenceGroupId = isRecurring ? uuid() : null;
   const createdSessions = [];
 
@@ -127,9 +131,9 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       (id, care_recipient_id, family_user_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours,
        special_instructions, estimated_cost, recurrence_rule, recurrence_group_id)
-      VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, careRecipientId, req.user.id, serviceType,
+      id, careRecipientId, req.user.id, serviceType, sessionStatus,
       sessionDate, scheduledTime, durationHours,
       specialInstructions || null, estimatedCost,
       isRecurring ? recurrenceRule : null,
@@ -274,6 +278,7 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
 router.put("/:id/status", async (req, res) => {
   const { status } = req.body;
   const validTransitions = {
+    open: ["pending", "confirmed", "cancelled"],
     confirmed: ["in_progress", "cancelled"],
     in_progress: ["completed", "cancelled"],
     pending: ["confirmed", "cancelled"],

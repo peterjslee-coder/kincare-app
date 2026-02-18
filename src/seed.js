@@ -18,6 +18,7 @@ async function seed() {
   // Clear existing data (reverse dependency order)
   const tables = [
     "trusted_devices", "user_2fa", "oauth_accounts",
+    "conversation_members", "conversations",
     "care_team_invites", "care_team_members", "care_teams",
     "care_recipient_shares", "push_subscriptions",
     "caregiver_assignments", "recipient_notes", "messages",
@@ -456,40 +457,79 @@ async function seed() {
 
   console.log("✅ Reviews created (4)");
 
-  // ─── Messages ───
-  const msgs = [
-    [uuid(), mariaUserId, peteId, "Good morning! Betty is in great spirits today. We just finished breakfast — she had oatmeal with blueberries!", "-4 hours"],
-    [uuid(), peteId, mariaUserId, "That's wonderful to hear! How was she feeling this morning?", "-3 hours"],
-    [uuid(), mariaUserId, peteId, "She was very alert and chatty. We looked through her photo album and she told me stories about her garden.", "-2 hours"],
-    [uuid(), peteId, mariaUserId, "She loves that album! Thank you for spending time with her on that.", "-1 hour"],
-    [uuid(), jamesUserId, peteId, "Hi Pete! Just arrived at Betty's. She seems to be doing well today.", "-6 hours"],
-    [uuid(), peteId, jamesUserId, "Great, thanks James! She mentioned wanting to do puzzles.", "-5 hours"],
-    [uuid(), jamesUserId, peteId, "Yes! We worked on a 500-piece puzzle of a garden scene. She was really focused.", "-4 hours"],
-    [uuid(), mariaUserId, bettyUserId, "Hi Betty! Looking forward to seeing you tomorrow. Is there anything special you'd like for lunch?", "-8 hours"],
-    [uuid(), bettyUserId, mariaUserId, "Oh Maria dear, could you make that tomato soup again? It was so good last time!", "-7 hours"],
-    [uuid(), mariaUserId, bettyUserId, "Of course! I'll pick up fresh tomatoes on my way. See you at noon! 🍅", "-6 hours"],
+  // ─── Conversations ───
+  // Direct conversations for existing message pairs
+  const convPeteMaria = uuid();
+  const convPeteJames = uuid();
+  const convBettyMaria = uuid();
+  const convDavidMaria = uuid();
+  const convSusanMaria = uuid();
+
+  const directConvs = [
+    [convPeteMaria, "direct", null, null, peteId],
+    [convPeteJames, "direct", null, null, peteId],
+    [convBettyMaria, "direct", null, null, bettyUserId],
+    [convDavidMaria, "direct", null, null, davidLeeId],
+    [convSusanMaria, "direct", null, null, susanLeeId],
   ];
 
-  for (const [id, senderId, recipientId, content, timeOffset] of msgs) {
+  for (const [id, type, name, careTeamId, createdBy] of directConvs) {
+    await db.prepare(
+      "INSERT INTO conversations (id, type, name, care_team_id, created_by) VALUES (?, ?, ?, ?, ?)"
+    ).run(id, type, name, careTeamId, createdBy);
+  }
+
+  // Conversation members for direct chats
+  const directMembers = [
+    [convPeteMaria, peteId], [convPeteMaria, mariaUserId],
+    [convPeteJames, peteId], [convPeteJames, jamesUserId],
+    [convBettyMaria, bettyUserId], [convBettyMaria, mariaUserId],
+    [convDavidMaria, davidLeeId], [convDavidMaria, mariaUserId],
+    [convSusanMaria, susanLeeId], [convSusanMaria, mariaUserId],
+  ];
+
+  for (const [convId, userId] of directMembers) {
+    await db.prepare(
+      "INSERT INTO conversation_members (id, conversation_id, user_id, role, last_read_at) VALUES (?, ?, ?, 'member', NOW())"
+    ).run(uuid(), convId, userId);
+  }
+
+  console.log("✅ Direct conversations created (5)");
+
+  // ─── Messages ───
+  const msgs = [
+    [uuid(), mariaUserId, peteId, convPeteMaria, "Good morning! Betty is in great spirits today. We just finished breakfast — she had oatmeal with blueberries!", "-4 hours"],
+    [uuid(), peteId, mariaUserId, convPeteMaria, "That's wonderful to hear! How was she feeling this morning?", "-3 hours"],
+    [uuid(), mariaUserId, peteId, convPeteMaria, "She was very alert and chatty. We looked through her photo album and she told me stories about her garden.", "-2 hours"],
+    [uuid(), peteId, mariaUserId, convPeteMaria, "She loves that album! Thank you for spending time with her on that.", "-1 hour"],
+    [uuid(), jamesUserId, peteId, convPeteJames, "Hi Pete! Just arrived at Betty's. She seems to be doing well today.", "-6 hours"],
+    [uuid(), peteId, jamesUserId, convPeteJames, "Great, thanks James! She mentioned wanting to do puzzles.", "-5 hours"],
+    [uuid(), jamesUserId, peteId, convPeteJames, "Yes! We worked on a 500-piece puzzle of a garden scene. She was really focused.", "-4 hours"],
+    [uuid(), mariaUserId, bettyUserId, convBettyMaria, "Hi Betty! Looking forward to seeing you tomorrow. Is there anything special you'd like for lunch?", "-8 hours"],
+    [uuid(), bettyUserId, mariaUserId, convBettyMaria, "Oh Maria dear, could you make that tomato soup again? It was so good last time!", "-7 hours"],
+    [uuid(), mariaUserId, bettyUserId, convBettyMaria, "Of course! I'll pick up fresh tomatoes on my way. See you at noon! 🍅", "-6 hours"],
+  ];
+
+  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of msgs) {
     await db.prepare(`
-      INSERT INTO messages (id, sender_id, recipient_id, content, is_read, created_at)
-      VALUES (?, ?, ?, ?, 1, NOW() + ?::interval)
-    `).run(id, senderId, recipientId, content, timeOffset);
+      INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, 1, NOW() + ?::interval)
+    `).run(id, senderId, recipientId, conversationId, content, timeOffset);
   }
 
   // Messages between siblings and caregivers
   const siblingMsgs = [
-    [uuid(), davidLeeId, mariaUserId, "Hi Maria, this is David — Pete's brother. I'll be coordinating Mom's care this week while Pete is traveling.", "-10 hours"],
-    [uuid(), mariaUserId, davidLeeId, "Hi David! No problem at all. Betty and I have our routine down. I'll send you updates after each visit.", "-9 hours"],
-    [uuid(), susanLeeId, mariaUserId, "Maria, it's Susan. Could you check if Mom has enough of her Donepezil? I want to make sure we're not running low.", "-7 hours"],
-    [uuid(), mariaUserId, susanLeeId, "Hi Susan! I'll check her pill organizer tomorrow and let you know. She had about a week's supply last time I looked.", "-6 hours"],
+    [uuid(), davidLeeId, mariaUserId, convDavidMaria, "Hi Maria, this is David — Pete's brother. I'll be coordinating Mom's care this week while Pete is traveling.", "-10 hours"],
+    [uuid(), mariaUserId, davidLeeId, convDavidMaria, "Hi David! No problem at all. Betty and I have our routine down. I'll send you updates after each visit.", "-9 hours"],
+    [uuid(), susanLeeId, mariaUserId, convSusanMaria, "Maria, it's Susan. Could you check if Mom has enough of her Donepezil? I want to make sure we're not running low.", "-7 hours"],
+    [uuid(), mariaUserId, susanLeeId, convSusanMaria, "Hi Susan! I'll check her pill organizer tomorrow and let you know. She had about a week's supply last time I looked.", "-6 hours"],
   ];
 
-  for (const [id, senderId, recipientId, content, timeOffset] of siblingMsgs) {
+  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of siblingMsgs) {
     await db.prepare(`
-      INSERT INTO messages (id, sender_id, recipient_id, content, is_read, created_at)
-      VALUES (?, ?, ?, ?, 1, NOW() + ?::interval)
-    `).run(id, senderId, recipientId, content, timeOffset);
+      INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, 1, NOW() + ?::interval)
+    `).run(id, senderId, recipientId, conversationId, content, timeOffset);
   }
 
   console.log("✅ Messages created (14)");
@@ -558,6 +598,38 @@ async function seed() {
   ).run(uuid(), arunCareTeamId, patelFamilyId, patelFamilyId);
 
   console.log("✅ Care teams created (3 — Betty with 3 members, Dorothy, Arun)");
+
+  // ─── Care Team Conversations ───
+  const bettyCareTeamConvId = uuid();
+  await db.prepare(
+    "INSERT INTO conversations (id, type, name, care_team_id, created_by) VALUES (?, 'care_team', ?, ?, ?)"
+  ).run(bettyCareTeamConvId, "Betty Lee's Care Team", bettyCareTeamId, peteId);
+
+  // Add all 3 Lee siblings to the care team conversation
+  for (const [userId, role] of [[peteId, "admin"], [davidLeeId, "member"], [susanLeeId, "member"]]) {
+    await db.prepare(
+      "INSERT INTO conversation_members (id, conversation_id, user_id, role, last_read_at) VALUES (?, ?, ?, ?, NOW())"
+    ).run(uuid(), bettyCareTeamConvId, userId, role);
+  }
+
+  // Seed group messages in the care team chat
+  const teamMsgs = [
+    [uuid(), peteId, bettyCareTeamConvId, "Hey everyone — I set up this group chat so we can coordinate Mom's care more easily. Let's use it for updates!", "-2 days"],
+    [uuid(), davidLeeId, bettyCareTeamConvId, "Great idea Pete. I'm covering this week while you're traveling. Maria has everything under control.", "-2 days"],
+    [uuid(), susanLeeId, bettyCareTeamConvId, "Thanks David! Can someone check if Mom's Donepezil is running low? I want to call in a refill if needed.", "-1 day"],
+    [uuid(), peteId, bettyCareTeamConvId, "I asked Maria to check tomorrow. She said Mom had about a week's supply. I'll call Dr. Patel's office for a refill just in case.", "-12 hours"],
+    [uuid(), davidLeeId, bettyCareTeamConvId, "Perfect. Also, Mom mentioned she wants to plant tomatoes this spring. Maybe we can set that up next weekend?", "-6 hours"],
+    [uuid(), susanLeeId, bettyCareTeamConvId, "She would love that! I'll pick up some seedlings from the garden center.", "-3 hours"],
+  ];
+
+  for (const [id, senderId, conversationId, content, timeOffset] of teamMsgs) {
+    await db.prepare(`
+      INSERT INTO messages (id, sender_id, conversation_id, content, is_read, created_at)
+      VALUES (?, ?, ?, ?, 1, NOW() + ?::interval)
+    `).run(id, senderId, conversationId, content, timeOffset);
+  }
+
+  console.log("✅ Care team conversation created (Betty's team with 6 group messages)");
 
   console.log("\n🎉 Seed complete! Database ready.\n");
   console.log("Demo logins:");

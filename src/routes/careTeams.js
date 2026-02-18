@@ -313,6 +313,21 @@ router.post("/accept-invite", authenticate, async (req, res) => {
     // Mark invite as accepted
     await db.prepare("UPDATE care_team_invites SET status = 'accepted' WHERE id = ?").run(invite.id);
 
+    // Auto-add to care team conversation
+    const careTeamConv = await db.prepare(
+      "SELECT id FROM conversations WHERE care_team_id = ? AND type = 'care_team'"
+    ).get(invite.care_team_id);
+    if (careTeamConv) {
+      const alreadyInConv = await db.prepare(
+        "SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+      ).get(careTeamConv.id, req.user.id);
+      if (!alreadyInConv) {
+        await db.prepare(
+          "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')"
+        ).run(uuid(), careTeamConv.id, req.user.id);
+      }
+    }
+
     // Also add to care_recipient_shares for backward compatibility
     const team = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(invite.care_team_id);
     if (team) {

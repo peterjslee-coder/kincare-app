@@ -87,11 +87,13 @@ const Schedule = window.Schedule = () => {
       completed: { bg: '#e0f2e9', text: '#1b6b5a' },
       confirmed: { bg: '#e3f2fd', text: '#1565c0' },
       pending: { bg: '#fff3e0', text: '#e65100' },
+      open: { bg: '#fff8e1', text: '#f57f17' },
       in_progress: { bg: '#f3e5f5', text: '#7b1fa2' },
       cancelled: { bg: '#fce4ec', text: '#c62828' },
     };
     const c = colors[status] || colors.pending;
-    return { background: c.bg, color: c.text, padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' };
+    const label = status === 'open' ? 'Open — waiting' : status;
+    return { style: { background: c.bg, color: c.text, padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }, label };
   };
 
   // Sessions for selected date
@@ -103,8 +105,25 @@ const Schedule = window.Schedule = () => {
     <>
       <div className="page-header">
         <h1 className="page-title">Schedule</h1>
-        <p className="page-subtitle">Betty's care calendar — click any day to see details</p>
+        <p className="page-subtitle">{sessions.length > 0 ? 'Care calendar — click any day to see details' : 'Your care calendar'}</p>
       </div>
+
+      {/* Empty state for new users with no sessions */}
+      {sessions.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: '48px 24px', marginBottom: 20 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
+          <h3 style={{ margin: '0 0 8px', color: '#1a1a2e', fontSize: 18 }}>No care sessions scheduled yet</h3>
+          <p style={{ color: '#666', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>
+            Request care to get started. Your sessions will appear here on the calendar so you can track everything in one place.
+          </p>
+          <button className="btn btn-primary" onClick={() => {
+            // Trigger the Request Care modal via the global handler if available
+            if (window.__openRequestCareModal) window.__openRequestCareModal();
+          }} style={{ padding: '12px 32px', fontSize: 15 }}>
+            Request Care
+          </button>
+        </div>
+      )}
 
       {/* Month navigation */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -236,7 +255,7 @@ const Schedule = window.Schedule = () => {
                     <span style={{ fontWeight: 400, marginLeft: 8, color: '#666' }}>{s.service_type}</span>
                   </div>
                   <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                    {s.caregiver_name || 'Unmatched'} — {s.recipient_name || 'Betty Lee'}
+                    {s.caregiver_name || (s.status === 'open' ? 'Waiting for caregiver' : 'Unmatched')} — {s.recipient_name || 'Care recipient'}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -245,7 +264,7 @@ const Schedule = window.Schedule = () => {
                       {s.recurrence_rule === 'weekly' ? '🔁 Weekly' : '🔁 Biweekly'}
                     </span>
                   )}
-                  <span style={getStatusBadge(s.status)}>{s.status}</span>
+                  <span style={getStatusBadge(s.status).style}>{getStatusBadge(s.status).label}</span>
                   <span style={{ color: '#999', fontSize: 16 }}>{expandedSession === s.id ? '▾' : '▸'}</span>
                 </div>
               </div>

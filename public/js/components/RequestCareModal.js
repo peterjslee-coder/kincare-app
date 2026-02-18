@@ -10,7 +10,16 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [selectedCaregiver, setSelectedCaregiver] = useState(null);
   const [matchedCaregivers, setMatchedCaregivers] = useState([]);
 
-  // When moving to step 4 (caregiver selection), find matches
+  // Determine if we have caregiver data for matching (demo mode)
+  const hasCaregiverData = typeof CAREGIVER_AVAILABILITY !== 'undefined' && Object.keys(CAREGIVER_AVAILABILITY).length > 0;
+  const totalSteps = hasCaregiverData ? 5 : 4;
+  const stepLabels = hasCaregiverData
+    ? ['Service', 'When', 'Duration', 'Caregiver', 'Review']
+    : ['Service', 'When', 'Duration', 'Review'];
+  const reviewStep = hasCaregiverData ? 5 : 4;
+  const caregiverStep = hasCaregiverData ? 4 : -1; // -1 = skip
+
+  // When moving to caregiver step, find matches (demo mode only)
   const findMatchingCaregivers = () => {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const selectedDate = new Date(date + 'T12:00:00');
@@ -33,10 +42,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
     const matches = [];
     Object.entries(CAREGIVER_AVAILABILITY).forEach(([name, avail]) => {
-      // Check skill match
       const hasSkill = caregiverMatchesService(name, serviceType);
 
-      // Check time availability
       const daySchedule = avail.weeklySchedule[dayName] || [];
       let isInSchedule = false;
       daySchedule.forEach(block => {
@@ -45,7 +52,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         if (requestStart >= blockStart && requestEnd <= blockEnd) isInSchedule = true;
       });
 
-      // Check no booking conflicts
       let hasConflict = false;
       (avail.bookedSlots || []).forEach(b => {
         if (b.date === date) {
@@ -62,7 +68,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       }
     });
 
-    // Sort: available + skill match first
     matches.sort((a, b) => {
       if (a.available && a.skillMatch && (!b.available || !b.skillMatch)) return -1;
       if (b.available && b.skillMatch && (!a.available || !a.skillMatch)) return 1;
@@ -75,23 +80,24 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   };
 
   const handleSubmit = async () => {
+    const isOpenRequest = !hasCaregiverData || !selectedCaregiver;
     const recurrenceLabel = recurrence !== 'none' ? ` (${recurrence}, ${recurrenceWeeks} sessions)` : '';
     const response = await apiFetch('/api/request-care', {
       method: 'POST',
       body: JSON.stringify({
         serviceType, date, time, duration, specialInstructions: instructions,
         caregiver: selectedCaregiver?.name,
+        status: isOpenRequest ? 'open' : undefined,
         recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
         recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
       })
     });
-    if (response?.ok) {
-      alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
-      onClose();
+    if (isOpenRequest) {
+      alert(`Care request posted!${recurrenceLabel}\n\nStatus: Open — waiting for caregiver match\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
     } else {
-      alert(`Booking confirmed!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
-      onClose();
+      alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
     }
+    onClose();
   };
 
   const formatTime12 = (t) => {
@@ -102,14 +108,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     return `${displayH}:${m.toString().padStart(2, '0')} ${ampm}`;
   };
 
-  // Trigger caregiver matching when reaching step 4
+  // Trigger caregiver matching when reaching caregiver step (demo only)
   useEffect(() => {
-    if (step === 4 && date && time && duration && serviceType) {
+    if (hasCaregiverData && step === caregiverStep && date && time && duration && serviceType) {
       findMatchingCaregivers();
     }
   }, [step]);
-
-  const stepLabels = ['Service', 'When', 'Duration', 'Caregiver', 'Review'];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -214,7 +218,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           </div>
         )}
 
-        {step === 4 && (
+        {/* Caregiver selection step — demo only */}
+        {step === caregiverStep && hasCaregiverData && (
           <div className="modal-section">
             <label className="modal-label">Available caregivers for {formatTime12(time)} on {date}</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
@@ -258,7 +263,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           </div>
         )}
 
-        {step === 5 && (
+        {/* Review step */}
+        {step === reviewStep && (
           <>
             <div className="modal-section">
               <label className="modal-label">Special Instructions (optional)</label>
@@ -274,12 +280,21 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 {recurrence !== 'none' && (
                   <><div style={{ color: '#666' }}>Repeat</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>{recurrence === 'weekly' ? 'Weekly' : 'Every 2 weeks'} for {recurrenceWeeks} sessions</div></>
                 )}
-                <div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{selectedCaregiver ? selectedCaregiver.name : 'Best available'}</div>
+                {hasCaregiverData ? (
+                  <><div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{selectedCaregiver ? selectedCaregiver.name : 'Best available'}</div></>
+                ) : (
+                  <><div style={{ color: '#666' }}>Status</div><div style={{ fontWeight: 600, color: '#e8724a' }}>Open — waiting for caregiver</div></>
+                )}
                 {selectedCaregiver && (
                   <><div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${parseInt((selectedCaregiver.rate || '$30').replace(/[^0-9]/g, '')) * parseInt(duration)}</div></>
                 )}
               </div>
             </div>
+            {!hasCaregiverData && (
+              <div style={{ marginTop: 12, padding: 12, background: '#fff8e1', borderRadius: 8, fontSize: 13, color: '#795548' }}>
+                Your care request will be posted as "open." When caregivers join InPlace in your area, they'll be able to respond to your request.
+              </div>
+            )}
           </>
         )}
 
@@ -287,16 +302,22 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           <button className="btn btn-outline" onClick={() => step > 1 ? setStep(step - 1) : onClose()} >
             {step === 1 ? 'Cancel' : 'Back'}
           </button>
-          {step < 4 && (
+          {step < reviewStep && step !== caregiverStep && (
             <button className="btn btn-primary" disabled={
               (step === 1 && !serviceType) || (step === 2 && (!date || !time)) || (step === 3 && !duration)
-            } onClick={() => setStep(step + 1)}>Next</button>
+            } onClick={() => {
+              const nextStep = step + 1;
+              // Skip caregiver step for real users (when caregiverStep === -1, reviewStep is 4)
+              setStep(nextStep);
+            }}>Next</button>
           )}
-          {step === 4 && (
+          {step === caregiverStep && hasCaregiverData && (
             <button className="btn btn-primary" disabled={!selectedCaregiver}
-              onClick={() => setStep(5)}>Continue</button>
+              onClick={() => setStep(reviewStep)}>Continue</button>
           )}
-          {step === 5 && <button className="btn btn-primary" onClick={handleSubmit}>Confirm Booking</button>}
+          {step === reviewStep && <button className="btn btn-primary" onClick={handleSubmit}>
+            {hasCaregiverData ? 'Confirm Booking' : 'Post Care Request'}
+          </button>}
         </div>
       </div>
     </div>

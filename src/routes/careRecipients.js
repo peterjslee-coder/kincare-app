@@ -87,6 +87,15 @@ router.post("/", requireRole("family"), async (req, res) => {
     "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
   ).run(uuid(), teamId, req.user.id, req.user.id);
 
+  // Auto-create a care team conversation
+  const convId = uuid();
+  await db.prepare(
+    "INSERT INTO conversations (id, type, name, care_team_id, created_by) VALUES (?, 'care_team', ?, ?, ?)"
+  ).run(convId, teamName, teamId, req.user.id);
+  await db.prepare(
+    "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'admin')"
+  ).run(uuid(), convId, req.user.id);
+
   res.status(201).json({ careRecipient: recipient, careTeamId: teamId });
 });
 

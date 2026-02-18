@@ -11,9 +11,7 @@
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
-- [ ] **Group messaging:** Conversations table, auto-created care team chat, custom group conversations
 - [ ] **Caregiver search by location:** Mapbox integration, radius-based search, map view with filters
-- [ ] **Calendar for real users:** Clean empty state, care request posts (status: `open`)
 - [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
 
 
@@ -47,6 +45,10 @@
 
 
 ## Done
+
+### Group Messaging & Calendar for Real Users (v1.1.0)
+- [x] **Phase 3 — Group Messaging:** New `conversations` and `conversation_members` tables. `conversation_id` column on messages. Full backend rewrite of `/api/messages` with conversation-centric endpoints (list, create, get messages, send). Legacy backward compatibility with auto-migration. Auto-created care team conversations on care recipient creation and invite acceptance. Frontend Messages.js rewrite with conversation list (direct + group), group chat with sender names, contact picker, group creation flow. WebSocket events include `conversationId`. Seed data: 5 direct conversations, 1 care team conversation with 6 group messages.
+- [x] **Phase 5 — Calendar for Real Users:** RequestCareModal 4-step wizard for real users (skips caregiver matching), `status: 'open'` for open care requests. Schedule.js empty state with "Request Care" CTA, `open` status badge. Sessions route accepts `open` status. Cache version v1.1.0.
 
 ### Auth Foundation & Care Teams (v1.0.0)
 - [x] **Phase 1 — Auth Foundation:** Google OAuth backend (Passport.js + passport-google-oauth20), TOTP 2FA (otplib + qrcode), "Remember This Device" (trusted_devices table, 30-day trust), temp password & forced change, demo mode isolation (is_demo flag, redesigned LoginPage), enhanced MyAccount (Profile | Security | Devices | Notifications tabs), TwoFactorSetup wizard component. 3 new DB tables: oauth_accounts, user_2fa, trusted_devices. 4 new npm packages.

@@ -2,66 +2,173 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
-const { validateMessage } = require("../middleware/validate");
 const { sendPushToUser } = require("./push");
 
 const router = express.Router();
 router.use(authenticate);
 
-// GET /api/messages/conversations — list conversations for current user
+// ─── GET /api/messages/conversations ─── List all conversations for current user
 router.get("/conversations", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
 
-  // Get all messages involving this user
-  const allMessages = await db.prepare(`
-    SELECT m.*,
-      CASE WHEN m.sender_id = ? THEN m.recipient_id ELSE m.sender_id END AS partner_id
-    FROM messages m
-    WHERE m.sender_id = ? OR m.recipient_id = ?
-    ORDER BY m.created_at DESC
+  // Get conversations from the conversations table (new model)
+  const convRows = await db.prepare(`
+    SELECT c.id, c.type, c.name, c.care_team_id, c.created_at,
+      cm.last_read_at
+    FROM conversation_members cm
+    JOIN conversations c ON cm.conversation_id = c.id
+    WHERE cm.user_id = ?
+    ORDER BY c.updated_at DESC
+  `).all(userId);
+
+  const conversations = [];
+  for (const conv of convRows) {
+    // Get last message
+    const lastMsg = await db.prepare(`
+      SELECT content, sender_id, created_at FROM messages
+      WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1
+    `).get(conv.id);
+
+    // Get unread count
+    const unreadRow = await db.prepare(`
+      SELECT COUNT(*) AS count FROM messages
+      WHERE conversation_id = ? AND sender_id != ?
+        AND created_at > COALESCE(?, '1970-01-01')
+    `).get(conv.id, userId, conv.last_read_at);
+
+    // Get members
+    const members = await db.prepare(`
+      SELECT u.id, u.first_name, u.last_name, u.role
+      FROM conversation_members cm
+      JOIN users u ON cm.user_id = u.id
+      WHERE cm.conversation_id = ?
+    `).all(conv.id);
+
+    // For direct conversations, use partner name as conversation name
+    let displayName = conv.name;
+    if (conv.type === "direct") {
+      const partner = members.find(m => m.id !== userId);
+      displayName = partner ? `${partner.first_name} ${partner.last_name}` : "Unknown";
+    }
+
+    conversations.push({
+      id: conv.id,
+      type: conv.type,
+      name: displayName,
+      careTeamId: conv.care_team_id,
+      members: members.map(m => ({
+        id: m.id,
+        name: `${m.first_name} ${m.last_name}`,
+        role: m.role,
+      })),
+      lastMessage: lastMsg?.content || null,
+      lastMessageAt: lastMsg?.created_at || conv.created_at,
+      unreadCount: parseInt(unreadRow?.count || 0),
+    });
+  }
+
+  // Also check for legacy messages without conversation_id (backward compat)
+  const legacyMessages = await db.prepare(`
+    SELECT DISTINCT
+      CASE WHEN sender_id = ? THEN recipient_id ELSE sender_id END AS partner_id
+    FROM messages
+    WHERE (sender_id = ? OR recipient_id = ?) AND conversation_id IS NULL
   `).all(userId, userId, userId);
 
-  // Build conversations from messages in JS
-  const convMap = {};
-  for (const m of allMessages) {
-    if (!convMap[m.partner_id]) {
-      convMap[m.partner_id] = { lastMessage: m.content, lastMessageAt: m.created_at, unread: 0 };
-    }
-    if (m.sender_id !== userId && m.recipient_id === userId && !m.is_read) {
-      convMap[m.partner_id].unread++;
-    }
+  for (const row of legacyMessages) {
+    // Check if we already have a direct conversation with this partner
+    const existingConv = conversations.find(c =>
+      c.type === "direct" && c.members.some(m => m.id === row.partner_id)
+    );
+    if (existingConv) continue;
+
+    // Build a virtual conversation from legacy messages
+    const partner = await db.prepare("SELECT id, first_name, last_name, role FROM users WHERE id = ?").get(row.partner_id);
+    if (!partner) continue;
+
+    const lastMsg = await db.prepare(`
+      SELECT content, created_at FROM messages
+      WHERE ((sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?))
+        AND conversation_id IS NULL
+      ORDER BY created_at DESC LIMIT 1
+    `).get(userId, row.partner_id, row.partner_id, userId);
+
+    const unreadRow = await db.prepare(`
+      SELECT COUNT(*) AS count FROM messages
+      WHERE sender_id = ? AND recipient_id = ? AND is_read = 0 AND conversation_id IS NULL
+    `).get(row.partner_id, userId);
+
+    conversations.push({
+      id: `legacy-${row.partner_id}`,
+      type: "direct",
+      name: `${partner.first_name} ${partner.last_name}`,
+      careTeamId: null,
+      members: [
+        { id: userId, name: "You", role: req.user.role },
+        { id: partner.id, name: `${partner.first_name} ${partner.last_name}`, role: partner.role },
+      ],
+      lastMessage: lastMsg?.content || null,
+      lastMessageAt: lastMsg?.created_at || null,
+      unreadCount: parseInt(unreadRow?.count || 0),
+      isLegacy: true,
+    });
   }
 
-  // Fetch partner info
-  const conversations = [];
-  for (const [partnerId, info] of Object.entries(convMap)) {
-    const partner = await db.prepare("SELECT id, first_name, last_name, role FROM users WHERE id = ?").get(partnerId);
-    if (partner) {
-      conversations.push({
-        partnerId: partner.id,
-        partnerName: `${partner.first_name} ${partner.last_name}`,
-        partnerRole: partner.role,
-        lastMessage: info.lastMessage,
-        lastMessageAt: info.lastMessageAt,
-        unreadCount: info.unread,
-      });
-    }
-  }
-
-  // Sort by most recent message
+  // Sort all conversations by most recent message
   conversations.sort((a, b) => (b.lastMessageAt || '').localeCompare(a.lastMessageAt || ''));
 
   res.json({ conversations });
 });
 
-// GET /api/messages/contacts — list users available to message
-// NOTE: must be before /:partnerId to avoid route collision
+// ─── POST /api/messages/conversations ─── Create a new conversation
+router.post("/conversations", async (req, res) => {
+  const db = await getDb();
+  const { type = "direct", name, memberIds = [] } = req.body;
+
+  if (!memberIds.length) return res.status(400).json({ error: "At least one member is required" });
+  if (type === "group" && !name) return res.status(400).json({ error: "Group name is required" });
+
+  // For direct conversations, check if one already exists
+  if (type === "direct" && memberIds.length === 1) {
+    const partnerId = memberIds[0];
+    const existing = await db.prepare(`
+      SELECT c.id FROM conversations c
+      JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
+      JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
+      WHERE c.type = 'direct'
+    `).get(req.user.id, partnerId);
+
+    if (existing) return res.json({ conversationId: existing.id, existing: true });
+  }
+
+  const convId = uuid();
+  await db.prepare(
+    "INSERT INTO conversations (id, type, name, created_by) VALUES (?, ?, ?, ?)"
+  ).run(convId, type, name || null, req.user.id);
+
+  // Add the creator as a member (admin for groups)
+  await db.prepare(
+    "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, ?)"
+  ).run(uuid(), convId, req.user.id, type === "group" ? "admin" : "member");
+
+  // Add other members
+  for (const memberId of memberIds) {
+    if (memberId !== req.user.id) {
+      await db.prepare(
+        "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, ?)"
+      ).run(uuid(), convId, memberId, "member");
+    }
+  }
+
+  res.status(201).json({ conversationId: convId });
+});
+
+// ─── GET /api/messages/contacts ─── List users available to message
 router.get("/contacts", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
 
-  // Return all users except the current user
   const users = await db.prepare(`
     SELECT id, first_name, last_name, role FROM users WHERE id != ?
     ORDER BY first_name ASC
@@ -76,42 +183,189 @@ router.get("/contacts", async (req, res) => {
   res.json({ contacts });
 });
 
-// GET /api/messages/:partnerId — get messages with a specific user
-router.get("/:partnerId", async (req, res) => {
+// ─── GET /api/messages/conversations/:id ─── Get messages in a conversation
+router.get("/conversations/:id", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
-  const partnerId = req.params.partnerId;
+  const convId = req.params.id;
 
+  // Handle legacy conversation IDs (legacy-<partnerId>)
+  if (convId.startsWith("legacy-")) {
+    const partnerId = convId.replace("legacy-", "");
+
+    const messages = await db.prepare(`
+      SELECT m.*,
+        su.first_name AS sender_first_name, su.last_name AS sender_last_name
+      FROM messages m
+      JOIN users su ON m.sender_id = su.id
+      WHERE ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))
+        AND m.conversation_id IS NULL
+      ORDER BY m.created_at ASC
+    `).all(userId, partnerId, partnerId, userId);
+
+    // Mark as read
+    await db.prepare(`
+      UPDATE messages SET is_read = 1
+      WHERE sender_id = ? AND recipient_id = ? AND is_read = 0 AND conversation_id IS NULL
+    `).run(partnerId, userId);
+
+    const enriched = messages.map(m => ({
+      ...m,
+      type: m.sender_id === userId ? 'sent' : 'received',
+      senderName: `${m.sender_first_name} ${m.sender_last_name}`,
+    }));
+
+    return res.json({ messages: enriched, conversationType: "direct" });
+  }
+
+  // Verify membership
+  const membership = await db.prepare(
+    "SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+  ).get(convId, userId);
+  if (!membership) return res.status(403).json({ error: "Not a member of this conversation" });
+
+  // Get conversation info
+  const conv = await db.prepare("SELECT type, name, care_team_id FROM conversations WHERE id = ?").get(convId);
+
+  // Get messages
   const messages = await db.prepare(`
     SELECT m.*,
-      su.first_name AS sender_first_name, su.last_name AS sender_last_name,
-      ru.first_name AS recipient_first_name, ru.last_name AS recipient_last_name
+      su.first_name AS sender_first_name, su.last_name AS sender_last_name
     FROM messages m
     JOIN users su ON m.sender_id = su.id
-    JOIN users ru ON m.recipient_id = ru.id
-    WHERE (m.sender_id = ? AND m.recipient_id = ?)
-       OR (m.sender_id = ? AND m.recipient_id = ?)
+    WHERE m.conversation_id = ?
     ORDER BY m.created_at ASC
-  `).all(userId, partnerId, partnerId, userId);
+  `).all(convId);
 
-  // Mark as read
-  await db.prepare(`
-    UPDATE messages SET is_read = 1
-    WHERE sender_id = ? AND recipient_id = ? AND is_read = 0
-  `).run(partnerId, userId);
+  // Update last_read_at
+  await db.prepare(
+    "UPDATE conversation_members SET last_read_at = NOW() WHERE conversation_id = ? AND user_id = ?"
+  ).run(convId, userId);
 
-  // Add type field for frontend
   const enriched = messages.map(m => ({
     ...m,
     type: m.sender_id === userId ? 'sent' : 'received',
     senderName: `${m.sender_first_name} ${m.sender_last_name}`,
   }));
 
-  res.json({ messages: enriched });
+  res.json({ messages: enriched, conversationType: conv?.type || "direct" });
 });
 
-// POST /api/messages — send a message
-router.post("/", validateMessage, async (req, res) => {
+// ─── POST /api/messages/conversations/:id ─── Send a message to a conversation
+router.post("/conversations/:id", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+  const convId = req.params.id;
+  const { content } = req.body;
+
+  if (!content || !content.trim()) return res.status(400).json({ error: "Message content is required" });
+
+  // Handle legacy conversations — auto-migrate to real conversation
+  if (convId.startsWith("legacy-")) {
+    const partnerId = convId.replace("legacy-", "");
+
+    // Create a real direct conversation
+    const newConvId = uuid();
+    await db.prepare(
+      "INSERT INTO conversations (id, type, created_by) VALUES (?, 'direct', ?)"
+    ).run(newConvId, userId);
+
+    await db.prepare(
+      "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')"
+    ).run(uuid(), newConvId, userId);
+    await db.prepare(
+      "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')"
+    ).run(uuid(), newConvId, partnerId);
+
+    // Migrate existing messages
+    await db.prepare(`
+      UPDATE messages SET conversation_id = ?
+      WHERE ((sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?))
+        AND conversation_id IS NULL
+    `).run(newConvId, userId, partnerId, partnerId, userId);
+
+    // Send the new message in this conversation
+    const msgId = uuid();
+    await db.prepare(
+      "INSERT INTO messages (id, sender_id, recipient_id, content, conversation_id) VALUES (?, ?, ?, ?, ?)"
+    ).run(msgId, userId, partnerId, content.trim(), newConvId);
+
+    await db.prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?").run(newConvId);
+
+    const message = await db.prepare("SELECT * FROM messages WHERE id = ?").get(msgId);
+    const sender = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+    const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Someone";
+
+    // Push + WebSocket to partner
+    sendPushToUser(partnerId, {
+      title: `New message from ${senderName}`,
+      body: content.trim().length > 100 ? content.trim().substring(0, 97) + "..." : content.trim(),
+      data: { type: "message", senderId: userId, conversationId: newConvId },
+    }).catch(() => {});
+
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      emitToUser(partnerId, "new_message", {
+        ...message, senderName, type: "received", conversationId: newConvId,
+      });
+    }
+
+    return res.status(201).json({ message, conversationId: newConvId });
+  }
+
+  // Verify membership
+  const membership = await db.prepare(
+    "SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+  ).get(convId, userId);
+  if (!membership) return res.status(403).json({ error: "Not a member of this conversation" });
+
+  // Get conversation members for notification
+  const members = await db.prepare(
+    "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?"
+  ).all(convId, userId);
+
+  // For 1:1 conversations, set recipient_id for backward compat
+  const conv = await db.prepare("SELECT type FROM conversations WHERE id = ?").get(convId);
+  const recipientId = (conv?.type === "direct" && members.length === 1) ? members[0].user_id : null;
+
+  const msgId = uuid();
+  await db.prepare(
+    "INSERT INTO messages (id, sender_id, recipient_id, content, conversation_id) VALUES (?, ?, ?, ?, ?)"
+  ).run(msgId, userId, recipientId || userId, content.trim(), convId);
+
+  // Update conversation timestamp
+  await db.prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?").run(convId);
+
+  // Update sender's last_read_at
+  await db.prepare(
+    "UPDATE conversation_members SET last_read_at = NOW() WHERE conversation_id = ? AND user_id = ?"
+  ).run(convId, userId);
+
+  const message = await db.prepare("SELECT * FROM messages WHERE id = ?").get(msgId);
+  const sender = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+  const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Someone";
+
+  // Notify all other members
+  const emitToUser = req.app.get("emitToUser");
+  for (const member of members) {
+    sendPushToUser(member.user_id, {
+      title: `New message from ${senderName}`,
+      body: content.trim().length > 100 ? content.trim().substring(0, 97) + "..." : content.trim(),
+      data: { type: "message", senderId: userId, conversationId: convId },
+    }).catch(() => {});
+
+    if (emitToUser) {
+      emitToUser(member.user_id, "new_message", {
+        ...message, senderName, type: "received", conversationId: convId,
+      });
+    }
+  }
+
+  res.status(201).json({ message });
+});
+
+// ─── LEGACY: POST /api/messages ─── Send a 1:1 message (backward compat)
+router.post("/", async (req, res) => {
   const db = await getDb();
   const { recipientId, content } = req.body;
 
@@ -119,34 +373,108 @@ router.post("/", validateMessage, async (req, res) => {
     return res.status(400).json({ error: "recipientId and content required" });
   }
 
+  // Check if a direct conversation already exists
+  let convId = null;
+  const existing = await db.prepare(`
+    SELECT c.id FROM conversations c
+    JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
+    JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
+    WHERE c.type = 'direct'
+  `).get(req.user.id, recipientId);
+
+  if (existing) {
+    convId = existing.id;
+  } else {
+    // Create a direct conversation
+    convId = uuid();
+    await db.prepare(
+      "INSERT INTO conversations (id, type, created_by) VALUES (?, 'direct', ?)"
+    ).run(convId, req.user.id);
+    await db.prepare(
+      "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')"
+    ).run(uuid(), convId, req.user.id);
+    await db.prepare(
+      "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')"
+    ).run(uuid(), convId, recipientId);
+  }
+
   const id = uuid();
   await db.prepare(`
-    INSERT INTO messages (id, sender_id, recipient_id, content)
-    VALUES (?, ?, ?, ?)
-  `).run(id, req.user.id, recipientId, content);
+    INSERT INTO messages (id, sender_id, recipient_id, content, conversation_id)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, req.user.id, recipientId, content, convId);
+
+  await db.prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?").run(convId);
 
   const message = await db.prepare("SELECT * FROM messages WHERE id = ?").get(id);
 
-  // Send push notification to recipient (non-blocking)
+  // Push + WebSocket
   const sender = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
   const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Someone";
   sendPushToUser(recipientId, {
     title: `New message from ${senderName}`,
     body: content.length > 100 ? content.substring(0, 97) + "..." : content,
-    data: { type: "message", senderId: req.user.id },
+    data: { type: "message", senderId: req.user.id, conversationId: convId },
   }).catch(() => {});
 
-  // Real-time: notify recipient via WebSocket
   const emitToUser = req.app.get("emitToUser");
   if (emitToUser) {
     emitToUser(recipientId, "new_message", {
-      ...message,
-      senderName,
-      type: "received",
+      ...message, senderName, type: "received", conversationId: convId,
     });
   }
 
   res.status(201).json({ message });
+});
+
+// ─── LEGACY: GET /api/messages/:partnerId ─── Get messages with a partner (backward compat)
+router.get("/:partnerId", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+  const partnerId = req.params.partnerId;
+
+  // Check for a conversation first
+  const conv = await db.prepare(`
+    SELECT c.id FROM conversations c
+    JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
+    JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
+    WHERE c.type = 'direct'
+  `).get(userId, partnerId);
+
+  let messages;
+  if (conv) {
+    messages = await db.prepare(`
+      SELECT m.*, su.first_name AS sender_first_name, su.last_name AS sender_last_name
+      FROM messages m JOIN users su ON m.sender_id = su.id
+      WHERE m.conversation_id = ?
+      ORDER BY m.created_at ASC
+    `).all(conv.id);
+
+    await db.prepare(
+      "UPDATE conversation_members SET last_read_at = NOW() WHERE conversation_id = ? AND user_id = ?"
+    ).run(conv.id, userId);
+  } else {
+    messages = await db.prepare(`
+      SELECT m.*, su.first_name AS sender_first_name, su.last_name AS sender_last_name
+      FROM messages m JOIN users su ON m.sender_id = su.id
+      WHERE ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))
+        AND m.conversation_id IS NULL
+      ORDER BY m.created_at ASC
+    `).all(userId, partnerId, partnerId, userId);
+
+    await db.prepare(`
+      UPDATE messages SET is_read = 1
+      WHERE sender_id = ? AND recipient_id = ? AND is_read = 0 AND conversation_id IS NULL
+    `).run(partnerId, userId);
+  }
+
+  const enriched = messages.map(m => ({
+    ...m,
+    type: m.sender_id === userId ? 'sent' : 'received',
+    senderName: `${m.sender_first_name} ${m.sender_last_name}`,
+  }));
+
+  res.json({ messages: enriched });
 });
 
 module.exports = router;

@@ -208,15 +208,32 @@
 - Seed data: 3 care teams (Betty with 3 members, Dorothy, Arun) with proper leader/member roles
 - 53 tests passing, cache version v1.0.0
 
+### v1.1.0 — Group Messaging & Calendar for Real Users (2026-02-18)
+
+**Phase 3: Group Messaging**
+- New tables: `conversations` (type: direct/group/care_team) and `conversation_members` (with `last_read_at` for unread tracking)
+- `conversation_id` column added to `messages` table — all messages now belong to a conversation
+- Backend rewrite of `/api/messages` with conversation-centric endpoints: list conversations, create conversation (direct/group), get messages by conversation, send to conversation
+- Legacy backward compatibility: old partner-based messages auto-migrated to conversations on first new message
+- Auto-created care team conversations: adding a care recipient creates a care team chat; accepting an invite auto-joins the chat
+- Frontend Messages.js rewrite: conversation list (direct + group), group chat with sender names, "New Message" contact picker, "Create Group" flow with name input
+- WebSocket `new_message` events now include `conversationId` and notify all conversation members
+- Seed data: 5 direct conversations, 1 care team conversation (Betty's team with Pete, David, Susan), 6 group messages
+
+**Phase 5: Calendar & Care Requests for Real Users**
+- RequestCareModal: 4-step wizard for real users (skips caregiver matching step), sends `status: 'open'` for open care requests
+- Schedule.js: empty state with "Request Care" CTA button, `open` status badge ("Open — waiting") in orange
+- Sessions route: accepts `status: 'open'` for care requests without caregiver, added `open` to valid status transitions
+- Cache version bumped to v1.1.0
+
 ---
 
-## Next Up — v1.1.0: Group Messaging & Caregiver Search
+## Next Up — v1.2.0: Caregiver Search & Location
 
-Priority: **HIGH** — Build out group communication and location-based search.
+Priority: **HIGH** — Build out location-based search.
 
-- [ ] **Group messaging:** Conversations table, auto-created care team chat, custom group conversations, Messages.js rework
 - [ ] **Caregiver search by location:** Mapbox integration, radius-based search, map view with filters
-- [ ] **Calendar for real users:** Clean empty state, care request posts (status: `open`)
+- [ ] **Geocoding & distance:** Real address → lat/lng via Mapbox. Caregiver matching by actual driving distance.
 
 ---
 
