@@ -1,5 +1,5 @@
-// InPlace Service Worker — v0.7.1
-const CACHE_NAME = 'inplace-v0.7.1';
+// InPlace Service Worker — v0.7.2
+const CACHE_NAME = 'inplace-v0.7.2';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -26,6 +26,8 @@ const STATIC_ASSETS = [
   '/js/components/AreaMap.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/icons/icon-maskable-192.png',
+  '/icons/icon-maskable-512.png',
   '/manifest.json',
 ];
 
