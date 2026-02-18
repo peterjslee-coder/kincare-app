@@ -49,6 +49,12 @@
 
 ## Done
 
+### Analytics, Push Notifications & Shared Care Recipients (v0.8.0)
+- [x] **Family Dashboard Analytics:** New `/api/analytics` endpoint with 6-month historical data (sessions, hours, spend per month), service type breakdown, and caregiver utilization stats. Frontend Analytics page with SVG bar charts (hours/spend/sessions monthly trends), donut chart for service types, caregiver utilization horizontal bars, summary stat cards. Tab switcher for different views.
+- [x] **Push Notifications:** `web-push` VAPID keys, `push_subscriptions` table, subscribe/unsubscribe API at `/api/push`. Service worker `push` + `notificationclick` event handlers. Push triggered on new messages with sender name and content preview. Frontend `subscribeToPush()` helper auto-subscribes on login.
+- [x] **Shared Care Recipients:** `care_recipient_shares` table with owner/edit/view permission levels. `hasAccess()` helper in careRecipients route. Share/unshare API endpoints on `/api/care-recipients/:id/share`. Dashboard includes shared recipients. Seed shares Betty with David & Susan (edit permission).
+- [x] **Infrastructure:** 2 new database tables (push_subscriptions, care_recipient_shares), 2 new route files (analytics.js, push.js), 1 new component (Analytics.js). Cache bumped to v0.8.0. 53 tests passing.
+
 ### Recurring Sessions (v0.7.0)
 - [x] **Recurring session booking:** Weekly and biweekly repeating care sessions. `recurrence_rule` and `recurrence_group_id` columns on care_sessions. `generateRecurringDates()` helper. POST /api/sessions creates multiple linked sessions. DELETE /api/sessions/recurring/:groupId cancels future sessions in a series.
 - [x] **Recurring UI:** RequestCareModal step 2 has One-time / Weekly / Every 2 weeks toggle + weeks selector (2-12). Review step shows recurrence summary. Schedule shows 🔁 badge on recurring session cards.

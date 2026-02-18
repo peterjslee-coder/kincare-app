@@ -135,6 +135,17 @@
 - Photo strip, personal story, hero section: all responsive on mobile
 - PWA "Install App" button in splash nav with iOS-specific Share instructions
 
+### v0.8.0 — Analytics, Push Notifications & Shared Care Recipients (2026-02-17)
+- Family Dashboard Analytics: SVG bar charts (hours/spend/sessions monthly trends), donut chart for service type breakdown, caregiver utilization bars
+- New `/api/analytics` endpoint with 6-month historical data, service breakdown, caregiver stats
+- Push notifications: `web-push` VAPID keys, `push_subscriptions` table, subscribe/unsubscribe API, SW push + notification click handlers
+- Push triggered on new messages (with sender name + preview)
+- Shared care recipients: `care_recipient_shares` table, share/unshare API endpoints on `/api/care-recipients/:id/share`
+- Owner/edit/view access levels — shared users see recipients on dashboard and can edit with permission
+- Seed shares Betty with David & Susan (siblings now see the same Betty record)
+- Analytics page added to sidebar for family users
+- Cache version bumped to v0.8.0
+
 ### v0.7.2 — PWA Android Fix & Email Domain (2026-02-17)
 - Fixed PWA not appearing on Android home screen after install
 - Split manifest icon `purpose: "any maskable"` into separate entries (Chrome requires distinct icons)
