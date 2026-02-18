@@ -54,7 +54,7 @@ router.post("/register", validateRegister, async (req, res) => {
 // ─── POST /api/auth/login ───
 router.post("/login", validateLogin, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, deviceFingerprint } = req.body;
 
     const db = await getDb();
     const user = await db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(email);
@@ -63,9 +63,38 @@ router.post("/login", validateLogin, async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
+    // Check if 2FA is enabled
+    const twoFa = await db.prepare("SELECT is_enabled FROM user_2fa WHERE user_id = ? AND is_enabled = 1").get(user.id);
+    if (twoFa) {
+      // Check for trusted device
+      let deviceTrusted = false;
+      if (deviceFingerprint) {
+        const device = await db.prepare(
+          "SELECT id FROM trusted_devices WHERE user_id = ? AND device_fingerprint = ? AND expires_at > NOW()"
+        ).get(user.id, deviceFingerprint);
+        if (device) {
+          deviceTrusted = true;
+          await db.prepare("UPDATE trusted_devices SET last_used = NOW() WHERE id = ?").run(device.id);
+        }
+      }
+
+      if (!deviceTrusted) {
+        // Return temp token for 2FA verification (5 min expiry)
+        const jwtLib = require("jsonwebtoken");
+        const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
+        const tempToken = jwtLib.sign({ id: user.id }, JWT_SECRET + "-2fa-temp", { expiresIn: "5m" });
+
+        return res.json({
+          requires2FA: true,
+          tempToken,
+          message: "Enter the code from your authenticator app",
+        });
+      }
+    }
+
     const token = generateToken(user);
 
-    res.json({
+    const responseData = {
       user: {
         id: user.id,
         email: user.email,
@@ -73,12 +102,63 @@ router.post("/login", validateLogin, async (req, res) => {
         firstName: user.first_name,
         lastName: user.last_name,
         emailVerified: !!user.email_verified,
+        isDemo: !!user.is_demo,
       },
       token,
-    });
+    };
+
+    // Check if password change is required
+    if (user.must_change_password) {
+      responseData.mustChangePassword = true;
+    }
+
+    res.json(responseData);
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// ─── POST /api/auth/change-password ───
+router.post("/change-password", authenticate, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current password and new password required" });
+    }
+
+    if (newPassword.length < 8 || newPassword.length > 128) {
+      return res.status(400).json({ error: "New password must be 8-128 characters" });
+    }
+
+    // Enforce password strength for non-demo accounts
+    if (!/[A-Z]/.test(newPassword)) {
+      return res.status(400).json({ error: "Password must contain at least one uppercase letter" });
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ error: "Password must contain at least one number" });
+    }
+    if (!/[^A-Za-z0-9]/.test(newPassword)) {
+      return res.status(400).json({ error: "Password must contain at least one special character" });
+    }
+
+    const db = await getDb();
+    const user = await db.prepare("SELECT password_hash FROM users WHERE id = ?").get(req.user.id);
+
+    if (!user || !(await bcrypt.compare(currentPassword, user.password_hash))) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await db.prepare(
+      "UPDATE users SET password_hash = ?, must_change_password = 0, password_changed_at = NOW(), updated_at = NOW() WHERE id = ?"
+    ).run(newHash, req.user.id);
+
+    res.json({ message: "Password changed successfully" });
+  } catch (err) {
+    console.error("Change password error:", err);
+    res.status(500).json({ error: "Failed to change password" });
   }
 });
 
@@ -86,12 +166,26 @@ router.post("/login", validateLogin, async (req, res) => {
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
   const user = await db.prepare(
-    "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, email_verified, created_at FROM users WHERE id = ?"
+    "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, email_verified, is_demo, password_changed_at, created_at FROM users WHERE id = ?"
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
 
-  res.json({ user: { ...user, email_verified: !!user.email_verified } });
+  // Check 2FA status
+  const twoFa = await db.prepare("SELECT is_enabled FROM user_2fa WHERE user_id = ?").get(req.user.id);
+
+  // Check linked OAuth accounts
+  const oauthAccounts = await db.prepare("SELECT provider, provider_email FROM oauth_accounts WHERE user_id = ?").all(req.user.id);
+
+  res.json({
+    user: {
+      ...user,
+      email_verified: !!user.email_verified,
+      is_demo: !!user.is_demo,
+      twoFactorEnabled: !!(twoFa?.is_enabled),
+      linkedAccounts: oauthAccounts || [],
+    },
+  });
 });
 
 // ─── PUT /api/auth/me ───

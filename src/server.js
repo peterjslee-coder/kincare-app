@@ -65,6 +65,7 @@ app.set("emitToUser", emitToUser);
 
 // ─── Middleware ───
 app.use(cors());
+app.use(require("cookie-parser")());
 app.use(express.json({ limit: "100kb" }));
 app.use(limitBodySize(100000));
 
@@ -115,6 +116,8 @@ app.use("/api/assignments", require("./routes/assignments"));
 app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/push", require("./routes/push"));
 app.use("/api/photos", require("./routes/photos"));
+app.use("/api/auth/2fa", require("./routes/twoFactor"));
+app.use("/api/oauth", require("./routes/oauth"));
 app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 

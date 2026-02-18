@@ -17,6 +17,7 @@ async function seed() {
 
   // Clear existing data (reverse dependency order)
   const tables = [
+    "trusted_devices", "user_2fa", "oauth_accounts",
     "care_recipient_shares", "push_subscriptions",
     "caregiver_assignments", "recipient_notes", "messages",
     "visit_photos", "visit_logs", "activity_feed", "reviews",
@@ -39,8 +40,8 @@ async function seed() {
 
   // Family user (Pete — Care Team primary)
   await db.prepare(`
-    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone, is_demo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
   `).run(peteId, "pete@inplace.care", passwordHash, "family", "Pete", "Lee", "(626) 555-0142");
 
   // Caregiver users
@@ -53,15 +54,15 @@ async function seed() {
 
   for (const [id, email, first, last, phone] of caregiverUsers) {
     await db.prepare(`
-      INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
-      VALUES (?, ?, ?, 'caregiver', ?, ?, ?)
+      INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone, is_demo)
+      VALUES (?, ?, ?, 'caregiver', ?, ?, ?, 1)
     `).run(id, email, passwordHash, first, last, phone);
   }
 
   // Cared-For user (Betty — limited access, controlled by Pete)
   await db.prepare(`
-    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
-    VALUES (?, ?, ?, 'care_for', ?, ?, ?)
+    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone, is_demo)
+    VALUES (?, ?, ?, 'care_for', ?, ?, ?, 1)
   `).run(bettyUserId, "betty@inplace.care", passwordHash, "Betty", "Lee", "(540) 555-0100");
 
   // Sibling family users (Pete's siblings who also coordinate Betty's care)
@@ -69,13 +70,13 @@ async function seed() {
   const susanLeeId = uuid();
 
   await db.prepare(`
-    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
-    VALUES (?, ?, ?, 'family', ?, ?, ?)
+    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone, is_demo)
+    VALUES (?, ?, ?, 'family', ?, ?, ?, 1)
   `).run(davidLeeId, "david.lee@inplace.care", passwordHash, "David", "Lee", "(626) 555-0143");
 
   await db.prepare(`
-    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
-    VALUES (?, ?, ?, 'family', ?, ?, ?)
+    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone, is_demo)
+    VALUES (?, ?, ?, 'family', ?, ?, ?, 1)
   `).run(susanLeeId, "susan.lee@inplace.care", passwordHash, "Susan", "Lee", "(626) 555-0144");
 
   console.log("✅ Users created (9 — Pete, David, Susan, 4 caregivers, Betty)");
@@ -85,13 +86,13 @@ async function seed() {
   const patelFamilyId = uuid();
 
   await db.prepare(`
-    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
-    VALUES (?, ?, ?, 'family', ?, ?, ?)
+    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone, is_demo)
+    VALUES (?, ?, ?, 'family', ?, ?, ?, 1)
   `).run(hendersonFamilyId, "linda@inplace.care", passwordHash, "Linda", "Henderson", "(540) 555-0301");
 
   await db.prepare(`
-    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone)
-    VALUES (?, ?, ?, 'family', ?, ?, ?)
+    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone, is_demo)
+    VALUES (?, ?, ?, 'family', ?, ?, ?, 1)
   `).run(patelFamilyId, "raj@inplace.care", passwordHash, "Raj", "Patel", "(540) 555-0302");
 
   console.log("✅ Additional family users created (2 — Henderson, Patel)");
