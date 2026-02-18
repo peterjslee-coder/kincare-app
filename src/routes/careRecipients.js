@@ -9,15 +9,30 @@ const router = express.Router();
 router.use(authenticate);
 
 // ─── GET /api/care-recipients ───
-// List care recipients for the logged-in family user
+// List care recipients for the logged-in family user (owned + shared)
 router.get("/", requireRole("family", "admin"), async (req, res) => {
   const db = await getDb();
-  const recipients = await db.prepare(
-    "SELECT * FROM care_recipients WHERE family_user_id = ? ORDER BY created_at DESC"
+
+  // Own recipients
+  const owned = await db.prepare(
+    "SELECT *, 'owner' AS access_level FROM care_recipients WHERE family_user_id = ? ORDER BY created_at DESC"
   ).all(req.user.id);
 
+  // Shared with me
+  const shared = await db.prepare(`
+    SELECT cr.*, crs.permission AS access_level
+    FROM care_recipient_shares crs
+    JOIN care_recipients cr ON crs.care_recipient_id = cr.id
+    WHERE crs.shared_with_user_id = ?
+    ORDER BY cr.created_at DESC
+  `).all(req.user.id);
+
+  // Merge and deduplicate (owner takes precedence)
+  const ownedIds = new Set(owned.map(r => r.id));
+  const all = [...owned, ...shared.filter(r => !ownedIds.has(r.id))];
+
   // Parse JSON fields
-  const parsed = recipients.map((r) => ({
+  const parsed = all.map((r) => ({
     ...r,
     healthConditions: JSON.parse(r.health_conditions || "[]"),
     medications: JSON.parse(r.medications || "[]"),
@@ -62,20 +77,54 @@ router.post("/", requireRole("family"), async (req, res) => {
   res.status(201).json({ careRecipient: recipient });
 });
 
+// ─── Helper: check if user has access to a care recipient ───
+async function hasAccess(db, recipientId, userId) {
+  // Check owner
+  const owned = await db.prepare(
+    "SELECT id FROM care_recipients WHERE id = ? AND family_user_id = ?"
+  ).get(recipientId, userId);
+  if (owned) return "owner";
+  // Check shared
+  const shared = await db.prepare(
+    "SELECT permission FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+  ).get(recipientId, userId);
+  return shared ? shared.permission : null;
+}
+
 // ─── GET /api/care-recipients/:id ───
 router.get("/:id", requireRole("family", "admin"), async (req, res) => {
   const db = await getDb();
-  const recipient = await db.prepare(
-    "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
-  ).get(req.params.id, req.user.id);
+  const access = await hasAccess(db, req.params.id, req.user.id);
+  if (!access) return res.status(404).json({ error: "Care recipient not found" });
 
+  const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
   if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+
+  // Get sharing info if owner
+  let sharedWith = [];
+  if (access === "owner") {
+    sharedWith = await db.prepare(`
+      SELECT crs.id AS share_id, crs.permission, crs.created_at,
+        u.id AS user_id, u.first_name, u.last_name, u.email
+      FROM care_recipient_shares crs
+      JOIN users u ON crs.shared_with_user_id = u.id
+      WHERE crs.care_recipient_id = ?
+    `).all(req.params.id);
+  }
 
   res.json({
     careRecipient: {
       ...recipient,
       healthConditions: JSON.parse(recipient.health_conditions || "[]"),
       medications: JSON.parse(recipient.medications || "[]"),
+      accessLevel: access,
+      sharedWith: sharedWith.map(s => ({
+        shareId: s.share_id,
+        userId: s.user_id,
+        name: `${s.first_name} ${s.last_name}`,
+        email: s.email,
+        permission: s.permission,
+      })),
     },
   });
 });
@@ -83,10 +132,11 @@ router.get("/:id", requireRole("family", "admin"), async (req, res) => {
 // ─── PUT /api/care-recipients/:id ───
 router.put("/:id", requireRole("family"), async (req, res) => {
   const db = await getDb();
-  const existing = await db.prepare(
-    "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
-  ).get(req.params.id, req.user.id);
+  const access = await hasAccess(db, req.params.id, req.user.id);
+  if (!access) return res.status(404).json({ error: "Care recipient not found" });
+  if (access === "view") return res.status(403).json({ error: "You have view-only access to this care recipient" });
 
+  const existing = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ error: "Care recipient not found" });
 
   const {
@@ -123,6 +173,72 @@ router.put("/:id", requireRole("family"), async (req, res) => {
 
   const updated = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
   res.json({ careRecipient: updated });
+});
+
+// ─── POST /api/care-recipients/:id/share ───
+// Share a care recipient with another family user
+router.post("/:id/share", requireRole("family"), async (req, res) => {
+  const db = await getDb();
+  const { email, permission = "edit" } = req.body;
+
+  if (!email) return res.status(400).json({ error: "Email of user to share with is required" });
+
+  // Only the owner can share
+  const recipient = await db.prepare(
+    "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
+  ).get(req.params.id, req.user.id);
+  if (!recipient) return res.status(404).json({ error: "Care recipient not found or you are not the owner" });
+
+  // Find the target user
+  const targetUser = await db.prepare(
+    "SELECT id, first_name, last_name, email, role FROM users WHERE email = ? AND role = 'family'"
+  ).get(email);
+  if (!targetUser) return res.status(404).json({ error: "Family user not found with that email" });
+  if (targetUser.id === req.user.id) return res.status(400).json({ error: "Cannot share with yourself" });
+
+  // Check if already shared
+  const existing = await db.prepare(
+    "SELECT id FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+  ).get(req.params.id, targetUser.id);
+  if (existing) {
+    // Update permission
+    await db.prepare("UPDATE care_recipient_shares SET permission = ? WHERE id = ?").run(permission, existing.id);
+    return res.json({ success: true, message: `Updated sharing with ${targetUser.first_name}` });
+  }
+
+  const id = uuid();
+  await db.prepare(
+    "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, shared_by_user_id) VALUES (?, ?, ?, ?, ?)"
+  ).run(id, req.params.id, targetUser.id, permission, req.user.id);
+
+  res.status(201).json({
+    success: true,
+    share: {
+      shareId: id,
+      userId: targetUser.id,
+      name: `${targetUser.first_name} ${targetUser.last_name}`,
+      email: targetUser.email,
+      permission,
+    },
+  });
+});
+
+// ─── DELETE /api/care-recipients/:id/share/:shareId ───
+// Remove sharing for a care recipient
+router.delete("/:id/share/:shareId", requireRole("family"), async (req, res) => {
+  const db = await getDb();
+
+  // Only the owner can unshare
+  const recipient = await db.prepare(
+    "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
+  ).get(req.params.id, req.user.id);
+  if (!recipient) return res.status(404).json({ error: "Care recipient not found or you are not the owner" });
+
+  await db.prepare(
+    "DELETE FROM care_recipient_shares WHERE id = ? AND care_recipient_id = ?"
+  ).run(req.params.shareId, req.params.id);
+
+  res.json({ success: true });
 });
 
 module.exports = router;

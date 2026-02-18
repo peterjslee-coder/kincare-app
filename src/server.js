@@ -59,6 +59,8 @@ app.use("/api/dashboard", require("./routes/dashboard"));
 app.use("/api/messages", require("./routes/messages"));
 app.use("/api/notes", require("./routes/notes"));
 app.use("/api/assignments", require("./routes/assignments"));
+app.use("/api/analytics", require("./routes/analytics"));
+app.use("/api/push", require("./routes/push"));
 app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 

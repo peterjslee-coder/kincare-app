@@ -208,3 +208,48 @@ const ToastProvider = window.ToastProvider = ({ children }) => {
     )
   );
 };
+
+// ─── Push Notification Helpers ───
+// Subscribe to push notifications (call after login)
+const subscribeToPush = window.subscribeToPush = async () => {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    const reg = await navigator.serviceWorker.ready;
+    // Check if already subscribed
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      // Already subscribed — just save to server
+      await apiFetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: sub }),
+      });
+      return sub;
+    }
+    // Get VAPID key from server
+    const keyRes = await fetch('/api/push/vapid-key');
+    if (!keyRes.ok) return null;
+    const { publicKey } = await keyRes.json();
+    // Convert VAPID key to Uint8Array
+    const urlBase64ToUint8Array = (base64String) => {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+      const rawData = atob(base64);
+      return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+    };
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+    // Save subscription to server
+    await apiFetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub }),
+    });
+    return sub;
+  } catch (err) {
+    console.log('Push subscription error:', err);
+    return null;
+  }
+};

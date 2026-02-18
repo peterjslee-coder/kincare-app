@@ -17,6 +17,7 @@ async function seed() {
 
   // Clear existing data (reverse dependency order)
   const tables = [
+    "care_recipient_shares", "push_subscriptions",
     "caregiver_assignments", "recipient_notes", "messages",
     "visit_photos", "visit_logs", "activity_feed", "reviews",
     "payments", "care_sessions", "availability",
@@ -507,6 +508,17 @@ async function seed() {
   }
 
   console.log("✅ Recipient notes created (4)");
+
+  // ─── Share Betty with siblings ───
+  // Pete shares Betty's care recipient record with David and Susan
+  await db.prepare(
+    "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, shared_by_user_id) VALUES (?, ?, ?, 'edit', ?)"
+  ).run(uuid(), bettyId, davidLeeId, peteId);
+  await db.prepare(
+    "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, shared_by_user_id) VALUES (?, ?, ?, 'edit', ?)"
+  ).run(uuid(), bettyId, susanLeeId, peteId);
+
+  console.log("✅ Care recipient sharing created (Betty shared with David & Susan)");
 
   console.log("\n🎉 Seed complete! Database ready.\n");
   console.log("Demo logins:");

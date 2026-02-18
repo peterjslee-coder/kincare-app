@@ -3,6 +3,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { validateMessage } = require("../middleware/validate");
+const { sendPushToUser } = require("./push");
 
 const router = express.Router();
 router.use(authenticate);
@@ -125,6 +126,16 @@ router.post("/", validateMessage, async (req, res) => {
   `).run(id, req.user.id, recipientId, content);
 
   const message = await db.prepare("SELECT * FROM messages WHERE id = ?").get(id);
+
+  // Send push notification to recipient (non-blocking)
+  const sender = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+  const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Someone";
+  sendPushToUser(recipientId, {
+    title: `New message from ${senderName}`,
+    body: content.length > 100 ? content.substring(0, 97) + "..." : content,
+    data: { type: "message", senderId: req.user.id },
+  }).catch(() => {});
+
   res.status(201).json({ message });
 });
 

@@ -25,9 +25,17 @@ router.get("/", async (req, res) => {
 
 // ─── Family Dashboard (Pete's view) ───
 async function familyDashboard(db, userId, res) {
-  const recipients = await db.prepare(
+  // Get owned + shared recipients
+  const ownedRecipients = await db.prepare(
     "SELECT * FROM care_recipients WHERE family_user_id = ?"
   ).all(userId);
+  const sharedRecipients = await db.prepare(`
+    SELECT cr.* FROM care_recipient_shares crs
+    JOIN care_recipients cr ON crs.care_recipient_id = cr.id
+    WHERE crs.shared_with_user_id = ?
+  `).all(userId);
+  const ownedIds = new Set(ownedRecipients.map(r => r.id));
+  const recipients = [...ownedRecipients, ...sharedRecipients.filter(r => !ownedIds.has(r.id))];
 
   const monthStart = new Date();
   monthStart.setDate(1);

@@ -122,6 +122,10 @@ const App = () => {
     setCurrentUser(user);
     setCurrentPage('dashboard');
     setAppState('app');
+    // Subscribe to push notifications after login (non-blocking)
+    if (typeof subscribeToPush === 'function') {
+      subscribeToPush().catch(() => {});
+    }
   };
 
   const handleLogout = () => {
@@ -171,6 +175,7 @@ const App = () => {
       { id: 'care-profile', icon: '👵', label: 'Care Profile' },
       { id: 'schedule', icon: '📅', label: 'Schedule' },
       { id: 'caregivers', icon: '👨‍⚕️', label: 'Caregivers' },
+      { id: 'analytics', icon: '📊', label: 'Analytics' },
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'recipients', icon: '👥', label: 'Recipients' },
       { id: 'messages', icon: '💬', label: 'Messages' },
@@ -196,6 +201,7 @@ const App = () => {
     if (currentPage === 'care-profile') return <CareProfile key={currentPage} />;
     if (currentPage === 'schedule') return <Schedule key={currentPage} />;
     if (currentPage === 'caregivers') return <Caregivers key={currentPage} />;
+    if (currentPage === 'analytics') return <Analytics key={currentPage} />;
     if (currentPage === 'activity') return <ActivityFeed key={currentPage} />;
     if (currentPage === 'recipients') return <CareRecipients key={currentPage} />;
     if (currentPage === 'messages') return <Messages key={currentPage} />;

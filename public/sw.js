@@ -1,5 +1,5 @@
-// InPlace Service Worker — v0.7.2
-const CACHE_NAME = 'inplace-v0.7.2';
+// InPlace Service Worker — v0.8.0
+const CACHE_NAME = 'inplace-v0.8.0';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -24,6 +24,7 @@ const STATIC_ASSETS = [
   '/js/components/CaredForView.js',
   '/js/components/CaretakerHub.js',
   '/js/components/AreaMap.js',
+  '/js/components/Analytics.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-maskable-192.png',
@@ -97,6 +98,50 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       });
+    })
+  );
+});
+
+// ─── Push Notifications ───
+self.addEventListener('push', (event) => {
+  let data = { title: 'InPlace', body: 'You have a new notification' };
+  try {
+    if (event.data) data = event.data.json();
+  } catch (e) {
+    // fallback to default
+  }
+
+  const options = {
+    body: data.body,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    vibrate: [100, 50, 100],
+    data: data.data || {},
+    actions: [
+      { action: 'open', title: 'Open' },
+      { action: 'dismiss', title: 'Dismiss' },
+    ],
+  };
+
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+// Handle notification click — open the app
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  if (event.action === 'dismiss') return;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Focus existing window if open
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Otherwise open a new window
+      return clients.openWindow('/');
     })
   );
 });
