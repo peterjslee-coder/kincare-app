@@ -135,6 +135,16 @@
 - Photo strip, personal story, hero section: all responsive on mobile
 - PWA "Install App" button in splash nav with iOS-specific Share instructions
 
+### v0.7.2 — PWA Android Fix & Email Domain (2026-02-17)
+- Fixed PWA not appearing on Android home screen after install
+- Split manifest icon `purpose: "any maskable"` into separate entries (Chrome requires distinct icons)
+- Created dedicated maskable icons (full-bleed, no rounded corners) for Android adaptive icon system
+- Added `id: "/"` to manifest for stable PWA identity across sessions
+- Resend domain verification: DKIM + SPF DNS records added in Cloudflare, domain verified
+- Production email now sends from `noreply@yourinplace.com` (was sandbox-only `onboarding@resend.dev`)
+- `FROM_EMAIL` env var set on Railway
+- Cache version bumped to v0.7.2
+
 ### v0.7.0 — Recurring Sessions (2026-02-17)
 - Weekly and biweekly recurring care session booking
 - `recurrence_rule` and `recurrence_group_id` columns on `care_sessions` table

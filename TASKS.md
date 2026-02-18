@@ -64,6 +64,11 @@
 - [x] **Input validation:** New `src/middleware/validate.js` with validators for register, login, profile update, messages, sessions. Email format, password strength (8-128 chars), phone format, string length limits, input sanitization (trim + null byte removal).
 - [x] **Rate limiting:** `express-rate-limit` — auth endpoints (20 attempts per 15 min), general API (120 req/min). JSON body size limit (100KB).
 
+### PWA Android Fix & Email Domain (v0.7.2)
+- [x] **PWA Android installability fix:** Split manifest icon `purpose: "any maskable"` into separate entries. Created dedicated maskable icons (full-bleed, no rounded corners) for Android's adaptive icon system. Added `id: "/"` to manifest. Cache bumped to v0.7.2.
+- [x] **Resend domain verification:** DKIM + SPF DNS records added in Cloudflare for yourinplace.com. Domain verified in Resend dashboard. Production email now sends from `noreply@yourinplace.com`.
+- [x] **FROM_EMAIL env var on Railway:** Set `FROM_EMAIL=noreply@yourinplace.com` so all transactional emails (verification, password reset, waitlist) use the verified domain sender.
+
 ### PWA & Mobile Polish (v0.6.0)
 - [x] **PWA add-to-homescreen:** Web app manifest, service worker (cache-first for static, network-first for API), install banner with `beforeinstallprompt`, offline indicator, Apple meta tags. Icons: 192x192, 512x512, apple-touch-icon.
 - [x] **Mobile touch polish:** 44px minimum tap targets, `font-size: 16px` to prevent iOS auto-zoom, `viewport-fit=cover` for notched phones, `display-mode: standalone` CSS adjustments, 2-column stats grid on mobile, single-column info-grid.
