@@ -25,130 +25,145 @@ router.get("/", async (req, res) => {
 
 // ─── Family Dashboard (Pete's view) ───
 async function familyDashboard(db, userId, res) {
-  // Get owned + shared recipients
-  const ownedRecipients = await db.prepare(
-    "SELECT * FROM care_recipients WHERE family_user_id = ?"
-  ).all(userId);
-  const sharedRecipients = await db.prepare(`
-    SELECT cr.* FROM care_recipient_shares crs
-    JOIN care_recipients cr ON crs.care_recipient_id = cr.id
-    WHERE crs.shared_with_user_id = ?
-  `).all(userId);
-  const ownedIds = new Set(ownedRecipients.map(r => r.id));
-  const recipients = [...ownedRecipients, ...sharedRecipients.filter(r => !ownedIds.has(r.id))];
+  try {
+    // Get owned + shared recipients
+    const ownedRecipients = await db.prepare(
+      "SELECT * FROM care_recipients WHERE family_user_id = ?"
+    ).all(userId);
+    const sharedRecipients = await db.prepare(`
+      SELECT cr.* FROM care_recipient_shares crs
+      JOIN care_recipients cr ON crs.care_recipient_id = cr.id
+      WHERE crs.shared_with_user_id = ?
+    `).all(userId);
+    const ownedIds = new Set(ownedRecipients.map(r => r.id));
+    const recipients = [...ownedRecipients, ...sharedRecipients.filter(r => !ownedIds.has(r.id))];
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  const monthStr = monthStart.toISOString().split("T")[0];
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    const monthStr = monthStart.toISOString().split("T")[0];
 
-  const monthlyStats = await db.prepare(`
-    SELECT
-      COUNT(*) as total_sessions,
-      SUM(duration_hours) as total_hours,
-      SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
-    FROM care_sessions
-    WHERE family_user_id = ? AND scheduled_date >= ?
-  `).get(userId, monthStr);
+    const monthlyStats = await db.prepare(`
+      SELECT
+        COUNT(*) as total_sessions,
+        SUM(duration_hours) as total_hours,
+        SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
+      FROM care_sessions
+      WHERE family_user_id = ? AND scheduled_date >= ?
+    `).get(userId, monthStr);
 
-  const today = new Date().toISOString().split("T")[0];
-  const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
+    const today = new Date().toISOString().split("T")[0];
+    const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
-  const upcoming = await db.prepare(`
-    SELECT cs.*,
-      cr.first_name || ' ' || cr.last_name AS recipient_name,
-      u.first_name || ' ' || u.last_name AS caregiver_name,
-      cp.rating_avg AS caregiver_rating
-    FROM care_sessions cs
-    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-    LEFT JOIN users u ON cp.user_id = u.id
-    WHERE cs.family_user_id = ?
-      AND cs.scheduled_date >= ?
-      AND cs.scheduled_date <= ?
-      AND cs.status IN ('pending', 'confirmed')
-    ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
-    LIMIT 5
-  `).all(userId, today, nextWeek);
+    const upcoming = await db.prepare(`
+      SELECT cs.*,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        cp.rating_avg AS caregiver_rating
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.family_user_id = ?
+        AND cs.scheduled_date >= ?
+        AND cs.scheduled_date <= ?
+        AND cs.status IN ('pending', 'confirmed')
+      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+      LIMIT 5
+    `).all(userId, today, nextWeek);
 
-  const recentActivity = await db.prepare(`
-    SELECT * FROM activity_feed
-    WHERE family_user_id = ?
-    ORDER BY created_at DESC LIMIT 5
-  `).all(userId);
+    const recentActivity = await db.prepare(`
+      SELECT * FROM activity_feed
+      WHERE family_user_id = ?
+      ORDER BY created_at DESC LIMIT 5
+    `).all(userId);
 
-  const unreadCount = await db.prepare(
-    "SELECT COUNT(*) as count FROM activity_feed WHERE family_user_id = ? AND is_read = 0"
-  ).get(userId);
+    const unreadCount = await db.prepare(
+      "SELECT COUNT(*) as count FROM activity_feed WHERE family_user_id = ? AND is_read = 0"
+    ).get(userId);
 
-  const avgRating = await db.prepare(`
-    SELECT AVG(cp.rating_avg) as avg
-    FROM care_sessions cs
-    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-    WHERE cs.family_user_id = ? AND cs.status = 'completed'
-  `).get(userId);
+    const avgRating = await db.prepare(`
+      SELECT AVG(cp.rating_avg) as avg
+      FROM care_sessions cs
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.family_user_id = ? AND cs.status = 'completed'
+    `).get(userId);
 
-  // Assigned caregiver count
-  const assignedCount = await db.prepare(`
-    SELECT COUNT(DISTINCT caregiver_profile_id) as count
-    FROM caregiver_assignments
-    WHERE family_user_id = ? AND is_active = 1
-  `).get(userId);
+    // Assigned caregiver count
+    const assignedCount = await db.prepare(`
+      SELECT COUNT(DISTINCT caregiver_profile_id) as count
+      FROM caregiver_assignments
+      WHERE family_user_id = ? AND is_active = 1
+    `).get(userId);
 
-  const primary = recipients[0];
-  const parent = primary
-    ? {
-        id: primary.id,
-        name: `${primary.first_name} ${primary.last_name}`,
-        age: primary.age,
-        location: `${primary.location_city}, ${primary.location_state}`,
-        healthConditions: JSON.parse(primary.health_conditions || "[]"),
-        medications: JSON.parse(primary.medications || "[]"),
-        preferences: primary.preferences,
-        emergencyContact: {
-          name: primary.emergency_contact_name,
-          phone: primary.emergency_contact_phone,
-        },
-      }
-    : null;
+    const primary = recipients[0];
+    const parent = primary
+      ? {
+          id: primary.id,
+          name: `${primary.first_name} ${primary.last_name}`,
+          age: primary.age,
+          location: `${primary.location_city}, ${primary.location_state}`,
+          healthConditions: JSON.parse(primary.health_conditions || "[]"),
+          medications: JSON.parse(primary.medications || "[]"),
+          preferences: primary.preferences,
+          emergencyContact: {
+            name: primary.emergency_contact_name,
+            phone: primary.emergency_contact_phone,
+          },
+        }
+      : null;
 
-  res.json({
-    role: "family",
-    parent,
-    careRecipients: recipients.map((r) => ({
-      ...r,
-      healthConditions: JSON.parse(r.health_conditions || "[]"),
-      medications: JSON.parse(r.medications || "[]"),
-    })),
-    stats: {
-      sessionsThisMonth: monthlyStats.total_sessions || 0,
-      totalHours: Math.round((monthlyStats.total_hours || 0) * 10) / 10,
-      monthlySpend: Math.round((monthlyStats.total_spend || 0) * 100) / 100,
-      avgCaregiverRating: Math.round((avgRating.avg || 0) * 10) / 10,
-      unreadNotifications: unreadCount.count,
-      assignedCaregivers: assignedCount.count,
-    },
-    upcomingSessions: upcoming.map((s) => ({
-      id: s.id,
-      date: s.scheduled_date,
-      time: s.scheduled_time,
-      serviceType: s.service_type,
-      status: s.status,
-      durationHours: s.duration_hours,
-      caregiverName: s.caregiver_name,
-      caregiverRating: s.caregiver_rating,
-      recipientName: s.recipient_name,
-      specialInstructions: s.special_instructions,
-      estimatedCost: s.estimated_cost,
-    })),
-    recentActivity: recentActivity.map((a) => ({
-      id: a.id,
-      eventType: a.event_type,
-      title: a.title,
-      message: a.message,
-      isRead: a.is_read,
-      timestamp: a.created_at,
-    })),
-  });
+    res.json({
+      role: "family",
+      parent,
+      isNewUser: recipients.length === 0,
+      careRecipients: recipients.map((r) => ({
+        ...r,
+        healthConditions: JSON.parse(r.health_conditions || "[]"),
+        medications: JSON.parse(r.medications || "[]"),
+      })),
+      stats: {
+        sessionsThisMonth: (monthlyStats && monthlyStats.total_sessions) || 0,
+        totalHours: Math.round(((monthlyStats && monthlyStats.total_hours) || 0) * 10) / 10,
+        monthlySpend: Math.round(((monthlyStats && monthlyStats.total_spend) || 0) * 100) / 100,
+        avgCaregiverRating: Math.round(((avgRating && avgRating.avg) || 0) * 10) / 10,
+        unreadNotifications: (unreadCount && unreadCount.count) || 0,
+        assignedCaregivers: (assignedCount && assignedCount.count) || 0,
+      },
+      upcomingSessions: upcoming.map((s) => ({
+        id: s.id,
+        date: s.scheduled_date,
+        time: s.scheduled_time,
+        serviceType: s.service_type,
+        status: s.status,
+        durationHours: s.duration_hours,
+        caregiverName: s.caregiver_name,
+        caregiverRating: s.caregiver_rating,
+        recipientName: s.recipient_name,
+        specialInstructions: s.special_instructions,
+        estimatedCost: s.estimated_cost,
+      })),
+      recentActivity: recentActivity.map((a) => ({
+        id: a.id,
+        eventType: a.event_type,
+        title: a.title,
+        message: a.message,
+        isRead: a.is_read,
+        timestamp: a.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error("Family dashboard error:", err);
+    // Return a valid response even on error so frontend doesn't break
+    res.json({
+      role: "family",
+      parent: null,
+      isNewUser: true,
+      careRecipients: [],
+      stats: { sessionsThisMonth: 0, totalHours: 0, monthlySpend: 0, avgCaregiverRating: 0, unreadNotifications: 0, assignedCaregivers: 0 },
+      upcomingSessions: [],
+      recentActivity: [],
+    });
+  }
 }
 
 // ─── Caregiver Dashboard (Maria's view) ───
