@@ -16,6 +16,8 @@ https://yourinplace.com
 - **Frontend:** Modular React SPA (via CDN — React 18, ReactDOM, Babel standalone). No build step — Babel compiles JSX in-browser.
 - **Real-Time:** Socket.io WebSocket server with JWT-authenticated connections. Events: `new_message`, `session_update`, `activity_update`, `visit_photos`.
 - **File Uploads:** Multer (memory storage, 5MB limit, image-only, max 5 files). Photos stored as base64 in PostgreSQL.
+- **Geocoding:** OpenStreetMap Nominatim (free, no API key). Swappable to Google Maps by changing one function in `src/utils/geocode.js`. Haversine distance for radius search.
+- **Maps:** Leaflet + OpenStreetMap tiles (free). Tile provider swappable in one line.
 - **Deployment:** Railway.app (NIXPACKS builder), Cloudflare DNS/proxy for yourinplace.com
 - **IDs:** UUID v4 for all entities
 
@@ -45,14 +47,14 @@ https://yourinplace.com
 │           ├── Dashboard.js            ← Stats cards, upcoming sessions, assigned caregivers
 │           ├── CareProfile.js          ← Care recipient profile with emergency contacts
 │           ├── Schedule.js             ← Calendar heat map with saturation shading, session details
-│           ├── Caregivers.js           ← Browse/search caregivers, assign/unassign/favorite
+│           ├── Caregivers.js           ← Browse/search/find nearby caregivers with map, assign/unassign/favorite
 │           ├── CareRecipients.js       ← Add/edit care recipients (CRUD)
 │           ├── ActivityFeed.js         ← Notification stream with mark-as-read
 │           ├── Messages.js             ← Real-time chat (database-backed conversations)
 │           ├── MyAccount.js            ← Settings & notification preferences (wired to PUT /api/auth/me)
 │           ├── CaredForView.js         ← Betty's limited view (calendar + personal notes)
 │           ├── CaretakerHub.js         ← Caregiver dashboard (schedule, families, earnings, reviews)
-│           ├── AreaMap.js              ← Leaflet/OpenStreetMap with family location pins (caregiver view)
+│           ├── AreaMap.js              ← Leaflet/OpenStreetMap with real lat/lng family pins, radius circle (caregiver view)
 │           ├── RequestCareModal.js     ← 5-step care request wizard with caregiver matching
 │           ├── CaregiverScheduleModal.js ← View caregiver availability, book from schedule
 │           ├── TwoFactorSetup.js       ← 2FA setup wizard (QR code → verify → backup codes)
@@ -68,12 +70,13 @@ https://yourinplace.com
     │   ├── auth.js            ← generateToken, authenticate, requireRole
     │   └── validate.js        ← Input validation (register, login, profile, messages, sessions)
     ├── utils/
-    │   └── email.js           ← Centralized Resend email sending + branded HTML templates
+    │   ├── email.js           ← Centralized Resend email sending + branded HTML templates
+    │   └── geocode.js         ← Nominatim geocoder (swappable to Google Maps), haversineDistance()
     └── routes/
         ├── auth.js            ← Register, login, GET /me, email verification (verify + resend)
-        ├── careRecipients.js  ← CRUD for care recipients (parents)
+        ├── careRecipients.js  ← CRUD for care recipients (parents), auto-geocodes on create/update
         ├── sessions.js        ← Care session booking, matching, status updates
-        ├── caregivers.js      ← Caregiver search, profiles, profile creation
+        ├── caregivers.js      ← Caregiver search (+ location/radius), profiles, nearby endpoint
         ├── activity.js        ← Activity feed, mark-read, visit log submission
         ├── dashboard.js       ← Aggregated stats & upcoming sessions
         ├── messages.js        ← Send/receive messages, conversation list
@@ -118,7 +121,7 @@ All demo passwords: `inplace123`
 
 ## Database Tables
 
-users, care_recipients, caregiver_profiles, availability, care_sessions, visit_logs, visit_photos, activity_feed, reviews, payments, messages, recipient_notes, caregiver_assignments, waitlist, care_recipient_shares, push_subscriptions, oauth_accounts, user_2fa, trusted_devices, care_teams, care_team_members, care_team_invites
+users, care_recipients, caregiver_profiles, availability, care_sessions, visit_logs, visit_photos, activity_feed, reviews, payments, conversations, conversation_members, messages, recipient_notes, caregiver_assignments, waitlist, care_recipient_shares, push_subscriptions, oauth_accounts, user_2fa, trusted_devices, care_teams, care_team_members, care_team_invites
 
 All tables use TEXT primary keys (UUIDs). Timestamps are TIMESTAMPTZ via `NOW()`. JSON fields (health_conditions, medications, specialties, certifications, tasks_completed) are stored as TEXT JSON strings — parse with `JSON.parse()` on read. The database wrapper auto-converts `?` placeholders to `$1, $2, ...` for PostgreSQL compatibility.
 
@@ -189,7 +192,9 @@ The server uses Socket.io for real-time updates. Express is wrapped in `http.cre
 
 ## Known Limitations
 
-1. Payments table exists but no payment processing (Stripe Connect planned)
+1. Payments table exists but no payment processing (Stripe Connect planned for v1.3.0)
 2. Sibling users each have separate care_recipient records for Betty (no shared access model yet)
 3. Email delivery requires domain verification in Resend — sandbox sender only delivers to account owner
 4. Visit photos stored as base64 in PostgreSQL — works for demo but won't scale to production (use S3/R2 later)
+5. Geocoding uses Nominatim (OSM) — less accurate for residential addresses than Google Maps. Swap path documented in `src/utils/geocode.js`.
+6. Google OAuth backend exists but needs GOOGLE_CLIENT_ID/SECRET env vars set on Railway (requires Google Cloud Console setup)
