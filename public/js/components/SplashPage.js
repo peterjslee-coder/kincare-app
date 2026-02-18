@@ -1,14 +1,14 @@
 const SplashPage = window.SplashPage = ({ onNavigate }) => {
   const [waitlistEmail, setWaitlistEmail] = React.useState('');
   const [waitlistName, setWaitlistName] = React.useState('');
-  const [waitlistStatus, setWaitlistStatus] = React.useState(null); // 'success' | 'exists' | 'error'
+  const [waitlistStatus, setWaitlistStatus] = React.useState(null);
   const [waitlistMsg, setWaitlistMsg] = React.useState('');
   const [waitlistSubmitting, setWaitlistSubmitting] = React.useState(false);
   const [showInstallTip, setShowInstallTip] = React.useState(false);
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-  const showInstallBtn = !isStandalone; // show on all non-installed contexts
+  const showInstallBtn = !isStandalone;
 
   const handleWaitlistSubmit = async (e) => {
     e.preventDefault();
@@ -36,15 +36,19 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
     setWaitlistSubmitting(false);
   };
 
+  const scrollTo = (id) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="splash-page">
+      {/* ── Clean Header: Logo Only ── */}
       <nav className="splash-nav">
         <div className="splash-nav-logo">
           <InPlaceIcon width={36} height={36} />
           <span><span className="logo-in">in</span><span className="logo-place">Place</span></span>
         </div>
         <div className="splash-nav-links">
-          <button onClick={() => document.getElementById('caregivers-join').scrollIntoView({ behavior: 'smooth' })} style={{ background: 'transparent', color: '#e8724a', border: '2px solid #e8724a' }}>For Caregivers</button>
           {showInstallBtn && (
             <div style={{ position: 'relative' }}>
               <button onClick={() => {
@@ -86,8 +90,6 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
               )}
             </div>
           )}
-          <button onClick={() => onNavigate('login')}>Sign In</button>
-          <button onClick={() => onNavigate('register')}>Get Started</button>
         </div>
       </nav>
 
@@ -110,11 +112,36 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
           <p className="hero-subtitle" style={{ fontSize: '20px', maxWidth: '700px', margin: '0 auto 40px', opacity: 0.92 }}>
             inPlace is on-demand home care that matches families with vetted caregivers in hours, not weeks. Think of it as the missing infrastructure for aging in place.
           </p>
-          <div className="hero-cta">
-            <button onClick={() => onNavigate('login')}>View Live Demo</button>
-            <button onClick={() => onNavigate('register')}>Get Started</button>
+
+          {/* Primary CTA */}
+          <div className="hero-cta" style={{ marginBottom: '32px' }}>
+            <button onClick={() => onNavigate('login')} style={{
+              padding: '16px 48px', fontSize: '18px', fontWeight: 600,
+              background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '8px',
+              cursor: 'pointer', transition: 'all 0.3s',
+            }}>View Live Demo</button>
           </div>
-          <div style={{ marginTop: '24px', fontSize: '13px', opacity: 0.7 }}>
+
+          {/* Audience Buttons */}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
+            <button onClick={() => scrollTo('for-family')} style={{
+              padding: '10px 24px', fontSize: '14px', fontWeight: 600,
+              background: 'rgba(255,255,255,0.15)', color: 'white', border: '1.5px solid rgba(255,255,255,0.5)',
+              borderRadius: '24px', cursor: 'pointer', transition: 'all 0.3s', backdropFilter: 'blur(4px)',
+            }}>For Family & Friends</button>
+            <button onClick={() => scrollTo('for-recipients')} style={{
+              padding: '10px 24px', fontSize: '14px', fontWeight: 600,
+              background: 'rgba(255,255,255,0.15)', color: 'white', border: '1.5px solid rgba(255,255,255,0.5)',
+              borderRadius: '24px', cursor: 'pointer', transition: 'all 0.3s', backdropFilter: 'blur(4px)',
+            }}>For Care Recipients</button>
+            <button onClick={() => scrollTo('for-caregivers')} style={{
+              padding: '10px 24px', fontSize: '14px', fontWeight: 600,
+              background: 'rgba(232,114,74,0.25)', color: '#e8724a', border: '1.5px solid #e8724a',
+              borderRadius: '24px', cursor: 'pointer', transition: 'all 0.3s', backdropFilter: 'blur(4px)',
+            }}>For Caregivers</button>
+          </div>
+
+          <div style={{ fontSize: '13px', opacity: 0.7 }}>
             Demo login: pete@inplace.care / inplace123
           </div>
         </div>
@@ -183,6 +210,116 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
               <h3 className="step-title">Care with Confidence</h3>
               <p className="step-description">Get real-time updates, post-visit summaries, photos, and caregiver ratings. Know exactly how your parent is doing.</p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* ── FOR FAMILY & FRIENDS ── */}
+      {/* ══════════════════════════════════════════════════════ */}
+      <section id="for-family" style={{ padding: '80px 32px', background: '#fff' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+            <div style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '16px', color: '#1b6b5a', fontWeight: 600 }}>
+              For Family & Friends
+            </div>
+            <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '16px' }}>
+              You Shouldn't Have to Choose Between Your Job and Your Parent
+            </h2>
+            <p style={{ fontSize: '18px', color: '#555', maxWidth: '700px', margin: '0 auto', lineHeight: 1.7 }}>
+              You're already doing so much — coordinating doctors, managing medications, worrying at 2 AM. inPlace takes the hardest part off your plate: finding reliable, trustworthy help when you need it most.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', justifyContent: 'center', marginBottom: '56px' }}>
+            {[
+              { icon: '🔍', title: 'Find Help in Hours, Not Weeks', desc: 'No more calling agencies and waiting. Browse vetted caregivers, read real reviews, and book someone who fits your family\'s needs — today.' },
+              { icon: '👨‍👩‍👧‍👦', title: 'Coordinate with Siblings', desc: 'Share your parent\'s care profile with brothers, sisters, and anyone involved. Everyone sees the same schedule, the same notes, the same updates.' },
+              { icon: '📊', title: 'See Everything in One Place', desc: 'Care hours, spending, caregiver performance, visit summaries — all tracked automatically. No more spreadsheets or group texts.' },
+              { icon: '💰', title: 'Pay Only for What You Need', desc: 'Sessions start at $45. No monthly minimums, no long-term contracts. Need help twice a week? Once a month? It\'s up to you.' },
+              { icon: '🛡️', title: 'Background-Checked Caregivers', desc: 'Every caregiver on inPlace is vetted, verified, and reviewed by other families. You\'ll never wonder who\'s walking through your parent\'s door.' },
+              { icon: '📱', title: 'Updates That Give You Peace of Mind', desc: 'Get notified when a visit starts, see what happened during care, and message your caregiver directly. Stay connected without hovering.' },
+            ].map((item, i) => (
+              <div key={i} style={{
+                flex: '1 1 280px', maxWidth: '460px', padding: '28px',
+                background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3',
+              }}>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: '28px', flexShrink: 0 }}>{item.icon}</div>
+                  <div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: '#1b6b5a', marginBottom: '6px' }}>{item.title}</div>
+                    <div style={{ fontSize: '14px', color: '#555', lineHeight: 1.6 }}>{item.desc}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{
+            background: '#f0faf8', borderRadius: '16px', padding: '40px 32px', textAlign: 'center',
+            border: '1px solid #d0e8e3',
+          }}>
+            <p style={{ fontSize: '20px', color: '#1b6b5a', fontWeight: 600, marginBottom: '12px' }}>
+              "I built inPlace because I was the family member Googling 'how to find a caregiver' at midnight."
+            </p>
+            <p style={{ fontSize: '15px', color: '#888' }}>— Pete Lee, Founder</p>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* ── FOR CARE RECIPIENTS ── */}
+      {/* ══════════════════════════════════════════════════════ */}
+      <section id="for-recipients" style={{ padding: '80px 32px', background: '#f8f9fa' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+            <div style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '16px', color: '#e8724a', fontWeight: 600 }}>
+              For Care Recipients
+            </div>
+            <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '16px' }}>
+              Stay Independent. Stay Home. Stay You.
+            </h2>
+            <p style={{ fontSize: '18px', color: '#555', maxWidth: '700px', margin: '0 auto', lineHeight: 1.7 }}>
+              You've earned the right to live on your own terms. inPlace helps you get the support you need — without giving up your independence or moving somewhere you don't want to be.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '32px', justifyContent: 'center', marginBottom: '56px' }}>
+            {[
+              { icon: '🏠', title: 'Age in Place', desc: 'Stay in the home you love with help that comes to you. Whether it\'s a few hours a week or daily visits, care is on your terms.' },
+              { icon: '🤝', title: 'People You Trust', desc: 'Get matched with caregivers who understand your needs. Build a relationship with someone you actually look forward to seeing.' },
+              { icon: '🗓️', title: 'Your Schedule, Your Way', desc: 'See your upcoming visits on a simple calendar. Know who\'s coming, when, and what they\'ll help with — no surprises.' },
+              { icon: '✍️', title: 'Your Voice Matters', desc: 'Write personal notes, share preferences, and tell caregivers exactly what works best for you. This is your care.' },
+              { icon: '💬', title: 'Stay Connected to Family', desc: 'Your family can see your schedule and updates, so they worry less and you get more of what you actually want — quality time together.' },
+              { icon: '🎯', title: 'Help with What You Need', desc: 'Companionship, meal prep, rides to appointments, light housekeeping, medication reminders — pick the services that make your day better.' },
+            ].map((item, i) => (
+              <div key={i} style={{
+                flex: '1 1 280px', maxWidth: '460px', padding: '28px',
+                background: 'white', borderRadius: '12px', border: '1px solid #e8e8e8',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+              }}>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: '28px', flexShrink: 0 }}>{item.icon}</div>
+                  <div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>{item.title}</div>
+                    <div style={{ fontSize: '14px', color: '#555', lineHeight: 1.6 }}>{item.desc}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{
+            background: 'white', borderRadius: '16px', padding: '40px 32px', textAlign: 'center',
+            border: '1px solid #e8e8e8', boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>👵</div>
+            <p style={{ fontSize: '20px', color: '#1b6b5a', fontWeight: 600, marginBottom: '8px' }}>
+              70% of seniors say they want to age at home.
+            </p>
+            <p style={{ fontSize: '16px', color: '#555', maxWidth: '500px', margin: '0 auto' }}>
+              inPlace was designed to make that possible — with the right help, at the right time, from people who genuinely care.
+            </p>
           </div>
         </div>
       </section>
@@ -298,11 +435,6 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
               background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '8px',
               cursor: 'pointer', transition: 'all 0.3s',
             }}>View Live Demo</button>
-            <button onClick={() => onNavigate('register')} style={{
-              padding: '16px 40px', fontSize: '18px', fontWeight: 600,
-              background: '#e8724a', color: 'white', border: 'none', borderRadius: '8px',
-              cursor: 'pointer', transition: 'all 0.3s',
-            }}>Create an Account</button>
           </div>
           <div className="demo-credentials">
             <strong>Demo Credentials:</strong> pete@inplace.care / inplace123
@@ -310,8 +442,10 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         </div>
       </section>
 
-      {/* ── Caregiver Recruitment ── */}
-      <section id="caregivers-join" style={{ padding: '80px 32px', background: '#f8f9fa' }}>
+      {/* ══════════════════════════════════════════════════════ */}
+      {/* ── FOR CAREGIVERS ── */}
+      {/* ══════════════════════════════════════════════════════ */}
+      <section id="for-caregivers" style={{ padding: '80px 32px', background: '#f8f9fa' }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '56px' }}>
             <div style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '16px', color: '#e8724a', fontWeight: 600 }}>
@@ -407,14 +541,9 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             <p style={{ fontSize: '16px', opacity: 0.9, marginBottom: '28px', maxWidth: '500px', margin: '0 auto 28px' }}>
               Join a growing network of caregivers who earn more, work flexibly, and build meaningful relationships with the families they serve.
             </p>
-            <button onClick={() => onNavigate('register')} style={{
-              padding: '16px 48px', fontSize: '18px', fontWeight: 600,
-              background: '#e8724a', color: 'white', border: 'none', borderRadius: '8px',
-              cursor: 'pointer', transition: 'all 0.3s',
-            }}>Apply to Be a Caregiver</button>
-            <div style={{ marginTop: '16px', fontSize: '13px', opacity: 0.7 }}>
-              No fees to join. Start earning within days of approval.
-            </div>
+            <p style={{ fontSize: '14px', opacity: 0.7 }}>
+              Caregiver applications opening soon. Join the waitlist below to be first in line.
+            </p>
           </div>
         </div>
       </section>
