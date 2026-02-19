@@ -138,6 +138,8 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin INTEGER DEFAULT 0`,
     // Auto-promote Pete's real account to admin
     `UPDATE users SET is_admin = 1 WHERE email = 'peterjslee@gmail.com'`,
+    // Backfill is_demo flag for demo accounts that were seeded before the column existed
+    `UPDATE users SET is_demo = 1 WHERE email IN ('pete@inplace.care', 'david.lee@inplace.care', 'susan.lee@inplace.care', 'maria@inplace.care', 'betty@inplace.care')`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
