@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.4.1';
+const DEMO_SEED_VERSION = '1.4.2';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -18,7 +18,7 @@ async function seed() {
   await initializeDatabase();
   const db = await getDb();
 
-  // Clear existing data (reverse dependency order)
+  // Clear existing data (reverse dependency order — all FK children before parents)
   const tables = [
     "trusted_devices", "user_2fa", "oauth_accounts",
     "conversation_members", "conversations",
@@ -27,8 +27,9 @@ async function seed() {
     "caregiver_assignments", "recipient_notes", "messages",
     "visit_photos", "visit_logs", "activity_feed", "reviews",
     "payments", "care_sessions", "availability",
+    "caregiver_documents", "platform_invites",
+    "password_reset_tokens", "email_verification_tokens",
     "caregiver_profiles", "care_recipients", "users", "waitlist",
-    "platform_invites",
   ];
   for (const table of tables) {
     await db.prepare(`DELETE FROM ${table}`).run();
