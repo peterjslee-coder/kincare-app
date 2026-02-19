@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.4.2';
+const DEMO_SEED_VERSION = '1.4.3';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -83,7 +83,14 @@ async function seed() {
     VALUES (?, ?, ?, 'family', ?, ?, ?, 1)
   `).run(susanLeeId, "susan.lee@inplace.care", passwordHash, "Susan", "Lee", "(626) 555-0144");
 
-  console.log("✅ Users created (9 — Pete, David, Susan, 4 caregivers, Betty)");
+  // ─── Real admin account (Pete's actual login) ───
+  const realPeteId = uuid();
+  await db.prepare(`
+    INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone, is_demo, is_admin, email_verified)
+    VALUES (?, ?, ?, 'family', ?, ?, ?, 0, 1, 1)
+  `).run(realPeteId, "peterjslee@gmail.com", passwordHash, "Pete", "Lee", "(626) 555-0142");
+
+  console.log("✅ Users created (10 — Pete real + Pete demo, David, Susan, 4 caregivers, Betty)");
 
   // ─── Additional Family Users (Maria's other clients) ───
   const hendersonFamilyId = uuid();

@@ -210,9 +210,17 @@ async function start() {
       ).get();
       const currentVersion = versionRow ? versionRow.name : null;
       if (currentVersion !== DEMO_SEED_VERSION) {
-        console.log(`  Demo data stale (${currentVersion || 'none'} → ${DEMO_SEED_VERSION}) — re-seeding...`);
-        await seed();
-        console.log("  Re-seed complete");
+        // Safety: skip auto-reseed if real (non-demo) users registered who aren't in the seed
+        const realUsers = await db.prepare(
+          "SELECT COUNT(*) as count FROM users WHERE is_demo = 0 AND email NOT IN ('peterjslee@gmail.com')"
+        ).get();
+        if (parseInt(realUsers.count) > 0) {
+          console.log(`  Demo data stale but ${realUsers.count} real user(s) found — skipping auto-reseed`);
+        } else {
+          console.log(`  Demo data stale (${currentVersion || 'none'} → ${DEMO_SEED_VERSION}) — re-seeding...`);
+          await seed();
+          console.log("  Re-seed complete");
+        }
       }
     }
   } catch (seedErr) {
