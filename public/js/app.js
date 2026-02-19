@@ -87,8 +87,6 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
 
   const demoAccounts = [
     { email: 'pete@inplace.care', label: 'Pete', icon: '👨‍👩‍👧', color: '#1b6b5a' },
-    { email: 'david.lee@inplace.care', label: 'David', icon: '👨', color: '#1b6b5a' },
-    { email: 'susan.lee@inplace.care', label: 'Susan', icon: '👩', color: '#1b6b5a' },
     { email: 'maria@inplace.care', label: 'Maria', icon: '👩‍⚕️', color: '#2e7d6d' },
     { email: 'betty@inplace.care', label: 'Betty', icon: '👵', color: '#e8724a' },
   ];

@@ -14,22 +14,6 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
       description: 'You\'re managing care for your 78-year-old mother Betty, who has early-stage dementia. See the full dashboard — scheduling, caregiver management, care profile, messaging, and analytics.',
     },
     {
-      email: 'david.lee@inplace.care',
-      label: 'David Lee',
-      role: 'Sibling (Care Team)',
-      color: '#1b6b5a',
-      icon: '👨',
-      description: 'You\'re Pete\'s brother, helping coordinate care for Mom. You share the same dashboard and can manage Betty\'s schedule and caregivers alongside Pete.',
-    },
-    {
-      email: 'susan.lee@inplace.care',
-      label: 'Susan Lee',
-      role: 'Sibling (Care Team)',
-      color: '#1b6b5a',
-      icon: '👩',
-      description: 'You\'re Pete\'s sister and part of the care team. Same full access to scheduling, messaging, and caregiver management for Betty.',
-    },
-    {
       email: 'maria@inplace.care',
       label: 'Maria Santos',
       role: 'Professional Caregiver',
