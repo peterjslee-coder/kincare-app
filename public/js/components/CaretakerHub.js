@@ -11,6 +11,71 @@ const CaretakerHub = window.CaretakerHub = () => {
   const [submittingLog, setSubmittingLog] = useState(false);
   const photoInputRef = useRef(null);
 
+  // Availability state
+  const [availRules, setAvailRules] = useState([]);
+  const [availLoading, setAvailLoading] = useState(false);
+  const [showAddRule, setShowAddRule] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [ruleForm, setRuleForm] = useState({
+    type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00',
+    isRecurring: true, specificDate: '', note: '',
+  });
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const fetchAvailability = async () => {
+    setAvailLoading(true);
+    try {
+      const res = await apiFetch('/api/availability');
+      if (res?.ok) {
+        const d = await res.json();
+        setAvailRules(d.rules || []);
+      }
+    } catch (err) { console.error('Availability fetch error:', err); }
+    setAvailLoading(false);
+  };
+
+  const handleSaveRule = async () => {
+    try {
+      const body = {
+        dayOfWeek: parseInt(ruleForm.dayOfWeek),
+        startTime: ruleForm.startTime,
+        endTime: ruleForm.endTime,
+        isRecurring: ruleForm.isRecurring,
+        specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null,
+        type: ruleForm.type,
+        note: ruleForm.note || null,
+      };
+
+      if (editingRule) {
+        await apiFetch(`/api/availability/${editingRule.id}`, { method: 'PUT', body: JSON.stringify(body) });
+      } else {
+        await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+      }
+      setShowAddRule(false);
+      setEditingRule(null);
+      setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '' });
+      fetchAvailability();
+    } catch (err) { console.error('Save rule error:', err); }
+  };
+
+  const handleDeleteRule = async (id) => {
+    try {
+      await apiFetch(`/api/availability/${id}`, { method: 'DELETE' });
+      fetchAvailability();
+    } catch (err) { console.error('Delete rule error:', err); }
+  };
+
+  const startEditRule = (rule) => {
+    setEditingRule(rule);
+    setRuleForm({
+      type: rule.type, dayOfWeek: rule.dayOfWeek, startTime: rule.startTime, endTime: rule.endTime,
+      isRecurring: rule.isRecurring, specificDate: rule.specificDate || '', note: rule.note || '',
+    });
+    setShowAddRule(true);
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -96,6 +161,7 @@ const CaretakerHub = window.CaretakerHub = () => {
 
   const tabs = [
     { id: 'schedule', label: 'Schedule', icon: '📅' },
+    { id: 'availability', label: 'Availability', icon: '🕐' },
     { id: 'families', label: 'My Families', icon: '👪' },
     { id: 'map', label: 'Area Map', icon: '🗺️' },
     { id: 'earnings', label: 'Earnings', icon: '💰' },
@@ -210,6 +276,25 @@ const CaretakerHub = window.CaretakerHub = () => {
             ) : <div style={{ padding: '20px', color: '#999', textAlign: 'center' }}>No upcoming sessions</div>}
           </div>
         </div>
+      )}
+
+      {activeTab === 'availability' && (
+        <AvailabilityTab
+          rules={availRules}
+          loading={availLoading}
+          fetchAvailability={fetchAvailability}
+          showAddRule={showAddRule}
+          setShowAddRule={setShowAddRule}
+          editingRule={editingRule}
+          setEditingRule={setEditingRule}
+          ruleForm={ruleForm}
+          setRuleForm={setRuleForm}
+          handleSaveRule={handleSaveRule}
+          handleDeleteRule={handleDeleteRule}
+          startEditRule={startEditRule}
+          dayNames={dayNames}
+          dayAbbr={dayAbbr}
+        />
       )}
 
       {activeTab === 'families' && (

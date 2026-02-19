@@ -1,5 +1,5 @@
-// InPlace Service Worker — v1.3.6
-const CACHE_NAME = 'inplace-v1.3.6';
+// InPlace Service Worker — v1.3.7
+const CACHE_NAME = 'inplace-v1.3.7';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -25,6 +25,7 @@ const STATIC_ASSETS = [
   '/js/components/CareTeamManage.js',
   '/js/components/CareTeamPage.js',
   '/js/components/CaredForView.js',
+  '/js/components/AvailabilityTab.js',
   '/js/components/CaretakerHub.js',
   '/js/components/AreaMap.js',
   '/js/components/Analytics.js',

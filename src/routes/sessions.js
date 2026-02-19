@@ -3,6 +3,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { validateSession } = require("../middleware/validate");
+const availabilityRouter = require("./availability");
 
 const router = express.Router();
 router.use(authenticate);
@@ -103,6 +104,52 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
 
   if (!recipient) {
     return res.status(404).json({ error: "Care recipient not found" });
+  }
+
+  // Validate caregiver availability if a caregiver is specified (via matching or direct booking)
+  const { caregiverId: bookCaregiverId } = req.body;
+  if (bookCaregiverId) {
+    try {
+      const schedDate = new Date(scheduledDate + "T12:00:00");
+      const dayOfWeek = schedDate.getDay();
+      const slots = await availabilityRouter.computeAvailableSlots(db, bookCaregiverId, scheduledDate, dayOfWeek);
+
+      if (slots.length > 0) {
+        // Parse scheduled time to minutes for comparison
+        const [sh, sm] = scheduledTime.split(":").map(Number);
+        const requestedStart = sh * 60 + (sm || 0);
+        const requestedEnd = requestedStart + (durationHours * 60);
+
+        // Check if the entire requested window fits within available slots
+        const coversRequest = (() => {
+          for (let m = requestedStart; m < requestedEnd; m++) {
+            const minuteCovered = slots.some(s => s.startMinutes <= m && (s.startMinutes + 60) > m);
+            if (!minuteCovered) return false;
+          }
+          return true;
+        })();
+
+        if (!coversRequest) {
+          return res.status(400).json({
+            error: "Caregiver is not available for the full requested time window",
+            availableSlots: slots.map(s => ({ start: s.start, end: s.end })),
+          });
+        }
+      }
+      // If no slots at all and availability rules exist, caregiver is not working that day
+      // But if NO availability rules exist at all, we skip validation (new/unconfigured caregiver)
+      const hasRules = await db.prepare(
+        "SELECT COUNT(*) as count FROM availability WHERE caregiver_id = ?"
+      ).get(bookCaregiverId);
+      if (parseInt(hasRules.count) > 0 && slots.length === 0) {
+        return res.status(400).json({
+          error: "Caregiver is not available on this date",
+        });
+      }
+    } catch (err) {
+      console.error("Availability validation error (non-blocking):", err);
+      // Non-blocking: if validation fails, allow the booking to proceed
+    }
   }
 
   // Estimate cost based on service type and duration

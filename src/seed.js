@@ -210,7 +210,7 @@ async function seed() {
   const profiles = [
     [mariaId, mariaUserId,
       "Certified dementia care specialist with 8 years of experience. Fluent in English and Spanish.",
-      8, 28, ["Dementia Care", "Meal Prep"], ["CNA", "CPR/First Aid"], 1, 4.9, 127, "Blacksburg", "VA", 37.2300, -80.4145],
+      8, 34, ["Dementia Care", "Meal Prep"], ["CNA", "CPR/First Aid"], 1, 4.9, 127, "Blacksburg", "VA", 37.2300, -80.4145],
     [jamesId, jamesUserId,
       "Former social worker passionate about elder care. CPR/First Aid certified.",
       5, 25, ["Companionship", "Transportation"], ["CPR/First Aid", "Social Work License"], 1, 4.8, 93, "Blacksburg", "VA", 37.2310, -80.4160],
@@ -250,31 +250,64 @@ async function seed() {
   console.log("✅ Caregiver assignments created (8)");
 
   // ─── Availability Windows ───
-  for (const cgId of [mariaId, jamesId, davidId]) {
-    for (let day = 1; day <= 5; day++) {
-      await db.prepare(`
-        INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time)
-        VALUES (?, ?, ?, '08:00', '17:00')
-      `).run(uuid(), cgId, day);
-    }
+  // Maria: Mon-Fri 8am-5pm available, Wed 2-4pm blocked
+  for (let day = 1; day <= 5; day++) {
+    await db.prepare(`
+      INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time, type)
+      VALUES (?, ?, ?, '08:00', '17:00', 'available')
+    `).run(uuid(), mariaId, day);
+  }
+  // Maria: blocked Wed 2-4pm (recurring)
+  await db.prepare(`
+    INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time, type, note)
+    VALUES (?, ?, 3, '14:00', '16:00', 'blocked', 'Personal appointment')
+  `).run(uuid(), mariaId);
+
+  // James: Mon-Fri 7am-3pm, Sat 8am-12pm
+  for (let day = 1; day <= 5; day++) {
+    await db.prepare(`
+      INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time, type)
+      VALUES (?, ?, ?, '07:00', '15:00', 'available')
+    `).run(uuid(), jamesId, day);
   }
   await db.prepare(`
-    INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time)
-    VALUES (?, ?, 6, '09:00', '14:00')
+    INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time, type)
+    VALUES (?, ?, 6, '08:00', '12:00', 'available')
   `).run(uuid(), jamesId);
 
-  console.log("✅ Availability windows created");
+  // David Kim: Mon-Fri 8am-5pm
+  for (let day = 1; day <= 5; day++) {
+    await db.prepare(`
+      INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time, type)
+      VALUES (?, ?, ?, '08:00', '17:00', 'available')
+    `).run(uuid(), davidId, day);
+  }
 
-  // ─── Care Sessions (Pete/Betty) ───
+  // Sarah Chen: Mon,Tue,Thu,Fri 9am-5pm (Wed off)
+  for (const day of [1, 2, 4, 5]) {
+    await db.prepare(`
+      INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time, type)
+      VALUES (?, ?, ?, '09:00', '17:00', 'available')
+    `).run(uuid(), sarahId, day);
+  }
+
+  // One-off block: Maria blocked Feb 26 afternoon (specific date override)
+  await db.prepare(`
+    INSERT INTO availability (id, caregiver_id, day_of_week, start_time, end_time, is_recurring, specific_date, type, note)
+    VALUES (?, ?, 3, '12:00', '17:00', 0, '2026-02-26', 'blocked', 'Doctor appointment')
+  `).run(uuid(), mariaId);
+
+  console.log("✅ Availability windows created (with types and blocked rules)");
+
+  // ─── Care Sessions (Pete/Betty) — Upcoming ───
   const sessions = [
-    [uuid(), bettyId, peteId, mariaId, "meals", "confirmed", "2026-02-14", "14:00", 2, "Mom prefers lunch around noon. Please remind her to drink water.", 56],
-    [uuid(), bettyId, peteId, jamesId, "companion", "confirmed", "2026-02-15", "10:00", 3, "She loves looking at photo albums.", 75],
-    [uuid(), bettyId, peteId, mariaId, "rides", "pending", "2026-02-19", "09:00", 1.5, "Doctor appointment at 9:30. Pickup prescriptions after.", 42],
-    [uuid(), bettyId, peteId, jamesId, "companion", "confirmed", "2026-02-21", "11:00", 2, null, 50],
-    [uuid(), bettyId, peteId, mariaId, "meals", "confirmed", "2026-02-25", "12:00", 2, "Betty requested her favorite tomato soup.", 56],
+    [uuid(), bettyId, peteId, mariaId, "meals", "confirmed", "2026-02-20", "08:00", 5, "Meal prep for the week — Betty's favorites.", 170],
+    [uuid(), bettyId, peteId, jamesId, "companion", "confirmed", "2026-02-21", "10:00", 3, "She loves looking at photo albums.", 75],
+    [uuid(), bettyId, peteId, mariaId, "meals", "confirmed", "2026-02-24", "08:00", 8, "Full day care — meal prep, companionship, light housekeeping.", 272],
+    [uuid(), bettyId, peteId, mariaId, "rides", "pending", "2026-02-25", "09:00", 2, "Doctor appointment at 9:30. Pickup prescriptions after.", 68],
     [uuid(), bettyId, peteId, sarahId, "companion", "pending", "2026-02-28", "10:00", 3, "First visit with Sarah — introduce slowly, show photo albums.", 96],
     [uuid(), bettyId, peteId, jamesId, "rides", "confirmed", "2026-03-03", "09:30", 1.5, "Follow-up appointment with Dr. Patel. Bring medication list.", 37],
-    [uuid(), bettyId, peteId, mariaId, "meals", "confirmed", "2026-03-05", "12:00", 2, "Prepare meals for the week and label with dates.", 56],
+    [uuid(), bettyId, peteId, mariaId, "meals", "confirmed", "2026-03-05", "12:00", 5, "Prepare meals for the week and label with dates.", 170],
     [uuid(), bettyId, peteId, davidId, "companion", "pending", "2026-03-07", "14:00", 2, "Afternoon gardening and light walk around the neighborhood.", 44],
   ];
 
@@ -288,13 +321,36 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
   }
 
-  // Past completed sessions (Pete/Betty)
+  // ─── Past Completed Sessions — Maria's ~$4K monthly earnings at $34/hr ───
+  // ~18 sessions over Jan 20 – Feb 18 spanning Betty, Dorothy, and Arun
+  // One 8-hour full day with Betty on Feb 12
   const pastSessions = [
-    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-13", "14:00", 2, null, 56],
-    [uuid(), bettyId, peteId, jamesId, "companion", "completed", "2026-02-09", "10:00", 3, null, 75],
-    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-07", "14:00", 2, null, 56],
-    [uuid(), bettyId, peteId, davidId, "rides", "completed", "2026-02-06", "09:00", 1.5, null, 33],
+    // Maria with Betty (Pete's)
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-01-20", "08:00", 6, "Full morning meal prep and lunch.", 204],
+    [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-01-22", "09:00", 5, "Companionship and afternoon activities.", 170],
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-01-24", "08:00", 6, "Breakfast, lunch prep, medication reminders.", 204],
+    [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-01-27", "08:00", 7, "Full day care — walks, meals, photo albums.", 238],
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-01-29", "08:00", 5, "Meal prep and grocery shopping.", 170],
+    [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-01-31", "09:00", 6, "Companionship, gardening, and lunch.", 204],
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-03", "08:00", 6, "Weekly meal prep and medication organizing.", 204],
+    [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-02-05", "09:00", 5, "Photo albums, short walk, afternoon tea.", 170],
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-07", "08:00", 7, "Extended meal prep and companionship.", 238],
+    [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-02-10", "08:00", 6, "Morning routine assistance and activities.", 204],
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-12", "08:00", 8, "Full 8-hour day — meals, companionship, light housekeeping.", 272],
+    [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-02-14", "09:00", 5, "Valentine's Day — special lunch and card making.", 170],
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-17", "08:00", 6, "Meal prep, medication check, organized kitchen.", 204],
+    [uuid(), bettyId, peteId, mariaId, "rides", "completed", "2026-02-18", "09:00", 4, "Doctor appointment and grocery run.", 136],
+    // Maria with Dorothy (Henderson's)
+    [uuid(), dorothyId, hendersonFamilyId, mariaId, "meals", "completed", "2026-01-23", "09:00", 5, "Diabetic-friendly meals for the week.", 170],
+    [uuid(), dorothyId, hendersonFamilyId, mariaId, "companion", "completed", "2026-02-04", "10:00", 4, "Card games and afternoon tea.", 136],
+    [uuid(), dorothyId, hendersonFamilyId, mariaId, "meals", "completed", "2026-02-11", "09:00", 5, "Meal prep and baking cookies.", 170],
+    // James with Betty (past)
+    [uuid(), bettyId, peteId, jamesId, "companion", "completed", "2026-02-09", "10:00", 3, "Puzzles and photo albums.", 75],
+    // David Kim with Betty (past)
+    [uuid(), bettyId, peteId, davidId, "rides", "completed", "2026-02-06", "09:00", 1.5, "Doctor appointment transport.", 33],
   ];
+  // Maria totals: 14 Betty sessions (86 hrs) + 3 Dorothy sessions (14 hrs) = 100 hrs × $34 = $3,400
+  // Plus upcoming: ~$4K range with pending/confirmed sessions
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of pastSessions) {
     await db.prepare(`
@@ -308,10 +364,10 @@ async function seed() {
 
   // ─── Care Sessions (Henderson/Dorothy) ───
   const hendersonSessions = [
-    [uuid(), dorothyId, hendersonFamilyId, mariaId, "meals", "confirmed", "2026-02-17", "09:00", 2, "Dorothy likes her eggs scrambled, toast lightly done.", 56],
-    [uuid(), dorothyId, hendersonFamilyId, mariaId, "companion", "confirmed", "2026-02-20", "14:00", 3, "Card games and afternoon tea. She enjoys rummy.", 84],
-    [uuid(), dorothyId, hendersonFamilyId, sarahId, "meals", "pending", "2026-02-24", "11:00", 2, "Diabetic-friendly meal prep for the week.", 64],
-    [uuid(), dorothyId, hendersonFamilyId, mariaId, "companion", "confirmed", "2026-03-02", "10:00", 2, "Help with baking — she wants to make cookies for her church group.", 56],
+    [uuid(), dorothyId, hendersonFamilyId, mariaId, "meals", "confirmed", "2026-02-21", "09:00", 4, "Dorothy likes her eggs scrambled, toast lightly done.", 136],
+    [uuid(), dorothyId, hendersonFamilyId, mariaId, "companion", "confirmed", "2026-02-26", "14:00", 3, "Card games and afternoon tea. She enjoys rummy.", 102],
+    [uuid(), dorothyId, hendersonFamilyId, sarahId, "meals", "pending", "2026-02-27", "11:00", 2, "Diabetic-friendly meal prep for the week.", 64],
+    [uuid(), dorothyId, hendersonFamilyId, mariaId, "companion", "confirmed", "2026-03-02", "10:00", 4, "Help with baking — she wants to make cookies for her church group.", 136],
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of hendersonSessions) {
@@ -342,8 +398,8 @@ async function seed() {
 
   // ─── Care Sessions (David Lee / Betty) ───
   const davidSessions = [
-    [uuid(), bettyForDavidId, davidLeeId, mariaId, "meals", "confirmed", "2026-02-20", "12:00", 2, "Mom likes her soup warm, not hot. David coordinating this week.", 56],
-    [uuid(), bettyForDavidId, davidLeeId, jamesId, "companion", "pending", "2026-02-26", "10:00", 3, "Puzzles and light gardening. David will check in after.", 75],
+    [uuid(), bettyForDavidId, davidLeeId, mariaId, "meals", "confirmed", "2026-02-22", "12:00", 4, "Mom likes her soup warm, not hot. David coordinating this week.", 136],
+    [uuid(), bettyForDavidId, davidLeeId, jamesId, "companion", "pending", "2026-02-27", "10:00", 3, "Puzzles and light gardening. David will check in after.", 75],
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of davidSessions) {
@@ -358,7 +414,7 @@ async function seed() {
 
   // ─── Care Sessions (Susan Lee / Betty) ───
   const susanSessions = [
-    [uuid(), bettyForSusanId, susanLeeId, mariaId, "companion", "confirmed", "2026-02-22", "14:00", 2, "Susan requested a garden walk if weather permits.", 56],
+    [uuid(), bettyForSusanId, susanLeeId, mariaId, "companion", "confirmed", "2026-02-23", "14:00", 4, "Susan requested a garden walk if weather permits.", 136],
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of susanSessions) {
@@ -371,20 +427,21 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
   }
 
-  console.log("✅ Care sessions created (22 — 13 Pete/Betty, 2 David/Betty, 1 Susan/Betty, 4 Dorothy, 2 Arun)");
+  console.log("✅ Care sessions created (31 — 8 upcoming Pete/Betty, 19 past completed, 4 Henderson, 2 Patel, 2 David/Betty, 1 Susan/Betty)");
 
   // ─── Visit Logs ───
+  // pastSessions[10] = Feb 12 full 8-hr day, [13] = Feb 18 rides, [17] = James Feb 9, [18] = David Feb 6
   const visitLogs = [
-    [uuid(), pastSessions[0][0], mariaId,
-      "Prepared chicken soup and a side salad. Betty ate well — finished the full bowl! We also organized her pill box for the week.",
-      "Happy & engaged", ["Cooked lunch", "Organized medications", "Kitchen cleanup"]],
-    [uuid(), pastSessions[1][0], jamesId,
+    [uuid(), pastSessions[10][0], mariaId,
+      "Full 8-hour day with Betty. Prepared breakfast, lunch, and dinner. Organized medications, did light housekeeping, and spent afternoon doing puzzles. Betty was in wonderful spirits all day!",
+      "Happy & engaged", ["Prepared 3 meals", "Organized medications", "Light housekeeping", "Puzzles", "Kitchen cleanup"]],
+    [uuid(), pastSessions[17][0], jamesId,
       "Spent the morning looking through photo albums and chatting about her garden. She was in great spirits. We took a short walk around the block.",
       "Cheerful", ["Photo album activity", "Short walk", "Conversation"]],
-    [uuid(), pastSessions[2][0], mariaId,
-      "Picked up groceries from Kroger — her favorites (sourdough, yogurt, bananas). Stocked the fridge and labeled leftovers with dates.",
-      "Calm", ["Grocery shopping", "Stocked fridge", "Labeled leftovers"]],
-    [uuid(), pastSessions[3][0], davidId,
+    [uuid(), pastSessions[13][0], mariaId,
+      "Drove Betty to Dr. Patel's office. Picked up prescriptions and groceries on the way home. Stocked the fridge and labeled leftovers.",
+      "Calm", ["Doctor transport", "Prescription pickup", "Grocery shopping", "Stocked fridge"]],
+    [uuid(), pastSessions[18][0], davidId,
       "Drove Betty to her doctor's appointment. The visit went well — no changes to medication. Picked up her prescription on the way home.",
       "A little tired", ["Doctor transport", "Prescription pickup"]],
   ];
@@ -442,10 +499,10 @@ async function seed() {
 
   // ─── Reviews ───
   const reviews = [
-    [uuid(), pastSessions[0][0], peteId, mariaId, 5, "Maria is wonderful with Mom. She always makes sure she eats well."],
-    [uuid(), pastSessions[1][0], peteId, jamesId, 5, "James is so patient and kind. Mom really enjoys his visits."],
-    [uuid(), pastSessions[2][0], peteId, mariaId, 5, "Always gets exactly what Mom needs from the store."],
-    [uuid(), pastSessions[3][0], peteId, davidId, 4, "David was punctual and helpful. Mom was comfortable with him."],
+    [uuid(), pastSessions[10][0], peteId, mariaId, 5, "Maria spent a full day with Mom and she was in great spirits. Incredible care and attention."],
+    [uuid(), pastSessions[17][0], peteId, jamesId, 5, "James is so patient and kind. Mom really enjoys his visits."],
+    [uuid(), pastSessions[13][0], peteId, mariaId, 5, "Always gets exactly what Mom needs from the store and doctor visits."],
+    [uuid(), pastSessions[18][0], peteId, davidId, 4, "David was punctual and helpful. Mom was comfortable with him."],
   ];
 
   for (const [id, sessionId, famId, cgId, rating, comment] of reviews) {

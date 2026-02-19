@@ -21,6 +21,9 @@
 - [ ] **Plausible Analytics setup:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html.
 - [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
 - [ ] **Upgrade to Google Maps geocoding:** Swap Nominatim → Google Maps for better residential accuracy when ready for production
+- [x] ~~**Demo data: Maria's earnings & calendar saturation (v1.3.7):** Done. Maria's rate bumped to $34/hr, ~19 past completed sessions totaling ~$3,890 (half-time). Full 8-hour day with Betty on Feb 12, upcoming 8-hour day Feb 24. Calendar heat map shows saturation shading.~~
+- [x] ~~**Caregiver availability rules engine (v1.3.7):** Done. New `/api/availability` CRUD + slot computation. Caregivers set recurring available/blocked rules per day, one-off date overrides, notes. `computeAvailableSlots()` resolves available windows minus blocked rules minus booked sessions. Backend validates caregiver availability on session creation.~~
+- [x] ~~**Scheduling UX overhaul (v1.3.7):** Done. CaretakerHub "Availability" tab with weekly grid view + rule management (add/edit/delete recurring and one-off rules). RequestCareModal and CaregiverScheduleModal now use API-driven availability instead of hardcoded data. Real slot computation from DB.~~
 
 
 ## Production Path — Beta on Phone
@@ -62,6 +65,14 @@
 - [x] **PWA icons (v1.3.5):** Regenerated all icons at 8 sizes (48, 72, 96, 128, 144, 192, 384, 512px) for both regular and maskable variants. Updated manifest.json with 16 icon entries. Cache-busted SW registration (`/sw.js?v=X.Y.Z`). Added 32px favicon.
 - [x] **Demo simplification (v1.3.6):** Removed David Lee and Susan Lee from demo picker page and demo banner switcher. Demo now shows 3 personas: Pete (family), Maria (caregiver), Betty (care recipient). David/Susan data remains in DB for message history.
 - [x] **Admin auto-migration:** `is_admin = 1` auto-set for `peterjslee@gmail.com` on every server start via migration in database.js.
+
+### Availability Engine & Scheduling UX (v1.3.7)
+- [x] **Maria earnings bump:** Rate $28→$34/hr, ~19 past completed sessions (~$3,890 monthly), 8-hour days for calendar saturation.
+- [x] **Availability rules engine:** New `availability` table with `type` (available/blocked) and `note` columns. `/api/availability` CRUD with ownership checks. `computeAvailableSlots()` builds minute-level availability map, subtracts blocked rules and booked sessions, returns 1-hour slots.
+- [x] **CaretakerHub Availability tab:** Weekly grid (6am-8pm, 7 days) with color-coded cells. Recurring rules list and one-off overrides. Add/Edit Rule modal with type, frequency, day/date, time range, note.
+- [x] **API-driven scheduling modals:** RequestCareModal and CaregiverScheduleModal fetch real availability from `/api/availability/:caregiverId/slots` instead of hardcoded `CAREGIVER_AVAILABILITY`. Loading states, graceful fallback.
+- [x] **Backend availability validation:** POST /api/sessions validates caregiver availability before booking. Returns 400 with available slots if time window doesn't fit.
+- [x] **Seed data:** Maria Mon-Fri 8-5 available, Wed 2-4pm blocked. James Mon-Fri 7-3, Sat 8-12. Typed rules for all demo caregivers.
 
 ### Caregiver Search & Location (v1.2.0)
 - [x] **Geocoding utility:** `src/utils/geocode.js` — Nominatim geocoder with documented Google Maps swap path (one function body change). `haversineDistance()` for radius filtering. `buildAddressString()` helper.

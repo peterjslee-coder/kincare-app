@@ -9,9 +9,30 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [recurrenceWeeks, setRecurrenceWeeks] = useState('4');
   const [selectedCaregiver, setSelectedCaregiver] = useState(null);
   const [matchedCaregivers, setMatchedCaregivers] = useState([]);
+  const [loadingCaregivers, setLoadingCaregivers] = useState(false);
+  const [assignedCaregivers, setAssignedCaregivers] = useState(null); // null = not loaded yet
 
-  // Determine if we have caregiver data for matching (demo mode)
-  const hasCaregiverData = typeof CAREGIVER_AVAILABILITY !== 'undefined' && Object.keys(CAREGIVER_AVAILABILITY).length > 0;
+  // Fetch assigned caregivers on mount to determine if step 4 is needed
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const res = await apiFetch('/api/assignments');
+        if (res?.ok) {
+          const data = await res.json();
+          setAssignedCaregivers(data.assignments || []);
+        } else {
+          setAssignedCaregivers([]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch assignments:', err);
+        setAssignedCaregivers([]);
+      }
+    };
+    fetchAssignments();
+  }, []);
+
+  // Check if user has assigned caregivers
+  const hasCaregiverData = assignedCaregivers !== null && assignedCaregivers.length > 0;
   const totalSteps = hasCaregiverData ? 5 : 4;
   const stepLabels = hasCaregiverData
     ? ['Service', 'When', 'Duration', 'Caregiver', 'Review']
@@ -19,64 +40,84 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const reviewStep = hasCaregiverData ? 5 : 4;
   const caregiverStep = hasCaregiverData ? 4 : -1; // -1 = skip
 
-  // When moving to caregiver step, find matches (demo mode only)
-  const findMatchingCaregivers = () => {
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const selectedDate = new Date(date + 'T12:00:00');
-    const dayName = dayNames[selectedDate.getDay()];
+  // When moving to caregiver step, find matches from API
+  const findMatchingCaregivers = async () => {
+    if (!date || !time || !duration || !serviceType) return;
+    setLoadingCaregivers(true);
 
     const parseTime24 = (t) => {
       const [h, m] = t.split(':').map(Number);
       return h * 60 + m;
     };
-    const parseTime12 = (t) => {
-      const [timePart, ampm] = t.split(' ');
-      let [h, m] = timePart.split(':').map(Number);
-      if (ampm === 'PM' && h !== 12) h += 12;
-      if (ampm === 'AM' && h === 12) h = 0;
-      return h * 60 + m;
-    };
-
     const requestStart = parseTime24(time);
     const requestEnd = requestStart + parseInt(duration) * 60;
 
-    const matches = [];
-    Object.entries(CAREGIVER_AVAILABILITY).forEach(([name, avail]) => {
-      const hasSkill = caregiverMatchesService(name, serviceType);
+    try {
+      const caregivers = assignedCaregivers || [];
+      const matches = [];
 
-      const daySchedule = avail.weeklySchedule[dayName] || [];
-      let isInSchedule = false;
-      daySchedule.forEach(block => {
-        const blockStart = parseTime12(block.start);
-        const blockEnd = parseTime12(block.end);
-        if (requestStart >= blockStart && requestEnd <= blockEnd) isInSchedule = true;
-      });
+      for (const cg of caregivers) {
+        const cgName = `${cg.first_name} ${cg.last_name}`;
+        const hasSkill = caregiverMatchesService(cgName, serviceType);
+        const rate = cg.hourly_rate || 30;
 
-      let hasConflict = false;
-      (avail.bookedSlots || []).forEach(b => {
-        if (b.date === date) {
-          const bStart = parseTime12(b.start);
-          const bEnd = parseTime12(b.end);
-          if (requestStart < bEnd && requestEnd > bStart) hasConflict = true;
+        // Fetch real availability slots from API
+        try {
+          const slotsRes = await apiFetch(`/api/availability/${cg.caregiver_profile_id}/slots?date=${date}`);
+          if (slotsRes?.ok) {
+            const slotsData = await slotsRes.json();
+            const daySlots = slotsData.slots?.[date] || [];
+
+            // Check if the requested time window fits within available slots
+            let isAvailable = true;
+            if (daySlots.length === 0) {
+              isAvailable = false;
+            } else {
+              for (let m = requestStart; m < requestEnd; m += 60) {
+                const slotExists = daySlots.some(s => s.startMinutes <= m && s.startMinutes + 60 > m);
+                if (!slotExists) { isAvailable = false; break; }
+              }
+            }
+
+            if (isAvailable) {
+              matches.push({
+                name: cgName, caregiverId: cg.caregiver_profile_id,
+                skills: cg.specialties || [], rate: `$${rate}/hr`,
+                skillMatch: hasSkill, available: true,
+              });
+            } else {
+              matches.push({
+                name: cgName, caregiverId: cg.caregiver_profile_id,
+                skills: cg.specialties || [], rate: `$${rate}/hr`,
+                skillMatch: hasSkill, available: false,
+                reason: daySlots.length === 0 ? 'Not scheduled this day' : 'Not available at this time',
+              });
+            }
+          }
+        } catch (err) {
+          matches.push({
+            name: cgName, caregiverId: cg.caregiver_profile_id,
+            skills: cg.specialties || [], rate: `$${rate}/hr`,
+            skillMatch: hasSkill, available: false, reason: 'Could not check availability',
+          });
         }
+      }
+
+      // Sort: best matches (available + skill) first
+      matches.sort((a, b) => {
+        if (a.available && a.skillMatch && (!b.available || !b.skillMatch)) return -1;
+        if (b.available && b.skillMatch && (!a.available || !a.skillMatch)) return 1;
+        if (a.available && !b.available) return -1;
+        if (b.available && !a.available) return 1;
+        return 0;
       });
 
-      if (isInSchedule && !hasConflict) {
-        matches.push({ name, ...avail, skillMatch: hasSkill, available: true });
-      } else if (hasSkill) {
-        matches.push({ name, ...avail, skillMatch: true, available: false, reason: !isInSchedule ? 'Not scheduled this day/time' : 'Already booked' });
-      }
-    });
-
-    matches.sort((a, b) => {
-      if (a.available && a.skillMatch && (!b.available || !b.skillMatch)) return -1;
-      if (b.available && b.skillMatch && (!a.available || !a.skillMatch)) return 1;
-      if (a.available && !b.available) return -1;
-      if (b.available && !a.available) return 1;
-      return 0;
-    });
-
-    setMatchedCaregivers(matches);
+      setMatchedCaregivers(matches);
+    } catch (err) {
+      console.error('Caregiver matching error:', err);
+      setMatchedCaregivers([]);
+    }
+    setLoadingCaregivers(false);
   };
 
   const handleSubmit = async () => {
@@ -108,12 +149,23 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     return `${displayH}:${m.toString().padStart(2, '0')} ${ampm}`;
   };
 
-  // Trigger caregiver matching when reaching caregiver step (demo only)
+  // Trigger caregiver matching when reaching caregiver step
   useEffect(() => {
     if (hasCaregiverData && step === caregiverStep && date && time && duration && serviceType) {
       findMatchingCaregivers();
     }
   }, [step]);
+
+  // While assignments haven't loaded yet, show loading
+  if (assignedCaregivers === null) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, textAlign: 'center', padding: 40 }}>
+          <div style={{ color: '#999' }}>Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -213,53 +265,60 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <option value="2">2 hours</option>
               <option value="3">3 hours</option>
               <option value="4">4 hours</option>
+              <option value="6">6 hours</option>
               <option value="8">Full day (8 hours)</option>
             </select>
           </div>
         )}
 
-        {/* Caregiver selection step — demo only */}
+        {/* Caregiver selection step */}
         {step === caregiverStep && hasCaregiverData && (
           <div className="modal-section">
             <label className="modal-label">Available caregivers for {formatTime12(time)} on {date}</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-              {matchedCaregivers.length > 0 ? matchedCaregivers.map((cg, idx) => (
-                <button key={idx} disabled={!cg.available}
-                  onClick={() => cg.available && setSelectedCaregiver(cg)}
-                  style={{
-                    padding: 14, border: selectedCaregiver?.name === cg.name ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                    borderRadius: 10, background: !cg.available ? '#f9f9f9' : selectedCaregiver?.name === cg.name ? '#e8f5e9' : '#fff',
-                    cursor: cg.available ? 'pointer' : 'not-allowed', textAlign: 'left', opacity: cg.available ? 1 : 0.6,
-                  }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a2e' }}>{cg.name}</div>
-                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>{cg.skills.join(', ')}</div>
-                      <div style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 500, marginTop: 2 }}>{cg.rate}</div>
+            {loadingCaregivers ? (
+              <div style={{ padding: 30, textAlign: 'center', color: '#999' }}>
+                <div style={{ marginBottom: 8 }}>Checking caregiver availability...</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                {matchedCaregivers.length > 0 ? matchedCaregivers.map((cg, idx) => (
+                  <button key={idx} disabled={!cg.available}
+                    onClick={() => cg.available && setSelectedCaregiver(cg)}
+                    style={{
+                      padding: 14, border: selectedCaregiver?.name === cg.name ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                      borderRadius: 10, background: !cg.available ? '#f9f9f9' : selectedCaregiver?.name === cg.name ? '#e8f5e9' : '#fff',
+                      cursor: cg.available ? 'pointer' : 'not-allowed', textAlign: 'left', opacity: cg.available ? 1 : 0.6,
+                    }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a2e' }}>{cg.name}</div>
+                        <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>{(cg.skills || []).join(', ')}</div>
+                        <div style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 500, marginTop: 2 }}>{cg.rate}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        {cg.available && cg.skillMatch && (
+                          <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Best Match</span>
+                        )}
+                        {cg.available && !cg.skillMatch && (
+                          <span style={{ background: '#fff8e1', color: '#f57f17', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Available</span>
+                        )}
+                        {!cg.available && (
+                          <span style={{ background: '#fce4ec', color: '#c62828', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Unavailable</span>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      {cg.available && cg.skillMatch && (
-                        <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Best Match</span>
-                      )}
-                      {cg.available && !cg.skillMatch && (
-                        <span style={{ background: '#fff8e1', color: '#f57f17', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Available</span>
-                      )}
-                      {!cg.available && (
-                        <span style={{ background: '#fce4ec', color: '#c62828', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Unavailable</span>
-                      )}
-                    </div>
+                    {!cg.available && cg.reason && (
+                      <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{cg.reason}</div>
+                    )}
+                  </button>
+                )) : (
+                  <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
+                    <p>No caregivers found for this time slot.</p>
+                    <p style={{ fontSize: 13 }}>Try adjusting the date or time.</p>
                   </div>
-                  {!cg.available && cg.reason && (
-                    <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{cg.reason}</div>
-                  )}
-                </button>
-              )) : (
-                <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
-                  <p>No caregivers found for this time slot.</p>
-                  <p style={{ fontSize: 13 }}>Try adjusting the date or time.</p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -307,12 +366,11 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               (step === 1 && !serviceType) || (step === 2 && (!date || !time)) || (step === 3 && !duration)
             } onClick={() => {
               const nextStep = step + 1;
-              // Skip caregiver step for real users (when caregiverStep === -1, reviewStep is 4)
               setStep(nextStep);
             }}>Next</button>
           )}
           {step === caregiverStep && hasCaregiverData && (
-            <button className="btn btn-primary" disabled={!selectedCaregiver}
+            <button className="btn btn-primary" disabled={!selectedCaregiver || loadingCaregivers}
               onClick={() => setStep(reviewStep)}>Continue</button>
           )}
           {step === reviewStep && <button className="btn btn-primary" onClick={handleSubmit}>

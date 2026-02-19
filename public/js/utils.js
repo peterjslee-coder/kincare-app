@@ -20,7 +20,7 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
 const CAREGIVER_AVAILABILITY = window.CAREGIVER_AVAILABILITY = {
   'Maria Santos': {
     skills: ['Dementia Care', 'Meal Prep', 'Companionship', 'Medication Reminders'],
-    rate: '$30/hr',
+    rate: '$34/hr',
     weeklySchedule: {
       'Mon': [{ start: '8:00 AM', end: '4:00 PM' }],
       'Tue': [{ start: '8:00 AM', end: '2:00 PM' }],
