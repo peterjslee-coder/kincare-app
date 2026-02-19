@@ -141,9 +141,6 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             }}>For Caregivers</button>
           </div>
 
-          <div style={{ fontSize: '13px', opacity: 0.7 }}>
-            Demo login: pete@inplace.care / inplace123
-          </div>
         </div>
       </section>
 
@@ -325,9 +322,6 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
               background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '8px',
               cursor: 'pointer', transition: 'all 0.3s',
             }}>View Live Demo</button>
-          </div>
-          <div className="demo-credentials">
-            <strong>Demo Credentials:</strong> pete@inplace.care / inplace123
           </div>
         </div>
       </section>
@@ -595,48 +589,6 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
               <div style={{ fontSize: '12px', opacity: 0.6, marginTop: '4px' }}>No spam. Just an update when beta opens in your area.</div>
             </form>
           )}
-        </div>
-      </section>
-
-      {/* ── Dev Login ── */}
-      <section style={{ padding: '40px 32px', background: '#f0f0f0', textAlign: 'center' }}>
-        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <div style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '2px', color: '#999', marginBottom: '16px', fontWeight: 600 }}>
-            Developer Access
-          </div>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {[
-              { label: 'Pete (Family)', email: 'pete@inplace.care' },
-              { label: 'David (Sibling)', email: 'david.lee@inplace.care' },
-              { label: 'Susan (Sibling)', email: 'susan.lee@inplace.care' },
-              { label: 'Maria (Caregiver)', email: 'maria@inplace.care' },
-              { label: 'Betty (Cared-For)', email: 'betty@inplace.care' },
-            ].map((acct, i) => (
-              <button key={i} onClick={async () => {
-                try {
-                  const res = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: acct.email, password: 'inplace123' }),
-                  });
-                  const data = await res.json();
-                  if (data.token) {
-                    setAuthToken(data.token);
-                    if (window.connectSocket) connectSocket(data.token);
-                    onNavigate('dashboard');
-                  }
-                } catch (err) {
-                  console.error('Dev login failed:', err);
-                }
-              }} style={{
-                padding: '8px 16px', fontSize: '12px', fontWeight: 600,
-                background: 'white', color: '#666', border: '1px solid #ddd', borderRadius: '6px',
-                cursor: 'pointer', transition: 'all 0.2s',
-              }}>
-                {acct.label}
-              </button>
-            ))}
-          </div>
         </div>
       </section>
 

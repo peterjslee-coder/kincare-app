@@ -178,6 +178,12 @@ const App = () => {
         if (r?.ok) {
           const data = await r.json();
           if (data.user) {
+            // Don't auto-restore demo sessions — send them back to splash
+            if (data.user.is_demo) {
+              setAuthToken(null);
+              if (typeof disconnectSocket === 'function') disconnectSocket();
+              return;
+            }
             setCurrentUser({
               id: data.user.id, email: data.user.email, role: data.user.role,
               firstName: data.user.first_name, lastName: data.user.last_name,
