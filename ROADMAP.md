@@ -242,6 +242,40 @@
 - Dev Login section added above footer: one-click login buttons for all 5 demo accounts (Pete, David, Susan, Maria, Betty) — calls `/api/auth/login` directly and navigates to dashboard
 - Cache version bumped to v1.1.1
 
+### v1.3.1–v1.3.6 — Demo Mode UX & PWA Fixes (2026-02-19)
+
+**v1.3.1 — Demo Mode Banner**
+- Demo mode banner at top of app with account switcher chips (Pete, Maria, Betty) and "Exit Demo" button
+- DemoModeBanner component in app.js with inline login/switch logic
+- Email verification banner suppressed for demo users (`!currentUser.isDemo`)
+- Sidebar logout says "Exit Demo" in demo mode
+
+**v1.3.2 — Splash Cleanup**
+- Removed "Dev Login" section at bottom of splash page (40+ lines)
+- Removed demo credential hints from hero section and working product CTA
+- Added auto-restore guard: if saved token belongs to a demo account, clear and return to splash
+
+**v1.3.3 — Demo Token Fix**
+- Demo login now stores JWT in memory only (`AUTH_TOKEN` variable) — never calls `setAuthToken()` which persists to localStorage
+- Prevents auto-login on page revisit after viewing demo
+
+**v1.3.4 — Production DB Fixes**
+- Backfilled `is_demo = 1` for all 5 demo accounts in production DB (seeded before column existed, all had `is_demo = 0`)
+- Added Leaflet CSS + JS CDN to index.html — maps were completely broken without these (AreaMap, Caregivers "Find Nearby" tab)
+- Auto-migration: `is_admin = 1` for `peterjslee@gmail.com` on every server start
+
+**v1.3.5 — PWA Icon Overhaul**
+- Regenerated all PWA icons at 8 sizes (48, 72, 96, 128, 144, 192, 384, 512px) in both regular and maskable variants
+- Updated manifest.json with 16 icon entries for full Android/Chrome compatibility
+- Cache-busted service worker registration URL (`/sw.js?v=X.Y.Z`) to force icon refresh on devices
+- Added 32px favicon link in index.html
+
+**v1.3.6 — Demo Simplification**
+- Removed David Lee and Susan Lee from demo picker page and demo mode banner switcher
+- Demo now shows 3 personas: Pete (family), Maria (caregiver), Betty (care recipient)
+- David/Susan accounts and their messages/sessions remain in the database for realistic demo data
+- Cache version bumped to v1.3.6
+
 ### v1.1.0 — Group Messaging & Calendar for Real Users (2026-02-18)
 
 **Phase 3: Group Messaging**
@@ -275,7 +309,7 @@ Priority: **HIGH** — Enable real transactions.
 ## Setup Tasks (no code needed)
 
 - [ ] **Plausible Analytics:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html. $9/mo for up to 10K pageviews. 30-day free trial available. Admin panel has a direct link to the Plausible dashboard.
-- [ ] **Set is_admin on Pete's account:** Run `UPDATE users SET is_admin = 1 WHERE email = 'peterjslee@gmail.com';` in Railway Postgres console (Data tab → Query).
+- [x] ~~**Set is_admin on Pete's account:** Now auto-migrated in database.js on every server start. No manual SQL needed.~~
 
 ---
 

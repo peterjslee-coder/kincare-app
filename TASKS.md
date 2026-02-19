@@ -14,7 +14,11 @@
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
 - [x] ~~**Admin / Superuser Dashboard (v1.3.0):** Done. Pete's real account gets `is_admin` flag → "Admin" sidebar section with: Overview (stat cards + trend charts), Users (searchable table), Waitlist (with CSV export), Activity (recent registrations/sessions/signups). Plausible Analytics script added for site traffic. Auto-restore user session on page reload.~~
-- [ ] **Plausible Analytics setup:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html. Then set `is_admin = 1` on Pete's real account in Railway Postgres so the admin panel (with Plausible dashboard link) is visible.
+- [x] ~~**Demo Mode UX (v1.3.1–v1.3.4):** Done. Demo mode banner with account switcher chips (Pete/Maria/Betty) and "Exit Demo" button. Demo tokens stored in memory only (no localStorage persistence). Email verification banner suppressed in demo. Removed dev login section and demo credential hints from splash page. Auto-restore guard clears demo tokens on page refresh. Backfilled `is_demo` flag for demo accounts in production DB. Added Leaflet CDN to index.html so maps actually render.~~
+- [x] ~~**PWA Icons Regenerated (v1.3.5):** Done. Regenerated all PWA icons at 8 sizes (48–512px) for both regular and maskable variants. Updated manifest.json with all 16 icon entries. Cache-busted SW registration URL.~~
+- [x] ~~**Demo Personas Simplified (v1.3.6):** Done. Removed David and Susan from demo picker and demo banner switcher. Demo now shows 3 personas: Pete (family), Maria (caregiver), Betty (care recipient). Existing messages/data involving David and Susan remain in the database.~~
+- [x] ~~**Admin auto-promotion:** Done. Pete's real account (`peterjslee@gmail.com`) auto-promoted to admin via migration in database.js — no manual SQL needed.~~
+- [ ] **Plausible Analytics setup:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html.
 - [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
 - [ ] **Upgrade to Google Maps geocoding:** Swap Nominatim → Google Maps for better residential accuracy when ready for production
 
@@ -42,13 +46,22 @@
 | Role | Email | Password | Notes |
 |------|-------|----------|-------|
 | Care Team | pete@inplace.care | inplace123 | Primary — manages Betty's care |
-| Sibling | david.lee@inplace.care | inplace123 | Pete's brother — coordinates Betty's care |
-| Sibling | susan.lee@inplace.care | inplace123 | Pete's sister — coordinates Betty's care |
 | Caretaker | maria@inplace.care | inplace123 | Assigned to Betty + 1 other family |
 | Cared-For | betty@inplace.care | inplace123 | Limited view, controlled by Pete |
 
+> David (david.lee@inplace.care) and Susan (susan.lee@inplace.care) still exist in the database with messages and sessions, but are hidden from the demo picker and banner switcher as of v1.3.6.
+
 
 ## Done
+
+### Demo Mode UX & PWA Fixes (v1.3.1–v1.3.6)
+- [x] **Demo mode banner (v1.3.1):** DemoModeBanner component with account switcher chips and "Exit Demo" button. Sidebar logout says "Exit Demo" in demo mode. Email verification banner suppressed for demo users.
+- [x] **Splash cleanup (v1.3.2):** Removed "Dev Login" section, demo credential hints from hero and working product CTA. Added auto-restore guard that clears demo tokens on page refresh.
+- [x] **Demo token fix (v1.3.3):** Demo login now stores JWT in memory only (`AUTH_TOKEN` variable) — never persists to localStorage. Prevents auto-login on revisit.
+- [x] **Production DB fixes (v1.3.4):** Backfilled `is_demo = 1` for all demo accounts in production (they had `is_demo = 0` because they were seeded before the column existed). Added Leaflet CSS + JS CDN to index.html (maps were broken without it).
+- [x] **PWA icons (v1.3.5):** Regenerated all icons at 8 sizes (48, 72, 96, 128, 144, 192, 384, 512px) for both regular and maskable variants. Updated manifest.json with 16 icon entries. Cache-busted SW registration (`/sw.js?v=X.Y.Z`). Added 32px favicon.
+- [x] **Demo simplification (v1.3.6):** Removed David Lee and Susan Lee from demo picker page and demo banner switcher. Demo now shows 3 personas: Pete (family), Maria (caregiver), Betty (care recipient). David/Susan data remains in DB for message history.
+- [x] **Admin auto-migration:** `is_admin = 1` auto-set for `peterjslee@gmail.com` on every server start via migration in database.js.
 
 ### Caregiver Search & Location (v1.2.0)
 - [x] **Geocoding utility:** `src/utils/geocode.js` — Nominatim geocoder with documented Google Maps swap path (one function body change). `haversineDistance()` for radius filtering. `buildAddressString()` helper.
