@@ -1,5 +1,5 @@
-// InPlace Service Worker — v1.2.1
-const CACHE_NAME = 'inplace-v1.3.4';
+// InPlace Service Worker — v1.3.5
+const CACHE_NAME = 'inplace-v1.3.5';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -31,9 +31,21 @@ const STATIC_ASSETS = [
   '/js/components/EmailVerificationBanner.js',
   '/js/components/DemoPickerPage.js',
   '/js/components/AdminPanel.js',
+  '/icons/icon-48.png',
+  '/icons/icon-72.png',
+  '/icons/icon-96.png',
+  '/icons/icon-128.png',
+  '/icons/icon-144.png',
   '/icons/icon-192.png',
+  '/icons/icon-384.png',
   '/icons/icon-512.png',
+  '/icons/icon-maskable-48.png',
+  '/icons/icon-maskable-72.png',
+  '/icons/icon-maskable-96.png',
+  '/icons/icon-maskable-128.png',
+  '/icons/icon-maskable-144.png',
   '/icons/icon-maskable-192.png',
+  '/icons/icon-maskable-384.png',
   '/icons/icon-maskable-512.png',
   '/manifest.json',
 ];
