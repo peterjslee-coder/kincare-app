@@ -10,6 +10,9 @@ const CaretakerHub = window.CaretakerHub = () => {
   const [photoPreviewUrls, setPhotoPreviewUrls] = useState([]);
   const [submittingLog, setSubmittingLog] = useState(false);
   const photoInputRef = useRef(null);
+  // Earnings state
+  const [completedSessions, setCompletedSessions] = useState([]);
+  const [earningsLoading, setEarningsLoading] = useState(false);
 
   // Availability state
   const [availRules, setAvailRules] = useState([]);
@@ -91,6 +94,25 @@ const CaretakerHub = window.CaretakerHub = () => {
     };
     fetchData();
   }, []);
+
+  // Fetch completed sessions when earnings tab is active
+  useEffect(() => {
+    if (activeTab !== 'earnings') return;
+    const fetchCompleted = async () => {
+      setEarningsLoading(true);
+      try {
+        const now = new Date();
+        const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        const res = await apiFetch(`/api/sessions?status=completed&from=${monthStart}&limit=100`);
+        if (res?.ok) {
+          const d = await res.json();
+          setCompletedSessions(d.sessions || []);
+        }
+      } catch (err) { console.error('Earnings fetch error:', err); }
+      setEarningsLoading(false);
+    };
+    fetchCompleted();
+  }, [activeTab]);
 
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []).slice(0, 5);
@@ -340,6 +362,61 @@ const CaretakerHub = window.CaretakerHub = () => {
                 <div style={{ fontSize: '10px', color: '#aaa' }}>Coming soon</div>
               </div>
             </div>
+          </div>
+
+          {/* Completed Sessions Breakdown */}
+          <div className="card" style={{ marginTop: '16px' }}>
+            <div className="card-header"><span className="card-icon">📋</span>Completed Sessions This Month</div>
+            {earningsLoading ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Loading sessions...</div>
+            ) : completedSessions.length > 0 ? (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Client</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Service</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Hours</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {completedSessions.map((s) => (
+                      <tr key={s.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: '10px 12px' }}>
+                          {new Date(s.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </td>
+                        <td style={{ padding: '10px 12px', fontWeight: 500 }}>{s.recipient_name || '—'}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
+                            background: '#f0faf8', color: '#1b6b5a', textTransform: 'capitalize',
+                          }}>{(s.service_type || '').replace(/_/g, ' ')}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>{s.duration_hours || '—'}h</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#1b6b5a' }}>
+                          ${(s.actual_cost || s.estimated_cost || 0).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: '2px solid #e0e0e0' }}>
+                      <td colSpan="3" style={{ padding: '10px 12px', fontWeight: 700 }}>Total</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
+                        {completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0).toFixed(1)}h
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: '#1b6b5a' }}>
+                        ${completedSessions.reduce((sum, s) => sum + (s.actual_cost || s.estimated_cost || 0), 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ) : (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>No completed sessions this month</div>
+            )}
           </div>
         </div>
       )}

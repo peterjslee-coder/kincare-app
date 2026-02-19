@@ -29,6 +29,27 @@ router.get("/", async (req, res) => {
       WHERE cs.family_user_id = ?
     `;
     params = [req.user.id];
+  } else if (req.user.role === "care_for") {
+    // Care recipient view — find their care_recipient record and show their sessions
+    const recipient = await db.prepare(`
+      SELECT cr.id FROM care_recipients cr
+      JOIN users u ON LOWER(cr.first_name || ' ' || cr.last_name) = LOWER(u.first_name || ' ' || u.last_name)
+      WHERE u.id = ?
+      LIMIT 1
+    `).get(req.user.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient record not found" });
+
+    query = `
+      SELECT cs.*,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        u.first_name || ' ' || u.last_name AS caregiver_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ?
+    `;
+    params = [recipient.id];
   } else {
     // Caregiver view
     const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
@@ -78,6 +99,110 @@ function generateRecurringDates(startDate, rule, weeks) {
   }
   return dates;
 }
+
+// ─── POST /api/sessions/request — Care recipient creates a "help wanted" request ───
+router.post("/request", async (req, res) => {
+  if (req.user.role !== "care_for") {
+    return res.status(403).json({ error: "Only care recipients can create care requests" });
+  }
+
+  const { serviceType, scheduledDate, scheduledTime, durationHours = 2, note } = req.body;
+  if (!serviceType || !scheduledDate || !scheduledTime) {
+    return res.status(400).json({ error: "Required: serviceType, scheduledDate, scheduledTime" });
+  }
+
+  const db = await getDb();
+
+  // Find the care_recipient record linked to this user
+  const recipient = await db.prepare(`
+    SELECT cr.id, cr.family_user_id FROM care_recipients cr
+    JOIN users u ON LOWER(cr.first_name || ' ' || cr.last_name) = LOWER(u.first_name || ' ' || u.last_name)
+    WHERE u.id = ?
+    LIMIT 1
+  `).get(req.user.id);
+
+  if (!recipient) return res.status(404).json({ error: "Care recipient record not found" });
+
+  const rates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
+  const baseRate = rates[serviceType] || 28;
+  const estimatedCost = baseRate * durationHours;
+
+  const id = uuid();
+  await db.prepare(`
+    INSERT INTO care_sessions
+    (id, care_recipient_id, family_user_id, service_type, status,
+     scheduled_date, scheduled_time, duration_hours,
+     special_instructions, estimated_cost)
+    VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?)
+  `).run(
+    id, recipient.id, recipient.family_user_id, serviceType,
+    scheduledDate, scheduledTime, durationHours,
+    note || null, estimatedCost
+  );
+
+  const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(id);
+
+  // Notify assigned caregivers via WebSocket
+  const emitToUser = req.app.get("emitToUser");
+  if (emitToUser) {
+    const assignments = await db.prepare(
+      "SELECT ca.caregiver_id, cp.user_id FROM caregiver_assignments ca JOIN caregiver_profiles cp ON ca.caregiver_id = cp.id WHERE ca.care_recipient_id = ? AND ca.status = 'active'"
+    ).all(recipient.id);
+    for (const a of assignments) {
+      emitToUser(a.user_id, "session_update", { sessionId: id, status: "requested", session });
+    }
+  }
+
+  res.status(201).json({ session });
+});
+
+// ─── PUT /api/sessions/:id/claim — Caregiver claims a care request ───
+router.put("/:id/claim", async (req, res) => {
+  if (req.user.role !== "caregiver") {
+    return res.status(403).json({ error: "Only caregivers can claim care requests" });
+  }
+
+  const db = await getDb();
+  const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+  if (!session) return res.status(404).json({ error: "Session not found" });
+  if (session.status !== "requested") {
+    return res.status(400).json({ error: "This session is not available for claiming (status: " + session.status + ")" });
+  }
+
+  await db.prepare(`
+    UPDATE care_sessions SET caregiver_id = ?, status = 'confirmed', updated_at = NOW() WHERE id = ?
+  `).run(profile.id, req.params.id);
+
+  const updated = await db.prepare(`
+    SELECT cs.*, cr.first_name || ' ' || cr.last_name AS recipient_name
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    WHERE cs.id = ?
+  `).get(req.params.id);
+
+  // Notify the family and care recipient via WebSocket
+  const emitToUser = req.app.get("emitToUser");
+  if (emitToUser) {
+    if (session.family_user_id) {
+      emitToUser(session.family_user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+    }
+    // Find care_for user to notify
+    const careForUser = await db.prepare(`
+      SELECT u.id FROM users u
+      JOIN care_recipients cr ON LOWER(cr.first_name || ' ' || cr.last_name) = LOWER(u.first_name || ' ' || u.last_name)
+      WHERE cr.id = ? AND u.role = 'care_for'
+      LIMIT 1
+    `).get(session.care_recipient_id);
+    if (careForUser) {
+      emitToUser(careForUser.id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+    }
+  }
+
+  res.json({ session: updated });
+});
 
 // ─── POST /api/sessions ───
 // Create a new care request (single or recurring)
@@ -326,6 +451,7 @@ router.put("/:id/status", async (req, res) => {
   const { status } = req.body;
   const validTransitions = {
     open: ["pending", "confirmed", "cancelled"],
+    requested: ["confirmed", "cancelled"],
     confirmed: ["in_progress", "cancelled"],
     in_progress: ["completed", "cancelled"],
     pending: ["confirmed", "cancelled"],

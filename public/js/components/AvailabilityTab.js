@@ -1,6 +1,7 @@
 /**
- * AvailabilityTab — Caregiver availability rules management
- * Displays a weekly grid view and allows CRUD operations on availability rules
+ * AvailabilityTab — Month calendar view with availability management
+ * Shows a month grid with day cells colored by availability/bookings.
+ * Click a day to see/edit availability rules and view booked sessions.
  */
 const AvailabilityTab = window.AvailabilityTab = ({
   rules, loading, fetchAvailability,
@@ -11,32 +12,53 @@ const AvailabilityTab = window.AvailabilityTab = ({
   dayNames, dayAbbr,
 }) => {
 
-  useEffect(() => {
-    fetchAvailability();
-  }, []);
-
-  // Build weekly grid data: for each day, collect available and blocked time ranges
-  const weeklyGrid = dayAbbr.map((abbr, dayIdx) => {
-    const dayRules = rules.filter(r => r.isRecurring && r.dayOfWeek === dayIdx);
-    const available = dayRules.filter(r => r.type === 'available');
-    const blocked = dayRules.filter(r => r.type === 'blocked');
-    return { dayIdx, abbr, fullName: dayNames[dayIdx], available, blocked };
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
   });
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [monthSessions, setMonthSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
 
-  // One-off rules (non-recurring, specific dates)
-  const oneOffRules = rules.filter(r => !r.isRecurring && r.specificDate);
+  useEffect(() => { fetchAvailability(); }, []);
 
-  const hours = [];
-  for (let h = 6; h <= 20; h++) {
-    hours.push(h);
-  }
+  // Fetch sessions for visible month
+  useEffect(() => {
+    const fetchMonthSessions = async () => {
+      setSessionsLoading(true);
+      try {
+        const { year, month } = currentMonth;
+        const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month + 1, 0).getDate();
+        const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        const res = await apiFetch(`/api/sessions?from=${from}&to=${to}&limit=100`);
+        if (res?.ok) {
+          const d = await res.json();
+          setMonthSessions(d.sessions || []);
+        }
+      } catch (err) { console.error('Session fetch error:', err); }
+      setSessionsLoading(false);
+    };
+    fetchMonthSessions();
+  }, [currentMonth]);
 
-  const timeToHour = (t) => {
-    const [h] = t.split(':').map(Number);
-    return h;
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+  const getFirstDayOfWeek = (y, m) => new Date(y, m, 1).getDay();
+
+  const prevMonth = () => {
+    setCurrentMonth(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: p.month - 1 });
+    setSelectedDate(null);
+  };
+  const nextMonth = () => {
+    setCurrentMonth(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: p.month + 1 });
+    setSelectedDate(null);
   };
 
   const formatTime = (t) => {
+    if (!t) return '';
     const [h, m] = t.split(':');
     const hr = parseInt(h);
     const ampm = hr >= 12 ? 'PM' : 'AM';
@@ -44,13 +66,59 @@ const AvailabilityTab = window.AvailabilityTab = ({
     return `${hr12}:${m} ${ampm}`;
   };
 
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const { year, month } = currentMonth;
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = getFirstDayOfWeek(year, month);
+
+  // Build sessions-by-date map
+  const sessionsByDate = {};
+  monthSessions.forEach(s => {
+    const d = s.scheduled_date;
+    if (!sessionsByDate[d]) sessionsByDate[d] = [];
+    sessionsByDate[d].push(s);
+  });
+
+  // Get availability info for a specific date
+  const getAvailForDate = (dateStr) => {
+    const d = new Date(dateStr + 'T12:00:00');
+    const dow = d.getDay();
+    const recurring = rules.filter(r => r.isRecurring && r.dayOfWeek === dow);
+    const specific = rules.filter(r => !r.isRecurring && r.specificDate === dateStr);
+    const available = [...recurring, ...specific].filter(r => r.type === 'available');
+    const blocked = [...recurring, ...specific].filter(r => r.type === 'blocked');
+    return { available, blocked, all: [...recurring, ...specific] };
+  };
+
+  // Calculate total available hours for a date
+  const getAvailHours = (avail) => {
+    let totalMins = 0;
+    avail.forEach(r => {
+      const [sh, sm] = r.startTime.split(':').map(Number);
+      const [eh, em] = r.endTime.split(':').map(Number);
+      totalMins += (eh * 60 + em) - (sh * 60 + sm);
+    });
+    return totalMins / 60;
+  };
+
+  // Build cells
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  // Selected date info
+  const selectedDateStr = selectedDate ? `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}` : null;
+  const selectedAvail = selectedDateStr ? getAvailForDate(selectedDateStr) : null;
+  const selectedSessions = selectedDateStr ? (sessionsByDate[selectedDateStr] || []) : [];
+
   return (
     <div>
-      {/* Header with Add Rule button */}
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
           <h3 style={{ margin: 0, color: '#333' }}>My Availability</h3>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#666' }}>Set your working hours and blocked times</p>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#666' }}>Click a day to view or edit your availability</p>
         </div>
         <button onClick={() => {
           setEditingRule(null);
@@ -65,139 +133,184 @@ const AvailabilityTab = window.AvailabilityTab = ({
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading availability...</div>
       ) : (
-        <React.Fragment>
-          {/* Weekly Grid */}
-          <div className="card" style={{ marginBottom: '16px' }}>
-            <div className="card-header"><span className="card-icon">📅</span>Weekly Schedule</div>
-            <div style={{ overflowX: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '80px repeat(15, 1fr)', gap: '0', minWidth: '600px' }}>
-                {/* Hour headers */}
-                <div style={{ padding: '4px', fontSize: '11px', color: '#999', fontWeight: 600 }}></div>
-                {hours.map(h => (
-                  <div key={h} style={{ padding: '4px 2px', fontSize: '10px', color: '#999', textAlign: 'center' }}>
-                    {h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h-12}p`}
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          {/* Month Calendar */}
+          <div className="card" style={{ flex: '1 1 400px', minWidth: '320px' }}>
+            {/* Month Nav */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0 12px' }}>
+              <button onClick={prevMonth} style={{ background: 'none', border: '1px solid #ddd', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '14px' }}>‹</button>
+              <h3 style={{ margin: 0, fontSize: '16px', color: '#333' }}>{monthNames[month]} {year}</h3>
+              <button onClick={nextMonth} style={{ background: 'none', border: '1px solid #ddd', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '14px' }}>›</button>
+            </div>
+
+            {/* Day headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
+              {dayAbbr.map(d => (
+                <div key={d} style={{ textAlign: 'center', fontSize: '11px', fontWeight: 600, color: '#888', padding: '4px 0' }}>{d}</div>
+              ))}
+            </div>
+
+            {/* Calendar grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+              {cells.map((day, idx) => {
+                if (day === null) return <div key={`e${idx}`} style={{ minHeight: '54px' }}></div>;
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isToday = dateStr === todayStr;
+                const isSelected = day === selectedDate;
+                const daySessions = sessionsByDate[dateStr] || [];
+                const avail = getAvailForDate(dateStr);
+                const availHrs = getAvailHours(avail.available);
+                const bookedHrs = daySessions.reduce((s, sess) => s + (sess.duration_hours || 0), 0);
+                const hasBlocked = avail.blocked.length > 0;
+                const hasRequested = daySessions.some(s => s.status === 'requested');
+
+                // Color logic
+                let bg = '#fafafa';
+                let borderColor = '#f0f0f0';
+                if (bookedHrs > 0) {
+                  const pct = Math.min(20 + bookedHrs * 8, 60);
+                  bg = `hsl(210, 60%, ${100 - pct}%)`;
+                  borderColor = '#90caf9';
+                } else if (availHrs > 0) {
+                  const pct = Math.min(15 + availHrs * 3, 45);
+                  bg = `hsl(145, 50%, ${100 - pct}%)`;
+                  borderColor = '#a5d6a7';
+                }
+                if (hasBlocked && !bookedHrs) {
+                  borderColor = '#ef9a9a';
+                }
+
+                return (
+                  <div key={day} onClick={() => setSelectedDate(day === selectedDate ? null : day)} style={{
+                    minHeight: '54px', padding: '4px', borderRadius: '6px', cursor: 'pointer',
+                    background: isSelected ? '#e8f5f1' : bg,
+                    border: isSelected ? '2px solid #1b6b5a' : isToday ? '2px solid #e8724a' : `1px solid ${borderColor}`,
+                    transition: 'all 0.15s', position: 'relative',
+                  }}>
+                    <div style={{ fontSize: '12px', fontWeight: isToday ? 700 : 500, color: isToday ? '#e8724a' : '#333' }}>{day}</div>
+                    <div style={{ display: 'flex', gap: '2px', marginTop: '2px', flexWrap: 'wrap' }}>
+                      {bookedHrs > 0 && (
+                        <span style={{ fontSize: '9px', background: '#e3f2fd', color: '#1565c0', padding: '1px 4px', borderRadius: '3px', fontWeight: 600 }}>
+                          {bookedHrs}h
+                        </span>
+                      )}
+                      {availHrs > 0 && !bookedHrs && (
+                        <span style={{ fontSize: '9px', background: '#e8f5e9', color: '#2e7d32', padding: '1px 4px', borderRadius: '3px' }}>
+                          {availHrs}h avail
+                        </span>
+                      )}
+                      {hasRequested && (
+                        <span style={{ fontSize: '9px', background: '#fce4ec', color: '#c62828', padding: '1px 4px', borderRadius: '3px' }}>req</span>
+                      )}
+                    </div>
                   </div>
-                ))}
+                );
+              })}
+            </div>
 
-                {/* Day rows */}
-                {weeklyGrid.map(({ dayIdx, abbr, available, blocked }) => (
-                  <React.Fragment key={dayIdx}>
-                    <div style={{
-                      padding: '8px 6px', fontSize: '12px', fontWeight: 600, color: '#333',
-                      display: 'flex', alignItems: 'center',
-                    }}>{abbr}</div>
-                    {hours.map(h => {
-                      const isAvail = available.some(r => {
-                        const s = timeToHour(r.startTime);
-                        const e = timeToHour(r.endTime);
-                        return h >= s && h < e;
-                      });
-                      const isBlocked = blocked.some(r => {
-                        const s = timeToHour(r.startTime);
-                        const e = timeToHour(r.endTime);
-                        return h >= s && h < e;
-                      });
+            {/* Legend */}
+            <div style={{ display: 'flex', gap: '14px', marginTop: '12px', fontSize: '11px', color: '#666', flexWrap: 'wrap' }}>
+              <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#c8e6c9', borderRadius: '2px', verticalAlign: 'middle', marginRight: '3px' }}></span>Available</span>
+              <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#bbdefb', borderRadius: '2px', verticalAlign: 'middle', marginRight: '3px' }}></span>Booked</span>
+              <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#fce4ec', borderRadius: '2px', verticalAlign: 'middle', marginRight: '3px', border: '1px solid #ef9a9a' }}></span>Request</span>
+            </div>
+          </div>
 
-                      let bg = '#f5f5f5';
-                      let title = 'Not scheduled';
-                      if (isAvail && !isBlocked) { bg = '#c8e6c9'; title = 'Available'; }
-                      else if (isAvail && isBlocked) { bg = '#ffcdd2'; title = 'Blocked'; }
-                      else if (isBlocked) { bg = '#ffcdd2'; title = 'Blocked'; }
+          {/* Day Detail Panel */}
+          {selectedDate && selectedAvail && (
+            <div style={{ flex: '1 1 300px', minWidth: '280px' }}>
+              <div className="card" style={{ marginBottom: '12px' }}>
+                <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>
+                    <span className="card-icon">📅</span>
+                    {new Date(selectedDateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  </span>
+                  <button onClick={() => setSelectedDate(null)} style={{
+                    background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#999',
+                  }}>×</button>
+                </div>
 
-                      return (
-                        <div key={h} title={`${abbr} ${h}:00 — ${title}`} style={{
-                          height: '28px', background: bg, border: '1px solid #fff',
-                          borderRadius: '2px', cursor: 'default',
-                        }}></div>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
+                {/* Sessions for this day */}
+                {selectedSessions.length > 0 && (
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '6px', textTransform: 'uppercase' }}>Booked Sessions</div>
+                    {selectedSessions.map(s => (
+                      <div key={s.id} style={{
+                        padding: '8px 12px', background: s.status === 'requested' ? '#fce4ec' : '#e3f2fd',
+                        borderRadius: '6px', marginBottom: '6px', fontSize: '13px',
+                      }}>
+                        <div style={{ fontWeight: 600, color: '#333' }}>
+                          {s.recipient_name || 'Client'} — {(s.service_type || '').replace(/_/g, ' ')}
+                        </div>
+                        <div style={{ color: '#666', fontSize: '12px' }}>
+                          {formatTime(s.scheduled_time)} &bull; {s.duration_hours}h &bull;
+                          <span style={{
+                            marginLeft: '4px', padding: '1px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 600,
+                            background: s.status === 'confirmed' ? '#e0f2e9' : s.status === 'requested' ? '#fff3e0' : '#f5f5f5',
+                            color: s.status === 'confirmed' ? '#1b6b5a' : s.status === 'requested' ? '#e65100' : '#888',
+                          }}>{s.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Availability rules for this day */}
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '6px', textTransform: 'uppercase' }}>Availability Rules</div>
+                  {selectedAvail.all.length === 0 ? (
+                    <div style={{ color: '#999', fontSize: '13px', padding: '8px 0' }}>No rules set for this day</div>
+                  ) : (
+                    selectedAvail.all.map(rule => (
+                      <div key={rule.id} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '8px 10px', background: rule.type === 'available' ? '#f0faf5' : '#fef2f2',
+                        borderRadius: '6px', marginBottom: '4px',
+                        borderLeft: `3px solid ${rule.type === 'available' ? '#1b6b5a' : '#dc2626'}`,
+                      }}>
+                        <div style={{ fontSize: '12px' }}>
+                          <span style={{ fontWeight: 600 }}>{formatTime(rule.startTime)} – {formatTime(rule.endTime)}</span>
+                          <span style={{ color: '#888', marginLeft: '6px' }}>
+                            {rule.type === 'available' ? '✅' : '🚫'}
+                            {rule.isRecurring ? ' (weekly)' : ' (one-time)'}
+                          </span>
+                          {rule.note && <div style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>{rule.note}</div>}
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button onClick={() => startEditRule(rule)} style={{
+                            padding: '3px 8px', background: '#fff', border: '1px solid #ddd', borderRadius: '4px',
+                            cursor: 'pointer', fontSize: '10px',
+                          }}>Edit</button>
+                          <button onClick={() => handleDeleteRule(rule.id)} style={{
+                            padding: '3px 8px', background: '#fff', border: '1px solid #fca5a5', borderRadius: '4px',
+                            cursor: 'pointer', fontSize: '10px', color: '#dc2626',
+                          }}>×</button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Quick add availability for this day */}
+                <button onClick={() => {
+                  const d = new Date(selectedDateStr + 'T12:00:00');
+                  setEditingRule(null);
+                  setRuleForm({
+                    type: 'available', dayOfWeek: d.getDay(),
+                    startTime: '08:00', endTime: '17:00',
+                    isRecurring: false, specificDate: selectedDateStr, note: '',
+                  });
+                  setShowAddRule(true);
+                }} style={{
+                  width: '100%', padding: '10px', background: '#f8f9fa', border: '1px dashed #ccc',
+                  borderRadius: '8px', cursor: 'pointer', fontSize: '13px', color: '#666',
+                }}>
+                  + Add availability for this day
+                </button>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '16px', marginTop: '12px', fontSize: '11px', color: '#666' }}>
-              <span><span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#c8e6c9', borderRadius: '2px', verticalAlign: 'middle', marginRight: '4px' }}></span> Available</span>
-              <span><span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#ffcdd2', borderRadius: '2px', verticalAlign: 'middle', marginRight: '4px' }}></span> Blocked</span>
-              <span><span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#f5f5f5', borderRadius: '2px', verticalAlign: 'middle', marginRight: '4px' }}></span> Not Scheduled</span>
-            </div>
-          </div>
-
-          {/* Recurring Rules List */}
-          <div className="card" style={{ marginBottom: '16px' }}>
-            <div className="card-header"><span className="card-icon">🔄</span>Recurring Rules</div>
-            {rules.filter(r => r.isRecurring).length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>No recurring rules set. Click "Add Rule" to get started.</div>
-            ) : (
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {rules.filter(r => r.isRecurring).map(rule => (
-                  <div key={rule.id} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '10px 14px', background: rule.type === 'available' ? '#f0faf5' : '#fef2f2',
-                    borderRadius: '8px', borderLeft: `4px solid ${rule.type === 'available' ? '#1b6b5a' : '#dc2626'}`,
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#333' }}>
-                        {dayNames[rule.dayOfWeek]} &bull; {formatTime(rule.startTime)} – {formatTime(rule.endTime)}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                        {rule.type === 'available' ? 'Available' : 'Blocked'}
-                        {rule.note && ` — ${rule.note}`}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button onClick={() => startEditRule(rule)} style={{
-                        padding: '4px 10px', background: '#fff', border: '1px solid #ddd', borderRadius: '6px',
-                        cursor: 'pointer', fontSize: '11px',
-                      }}>Edit</button>
-                      <button onClick={() => handleDeleteRule(rule.id)} style={{
-                        padding: '4px 10px', background: '#fff', border: '1px solid #fca5a5', borderRadius: '6px',
-                        cursor: 'pointer', fontSize: '11px', color: '#dc2626',
-                      }}>Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* One-off Date Blocks */}
-          <div className="card">
-            <div className="card-header"><span className="card-icon">📌</span>Date-Specific Overrides</div>
-            {oneOffRules.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>No date-specific overrides. Use "Add Rule" with a specific date to block off time.</div>
-            ) : (
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {oneOffRules.map(rule => (
-                  <div key={rule.id} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '10px 14px', background: rule.type === 'available' ? '#f0faf5' : '#fef2f2',
-                    borderRadius: '8px', borderLeft: `4px solid ${rule.type === 'available' ? '#1b6b5a' : '#dc2626'}`,
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#333' }}>
-                        {rule.specificDate} &bull; {formatTime(rule.startTime)} – {formatTime(rule.endTime)}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                        {rule.type === 'available' ? 'Available (override)' : 'Blocked'}
-                        {rule.note && ` — ${rule.note}`}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button onClick={() => startEditRule(rule)} style={{
-                        padding: '4px 10px', background: '#fff', border: '1px solid #ddd', borderRadius: '6px',
-                        cursor: 'pointer', fontSize: '11px',
-                      }}>Edit</button>
-                      <button onClick={() => handleDeleteRule(rule.id)} style={{
-                        padding: '4px 10px', background: '#fff', border: '1px solid #fca5a5', borderRadius: '6px',
-                        cursor: 'pointer', fontSize: '11px', color: '#dc2626',
-                      }}>Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </React.Fragment>
+          )}
+        </div>
       )}
 
       {/* Add/Edit Rule Modal */}
@@ -220,7 +333,6 @@ const AvailabilityTab = window.AvailabilityTab = ({
                     flex: 1, padding: '8px', border: ruleForm.type === t ? '2px solid #1b6b5a' : '2px solid #ddd',
                     borderRadius: '8px', background: ruleForm.type === t ? (t === 'available' ? '#f0faf5' : '#fef2f2') : '#fff',
                     cursor: 'pointer', fontSize: '13px', fontWeight: ruleForm.type === t ? 600 : 400,
-                    textTransform: 'capitalize',
                   }}>{t === 'available' ? '✅ Available' : '🚫 Blocked'}</button>
                 ))}
               </div>
@@ -240,7 +352,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
               </div>
             </div>
 
-            {/* Day of Week (recurring) or Date (one-off) */}
+            {/* Day or Date */}
             {ruleForm.isRecurring ? (
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Day of Week</label>

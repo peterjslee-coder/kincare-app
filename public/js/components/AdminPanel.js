@@ -32,6 +32,13 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'invites') loadInvites();
   }, [activeTab]);
 
+  // Auto-trigger search when switching to invites tab with pre-filled email (e.g. from waitlist Invite button)
+  useEffect(() => {
+    if (activeTab === 'invites' && inviteSearch.trim() && !searchResult && !searchLoading) {
+      handleSearchEmail();
+    }
+  }, [activeTab, inviteSearch]);
+
   const loadStats = async () => {
     try {
       const res = await apiFetch('/api/admin/stats');

@@ -1,10 +1,12 @@
-// ─── CaregiverCalendar — Weekly calendar with availability overlay ───
-// Green = available, Blue = booked session, Red = blocked, Gray = off
+// ─── CaregiverCalendar — Weekly calendar with availability overlay + care requests ───
+// Green = available, Blue = booked session, Pink/Orange = care request, Red = blocked, Gray = off
 const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, availRules, fetchAvailability, onLogVisit }) => {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
   const [allSessions, setAllSessions] = useState([]);
+  const [careRequests, setCareRequests] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const [claimingId, setClaimingId] = useState(null);
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const hourStart = 6;
@@ -33,22 +35,72 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
     const fetchAll = async () => {
       setLoadingSessions(true);
       try {
-        const res = await apiFetch(`/api/sessions?start=${weekStart}&end=${weekEnd}`);
+        const res = await apiFetch(`/api/sessions?from=${weekStart}&to=${weekEnd}`);
         if (res?.ok) {
           const d = await res.json();
-          setAllSessions(d.sessions || []);
+          const all = d.sessions || [];
+          // Separate regular sessions from care requests
+          setAllSessions(all.filter(s => s.status !== 'requested'));
+          setCareRequests(all.filter(s => s.status === 'requested'));
         } else {
-          // Fall back to dashboard sessions
           setAllSessions(sessions || []);
+          setCareRequests([]);
         }
       } catch {
         setAllSessions(sessions || []);
+        setCareRequests([]);
       }
       setLoadingSessions(false);
     };
     fetchAll();
     if (typeof fetchAvailability === 'function') fetchAvailability();
   }, [weekOffset]);
+
+  // Also fetch care requests from assigned recipients
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const res = await apiFetch(`/api/sessions?status=requested&from=${weekStart}&to=${weekEnd}`);
+        if (res?.ok) {
+          const d = await res.json();
+          const requests = (d.sessions || []).filter(s => s.status === 'requested');
+          setCareRequests(prev => {
+            // Merge without duplicates
+            const ids = new Set(prev.map(p => p.id));
+            const merged = [...prev];
+            requests.forEach(r => { if (!ids.has(r.id)) merged.push(r); });
+            return merged;
+          });
+        }
+      } catch { /* ignore */ }
+    };
+    fetchRequests();
+  }, [weekOffset]);
+
+  // Claim a care request
+  const handleClaim = async (sessionId) => {
+    setClaimingId(sessionId);
+    try {
+      const res = await apiFetch(`/api/sessions/${sessionId}/claim`, { method: 'PUT' });
+      if (res?.ok) {
+        // Refresh sessions
+        const fetchRes = await apiFetch(`/api/sessions?from=${weekStart}&to=${weekEnd}`);
+        if (fetchRes?.ok) {
+          const d = await fetchRes.json();
+          const all = d.sessions || [];
+          setAllSessions(all.filter(s => s.status !== 'requested'));
+          setCareRequests(all.filter(s => s.status === 'requested'));
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to accept request');
+      }
+    } catch (err) {
+      console.error('Claim error:', err);
+      alert('Failed to accept request');
+    }
+    setClaimingId(null);
+  };
 
   // Parse availability rules into per-day time ranges
   const getAvailForDay = (dayOfWeek, dateStr) => {
@@ -62,7 +114,6 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
       const rDate = r.specific_date ?? r.specificDate;
       const rType = r.type || 'available';
 
-      // Match: recurring rule for this day, or specific-date rule for this date
       const matchesDay = rRecurring && rDay === dayOfWeek;
       const matchesDate = !rRecurring && rDate === dateStr;
 
@@ -89,9 +140,12 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
     });
   };
 
-  // Format date as "Mon 19"
-  const formatDateShort = (d) => {
-    return `${dayNames[d.getDay()]} ${d.getDate()}`;
+  // Get care requests for a specific date
+  const getRequestsForDate = (dateStr) => {
+    return careRequests.filter(s => {
+      const sDate = s.scheduled_date || s.date;
+      return sDate === dateStr;
+    });
   };
 
   const formatMonth = () => {
@@ -109,6 +163,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   const getCellType = (dateStr, dayOfWeek, hour) => {
     const { available, blocked } = getAvailForDay(dayOfWeek, dateStr);
     const daySessions = getSessionsForDate(dateStr);
+    const dayRequests = getRequestsForDate(dateStr);
 
     // Check if this hour falls within a booked session
     for (const s of daySessions) {
@@ -117,6 +172,16 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
       const sDuration = parseFloat(s.duration_hours || s.durationHours || 1);
       if (hour >= sHour && hour < sHour + sDuration) {
         return { type: 'booked', session: s };
+      }
+    }
+
+    // Check if this hour falls within a care request
+    for (const s of dayRequests) {
+      const sTime = s.scheduled_time || s.time || '';
+      const sHour = parseInt(sTime.split(':')[0]);
+      const sDuration = parseFloat(s.duration_hours || s.durationHours || 1);
+      if (hour >= sHour && hour < sHour + sDuration) {
+        return { type: 'request', session: s };
       }
     }
 
@@ -140,19 +205,29 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   const cellColors = {
     available: { bg: '#e8f5e9', border: '#a5d6a7' },
     booked: { bg: '#e3f2fd', border: '#90caf9' },
-    blocked: { bg: '#fce4ec', border: '#ef9a9a' },
+    request: { bg: '#fce4ec', border: '#f48fb1' },
+    blocked: { bg: '#ffebee', border: '#ef9a9a' },
     off: { bg: '#fafafa', border: '#f0f0f0' },
   };
 
   // Selected day details
   const selectedDateStr = selectedDay ? selectedDay.toISOString().split('T')[0] : null;
   const selectedSessions = selectedDateStr ? getSessionsForDate(selectedDateStr) : [];
+  const selectedRequests = selectedDateStr ? getRequestsForDate(selectedDateStr) : [];
   const selectedAvail = selectedDay ? getAvailForDay(selectedDay.getDay(), selectedDateStr) : { available: [], blocked: [] };
 
   const formatTime12 = (h, m) => {
     const ampm = h >= 12 ? 'PM' : 'AM';
     const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
     return m ? `${dh}:${String(m).padStart(2, '0')} ${ampm}` : `${dh} ${ampm}`;
+  };
+
+  const formatTimeStr = (t) => {
+    if (!t) return '';
+    const [h, min] = t.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    return `${dh}:${String(min || 0).padStart(2, '0')} ${ampm}`;
   };
 
   return (
@@ -170,9 +245,10 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 11, color: '#666' }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 11, color: '#666', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: cellColors.available.bg, border: `1px solid ${cellColors.available.border}`, display: 'inline-block' }}></span> Available</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: cellColors.booked.bg, border: `1px solid ${cellColors.booked.border}`, display: 'inline-block' }}></span> Booked</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: cellColors.request.bg, border: `1px solid ${cellColors.request.border}`, display: 'inline-block' }}></span> Care Request</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: cellColors.blocked.bg, border: `1px solid ${cellColors.blocked.border}`, display: 'inline-block' }}></span> Blocked</span>
       </div>
 
@@ -184,11 +260,16 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
               <th style={{ width: 44, padding: '8px 4px', borderBottom: '2px solid #e0e0e0', background: '#fafafa', position: 'sticky', left: 0, zIndex: 1 }}></th>
               {weekDates.map((d, i) => {
                 const today = isToday(d);
+                const dateStr = d.toISOString().split('T')[0];
+                const hasRequests = getRequestsForDate(dateStr).length > 0;
                 return (
                   <th key={i} onClick={() => setSelectedDay(d)}
                     style={{ padding: '8px 2px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', cursor: 'pointer', background: today ? '#e8f5e9' : selectedDay && d.toDateString() === selectedDay.toDateString() ? '#f0f4ff' : '#fafafa' }}>
                     <div style={{ fontWeight: 600, color: today ? '#1b6b5a' : '#555' }}>{dayNames[d.getDay()]}</div>
-                    <div style={{ fontSize: 13, fontWeight: today ? 800 : 600, color: today ? '#1b6b5a' : '#333', background: today ? '#1b6b5a' : 'transparent', color: today ? '#fff' : '#333', borderRadius: '50%', width: 24, height: 24, lineHeight: '24px', margin: '2px auto 0', display: 'inline-block' }}>{d.getDate()}</div>
+                    <div style={{ fontSize: 13, fontWeight: today ? 800 : 600, color: today ? '#fff' : '#333', background: today ? '#1b6b5a' : 'transparent', borderRadius: '50%', width: 24, height: 24, lineHeight: '24px', margin: '2px auto 0', display: 'inline-block' }}>{d.getDate()}</div>
+                    {hasRequests && (
+                      <div style={{ fontSize: 9, color: '#c62828', fontWeight: 600, marginTop: 2 }}>help needed</div>
+                    )}
                   </th>
                 );
               })}
@@ -206,11 +287,10 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                     const dateStr = d.toISOString().split('T')[0];
                     const cell = getCellType(dateStr, d.getDay(), hour);
                     const colors = cellColors[cell.type];
-                    // Merge consecutive booked cells visually
                     return (
                       <td key={di}
                         onClick={() => setSelectedDay(d)}
-                        title={cell.type === 'booked' ? `${cell.session.recipientName || cell.session.recipient_name || ''} — ${cell.session.serviceType || cell.session.service_type || ''}` : cell.type === 'blocked' ? `Blocked${cell.note ? ': ' + cell.note : ''}` : cell.type}
+                        title={cell.type === 'booked' ? `${cell.session.recipientName || cell.session.recipient_name || ''} — ${cell.session.serviceType || cell.session.service_type || ''}` : cell.type === 'request' ? `Care request: ${cell.session.service_type || cell.session.serviceType || ''}` : cell.type === 'blocked' ? `Blocked${cell.note ? ': ' + cell.note : ''}` : cell.type}
                         style={{
                           background: colors.bg,
                           borderBottom: '1px solid #f0f0f0',
@@ -222,6 +302,9 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         }}>
                         {cell.type === 'booked' && (
                           <div style={{ position: 'absolute', inset: 1, background: '#42a5f5', borderRadius: 3, opacity: 0.7 }}></div>
+                        )}
+                        {cell.type === 'request' && (
+                          <div style={{ position: 'absolute', inset: 1, background: '#f48fb1', borderRadius: 3, opacity: 0.6 }}></div>
                         )}
                         {cell.type === 'blocked' && (
                           <div style={{ position: 'absolute', inset: 1, background: '#ef5350', borderRadius: 3, opacity: 0.25 }}></div>
@@ -270,7 +353,41 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
             <div style={{ fontSize: 13, color: '#999', marginBottom: 12 }}>No availability rules for this day</div>
           )}
 
-          {/* Sessions */}
+          {/* Care Requests */}
+          {selectedRequests.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#c62828', marginBottom: 8 }}>Care Requests</div>
+              {selectedRequests.map((s, idx) => (
+                <div key={idx} style={{ padding: '10px 12px', background: '#fce4ec', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #f48fb1' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>
+                        {s.recipientName || s.recipient_name || 'Client'}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#666' }}>
+                        {formatTimeStr(s.time || s.scheduled_time)} · {s.durationHours || s.duration_hours}h · {s.serviceType || s.service_type}
+                      </div>
+                      {(s.specialInstructions || s.special_instructions) && (
+                        <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
+                          {s.specialInstructions || s.special_instructions}
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={() => handleClaim(s.id)} disabled={claimingId === s.id}
+                      style={{
+                        padding: '6px 16px', background: '#1b6b5a', color: '#fff', border: 'none',
+                        borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                        opacity: claimingId === s.id ? 0.5 : 1,
+                      }}>
+                      {claimingId === s.id ? 'Accepting...' : 'Accept'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Booked Sessions */}
           {selectedSessions.length > 0 ? (
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#1565c0', marginBottom: 8 }}>Booked Sessions</div>
@@ -282,7 +399,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         {s.recipientName || s.recipient_name || 'Client'}
                       </div>
                       <div style={{ fontSize: 12, color: '#666' }}>
-                        {s.time || s.scheduled_time} · {s.durationHours || s.duration_hours}h · {s.serviceType || s.service_type}
+                        {formatTimeStr(s.time || s.scheduled_time)} · {s.durationHours || s.duration_hours}h · {s.serviceType || s.service_type}
                       </div>
                       {(s.specialInstructions || s.special_instructions) && (
                         <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
@@ -310,7 +427,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
               ))}
             </div>
           ) : (
-            <div style={{ fontSize: 13, color: '#999' }}>No sessions booked this day</div>
+            selectedRequests.length === 0 && <div style={{ fontSize: 13, color: '#999' }}>No sessions booked this day</div>
           )}
         </div>
       )}

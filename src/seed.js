@@ -435,7 +435,25 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
   }
 
-  console.log("✅ Care sessions created (31 — 8 upcoming Pete/Betty, 19 past completed, 4 Henderson, 2 Patel, 2 David/Betty, 1 Susan/Betty)");
+  // ─── Care Requests (Betty requesting help — status='requested', no caregiver) ───
+  const careRequests = [
+    [uuid(), bettyId, peteId, null, "companion", "requested", "2026-02-22", "14:00", 2, "Would love some company this afternoon — maybe a walk if the weather is nice.", 50],
+    [uuid(), bettyId, peteId, null, "meals", "requested", "2026-02-26", "11:00", 3, "Need help with meal prep for the week. Running low on groceries.", 90],
+    [uuid(), bettyId, peteId, null, "rides", "requested", "2026-03-01", "09:00", 1.5, "Need a ride to the pharmacy and back.", 42],
+    [uuid(), bettyId, peteId, null, "companion", "requested", "2026-03-04", "10:00", 3, "Morning companionship — puzzles and tea.", 75],
+  ];
+
+  for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of careRequests) {
+    await db.prepare(`
+      INSERT INTO care_sessions
+      (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+       status, scheduled_date, scheduled_time, duration_hours,
+       special_instructions, estimated_cost)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
+  }
+
+  console.log("✅ Care sessions created (35 — 8 upcoming Pete/Betty, 19 past completed, 4 Henderson, 2 Patel, 2 David/Betty, 1 Susan/Betty, 4 care requests)");
 
   // ─── Visit Logs ───
   // pastSessions[10] = Feb 12 full 8-hr day, [13] = Feb 18 rides, [25] = James Feb 9, [26] = David Feb 6
