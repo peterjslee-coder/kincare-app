@@ -11,6 +11,15 @@ const AdminPanel = window.AdminPanel = () => {
   const [waitlistTotal, setWaitlistTotal] = useState(0);
   const [activity, setActivity] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Invites tab state
+  const [invites, setInvites] = useState([]);
+  const [invitesTotal, setInvitesTotal] = useState(0);
+  const [inviteSearch, setInviteSearch] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [inviteRole, setInviteRole] = useState('caregiver');
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState(null);
 
   useEffect(() => {
     loadStats();
@@ -20,6 +29,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'users') loadUsers();
     if (activeTab === 'waitlist') loadWaitlist();
     if (activeTab === 'activity') loadActivity();
+    if (activeTab === 'invites') loadInvites();
   }, [activeTab]);
 
   const loadStats = async () => {
@@ -62,6 +72,73 @@ const AdminPanel = window.AdminPanel = () => {
     } catch (err) { console.error('Admin activity error:', err); }
   };
 
+  const loadInvites = async () => {
+    try {
+      const res = await apiFetch('/api/platform-invites?limit=100');
+      if (res?.ok) {
+        const data = await res.json();
+        setInvites(data.invites || []);
+        setInvitesTotal(data.total || 0);
+      }
+    } catch (err) { console.error('Admin invites error:', err); }
+  };
+
+  const handleSearchEmail = async () => {
+    if (!inviteSearch.trim()) return;
+    setSearchLoading(true);
+    setSearchResult(null);
+    setInviteMsg(null);
+    try {
+      const res = await apiFetch(`/api/admin/search-email?email=${encodeURIComponent(inviteSearch.trim())}`);
+      if (res?.ok) setSearchResult(await res.json());
+    } catch (err) { console.error('Search error:', err); }
+    setSearchLoading(false);
+  };
+
+  const handleSendInvite = async (email, role) => {
+    setInviteSending(true);
+    setInviteMsg(null);
+    try {
+      const res = await apiFetch('/api/platform-invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email || inviteSearch.trim(), role: role || inviteRole }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setInviteMsg({ type: 'success', text: data.message + (data.wasOnWaitlist ? ' (was on waitlist)' : '') });
+        loadInvites();
+        setSearchResult(null);
+        setInviteSearch('');
+      } else {
+        setInviteMsg({ type: 'error', text: data.error });
+      }
+    } catch (err) {
+      setInviteMsg({ type: 'error', text: 'Failed to send invite' });
+    }
+    setInviteSending(false);
+  };
+
+  const handleResendInvite = async (inviteId) => {
+    try {
+      const res = await apiFetch(`/api/platform-invites/${inviteId}/resend`, { method: 'POST' });
+      if (res?.ok) {
+        setInviteMsg({ type: 'success', text: 'Invite resent' });
+        loadInvites();
+      }
+    } catch (err) { setInviteMsg({ type: 'error', text: 'Failed to resend' }); }
+  };
+
+  const handleCancelInvite = async (inviteId) => {
+    try {
+      const res = await apiFetch(`/api/platform-invites/${inviteId}`, { method: 'DELETE' });
+      if (res?.ok) {
+        setInviteMsg({ type: 'success', text: 'Invite cancelled' });
+        loadInvites();
+      }
+    } catch (err) { setInviteMsg({ type: 'error', text: 'Failed to cancel' }); }
+  };
+
   const exportWaitlistCSV = () => {
     if (!waitlist.length) return;
     const headers = ['Email', 'Name', 'Role', 'Source', 'Date'];
@@ -96,6 +173,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'users', label: 'Users', icon: '👥' },
     { id: 'waitlist', label: 'Waitlist', icon: '📋' },
+    { id: 'invites', label: 'Invites', icon: '✉️' },
     { id: 'activity', label: 'Activity', icon: '⚡' },
   ];
 
@@ -355,6 +433,7 @@ const AdminPanel = window.AdminPanel = () => {
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Source</th>
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -365,6 +444,12 @@ const AdminPanel = window.AdminPanel = () => {
                     <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{w.role || 'family'}</td>
                     <td style={{ padding: '10px 12px', color: '#888' }}>{w.source || 'splash'}</td>
                     <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(w.created_at)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      <button onClick={() => { setInviteSearch(w.email); setActiveTab('invites'); }} style={{
+                        padding: '4px 12px', background: '#e8724a', color: 'white', border: 'none',
+                        borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                      }}>Invite</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -372,6 +457,174 @@ const AdminPanel = window.AdminPanel = () => {
             {waitlist.length === 0 && (
               <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No waitlist entries yet</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Invites Tab ─── */}
+      {activeTab === 'invites' && (
+        <div>
+          {/* Search & Send */}
+          <div className="card" style={{ marginBottom: '20px' }}>
+            <div className="card-header"><span className="card-icon">🔍</span>Search & Invite</div>
+            <div style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                <input
+                  type="email" placeholder="Enter email address..."
+                  value={inviteSearch} onChange={(e) => setInviteSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearchEmail()}
+                  style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}
+                />
+                <button onClick={handleSearchEmail} disabled={searchLoading} style={{
+                  padding: '10px 20px', background: '#1b6b5a', color: 'white', border: 'none',
+                  borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                  opacity: searchLoading ? 0.6 : 1,
+                }}>
+                  {searchLoading ? 'Searching...' : 'Search'}
+                </button>
+              </div>
+
+              {/* Search Result */}
+              {searchResult && (
+                <div style={{ padding: '14px', background: '#f8f9fa', borderRadius: '8px', marginBottom: '12px' }}>
+                  {searchResult.user && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#e0f2e9', color: '#1b6b5a' }}>REGISTERED</span>
+                      <span style={{ marginLeft: '10px', fontWeight: 500 }}>{searchResult.user.first_name} {searchResult.user.last_name}</span>
+                      <span style={{ color: '#888', marginLeft: '8px', fontSize: '13px' }}>{searchResult.user.email}</span>
+                      <span style={{ color: '#888', marginLeft: '8px', fontSize: '12px' }}>({searchResult.user.role}, joined {formatDate(searchResult.user.created_at)})</span>
+                    </div>
+                  )}
+                  {searchResult.waitlist && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#fff3e0', color: '#e65100' }}>WAITLIST</span>
+                      <span style={{ marginLeft: '10px', fontWeight: 500 }}>{searchResult.waitlist.name || 'No name'}</span>
+                      <span style={{ color: '#888', marginLeft: '8px', fontSize: '13px' }}>{searchResult.waitlist.email}</span>
+                      <span style={{ color: '#888', marginLeft: '8px', fontSize: '12px' }}>(signed up {formatDate(searchResult.waitlist.created_at)})</span>
+                    </div>
+                  )}
+                  {searchResult.invite && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                        background: searchResult.invite.status === 'accepted' ? '#e0f2e9' : searchResult.invite.status === 'pending' ? '#e3f2fd' : '#f5f5f5',
+                        color: searchResult.invite.status === 'accepted' ? '#1b6b5a' : searchResult.invite.status === 'pending' ? '#1565c0' : '#888',
+                      }}>INVITE: {searchResult.invite.status.toUpperCase()}</span>
+                      <span style={{ color: '#888', marginLeft: '10px', fontSize: '13px' }}>
+                        {searchResult.invite.role} — sent {formatDate(searchResult.invite.created_at)}
+                      </span>
+                    </div>
+                  )}
+                  {!searchResult.user && !searchResult.waitlist && !searchResult.invite && (
+                    <div style={{ color: '#999' }}>No records found for this email.</div>
+                  )}
+
+                  {/* Send Invite — only show if not already registered and no pending invite */}
+                  {!searchResult.user && (!searchResult.invite || searchResult.invite.status !== 'pending') && (
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e0e0e0' }}>
+                      <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}
+                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px' }}>
+                        <option value="caregiver">Caregiver</option>
+                        <option value="family">Care Team (Family)</option>
+                        <option value="care_for">Cared-For</option>
+                      </select>
+                      <button onClick={() => handleSendInvite()} disabled={inviteSending} style={{
+                        padding: '8px 20px', background: '#e8724a', color: 'white', border: 'none',
+                        borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                        opacity: inviteSending ? 0.6 : 1,
+                      }}>
+                        {inviteSending ? 'Sending...' : 'Send Invite'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Status message */}
+              {inviteMsg && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 500,
+                  background: inviteMsg.type === 'success' ? '#e0f2e9' : '#fde8e8',
+                  color: inviteMsg.type === 'success' ? '#1b6b5a' : '#c0392b',
+                }}>
+                  {inviteMsg.text}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Invite List */}
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span><span className="card-icon">✉️</span>Platform Invites</span>
+              <span style={{ fontSize: '13px', color: '#888', fontWeight: 400 }}>{invitesTotal} total</span>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Sent By</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Expires</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invites.map((inv) => {
+                    const isExpired = inv.status === 'pending' && new Date(inv.expires_at) < new Date();
+                    const displayStatus = isExpired ? 'expired' : inv.status;
+                    return (
+                      <tr key={inv.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: '10px 12px', fontWeight: 500 }}>{inv.invited_email}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, textTransform: 'capitalize',
+                            background: inv.role === 'caregiver' ? '#e3f2fd' : inv.role === 'family' ? '#e0f2e9' : '#fff3e0',
+                            color: inv.role === 'caregiver' ? '#1565c0' : inv.role === 'family' ? '#1b6b5a' : '#e65100',
+                          }}>{inv.role === 'care_for' ? 'Cared-For' : inv.role}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, textTransform: 'capitalize',
+                            background: displayStatus === 'accepted' ? '#e0f2e9' : displayStatus === 'pending' ? '#e3f2fd' : displayStatus === 'cancelled' ? '#f5f5f5' : '#fff3e0',
+                            color: displayStatus === 'accepted' ? '#1b6b5a' : displayStatus === 'pending' ? '#1565c0' : displayStatus === 'cancelled' ? '#888' : '#e65100',
+                          }}>{displayStatus}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#555', fontSize: '12px' }}>
+                          {inv.inviter_first_name} {inv.inviter_last_name}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(inv.expires_at)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          {inv.status === 'pending' && !isExpired && (
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                              <button onClick={() => handleResendInvite(inv.id)} style={{
+                                padding: '4px 10px', background: '#f0f0f0', border: '1px solid #ddd',
+                                borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
+                              }}>Resend</button>
+                              <button onClick={() => handleCancelInvite(inv.id)} style={{
+                                padding: '4px 10px', background: '#fff0f0', border: '1px solid #fdd',
+                                borderRadius: '6px', fontSize: '11px', cursor: 'pointer', color: '#c00',
+                              }}>Cancel</button>
+                            </div>
+                          )}
+                          {(inv.status === 'accepted') && <span style={{ color: '#1b6b5a', fontSize: '12px' }}>Completed</span>}
+                          {(isExpired || inv.status === 'cancelled') && (
+                            <button onClick={() => { setInviteSearch(inv.invited_email); setActiveTab('invites'); }} style={{
+                              padding: '4px 10px', background: '#f0f0f0', border: '1px solid #ddd',
+                              borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
+                            }}>Re-invite</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {invites.length === 0 && (
+                <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No invites sent yet</div>
+              )}
+            </div>
           </div>
         </div>
       )}

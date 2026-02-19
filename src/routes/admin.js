@@ -186,4 +186,43 @@ router.get("/activity", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/search-email — Search across users, waitlist, and invites ───
+router.get("/search-email", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ error: "Email query parameter required" });
+
+    const db = await getDb();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const [user, waitlistEntry, invite] = await Promise.all([
+      db.prepare(`
+        SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, created_at
+        FROM users WHERE LOWER(email) = ?
+      `).get(normalizedEmail),
+      db.prepare(`
+        SELECT id, email, name, role, source, created_at
+        FROM waitlist WHERE LOWER(email) = ?
+      `).get(normalizedEmail),
+      db.prepare(`
+        SELECT pi.id, pi.invited_email, pi.role, pi.status, pi.expires_at, pi.created_at,
+               u.first_name AS inviter_first_name, u.last_name AS inviter_last_name
+        FROM platform_invites pi
+        JOIN users u ON pi.invited_by = u.id
+        WHERE LOWER(pi.invited_email) = ?
+        ORDER BY pi.created_at DESC LIMIT 1
+      `).get(normalizedEmail),
+    ]);
+
+    res.json({
+      user: user || null,
+      waitlist: waitlistEntry || null,
+      invite: invite || null,
+    });
+  } catch (err) {
+    console.error("Admin search-email error:", err);
+    res.status(500).json({ error: "Failed to search" });
+  }
+});
+
 module.exports = router;

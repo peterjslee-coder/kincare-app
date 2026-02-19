@@ -230,6 +230,10 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
   const {
     bio, yearsExperience, hourlyRate, specialties,
     certifications, maxTravelMiles, city, state, address,
+    // Checkr / onboarding fields
+    legalFirstName, legalLastName, dateOfBirth, ssnLast4,
+    addressLine1, addressLine2, zip, dlNumber, dlState,
+    backgroundCheckConsent,
   } = req.body;
 
   if (!hourlyRate) {
@@ -266,6 +270,17 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
         location_state = COALESCE(?, location_state),
         latitude = COALESCE(?, latitude),
         longitude = COALESCE(?, longitude),
+        legal_first_name = COALESCE(?, legal_first_name),
+        legal_last_name = COALESCE(?, legal_last_name),
+        date_of_birth = COALESCE(?, date_of_birth),
+        ssn_last4 = COALESCE(?, ssn_last4),
+        address_line1 = COALESCE(?, address_line1),
+        address_line2 = COALESCE(?, address_line2),
+        zip = COALESCE(?, zip),
+        dl_number = COALESCE(?, dl_number),
+        dl_state = COALESCE(?, dl_state),
+        background_check_consent = COALESCE(?, background_check_consent),
+        background_check_consent_at = CASE WHEN ? = 1 THEN NOW() ELSE background_check_consent_at END,
         updated_at = NOW()
       WHERE user_id = ?
     `).run(
@@ -274,6 +289,11 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       certifications ? JSON.stringify(certifications) : null,
       maxTravelMiles, city, state,
       lat, lng,
+      legalFirstName || null, legalLastName || null,
+      dateOfBirth || null, ssnLast4 || null,
+      addressLine1 || null, addressLine2 || null, zip || null,
+      dlNumber || null, dlState || null,
+      backgroundCheckConsent ? 1 : null, backgroundCheckConsent ? 1 : 0,
       req.user.id
     );
 
@@ -287,14 +307,21 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     INSERT INTO caregiver_profiles
     (id, user_id, bio, years_experience, hourly_rate, specialties,
      certifications, max_travel_miles, location_city, location_state,
-     latitude, longitude)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     latitude, longitude, legal_first_name, legal_last_name,
+     date_of_birth, ssn_last4, address_line1, address_line2, zip,
+     dl_number, dl_state, background_check_consent, background_check_consent_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"})
   `).run(
     id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
     JSON.stringify(specialties || []),
     JSON.stringify(certifications || []),
     maxTravelMiles || 10, city || null, state || null,
-    lat, lng
+    lat, lng,
+    legalFirstName || null, legalLastName || null,
+    dateOfBirth || null, ssnLast4 || null,
+    addressLine1 || null, addressLine2 || null, zip || null,
+    dlNumber || null, dlState || null,
+    backgroundCheckConsent ? 1 : 0
   );
 
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);

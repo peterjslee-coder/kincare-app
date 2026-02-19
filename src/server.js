@@ -123,6 +123,8 @@ app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 app.use("/api/availability", require("./routes/availability"));
 app.use("/api/admin", require("./routes/admin"));
+app.use("/api/platform-invites", require("./routes/platformInvites"));
+app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
 
 // ─── Health check ───
 app.get("/api/health", (req, res) => {

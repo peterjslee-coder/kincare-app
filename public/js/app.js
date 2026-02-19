@@ -165,6 +165,7 @@ const App = () => {
   const [resetToken, setResetToken] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState(null);
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
+  const [platformInviteToken, setPlatformInviteToken] = useState(null);
   const [selectedCareTeamId, setSelectedCareTeamId] = useState(null);
 
   useEffect(() => {
@@ -222,6 +223,14 @@ const App = () => {
     const inviteToken = params.get('invite');
     if (inviteToken) {
       setPendingInviteToken(inviteToken);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    // Check for platform (onboarding) invite token
+    const pInvite = params.get('platformInvite');
+    if (pInvite) {
+      setPlatformInviteToken(pInvite);
+      setAppState('platform-onboarding');
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -288,6 +297,35 @@ const App = () => {
     setCurrentPage(page);
     setSidebarOpen(false);
   };
+
+  // Platform invite onboarding flow (caregiver, family, or care_for)
+  if (appState === 'platform-onboarding' && platformInviteToken) {
+    return <CaregiverOnboarding inviteToken={platformInviteToken} onComplete={(token) => {
+      setPlatformInviteToken(null);
+      // Restore user from the token
+      if (token) {
+        AUTH_TOKEN = token;
+        localStorage.setItem('auth_token', token);
+        if (typeof connectSocket === 'function') connectSocket(token);
+        apiFetch('/api/auth/me').then(async r => {
+          if (r?.ok) {
+            const data = await r.json();
+            if (data.user) {
+              setCurrentUser({
+                id: data.user.id, email: data.user.email, role: data.user.role,
+                firstName: data.user.first_name, lastName: data.user.last_name,
+                emailVerified: !!data.user.email_verified, isDemo: false,
+                isAdmin: !!data.user.is_admin,
+              });
+              setAppState('app');
+            }
+          }
+        }).catch(() => setAppState('splash'));
+      } else {
+        setAppState('splash');
+      }
+    }} />;
+  }
 
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} />;
   if (appState === 'demo') return <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />;
