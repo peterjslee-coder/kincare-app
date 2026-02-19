@@ -1,0 +1,180 @@
+// ─── Demo Account Picker Page ───
+// Shown when visitors click "View Live Demo" on the splash page.
+// Lets them pick which demo persona to log in as — no confusion with registration.
+const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
+  const [loading, setLoading] = React.useState(null); // email of account being logged in
+
+  const demoAccounts = [
+    {
+      email: 'pete@inplace.care',
+      label: 'Pete Lee',
+      role: 'Family (Care Team)',
+      color: '#1b6b5a',
+      icon: '👨‍👩‍👧',
+      description: 'You\'re managing care for your 78-year-old mother Betty, who has early-stage dementia. See the full dashboard — scheduling, caregiver management, care profile, messaging, and analytics.',
+    },
+    {
+      email: 'david.lee@inplace.care',
+      label: 'David Lee',
+      role: 'Sibling (Care Team)',
+      color: '#1b6b5a',
+      icon: '👨',
+      description: 'You\'re Pete\'s brother, helping coordinate care for Mom. You share the same dashboard and can manage Betty\'s schedule and caregivers alongside Pete.',
+    },
+    {
+      email: 'susan.lee@inplace.care',
+      label: 'Susan Lee',
+      role: 'Sibling (Care Team)',
+      color: '#1b6b5a',
+      icon: '👩',
+      description: 'You\'re Pete\'s sister and part of the care team. Same full access to scheduling, messaging, and caregiver management for Betty.',
+    },
+    {
+      email: 'maria@inplace.care',
+      label: 'Maria Santos',
+      role: 'Professional Caregiver',
+      color: '#2e7d6d',
+      icon: '👩‍⚕️',
+      description: 'You\'re a professional caregiver assigned to the Lee family. See your schedule, earnings, assigned families, area map, and client reviews.',
+    },
+    {
+      email: 'betty@inplace.care',
+      label: 'Betty Lee',
+      role: 'Care Recipient',
+      color: '#e8724a',
+      icon: '👵',
+      description: 'You\'re the person receiving care — Pete\'s mother. See your upcoming visits on a simple calendar and write personal notes for your caregivers.',
+    },
+  ];
+
+  const handleDemoLogin = async (account) => {
+    setLoading(account.email);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: account.email, password: 'inplace123' }),
+      });
+      const data = await res.json();
+      if (data.token) {
+        setAuthToken(data.token);
+        if (window.connectSocket) connectSocket(data.token);
+        onLogin(data.user || { role: 'family' });
+      } else {
+        setLoading(null);
+      }
+    } catch (err) {
+      console.error('Demo login failed:', err);
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f8f9fa' }}>
+      {/* Header */}
+      <nav style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '16px 24px', background: 'white', borderBottom: '1px solid #e8e8e8',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => onNavigate('splash')}>
+          <InPlaceIcon width={32} height={32} />
+          <span style={{ fontSize: '20px', fontWeight: 700 }}>
+            <span style={{ color: '#1b6b5a' }}>in</span><span style={{ color: '#333' }}>Place</span>
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button onClick={() => onNavigate('login')} style={{
+            padding: '8px 20px', fontSize: '14px', fontWeight: 600,
+            background: 'transparent', color: '#1b6b5a', border: '1.5px solid #1b6b5a',
+            borderRadius: '6px', cursor: 'pointer',
+          }}>Sign In</button>
+          <button onClick={() => onNavigate('register')} style={{
+            padding: '8px 20px', fontSize: '14px', fontWeight: 600,
+            background: '#1b6b5a', color: 'white', border: 'none',
+            borderRadius: '6px', cursor: 'pointer',
+          }}>Sign Up</button>
+        </div>
+      </nav>
+
+      {/* Content */}
+      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '48px 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <h1 style={{ fontSize: '32px', color: '#1b6b5a', marginBottom: '12px', fontWeight: 700 }}>
+            Try the Live Demo
+          </h1>
+          <p style={{ fontSize: '17px', color: '#666', maxWidth: '560px', margin: '0 auto', lineHeight: 1.6 }}>
+            Choose a persona below to explore inPlace from their perspective. Each role sees a different dashboard and set of features. No sign-up required.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {demoAccounts.map((account) => (
+            <button
+              key={account.email}
+              onClick={() => handleDemoLogin(account)}
+              disabled={loading !== null}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '20px',
+                padding: '24px 28px', background: 'white', border: '2px solid #e8e8e8',
+                borderRadius: '12px', cursor: loading ? 'wait' : 'pointer',
+                textAlign: 'left', transition: 'all 0.2s', width: '100%',
+                opacity: loading && loading !== account.email ? 0.5 : 1,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+              }}
+              onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.borderColor = account.color; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)'; }}}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e8e8e8'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; }}
+            >
+              {/* Avatar */}
+              <div style={{
+                width: '56px', height: '56px', borderRadius: '50%',
+                background: account.color, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontSize: '28px', flexShrink: 0,
+              }}>
+                {account.icon}
+              </div>
+
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '17px', fontWeight: 700, color: '#333' }}>
+                    {account.label}
+                  </span>
+                  <span style={{
+                    fontSize: '12px', fontWeight: 600, color: account.color,
+                    background: account.color + '15', padding: '3px 10px',
+                    borderRadius: '12px', whiteSpace: 'nowrap',
+                  }}>
+                    {account.role}
+                  </span>
+                </div>
+                <div style={{ fontSize: '14px', color: '#666', lineHeight: 1.5 }}>
+                  {account.description}
+                </div>
+              </div>
+
+              {/* Arrow / Loading */}
+              <div style={{ flexShrink: 0, color: '#999', fontSize: '20px' }}>
+                {loading === account.email ? (
+                  <div style={{
+                    width: '24px', height: '24px', border: '3px solid #ddd',
+                    borderTopColor: account.color, borderRadius: '50%',
+                    animation: 'spin 0.6s linear infinite',
+                  }} />
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Footer note */}
+        <div style={{ textAlign: 'center', marginTop: '32px', color: '#999', fontSize: '13px' }}>
+          All demo accounts use password <strong style={{ color: '#666' }}>inplace123</strong> — or just click any card above.
+        </div>
+      </div>
+    </div>
+  );
+};

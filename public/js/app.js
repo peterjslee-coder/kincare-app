@@ -186,6 +186,7 @@ const App = () => {
   };
 
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} />;
+  if (appState === 'demo') return <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />;
   if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
   if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} />;
   if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;

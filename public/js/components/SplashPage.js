@@ -115,7 +115,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
 
           {/* Primary CTA */}
           <div className="hero-cta" style={{ marginBottom: '32px' }}>
-            <button onClick={() => onNavigate('login')} style={{
+            <button onClick={() => onNavigate('demo')} style={{
               padding: '16px 48px', fontSize: '18px', fontWeight: 600,
               background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '8px',
               cursor: 'pointer', transition: 'all 0.3s',
@@ -320,7 +320,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             inPlace is live today with three working logins — family, caregiver, and care recipient. Real scheduling, real messaging, real caregiver matching. See it for yourself.
           </p>
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
-            <button onClick={() => onNavigate('login')} style={{
+            <button onClick={() => onNavigate('demo')} style={{
               padding: '16px 40px', fontSize: '18px', fontWeight: 600,
               background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '8px',
               cursor: 'pointer', transition: 'all 0.3s',

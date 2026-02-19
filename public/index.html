@@ -19,7 +19,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=1.2.1">
+  <link rel="stylesheet" href="/css/styles.css?v=1.2.2">
 </head>
 <body>
   <div id="root"></div>
@@ -63,11 +63,12 @@
         '/js/components/AreaMap.js',
         '/js/components/Analytics.js',
         '/js/components/EmailVerificationBanner.js',
+        '/js/components/DemoPickerPage.js',
         '/js/app.js'
       ];
       try {
         var sources = await Promise.all(
-          scripts.map(function(url) { return fetch(url + '?v=1.2.1').then(function(r) { return r.text(); }); })
+          scripts.map(function(url) { return fetch(url + '?v=1.2.2').then(function(r) { return r.text(); }); })
         );
         var combined = sources.join('\n;\n');
         var compiled = Babel.transform(combined, { presets: ['react'] }).code;
