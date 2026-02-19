@@ -198,21 +198,25 @@ async function start() {
   const userCount = await db.prepare("SELECT COUNT(*) as count FROM users").get();
   const { seed, DEMO_SEED_VERSION } = require("./seed");
 
-  if (parseInt(userCount.count) === 0) {
-    console.log("  Empty database detected — running seed...");
-    await seed();
-    console.log("  Seed complete");
-  } else {
-    // Check if demo data version is current — re-seed if stale
-    const versionRow = await db.prepare(
-      "SELECT name FROM waitlist WHERE email = '_seed_version@inplace.internal' LIMIT 1"
-    ).get();
-    const currentVersion = versionRow ? versionRow.name : null;
-    if (currentVersion !== DEMO_SEED_VERSION) {
-      console.log(`  Demo data stale (${currentVersion || 'none'} → ${DEMO_SEED_VERSION}) — re-seeding...`);
+  try {
+    if (parseInt(userCount.count) === 0) {
+      console.log("  Empty database detected — running seed...");
       await seed();
-      console.log("  Re-seed complete");
+      console.log("  Seed complete");
+    } else {
+      // Check if demo data version is current — re-seed if stale
+      const versionRow = await db.prepare(
+        "SELECT name FROM waitlist WHERE email = '_seed_version@inplace.internal' LIMIT 1"
+      ).get();
+      const currentVersion = versionRow ? versionRow.name : null;
+      if (currentVersion !== DEMO_SEED_VERSION) {
+        console.log(`  Demo data stale (${currentVersion || 'none'} → ${DEMO_SEED_VERSION}) — re-seeding...`);
+        await seed();
+        console.log("  Re-seed complete");
+      }
     }
+  } catch (seedErr) {
+    console.error("  ⚠️  Seed failed — starting server anyway:", seedErr.message);
   }
 
   server.listen(PORT, "0.0.0.0", () => {

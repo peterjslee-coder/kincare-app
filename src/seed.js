@@ -18,22 +18,19 @@ async function seed() {
   await initializeDatabase();
   const db = await getDb();
 
-  // Clear existing data (reverse dependency order — all FK children before parents)
-  const tables = [
-    "trusted_devices", "user_2fa", "oauth_accounts",
-    "conversation_members", "conversations",
-    "care_team_invites", "care_team_members", "care_teams",
-    "care_recipient_shares", "push_subscriptions",
-    "caregiver_assignments", "recipient_notes", "messages",
-    "visit_photos", "visit_logs", "activity_feed", "reviews",
-    "payments", "care_sessions", "availability",
-    "caregiver_documents", "platform_invites",
-    "password_reset_tokens", "email_verification_tokens",
-    "caregiver_profiles", "care_recipients", "users", "waitlist",
-  ];
-  for (const table of tables) {
-    await db.prepare(`DELETE FROM ${table}`).run();
-  }
+  // Clear ALL data in one shot — TRUNCATE CASCADE handles FK order automatically
+  await db.exec(`TRUNCATE
+    trusted_devices, user_2fa, oauth_accounts,
+    conversation_members, conversations,
+    care_team_invites, care_team_members, care_teams,
+    care_recipient_shares, push_subscriptions,
+    caregiver_assignments, recipient_notes, messages,
+    visit_photos, visit_logs, activity_feed, reviews,
+    payments, care_sessions, availability,
+    caregiver_documents, platform_invites,
+    password_reset_tokens, email_verification_tokens,
+    caregiver_profiles, care_recipients, users, waitlist
+  CASCADE`);
 
   // ─── Users ───
   const passwordHash = await bcrypt.hash("inplace123", 10);
