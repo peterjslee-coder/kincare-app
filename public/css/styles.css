@@ -2125,6 +2125,167 @@
       to { transform: translateY(0); opacity: 1; }
     }
 
+    /* ===== Demo Mode Banner ===== */
+    .demo-mode-banner {
+      background: linear-gradient(135deg, #2c3e50 0%, #1a2332 100%);
+      color: #fff;
+      z-index: 1200;
+      flex-shrink: 0;
+      width: 100%;
+    }
+
+    .demo-mode-banner-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 20px;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    .demo-mode-label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #e8724a;
+      background: rgba(232, 114, 74, 0.15);
+      padding: 3px 10px;
+      border-radius: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .demo-mode-accounts {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .demo-mode-accounts::-webkit-scrollbar {
+      display: none;
+    }
+
+    .demo-mode-chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 16px;
+      border: 1.5px solid rgba(255,255,255,0.15);
+      background: transparent;
+      color: rgba(255,255,255,0.7);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .demo-mode-chip:hover:not(:disabled) {
+      border-color: rgba(255,255,255,0.4);
+      color: #fff;
+      background: rgba(255,255,255,0.08);
+    }
+
+    .demo-mode-chip.active {
+      border-color: var(--chip-color, #1b6b5a);
+      background: var(--chip-color, #1b6b5a);
+      color: #fff;
+      font-weight: 600;
+      cursor: default;
+    }
+
+    .demo-mode-chip:disabled:not(.active) {
+      opacity: 0.4;
+      cursor: wait;
+    }
+
+    .demo-mode-chip-icon {
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .demo-mode-chip-label {
+      line-height: 1;
+    }
+
+    .demo-mode-chip-spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    .demo-mode-exit {
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      background: transparent;
+      color: rgba(255,255,255,0.8);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .demo-mode-exit:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: rgba(255,255,255,0.4);
+      color: #fff;
+    }
+
+    /* When demo mode is active, stack banner above sidebar+main */
+    .app-container.demo-mode-active {
+      flex-direction: column;
+    }
+
+    .demo-mode-body {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* Mobile adjustments for demo banner */
+    @media (max-width: 768px) {
+      .demo-mode-banner-inner {
+        padding: 6px 12px;
+        gap: 8px;
+      }
+
+      .demo-mode-chip-label {
+        display: none;
+      }
+
+      .demo-mode-chip {
+        padding: 4px 6px;
+        gap: 0;
+      }
+
+      .demo-mode-chip-icon {
+        font-size: 16px;
+      }
+
+      .demo-mode-body {
+        flex-direction: column;
+        overflow-y: auto;
+      }
+
+      .demo-mode-active .bottom-nav {
+        z-index: 1201;
+      }
+    }
+
     /* ===== Standalone PWA: adjust for no browser chrome ===== */
     @media all and (display-mode: standalone) {
       .splash-page {

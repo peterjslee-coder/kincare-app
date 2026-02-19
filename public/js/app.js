@@ -79,6 +79,76 @@ const OfflineIndicator = window.OfflineIndicator = () => {
   );
 };
 
+// ─── Demo Mode Banner ───
+// Persistent header bar when logged in as a demo account.
+// Shows current persona, quick-switch buttons for other demo accounts, and Exit Demo button.
+const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, onExit }) => {
+  const [switching, setSwitching] = useState(null);
+
+  const demoAccounts = [
+    { email: 'pete@inplace.care', label: 'Pete', icon: '👨‍👩‍👧', color: '#1b6b5a' },
+    { email: 'david.lee@inplace.care', label: 'David', icon: '👨', color: '#1b6b5a' },
+    { email: 'susan.lee@inplace.care', label: 'Susan', icon: '👩', color: '#1b6b5a' },
+    { email: 'maria@inplace.care', label: 'Maria', icon: '👩‍⚕️', color: '#2e7d6d' },
+    { email: 'betty@inplace.care', label: 'Betty', icon: '👵', color: '#e8724a' },
+  ];
+
+  const handleSwitch = async (account) => {
+    if (account.email === currentUser?.email) return;
+    setSwitching(account.email);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: account.email, password: 'inplace123' }),
+      });
+      const data = await res.json();
+      if (data.token) {
+        setAuthToken(data.token);
+        if (window.connectSocket) connectSocket(data.token);
+        onSwitchAccount(data.user || { role: 'family' });
+      }
+    } catch (err) {
+      console.error('Demo switch failed:', err);
+    }
+    setSwitching(null);
+  };
+
+  return (
+    <div className="demo-mode-banner">
+      <div className="demo-mode-banner-inner">
+        <span className="demo-mode-label">DEMO</span>
+        <div className="demo-mode-accounts">
+          {demoAccounts.map((account) => {
+            const isActive = account.email === currentUser?.email;
+            const isLoading = switching === account.email;
+            return (
+              <button
+                key={account.email}
+                onClick={() => handleSwitch(account)}
+                disabled={isActive || switching !== null}
+                className={`demo-mode-chip ${isActive ? 'active' : ''}`}
+                style={{ '--chip-color': account.color }}
+                title={`Switch to ${account.label}`}
+              >
+                {isLoading ? (
+                  <span className="demo-mode-chip-spinner" />
+                ) : (
+                  <span className="demo-mode-chip-icon">{account.icon}</span>
+                )}
+                <span className="demo-mode-chip-label">{account.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <button className="demo-mode-exit" onClick={onExit}>
+          Exit Demo
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // Main App Component — role-aware routing & sidebar
 const App = () => {
   const [appState, setAppState] = useState('splash');
@@ -191,6 +261,19 @@ const App = () => {
     if (typeof disconnectSocket === 'function') disconnectSocket();
   };
 
+  const handleExitDemo = () => {
+    setCurrentUser(null);
+    setAuthToken(null);
+    setCurrentPage('dashboard');
+    setAppState('demo');
+    if (typeof disconnectSocket === 'function') disconnectSocket();
+  };
+
+  const handleDemoSwitch = (user) => {
+    setCurrentUser(user);
+    setCurrentPage('dashboard');
+  };
+
   const handleNavigate = (page) => {
     setAppState(page);
   };
@@ -299,8 +382,10 @@ const App = () => {
     ];
   };
 
-  return (
-    <div className="app-container">
+  const isDemo = currentUser?.isDemo;
+
+  const appContent = (
+    <React.Fragment>
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-logo">
@@ -332,8 +417,8 @@ const App = () => {
           <div style={{ padding: '8px 16px', fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>
             {currentUser?.firstName || 'User'} {currentUser?.lastName || ''}
           </div>
-          <button className="nav-link" onClick={handleLogout}>
-            <span className="nav-icon">🚪</span> Logout
+          <button className="nav-link" onClick={isDemo ? handleExitDemo : handleLogout}>
+            <span className="nav-icon">{isDemo ? '🚪' : '🚪'}</span> {isDemo ? 'Exit Demo' : 'Logout'}
           </button>
         </div>
       </aside>
@@ -352,7 +437,7 @@ const App = () => {
             <button onClick={() => setVerifyMessage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'inherit' }}>&times;</button>
           </div>
         )}
-        {currentUser && currentUser.emailVerified === false && !verifyMessage && (
+        {currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && (
           <EmailVerificationBanner userId={currentUser.id} />
         )}
         {renderPage()}
@@ -369,6 +454,19 @@ const App = () => {
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
       <PWAInstallBanner />
       <OfflineIndicator />
+    </React.Fragment>
+  );
+
+  return (
+    <div className={`app-container ${isDemo ? 'demo-mode-active' : ''}`}>
+      {isDemo && (
+        <DemoModeBanner currentUser={currentUser} onSwitchAccount={handleDemoSwitch} onExit={handleExitDemo} />
+      )}
+      {isDemo ? (
+        <div className="demo-mode-body">{appContent}</div>
+      ) : (
+        appContent
+      )}
     </div>
   );
 };
