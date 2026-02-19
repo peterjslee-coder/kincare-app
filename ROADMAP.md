@@ -223,6 +223,18 @@
 - Leaflet + OpenStreetMap tiles (free, no API key) — designed so tile provider and geocoder are each swappable in one line
 - Cache version bumped to v1.2.0, 53 tests passing
 
+### v1.3.0 — Admin Dashboard & Plausible Analytics (2026-02-19)
+- `is_admin` column migration on users table, `requireAdmin` middleware in auth.js
+- New `src/routes/admin.js` with 4 admin-only endpoints: `/api/admin/stats`, `/api/admin/users` (search/filter/pagination), `/api/admin/waitlist`, `/api/admin/activity`
+- Login and GET /me now return `isAdmin` flag in user response
+- `AdminPanel.js` frontend component — 4-tab interface: Overview (stat cards + signup/waitlist trend charts + sessions by status), Users (searchable/filterable table with role badges), Waitlist (sortable table with CSV export), Activity (recent registrations, sessions, waitlist signups)
+- Sidebar "Admin" link (shield icon) only visible when `user.is_admin === 1`
+- Auto-restore user session on page reload: app now calls `/api/auth/me` when a saved token exists in localStorage (previously required re-login)
+- Plausible Analytics script tag added to index.html for privacy-friendly site traffic tracking (page views, referrers, geography, no cookies). Admin panel links to Plausible dashboard.
+- Demo picker page: "View Live Demo" button on splash now leads to dedicated account picker instead of login page
+- CaretakerHub: replaced notional SVG map with real Leaflet/OpenStreetMap AreaMap component
+- Cache version bumped to v1.3.0, 53 tests passing
+
 ### v1.1.1 — Splash Page Rework (2026-02-18)
 - Splash page layout reorganized: pitch content (Problem → Solution → Market → Business Model → Personal Story → Vision → Working Product CTA) all pushed higher; audience sections (For Family, For Care Recipients, For Caregivers) grouped chronologically near the bottom
 - "For Caregivers" hero button styling fixed: now matches "For Family" and "For Care Recipients" (white text, transparent bg) instead of orange-tinted outlier
@@ -250,13 +262,20 @@
 
 ---
 
-## Next Up — v1.3.0: Payments & Marketplace
+## Next Up — v1.4.0: Payments & Marketplace
 
 Priority: **HIGH** — Enable real transactions.
 
 - [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
 - [ ] **Caregiver earnings dashboard:** Payment history, pending payouts, tax summary
 - [ ] **Family billing:** Payment methods, invoices, spending history
+
+---
+
+## Setup Tasks (no code needed)
+
+- [ ] **Plausible Analytics:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html. $9/mo for up to 10K pageviews. 30-day free trial available. Admin panel has a direct link to the Plausible dashboard.
+- [ ] **Set is_admin on Pete's account:** Run `UPDATE users SET is_admin = 1 WHERE email = 'peterjslee@gmail.com';` in Railway Postgres console (Data tab → Query).
 
 ---
 
@@ -267,4 +286,3 @@ Priority: **MEDIUM** — Scale and polish.
 - [ ] **Google Maps geocoding upgrade:** Swap Nominatim for Google Maps for better residential address accuracy (one function change)
 - [ ] **Build step for frontend:** Move to Vite when component count demands it
 - [ ] **Apple Sign-In:** After Google OAuth is proven
-- [ ] **Admin dashboard:** User management, flagging accounts

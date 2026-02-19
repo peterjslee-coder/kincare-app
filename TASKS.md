@@ -13,6 +13,8 @@
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
+- [x] ~~**Admin / Superuser Dashboard (v1.3.0):** Done. Pete's real account gets `is_admin` flag → "Admin" sidebar section with: Overview (stat cards + trend charts), Users (searchable table), Waitlist (with CSV export), Activity (recent registrations/sessions/signups). Plausible Analytics script added for site traffic. Auto-restore user session on page reload.~~
+- [ ] **Plausible Analytics setup:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html. Then set `is_admin = 1` on Pete's real account in Railway Postgres so the admin panel (with Plausible dashboard link) is visible.
 - [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
 - [ ] **Upgrade to Google Maps geocoding:** Swap Nominatim → Google Maps for better residential accuracy when ready for production
 
