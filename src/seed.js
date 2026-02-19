@@ -9,6 +9,9 @@ const bcrypt = require("bcryptjs");
 const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
+// Bump this whenever seed data changes — triggers auto-reseed on deploy
+const DEMO_SEED_VERSION = '1.4.1';
+
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
 
@@ -25,6 +28,7 @@ async function seed() {
     "visit_photos", "visit_logs", "activity_feed", "reviews",
     "payments", "care_sessions", "availability",
     "caregiver_profiles", "care_recipients", "users", "waitlist",
+    "platform_invites",
   ];
   for (const table of tables) {
     await db.prepare(`DELETE FROM ${table}`).run();
@@ -714,6 +718,15 @@ async function seed() {
 
   console.log("✅ Care team conversation created (Betty's team with 6 group messages)");
 
+  // ─── Seed Version Marker ───
+  // Store version in waitlist with special internal email so server.js can detect stale demo data
+  await db.prepare(`
+    INSERT INTO waitlist (id, email, name, created_at)
+    VALUES (?, '_seed_version@inplace.internal', ?, NOW())
+    ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+  `).run(uuid(), DEMO_SEED_VERSION);
+
+  console.log(`✅ Seed version marker set: ${DEMO_SEED_VERSION}`);
   console.log("\n🎉 Seed complete! Database ready.\n");
   console.log("Demo logins:");
   console.log("  Care Team:       pete@inplace.care       / inplace123");
@@ -725,7 +738,7 @@ async function seed() {
 }
 
 // Export for in-process seeding from server.js
-module.exports = { seed };
+module.exports = { seed, DEMO_SEED_VERSION };
 
 // Run directly if called from CLI (npm run seed)
 if (require.main === module) {

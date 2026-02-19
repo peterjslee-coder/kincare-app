@@ -193,15 +193,26 @@ app.use((err, req, res, next) => {
 async function start() {
   await initializeDatabase();
 
-  // Auto-seed if database is empty (first deploy)
+  // Auto-seed if database is empty OR demo data is stale
   const db = await getDb();
   const userCount = await db.prepare("SELECT COUNT(*) as count FROM users").get();
+  const { seed, DEMO_SEED_VERSION } = require("./seed");
+
   if (parseInt(userCount.count) === 0) {
     console.log("  Empty database detected — running seed...");
-    // Run seed in-process (PostgreSQL is shared, no need for child process)
-    const { seed } = require("./seed");
     await seed();
     console.log("  Seed complete");
+  } else {
+    // Check if demo data version is current — re-seed if stale
+    const versionRow = await db.prepare(
+      "SELECT name FROM waitlist WHERE email = '_seed_version@inplace.internal' LIMIT 1"
+    ).get();
+    const currentVersion = versionRow ? versionRow.name : null;
+    if (currentVersion !== DEMO_SEED_VERSION) {
+      console.log(`  Demo data stale (${currentVersion || 'none'} → ${DEMO_SEED_VERSION}) — re-seeding...`);
+      await seed();
+      console.log("  Re-seed complete");
+    }
   }
 
   server.listen(PORT, "0.0.0.0", () => {

@@ -13,17 +13,11 @@
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
-- [x] ~~**Admin / Superuser Dashboard (v1.3.0):** Done. Pete's real account gets `is_admin` flag → "Admin" sidebar section with: Overview (stat cards + trend charts), Users (searchable table), Waitlist (with CSV export), Activity (recent registrations/sessions/signups). Plausible Analytics script added for site traffic. Auto-restore user session on page reload.~~
-- [x] ~~**Demo Mode UX (v1.3.1–v1.3.4):** Done. Demo mode banner with account switcher chips (Pete/Maria/Betty) and "Exit Demo" button. Demo tokens stored in memory only (no localStorage persistence). Email verification banner suppressed in demo. Removed dev login section and demo credential hints from splash page. Auto-restore guard clears demo tokens on page refresh. Backfilled `is_demo` flag for demo accounts in production DB. Added Leaflet CDN to index.html so maps actually render.~~
-- [x] ~~**PWA Icons Regenerated (v1.3.5):** Done. Regenerated all PWA icons at 8 sizes (48–512px) for both regular and maskable variants. Updated manifest.json with all 16 icon entries. Cache-busted SW registration URL.~~
-- [x] ~~**Demo Personas Simplified (v1.3.6):** Done. Removed David and Susan from demo picker and demo banner switcher. Demo now shows 3 personas: Pete (family), Maria (caregiver), Betty (care recipient). Existing messages/data involving David and Susan remain in the database.~~
-- [x] ~~**Admin auto-promotion:** Done. Pete's real account (`peterjslee@gmail.com`) auto-promoted to admin via migration in database.js — no manual SQL needed.~~
 - [ ] **Plausible Analytics setup:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html.
 - [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
 - [ ] **Upgrade to Google Maps geocoding:** Swap Nominatim → Google Maps for better residential accuracy when ready for production
-- [x] ~~**Demo data: Maria's earnings & calendar saturation (v1.3.7):** Done. Maria's rate bumped to $34/hr, ~19 past completed sessions totaling ~$3,890 (half-time). Full 8-hour day with Betty on Feb 12, upcoming 8-hour day Feb 24. Calendar heat map shows saturation shading.~~
-- [x] ~~**Caregiver availability rules engine (v1.3.7):** Done. New `/api/availability` CRUD + slot computation. Caregivers set recurring available/blocked rules per day, one-off date overrides, notes. `computeAvailableSlots()` resolves available windows minus blocked rules minus booked sessions. Backend validates caregiver availability on session creation.~~
-- [x] ~~**Scheduling UX overhaul (v1.3.7):** Done. CaretakerHub "Availability" tab with weekly grid view + rule management (add/edit/delete recurring and one-off rules). RequestCareModal and CaregiverScheduleModal now use API-driven availability instead of hardcoded data. Real slot computation from DB.~~
+- [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes 20% fee)
+- [ ] **S3/R2 for visit photos:** Replace base64 PostgreSQL storage with object storage
 
 
 ## Production Path — Beta on Phone
@@ -57,6 +51,29 @@
 
 ## Done
 
+### Calendar Unification & Care Requests (v1.4.1)
+- [x] **CaregiverCalendar query fix:** Changed `?start=X&end=Y` to `?from=X&to=Y` so Maria's bookings load correctly.
+- [x] **Admin invite auto-search:** useEffect triggers search when switching to invites tab from waitlist with pre-filled email.
+- [x] **CaretakerHub earnings overhaul:** Earnings tab fetches completed sessions from API, shows itemized breakdown table (date, client, service, hours, amount).
+- [x] **AvailabilityTab rewrite:** Replaced weekly hourly grid with month calendar view matching Schedule.js. Day-click editing for availability rules.
+- [x] **CaredForView rewrite:** Betty's calendar is now a real month calendar. Pink = seeking help, Blue = confirmed. "Request Care" form on day click.
+- [x] **Care request system:** `status='requested'` sessions, POST /api/sessions/request, PUT /api/sessions/:id/claim with WebSocket notifications.
+- [x] **CaregiverCalendar care requests:** Pink cells for care requests in weekly grid, "Accept" button in day detail panel.
+- [x] **Seed data:** 4 care request sessions for Betty (Feb 22, 26, Mar 1, Mar 4).
+
+### Admin Invites & Caregiver Onboarding (v1.4.0)
+- [x] **Admin invite system:** Admin panel "Invites" tab — search any email across users/waitlist/invites, send branded invitation emails via Resend, track invite status.
+- [x] **Platform invites table:** `platform_invites` table with token-based accept flow, 7-day expiry.
+- [x] **Caregiver onboarding wizard:** `CaregiverOnboarding.js` — 5-step wizard for new caregiver registration.
+- [x] **Waitlist-to-invite flow:** Click "Invite" on any waitlist entry → auto-populates invite tab with their email.
+
+### Availability Engine & Scheduling UX (v1.3.7–v1.3.9)
+- [x] **Maria earnings bump:** Rate $28→$34/hr, ~19 past completed sessions (~$3,890 monthly), 8-hour days for calendar saturation.
+- [x] **Availability rules engine:** New `availability` table with CRUD, `computeAvailableSlots()`, backend validation on booking.
+- [x] **CaretakerHub Availability tab:** Weekly grid with color-coded cells, rule management modals.
+- [x] **CaregiverCalendar component:** Weekly calendar with availability overlay (green/blue/red/gray), hour-by-hour grid, week navigation.
+- [x] **API-driven scheduling modals:** RequestCareModal and CaregiverScheduleModal fetch real availability instead of hardcoded data.
+
 ### Demo Mode UX & PWA Fixes (v1.3.1–v1.3.6)
 - [x] **Demo mode banner (v1.3.1):** DemoModeBanner component with account switcher chips and "Exit Demo" button. Sidebar logout says "Exit Demo" in demo mode. Email verification banner suppressed for demo users.
 - [x] **Splash cleanup (v1.3.2):** Removed "Dev Login" section, demo credential hints from hero and working product CTA. Added auto-restore guard that clears demo tokens on page refresh.
@@ -65,14 +82,6 @@
 - [x] **PWA icons (v1.3.5):** Regenerated all icons at 8 sizes (48, 72, 96, 128, 144, 192, 384, 512px) for both regular and maskable variants. Updated manifest.json with 16 icon entries. Cache-busted SW registration (`/sw.js?v=X.Y.Z`). Added 32px favicon.
 - [x] **Demo simplification (v1.3.6):** Removed David Lee and Susan Lee from demo picker page and demo banner switcher. Demo now shows 3 personas: Pete (family), Maria (caregiver), Betty (care recipient). David/Susan data remains in DB for message history.
 - [x] **Admin auto-migration:** `is_admin = 1` auto-set for `peterjslee@gmail.com` on every server start via migration in database.js.
-
-### Availability Engine & Scheduling UX (v1.3.7)
-- [x] **Maria earnings bump:** Rate $28→$34/hr, ~19 past completed sessions (~$3,890 monthly), 8-hour days for calendar saturation.
-- [x] **Availability rules engine:** New `availability` table with `type` (available/blocked) and `note` columns. `/api/availability` CRUD with ownership checks. `computeAvailableSlots()` builds minute-level availability map, subtracts blocked rules and booked sessions, returns 1-hour slots.
-- [x] **CaretakerHub Availability tab:** Weekly grid (6am-8pm, 7 days) with color-coded cells. Recurring rules list and one-off overrides. Add/Edit Rule modal with type, frequency, day/date, time range, note.
-- [x] **API-driven scheduling modals:** RequestCareModal and CaregiverScheduleModal fetch real availability from `/api/availability/:caregiverId/slots` instead of hardcoded `CAREGIVER_AVAILABILITY`. Loading states, graceful fallback.
-- [x] **Backend availability validation:** POST /api/sessions validates caregiver availability before booking. Returns 400 with available slots if time window doesn't fit.
-- [x] **Seed data:** Maria Mon-Fri 8-5 available, Wed 2-4pm blocked. James Mon-Fri 7-3, Sat 8-12. Typed rules for all demo caregivers.
 
 ### Caregiver Search & Location (v1.2.0)
 - [x] **Geocoding utility:** `src/utils/geocode.js` — Nominatim geocoder with documented Google Maps swap path (one function body change). `haversineDistance()` for radius filtering. `buildAddressString()` helper.

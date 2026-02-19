@@ -242,6 +242,45 @@
 - Dev Login section added above footer: one-click login buttons for all 5 demo accounts (Pete, David, Susan, Maria, Betty) — calls `/api/auth/login` directly and navigates to dashboard
 - Cache version bumped to v1.1.1
 
+### v1.4.1 — Calendar Unification & Care Requests (2026-02-19)
+- **CaregiverCalendar query fix:** Changed `?start=X&end=Y` to `?from=X&to=Y` — Maria's bookings now load correctly
+- **Admin invite auto-search:** useEffect triggers search when switching to invites tab from waitlist with pre-filled email
+- **CaretakerHub earnings overhaul:** Earnings tab fetches completed sessions from API, shows itemized breakdown table (date, client, service, hours, amount)
+- **AvailabilityTab rewrite:** Replaced weekly hourly grid with month calendar view (same pattern as Schedule.js). Day cells colored by availability (green) and bookings (blue). Click day → right panel with booked sessions, availability rules with edit/delete, and quick-add button
+- **CaredForView rewrite:** Betty's calendar replaced from flat list to full month calendar. Pink (#fce4ec) = seeking help (requested sessions), Blue (#e3f2fd) = confirmed bookings. Click day → session list + "Request Care" form (service type, time, hours, note). Notes tab preserved
+- **Care request system:** New `status='requested'` sessions created by care_for role, no caregiver_id. POST /api/sessions/request creates help-wanted sessions. PUT /api/sessions/:id/claim lets caregivers accept. WebSocket notifications to all parties
+- **CaregiverCalendar care requests:** Pink cells for care requests in weekly grid. "help needed" labels on column headers. Selected day shows care requests with "Accept" button
+- **Seed data:** 4 care request sessions for Betty (Feb 22, 26, Mar 1, Mar 4)
+- Cache version bumped to v1.4.1, 53 tests passing
+
+### v1.4.0 — Admin Invites & Caregiver Onboarding (2026-02-19)
+- **Admin invite system:** Admin panel 5th tab "Invites" — search any email across users/waitlist/invites, send branded invitation emails via Resend, track invite status (pending/accepted/expired)
+- **Platform invites table:** `platform_invites` table with token-based accept flow, 7-day expiry
+- **Caregiver onboarding wizard:** `CaregiverOnboarding.js` — 5-step wizard (Welcome → Personal Info → Professional Background → Availability → Review & Submit) for new caregiver registration
+- **Admin user management:** Users tab shows all registered users with role badges, search, and admin promotion
+- **Waitlist-to-invite flow:** Click "Invite" on any waitlist entry → auto-populates invite tab with their email
+- Cache version bumped to v1.4.0, 53 tests passing
+
+### v1.3.7–v1.3.9 — Demo Data & Availability Engine (2026-02-19)
+
+**v1.3.7 — Earnings & Availability**
+- Maria's rate bumped to $34/hr, ~19 past completed sessions (~$3,890 monthly), full 8-hour days for calendar saturation
+- New `availability` table with `type` (available/blocked), `note` columns, `/api/availability` CRUD with ownership checks
+- `computeAvailableSlots()` builds minute-level availability map minus blocked rules minus booked sessions
+- CaretakerHub "Availability" tab: weekly grid (6am-8pm, 7 days) with color-coded cells, rule management modals
+- RequestCareModal and CaregiverScheduleModal fetch real availability from `/api/availability/:caregiverId/slots`
+- Backend validates caregiver availability on session creation
+
+**v1.3.8 — CaregiverCalendar Component**
+- New `CaregiverCalendar.js` — weekly calendar with availability overlay (green=available, blue=booked, red=blocked, gray=off)
+- Hour-by-hour grid (6am-8pm), week navigation, selected-day detail panel with sessions + availability summary
+- Replaces CaretakerHub "Schedule" tab content
+
+**v1.3.9 — Demo Data Polish**
+- Additional completed sessions for Maria across multiple families
+- Calendar saturation visible in heat map view
+- Cache version bumped to v1.3.9
+
 ### v1.3.1–v1.3.6 — Demo Mode UX & PWA Fixes (2026-02-19)
 
 **v1.3.1 — Demo Mode Banner**
@@ -296,13 +335,14 @@
 
 ---
 
-## Next Up — v1.4.0: Payments & Marketplace
+## Next Up — v1.5.0: Payments & Marketplace
 
 Priority: **HIGH** — Enable real transactions.
 
-- [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes fee)
-- [ ] **Caregiver earnings dashboard:** Payment history, pending payouts, tax summary
+- [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes 20% fee)
+- [ ] **Caregiver earnings dashboard:** Real payment history, pending payouts, tax summary (1099 support)
 - [ ] **Family billing:** Payment methods, invoices, spending history
+- [ ] **Session payment flow:** Charge on session completion, hold on confirmation
 
 ---
 
@@ -310,6 +350,7 @@ Priority: **HIGH** — Enable real transactions.
 
 - [ ] **Plausible Analytics:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html. $9/mo for up to 10K pageviews. 30-day free trial available. Admin panel has a direct link to the Plausible dashboard.
 - [x] ~~**Set is_admin on Pete's account:** Now auto-migrated in database.js on every server start. No manual SQL needed.~~
+- [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — free)
 
 ---
 
@@ -320,3 +361,5 @@ Priority: **MEDIUM** — Scale and polish.
 - [ ] **Google Maps geocoding upgrade:** Swap Nominatim for Google Maps for better residential address accuracy (one function change)
 - [ ] **Build step for frontend:** Move to Vite when component count demands it
 - [ ] **Apple Sign-In:** After Google OAuth is proven
+- [ ] **S3/R2 for photos:** Replace base64 PostgreSQL storage with object storage for visit photos
+- [ ] **Push notification expansion:** Push for session updates, care requests, and care team activity (currently messages only)

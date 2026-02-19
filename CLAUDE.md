@@ -52,18 +52,26 @@ https://yourinplace.com
 │           ├── ActivityFeed.js         ← Notification stream with mark-as-read
 │           ├── Messages.js             ← Real-time chat (database-backed conversations)
 │           ├── MyAccount.js            ← Settings & notification preferences (wired to PUT /api/auth/me)
-│           ├── CaredForView.js         ← Betty's limited view (calendar + personal notes)
-│           ├── CaretakerHub.js         ← Caregiver dashboard (schedule, families, earnings, reviews)
+│           ├── CaredForView.js         ← Betty's month calendar (pink=seeking help, blue=confirmed) + care request form + notes
+│           ├── CaretakerHub.js         ← Caregiver dashboard (schedule, families, earnings breakdown, reviews)
+│           ├── AvailabilityTab.js      ← Month calendar for caregiver availability management (day-click editing)
+│           ├── CaregiverCalendar.js    ← Weekly calendar with availability overlay + care request accept flow
 │           ├── AreaMap.js              ← Leaflet/OpenStreetMap with real lat/lng family pins, radius circle (caregiver view)
 │           ├── RequestCareModal.js     ← 5-step care request wizard with caregiver matching
 │           ├── CaregiverScheduleModal.js ← View caregiver availability, book from schedule
 │           ├── TwoFactorSetup.js       ← 2FA setup wizard (QR code → verify → backup codes)
 │           ├── CareTeamManage.js       ← Care team member management (invite, remove, change roles)
 │           ├── CareTeamPage.js         ← Care team listing/navigation wrapper
-│           └── EmailVerificationBanner.js ← Banner prompting unverified users to check email
+│           ├── EmailVerificationBanner.js ← Banner prompting unverified users to check email
+│           ├── Analytics.js            ← Family dashboard analytics (bar charts, donut chart, utilization)
+│           ├── DemoPickerPage.js       ← Demo account selector (Pete/Maria/Betty)
+│           ├── ForgotPasswordPage.js   ← Password reset request form
+│           ├── ResetPasswordPage.js    ← Password reset confirmation form
+│           ├── CaregiverOnboarding.js  ← 5-step caregiver registration wizard
+│           └── AdminPanel.js           ← Admin dashboard (stats, users, waitlist, activity, invites)
 └── src/
     ├── server.js              ← Express app + Socket.io WebSocket server, route mounting, static file serving, auto-seed on empty DB
-    ├── seed.js                ← Demo data (5 users, 4 caregivers, 13 sessions, messages, assignments)
+    ├── seed.js                ← Demo data (5 users, 4 caregivers, sessions incl. care requests, messages, assignments, availability rules)
     ├── models/
     │   └── database.js        ← PostgreSQL schema (16 tables), pg Pool wrapper
     ├── middleware/
@@ -86,7 +94,11 @@ https://yourinplace.com
         ├── careTeams.js       ← Care team CRUD, invite flow, member management
         ├── twoFactor.js       ← TOTP 2FA setup/verify/disable, backup codes, trusted devices
         ├── waitlist.js        ← POST signup, GET count (no auth required)
-        └── passwordReset.js   ← Forgot password + reset (via Resend email)
+        ├── passwordReset.js   ← Forgot password + reset (via Resend email)
+        ├── availability.js    ← Caregiver availability CRUD, slot computation
+        ├── analytics.js       ← Family dashboard analytics (6-month trends, service breakdown)
+        ├── push.js            ← Push notification subscribe/unsubscribe
+        └── admin.js           ← Admin-only endpoints (stats, users, waitlist, activity, invites)
 ```
 
 ## Frontend Architecture
@@ -121,7 +133,7 @@ All demo passwords: `inplace123`
 
 ## Database Tables
 
-users, care_recipients, caregiver_profiles, availability, care_sessions, visit_logs, visit_photos, activity_feed, reviews, payments, conversations, conversation_members, messages, recipient_notes, caregiver_assignments, waitlist, care_recipient_shares, push_subscriptions, oauth_accounts, user_2fa, trusted_devices, care_teams, care_team_members, care_team_invites
+users, care_recipients, caregiver_profiles, availability, care_sessions, visit_logs, visit_photos, activity_feed, reviews, payments, conversations, conversation_members, messages, recipient_notes, caregiver_assignments, waitlist, care_recipient_shares, push_subscriptions, oauth_accounts, user_2fa, trusted_devices, care_teams, care_team_members, care_team_invites, platform_invites, password_reset_tokens, email_verification_tokens
 
 All tables use TEXT primary keys (UUIDs). Timestamps are TIMESTAMPTZ via `NOW()`. JSON fields (health_conditions, medications, specialties, certifications, tasks_completed) are stored as TEXT JSON strings — parse with `JSON.parse()` on read. The database wrapper auto-converts `?` placeholders to `$1, $2, ...` for PostgreSQL compatibility.
 
