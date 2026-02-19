@@ -104,7 +104,9 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
       });
       const data = await res.json();
       if (data.token) {
-        setAuthToken(data.token);
+        // Set token in memory only — don't persist demo sessions to localStorage
+        AUTH_TOKEN = data.token;
+        localStorage.removeItem('auth_token');
         if (window.connectSocket) connectSocket(data.token);
         onSwitchAccount(data.user || { role: 'family' });
       }

@@ -57,7 +57,9 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
       });
       const data = await res.json();
       if (data.token) {
-        setAuthToken(data.token);
+        // Set token in memory only — don't persist demo sessions to localStorage
+        AUTH_TOKEN = data.token;
+        localStorage.removeItem('auth_token');
         if (window.connectSocket) connectSocket(data.token);
         onLogin(data.user || { role: 'family' });
       } else {

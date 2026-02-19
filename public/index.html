@@ -19,7 +19,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=1.3.2">
+  <link rel="stylesheet" href="/css/styles.css?v=1.3.3">
 
   <!-- Plausible Analytics — privacy-friendly, no cookies, GDPR compliant -->
   <script defer data-domain="yourinplace.com" src="https://plausible.io/js/script.js"></script>
@@ -72,7 +72,7 @@
       ];
       try {
         var sources = await Promise.all(
-          scripts.map(function(url) { return fetch(url + '?v=1.3.2').then(function(r) { return r.text(); }); })
+          scripts.map(function(url) { return fetch(url + '?v=1.3.3').then(function(r) { return r.text(); }); })
         );
         var combined = sources.join('\n;\n');
         var compiled = Babel.transform(combined, { presets: ['react'] }).code;
