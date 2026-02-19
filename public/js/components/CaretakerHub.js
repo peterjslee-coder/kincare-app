@@ -235,47 +235,13 @@ const CaretakerHub = window.CaretakerHub = () => {
 
       {/* Tab Content */}
       {activeTab === 'schedule' && (
-        <div>
-          <div className="card">
-            <div className="card-header"><span className="card-icon">📅</span>Upcoming Sessions</div>
-            {sessions.length > 0 ? (
-              <ul className="sessions-list">
-                {sessions.map((s, idx) => (
-                  <li key={idx} className="session-item">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ flex: 1 }}>
-                        <div className="session-time">{s.date} at {s.time}</div>
-                        <div className="session-caregiver" style={{ fontWeight: 600 }}>{s.recipientName}</div>
-                        <div style={{ fontSize: '12px', color: '#888' }}>{s.location}</div>
-                        <span className="session-type">{s.serviceType}</span>
-                        {s.specialInstructions && (
-                          <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontStyle: 'italic' }}>
-                            Note: {s.specialInstructions}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
-                        <span style={{
-                          padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
-                          background: s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
-                          color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
-                          textTransform: 'capitalize',
-                        }}>{s.status}</span>
-                        <span style={{ fontSize: '12px', color: '#666' }}>{s.durationHours}h &bull; ${s.estimatedCost}</span>
-                        {s.status === 'confirmed' && (
-                          <button onClick={() => setVisitLogSession(s)} style={{
-                            padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none',
-                            borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontWeight: 600,
-                          }}>Log Visit</button>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : <div style={{ padding: '20px', color: '#999', textAlign: 'center' }}>No upcoming sessions</div>}
-          </div>
-        </div>
+        <CaregiverCalendar
+          caregiverId={profile.id}
+          sessions={sessions}
+          availRules={availRules}
+          fetchAvailability={fetchAvailability}
+          onLogVisit={setVisitLogSession}
+        />
       )}
 
       {activeTab === 'availability' && (

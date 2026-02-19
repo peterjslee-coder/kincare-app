@@ -203,6 +203,13 @@ const MyAccount = window.MyAccount = () => {
     ? [{ id: 'profile', label: 'Profile' }, { id: 'notifications', label: 'Notifications' }]
     : [{ id: 'profile', label: 'Profile' }, { id: 'security', label: 'Security' }, { id: 'devices', label: 'Devices' }, { id: 'notifications', label: 'Notifications' }];
 
+  const handleLogoutFromAccount = () => {
+    localStorage.removeItem('auth_token');
+    AUTH_TOKEN = null;
+    if (typeof disconnectSocket === 'function') disconnectSocket();
+    window.location.reload();
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -471,6 +478,20 @@ const MyAccount = window.MyAccount = () => {
           ))}
         </div>
       )}
+
+      {/* Logout — always visible, especially important for mobile PWA */}
+      <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid #e0e0e0' }}>
+        <button onClick={handleLogoutFromAccount} style={{
+          width: '100%', padding: '14px 20px', background: '#fff', color: '#c62828',
+          border: '1px solid #e0e0e0', borderRadius: 10, fontSize: 15, fontWeight: 600,
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          🚪 Log Out
+        </button>
+        <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#bbb' }}>
+          v{window.APP_VERSION || '?'}
+        </div>
+      </div>
     </div>
   );
 };

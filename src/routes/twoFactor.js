@@ -2,9 +2,9 @@ const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const { v4: uuid } = require("uuid");
-// Lazy-loaded to avoid ESM issues with Jest
-let _authenticator, _QRCode;
-const getAuthenticator = () => { if (!_authenticator) _authenticator = require("otplib").authenticator; return _authenticator; };
+// otplib v13+ uses top-level exports (no .authenticator)
+let _otplib, _QRCode;
+const getOtplib = () => { if (!_otplib) _otplib = require("otplib"); return _otplib; };
 const getQRCode = () => { if (!_QRCode) _QRCode = require("qrcode"); return _QRCode; };
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
@@ -44,8 +44,9 @@ router.post("/setup", authenticate, async (req, res) => {
     }
 
     // Generate secret
-    const secret = getAuthenticator().generateSecret();
-    const otpauth = getAuthenticator().keyuri(req.user.email, "InPlace", secret);
+    const otp = getOtplib();
+    const secret = otp.generateSecret();
+    const otpauth = otp.generateURI({ type: "totp", label: req.user.email, issuer: "InPlace", secret });
 
     // Generate QR code as data URL
     const qrCodeDataUrl = await getQRCode().toDataURL(otpauth);
@@ -87,8 +88,8 @@ router.post("/verify-setup", authenticate, async (req, res) => {
     }
 
     // Verify the code
-    const isValid = getAuthenticator().check(code, record.totp_secret);
-    if (!isValid) {
+    const verifyResult = getOtplib().verifySync({ token: code, secret: record.totp_secret });
+    if (!verifyResult.valid) {
       return res.status(400).json({ error: "Invalid verification code. Try again." });
     }
 
@@ -147,7 +148,8 @@ router.post("/verify", async (req, res) => {
     }
 
     // Try TOTP code first
-    let isValid = getAuthenticator().check(code, record.totp_secret);
+    const verifyResult = getOtplib().verifySync({ token: code, secret: record.totp_secret });
+    let isValid = verifyResult.valid;
 
     // If TOTP fails, try backup codes
     if (!isValid && record.backup_codes) {
@@ -218,8 +220,8 @@ router.post("/disable", authenticate, async (req, res) => {
       return res.status(400).json({ error: "2FA is not enabled" });
     }
 
-    const isValid = getAuthenticator().check(code, record.totp_secret);
-    if (!isValid) {
+    const disableVerify = getOtplib().verifySync({ token: code, secret: record.totp_secret });
+    if (!disableVerify.valid) {
       return res.status(400).json({ error: "Invalid verification code" });
     }
 
@@ -247,8 +249,8 @@ router.post("/backup-codes", authenticate, async (req, res) => {
       return res.status(400).json({ error: "2FA is not enabled" });
     }
 
-    const isValid = getAuthenticator().check(code, record.totp_secret);
-    if (!isValid) {
+    const backupVerify = getOtplib().verifySync({ token: code, secret: record.totp_secret });
+    if (!backupVerify.valid) {
       return res.status(400).json({ error: "Invalid verification code" });
     }
 

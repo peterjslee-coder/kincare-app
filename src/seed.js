@@ -340,17 +340,25 @@ async function seed() {
     [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-02-14", "09:00", 5, "Valentine's Day — special lunch and card making.", 170],
     [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-17", "08:00", 6, "Meal prep, medication check, organized kitchen.", 204],
     [uuid(), bettyId, peteId, mariaId, "rides", "completed", "2026-02-18", "09:00", 4, "Doctor appointment and grocery run.", 136],
+    // Maria with Betty (additional Feb sessions for ~$4K monthly target)
+    [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-02-02", "09:00", 6, "Morning routine, puzzles, and lunch prep.", 204],
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-06", "08:00", 7, "Grocery shopping, meal prep, and kitchen cleanup.", 238],
+    [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-02-09", "09:00", 6, "Photo albums, short walk, afternoon nap monitoring.", 204],
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-11", "08:00", 6, "Meal prep and medication organizing.", 204],
+    [uuid(), bettyId, peteId, mariaId, "companion", "completed", "2026-02-13", "09:00", 7, "Full day companionship — crafts, games, garden walk.", 238],
+    [uuid(), bettyId, peteId, mariaId, "meals", "completed", "2026-02-16", "08:00", 6, "Weekly meal prep — Betty's favorites.", 204],
     // Maria with Dorothy (Henderson's)
     [uuid(), dorothyId, hendersonFamilyId, mariaId, "meals", "completed", "2026-01-23", "09:00", 5, "Diabetic-friendly meals for the week.", 170],
     [uuid(), dorothyId, hendersonFamilyId, mariaId, "companion", "completed", "2026-02-04", "10:00", 4, "Card games and afternoon tea.", 136],
-    [uuid(), dorothyId, hendersonFamilyId, mariaId, "meals", "completed", "2026-02-11", "09:00", 5, "Meal prep and baking cookies.", 170],
+    [uuid(), dorothyId, hendersonFamilyId, mariaId, "meals", "completed", "2026-02-08", "09:00", 5, "Meal prep and baking cookies.", 170],
+    [uuid(), dorothyId, hendersonFamilyId, mariaId, "companion", "completed", "2026-02-13", "14:00", 4, "Afternoon tea and puzzles.", 136],
+    [uuid(), dorothyId, hendersonFamilyId, mariaId, "meals", "completed", "2026-02-15", "09:00", 5, "Diabetic-friendly meal prep.", 170],
     // James with Betty (past)
     [uuid(), bettyId, peteId, jamesId, "companion", "completed", "2026-02-09", "10:00", 3, "Puzzles and photo albums.", 75],
     // David Kim with Betty (past)
     [uuid(), bettyId, peteId, davidId, "rides", "completed", "2026-02-06", "09:00", 1.5, "Doctor appointment transport.", 33],
   ];
-  // Maria totals: 14 Betty sessions (86 hrs) + 3 Dorothy sessions (14 hrs) = 100 hrs × $34 = $3,400
-  // Plus upcoming: ~$4K range with pending/confirmed sessions
+  // Maria Feb totals: 20 Betty sessions (~124 hrs) + 5 Dorothy sessions (~23 hrs) ≈ $4,000+
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of pastSessions) {
     await db.prepare(`
@@ -430,18 +438,18 @@ async function seed() {
   console.log("✅ Care sessions created (31 — 8 upcoming Pete/Betty, 19 past completed, 4 Henderson, 2 Patel, 2 David/Betty, 1 Susan/Betty)");
 
   // ─── Visit Logs ───
-  // pastSessions[10] = Feb 12 full 8-hr day, [13] = Feb 18 rides, [17] = James Feb 9, [18] = David Feb 6
+  // pastSessions[10] = Feb 12 full 8-hr day, [13] = Feb 18 rides, [25] = James Feb 9, [26] = David Feb 6
   const visitLogs = [
     [uuid(), pastSessions[10][0], mariaId,
       "Full 8-hour day with Betty. Prepared breakfast, lunch, and dinner. Organized medications, did light housekeeping, and spent afternoon doing puzzles. Betty was in wonderful spirits all day!",
       "Happy & engaged", ["Prepared 3 meals", "Organized medications", "Light housekeeping", "Puzzles", "Kitchen cleanup"]],
-    [uuid(), pastSessions[17][0], jamesId,
+    [uuid(), pastSessions[25][0], jamesId,
       "Spent the morning looking through photo albums and chatting about her garden. She was in great spirits. We took a short walk around the block.",
       "Cheerful", ["Photo album activity", "Short walk", "Conversation"]],
     [uuid(), pastSessions[13][0], mariaId,
       "Drove Betty to Dr. Patel's office. Picked up prescriptions and groceries on the way home. Stocked the fridge and labeled leftovers.",
       "Calm", ["Doctor transport", "Prescription pickup", "Grocery shopping", "Stocked fridge"]],
-    [uuid(), pastSessions[18][0], davidId,
+    [uuid(), pastSessions[26][0], davidId,
       "Drove Betty to her doctor's appointment. The visit went well — no changes to medication. Picked up her prescription on the way home.",
       "A little tired", ["Doctor transport", "Prescription pickup"]],
   ];
@@ -500,9 +508,9 @@ async function seed() {
   // ─── Reviews ───
   const reviews = [
     [uuid(), pastSessions[10][0], peteId, mariaId, 5, "Maria spent a full day with Mom and she was in great spirits. Incredible care and attention."],
-    [uuid(), pastSessions[17][0], peteId, jamesId, 5, "James is so patient and kind. Mom really enjoys his visits."],
+    [uuid(), pastSessions[25][0], peteId, jamesId, 5, "James is so patient and kind. Mom really enjoys his visits."],
     [uuid(), pastSessions[13][0], peteId, mariaId, 5, "Always gets exactly what Mom needs from the store and doctor visits."],
-    [uuid(), pastSessions[18][0], peteId, davidId, 4, "David was punctual and helpful. Mom was comfortable with him."],
+    [uuid(), pastSessions[26][0], peteId, davidId, 4, "David was punctual and helpful. Mom was comfortable with him."],
   ];
 
   for (const [id, sessionId, famId, cgId, rating, comment] of reviews) {
