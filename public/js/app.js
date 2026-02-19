@@ -426,6 +426,9 @@ const App = () => {
           <button className="nav-link" onClick={isDemo ? handleExitDemo : handleLogout}>
             <span className="nav-icon">{isDemo ? '🚪' : '🚪'}</span> {isDemo ? 'Exit Demo' : 'Logout'}
           </button>
+          <div style={{ padding: '8px 16px 4px', fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>
+            v{window.APP_VERSION || '?'}
+          </div>
         </div>
       </aside>
       <main className="main-content">

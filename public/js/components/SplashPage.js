@@ -597,6 +597,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         <p style={{ marginTop: '8px', fontSize: '14px', opacity: 0.8 }}>
           <a href="mailto:peter@yourinplace.com" style={{ color: '#1b6b5a', textDecoration: 'none' }}>peter@yourinplace.com</a>
         </p>
+        <p style={{ marginTop: '6px', fontSize: '11px', opacity: 0.4 }}>v{window.APP_VERSION || '?'}</p>
       </footer>
     </div>
   );
