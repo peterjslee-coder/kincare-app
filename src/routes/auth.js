@@ -103,6 +103,7 @@ router.post("/login", validateLogin, async (req, res) => {
         lastName: user.last_name,
         emailVerified: !!user.email_verified,
         isDemo: !!user.is_demo,
+        isAdmin: !!user.is_admin,
       },
       token,
     };
@@ -166,7 +167,7 @@ router.post("/change-password", authenticate, async (req, res) => {
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
   const user = await db.prepare(
-    "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, email_verified, is_demo, password_changed_at, created_at FROM users WHERE id = ?"
+    "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, email_verified, is_demo, is_admin, password_changed_at, created_at FROM users WHERE id = ?"
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -182,6 +183,7 @@ router.get("/me", authenticate, async (req, res) => {
       ...user,
       email_verified: !!user.email_verified,
       is_demo: !!user.is_demo,
+      is_admin: !!user.is_admin,
       twoFactorEnabled: !!(twoFa?.is_enabled),
       linkedAccounts: oauthAccounts || [],
     },

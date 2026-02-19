@@ -121,6 +121,7 @@ app.use("/api/oauth", require("./routes/oauth"));
 app.use("/api/care-teams", require("./routes/careTeams"));
 app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
+app.use("/api/admin", require("./routes/admin"));
 
 // ─── Health check ───
 app.get("/api/health", (req, res) => {

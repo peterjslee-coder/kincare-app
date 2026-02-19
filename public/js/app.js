@@ -103,6 +103,21 @@ const App = () => {
       AUTH_TOKEN = savedToken;
       // Auto-connect WebSocket if returning user
       if (typeof connectSocket === 'function') connectSocket(savedToken);
+      // Restore user session from token
+      apiFetch('/api/auth/me').then(async r => {
+        if (r?.ok) {
+          const data = await r.json();
+          if (data.user) {
+            setCurrentUser({
+              id: data.user.id, email: data.user.email, role: data.user.role,
+              firstName: data.user.first_name, lastName: data.user.last_name,
+              emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
+              isAdmin: !!data.user.is_admin,
+            });
+            setAppState('app');
+          }
+        }
+      }).catch(() => {});
     }
     const params = new URLSearchParams(window.location.search);
 
@@ -212,7 +227,7 @@ const App = () => {
       ];
     }
     // family (default)
-    return [
+    const familyNav = [
       { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { id: 'care-profile', icon: '👵', label: 'Care Profile' },
       { id: 'care-team', icon: '👪', label: 'Care Team' },
@@ -224,6 +239,10 @@ const App = () => {
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'account', icon: '👤', label: 'My Account' },
     ];
+    if (currentUser?.isAdmin) {
+      familyNav.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
+    }
+    return familyNav;
   };
 
   // Role label for sidebar header
@@ -250,6 +269,7 @@ const App = () => {
     if (currentPage === 'recipients') return <CareRecipients key={currentPage} />;
     if (currentPage === 'messages') return <Messages key={currentPage} />;
     if (currentPage === 'account') return <MyAccount key={currentPage} />;
+    if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={currentPage} />;
     return <Dashboard key={currentPage} onNavigate={setCurrentPage} />;
   };
 

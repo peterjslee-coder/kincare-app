@@ -35,4 +35,12 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { generateToken, authenticate, requireRole };
+function requireAdmin(req, res, next) {
+  // Check is_admin flag from DB (set on req by admin routes after authenticate)
+  if (!req.isAdmin) {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+}
+
+module.exports = { generateToken, authenticate, requireRole, requireAdmin };
