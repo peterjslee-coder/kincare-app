@@ -1,4 +1,4 @@
-const LoginPage = window.LoginPage = ({ onLogin, onNavigate }) => {
+const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBanner }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -239,6 +239,18 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate }) => {
         </div>
         <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>Welcome Back</h2>
         <p className="login-subtitle" style={{ textAlign: 'center', color: '#666', fontSize: 14, margin: '0 0 20px' }}>Sign in to manage care for your loved ones</p>
+
+        {banner && (
+          <div style={{
+            padding: '12px 14px', marginBottom: '16px', borderRadius: '8px', fontSize: '13px', fontWeight: 500,
+            background: banner.type === 'info' ? '#e3f2fd' : banner.type === 'success' ? '#e0f2e9' : '#fce4ec',
+            color: banner.type === 'info' ? '#1565c0' : banner.type === 'success' ? '#1b6b5a' : '#c62828',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <span>{banner.type === 'info' ? 'ℹ️ ' : banner.type === 'success' ? '✅ ' : '⚠️ '}{banner.text}</span>
+            {onDismissBanner && <button onClick={onDismissBanner} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'inherit', padding: '0 0 0 8px' }}>&times;</button>}
+          </div>
+        )}
 
         {error && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{error}</div>}
 

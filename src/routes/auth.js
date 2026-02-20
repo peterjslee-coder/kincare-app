@@ -118,10 +118,23 @@ router.get("/confirm-signup", async (req, res) => {
     }
 
     // Check if someone already registered with this email
-    const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(intent.email);
+    const existing = await db.prepare("SELECT id, role FROM users WHERE email = ?").get(intent.email);
     if (existing) {
       await db.prepare("DELETE FROM signup_intents WHERE id = ?").run(intent.id);
-      return res.status(409).json({ error: "This email is already registered. Try signing in." });
+      // Check if caregiver has completed profile
+      let hasProfile = true;
+      if (existing.role === 'caregiver') {
+        const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(existing.id);
+        hasProfile = !!profile;
+      }
+      return res.status(409).json({
+        error: hasProfile
+          ? "This email is already registered. Try signing in."
+          : "This email is already registered but your profile isn't complete yet. Sign in to finish setting up your account.",
+        alreadyRegistered: true,
+        needsProfile: !hasProfile,
+        email: intent.email,
+      });
     }
 
     res.json({ email: intent.email, role: intent.role });

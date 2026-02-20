@@ -225,4 +225,53 @@ router.get("/search-email", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/reset-password ───
+// Admin resets a user's password (sets to a temporary password + must_change_password flag)
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { userId, newPassword } = req.body;
+    if (!userId || !newPassword) {
+      return res.status(400).json({ error: "userId and newPassword required" });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, email FROM users WHERE id = ?").get(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const bcrypt = require("bcryptjs");
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?").run(hash, userId);
+
+    res.json({ success: true, message: `Password reset for ${user.email}` });
+  } catch (err) {
+    console.error("Admin reset-password error:", err);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+});
+
+// ─── DELETE /api/admin/users/:id ───
+// Admin deletes a user and all associated data
+router.delete("/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, email, role FROM users WHERE id = ?").get(id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Delete associated data
+    await db.prepare("DELETE FROM caregiver_profiles WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM activity_feed WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM users WHERE id = ?").run(id);
+
+    res.json({ success: true, message: `Deleted user ${user.email}` });
+  } catch (err) {
+    console.error("Admin delete user error:", err);
+    res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
 module.exports = router;

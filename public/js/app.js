@@ -242,12 +242,19 @@ const App = () => {
       window.history.replaceState({}, '', window.location.pathname);
       // Validate the token and get email + role
       fetch(`/api/auth/confirm-signup?token=${signupToken}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.email && data.role) {
+        .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data })))
+        .then(({ ok, status, data }) => {
+          if (ok && data.email && data.role) {
             setSignupPrefill({ email: data.email, role: data.role, signupToken });
             // Route caregivers to the full onboarding wizard, families to registration
             setAppState(data.role === 'caregiver' ? 'signup-onboarding' : 'register');
+          } else if (status === 409 && data.alreadyRegistered) {
+            // Already registered — redirect to login with helpful message
+            setVerifyMessage({
+              type: data.needsProfile ? 'info' : 'success',
+              text: data.error || 'This email is already registered. Please sign in.',
+            });
+            setAppState('login');
           } else {
             setVerifyMessage({ type: 'error', text: data.error || 'Invalid signup link.' });
           }
@@ -423,7 +430,7 @@ const App = () => {
 
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} />;
   if (appState === 'demo') return <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />;
-  if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
+  if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} />;
   if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} />;
   if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;
   if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
@@ -570,8 +577,8 @@ const App = () => {
         {verifyMessage && (
           <div style={{
             padding: '12px 16px', marginBottom: '16px', borderRadius: '8px', fontSize: '14px', fontWeight: 500,
-            background: verifyMessage.type === 'success' ? '#e0f2e9' : '#fce4ec',
-            color: verifyMessage.type === 'success' ? '#1b6b5a' : '#c62828',
+            background: verifyMessage.type === 'success' ? '#e0f2e9' : verifyMessage.type === 'info' ? '#e3f2fd' : '#fce4ec',
+            color: verifyMessage.type === 'success' ? '#1b6b5a' : verifyMessage.type === 'info' ? '#1565c0' : '#c62828',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <span>{verifyMessage.type === 'success' ? '✅ ' : '⚠️ '}{verifyMessage.text}</span>
