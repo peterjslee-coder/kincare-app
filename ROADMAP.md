@@ -366,16 +366,28 @@
 
 ---
 
-## Next Up — v1.6.0: Bug Fixes & Core UX
+## Completed — v1.6.0: Bug Fixes & Core UX (2026-02-20)
 
-Priority: **HIGH** — Fix broken flows before adding features.
+- [x] **Fix "Invalid Date" in messages:** PostgreSQL timestamps with `+00` timezone offset were being double-suffixed with `Z`. Fixed timezone-aware parsing in Messages.js `formatTime` and Dashboard.js `formatActivityTime`.
+- [x] **Lock down contact visibility:** Contacts endpoint now restricted to users connected via care_team_members or caregiver_assignments. No more strangers in messaging.
+- [x] **Profile photo upload + avatar:** PUT/DELETE `/api/auth/me/photo` endpoints (base64, 2MB max). User avatar (photo or initial) displayed in sidebar next to iP logo.
+- [x] **Dashboard "Latest" status section:** Context-aware banner at top of family and caregiver dashboards. Shows upcoming sessions, onboarding status, background check progress, or next action.
+- [x] **Caregiver document review:** New "Documents" tab in CaretakerHub showing uploaded onboarding docs (DL front/back, certifications), legal info (DOB, SSN last 4, DL number), background check status, onboarding completion status.
+- [x] **Medical care disclaimer:** Full-screen blocking modal with Virginia state law and personal liability warnings. Scroll-to-bottom required. Versioned (`disclaimer_version`) for future re-prompting.
+- New component: `DisclaimerModal.js`. Cache version v1.6.0.
 
-- [ ] **Fix "Invalid Date" in messages:** Sent messages show "Invalid Date" timestamp. Likely backend `created_at` format mismatch with frontend date parser.
-- [ ] **Fix contact visibility:** Real users can see/message any other user without an accepted connection. Gate contacts by: accepted care team invite, caregiver assignment, or new connection request flow.
-- [ ] **Profile photo upload:** First Steps says "Upload profile photo" but there's no upload UI. Add upload flow + display avatar next to iP logo in sidebar/header.
-- [ ] **Dashboard "Latest" status section:** Context-aware status banner at top of every role's dashboard. Shows current state and next action (e.g., "Pending background check," "2 sessions this week," "Care request awaiting caregiver").
-- [ ] **Caregiver document review:** Let caregivers view their submitted onboarding documents (DL, selfie, info) in their profile. Allow re-upload if needed.
-- [ ] **Medical care disclaimer banner:** Full-screen modal on first login. Bold statements: "InPlace does not provide at-home medical care in accordance with Virginia state law" and "You are personally liable for any medical care you provide beyond calling professional medical attention when warranted." Must scroll + acknowledge. Stored with version for re-prompting.
+---
+
+## Next Up — v1.6.1: Floating Feedback Button
+
+Priority: **HIGH** — Collect real user feedback to drive iteration.
+
+- [ ] **Floating feedback button (FAB):** Persistent circular button (bottom-right, above mobile nav) on every screen for all authenticated users. Speech bubble icon. Doesn't block content.
+- [ ] **Feedback form modal:** Category (Bug Report / Feature Request / General Feedback / Complaint / Praise), description (required), mood (emoji row), optional screenshot, auto-captured page context (page, role, version, device).
+- [ ] **Backend:** New `feedback` table. POST `/api/feedback` (any user), GET `/api/feedback` (admin, paginated/filterable), PUT `/api/feedback/:id` (admin status + notes).
+- [ ] **Admin Feedback tab:** New tab in AdminPanel. Sortable table: date, user, category, mood, status, preview. Click to expand full detail + screenshot. Status workflow: New → Reviewed → Planned → Done → Dismissed. Admin internal notes. Filter by category/status/date.
+- [ ] **Feedback triage:** Admin tagging (bug, feature, ux, content). Group similar items. Clustered feedback informs next dev batch.
+- [ ] **Push notification to admin on new feedback.**
 
 ---
 

@@ -21,6 +21,13 @@ const AdminPanel = window.AdminPanel = () => {
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteMsg, setInviteMsg] = useState(null);
   const [user, setUser] = useState(null);
+  // Feedback tab state
+  const [feedbackItems, setFeedbackItems] = useState([]);
+  const [feedbackTotal, setFeedbackTotal] = useState(0);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackFilter, setFeedbackFilter] = useState({ category: '', status: '' });
+  const [expandedFeedback, setExpandedFeedback] = useState(null);
+  const [feedbackEditNotes, setFeedbackEditNotes] = useState('');
 
   useEffect(() => {
     loadStats();
@@ -33,6 +40,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'waitlist') loadWaitlist();
     if (activeTab === 'activity') loadActivity();
     if (activeTab === 'invites') loadInvites();
+    if (activeTab === 'feedback') loadFeedback();
   }, [activeTab]);
 
   // Auto-trigger search when switching to invites tab with pre-filled email (e.g. from waitlist Invite button)
@@ -91,6 +99,32 @@ const AdminPanel = window.AdminPanel = () => {
         setInvitesTotal(data.total || 0);
       }
     } catch (err) { console.error('Admin invites error:', err); }
+  };
+
+  const loadFeedback = async () => {
+    setFeedbackLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '50' });
+      if (feedbackFilter.category) params.set('category', feedbackFilter.category);
+      if (feedbackFilter.status) params.set('status', feedbackFilter.status);
+      const res = await apiFetch(`/api/feedback?${params}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setFeedbackItems(data.feedback || []);
+        setFeedbackTotal(data.total || 0);
+      }
+    } catch (err) { console.error('Feedback load error:', err); }
+    setFeedbackLoading(false);
+  };
+
+  const updateFeedbackItem = async (id, updates) => {
+    try {
+      const res = await apiFetch(`/api/feedback/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+      if (res?.ok) loadFeedback();
+    } catch (err) { console.error('Feedback update error:', err); }
   };
 
   const handleSearchEmail = async () => {
@@ -185,6 +219,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'waitlist', label: 'Waitlist', icon: '📋' },
     { id: 'invites', label: 'Invites', icon: '✉️' },
     { id: 'activity', label: 'Activity', icon: '⚡' },
+    { id: 'feedback', label: 'Feedback', icon: '💬' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 
@@ -724,6 +759,131 @@ const AdminPanel = window.AdminPanel = () => {
               </div>
             ) : <div style={{ padding: '16px', color: '#999', textAlign: 'center' }}>No sessions yet</div>}
           </div>
+        </div>
+      )}
+
+      {/* ─── Feedback Tab ─── */}
+      {activeTab === 'feedback' && (
+        <div>
+          {/* Filters */}
+          <div className="card" style={{ marginBottom: 16, padding: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select value={feedbackFilter.category} onChange={e => { setFeedbackFilter(f => ({ ...f, category: e.target.value })); setTimeout(loadFeedback, 0); }}
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}>
+              <option value="">All Categories</option>
+              <option value="bug">Bug Report</option>
+              <option value="feature">Feature Request</option>
+              <option value="general">General</option>
+              <option value="complaint">Complaint</option>
+              <option value="praise">Praise</option>
+            </select>
+            <select value={feedbackFilter.status} onChange={e => { setFeedbackFilter(f => ({ ...f, status: e.target.value })); setTimeout(loadFeedback, 0); }}
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}>
+              <option value="">All Statuses</option>
+              <option value="new">New</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="planned">Planned</option>
+              <option value="done">Done</option>
+              <option value="dismissed">Dismissed</option>
+            </select>
+            <span style={{ fontSize: 12, color: '#888', marginLeft: 'auto' }}>{feedbackTotal} total</span>
+          </div>
+
+          {feedbackLoading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Loading feedback...</div>
+          ) : feedbackItems.length === 0 ? (
+            <div className="card" style={{ padding: 40, textAlign: 'center', color: '#999' }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
+              No feedback yet. The floating feedback button will appear for all users.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {feedbackItems.map(fb => {
+                const isExpanded = expandedFeedback === fb.id;
+                const categoryColors = { bug: '#c62828', feature: '#1565c0', general: '#555', complaint: '#e65100', praise: '#2e7d32' };
+                const categoryLabels = { bug: 'Bug', feature: 'Feature', general: 'General', complaint: 'Complaint', praise: 'Praise' };
+                const statusColors = { new: '#e8724a', reviewed: '#1565c0', planned: '#7b1fa2', done: '#2e7d32', dismissed: '#999' };
+                const moodEmojis = { great: '😊', good: '🙂', okay: '😐', bad: '😟', terrible: '😡' };
+
+                return (
+                  <div key={fb.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                    {/* Summary row */}
+                    <div
+                      onClick={() => { setExpandedFeedback(isExpanded ? null : fb.id); setFeedbackEditNotes(fb.adminNotes || ''); }}
+                      style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: isExpanded ? '#f8f9fa' : '#fff' }}
+                    >
+                      {fb.mood && <span style={{ fontSize: 18 }}>{moodEmojis[fb.mood] || ''}</span>}
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        background: (categoryColors[fb.category] || '#555') + '18', color: categoryColors[fb.category] || '#555',
+                      }}>{categoryLabels[fb.category] || fb.category}</span>
+                      <span style={{ flex: 1, fontSize: 13, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {fb.description.substring(0, 80)}{fb.description.length > 80 ? '...' : ''}
+                      </span>
+                      <span style={{ fontSize: 11, color: '#999', whiteSpace: 'nowrap' }}>{fb.userName}</span>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+                        background: (statusColors[fb.status] || '#999') + '18', color: statusColors[fb.status] || '#999',
+                      }}>{fb.status}</span>
+                      <span style={{ fontSize: 11, color: '#bbb', whiteSpace: 'nowrap' }}>
+                        {new Date(fb.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div style={{ padding: '16px', borderTop: '1px solid #eee' }}>
+                        <div style={{ fontSize: 14, color: '#333', lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{fb.description}</div>
+
+                        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#888', marginBottom: 12 }}>
+                          <span>From: <strong>{fb.userName}</strong> ({fb.userEmail})</span>
+                          <span>Role: {fb.userRole}</span>
+                          {fb.pageContext && <span>Page: {fb.pageContext.page}</span>}
+                          {fb.pageContext?.device && <span>Device: {fb.pageContext.device}</span>}
+                          <span>{new Date(fb.createdAt).toLocaleString()}</span>
+                        </div>
+
+                        {fb.hasScreenshot && (
+                          <div style={{ marginBottom: 12 }}>
+                            <img src={`/api/feedback/${fb.id}/screenshot`} alt="Screenshot" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8, border: '1px solid #eee' }} />
+                          </div>
+                        )}
+
+                        {/* Status update */}
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                          {['new', 'reviewed', 'planned', 'done', 'dismissed'].map(s => (
+                            <button key={s} onClick={() => updateFeedbackItem(fb.id, { status: s })}
+                              style={{
+                                padding: '4px 12px', borderRadius: 12, border: fb.status === s ? '2px solid ' + (statusColors[s] || '#999') : '1px solid #ddd',
+                                background: fb.status === s ? (statusColors[s] || '#999') + '18' : '#fff',
+                                color: fb.status === s ? statusColors[s] : '#666', fontSize: 11, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize',
+                              }}
+                            >{s}</button>
+                          ))}
+                        </div>
+
+                        {/* Admin notes */}
+                        <div>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Admin Notes</label>
+                          <textarea
+                            value={feedbackEditNotes}
+                            onChange={e => setFeedbackEditNotes(e.target.value)}
+                            placeholder="Internal notes about this feedback..."
+                            rows={2}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }}
+                          />
+                          {feedbackEditNotes !== (fb.adminNotes || '') && (
+                            <button onClick={() => updateFeedbackItem(fb.id, { adminNotes: feedbackEditNotes })}
+                              style={{ marginTop: 6, padding: '4px 14px', borderRadius: 6, border: 'none', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                            >Save Notes</button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
