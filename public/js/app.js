@@ -292,7 +292,7 @@ const App = () => {
             window.__pendingConversation = d.conversationId;
             setCurrentPage('messages');
           } else if (d.type === 'care_request' || d.type === 'care_request_accepted') {
-            setCurrentPage('schedule');
+            setCurrentPage(role === 'caregiver' ? 'find-work' : 'schedule');
           }
         }
       });
@@ -476,7 +476,7 @@ const App = () => {
     if (role === 'caregiver') {
       return [
         { id: 'dashboard', icon: '🩺', label: 'My Dashboard' },
-        { id: 'schedule', icon: '📅', label: 'Schedule' },
+        { id: 'find-work', icon: '🔍', label: 'Find Work' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'account', icon: '👤', label: 'My Account' },
       ];
@@ -524,6 +524,7 @@ const App = () => {
     }
     if (currentPage === 'care-profile') return <CareProfile key={currentPage} />;
     if (currentPage === 'care-team') return <CareTeamPage key={currentPage} selectedTeamId={selectedCareTeamId} onNavigate={setCurrentPage} />;
+    if (currentPage === 'find-work') return <FindWork key={currentPage} />;
     if (currentPage === 'schedule') return <Schedule key={currentPage} />;
     if (currentPage === 'caregivers') return <Caregivers key={currentPage} />;
     if (currentPage === 'analytics') return <Analytics key={currentPage} />;
@@ -540,7 +541,7 @@ const App = () => {
     if (role === 'caregiver') {
       return [
         { id: 'dashboard', icon: '🩺', label: 'Home' },
-        { id: 'schedule', icon: '📅', label: 'Schedule' },
+        { id: 'find-work', icon: '🔍', label: 'Find Work' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'account', icon: '👤', label: 'Account' },
       ];

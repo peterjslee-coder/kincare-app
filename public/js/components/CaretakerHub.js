@@ -321,7 +321,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   const avgHourlyRate = totalHours > 0 ? (totalEarned / totalHours).toFixed(0) : (profile.hourlyRate || '--');
 
   const tabs = [
-    { id: 'schedule', label: 'Schedule', icon: '📅' },
+    { id: 'schedule', label: 'Calendar', icon: '📅' },
     { id: 'availability', label: 'Availability', icon: '🕐' },
     { id: 'families', label: 'My Families', icon: '👪' },
     { id: 'map', label: 'Area Map', icon: '🗺️' },
@@ -737,15 +737,36 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
                 </div>
               </div>
             ) : stoplightData ? (
-              <div style={{ display: 'grid', gap: '6px' }}>
-                {CARE_TASKS.map(task => {
-                  const val = stoplightData[task];
-                  if (!val) return null;
-                  const color = val === 'green' ? { bg: '#e8f5e9', text: '#2e7d32' } : val === 'yellow' ? { bg: '#fff8e1', text: '#f57f17' } : { bg: '#fce4ec', text: '#c62828' };
+              <div style={{ display: 'grid', gap: '16px' }}>
+                {[
+                  { color: 'green', label: 'Comfortable With', bg: '#e8f5e9', text: '#2e7d32', icon: '✓' },
+                  { color: 'yellow', label: 'With Supervision', bg: '#fff8e1', text: '#f57f17', icon: '~' },
+                  { color: 'red', label: 'Not Comfortable', bg: '#fce4ec', text: '#c62828', icon: '✕' },
+                ].map(group => {
+                  const tasks = CARE_TASKS.filter(t => stoplightData[t] === group.color);
+                  if (tasks.length === 0) return null;
                   return (
-                    <div key={task} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: color.bg, borderRadius: '6px' }}>
-                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: color.text, flexShrink: 0 }} />
-                      <span style={{ fontSize: '13px', color: color.text, fontWeight: 500 }}>{task}</span>
+                    <div key={group.color}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px',
+                        padding: '6px 12px', background: group.bg, borderRadius: '8px',
+                      }}>
+                        <span style={{
+                          width: '22px', height: '22px', borderRadius: '50%', background: group.text,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0,
+                        }}>{group.icon}</span>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: group.text }}>{group.label}</span>
+                        <span style={{ fontSize: '12px', color: group.text, opacity: 0.7, marginLeft: 'auto' }}>{tasks.length} task{tasks.length > 1 ? 's' : ''}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingLeft: '4px' }}>
+                        {tasks.map(task => (
+                          <span key={task} style={{
+                            padding: '4px 10px', background: group.bg, borderRadius: '14px',
+                            fontSize: '12px', color: group.text, fontWeight: 500,
+                          }}>{task}</span>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
@@ -896,13 +917,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>📸 Visit Photos (up to 5)</label>
+              <p style={{ fontSize: '12px', color: '#888', margin: '0 0 8px' }}>
+                Share photos from the visit with the family — activities, meals, smiles!
+              </p>
               <input type="file" ref={photoInputRef} accept="image/*" multiple onChange={handlePhotoSelect}
                 style={{ display: 'none' }} />
               <button onClick={() => photoInputRef.current?.click()} style={{
-                padding: '8px 16px', background: '#f0f0f0', border: '1px dashed #ccc', borderRadius: '8px',
-                cursor: 'pointer', fontSize: '13px', color: '#666', width: '100%',
+                padding: '16px', background: logPhotos.length > 0 ? '#e8f5e9' : '#f8f9fa',
+                border: logPhotos.length > 0 ? '2px solid #1b6b5a' : '2px dashed #ccc', borderRadius: '10px',
+                cursor: 'pointer', fontSize: '14px', color: logPhotos.length > 0 ? '#1b6b5a' : '#666',
+                width: '100%', fontWeight: logPhotos.length > 0 ? 600 : 400,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               }}>
-                {logPhotos.length > 0 ? `${logPhotos.length} photo${logPhotos.length > 1 ? 's' : ''} selected — add more` : 'Tap to add photos'}
+                <span style={{ fontSize: '20px' }}>{logPhotos.length > 0 ? '✅' : '📷'}</span>
+                {logPhotos.length > 0 ? `${logPhotos.length} photo${logPhotos.length > 1 ? 's' : ''} selected — tap to add more` : 'Tap to add visit photos'}
               </button>
               {photoPreviewUrls.length > 0 && (
                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
