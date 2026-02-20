@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.7.2';
+const DEMO_SEED_VERSION = '1.7.5';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -321,6 +321,12 @@ async function seed() {
       avail, rating, count, city, state, lat, lng,
       workLocations[i], travelRadii[i], JSON.stringify(stoplights[stoplightKeys[i]]));
   }
+
+  // Set Maria's avatar (SVG data URI — professional headshot placeholder)
+  await db.prepare(`UPDATE users SET avatar_url = ? WHERE id = ?`).run(
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%231b6b5a'/%3E%3Ctext x='50%25' y='52%25' font-family='system-ui' font-size='48' font-weight='700' fill='white' text-anchor='middle' dominant-baseline='central'%3EMS%3C/text%3E%3C/svg%3E",
+    mariaUserId
+  );
 
   // Complete Maria's onboarding — she's the primary demo caregiver
   await db.prepare(`

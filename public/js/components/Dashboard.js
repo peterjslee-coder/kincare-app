@@ -4,6 +4,8 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [user, setUser] = useState(null);
   const [careTeams, setCareTeams] = useState([]);
   const [error, setError] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   const fetchDashboard = async () => {
     try {
@@ -35,7 +37,14 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     } catch {}
   };
 
-  useEffect(() => { fetchDashboard(); fetchUser(); fetchCareTeams(); }, []);
+  const fetchAnalytics = async () => {
+    try {
+      const res = await apiFetch('/api/analytics');
+      if (res?.ok) setAnalyticsData(await res.json());
+    } catch {}
+  };
+
+  useEffect(() => { fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); }, []);
 
   // Real-time: refresh dashboard on activity or session updates
   useEffect(() => {
@@ -386,6 +395,81 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           )) : <div style={{ color: '#999', padding: '16px' }}>No recent activity</div>}
         </div>
       </div>
+
+      {/* Inline Analytics (collapsible) */}
+      {analyticsData && (() => {
+        const totals = analyticsData.totals || {};
+        const cgStats = analyticsData.caregiverStats || [];
+        const serviceBreakdown = analyticsData.serviceBreakdown || [];
+        const serviceLabels = { meals: 'Meals', rides: 'Rides', companion: 'Companion', companionship: 'Companion', personal_care: 'Personal Care', meal_prep: 'Meal Prep', transportation: 'Transport', health_wellness: 'Health', full_day: 'Full Day' };
+        return (
+          <div className="card" style={{ marginTop: 0 }}>
+            <div className="card-header" onClick={() => setAnalyticsOpen(!analyticsOpen)}
+              style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span><span className="card-icon">📊</span>Care Analytics</span>
+              <span style={{ fontSize: 12, color: '#999', transition: 'transform 0.2s', display: 'inline-block', transform: analyticsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+            </div>
+            {!analyticsOpen ? (
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: '#666', marginTop: 8 }}>
+                <span><strong>{totals.sessions}</strong> sessions</span>
+                <span><strong>{totals.hours}</strong> hours</span>
+                <span><strong>${totals.spend}</strong> spent</span>
+                <span><strong>{cgStats.length}</strong> caregivers</span>
+              </div>
+            ) : (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 16 }}>
+                  {[
+                    { icon: '📅', val: totals.sessions, label: 'Total Sessions' },
+                    { icon: '⏱️', val: totals.hours, label: 'Total Hours' },
+                    { icon: '💰', val: `$${totals.spend}`, label: 'Total Spend' },
+                    { icon: '👨‍⚕️', val: cgStats.length, label: 'Caregivers' },
+                  ].map((s, i) => (
+                    <div key={i} style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 18 }}>{s.icon}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#1b6b5a' }}>{s.val}</div>
+                      <div style={{ fontSize: 11, color: '#888' }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Service breakdown */}
+                {serviceBreakdown.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#333', marginBottom: 6 }}>Service Breakdown</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {serviceBreakdown.map((s, i) => (
+                        <span key={i} style={{ padding: '4px 10px', borderRadius: 12, background: '#f0faf7', color: '#1b6b5a', fontSize: 12, fontWeight: 500 }}>
+                          {serviceLabels[s.serviceType] || s.serviceType}: {s.count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Caregiver utilization */}
+                {cgStats.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#333', marginBottom: 6 }}>Caregiver Utilization</div>
+                    {cgStats.map((cg, i) => {
+                      const maxS = Math.max(...cgStats.map(c => c.sessions), 1);
+                      return (
+                        <div key={i} style={{ marginBottom: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}>
+                            <span style={{ fontWeight: 600 }}>{cg.name}</span>
+                            <span style={{ color: '#888' }}>{cg.sessions} sessions · {cg.hours}h{cg.rating > 0 ? ` · ⭐ ${cg.rating}` : ''}</span>
+                          </div>
+                          <div style={{ height: 6, background: '#f0f0f0', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.round(cg.sessions / maxS * 100)}%`, background: '#1b6b5a', borderRadius: 3 }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </>
   );
 };

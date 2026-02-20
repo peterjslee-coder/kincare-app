@@ -477,7 +477,7 @@ router.put("/me/photo", authenticate, async (req, res) => {
     const { photo } = req.body; // base64 data URL
     if (!photo) return res.status(400).json({ error: "No photo provided" });
     if (photo.length > 2 * 1024 * 1024) return res.status(400).json({ error: "Photo too large (max 1.5MB)" });
-    await db.prepare("UPDATE users SET profile_photo = ?, updated_at = NOW() WHERE id = ?").run(photo, req.user.id);
+    await db.prepare("UPDATE users SET profile_photo = ?, avatar_url = ?, updated_at = NOW() WHERE id = ?").run(photo, photo, req.user.id);
     res.json({ message: "Profile photo updated", photoUrl: photo });
   } catch (err) {
     console.error("Photo upload error:", err);

@@ -495,7 +495,6 @@ const App = () => {
       { id: 'care-team', icon: '👪', label: 'Care Team' },
       { id: 'schedule', icon: '📅', label: 'Schedule' },
       { id: 'caregivers', icon: '👨‍⚕️', label: 'Caregivers' },
-      { id: 'analytics', icon: '📊', label: 'Analytics' },
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'recipients', icon: '👥', label: 'Recipients' },
       { id: 'messages', icon: '💬', label: 'Messages' },

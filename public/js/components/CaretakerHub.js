@@ -11,6 +11,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   const [photoPreviewUrls, setPhotoPreviewUrls] = useState([]);
   const [submittingLog, setSubmittingLog] = useState(false);
   const photoInputRef = useRef(null);
+  const avatarInputRef = useRef(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   // Earnings state
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
@@ -299,6 +301,43 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   ];
 
 
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      // Resize image to max 400px and convert to JPEG
+      const canvas = document.createElement('canvas');
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await new Promise(r => { img.onload = r; });
+      const maxDim = 400;
+      let w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      URL.revokeObjectURL(img.src);
+
+      const res = await apiFetch('/api/auth/me/photo', {
+        method: 'PUT',
+        body: JSON.stringify({ photo: dataUrl }),
+      });
+      if (res?.ok) {
+        // Update local state to reflect the new avatar
+        setData(prev => prev ? { ...prev, profile: { ...prev.profile, avatar_url: dataUrl } } : prev);
+        if (typeof showToast === 'function' || (window.useToast && typeof useToast === 'function')) {
+          try { useToast().showToast('Profile photo updated!', 'success'); } catch(e) {}
+        }
+      }
+    } catch (err) { console.error('Avatar upload error:', err); }
+    setUploadingAvatar(false);
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
+  };
+
   const saveStoplight = async () => {
     try {
       await apiFetch('/api/caregivers/profile', {
@@ -404,14 +443,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
               <div style={{ width: `${(firstStepsDone / firstSteps.length) * 100}%`, height: '100%', background: '#1b6b5a', borderRadius: '3px', transition: 'width 0.3s' }} />
             </div>
           </div>
+          <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
           <div style={{ display: 'grid', gap: '8px' }}>
             {firstSteps.map(s => (
               <div key={s.id} onClick={() => {
+                if (s.done) return;
                 if (s.id === 'availability') setActiveTab('availability');
                 if (s.id === 'stoplight') setActiveTab('preferences');
+                if (s.id === 'photo') avatarInputRef.current?.click();
               }} style={{
                 display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px',
-                color: s.done ? '#999' : '#333', cursor: (s.id === 'availability' || s.id === 'stoplight') ? 'pointer' : 'default',
+                color: s.done ? '#999' : '#333', cursor: s.done ? 'default' : 'pointer',
                 textDecoration: s.done ? 'line-through' : 'none',
               }}>
                 <span style={{ width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', background: s.done ? '#e8f5e9' : '#f0f0f0', color: s.done ? '#2e7d32' : '#999' }}>

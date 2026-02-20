@@ -171,7 +171,7 @@ async function caregiverDashboard(db, userId, res) {
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
-  const user = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+  const user = await db.prepare("SELECT first_name, last_name, avatar_url FROM users WHERE id = ?").get(userId);
 
   // Assigned families
   const assignments = await db.prepare(`
@@ -249,6 +249,7 @@ async function caregiverDashboard(db, userId, res) {
       dlNumber: profile.dl_number,
       dlState: profile.dl_state,
       care_stoplight: profile.care_stoplight,
+      avatar_url: user.avatar_url || null,
     },
     assignments: assignments.map(a => ({
       ...a,
