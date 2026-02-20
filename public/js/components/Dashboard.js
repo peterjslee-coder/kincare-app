@@ -342,6 +342,31 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                 <div style={{ textAlign: 'right', fontSize: '12px' }}>
                   <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : '#e8724a', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>
                   {s.estimatedCost && <div style={{ color: '#666', marginTop: '2px' }}>${s.estimatedCost}</div>}
+                  {s.status === 'confirmed' && s.estimatedCost && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          const res = await apiFetch('/api/payments/checkout', {
+                            method: 'POST',
+                            body: JSON.stringify({ sessionId: s.id }),
+                          });
+                          if (res?.ok) {
+                            const d = await res.json();
+                            if (d.checkoutUrl) window.location.href = d.checkoutUrl;
+                          } else {
+                            const err = await res?.json();
+                            alert(err?.error || 'Payment not available yet');
+                          }
+                        } catch (err) { alert('Payment service unavailable'); }
+                      }}
+                      style={{
+                        marginTop: '6px', padding: '4px 12px', borderRadius: '6px',
+                        border: 'none', background: '#1b6b5a', color: '#fff',
+                        fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >Pay Now</button>
+                  )}
                 </div>
               </div>
             </li>

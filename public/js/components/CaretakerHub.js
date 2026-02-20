@@ -15,6 +15,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
 
+  // Stripe Connect state
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
+
   // Documents state
   const [documents, setDocuments] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
@@ -136,7 +140,46 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
       setEarningsLoading(false);
     };
     fetchCompleted();
+
+    // Also check Stripe Connect status
+    const checkStripe = async () => {
+      try {
+        const sRes = await apiFetch('/api/payments/connect/status');
+        if (sRes?.ok) {
+          const sData = await sRes.json();
+          setStripeStatus(sData);
+        }
+      } catch (err) { /* Stripe not configured yet — that's ok */ }
+    };
+    checkStripe();
   }, [activeTab]);
+
+  // Stripe Connect onboarding handler
+  const handleStripeOnboard = async () => {
+    setStripeLoading(true);
+    try {
+      const res = await apiFetch('/api/payments/connect/onboard', { method: 'POST' });
+      if (res?.ok) {
+        const d = await res.json();
+        if (d.url) window.location.href = d.url;
+      } else {
+        const err = await res?.json();
+        alert(err?.error || 'Failed to start Stripe onboarding');
+      }
+    } catch (err) { alert('Could not connect to payment service'); }
+    setStripeLoading(false);
+  };
+
+  // Open Stripe Express Dashboard
+  const handleStripeDashboard = async () => {
+    try {
+      const res = await apiFetch('/api/payments/connect/dashboard');
+      if (res?.ok) {
+        const d = await res.json();
+        if (d.url) window.open(d.url, '_blank');
+      }
+    } catch (err) { alert('Could not open Stripe dashboard'); }
+  };
 
   // Load stoplight from profile (must be before early returns — React hook order rules)
   useEffect(() => {
@@ -492,6 +535,35 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
 
       {activeTab === 'earnings' && (
         <div>
+          {/* Stripe Connect Banner */}
+          <div className="card" style={{ marginBottom: '16px', border: stripeStatus?.status === 'active' ? '1px solid #4caf50' : '1px solid #ff9800' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '15px', color: '#333', marginBottom: '4px' }}>
+                  {stripeStatus?.status === 'active' ? '✅ Stripe Connected' : '💳 Payment Setup'}
+                </div>
+                <div style={{ fontSize: '13px', color: '#666' }}>
+                  {stripeStatus?.status === 'active'
+                    ? 'Your Stripe account is active. Payouts are enabled.'
+                    : stripeStatus?.status === 'pending'
+                    ? 'Your Stripe account is pending verification. Click below to complete setup.'
+                    : 'Connect your Stripe account to receive payouts for care sessions.'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {stripeStatus?.status === 'active' ? (
+                  <button onClick={handleStripeDashboard} className="btn btn-secondary" style={{ fontSize: '13px', padding: '8px 16px' }}>
+                    View Stripe Dashboard
+                  </button>
+                ) : (
+                  <button onClick={handleStripeOnboard} disabled={stripeLoading} className="btn btn-primary" style={{ fontSize: '13px', padding: '8px 16px' }}>
+                    {stripeLoading ? 'Loading...' : stripeStatus?.status === 'pending' ? 'Complete Setup' : 'Connect with Stripe'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="earnings-grid">
             <div className="earning-card">
               <div className="earning-amount">${stats.monthlyEarnings || 0}</div>

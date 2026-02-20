@@ -126,6 +126,7 @@ app.use("/api/admin", require("./routes/admin"));
 app.use("/api/platform-invites", require("./routes/platformInvites"));
 app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
 app.use("/api/feedback", require("./routes/feedback"));
+app.use("/api/payments", require("./routes/payments"));
 
 // ─── Health check ───
 app.get("/api/health", (req, res) => {
