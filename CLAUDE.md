@@ -191,6 +191,25 @@ The production PostgreSQL database is a Railway service. The `DATABASE_URL` env 
 - `npm run seed` — Reset & populate demo data
 - `npm run setup` — Seed + start combined
 - `npm test` — Run Jest test suite (53 tests, no database needed)
+- `npm run collect-feedback` — Fetch all user feedback from production into FEEDBACK.md
+
+## Feedback-Driven Development Workflow
+
+**Before planning any new version or feature work, always run:**
+
+```bash
+npm run collect-feedback
+```
+
+This fetches all user feedback from production (yourinplace.com), authenticates as admin, and writes a structured `FEEDBACK.md` file with summaries and individual items. Review this file to understand what real users are requesting, reporting as bugs, or praising before deciding what to build next.
+
+**Workflow:**
+1. Run `npm run collect-feedback` to pull latest feedback
+2. Read `FEEDBACK.md` — pay attention to items with status `new` or `reviewed`
+3. Factor actionable feedback into the next version's TASKS.md and ROADMAP.md
+4. After shipping, check if feedback items were addressed and update their status in the admin panel
+
+**FEEDBACK.md is gitignored** — it's a local working file regenerated on demand, not committed to the repo.
 
 ## WebSocket Architecture
 

@@ -112,6 +112,24 @@ router.get("/", async (req, res) => {
   }
 });
 
+// ─── GET /api/feedback/my ───
+// Get current user's own feedback submissions
+router.get("/my", async (req, res) => {
+  const db = await getDb();
+  try {
+    const items = await db.prepare(`
+      SELECT id, category, description, mood, status, created_at
+      FROM feedback WHERE user_id = ?
+      ORDER BY created_at DESC LIMIT 20
+    `).all(req.user.id);
+
+    res.json({ feedback: items });
+  } catch (err) {
+    console.error("My feedback error:", err);
+    res.status(500).json({ error: "Failed to load feedback" });
+  }
+});
+
 // ─── GET /api/feedback/:id/screenshot ───
 // Get screenshot image for a feedback item (admin only)
 router.get("/:id/screenshot", async (req, res) => {
@@ -169,24 +187,6 @@ router.put("/:id", async (req, res) => {
   } catch (err) {
     console.error("Update feedback error:", err);
     res.status(500).json({ error: "Failed to update feedback" });
-  }
-});
-
-// ─── GET /api/feedback/my ───
-// Get current user's own feedback submissions
-router.get("/my", async (req, res) => {
-  const db = await getDb();
-  try {
-    const items = await db.prepare(`
-      SELECT id, category, description, mood, status, created_at
-      FROM feedback WHERE user_id = ?
-      ORDER BY created_at DESC LIMIT 20
-    `).all(req.user.id);
-
-    res.json({ feedback: items });
-  } catch (err) {
-    console.error("My feedback error:", err);
-    res.status(500).json({ error: "Failed to load feedback" });
   }
 });
 
