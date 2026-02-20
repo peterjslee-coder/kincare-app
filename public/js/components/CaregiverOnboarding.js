@@ -293,11 +293,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   // Document handling — resize large images client-side before storing
   const resizeImage = (file, maxDimension = 1600) => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Image processing timed out')), 15000);
+      const done = (result) => { clearTimeout(timeout); resolve(result); };
+      const fail = (err) => { clearTimeout(timeout); reject(err); };
+
       // If file is already small enough, skip resize
       if (file.size <= 2 * 1024 * 1024) {
         const reader = new FileReader();
-        reader.onload = (ev) => resolve({ dataUrl: ev.target.result, blob: file });
+        reader.onload = (ev) => done({ dataUrl: ev.target.result, blob: file });
+        reader.onerror = () => fail(new Error('Failed to read file'));
         reader.readAsDataURL(file);
         return;
       }
@@ -305,27 +310,32 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const url = URL.createObjectURL(file);
       img.onload = () => {
         URL.revokeObjectURL(url);
-        let { width, height } = img;
-        if (width > maxDimension || height > maxDimension) {
-          const ratio = Math.min(maxDimension / width, maxDimension / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
+        try {
+          let { width, height } = img;
+          if (width > maxDimension || height > maxDimension) {
+            const ratio = Math.min(maxDimension / width, maxDimension / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          canvas.toBlob((blob) => {
+            done({ dataUrl, blob: blob || file });
+          }, 'image/jpeg', 0.85);
+        } catch (err) {
+          fail(err);
         }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        canvas.toBlob((blob) => {
-          resolve({ dataUrl, blob: blob || file });
-        }, 'image/jpeg', 0.85);
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
-        // Fallback: use original
+        // Fallback: try FileReader directly
         const reader = new FileReader();
-        reader.onload = (ev) => resolve({ dataUrl: ev.target.result, blob: file });
+        reader.onload = (ev) => done({ dataUrl: ev.target.result, blob: file });
+        reader.onerror = () => fail(new Error('Failed to read image'));
         reader.readAsDataURL(file);
       };
       img.src = url;
@@ -336,17 +346,33 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { setErrors(er => ({ ...er, [docType]: 'File must be under 10MB' })); return; }
-    if (!file.type.startsWith('image/')) { setErrors(er => ({ ...er, [docType]: 'Must be an image file' })); return; }
+    // Accept any file from image/* inputs — some mobile browsers return empty MIME type for camera photos
+    const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name) || file.type === '';
+    if (!isImage) { setErrors(er => ({ ...er, [docType]: 'Must be an image file' })); return; }
 
-    const { dataUrl, blob } = await resizeImage(file);
-    // Create a new File object from the resized blob for upload
-    const resizedFile = new File([blob], file.name, { type: blob.type || file.type });
-    setForm(f => {
-      const docs = f.documents.filter(d => d.type !== docType);
-      docs.push({ type: docType, file: resizedFile, preview: dataUrl, fileName: file.name });
-      return { ...f, documents: docs };
-    });
-    setErrors(er => ({ ...er, [docType]: null }));
+    try {
+      const { dataUrl, blob } = await resizeImage(file);
+      // Create a new File object from the resized blob for upload
+      const resizedFile = new File([blob], file.name, { type: blob.type || file.type || 'image/jpeg' });
+      setForm(f => {
+        const docs = f.documents.filter(d => d.type !== docType);
+        docs.push({ type: docType, file: resizedFile, preview: dataUrl, fileName: file.name });
+        return { ...f, documents: docs };
+      });
+      setErrors(er => ({ ...er, [docType]: null }));
+    } catch (err) {
+      console.error('Image processing error:', err);
+      // Fallback: use original file with object URL for preview
+      const preview = URL.createObjectURL(file);
+      setForm(f => {
+        const docs = f.documents.filter(d => d.type !== docType);
+        docs.push({ type: docType, file, preview, fileName: file.name });
+        return { ...f, documents: docs };
+      });
+      setErrors(er => ({ ...er, [docType]: null }));
+    }
+    // Reset the input so re-selecting the same file triggers onChange
+    e.target.value = '';
   };
 
   const removeDocument = (docType) => {
