@@ -286,23 +286,62 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     setSaving(false);
   };
 
-  // Document handling
-  const handleFileSelect = (docType, e) => {
+  // Document handling — resize large images client-side before storing
+  const resizeImage = (file, maxDimension = 1600) => {
+    return new Promise((resolve) => {
+      // If file is already small enough, skip resize
+      if (file.size <= 2 * 1024 * 1024) {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve({ dataUrl: ev.target.result, blob: file });
+        reader.readAsDataURL(file);
+        return;
+      }
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          const ratio = Math.min(maxDimension / width, maxDimension / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        canvas.toBlob((blob) => {
+          resolve({ dataUrl, blob: blob || file });
+        }, 'image/jpeg', 0.85);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        // Fallback: use original
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve({ dataUrl: ev.target.result, blob: file });
+        reader.readAsDataURL(file);
+      };
+      img.src = url;
+    });
+  };
+
+  const handleFileSelect = async (docType, e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { setErrors(er => ({ ...er, [docType]: 'File must be under 5MB' })); return; }
+    if (file.size > 10 * 1024 * 1024) { setErrors(er => ({ ...er, [docType]: 'File must be under 10MB' })); return; }
     if (!file.type.startsWith('image/')) { setErrors(er => ({ ...er, [docType]: 'Must be an image file' })); return; }
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setForm(f => {
-        const docs = f.documents.filter(d => d.type !== docType);
-        docs.push({ type: docType, file, preview: ev.target.result, fileName: file.name });
-        return { ...f, documents: docs };
-      });
-      setErrors(e => ({ ...e, [docType]: null }));
-    };
-    reader.readAsDataURL(file);
+    const { dataUrl, blob } = await resizeImage(file);
+    // Create a new File object from the resized blob for upload
+    const resizedFile = new File([blob], file.name, { type: blob.type || file.type });
+    setForm(f => {
+      const docs = f.documents.filter(d => d.type !== docType);
+      docs.push({ type: docType, file: resizedFile, preview: dataUrl, fileName: file.name });
+      return { ...f, documents: docs };
+    });
+    setErrors(er => ({ ...er, [docType]: null }));
   };
 
   const removeDocument = (docType) => {
@@ -771,13 +810,18 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {step === 6 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Upload Documents</h2>
-            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
+            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
               Upload photos of your driver's license (front and back). You can also upload certification documents.
             </p>
+            <div style={{ padding: '10px 14px', background: '#f0faf8', borderRadius: '8px', marginBottom: '20px', border: '1px solid #d0e8e2' }}>
+              <p style={{ fontSize: '12px', color: '#1b6b5a', margin: 0, lineHeight: '1.5' }}>
+                <strong>Tip:</strong> Place your ID on a flat, well-lit surface. Make sure all text and the photo are clearly readable. Images are automatically optimized for upload.
+              </p>
+            </div>
 
             {/* DL Front */}
             <div style={fieldGroup}>
-              <label style={labelStyle}>Driver's License -- Front *</label>
+              <label style={labelStyle}>Driver's License — Front *</label>
               {form.documents.find(d => d.type === 'dl_front') ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
                   <img src={form.documents.find(d => d.type === 'dl_front').preview}
@@ -790,8 +834,20 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 </div>
               ) : (
                 <div>
-                  <input type="file" accept="image/*" capture="environment" onChange={(e) => handleFileSelect('dl_front', e)}
-                    style={{ fontSize: '14px' }} />
+                  <input type="file" accept="image/*" capture="environment" id="dl_front_camera" style={{ display: 'none' }}
+                    onChange={(e) => handleFileSelect('dl_front', e)} />
+                  <input type="file" accept="image/*" id="dl_front_gallery" style={{ display: 'none' }}
+                    onChange={(e) => handleFileSelect('dl_front', e)} />
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button type="button" onClick={() => document.getElementById('dl_front_camera').click()} style={{
+                      flex: 1, padding: '14px 12px', background: '#1b6b5a', color: 'white', border: 'none',
+                      borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                    }}>&#128247; Take Photo</button>
+                    <button type="button" onClick={() => document.getElementById('dl_front_gallery').click()} style={{
+                      flex: 1, padding: '14px 12px', background: 'white', color: '#1b6b5a', border: '2px solid #1b6b5a',
+                      borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                    }}>&#128444; Choose Photo</button>
+                  </div>
                   {errors.dl_front && <div style={errorStyle}>{errors.dl_front}</div>}
                 </div>
               )}
@@ -799,7 +855,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {/* DL Back */}
             <div style={fieldGroup}>
-              <label style={labelStyle}>Driver's License -- Back *</label>
+              <label style={labelStyle}>Driver's License — Back *</label>
               {form.documents.find(d => d.type === 'dl_back') ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
                   <img src={form.documents.find(d => d.type === 'dl_back').preview}
@@ -812,8 +868,20 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 </div>
               ) : (
                 <div>
-                  <input type="file" accept="image/*" capture="environment" onChange={(e) => handleFileSelect('dl_back', e)}
-                    style={{ fontSize: '14px' }} />
+                  <input type="file" accept="image/*" capture="environment" id="dl_back_camera" style={{ display: 'none' }}
+                    onChange={(e) => handleFileSelect('dl_back', e)} />
+                  <input type="file" accept="image/*" id="dl_back_gallery" style={{ display: 'none' }}
+                    onChange={(e) => handleFileSelect('dl_back', e)} />
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button type="button" onClick={() => document.getElementById('dl_back_camera').click()} style={{
+                      flex: 1, padding: '14px 12px', background: '#1b6b5a', color: 'white', border: 'none',
+                      borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                    }}>&#128247; Take Photo</button>
+                    <button type="button" onClick={() => document.getElementById('dl_back_gallery').click()} style={{
+                      flex: 1, padding: '14px 12px', background: 'white', color: '#1b6b5a', border: '2px solid #1b6b5a',
+                      borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                    }}>&#128444; Choose Photo</button>
+                  </div>
                   {errors.dl_back && <div style={errorStyle}>{errors.dl_back}</div>}
                 </div>
               )}
@@ -840,18 +908,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   }}>Remove</button>
                 </div>
               ))}
-              <input type="file" accept="image/*" onChange={(e) => {
+              <input type="file" accept="image/*" onChange={async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                if (file.size > 5 * 1024 * 1024) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  setForm(f => ({
-                    ...f,
-                    documents: [...f.documents, { type: 'certification', file, preview: ev.target.result, fileName: file.name }],
-                  }));
-                };
-                reader.readAsDataURL(file);
+                if (file.size > 10 * 1024 * 1024) return;
+                const { dataUrl, blob } = await resizeImage(file);
+                const resizedFile = new File([blob], file.name, { type: blob.type || file.type });
+                setForm(f => ({
+                  ...f,
+                  documents: [...f.documents, { type: 'certification', file: resizedFile, preview: dataUrl, fileName: file.name }],
+                }));
                 e.target.value = '';
               }} style={{ fontSize: '14px' }} />
             </div>

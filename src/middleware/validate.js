@@ -226,6 +226,9 @@ function validateSession(req, res, next) {
  */
 function limitBodySize(maxBytes = 50000) {
   return (req, res, next) => {
+    // Skip body size check for multipart/form-data (file uploads) — multer handles its own limits
+    const contentType = req.headers["content-type"] || "";
+    if (contentType.startsWith("multipart/form-data")) return next();
     const contentLength = parseInt(req.headers["content-length"] || "0");
     if (contentLength > maxBytes) {
       return res.status(413).json({ error: "Request body too large" });

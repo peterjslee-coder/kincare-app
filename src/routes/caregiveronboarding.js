@@ -6,10 +6,10 @@ const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 
-// Multer config — same as photos.js (memory storage, 5MB, images only)
+// Multer config — memory storage, 10MB per file (phone photos can be large), images only
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max per file
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {
       cb(null, true);
