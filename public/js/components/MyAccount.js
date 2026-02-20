@@ -1,3 +1,73 @@
+// ─── Delete Account Section ───
+const DeleteAccountSection = ({ onDeleted }) => {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleDelete = async () => {
+    if (confirmText !== 'DELETE') return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await apiFetch('/api/auth/me', { method: 'DELETE' });
+      if (res?.ok) {
+        onDeleted();
+      } else {
+        const data = await res?.json();
+        setError(data?.error || 'Failed to delete account');
+      }
+    } catch (err) {
+      setError('Network error — please try again');
+    }
+    setDeleting(false);
+  };
+
+  return (
+    <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #fdd' }}>
+      {!showConfirm ? (
+        <button onClick={() => setShowConfirm(true)} style={{
+          width: '100%', padding: '12px 20px', background: '#fff', color: '#999',
+          border: '1px solid #e0e0e0', borderRadius: 10, fontSize: 13, fontWeight: 500,
+          cursor: 'pointer',
+        }}>
+          Delete My Account
+        </button>
+      ) : (
+        <div style={{ padding: '16px', background: '#fff8f8', borderRadius: '10px', border: '1px solid #fdd' }}>
+          <div style={{ fontSize: '15px', fontWeight: 600, color: '#c62828', marginBottom: '8px' }}>
+            Delete Account Permanently
+          </div>
+          <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px', lineHeight: '1.5' }}>
+            This will permanently remove your account and all associated data. This action cannot be undone.
+          </p>
+          <p style={{ fontSize: '13px', color: '#333', margin: '0 0 8px', fontWeight: 500 }}>
+            Type <strong>DELETE</strong> to confirm:
+          </p>
+          <input type="text" value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="Type DELETE" style={{
+              width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px',
+              fontSize: '14px', marginBottom: '12px', boxSizing: 'border-box',
+            }} />
+          {error && <div style={{ fontSize: '13px', color: '#c62828', marginBottom: '10px' }}>{error}</div>}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={() => { setShowConfirm(false); setConfirmText(''); setError(null); }} style={{
+              flex: 1, padding: '10px', background: '#f0f0f0', color: '#555', border: 'none',
+              borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+            }}>Cancel</button>
+            <button onClick={handleDelete} disabled={confirmText !== 'DELETE' || deleting} style={{
+              flex: 1, padding: '10px', background: confirmText === 'DELETE' ? '#c62828' : '#e0e0e0',
+              color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+              cursor: confirmText === 'DELETE' ? 'pointer' : 'not-allowed',
+              opacity: deleting ? 0.6 : 1,
+            }}>{deleting ? 'Deleting...' : 'Delete My Account'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const MyAccount = window.MyAccount = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -554,9 +624,15 @@ const MyAccount = window.MyAccount = () => {
         }}>
           🚪 Log Out
         </button>
-        <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#bbb' }}>
-          v{window.APP_VERSION || '?'}
-        </div>
+      </div>
+
+      {/* Delete Account — not for demo accounts */}
+      {!isDemo && (
+        <DeleteAccountSection onDeleted={handleLogoutFromAccount} />
+      )}
+
+      <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#bbb' }}>
+        v{window.APP_VERSION || '?'}
       </div>
     </div>
   );

@@ -252,25 +252,47 @@ router.post("/reset-password", async (req, res) => {
 });
 
 // ─── DELETE /api/admin/users/:id ───
-// Admin deletes a user and all associated data
+// Admin deletes a user and all associated data (same logic as self-service DELETE /api/auth/me)
 router.delete("/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const db = await getDb();
-    const user = await db.prepare("SELECT id, email, role FROM users WHERE id = ?").get(id);
+    const user = await db.prepare("SELECT id, email, role, is_demo FROM users WHERE id = ?").get(id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Delete associated data
-    await db.prepare("DELETE FROM caregiver_profiles WHERE user_id = ?").run(id);
-    await db.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
-    await db.prepare("DELETE FROM activity_feed WHERE user_id = ?").run(id);
+    const cgProfile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(id);
+    const cgId = cgProfile?.id;
+
+    if (cgId) {
+      await db.prepare("DELETE FROM visit_photos WHERE visit_log_id IN (SELECT id FROM visit_logs WHERE caregiver_id = ?)").run(cgId);
+      await db.prepare("DELETE FROM visit_logs WHERE caregiver_id = ?").run(cgId);
+      await db.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(cgId);
+      await db.prepare("DELETE FROM reviews WHERE caregiver_id = ?").run(cgId);
+      await db.prepare("DELETE FROM payments WHERE caregiver_id = ?").run(cgId);
+      await db.prepare("DELETE FROM caregiver_assignments WHERE caregiver_profile_id = ?").run(cgId);
+      await db.prepare("DELETE FROM care_sessions WHERE caregiver_id = ?").run(cgId);
+      await db.prepare("DELETE FROM caregiver_profiles WHERE id = ?").run(cgId);
+    }
+
+    await db.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM activity_feed WHERE family_user_id = ?").run(id);
+    await db.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(id, id);
+    await db.prepare("DELETE FROM recipient_notes WHERE author_id = ?").run(id);
+    await db.prepare("DELETE FROM messages WHERE sender_id = ? OR recipient_id = ?").run(id, id);
     await db.prepare("DELETE FROM users WHERE id = ?").run(id);
 
     res.json({ success: true, message: `Deleted user ${user.email}` });
   } catch (err) {
     console.error("Admin delete user error:", err);
-    res.status(500).json({ error: "Failed to delete user" });
+    res.status(500).json({ error: "Failed to delete user: " + (err.message || "") });
   }
 });
 
