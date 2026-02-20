@@ -51,11 +51,14 @@ const Messages = window.Messages = () => {
     }
   };
 
-  // Fetch contacts for new chat
-  const fetchContacts = async () => {
+  const [contactSearch, setContactSearch] = useState('');
+
+  // Fetch contacts for new chat (with optional search)
+  const fetchContacts = async (query) => {
     setContactsLoading(true);
     try {
-      const res = await apiFetch('/api/messages/contacts');
+      const url = query ? `/api/messages/contacts?q=${encodeURIComponent(query)}` : '/api/messages/contacts';
+      const res = await apiFetch(url);
       if (res?.ok) {
         const data = await res.json();
         setContacts(data.contacts || []);
@@ -66,7 +69,17 @@ const Messages = window.Messages = () => {
     setContactsLoading(false);
   };
 
-  useEffect(() => { fetchConversations(); }, []);
+  // Handle deep-link from push notification or URL param
+  useEffect(() => {
+    fetchConversations().then(() => {
+      const pendingConv = window.__pendingConversation;
+      if (pendingConv) {
+        delete window.__pendingConversation;
+        setActiveConvId(pendingConv);
+        fetchMessages(pendingConv);
+      }
+    });
+  }, []);
 
   // Listen for real-time incoming messages
   useEffect(() => {
@@ -194,6 +207,61 @@ const Messages = window.Messages = () => {
     setSending(false);
   };
 
+  const handleStartVideoCall = async () => {
+    const meetLink = 'https://meet.google.com/new';
+    const message = `📹 Started a video call — join here: ${meetLink}`;
+    setInputText(message);
+    // Use a small timeout to ensure state is updated, then send
+    setTimeout(() => {
+      setSending(true);
+      apiFetch(`/api/messages/conversations/${activeConvId}`, {
+        method: 'POST',
+        body: JSON.stringify({ content: message }),
+      })
+        .then(res => {
+          if (res?.ok) {
+            setInputText('');
+            return res.json();
+          }
+          throw new Error('Failed to send');
+        })
+        .then(data => {
+          fetchMessages(data.conversationId || activeConvId);
+          fetchConversations();
+        })
+        .catch(err => console.error('Video call message error:', err))
+        .finally(() => setSending(false));
+    }, 50);
+  };
+
+  const renderMessageContent = (content) => {
+    const meetLinkRegex = /https:\/\/meet\.google\.com\/\S+/g;
+    const parts = content.split(meetLinkRegex);
+    const links = content.match(meetLinkRegex) || [];
+
+    if (links.length === 0) {
+      return content;
+    }
+
+    return React.createElement(React.Fragment, null,
+      parts.map((part, i) => [
+        part && React.createElement(React.Fragment, { key: `text-${i}` }, part),
+        i < links.length && React.createElement('a', {
+          key: `link-${i}`,
+          href: links[i],
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          style: {
+            color: '#1b6b5a',
+            textDecoration: 'underline',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }
+        }, links[i])
+      ]).filter(Boolean).flat()
+    );
+  };
+
   const activeConv = conversations.find(c => c.id === activeConvId);
 
   const formatTime = (ts) => {
@@ -278,12 +346,19 @@ const Messages = window.Messages = () => {
         </div>
       )}
 
+      {/* Search bar */}
+      <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0' }}>
+        <input type="text" placeholder="Search by name or email..." value={contactSearch}
+          onChange={e => { setContactSearch(e.target.value); fetchContacts(e.target.value); }}
+          style={{ width: '100%', padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 14, background: '#f8f9fa' }} />
+      </div>
+
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {contactsLoading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading contacts...</div>
         ) : contacts.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#999', fontSize: '14px' }}>
-            No contacts available.
+            {contactSearch ? 'No users found.' : 'No contacts available.'}
           </div>
         ) : (
           contacts.map(c => {
@@ -389,7 +464,7 @@ const Messages = window.Messages = () => {
             </button>
           )}
           {activeConv && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
               <div style={{
                 width: '36px', height: '36px', borderRadius: isGroup ? '10px' : '50%',
                 background: isGroup ? '#e8f5e9' : getAvatarColor(activeConv.name),
@@ -409,6 +484,35 @@ const Messages = window.Messages = () => {
               </div>
             </div>
           )}
+          <button
+            className="msg-video-call-btn"
+            onClick={handleStartVideoCall}
+            title="Start video call"
+            style={{
+              background: 'none',
+              border: '2px solid #1b6b5a',
+              color: '#1b6b5a',
+              borderRadius: '8px',
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              transition: 'all 0.2s',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#1b6b5a';
+              e.currentTarget.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'none';
+              e.currentTarget.style.color = '#1b6b5a';
+            }}>
+            📹
+          </button>
         </div>
 
         <div className="msg-messages-area">
@@ -456,7 +560,7 @@ const Messages = window.Messages = () => {
                         lineHeight: 1.45,
                         wordWrap: 'break-word',
                       }}>
-                        {m.content}
+                        {renderMessageContent(m.content)}
                         <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : '#bbb', marginTop: '4px', textAlign: 'right' }}>
                           {formatTime(m.created_at)}
                         </div>

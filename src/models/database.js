@@ -162,6 +162,27 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS checkr_status TEXT DEFAULT 'pending'`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS background_check_consent INTEGER DEFAULT 0`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS background_check_consent_at TIMESTAMPTZ`,
+    // v1.5.0 — Caregiver work location, stoplight, terms
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS work_location_address TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS work_latitude REAL`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS work_longitude REAL`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS care_stoplight TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS terms_version TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS onboarding_complete INTEGER DEFAULT 0`,
+    // v1.5.0 — Care recipient health profile
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS pets TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS pet_allergies TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS food_allergies TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS medical_conditions TEXT`,
+    // v1.5.0 — User health/pet profile (for caregivers and family)
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS pets TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS pet_allergies TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS food_allergies TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_conditions TEXT`,
+    // v1.5.0 — Message type for special messages (video_call, system, etc.)
+    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type TEXT DEFAULT 'text'`,
+    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

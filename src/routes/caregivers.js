@@ -234,6 +234,9 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     legalFirstName, legalLastName, dateOfBirth, ssnLast4,
     addressLine1, addressLine2, zip, dlNumber, dlState,
     backgroundCheckConsent,
+    // v1.5.0 — work location, stoplight, terms
+    workLocationAddress, travelRadius, careStoplight,
+    termsAcceptedAt, termsVersion,
   } = req.body;
 
   if (!hourlyRate) {
@@ -281,19 +284,26 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
         dl_state = COALESCE(?, dl_state),
         background_check_consent = COALESCE(?, background_check_consent),
         background_check_consent_at = CASE WHEN ? = 1 THEN NOW() ELSE background_check_consent_at END,
+        work_location_address = COALESCE(?, work_location_address),
+        care_stoplight = COALESCE(?, care_stoplight),
+        terms_accepted_at = COALESCE(?, terms_accepted_at),
+        terms_version = COALESCE(?, terms_version),
         updated_at = NOW()
       WHERE user_id = ?
     `).run(
       bio, yearsExperience, hourlyRate,
       specialties ? JSON.stringify(specialties) : null,
       certifications ? JSON.stringify(certifications) : null,
-      maxTravelMiles, city, state,
+      travelRadius || maxTravelMiles, city, state,
       lat, lng,
       legalFirstName || null, legalLastName || null,
       dateOfBirth || null, ssnLast4 || null,
       addressLine1 || null, addressLine2 || null, zip || null,
       dlNumber || null, dlState || null,
       backgroundCheckConsent ? 1 : null, backgroundCheckConsent ? 1 : 0,
+      workLocationAddress || null,
+      careStoplight ? JSON.stringify(careStoplight) : null,
+      termsAcceptedAt || null, termsVersion || null,
       req.user.id
     );
 

@@ -20,9 +20,12 @@ const AdminPanel = window.AdminPanel = () => {
   const [inviteRole, setInviteRole] = useState('caregiver');
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteMsg, setInviteMsg] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     loadStats();
+    // Fetch current user for settings tab
+    apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -182,6 +185,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'waitlist', label: 'Waitlist', icon: '📋' },
     { id: 'invites', label: 'Invites', icon: '✉️' },
     { id: 'activity', label: 'Activity', icon: '⚡' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 
   return (
@@ -719,6 +723,37 @@ const AdminPanel = window.AdminPanel = () => {
                 ))}
               </div>
             ) : <div style={{ padding: '16px', color: '#999', textAlign: 'center' }}>No sessions yet</div>}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Settings Tab ─── */}
+      {activeTab === 'settings' && (
+        <div>
+          <div className="card">
+            <div className="card-header">Admin Push Notifications</div>
+            <p style={{ padding: '0 16px', fontSize: 13, color: '#888', margin: '0 0 8px' }}>
+              Receive push notifications on your phone for admin events.
+            </p>
+            {[
+              { key: 'push_waitlist_signup', label: 'New waitlist signups' },
+              { key: 'push_new_registration', label: 'New user registrations' },
+            ].map(({ key, label }) => {
+              const prefs = user?.notification_prefs ? (typeof user.notification_prefs === 'string' ? JSON.parse(user.notification_prefs) : user.notification_prefs) : {};
+              const checked = prefs[key] !== false;
+              return (
+                <label key={key} className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px' }}>
+                  <input type="checkbox" checked={checked} onChange={async (e) => {
+                    const newPrefs = { ...prefs, [key]: e.target.checked };
+                    try {
+                      await apiFetch('/api/auth/me', { method: 'PUT', body: JSON.stringify({ notificationPrefs: newPrefs }) });
+                      setUser(prev => ({ ...prev, notification_prefs: JSON.stringify(newPrefs) }));
+                    } catch {}
+                  }} />
+                  <span style={{ fontSize: 14 }}>{label}</span>
+                </label>
+              );
+            })}
           </div>
         </div>
       )}

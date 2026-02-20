@@ -149,7 +149,7 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '20px' }}>The Problem</h2>
           <p style={{ fontSize: '20px', color: '#333', lineHeight: 1.7, marginBottom: '48px' }}>
-            There is no Uber for elder care. Families needing help with an aging parent face two options: expensive agencies charging $5,000 to $10,000 per month, or the impossible task of doing it all themselves. The middle ground — affordable, flexible, on-demand care — simply does not exist.
+            Elder care is broken. Families needing help with an aging parent face two options: expensive agencies charging $5,000 to $10,000 per month, or the impossible task of doing it all themselves. The middle ground — affordable, flexible, on-demand care — simply does not exist.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '32px', justifyContent: 'center' }}>
             <div style={{ padding: '32px', background: '#fef3f0', borderRadius: '12px', flex: '1 1 220px', maxWidth: '320px', textAlign: 'center' }}>

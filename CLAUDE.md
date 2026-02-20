@@ -2,7 +2,7 @@
 
 ## What This Is
 
-InPlace is an on-demand care coordination platform connecting families with professional caregivers for elderly/parent care. Think "Uber for home caregiving." The primary user is Pete Lee, who is managing care for his mother Betty Lee (78, early-stage dementia, mild arthritis) in Blacksburg, VA.
+InPlace is an on-demand care coordination platform connecting families with professional caregivers for elderly/parent care. The primary user is Pete Lee, who is managing care for his mother Betty Lee (78, early-stage dementia, mild arthritis) in Blacksburg, VA.
 
 ## Live Demo
 

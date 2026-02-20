@@ -4,6 +4,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { validateSession } = require("../middleware/validate");
 const availabilityRouter = require("./availability");
+const { sendPushToUser } = require("./push");
 
 const router = express.Router();
 router.use(authenticate);
@@ -148,15 +149,20 @@ router.post("/request", async (req, res) => {
 
   const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(id);
 
-  // Notify assigned caregivers via WebSocket
+  // Notify assigned caregivers via WebSocket + push
   const emitToUser = req.app.get("emitToUser");
-  if (emitToUser) {
-    const assignments = await db.prepare(
-      "SELECT ca.caregiver_id, cp.user_id FROM caregiver_assignments ca JOIN caregiver_profiles cp ON ca.caregiver_id = cp.id WHERE ca.care_recipient_id = ? AND ca.status = 'active'"
-    ).all(recipient.id);
-    for (const a of assignments) {
+  const assignments = await db.prepare(
+    "SELECT ca.caregiver_profile_id, cp.user_id FROM caregiver_assignments ca JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id WHERE ca.care_recipient_id = ? AND ca.is_active = 1"
+  ).all(recipient.id);
+  for (const a of assignments) {
+    if (emitToUser) {
       emitToUser(a.user_id, "session_update", { sessionId: id, status: "requested", session });
     }
+    sendPushToUser(a.user_id, {
+      title: "New Care Request",
+      body: `${serviceType} on ${scheduledDate} — tap to view`,
+      data: { type: "care_request", sessionId: id },
+    }, "care_request").catch(() => {});
   }
 
   res.status(201).json({ session });
@@ -189,22 +195,27 @@ router.put("/:id/claim", async (req, res) => {
     WHERE cs.id = ?
   `).get(req.params.id);
 
-  // Notify the family and care recipient via WebSocket
+  // Notify the family and care recipient via WebSocket + push
   const emitToUser = req.app.get("emitToUser");
-  if (emitToUser) {
-    if (session.family_user_id) {
-      emitToUser(session.family_user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
-    }
-    // Find care_for user to notify
-    const careForUser = await db.prepare(`
-      SELECT u.id FROM users u
-      JOIN care_recipients cr ON LOWER(cr.first_name || ' ' || cr.last_name) = LOWER(u.first_name || ' ' || u.last_name)
-      WHERE cr.id = ? AND u.role = 'care_for'
-      LIMIT 1
-    `).get(session.care_recipient_id);
-    if (careForUser) {
-      emitToUser(careForUser.id, "session_update", { sessionId: req.params.id, status: "confirmed" });
-    }
+  const caregiverName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'A caregiver';
+
+  if (session.family_user_id) {
+    if (emitToUser) emitToUser(session.family_user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+    sendPushToUser(session.family_user_id, {
+      title: "Care Request Accepted",
+      body: `${caregiverName} accepted the ${session.service_type} session on ${session.scheduled_date}`,
+      data: { type: "care_request_accepted", sessionId: req.params.id },
+    }, "care_request_accepted").catch(() => {});
+  }
+  // Find care_for user to notify
+  const careForUser = await db.prepare(`
+    SELECT u.id FROM users u
+    JOIN care_recipients cr ON LOWER(cr.first_name || ' ' || cr.last_name) = LOWER(u.first_name || ' ' || u.last_name)
+    WHERE cr.id = ? AND u.role = 'care_for'
+    LIMIT 1
+  `).get(session.care_recipient_id);
+  if (careForUser) {
+    if (emitToUser) emitToUser(careForUser.id, "session_update", { sessionId: req.params.id, status: "confirmed" });
   }
 
   res.json({ session: updated });

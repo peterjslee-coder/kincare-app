@@ -233,6 +233,34 @@ const App = () => {
       setAppState('platform-onboarding');
       window.history.replaceState({}, '', window.location.pathname);
     }
+
+    // Deep-link from push notification — open conversation or page
+    const convId = params.get('conversation');
+    if (convId) {
+      window.__pendingConversation = convId;
+      setCurrentPage('messages');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    const deepPage = params.get('page');
+    if (deepPage) {
+      setCurrentPage(deepPage);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    // Listen for push navigation messages from service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data?.type === 'PUSH_NAVIGATE') {
+          const d = event.data.data || {};
+          if (d.type === 'message' && d.conversationId) {
+            window.__pendingConversation = d.conversationId;
+            setCurrentPage('messages');
+          } else if (d.type === 'care_request' || d.type === 'care_request_accepted') {
+            setCurrentPage('schedule');
+          }
+        }
+      });
+    }
   }, []);
 
   const handleLogin = (user) => {

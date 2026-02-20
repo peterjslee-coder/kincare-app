@@ -181,6 +181,56 @@ const CaretakerHub = window.CaretakerHub = () => {
   const reviews = data.reviews || [];
   const stats = data.stats || {};
 
+  // Stoplight chart state
+  const [stoplightData, setStoplightData] = useState(null);
+  const [editingStoplight, setEditingStoplight] = useState(false);
+  const [stoplightForm, setStoplightForm] = useState({});
+
+  const CARE_TASKS = [
+    'Bathing / Showering', 'Toileting', 'Dressing', 'Feeding / Meal Assistance',
+    'Medication Reminders', 'Mobility / Transfer', 'Light Housekeeping', 'Laundry',
+    'Meal Preparation', 'Grocery Shopping', 'Transportation / Errands',
+    'Companionship', 'Exercise / Physical Therapy', 'Wound Care',
+    'Dementia / Memory Care', 'Hospice / End-of-Life',
+  ];
+
+  useEffect(() => {
+    // Load stoplight from profile
+    if (profile.care_stoplight) {
+      try {
+        const parsed = typeof profile.care_stoplight === 'string' ? JSON.parse(profile.care_stoplight) : profile.care_stoplight;
+        setStoplightData(parsed);
+        setStoplightForm(parsed);
+      } catch { /* ignore */ }
+    }
+  }, [profile.care_stoplight]);
+
+  const saveStoplight = async () => {
+    try {
+      await apiFetch('/api/caregivers/profile', {
+        method: 'POST',
+        body: JSON.stringify({ hourlyRate: profile.hourlyRate || 25, careStoplight: stoplightForm }),
+      });
+      setStoplightData(stoplightForm);
+      setEditingStoplight(false);
+    } catch (err) { console.error('Stoplight save error:', err); }
+  };
+
+  // First Steps checklist
+  const firstSteps = [
+    { id: 'profile', label: 'Complete your profile', done: !!(profile.bio && profile.hourlyRate) },
+    { id: 'availability', label: 'Set your availability', done: availRules.length > 0 },
+    { id: 'stoplight', label: 'Set your care preferences (stoplight)', done: !!stoplightData },
+    { id: 'photo', label: 'Upload a profile photo', done: !!profile.avatar_url },
+  ];
+  const firstStepsDone = firstSteps.filter(s => s.done).length;
+  const showFirstSteps = firstStepsDone < firstSteps.length;
+
+  // Average hourly rate from completed sessions
+  const totalHours = completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0);
+  const totalEarned = completedSessions.reduce((sum, s) => sum + (s.actual_cost || s.estimated_cost || 0), 0);
+  const avgHourlyRate = totalHours > 0 ? (totalEarned / totalHours).toFixed(0) : (profile.hourlyRate || '--');
+
   const tabs = [
     { id: 'schedule', label: 'Schedule', icon: '📅' },
     { id: 'availability', label: 'Availability', icon: '🕐' },
@@ -188,6 +238,7 @@ const CaretakerHub = window.CaretakerHub = () => {
     { id: 'map', label: 'Area Map', icon: '🗺️' },
     { id: 'earnings', label: 'Earnings', icon: '💰' },
     { id: 'reviews', label: 'Reviews', icon: '⭐' },
+    { id: 'preferences', label: 'Care Preferences', icon: '🚦' },
   ];
 
   return (
@@ -216,27 +267,57 @@ const CaretakerHub = window.CaretakerHub = () => {
         </div>
       </div>
 
-      {/* Quick Stats */}
+      {/* First Steps Banner */}
+      {showFirstSteps && (
+        <div className="card" style={{ marginBottom: '20px', padding: '16px', background: '#fffbf0', border: '1px solid #ffe0a0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ margin: 0, fontSize: '15px', color: '#b45309' }}>First Steps — {firstStepsDone}/{firstSteps.length} complete</h3>
+            <div style={{ width: '100px', height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: `${(firstStepsDone / firstSteps.length) * 100}%`, height: '100%', background: '#1b6b5a', borderRadius: '3px', transition: 'width 0.3s' }} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {firstSteps.map(s => (
+              <div key={s.id} onClick={() => {
+                if (s.id === 'availability') setActiveTab('availability');
+                if (s.id === 'stoplight') setActiveTab('preferences');
+              }} style={{
+                display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px',
+                color: s.done ? '#999' : '#333', cursor: (s.id === 'availability' || s.id === 'stoplight') ? 'pointer' : 'default',
+                textDecoration: s.done ? 'line-through' : 'none',
+              }}>
+                <span style={{ width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', background: s.done ? '#e8f5e9' : '#f0f0f0', color: s.done ? '#2e7d32' : '#999' }}>
+                  {s.done ? '✓' : '○'}
+                </span>
+                {s.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Stats — clickable */}
       <div className="stats-grid">
-        <div className="stat-card">
+        <div className="stat-card" onClick={() => setActiveTab('families')} style={{ cursor: 'pointer' }}>
           <div style={{ fontSize: 24 }}>👪</div>
           <div className="stat-number">{stats.assignedFamilies || 0}</div>
           <div className="stat-label">Assigned Families</div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card" onClick={() => setActiveTab('earnings')} style={{ cursor: 'pointer' }}>
           <div style={{ fontSize: 24 }}>✅</div>
           <div className="stat-number">{stats.completedThisMonth || 0}</div>
           <div className="stat-label">Completed This Month</div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card" onClick={() => setActiveTab('earnings')} style={{ cursor: 'pointer' }}>
           <div style={{ fontSize: 24 }}>⏱️</div>
           <div className="stat-number">{stats.hoursThisMonth || 0}h</div>
           <div className="stat-label">Hours This Month</div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card" onClick={() => setActiveTab('earnings')} style={{ cursor: 'pointer' }}>
           <div style={{ fontSize: 24 }}>💰</div>
           <div className="stat-number">${stats.monthlyEarnings || 0}</div>
           <div className="stat-label">Earned This Month</div>
+          <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>~${avgHourlyRate}/hr avg</div>
         </div>
       </div>
 
@@ -450,6 +531,78 @@ const CaretakerHub = window.CaretakerHub = () => {
                 <div style={{ color: '#999', padding: '12px' }}>No certifications listed</div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'preferences' && (
+        <div>
+          <div className="card" style={{ marginBottom: '16px' }}>
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span><span className="card-icon">🚦</span>Care Task Preferences (Stoplight Chart)</span>
+              {!editingStoplight && (
+                <button onClick={() => { setEditingStoplight(true); setStoplightForm(stoplightData || {}); }} style={{
+                  background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '6px',
+                  padding: '6px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                }}>{stoplightData ? 'Edit' : 'Set Preferences'}</button>
+              )}
+            </div>
+            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 16px' }}>
+              Rate each care task to let families know what you're comfortable with.
+              <span style={{ display: 'inline-block', margin: '0 6px', padding: '2px 8px', background: '#e8f5e9', color: '#2e7d32', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Green = Comfortable</span>
+              <span style={{ display: 'inline-block', margin: '0 6px', padding: '2px 8px', background: '#fff8e1', color: '#f57f17', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Yellow = With Supervision</span>
+              <span style={{ display: 'inline-block', margin: '0 6px', padding: '2px 8px', background: '#fce4ec', color: '#c62828', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Red = Not Comfortable</span>
+            </p>
+
+            {editingStoplight ? (
+              <div>
+                {CARE_TASKS.map(task => {
+                  const val = stoplightForm[task] || '';
+                  return (
+                    <div key={task} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                      <span style={{ fontSize: '13px', color: '#333', flex: 1 }}>{task}</span>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        {[{ v: 'green', bg: '#e8f5e9', border: '#2e7d32', label: '✓' },
+                          { v: 'yellow', bg: '#fff8e1', border: '#f57f17', label: '~' },
+                          { v: 'red', bg: '#fce4ec', border: '#c62828', label: '✕' }].map(opt => (
+                          <button key={opt.v} onClick={() => setStoplightForm(f => ({ ...f, [task]: opt.v }))} style={{
+                            width: '32px', height: '32px', borderRadius: '50%', border: val === opt.v ? `3px solid ${opt.border}` : '2px solid #ddd',
+                            background: val === opt.v ? opt.bg : '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 700,
+                            color: opt.border, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>{opt.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                  <button onClick={() => setEditingStoplight(false)} style={{
+                    padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: '8px', cursor: 'pointer', fontSize: '13px',
+                  }}>Cancel</button>
+                  <button onClick={saveStoplight} style={{
+                    flex: 1, padding: '10px', background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                  }}>Save Preferences</button>
+                </div>
+              </div>
+            ) : stoplightData ? (
+              <div style={{ display: 'grid', gap: '6px' }}>
+                {CARE_TASKS.map(task => {
+                  const val = stoplightData[task];
+                  if (!val) return null;
+                  const color = val === 'green' ? { bg: '#e8f5e9', text: '#2e7d32' } : val === 'yellow' ? { bg: '#fff8e1', text: '#f57f17' } : { bg: '#fce4ec', text: '#c62828' };
+                  return (
+                    <div key={task} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: color.bg, borderRadius: '6px' }}>
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: color.text, flexShrink: 0 }} />
+                      <span style={{ fontSize: '13px', color: color.text, fontWeight: 500 }}>{task}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                No preferences set yet. Click "Set Preferences" to get started.
+              </div>
+            )}
           </div>
         </div>
       )}

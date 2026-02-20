@@ -16,8 +16,74 @@
 - [ ] **Plausible Analytics setup:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html.
 - [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
 - [ ] **Upgrade to Google Maps geocoding:** Swap Nominatim → Google Maps for better residential accuracy when ready for production
-- [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes 20% fee)
+- [ ] **Stripe Connect integration:** Marketplace payments — families pay, caregivers get paid, platform takes fee.
+  - **Account type:** Express (Stripe-hosted caregiver onboarding with InPlace branding)
+  - **Charge type:** Destination charges (charge lives on platform, auto-transfer to caregiver minus fee)
+  - **Charge timing:** After session completion (not at booking)
+  - **Platform fee:** 20% base rate stored as a configurable variable — build as a fee calculation function so rules can be added later (e.g., discount after 3+ hours, surge pricing, volume tiers). Never hardcode 20% anywhere.
+  - **Payout schedule:** 2-day rolling default. Instant payout available as opt-in — platform takes additional 1% on top of Stripe's ~1% instant payout fee (caregiver pays both).
+  - **Cancellation policy:**
+    - Caregiver cancels → no pay, no charge to family.
+    - Family cancels ≥24 hours before session → free cancellation, no charge.
+    - Family cancels <24 hours before session → charged 100% of planned cost, caregiver gets paid. Family can request a "grace cancel" — caregiver can approve to waive the charge. If caregiver grants grace, no charge to family.
+    - Needs: grace request/approve flow in UI (notification to caregiver, approve/deny buttons, time window for response).
+  - **Implementation:** Stripe SDK (stripe npm), caregiver Express onboarding flow, PaymentIntent creation on session complete, webhook handler for payment events, fee calculation utility (`calcPlatformFee(session)` with base rate + rule engine), earnings/payout tracking in CaretakerHub, grace cancel request flow
+  - **Stripe account setup:** Sign up at stripe.com as sole proprietor (SSN, personal bank account OK, no EIN needed)
 - [ ] **S3/R2 for visit photos:** Replace base64 PostgreSQL storage with object storage
+- [ ] **Cloudflare R2 database backup pipeline:** Deploy Railway's [postgres-s3-backups](https://railway.com/deploy/I4zGrH) template. Create R2 bucket (`inplace-db-backups`), generate R2 API token (Object Read & Write), configure daily 5 AM UTC cron. Env vars: `AWS_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`, `AWS_S3_REGION=auto`, `BACKUP_CRON_SCHEDULE=0 5 * * *`, `RUN_ON_STARTUP=true`, `BACKUP_FILE_PREFIX=inplace-`
+- [ ] **Push notification expansion:** Extend `sendPushToUser()` beyond messages to cover key app events. Two tiers:
+  - **Admin-only (peterjslee@gmail.com):** Waitlist signup, new user registration. Toggle on/off in Admin Panel.
+  - **All users:** Care request created (notify assigned caregivers), care request accepted (notify family), session status changes (confirmed/cancelled/check-in). Toggle per-type in MyAccount notification preferences.
+  - **Implementation:** Add push event types to `notification_prefs` JSON on users table. Add admin push prefs to Admin Panel settings. Wire `sendPushToUser()` into waitlist.js, auth.js (register), sessions.js (request/claim/status). Check user's prefs before sending.
+- [ ] **CaretakerHub dashboard overhaul:** Make stat callout cards clickable with drill-down detail views. Must work with real data and demo data alike.
+  - **Assigned Families:** Click → show list of assigned family names (from caregiver_assignments)
+  - **Jobs Completed:** Click → show itemized list of every completed job this month (date, family, service, hours)
+  - **Hours This Month:** Click → show average day length across completed sessions
+  - **Earnings + Payments:** Merge "Earned This Month" and "Pending Payments" into one combined card. Click → show breakdown (earned vs pending vs paid)
+  - **Monthly Summary cleanup:** Remove redundant info that duplicates the stat cards above
+  - **Hourly Rate:** Display as average rate (calculated from actual completed sessions), not a fixed profile value
+- [ ] **Onboarding profile questions — all roles:** Add essential info collection during registration and to profile editing for both care recipients and caregivers.
+  - **Pets:** Do you own pets? (type, count). Do you have any pet allergies?
+  - **Food allergies:** Free-text or common tags (nuts, shellfish, dairy, gluten, etc.)
+  - **Medical conditions / mobility:** Wheelchair bound, uses walker, poor hearing, hearing aids, near-sighted, oxygen, etc. Tag-based with free-text "other" option.
+  - **Applies to:** Care recipients (CareProfile / CareRecipients CRUD) — captures the person being cared for. Caregivers (CaregiverOnboarding / profile edit) — captures their own allergies/pets so families know. Family members (RegisterPage / MyAccount) — captures household info.
+  - **Schema:** Add columns to `care_recipients` (pets, pet_allergies, food_allergies, medical_conditions as JSON text) and `users` or `caregiver_profiles` as appropriate. Surface in CareProfile view so caregivers see it before a session.
+- [ ] **User search + messaging for all users:** Add ability to search for any registered user and start a conversation. Standard messaging app behavior.
+  - **User search:** Search by name or email across all registered users. Results show name, role, avatar. Tapping a result opens or creates a direct conversation.
+  - **Message push notifications:** When a message is received, push notification with sender name + preview. Tapping the notification opens the app directly to that conversation. If not logged in, authenticate first then navigate to the conversation.
+  - **Deep-link to conversation:** Push notification `data` payload includes `conversationId`. Service worker `notificationclick` handler opens `/?conversation=ID`, app.js reads the param and navigates to Messages with that conversation selected.
+  - **Applies to all users** — families, caregivers, care recipients, and any registered user (e.g., investors, admins).
+  - **Note:** Message push already exists for sender→recipient but needs the deep-link navigation and the user search/discovery UI. Currently contacts are limited to assigned caregivers/families.
+- [ ] **Video chat — Meet link in messages (v1):** "Video Call" button in message thread header generates a Google Meet link and sends it as a special message type (rendered as a clickable card, not plain text). Both parties get a push notification with "Join Video Call" action. Upgrade path to embedded Daily.co later if usage warrants it.
+- [ ] **Caregiver registration disclosures & agreements:** Add a legal/informational step to CaregiverOnboarding before they can complete registration. Must be acknowledged (checkbox + signature/accept) to proceed.
+  - **Background check notice:**
+    - InPlace uses Checkr for background checks on all caregivers
+    - Caregiver pays for the background check upfront (display cost)
+    - Caregiver receives a copy of the completed report
+    - Background check fee is refunded to their InPlace account after 10 completed sessions
+    - InPlace will not share background check results with third parties
+    - InPlace reserves the right to refuse or revoke platform access based on background check results
+  - **Payment & tax disclosures:**
+    - All payments processed through Stripe (online payment platform)
+    - Caregivers are independent contractors, not employees
+    - InPlace issues 1099 tax forms annually for earnings exceeding IRS threshold
+    - Caregiver is responsible for their own tax reporting and obligations
+  - **Platform terms:**
+    - InPlace takes a platform fee from each session (percentage displayed)
+    - Instant payout option available for an additional fee
+    - Cancellation policy summary (caregiver cancels = no pay, family late cancel = caregiver gets paid, grace cancel flow)
+  - **Implementation:** New step in CaregiverOnboarding wizard (before final submit). Scrollable disclosure text with required checkbox "I have read and agree to these terms." Store acceptance timestamp + version in `caregiver_profiles` (new columns: `terms_accepted_at`, `terms_version`). Track background check refund eligibility (sessions completed count vs. 10 threshold) in CaretakerHub earnings view.
+- [ ] **Multiple certifications in caregiver signup:** CaregiverOnboarding currently limits to one certification entry. Change to a dynamic list — "Add another certification" button, each entry has cert name + issuing body + expiration date (optional). Remove button per entry. Store as JSON array in `certifications` column on `caregiver_profiles`. Same multi-entry UI on profile edit in CaretakerHub.
+- [ ] **Caregiver onboarding cleanup — remove availability, add work location/radius:**
+  - **Remove availability from signup:** Don't ask about availability during registration. Move it to a "First Steps" checklist shown on CaretakerHub after account creation (similar to the family onboarding checklist pattern).
+  - **Stoplight chart (First Steps):** Caregiver categorizes care tasks into three tiers:
+    - **Green light** — comfortable with (bathing, diapers, wheelchairs, medication reminders, meal prep, etc.)
+    - **Red light** — won't do / not comfortable with (pets, stairs, heavy lifting, food preparation, driving, etc.)
+    - **Yellow light / Needs discussion** — case-by-case (unable to walk, confined to bed, dementia, hospice, etc.)
+    - UI: Drag-and-drop or tap-to-assign from a master list of common care tasks into green/yellow/red columns. Free-text "Add custom" option per column.
+    - Store as JSON on `caregiver_profiles` (new column: `care_stoplight`). Surface on caregiver profile cards so families see it when browsing/assigning. Use for smarter caregiver-to-family matching (green-light tasks overlap with care recipient needs).
+  - **Add preferred work location + travel radius:** New fields in Step 2 (Personal Info) of CaregiverOnboarding. Caregiver sets a preferred work area (could differ from home address — e.g., "I live in Christiansburg but prefer jobs in Blacksburg"). Radius slider (5–50 miles) for how far they're willing to travel from that work location. Store as `work_location_address`, `work_latitude`, `work_longitude`, `max_travel_miles` on `caregiver_profiles`. Geocode on save. This drives the nearby caregiver search for families. Also editable in CaretakerHub profile.
+- [ ] **Remove all Uber references:** Reword any "Uber for X" comparisons in CLAUDE.md and SplashPage.js (The Problem section). Replace with language that describes what InPlace does without inviting the comparison.
 
 
 ## Production Path — Beta on Phone

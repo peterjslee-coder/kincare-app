@@ -1,5 +1,5 @@
-// InPlace Service Worker — v1.4.3
-const CACHE_NAME = 'inplace-v1.4.3';
+// InPlace Service Worker — v1.5.0
+const CACHE_NAME = 'inplace-v1.5.0';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -147,22 +147,34 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(data.title, options));
 });
 
-// Handle notification click — open the app
+// Handle notification click — open the app with deep-link
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   if (event.action === 'dismiss') return;
 
+  // Build deep-link URL from notification data
+  const data = event.notification.data || {};
+  let targetUrl = '/';
+  if (data.type === 'message' && data.conversationId) {
+    targetUrl = `/?conversation=${data.conversationId}`;
+  } else if (data.type === 'care_request' || data.type === 'care_request_accepted') {
+    targetUrl = '/?page=schedule';
+  } else if (data.type === 'video_call' && data.conversationId) {
+    targetUrl = `/?conversation=${data.conversationId}`;
+  }
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if open
+      // Focus existing window and navigate if open
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.postMessage({ type: 'PUSH_NAVIGATE', data });
           return client.focus();
         }
       }
-      // Otherwise open a new window
-      return clients.openWindow('/');
+      // Otherwise open a new window with deep-link
+      return clients.openWindow(targetUrl);
     })
   );
 });

@@ -6,6 +6,7 @@ const { getDb } = require("../models/database");
 const { generateToken, authenticate } = require("../middleware/auth");
 const { validateRegister, validateLogin, validateProfileUpdate } = require("../middleware/validate");
 const { sendEmail, brandedHtml } = require("../utils/email");
+const { sendPushToAdmins } = require("./push");
 
 const router = express.Router();
 
@@ -43,6 +44,14 @@ router.post("/register", validateRegister, async (req, res) => {
     sendVerificationEmail(db, id, email, firstName).catch(err =>
       console.error("  [email] Failed to queue verification email:", err.message)
     );
+
+    // Push notification to admins (fire-and-forget)
+    const roleName = role === "caregiver" ? "Caregiver" : role === "care_for" ? "Care Recipient" : "Family";
+    sendPushToAdmins("new_registration", {
+      title: "New User Registration",
+      body: `${firstName} ${lastName} (${roleName}) just created an account`,
+      data: { type: "new_registration", userId: id, email },
+    });
 
     res.status(201).json({ user, token });
   } catch (err) {
@@ -193,7 +202,7 @@ router.get("/me", authenticate, async (req, res) => {
 // ─── PUT /api/auth/me ───
 router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
   try {
-    const { firstName, lastName, phone, notificationPrefs } = req.body;
+    const { firstName, lastName, phone, notificationPrefs, pets, petAllergies, foodAllergies, medicalConditions } = req.body;
     const db = await getDb();
 
     // Build dynamic update
@@ -207,6 +216,10 @@ router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
       fields.push("notification_prefs = ?");
       values.push(JSON.stringify(notificationPrefs));
     }
+    if (pets !== undefined) { fields.push("pets = ?"); values.push(pets || null); }
+    if (petAllergies !== undefined) { fields.push("pet_allergies = ?"); values.push(petAllergies || null); }
+    if (foodAllergies !== undefined) { fields.push("food_allergies = ?"); values.push(foodAllergies || null); }
+    if (medicalConditions !== undefined) { fields.push("medical_conditions = ?"); values.push(medicalConditions || null); }
 
     if (fields.length === 0) {
       return res.status(400).json({ error: "No fields to update" });

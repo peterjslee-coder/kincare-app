@@ -15,30 +15,37 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
   const [form, setForm] = useState({
     // Step 1 — Account
     firstName: '', lastName: '', email: '', password: '', confirmPassword: '',
-    // Step 2 — Personal Info
+    // Step 2 — Disclosures & Terms
+    acceptBackgroundCheck: false,
+    acceptStripePayments: false,
+    accept1099: false,
+    acceptIndependentContractor: false,
+    acceptRefundPolicy: false,
+    // Step 3 — Personal Info + Work Location
     phone: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '',
     yearsExperience: '', hourlyRate: '', bio: '',
-    // Step 3 — Legal / Checkr
+    workLocationAddress: '', workCity: '', workState: '', workZip: '',
+    travelRadius: '15',
+    // Step 4 — Legal / Checkr
     legalFirstName: '', legalLastName: '', dateOfBirth: '', ssnLast4: '',
     dlNumber: '', dlState: '', backgroundCheckConsent: false,
-    // Step 4 — Certifications
+    // Step 5 — Certifications
     certifications: [{ certType: '', certNumber: '', issuer: '', expiryDate: '' }],
-    // Step 5 — Documents
+    // Step 6 — Documents
     documents: [], // { type, file, preview, fileName }
   });
 
-  const TOTAL_STEPS = 6;
+  const TOTAL_STEPS = 7;
   const US_STATES = [
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
     'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY',
     'NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
   ];
   const CERT_TYPES = ['CNA', 'HHA', 'LPN', 'RN', 'CPR/First Aid', 'BLS', 'ACLS', 'Other'];
+  const RADIUS_OPTIONS = ['5', '10', '15', '25', '50'];
 
   // Validate invite token on mount
-  useEffect(() => {
-    validateInvite();
-  }, []);
+  useEffect(() => { validateInvite(); }, []);
 
   const validateInvite = async () => {
     try {
@@ -72,6 +79,13 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
       if (form.password !== form.confirmPassword) errs.confirmPassword = 'Passwords do not match';
     }
     if (stepNum === 2) {
+      if (!form.acceptBackgroundCheck) errs.acceptBackgroundCheck = 'You must acknowledge this to proceed';
+      if (!form.acceptStripePayments) errs.acceptStripePayments = 'You must acknowledge this to proceed';
+      if (!form.accept1099) errs.accept1099 = 'You must acknowledge this to proceed';
+      if (!form.acceptIndependentContractor) errs.acceptIndependentContractor = 'You must acknowledge this to proceed';
+      if (!form.acceptRefundPolicy) errs.acceptRefundPolicy = 'You must acknowledge this to proceed';
+    }
+    if (stepNum === 3) {
       if (!form.phone.trim()) errs.phone = 'Required';
       if (!form.addressLine1.trim()) errs.addressLine1 = 'Required';
       if (!form.city.trim()) errs.city = 'Required';
@@ -79,7 +93,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
       if (!form.zip.trim()) errs.zip = 'Required';
       if (!form.hourlyRate) errs.hourlyRate = 'Required';
     }
-    if (stepNum === 3) {
+    if (stepNum === 4) {
       if (!form.legalFirstName.trim()) errs.legalFirstName = 'Required';
       if (!form.legalLastName.trim()) errs.legalLastName = 'Required';
       if (!form.dateOfBirth) errs.dateOfBirth = 'Required';
@@ -88,7 +102,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
       if (!form.dlState) errs.dlState = 'Required';
       if (!form.backgroundCheckConsent) errs.backgroundCheckConsent = 'You must consent to proceed';
     }
-    if (stepNum === 5) {
+    if (stepNum === 6) {
       const hasDLFront = form.documents.some(d => d.type === 'dl_front');
       const hasDLBack = form.documents.some(d => d.type === 'dl_back');
       if (!hasDLFront) errs.dl_front = "Driver's license front is required";
@@ -115,7 +129,6 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
       const data = await res.json();
       if (!res.ok) { setErrors({ submit: data.error || 'Registration failed' }); setSaving(false); return; }
 
-      // Store token
       const token = data.token;
       setAuthTokenState(token);
       if (typeof setAuthToken === 'function') setAuthToken(token);
@@ -136,9 +149,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
     setSaving(false);
   };
 
-  // Step 2: Save personal info + create caregiver profile
-  const handleSavePersonalInfo = async () => {
+  // Step 2: Disclosures & Terms (just validation, no API call)
+  const handleAcceptTerms = () => {
     if (!validateStep(2)) return;
+    setStep(3);
+  };
+
+  // Step 3: Save personal info + create caregiver profile
+  const handleSavePersonalInfo = async () => {
+    if (!validateStep(3)) return;
     setSaving(true);
     try {
       const token = authToken || window.AUTH_TOKEN;
@@ -152,6 +171,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
           city: form.city, state: form.state,
           address: form.addressLine1,
           addressLine1: form.addressLine1, addressLine2: form.addressLine2, zip: form.zip,
+          workLocationAddress: form.workLocationAddress || `${form.addressLine1}, ${form.city}, ${form.state} ${form.zip}`,
+          travelRadius: parseInt(form.travelRadius) || 15,
+          termsAcceptedAt: new Date().toISOString(),
+          termsVersion: '1.0',
         }),
       });
       const data = await res.json();
@@ -165,16 +188,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
         body: JSON.stringify({ phone: form.phone }),
       });
 
-      setStep(3);
+      setStep(4);
     } catch (err) {
       setErrors({ submit: 'Network error — please try again' });
     }
     setSaving(false);
   };
 
-  // Step 3: Save legal/Checkr info
+  // Step 4: Save legal/Checkr info
   const handleSaveLegalInfo = async () => {
-    if (!validateStep(3)) return;
+    if (!validateStep(4)) return;
     setSaving(true);
     try {
       const token = authToken || window.AUTH_TOKEN;
@@ -190,14 +213,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
         }),
       });
       if (!res.ok) { const data = await res.json(); setErrors({ submit: data.error }); setSaving(false); return; }
-      setStep(4);
+      setStep(5);
     } catch (err) {
       setErrors({ submit: 'Network error' });
     }
     setSaving(false);
   };
 
-  // Step 4: Save certifications
+  // Step 5: Save certifications
   const handleSaveCertifications = async () => {
     setSaving(true);
     try {
@@ -211,16 +234,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
           certifications: validCerts.map(c => `${c.certType}${c.certNumber ? ' #' + c.certNumber : ''}`),
         }),
       });
-      setStep(5);
+      setStep(6);
     } catch (err) {
       setErrors({ submit: 'Network error' });
     }
     setSaving(false);
   };
 
-  // Step 5: Upload documents
+  // Step 6: Upload documents
   const handleUploadDocuments = async () => {
-    if (!validateStep(5)) return;
+    if (!validateStep(6)) return;
     setSaving(true);
     try {
       const token = authToken || window.AUTH_TOKEN;
@@ -243,7 +266,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
         body: formData,
       });
       if (!res.ok) { const data = await res.json(); setErrors({ submit: data.error }); setSaving(false); return; }
-      setStep(6);
+      setStep(7);
     } catch (err) {
       setErrors({ submit: 'Upload failed — please try again' });
     }
@@ -300,12 +323,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
 
   // ─── Render ───
 
-  // Loading / Error states
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f5f7f5' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>&#9203;</div>
           <div style={{ color: '#666', fontSize: '16px' }}>Validating your invite...</div>
         </div>
       </div>
@@ -316,7 +338,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f5f7f5' }}>
         <div style={{ textAlign: 'center', maxWidth: '400px', padding: '40px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>😔</div>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#128532;</div>
           <h2 style={{ color: '#333', marginBottom: '8px' }}>Invite Issue</h2>
           <p style={{ color: '#666', marginBottom: '24px' }}>{inviteError}</p>
           <a href="/" style={{
@@ -338,6 +360,47 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
   const errorStyle = { color: '#e74c3c', fontSize: '12px', marginTop: '4px' };
   const fieldGroup = { marginBottom: '16px' };
   const rowStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' };
+
+  const stepLabels = {
+    1: 'Create Account',
+    2: 'Disclosures & Terms',
+    3: 'Personal Info',
+    4: 'Background Check Info',
+    5: 'Certifications',
+    6: 'Document Upload',
+    7: 'Review & Complete',
+  };
+
+  const backBtn = (targetStep) => (
+    <button onClick={() => setStep(targetStep)} style={{
+      padding: '14px 24px', background: '#f0f0f0', color: '#555', border: 'none',
+      borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+    }}>Back</button>
+  );
+
+  const nextBtn = (handler, label, disabledExtra) => (
+    <button onClick={handler} disabled={saving || disabledExtra} style={{
+      flex: 1, padding: '14px', background: '#1b6b5a', color: 'white', border: 'none',
+      borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
+      opacity: (saving || disabledExtra) ? 0.6 : 1,
+    }}>{saving ? 'Saving...' : label}</button>
+  );
+
+  // Disclosure checkbox helper
+  const disclosureCheck = (field, label, description) => (
+    <div style={{ padding: '14px', background: '#f8f9fa', borderRadius: '8px', marginBottom: '12px', border: errors[field] ? '1px solid #e74c3c' : '1px solid #eee' }}>
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+        <input type="checkbox" checked={form[field]}
+          onChange={(e) => updateForm(field, e.target.checked)}
+          style={{ marginTop: '3px', width: '18px', height: '18px', flexShrink: 0 }} />
+        <div>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>{label}</div>
+          <div style={{ fontSize: '13px', color: '#666', lineHeight: '1.5' }}>{description}</div>
+        </div>
+      </label>
+      {errors[field] && <div style={errorStyle}>{errors[field]}</div>}
+    </div>
+  );
 
   return (
     <div style={{ minHeight: '100vh', background: '#f5f7f5', padding: '20px' }}>
@@ -369,12 +432,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
           ))}
         </div>
 
-        {/* Step labels */}
+        {/* Step label */}
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <span style={{ fontSize: '12px', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
-            Step {step} of {TOTAL_STEPS} —{' '}
-            {step === 1 ? 'Create Account' : step === 2 ? 'Personal Info' : step === 3 ? 'Background Check Info' :
-             step === 4 ? 'Certifications' : step === 5 ? 'Document Upload' : 'Review & Complete'}
+            Step {step} of {TOTAL_STEPS} — {stepLabels[step]}
           </span>
         </div>
 
@@ -415,16 +476,53 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
               </div>
             </div>
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
-            <button onClick={handleCreateAccount} disabled={saving} style={{
-              width: '100%', padding: '14px', background: '#1b6b5a', color: 'white', border: 'none',
-              borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-              opacity: saving ? 0.6 : 1,
-            }}>{saving ? 'Creating Account...' : 'Create Account & Continue'}</button>
+            {nextBtn(handleCreateAccount, 'Create Account & Continue')}
           </div>
         )}
 
-        {/* ─── Step 2: Personal Info ─── */}
+        {/* ─── Step 2: Disclosures & Terms ─── */}
         {step === 2 && (
+          <div className="card" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Before We Begin</h2>
+            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
+              Please review and acknowledge the following terms to continue with your application.
+            </p>
+
+            {disclosureCheck('acceptBackgroundCheck',
+              'Background Check Required',
+              'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($35). This includes criminal history, driving record, and identity verification.'
+            )}
+
+            {disclosureCheck('acceptStripePayments',
+              'Payment via Stripe',
+              'All payments are processed through Stripe. You will set up a Stripe account to receive direct deposits for completed care sessions. InPlace retains a platform fee from each session.'
+            )}
+
+            {disclosureCheck('accept1099',
+              '1099 Tax Reporting',
+              'As an independent contractor, you will receive a 1099-NEC for earnings over $600 in a calendar year. You are responsible for your own taxes, including self-employment tax.'
+            )}
+
+            {disclosureCheck('acceptIndependentContractor',
+              'Independent Contractor Status',
+              'You are an independent contractor, not an employee of InPlace. You control your own schedule, rates, and clients. InPlace does not provide benefits, workers\' compensation, or unemployment insurance.'
+            )}
+
+            {disclosureCheck('acceptRefundPolicy',
+              'Refund & Cancellation Policy',
+              'After completing 10 sessions, your background check fee will be refunded. If a family cancels within 24 hours of a session, you will still be compensated unless you agree to a grace cancellation.'
+            )}
+
+            {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {backBtn(1)}
+              {nextBtn(handleAcceptTerms, 'I Understand — Continue')}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Step 3: Personal Info + Work Location ─── */}
+        {step === 3 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '16px' }}>Personal Information</h2>
             <div style={fieldGroup}>
@@ -434,7 +532,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
               {errors.phone && <div style={errorStyle}>{errors.phone}</div>}
             </div>
             <div style={fieldGroup}>
-              <label style={labelStyle}>Street Address *</label>
+              <label style={labelStyle}>Home Address *</label>
               <input style={errors.addressLine1 ? inputErrorStyle : inputStyle} value={form.addressLine1}
                 onChange={(e) => updateForm('addressLine1', e.target.value)} placeholder="123 Main Street" />
               {errors.addressLine1 && <div style={errorStyle}>{errors.addressLine1}</div>}
@@ -455,7 +553,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
                 <label style={labelStyle}>State *</label>
                 <select style={errors.state ? inputErrorStyle : inputStyle} value={form.state}
                   onChange={(e) => updateForm('state', e.target.value)}>
-                  <option value="">—</option>
+                  <option value="">--</option>
                   {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 {errors.state && <div style={errorStyle}>{errors.state}</div>}
@@ -467,6 +565,35 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
                 {errors.zip && <div style={errorStyle}>{errors.zip}</div>}
               </div>
             </div>
+
+            {/* Work Location */}
+            <div style={{ padding: '16px', background: '#f0faf8', borderRadius: '8px', marginBottom: '16px', border: '1px solid #d0e8e2' }}>
+              <h3 style={{ fontSize: '15px', color: '#1b6b5a', margin: '0 0 4px' }}>Preferred Work Location</h3>
+              <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px' }}>
+                Where do you prefer to work? Leave blank to use your home address.
+              </p>
+              <div style={fieldGroup}>
+                <label style={labelStyle}>Work Area Address</label>
+                <input style={inputStyle} value={form.workLocationAddress}
+                  onChange={(e) => updateForm('workLocationAddress', e.target.value)}
+                  placeholder="e.g. Downtown Blacksburg, VA (or leave blank for home address)" />
+              </div>
+              <div style={fieldGroup}>
+                <label style={labelStyle}>Travel Radius (miles)</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {RADIUS_OPTIONS.map(r => (
+                    <button key={r} onClick={() => updateForm('travelRadius', r)} style={{
+                      padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 600,
+                      border: form.travelRadius === r ? '2px solid #1b6b5a' : '2px solid #ddd',
+                      background: form.travelRadius === r ? '#e8f5f1' : '#fff',
+                      color: form.travelRadius === r ? '#1b6b5a' : '#666',
+                      cursor: 'pointer',
+                    }}>{r} mi</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             <div style={rowStyle}>
               <div style={fieldGroup}>
                 <label style={labelStyle}>Years of Experience</label>
@@ -488,21 +615,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
             </div>
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => setStep(1)} style={{
-                padding: '14px 24px', background: '#f0f0f0', color: '#555', border: 'none',
-                borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-              }}>Back</button>
-              <button onClick={handleSavePersonalInfo} disabled={saving} style={{
-                flex: 1, padding: '14px', background: '#1b6b5a', color: 'white', border: 'none',
-                borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-                opacity: saving ? 0.6 : 1,
-              }}>{saving ? 'Saving...' : 'Continue'}</button>
+              {backBtn(2)}
+              {nextBtn(handleSavePersonalInfo, 'Continue')}
             </div>
           </div>
         )}
 
-        {/* ─── Step 3: Legal / Checkr ─── */}
-        {step === 3 && (
+        {/* ─── Step 4: Legal / Checkr ─── */}
+        {step === 4 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Background Check Information</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
@@ -533,7 +653,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
                 <label style={labelStyle}>SSN (Last 4 Digits) *</label>
                 <input type="password" maxLength={4} style={errors.ssnLast4 ? inputErrorStyle : inputStyle} value={form.ssnLast4}
                   onChange={(e) => updateForm('ssnLast4', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="••••" />
+                  placeholder="----" />
                 {errors.ssnLast4 && <div style={errorStyle}>{errors.ssnLast4}</div>}
               </div>
             </div>
@@ -561,33 +681,26 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
                   style={{ marginTop: '3px', width: '18px', height: '18px' }} />
                 <span style={{ fontSize: '13px', color: '#444', lineHeight: '1.5' }}>
                   I authorize InPlace to conduct a background check, including criminal history, driving record,
-                  and identity verification through a third-party service (Checkr). I understand this is required
-                  to provide care through the InPlace platform.
+                  and identity verification through Checkr. I understand this is required
+                  to provide care through InPlace and the $35 fee will be refunded after 10 completed sessions.
                 </span>
               </label>
               {errors.backgroundCheckConsent && <div style={errorStyle}>{errors.backgroundCheckConsent}</div>}
             </div>
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => setStep(2)} style={{
-                padding: '14px 24px', background: '#f0f0f0', color: '#555', border: 'none',
-                borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-              }}>Back</button>
-              <button onClick={handleSaveLegalInfo} disabled={saving} style={{
-                flex: 1, padding: '14px', background: '#1b6b5a', color: 'white', border: 'none',
-                borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-                opacity: saving ? 0.6 : 1,
-              }}>{saving ? 'Saving...' : 'Continue'}</button>
+              {backBtn(3)}
+              {nextBtn(handleSaveLegalInfo, 'Continue')}
             </div>
           </div>
         )}
 
-        {/* ─── Step 4: Certifications ─── */}
-        {step === 4 && (
+        {/* ─── Step 5: Certifications ─── */}
+        {step === 5 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Certifications</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
-              Add any professional certifications you hold. You can skip this if you don't have any yet.
+              Add any professional certifications you hold. You can add multiple. Skip if you don't have any yet.
             </p>
             {form.certifications.map((cert, idx) => (
               <div key={idx} style={{
@@ -598,7 +711,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
                   <button onClick={() => removeCert(idx)} style={{
                     position: 'absolute', top: '8px', right: '8px', background: 'none', border: 'none',
                     color: '#c00', cursor: 'pointer', fontSize: '16px', padding: '4px',
-                  }}>×</button>
+                  }}>x</button>
                 )}
                 <div style={rowStyle}>
                   <div style={fieldGroup}>
@@ -632,24 +745,17 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
               padding: '10px 16px', background: 'white', border: '2px dashed #ccc',
               borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#1b6b5a',
               cursor: 'pointer', width: '100%', marginBottom: '16px',
-            }}>+ Add Certification</button>
+            }}>+ Add Another Certification</button>
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => setStep(3)} style={{
-                padding: '14px 24px', background: '#f0f0f0', color: '#555', border: 'none',
-                borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-              }}>Back</button>
-              <button onClick={handleSaveCertifications} disabled={saving} style={{
-                flex: 1, padding: '14px', background: '#1b6b5a', color: 'white', border: 'none',
-                borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-                opacity: saving ? 0.6 : 1,
-              }}>{saving ? 'Saving...' : 'Continue'}</button>
+              {backBtn(4)}
+              {nextBtn(handleSaveCertifications, 'Continue')}
             </div>
           </div>
         )}
 
-        {/* ─── Step 5: Document Upload ─── */}
-        {step === 5 && (
+        {/* ─── Step 6: Document Upload ─── */}
+        {step === 6 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Upload Documents</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
@@ -658,7 +764,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
 
             {/* DL Front */}
             <div style={fieldGroup}>
-              <label style={labelStyle}>Driver's License — Front *</label>
+              <label style={labelStyle}>Driver's License -- Front *</label>
               {form.documents.find(d => d.type === 'dl_front') ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
                   <img src={form.documents.find(d => d.type === 'dl_front').preview}
@@ -680,7 +786,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
 
             {/* DL Back */}
             <div style={fieldGroup}>
-              <label style={labelStyle}>Driver's License — Back *</label>
+              <label style={labelStyle}>Driver's License -- Back *</label>
               {form.documents.find(d => d.type === 'dl_back') ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
                   <img src={form.documents.find(d => d.type === 'dl_back').preview}
@@ -713,7 +819,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
                 }}>
                   <img src={doc.preview} style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
                   <span style={{ fontSize: '13px', color: '#555', flex: 1 }}>{doc.fileName}</span>
-                  <button onClick={() => removeDocument('certification')} style={{
+                  <button onClick={() => {
+                    setForm(f => ({ ...f, documents: f.documents.filter((d, idx) => !(d.type === 'certification' && idx === f.documents.indexOf(doc))) }));
+                  }} style={{
                     background: '#fff0f0', border: '1px solid #fdd', borderRadius: '6px',
                     padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: '#c00',
                   }}>Remove</button>
@@ -737,24 +845,17 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
 
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => setStep(4)} style={{
-                padding: '14px 24px', background: '#f0f0f0', color: '#555', border: 'none',
-                borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-              }}>Back</button>
-              <button onClick={handleUploadDocuments} disabled={saving} style={{
-                flex: 1, padding: '14px', background: '#1b6b5a', color: 'white', border: 'none',
-                borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-                opacity: saving ? 0.6 : 1,
-              }}>{saving ? 'Uploading...' : 'Upload & Continue'}</button>
+              {backBtn(5)}
+              {nextBtn(handleUploadDocuments, 'Upload & Continue')}
             </div>
           </div>
         )}
 
-        {/* ─── Step 6: Review & Complete ─── */}
-        {step === 6 && (
+        {/* ─── Step 7: Review & Complete ─── */}
+        {step === 7 && (
           <div className="card" style={{ padding: '24px' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#127881;</div>
               <h2 style={{ fontSize: '22px', color: '#1b6b5a', margin: '0 0 8px' }}>Welcome to InPlace!</h2>
               <p style={{ color: '#666', fontSize: '15px', margin: 0 }}>
                 Your profile has been created and your documents are uploaded.
@@ -772,15 +873,19 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
                 <div><span style={{ color: '#888' }}>Experience:</span> {form.yearsExperience || 0} years</div>
                 <div><span style={{ color: '#888' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
                 <div><span style={{ color: '#888' }}>Documents:</span> {form.documents.length} uploaded</div>
-                <div><span style={{ color: '#888' }}>Background Check:</span> {form.backgroundCheckConsent ? 'Authorized' : 'Pending'}</div>
+                <div><span style={{ color: '#888' }}>Travel radius:</span> {form.travelRadius} miles</div>
               </div>
             </div>
 
-            <div style={{ padding: '14px', background: '#fff8f0', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ffe0c0' }}>
+            <div style={{ padding: '14px', background: '#fff8f0', borderRadius: '8px', marginBottom: '16px', border: '1px solid #ffe0c0' }}>
               <p style={{ fontSize: '13px', color: '#b45309', margin: 0, lineHeight: '1.5' }}>
-                <strong>Next steps:</strong> Your background check is pending review. Once verified, you'll be able
-                to accept care requests from families in your area. You'll receive an email when your account is fully activated.
+                <strong>What happens next:</strong>
               </p>
+              <ul style={{ fontSize: '13px', color: '#b45309', margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
+                <li>Your background check is being processed (typically 2-5 business days)</li>
+                <li>Once verified, complete your First Steps checklist to start accepting care requests</li>
+                <li>Set your availability and care preferences from your dashboard</li>
+              </ul>
             </div>
 
             <button onClick={handleComplete} style={{

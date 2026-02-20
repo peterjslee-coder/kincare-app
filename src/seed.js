@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.4.3';
+const DEMO_SEED_VERSION = '1.5.0';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -116,8 +116,9 @@ async function seed() {
      location_address, location_city, location_state, location_zip,
      latitude, longitude,
      health_conditions, medications, preferences,
-     emergency_contact_name, emergency_contact_phone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     emergency_contact_name, emergency_contact_phone,
+     pets, pet_allergies, food_allergies, medical_conditions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     bettyId, peteId, "Betty", "Lee", 78,
     "123 Main Street", "Blacksburg", "VA", "24060",
@@ -125,7 +126,11 @@ async function seed() {
     JSON.stringify(["Early-stage dementia", "Mild arthritis"]),
     JSON.stringify(["Donepezil 10mg", "Ibuprofen PRN"]),
     "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals.",
-    "Pete Lee", "(626) 555-0142"
+    "Pete Lee", "(626) 555-0142",
+    "1 cat (Whiskers — orange tabby, indoor, friendly)",
+    "None",
+    "Shellfish allergy (mild — causes hives)",
+    "Early-stage dementia, mild arthritis, occasional knee pain"
   );
 
   // ─── Care Recipient (Dorothy Henderson — Linda's mother) ───
@@ -136,8 +141,9 @@ async function seed() {
      location_address, location_city, location_state, location_zip,
      latitude, longitude,
      health_conditions, medications, preferences,
-     emergency_contact_name, emergency_contact_phone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     emergency_contact_name, emergency_contact_phone,
+     pets, pet_allergies, food_allergies, medical_conditions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     dorothyId, hendersonFamilyId, "Dorothy", "Henderson", 82,
     "456 Oak Avenue", "Blacksburg", "VA", "24060",
@@ -145,7 +151,11 @@ async function seed() {
     JSON.stringify(["Type 2 diabetes", "Hearing loss"]),
     JSON.stringify(["Metformin 500mg", "Lisinopril 10mg"]),
     "Hard of hearing — speak clearly and face her. Enjoys card games and baking.",
-    "Linda Henderson", "(540) 555-0301"
+    "Linda Henderson", "(540) 555-0301",
+    "No pets",
+    "Allergic to cats (sneezing, watery eyes)",
+    "Gluten sensitivity — avoid wheat-based breads",
+    "Type 2 diabetes, hearing loss (wears hearing aids)"
   );
 
   // ─── Care Recipient (Arun Patel — Raj's father) ───
@@ -156,8 +166,9 @@ async function seed() {
      location_address, location_city, location_state, location_zip,
      latitude, longitude,
      health_conditions, medications, preferences,
-     emergency_contact_name, emergency_contact_phone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     emergency_contact_name, emergency_contact_phone,
+     pets, pet_allergies, food_allergies, medical_conditions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     arunId, patelFamilyId, "Arun", "Patel", 75,
     "789 Elm Street", "Christiansburg", "VA", "24073",
@@ -165,7 +176,11 @@ async function seed() {
     JSON.stringify(["Parkinson's disease", "Mild depression"]),
     JSON.stringify(["Levodopa 100mg", "Sertraline 50mg"]),
     "Enjoys chess and classical music. Needs help with fine motor tasks. Very independent — let him try first.",
-    "Raj Patel", "(540) 555-0302"
+    "Raj Patel", "(540) 555-0302",
+    "1 small dog (Kavi — miniature poodle, very calm)",
+    "None",
+    "Lactose intolerant — use dairy-free alternatives",
+    "Parkinson's disease (early stage), mild depression, occasional hand tremors"
   );
 
   // ─── Care Recipient (Betty — David's view, same person) ───
@@ -176,8 +191,9 @@ async function seed() {
      location_address, location_city, location_state, location_zip,
      latitude, longitude,
      health_conditions, medications, preferences,
-     emergency_contact_name, emergency_contact_phone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     emergency_contact_name, emergency_contact_phone,
+     pets, pet_allergies, food_allergies, medical_conditions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     bettyForDavidId, davidLeeId, "Betty", "Lee", 78,
     "123 Main Street", "Blacksburg", "VA", "24060",
@@ -185,7 +201,11 @@ async function seed() {
     JSON.stringify(["Early-stage dementia", "Mild arthritis"]),
     JSON.stringify(["Donepezil 10mg", "Ibuprofen PRN"]),
     "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals.",
-    "Pete Lee", "(626) 555-0142"
+    "Pete Lee", "(626) 555-0142",
+    "1 cat (Whiskers — orange tabby, indoor, friendly)",
+    "None",
+    "Shellfish allergy (mild — causes hives)",
+    "Early-stage dementia, mild arthritis, occasional knee pain"
   );
 
   // ─── Care Recipient (Betty — Susan's view, same person) ───
@@ -196,8 +216,9 @@ async function seed() {
      location_address, location_city, location_state, location_zip,
      latitude, longitude,
      health_conditions, medications, preferences,
-     emergency_contact_name, emergency_contact_phone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     emergency_contact_name, emergency_contact_phone,
+     pets, pet_allergies, food_allergies, medical_conditions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     bettyForSusanId, susanLeeId, "Betty", "Lee", 78,
     "123 Main Street", "Blacksburg", "VA", "24060",
@@ -205,7 +226,11 @@ async function seed() {
     JSON.stringify(["Early-stage dementia", "Mild arthritis"]),
     JSON.stringify(["Donepezil 10mg", "Ibuprofen PRN"]),
     "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals.",
-    "Pete Lee", "(626) 555-0142"
+    "Pete Lee", "(626) 555-0142",
+    "1 cat (Whiskers — orange tabby, indoor, friendly)",
+    "None",
+    "Shellfish allergy (mild — causes hives)",
+    "Early-stage dementia, mild arthritis, occasional knee pain"
   );
 
   console.log("✅ Care recipients created (5 — Betty×3, Dorothy, Arun)");
@@ -231,15 +256,70 @@ async function seed() {
       3, 22, ["Errands", "Light Housekeeping"], ["CPR/First Aid"], 1, 4.7, 68, "Blacksburg", "VA", 37.2280, -80.4200],
   ];
 
-  for (const [id, userId, bio, years, rate, specs, certs, avail, rating, count, city, state, lat, lng] of profiles) {
+  // v1.5.0 — Stoplight care preferences per caregiver
+  const stoplights = {
+    maria: {
+      'Bathing / Showering': 'green', 'Toileting': 'green', 'Dressing': 'green',
+      'Feeding / Meal Assistance': 'green', 'Medication Reminders': 'green',
+      'Mobility / Transfer': 'green', 'Light Housekeeping': 'green', 'Laundry': 'green',
+      'Meal Preparation': 'green', 'Grocery Shopping': 'green',
+      'Transportation / Errands': 'green', 'Companionship': 'green',
+      'Exercise / Physical Therapy': 'yellow', 'Wound Care': 'yellow',
+      'Dementia / Memory Care': 'green', 'Hospice / End-of-Life': 'red',
+    },
+    james: {
+      'Bathing / Showering': 'yellow', 'Toileting': 'yellow', 'Dressing': 'green',
+      'Feeding / Meal Assistance': 'green', 'Medication Reminders': 'green',
+      'Mobility / Transfer': 'green', 'Light Housekeeping': 'green', 'Laundry': 'green',
+      'Meal Preparation': 'yellow', 'Grocery Shopping': 'green',
+      'Transportation / Errands': 'green', 'Companionship': 'green',
+      'Exercise / Physical Therapy': 'green', 'Wound Care': 'red',
+      'Dementia / Memory Care': 'yellow', 'Hospice / End-of-Life': 'red',
+    },
+    sarah: {
+      'Bathing / Showering': 'green', 'Toileting': 'green', 'Dressing': 'green',
+      'Feeding / Meal Assistance': 'green', 'Medication Reminders': 'green',
+      'Mobility / Transfer': 'green', 'Light Housekeeping': 'yellow', 'Laundry': 'yellow',
+      'Meal Preparation': 'green', 'Grocery Shopping': 'green',
+      'Transportation / Errands': 'yellow', 'Companionship': 'green',
+      'Exercise / Physical Therapy': 'green', 'Wound Care': 'green',
+      'Dementia / Memory Care': 'green', 'Hospice / End-of-Life': 'yellow',
+    },
+    david: {
+      'Bathing / Showering': 'yellow', 'Toileting': 'red', 'Dressing': 'green',
+      'Feeding / Meal Assistance': 'green', 'Medication Reminders': 'green',
+      'Mobility / Transfer': 'green', 'Light Housekeeping': 'green', 'Laundry': 'green',
+      'Meal Preparation': 'yellow', 'Grocery Shopping': 'green',
+      'Transportation / Errands': 'green', 'Companionship': 'green',
+      'Exercise / Physical Therapy': 'green', 'Wound Care': 'red',
+      'Dementia / Memory Care': 'yellow', 'Hospice / End-of-Life': 'red',
+    },
+  };
+
+  const workLocations = [
+    "Blacksburg, VA 24060",   // Maria
+    "Blacksburg, VA 24060",   // James
+    "Christiansburg, VA 24073", // Sarah
+    "Blacksburg, VA 24060",   // David
+  ];
+  const travelRadii = [15, 10, 25, 10]; // miles
+  const stoplightKeys = ["maria", "james", "sarah", "david"];
+
+  for (let i = 0; i < profiles.length; i++) {
+    const [id, userId, bio, years, rate, specs, certs, avail, rating, count, city, state, lat, lng] = profiles[i];
     await db.prepare(`
       INSERT INTO caregiver_profiles
       (id, user_id, bio, years_experience, hourly_rate, specialties, certifications,
        is_background_checked, is_available, rating_avg, rating_count,
-       location_city, location_state, latitude, longitude)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
+       location_city, location_state, latitude, longitude,
+       work_location_address, max_travel_miles, care_stoplight,
+       terms_accepted_at, terms_version,
+       background_check_consent, background_check_consent_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, NOW() - INTERVAL '30 days', '1.0', 1, NOW() - INTERVAL '30 days')
     `).run(id, userId, bio, years, rate, JSON.stringify(specs), JSON.stringify(certs),
-      avail, rating, count, city, state, lat, lng);
+      avail, rating, count, city, state, lat, lng,
+      workLocations[i], travelRadii[i], JSON.stringify(stoplights[stoplightKeys[i]]));
   }
 
   console.log("✅ Caregiver profiles created (4)");

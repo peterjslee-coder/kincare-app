@@ -57,12 +57,41 @@ router.delete("/unsubscribe", authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── Utility: Send push to admin users ───
+// Fire-and-forget push to all admin accounts for a given event type
+async function sendPushToAdmins(eventType, payload) {
+  try {
+    const db = await getDb();
+    const admins = await db.prepare("SELECT id, notification_prefs FROM users WHERE is_admin = 1").all();
+    for (const admin of admins) {
+      const prefs = admin.notification_prefs ? JSON.parse(admin.notification_prefs) : {};
+      if (prefs[`push_${eventType}`] === false) continue; // opt-out check (default on)
+      sendPushToUser(admin.id, payload).catch(() => {});
+    }
+  } catch (err) {
+    console.error("Admin push error:", err.message);
+  }
+}
+
 // ─── Utility: Send push to a user ───
 // Used internally by other routes (sessions, messages, etc.)
-async function sendPushToUser(userId, payload) {
+// Optional eventType param — if provided, checks user's notification_prefs before sending
+async function sendPushToUser(userId, payload, eventType) {
   // Only attempt if web-push is configured
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   if (!privateKey || !VAPID_PUBLIC_KEY) return;
+
+  // Check user notification preferences if eventType is provided
+  if (eventType) {
+    try {
+      const db = await getDb();
+      const user = await db.prepare("SELECT notification_prefs FROM users WHERE id = ?").get(userId);
+      if (user && user.notification_prefs) {
+        const prefs = JSON.parse(user.notification_prefs);
+        if (prefs[`push_${eventType}`] === false) return; // user opted out
+      }
+    } catch (e) { /* proceed if prefs check fails */ }
+  }
 
   try {
     const webpush = require("web-push");
@@ -102,3 +131,4 @@ async function sendPushToUser(userId, payload) {
 
 module.exports = router;
 module.exports.sendPushToUser = sendPushToUser;
+module.exports.sendPushToAdmins = sendPushToAdmins;

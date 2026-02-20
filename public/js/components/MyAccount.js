@@ -6,7 +6,8 @@ const MyAccount = window.MyAccount = () => {
   const [editData, setEditData] = useState({});
   const [activeTab, setActiveTab] = useState('profile');
   const [notifications, setNotifications] = useState({
-    sessionUpdates: true, caregiverMessages: true, healthAlerts: true, reminderEmails: false
+    sessionUpdates: true, caregiverMessages: true, healthAlerts: true, reminderEmails: false,
+    push_messages: true, push_care_request: true, push_care_request_accepted: true, push_session_status: true
   });
   const [savingNotifs, setSavingNotifs] = useState(false);
   const { showToast } = useToast();
@@ -83,6 +84,10 @@ const MyAccount = window.MyAccount = () => {
       firstName: user?.first_name || '',
       lastName: user?.last_name || '',
       phone: user?.phone || '',
+      pets: user?.pets || '',
+      petAllergies: user?.pet_allergies || '',
+      foodAllergies: user?.food_allergies || '',
+      medicalConditions: user?.medical_conditions || '',
     });
     setEditing(true);
   };
@@ -98,6 +103,10 @@ const MyAccount = window.MyAccount = () => {
           firstName: editData.firstName,
           lastName: editData.lastName,
           phone: editData.phone,
+          pets: editData.pets,
+          petAllergies: editData.petAllergies,
+          foodAllergies: editData.foodAllergies,
+          medicalConditions: editData.medicalConditions,
         }),
       });
       if (res?.ok) {
@@ -259,6 +268,22 @@ const MyAccount = window.MyAccount = () => {
                   <div style={fieldLabel}>Email</div>
                   <input style={{ ...inputStyle, background: '#f5f5f5', color: '#999' }} value={user?.email || ''} disabled />
                 </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={fieldLabel}>Do you have pets?</div>
+                  <input style={inputStyle} value={editData.pets} onChange={(e) => ed('pets', e.target.value)} placeholder="E.g., 2 cats, golden retriever" />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={fieldLabel}>Pet allergies</div>
+                  <input style={inputStyle} value={editData.petAllergies} onChange={(e) => ed('petAllergies', e.target.value)} placeholder="E.g., dog fur, bird feathers" />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={fieldLabel}>Food allergies</div>
+                  <input style={inputStyle} value={editData.foodAllergies} onChange={(e) => ed('foodAllergies', e.target.value)} placeholder="E.g., peanuts, shellfish, dairy" />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={fieldLabel}>Medical conditions to be aware of</div>
+                  <input style={inputStyle} value={editData.medicalConditions} onChange={(e) => ed('medicalConditions', e.target.value)} placeholder="E.g., diabetes, hypertension, asthma" />
+                </div>
               </div>
             ) : (
               <div className="info-grid">
@@ -298,6 +323,30 @@ const MyAccount = window.MyAccount = () => {
               </div>
             </div>
           </div>
+
+          {!editing && (
+            <div className="card">
+              <div className="card-header">Health & Safety</div>
+              <div className="info-grid">
+                <div className="info-item">
+                  <div className="info-label">Pets</div>
+                  <div className="info-value">{user?.pets || 'Not specified'}</div>
+                </div>
+                <div className="info-item">
+                  <div className="info-label">Pet Allergies</div>
+                  <div className="info-value">{user?.pet_allergies || 'None'}</div>
+                </div>
+                <div className="info-item">
+                  <div className="info-label">Food Allergies</div>
+                  <div className="info-value">{user?.food_allergies || 'None'}</div>
+                </div>
+                <div className="info-item">
+                  <div className="info-label">Medical Conditions</div>
+                  <div className="info-value">{user?.medical_conditions || 'Not specified'}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -465,17 +514,34 @@ const MyAccount = window.MyAccount = () => {
 
       {/* ─── Notifications Tab ─── */}
       {activeTab === 'notifications' && (
-        <div className="card">
-          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>Notifications</span>
-            {savingNotifs && <span style={{ fontSize: 11, color: '#999' }}>Saving...</span>}
+        <div>
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Email Notifications</span>
+              {savingNotifs && <span style={{ fontSize: 11, color: '#999' }}>Saving...</span>}
+            </div>
+            {['sessionUpdates', 'caregiverMessages', 'healthAlerts', 'reminderEmails'].map(key => (
+              <label key={key} className="toggle-label">
+                <input type="checkbox" className="toggle-input" checked={notifications[key]} onChange={(e) => handleNotificationChange(key, e.target.checked)} />
+                <span>{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+              </label>
+            ))}
           </div>
-          {Object.keys(notifications).map(key => (
-            <label key={key} className="toggle-label">
-              <input type="checkbox" className="toggle-input" checked={notifications[key]} onChange={(e) => handleNotificationChange(key, e.target.checked)} />
-              <span>{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-            </label>
-          ))}
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-header">Push Notifications</div>
+            <p style={{ padding: '0 16px', fontSize: 13, color: '#888', margin: '0 0 8px' }}>Choose which events send push notifications to your phone.</p>
+            {[
+              { key: 'push_messages', label: 'New messages' },
+              { key: 'push_care_request', label: 'Care requests (for caregivers)' },
+              { key: 'push_care_request_accepted', label: 'Care request accepted (for families)' },
+              { key: 'push_session_status', label: 'Session status changes' },
+            ].map(({ key, label }) => (
+              <label key={key} className="toggle-label">
+                <input type="checkbox" className="toggle-input" checked={notifications[key] !== false} onChange={(e) => handleNotificationChange(key, e.target.checked)} />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
         </div>
       )}
 

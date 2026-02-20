@@ -6,7 +6,7 @@ const CareRecipients = window.CareRecipients = () => {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', age: '', relationship: '', nickname: '', city: '', state: '',
-    sameAddress: false, healthConditions: '', medications: '', personality: '', preferences: '',
+    sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
     emergencyContactName: '', emergencyContactPhone: ''
   });
   const [saveMsg, setSaveMsg] = useState('');
@@ -27,7 +27,7 @@ const CareRecipients = window.CareRecipients = () => {
   const resetForm = () => {
     setFormData({
       firstName: '', lastName: '', age: '', relationship: '', nickname: '', city: '', state: '',
-      sameAddress: false, healthConditions: '', medications: '', personality: '', preferences: '',
+      sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
       emergencyContactName: '', emergencyContactPhone: ''
     });
   };
@@ -50,6 +50,10 @@ const CareRecipients = window.CareRecipients = () => {
       sameAddress: false,
       healthConditions: parseField(r.health_conditions || r.healthConditions),
       medications: parseField(r.medications),
+      pets: r.pets || '',
+      petAllergies: r.pet_allergies || '',
+      foodAllergies: r.food_allergies || '',
+      medicalConditions: r.medical_conditions || '',
       personality: r.personality || '',
       preferences: r.preferences || '',
       emergencyContactName: r.emergency_contact_name || r.emergencyContactName || '',
@@ -72,6 +76,10 @@ const CareRecipients = window.CareRecipients = () => {
       zip: null,
       healthConditions: formData.healthConditions.split('\n').map(s => s.trim()).filter(Boolean),
       medications: formData.medications.split('\n').map(s => s.trim()).filter(Boolean),
+      pets: formData.pets,
+      petAllergies: formData.petAllergies,
+      foodAllergies: formData.foodAllergies,
+      medicalConditions: formData.medicalConditions,
       preferences: formData.preferences,
       emergencyContactName: formData.emergencyContactName,
       emergencyContactPhone: formData.emergencyContactPhone,
@@ -150,6 +158,30 @@ const CareRecipients = window.CareRecipients = () => {
               <p style={{ color: '#6c757d', marginTop: '8px' }}>{parseDisplay(selected.medications)}</p>
             </div>
           )}
+          {selected.pets && (
+            <div style={{ marginTop: '16px' }}>
+              <strong>Pets in the home:</strong>
+              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.pets}</p>
+            </div>
+          )}
+          {selected.pet_allergies && (
+            <div style={{ marginTop: '16px' }}>
+              <strong>Pet allergies:</strong>
+              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.pet_allergies}</p>
+            </div>
+          )}
+          {selected.food_allergies && (
+            <div style={{ marginTop: '16px' }}>
+              <strong>Food allergies:</strong>
+              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.food_allergies}</p>
+            </div>
+          )}
+          {selected.medical_conditions && (
+            <div style={{ marginTop: '16px' }}>
+              <strong>Additional medical conditions:</strong>
+              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.medical_conditions}</p>
+            </div>
+          )}
           {selected.preferences && (
             <div style={{ marginTop: '16px' }}>
               <strong>Preferences:</strong>
@@ -219,6 +251,22 @@ const CareRecipients = window.CareRecipients = () => {
           <div className="form-group">
             <label>Medications (one per line)</label>
             <textarea value={formData.medications} onChange={(e) => fd('medications', e.target.value)} placeholder="Donepezil 10mg daily&#10;Vitamin D" />
+          </div>
+          <div className="form-group">
+            <label>Pets in the home</label>
+            <input type="text" value={formData.pets} onChange={(e) => fd('pets', e.target.value)} placeholder="e.g., Golden Retriever, Orange tabby cat" />
+          </div>
+          <div className="form-group">
+            <label>Pet allergies</label>
+            <input type="text" value={formData.petAllergies} onChange={(e) => fd('petAllergies', e.target.value)} placeholder="e.g., Dander sensitivity" />
+          </div>
+          <div className="form-group">
+            <label>Food allergies</label>
+            <input type="text" value={formData.foodAllergies} onChange={(e) => fd('foodAllergies', e.target.value)} placeholder="e.g., Shellfish, nuts" />
+          </div>
+          <div className="form-group">
+            <label>Additional medical conditions</label>
+            <input type="text" value={formData.medicalConditions} onChange={(e) => fd('medicalConditions', e.target.value)} placeholder="e.g., Hypertension, Sleep apnea" />
           </div>
           <div className="form-group">
             <label>Preferences</label>
