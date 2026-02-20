@@ -106,10 +106,18 @@ async function main() {
     const byCategory = {};
     const byStatus = {};
     const byMood = {};
+    const byBrowser = {};
+    const byOS = {};
+    const byDevice = {};
+    const hasErrors = [];
     for (const f of allFeedback) {
       byCategory[f.category] = (byCategory[f.category] || 0) + 1;
       byStatus[f.status] = (byStatus[f.status] || 0) + 1;
       if (f.mood) byMood[f.mood] = (byMood[f.mood] || 0) + 1;
+      if (f.pageContext?.browser) byBrowser[f.pageContext.browser] = (byBrowser[f.pageContext.browser] || 0) + 1;
+      if (f.pageContext?.os) byOS[f.pageContext.os] = (byOS[f.pageContext.os] || 0) + 1;
+      if (f.pageContext?.device) byDevice[f.pageContext.device] = (byDevice[f.pageContext.device] || 0) + 1;
+      if (f.pageContext?.recentErrors?.length) hasErrors.push(f);
     }
 
     md += `## Summary\n\n`;
@@ -125,6 +133,33 @@ async function main() {
       md += `\n`;
     }
 
+    if (Object.keys(byBrowser).length) {
+      md += `| Browser | Count |\n|---------|-------|\n`;
+      for (const [k, v] of Object.entries(byBrowser)) md += `| ${k} | ${v} |\n`;
+      md += `\n`;
+    }
+
+    if (Object.keys(byOS).length) {
+      md += `| OS | Count |\n|----|-------|\n`;
+      for (const [k, v] of Object.entries(byOS)) md += `| ${k} | ${v} |\n`;
+      md += `\n`;
+    }
+
+    if (Object.keys(byDevice).length) {
+      md += `| Device | Count |\n|--------|-------|\n`;
+      for (const [k, v] of Object.entries(byDevice)) md += `| ${k} | ${v} |\n`;
+      md += `\n`;
+    }
+
+    if (hasErrors.length) {
+      md += `## ⚠️ Feedback With Console Errors\n\n`;
+      md += `${hasErrors.length} item(s) captured JavaScript errors at time of submission:\n\n`;
+      for (const f of hasErrors) {
+        md += `- **${f.userName}** on ${f.pageContext.page}: ${f.pageContext.recentErrors.map(e => e.message.substring(0, 60)).join("; ")}\n`;
+      }
+      md += `\n`;
+    }
+
     // Individual items
     md += `## All Feedback\n\n`;
     for (const f of allFeedback) {
@@ -132,13 +167,25 @@ async function main() {
         year: "numeric", month: "short", day: "numeric",
       });
       md += `### ${f.category.toUpperCase()}: ${f.description.substring(0, 80)}${f.description.length > 80 ? "..." : ""}\n`;
-      md += `- **From:** ${f.userName} (${f.userEmail}) — ${f.userRole}\n`;
+      md += `- **From:** ${f.userName} (${f.userEmail || "anonymous"}) — ${f.userRole || "visitor"}\n`;
       md += `- **Date:** ${date}\n`;
       md += `- **Status:** ${f.status}`;
       if (f.mood) md += ` | **Mood:** ${f.mood}`;
       md += `\n`;
       if (f.pageContext) {
-        md += `- **Page:** ${f.pageContext.page || "unknown"} (v${f.pageContext.version || "?"})\n`;
+        md += `- **Page:** ${f.pageContext.page || "unknown"} (v${f.pageContext.version || "?"})`;
+        if (f.pageContext.currentUrl) md += ` — URL: ${f.pageContext.currentUrl}`;
+        md += `\n`;
+        if (f.pageContext.browser || f.pageContext.os) {
+          md += `- **Environment:** ${f.pageContext.browser || "?"} on ${f.pageContext.os || "?"} — ${f.pageContext.device || "?"} (${f.pageContext.screenResolution || "?"}, viewport ${f.pageContext.viewportSize || "?"})`;
+          if (f.pageContext.touchSupport === 'yes') md += ` [touch]`;
+          if (f.pageContext.isPWA === 'yes') md += ` [PWA]`;
+          if (f.pageContext.connectionType && f.pageContext.connectionType !== 'unknown') md += ` [${f.pageContext.connectionType}]`;
+          md += `\n`;
+        }
+        if (f.pageContext.recentErrors?.length) {
+          md += `- **⚠️ Console errors (${f.pageContext.recentErrors.length}):** ${f.pageContext.recentErrors.map(e => "`" + e.message.substring(0, 80) + "`").join(", ")}\n`;
+        }
       }
       md += `- **Full description:** ${f.description}\n`;
       if (f.adminNotes) md += `- **Admin notes:** ${f.adminNotes}\n`;

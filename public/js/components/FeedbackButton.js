@@ -1,6 +1,7 @@
 // ─── Floating Feedback Button ───
 // Persistent FAB on every screen, opens feedback submission modal.
-const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole }) => {
+// Enhanced with device/browser context auto-collection and anonymous support.
+const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, currentUser }) => {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState('general');
   const [description, setDescription] = useState('');
@@ -8,6 +9,130 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole }) => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
+
+  // Refs for console error tracking
+  const recentErrorsRef = React.useRef([]);
+  const errorListenerRef = React.useRef(null);
+
+  // Parse user agent to extract browser, OS info
+  const parseUserAgent = (ua) => {
+    let browserName = 'Unknown';
+    let browserVersion = 'Unknown';
+    let osName = 'Unknown';
+    let osVersion = 'Unknown';
+
+    // Browser detection
+    if (/Chrome/.test(ua) && !/Chromium/.test(ua)) {
+      browserName = 'Chrome';
+      const match = ua.match(/Chrome\/([0-9.]+)/);
+      browserVersion = match ? match[1] : 'Unknown';
+    } else if (/Safari/.test(ua) && !/Chrome/.test(ua)) {
+      browserName = 'Safari';
+      const match = ua.match(/Version\/([0-9.]+)/);
+      browserVersion = match ? match[1] : 'Unknown';
+    } else if (/Firefox/.test(ua)) {
+      browserName = 'Firefox';
+      const match = ua.match(/Firefox\/([0-9.]+)/);
+      browserVersion = match ? match[1] : 'Unknown';
+    } else if (/Edge/.test(ua)) {
+      browserName = 'Edge';
+      const match = ua.match(/Edge\/([0-9.]+)/);
+      browserVersion = match ? match[1] : 'Unknown';
+    }
+
+    // OS detection
+    if (/Windows/.test(ua)) {
+      osName = 'Windows';
+      const match = ua.match(/Windows NT ([0-9.]+)/);
+      osVersion = match ? match[1] : 'Unknown';
+    } else if (/Macintosh/.test(ua)) {
+      osName = 'macOS';
+      const match = ua.match(/Mac OS X ([0-9_]+)/);
+      osVersion = match ? match[1].replace(/_/g, '.') : 'Unknown';
+    } else if (/Linux/.test(ua)) {
+      osName = 'Linux';
+      osVersion = 'Unknown';
+    } else if (/iPhone|iPad|iPod/.test(ua)) {
+      osName = 'iOS';
+      const match = ua.match(/OS ([0-9_]+)/);
+      osVersion = match ? match[1].replace(/_/g, '.') : 'Unknown';
+    } else if (/Android/.test(ua)) {
+      osName = 'Android';
+      const match = ua.match(/Android ([0-9.]+)/);
+      osVersion = match ? match[1] : 'Unknown';
+    }
+
+    return { browserName, browserVersion, osName, osVersion };
+  };
+
+  // Initialize error listener on mount
+  React.useEffect(() => {
+    // Capture console errors
+    const originalError = console.error;
+    console.error = function (...args) {
+      recentErrorsRef.current.push({
+        message: args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '),
+        timestamp: new Date().toISOString(),
+      });
+      // Keep only last 5 errors
+      if (recentErrorsRef.current.length > 5) {
+        recentErrorsRef.current.shift();
+      }
+      // Call original
+      originalError.apply(console, args);
+    };
+
+    // Global error handler for uncaught exceptions
+    const handleError = (event) => {
+      recentErrorsRef.current.push({
+        message: event.message || String(event),
+        timestamp: new Date().toISOString(),
+      });
+      if (recentErrorsRef.current.length > 5) {
+        recentErrorsRef.current.shift();
+      }
+    };
+
+    window.addEventListener('error', handleError);
+    errorListenerRef.current = handleError;
+
+    return () => {
+      // Cleanup on unmount
+      console.error = originalError;
+      if (errorListenerRef.current) {
+        window.removeEventListener('error', errorListenerRef.current);
+      }
+    };
+  }, []);
+
+  // Build rich pageContext with device/browser info
+  const buildPageContext = () => {
+    const ua = navigator.userAgent;
+    const { browserName, browserVersion, osName, osVersion } = parseUserAgent(ua);
+
+    const pageContext = {
+      page: currentPage || 'unknown',
+      role: userRole || 'unknown',
+      version: window.APP_VERSION || 'unknown',
+      device: window.innerWidth <= 768 ? 'mobile' : 'desktop',
+      timestamp: new Date().toISOString(),
+      // Rich device context
+      userAgent: ua,
+      browser: `${browserName} ${browserVersion}`,
+      os: `${osName} ${osVersion}`,
+      screenResolution: `${window.screen.width}x${window.screen.height}`,
+      viewportSize: `${window.innerWidth}x${window.innerHeight}`,
+      devicePixelRatio: window.devicePixelRatio || 1,
+      touchSupport: typeof window !== 'undefined' && window.ontouchstart !== undefined ? 'yes' : 'no',
+      currentUrl: window.location.hash || window.location.pathname,
+      connectionType: navigator.connection?.effectiveType || 'unknown',
+      language: navigator.language || 'unknown',
+      isPWA: window.navigator.standalone === true ? 'yes' : 'no',
+      recentErrors: recentErrorsRef.current.length > 0 ? recentErrorsRef.current : null,
+    };
+
+    return pageContext;
+  };
 
   const resetForm = () => {
     setCategory('general');
@@ -25,17 +150,31 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole }) => {
     setSubmitting(true);
     setError(null);
     try {
-      const pageContext = {
-        page: currentPage || 'unknown',
-        role: userRole || 'unknown',
-        version: window.APP_VERSION || 'unknown',
-        device: window.innerWidth <= 768 ? 'mobile' : 'desktop',
-        timestamp: new Date().toISOString(),
+      const pageContext = buildPageContext();
+      const payload = {
+        category,
+        description: description.trim(),
+        mood,
+        pageContext,
       };
-      const res = await apiFetch('/api/feedback', {
-        method: 'POST',
-        body: JSON.stringify({ category, description: description.trim(), mood, pageContext }),
-      });
+
+      let res;
+      // If user is authenticated, use apiFetch (with auth header)
+      // If user is null/anonymous, use raw fetch without auth
+      if (currentUser) {
+        res = await apiFetch('/api/feedback', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // Anonymous feedback: POST to separate endpoint without auth
+        res = await fetch('/api/feedback/anonymous', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
       if (res?.ok) {
         setSubmitted(true);
         setTimeout(() => { setOpen(false); resetForm(); }, 1500);

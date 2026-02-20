@@ -4,6 +4,51 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
+
+// ─── POST /api/feedback/anonymous ───
+// Submit feedback without authentication (splash/demo visitors)
+router.post("/anonymous", async (req, res) => {
+  const db = await getDb();
+  const { category, description, mood, screenshot, pageContext } = req.body;
+
+  if (!category || !description || description.trim().length < 10) {
+    return res.status(400).json({ error: "Category and description (10+ chars) are required" });
+  }
+
+  const validCategories = ['bug', 'feature', 'general', 'complaint', 'praise'];
+  if (!validCategories.includes(category)) {
+    return res.status(400).json({ error: "Invalid category" });
+  }
+
+  // Limit screenshot size (2MB base64)
+  if (screenshot && screenshot.length > 2 * 1024 * 1024) {
+    return res.status(400).json({ error: "Screenshot too large (max 2MB)" });
+  }
+
+  const id = uuid();
+  try {
+    await db.prepare(`
+      INSERT INTO feedback (id, user_id, category, description, mood, screenshot, page_context, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'new', NOW(), NOW())
+    `).run(id, null, category, description.trim(), mood || null, screenshot || null, pageContext ? JSON.stringify(pageContext) : null);
+
+    // Push notification to admin (with "Anonymous" as userName)
+    try {
+      const emitToUser = req.app.get("emitToUser");
+      const adminUser = await db.prepare("SELECT id FROM users WHERE is_admin = 1 LIMIT 1").get();
+      if (adminUser && emitToUser) {
+        emitToUser(adminUser.id, "new_feedback", { id, category, description: description.trim().substring(0, 100), userName: "Anonymous" });
+      }
+    } catch (pushErr) { console.error("Feedback push error:", pushErr); }
+
+    res.status(201).json({ id, message: "Feedback submitted — thank you!" });
+  } catch (err) {
+    console.error("Submit anonymous feedback error:", err);
+    res.status(500).json({ error: "Failed to submit feedback" });
+  }
+});
+
+// All other routes require auth
 router.use(authenticate);
 
 // ─── POST /api/feedback ───
@@ -63,7 +108,7 @@ router.get("/", async (req, res) => {
   let query = `
     SELECT f.*, u.first_name, u.last_name, u.email, u.role AS user_role
     FROM feedback f
-    JOIN users u ON f.user_id = u.id
+    LEFT JOIN users u ON f.user_id = u.id
     WHERE 1=1
   `;
   const params = [];
@@ -90,9 +135,9 @@ router.get("/", async (req, res) => {
       feedback: items.map(f => ({
         id: f.id,
         userId: f.user_id,
-        userName: `${f.first_name} ${f.last_name}`,
-        userEmail: f.email,
-        userRole: f.user_role,
+        userName: f.user_id ? `${f.first_name} ${f.last_name}` : "Anonymous",
+        userEmail: f.email || "—",
+        userRole: f.user_role || "—",
         category: f.category,
         description: f.description,
         mood: f.mood,

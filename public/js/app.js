@@ -645,7 +645,7 @@ const App = () => {
         ))}
       </nav>
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
-      {currentUser && <FeedbackButton currentPage={currentPage} userRole={currentUser.role} />}
+      <FeedbackButton currentPage={currentPage} userRole={currentUser?.role} currentUser={currentUser} />
       <PWAInstallBanner />
       <OfflineIndicator />
     </React.Fragment>

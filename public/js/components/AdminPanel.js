@@ -835,12 +835,42 @@ const AdminPanel = window.AdminPanel = () => {
                         <div style={{ fontSize: 14, color: '#333', lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{fb.description}</div>
 
                         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#888', marginBottom: 12 }}>
-                          <span>From: <strong>{fb.userName}</strong> ({fb.userEmail})</span>
-                          <span>Role: {fb.userRole}</span>
+                          <span>From: <strong>{fb.userName}</strong> ({fb.userEmail || '—'})</span>
+                          <span>Role: {fb.userRole || '—'}</span>
                           {fb.pageContext && <span>Page: {fb.pageContext.page}</span>}
                           {fb.pageContext?.device && <span>Device: {fb.pageContext.device}</span>}
                           <span>{new Date(fb.createdAt).toLocaleString()}</span>
                         </div>
+
+                        {/* Rich device context (collapsible) */}
+                        {fb.pageContext && (fb.pageContext.browser || fb.pageContext.os) && (
+                          <details style={{ marginBottom: 12, fontSize: 12, color: '#666' }}>
+                            <summary style={{ cursor: 'pointer', fontWeight: 600, color: '#555', marginBottom: 6 }}>Device &amp; Environment Details</summary>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '4px 16px', padding: '8px 12px', background: '#f8f9fa', borderRadius: 8 }}>
+                              {fb.pageContext.browser && <span><strong>Browser:</strong> {fb.pageContext.browser}</span>}
+                              {fb.pageContext.os && <span><strong>OS:</strong> {fb.pageContext.os}</span>}
+                              {fb.pageContext.screenResolution && <span><strong>Screen:</strong> {fb.pageContext.screenResolution}</span>}
+                              {fb.pageContext.viewportSize && <span><strong>Viewport:</strong> {fb.pageContext.viewportSize}</span>}
+                              {fb.pageContext.devicePixelRatio && <span><strong>DPR:</strong> {fb.pageContext.devicePixelRatio}x</span>}
+                              {fb.pageContext.touchSupport && <span><strong>Touch:</strong> {fb.pageContext.touchSupport}</span>}
+                              {fb.pageContext.connectionType && fb.pageContext.connectionType !== 'unknown' && <span><strong>Connection:</strong> {fb.pageContext.connectionType}</span>}
+                              {fb.pageContext.language && <span><strong>Language:</strong> {fb.pageContext.language}</span>}
+                              {fb.pageContext.isPWA === 'yes' && <span><strong>PWA:</strong> Yes</span>}
+                              {fb.pageContext.currentUrl && <span><strong>URL:</strong> {fb.pageContext.currentUrl}</span>}
+                              {fb.pageContext.version && <span><strong>Version:</strong> v{fb.pageContext.version}</span>}
+                            </div>
+                            {fb.pageContext.recentErrors && fb.pageContext.recentErrors.length > 0 && (
+                              <div style={{ marginTop: 8, padding: '8px 12px', background: '#fff3f3', borderRadius: 8, border: '1px solid #fdd' }}>
+                                <strong style={{ color: '#c62828' }}>Console Errors ({fb.pageContext.recentErrors.length}):</strong>
+                                {fb.pageContext.recentErrors.map((err, i) => (
+                                  <div key={i} style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11, color: '#c62828', wordBreak: 'break-all' }}>
+                                    {err.message}{err.timestamp ? ` (${new Date(err.timestamp).toLocaleTimeString()})` : ''}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </details>
+                        )}
 
                         {fb.hasScreenshot && (
                           <div style={{ marginBottom: 12 }}>
