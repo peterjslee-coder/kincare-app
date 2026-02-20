@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.7.1';
+const DEMO_SEED_VERSION = '1.7.2';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -322,7 +322,30 @@ async function seed() {
       workLocations[i], travelRadii[i], JSON.stringify(stoplights[stoplightKeys[i]]));
   }
 
-  console.log("✅ Caregiver profiles created (4)");
+  // Complete Maria's onboarding — she's the primary demo caregiver
+  await db.prepare(`
+    UPDATE caregiver_profiles SET
+      onboarding_complete = 1,
+      checkr_status = 'clear',
+      legal_first_name = 'Maria',
+      legal_last_name = 'Santos',
+      date_of_birth = '1992-03-15',
+      ssn_last4 = '4829',
+      dl_number = 'S520-4829-0315',
+      dl_state = 'VA'
+    WHERE id = ?
+  `).run(mariaId);
+
+  // James partially complete (in progress)
+  await db.prepare(`
+    UPDATE caregiver_profiles SET
+      checkr_status = 'pending',
+      legal_first_name = 'James',
+      legal_last_name = 'Okafor'
+    WHERE id = ?
+  `).run(jamesId);
+
+  console.log("✅ Caregiver profiles created (4 — Maria fully onboarded, James partial)");
 
   // ─── Caregiver Assignments ───
   await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 1)`).run(uuid(), bettyId, peteId, mariaId);
@@ -575,21 +598,31 @@ async function seed() {
   console.log("✅ Visit logs created (4)");
 
   // ─── Activity Feed ───
+  // Pete's activity feed — spans 10 days of realistic care coordination
   const activities = [
-    [uuid(), peteId, bettyId, "visit_complete", "Visit completed",
-      "Maria prepared chicken soup. Betty ate well and was in good spirits.", "-5 days"],
+    // Older entries
+    [uuid(), peteId, bettyId, "visit_complete", "Full-day visit completed",
+      "Maria spent 8 hours with Betty — prepared 3 meals, organized medications, did light housekeeping, and afternoon puzzles. Betty was in wonderful spirits all day!", "-8 days"],
     [uuid(), peteId, bettyId, "session_confirmed", "Caregiver matched: James Okafor",
-      "James will arrive tomorrow at 10:00 AM for companionship.", "-3 days"],
-    [uuid(), peteId, bettyId, "visit_complete", "Visit completed",
-      "James and Betty looked through photo albums and took a short walk.", "-2 days"],
-    [uuid(), peteId, bettyId, "session_booked", "Rides & Errands requested",
-      "Session booked for Feb 19 at 9:00 AM — doctor appointment.", "-1 day"],
-    [uuid(), peteId, bettyId, "visit_complete", "Grocery run completed",
-      "Maria picked up groceries from Kroger and stocked the fridge.", "-12 hours"],
-    [uuid(), peteId, bettyId, "session_confirmed", "Meal Prep confirmed for Feb 25",
-      "Maria Santos will prepare Betty's favorite tomato soup and meals for the week.", "-6 hours"],
+      "James accepted the companionship session for Saturday at 10:00 AM. He'll bring crossword books and puzzles.", "-7 days"],
+    [uuid(), peteId, bettyId, "visit_complete", "Companionship visit completed",
+      "James and Betty looked through photo albums, took a short walk around the block, and worked on a 500-piece garden puzzle. She was steady on her feet and very chatty.", "-5 days"],
+    [uuid(), peteId, bettyId, "care_request", "Betty requested afternoon company",
+      "Betty submitted a care request for Saturday afternoon — she'd like companionship for a walk and maybe some gardening if weather permits.", "-4 days"],
+    [uuid(), peteId, bettyId, "visit_complete", "Meal prep completed",
+      "Maria prepared chicken soup, labeled leftovers in the fridge, and stocked groceries from Kroger. Betty ate well — two slices of sourdough with soup.", "-3 days"],
+    [uuid(), peteId, bettyId, "session_booked", "Doctor appointment transport booked",
+      "Rides session booked for Feb 25 at 9:00 AM. Maria will drive Betty to Dr. Patel's office and pick up prescriptions afterward.", "-2 days"],
+    [uuid(), peteId, bettyId, "session_confirmed", "Meal Prep confirmed for Feb 24",
+      "Maria Santos confirmed full-day care (8 hours) — meal prep, companionship, and light housekeeping. Betty's favorite tomato soup is on the menu.", "-1 day"],
+    [uuid(), peteId, bettyId, "medication_reminder", "Donepezil refill needed by Friday",
+      "Susan called CVS — the Donepezil refill will be ready Friday after 10am. Maria will pick it up on her way to Betty's.", "-12 hours"],
+    [uuid(), peteId, bettyId, "visit_complete", "Morning visit completed",
+      "Maria arrived at 8am. Betty was already up and dressed with Whiskers on her lap. They had oatmeal with blueberries and started the day with gentle stretches.", "-4 hours"],
     [uuid(), peteId, bettyId, "session_booked", "New caregiver introduction scheduled",
-      "Sarah Chen will visit Betty on Feb 28 for a companionship session. First visit — please ensure a warm welcome.", "-2 hours"],
+      "Sarah Chen will visit Betty on Feb 28 for a companionship session. First visit — please ensure a warm welcome. Sarah specializes in nutrition for seniors.", "-2 hours"],
+    [uuid(), peteId, bettyId, "note_added", "Care note added by Susan",
+      "Susan added a health note: Dr. Patel's nurse said Ibuprofen PRN is fine for knee pain, ice 15 min after walks.", "-1 hour"],
   ];
 
   for (const [id, famId, recipId, type, title, msg, timeOffset] of activities) {
@@ -600,19 +633,37 @@ async function seed() {
     `).run(id, famId, recipId, type, title, msg, timeOffset);
   }
 
-  // Activity feed for David Lee
-  await db.prepare(`
-    INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, created_at)
-    VALUES (?, ?, ?, 'session_confirmed', 'Meal Prep confirmed for Feb 20', 'Maria Santos will prepare lunch for Betty.', NOW() - INTERVAL '4 hours')
-  `).run(uuid(), davidLeeId, bettyForDavidId);
+  // Activity feed for David Lee — his own set
+  const davidActivities = [
+    [uuid(), davidLeeId, bettyForDavidId, "session_confirmed", "Meal Prep confirmed for Feb 22",
+      "Maria Santos will prepare lunch for Betty — David coordinating this week.", "-1 day"],
+    [uuid(), davidLeeId, bettyForDavidId, "visit_complete", "Video call with grandkids",
+      "Maria helped Betty video call with David's kids at 2pm. Betty was laughing and showing them Whiskers. Great interaction!", "-4 hours"],
+  ];
+
+  for (const [id, famId, recipId, type, title, msg, timeOffset] of davidActivities) {
+    await db.prepare(`
+      INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW() + ?::interval)
+    `).run(id, famId, recipId, type, title, msg, timeOffset);
+  }
 
   // Activity feed for Susan Lee
-  await db.prepare(`
-    INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, created_at)
-    VALUES (?, ?, ?, 'session_confirmed', 'Companionship confirmed for Feb 22', 'Maria Santos will visit Betty for an afternoon garden walk.', NOW() - INTERVAL '3 hours')
-  `).run(uuid(), susanLeeId, bettyForSusanId);
+  const susanActivities = [
+    [uuid(), susanLeeId, bettyForSusanId, "session_confirmed", "Companionship confirmed for Feb 23",
+      "Maria Santos will visit Betty for an afternoon garden walk if weather permits.", "-6 hours"],
+    [uuid(), susanLeeId, bettyForSusanId, "medication_reminder", "Donepezil refill ready Friday",
+      "CVS will have the refill ready after 10am. Maria will pick it up.", "-3 hours"],
+  ];
 
-  console.log("✅ Activity feed populated (9)");
+  for (const [id, famId, recipId, type, title, msg, timeOffset] of susanActivities) {
+    await db.prepare(`
+      INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW() + ?::interval)
+    `).run(id, famId, recipId, type, title, msg, timeOffset);
+  }
+
+  console.log("✅ Activity feed populated (15 — Pete 11, David 2, Susan 2)");
 
   // ─── Reviews ───
   const reviews = [
@@ -671,49 +722,121 @@ async function seed() {
   console.log("✅ Direct conversations created (5)");
 
   // ─── Messages ───
-  const msgs = [
-    [uuid(), mariaUserId, peteId, convPeteMaria, "Good morning! Betty is in great spirits today. We just finished breakfast — she had oatmeal with blueberries!", "-4 hours"],
-    [uuid(), peteId, mariaUserId, convPeteMaria, "That's wonderful to hear! How was she feeling this morning?", "-3 hours"],
-    [uuid(), mariaUserId, peteId, convPeteMaria, "She was very alert and chatty. We looked through her photo album and she told me stories about her garden.", "-2 hours"],
-    [uuid(), peteId, mariaUserId, convPeteMaria, "She loves that album! Thank you for spending time with her on that.", "-1 hour"],
-    [uuid(), jamesUserId, peteId, convPeteJames, "Hi Pete! Just arrived at Betty's. She seems to be doing well today.", "-6 hours"],
-    [uuid(), peteId, jamesUserId, convPeteJames, "Great, thanks James! She mentioned wanting to do puzzles.", "-5 hours"],
-    [uuid(), jamesUserId, peteId, convPeteJames, "Yes! We worked on a 500-piece puzzle of a garden scene. She was really focused.", "-4 hours"],
-    [uuid(), mariaUserId, bettyUserId, convBettyMaria, "Hi Betty! Looking forward to seeing you tomorrow. Is there anything special you'd like for lunch?", "-8 hours"],
-    [uuid(), bettyUserId, mariaUserId, convBettyMaria, "Oh Maria dear, could you make that tomato soup again? It was so good last time!", "-7 hours"],
-    [uuid(), mariaUserId, bettyUserId, convBettyMaria, "Of course! I'll pick up fresh tomatoes on my way. See you at noon! 🍅", "-6 hours"],
+  // Pete ↔ Maria: ongoing care coordination thread spanning several days
+  const peteMariaMsgs = [
+    // 3 days ago — post-visit update
+    [uuid(), mariaUserId, peteId, convPeteMaria, "Hi Pete! Just finished today's visit. Betty had a great morning — we went through her photo album and she told me all about planting roses with your dad. She got a little emotional but said it was happy tears.", "-3 days"],
+    [uuid(), peteId, mariaUserId, convPeteMaria, "That's so sweet. Dad would have loved that. How was her appetite?", "-3 days"],
+    [uuid(), mariaUserId, peteId, convPeteMaria, "Good! She ate the chicken soup and two slices of sourdough. I labeled the leftovers in the fridge — enough for dinner and tomorrow's lunch.", "-3 days"],
+    [uuid(), peteId, mariaUserId, convPeteMaria, "Perfect, thank you Maria. Quick question — did she remember to take her afternoon Donepezil?", "-3 days"],
+    [uuid(), mariaUserId, peteId, convPeteMaria, "Yes! I set a phone alarm for 2pm and she took it right on time. I also noticed she's been rubbing her left knee more. Might be worth mentioning to Dr. Patel.", "-3 days"],
+    // 2 days ago — scheduling
+    [uuid(), peteId, mariaUserId, convPeteMaria, "Hey Maria, I need to adjust Thursday's session. Can we move it from 8am to 9am? I have an early call and want to say hi to Mom before you arrive.", "-2 days"],
+    [uuid(), mariaUserId, peteId, convPeteMaria, "9am works perfectly! I'll use the extra time to stop at Kroger — Betty asked for bananas and that Greek yogurt she likes.", "-2 days"],
+    [uuid(), peteId, mariaUserId, convPeteMaria, "You're amazing. Also, David mentioned he might video call Mom during your visit Wednesday. Would you mind helping her with the iPad if he does?", "-2 days"],
+    [uuid(), mariaUserId, peteId, convPeteMaria, "Of course! We've done FaceTime before — she loves seeing David's kids. I'll make sure the iPad is charged.", "-2 days"],
+    // Today — morning check-in
+    [uuid(), mariaUserId, peteId, convPeteMaria, "Good morning! Just arrived at Betty's. She was already up and dressed — had Whiskers on her lap watching the birds outside. Great start to the day!", "-2 hours"],
+    [uuid(), peteId, mariaUserId, convPeteMaria, "That's wonderful! She must be having a good day. I'll try to call around noon if that's okay.", "-1 hour"],
+    [uuid(), mariaUserId, peteId, convPeteMaria, "Sounds great! We're about to start breakfast — oatmeal with blueberries, her favorite.", "-45 minutes"],
   ];
 
-  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of msgs) {
+  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of peteMariaMsgs) {
     await db.prepare(`
       INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, is_read, created_at)
       VALUES (?, ?, ?, ?, ?, 1, NOW() + ?::interval)
     `).run(id, senderId, recipientId, conversationId, content, timeOffset);
   }
 
-  // Messages between siblings and caregivers
-  const siblingMsgs = [
-    [uuid(), davidLeeId, mariaUserId, convDavidMaria, "Hi Maria, this is David — Pete's brother. I'll be coordinating Mom's care this week while Pete is traveling.", "-10 hours"],
-    [uuid(), mariaUserId, davidLeeId, convDavidMaria, "Hi David! No problem at all. Betty and I have our routine down. I'll send you updates after each visit.", "-9 hours"],
-    [uuid(), susanLeeId, mariaUserId, convSusanMaria, "Maria, it's Susan. Could you check if Mom has enough of her Donepezil? I want to make sure we're not running low.", "-7 hours"],
-    [uuid(), mariaUserId, susanLeeId, convSusanMaria, "Hi Susan! I'll check her pill organizer tomorrow and let you know. She had about a week's supply last time I looked.", "-6 hours"],
+  // Pete ↔ James: companionship check-ins
+  const peteJamesMsgs = [
+    [uuid(), jamesUserId, peteId, convPeteJames, "Hi Pete! Just arrived at Betty's. She answered the door herself and seemed really alert today.", "-2 days"],
+    [uuid(), peteId, jamesUserId, convPeteJames, "Great to hear! She mentioned wanting to do puzzles — there's a new 500-piece one on the dining table.", "-2 days"],
+    [uuid(), jamesUserId, peteId, convPeteJames, "Found it! A garden scene — she lit up when she saw it. We're about halfway through now. She's super focused.", "-2 days"],
+    [uuid(), jamesUserId, peteId, convPeteJames, "Visit done! We finished the puzzle border and about a third of the flowers. She wants to continue next time. Also we took a short walk around the block — she was steady on her feet.", "-2 days"],
+    [uuid(), peteId, jamesUserId, convPeteJames, "That's amazing, she'll love finishing it together. Thanks for the walk update — her PT said walking is great for her balance.", "-2 days"],
+    [uuid(), peteId, jamesUserId, convPeteJames, "Hey James, I just confirmed next Friday at 10am for companionship. Mom's looking forward to finishing that puzzle!", "-4 hours"],
+    [uuid(), jamesUserId, peteId, convPeteJames, "Wouldn't miss it! I'll bring some new crossword books too — she mentioned liking the word games.", "-3 hours"],
   ];
 
-  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of siblingMsgs) {
+  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of peteJamesMsgs) {
     await db.prepare(`
       INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, is_read, created_at)
       VALUES (?, ?, ?, ?, ?, 1, NOW() + ?::interval)
     `).run(id, senderId, recipientId, conversationId, content, timeOffset);
   }
 
-  console.log("✅ Messages created (14)");
+  // Betty ↔ Maria: personal warmth
+  const bettyMariaMsgs = [
+    [uuid(), mariaUserId, bettyUserId, convBettyMaria, "Good evening Betty! I wanted to let you know I'll be there tomorrow at noon. Is there anything special you'd like for lunch?", "-1 day"],
+    [uuid(), bettyUserId, mariaUserId, convBettyMaria, "Oh Maria dear, could you make that tomato soup again? It was so good last time! And maybe some of that cornbread?", "-1 day"],
+    [uuid(), mariaUserId, bettyUserId, convBettyMaria, "Of course! I'll pick up fresh tomatoes and cornmeal on my way. Your recipe is my favorite to make!", "-1 day"],
+    [uuid(), bettyUserId, mariaUserId, convBettyMaria, "You're such a sweetheart. Whiskers has been keeping me company all morning. He sits right on my lap while I watch my shows.", "-1 day"],
+    [uuid(), mariaUserId, bettyUserId, convBettyMaria, "Whiskers is the best companion! I'll give him some treats when I come. See you tomorrow at noon!", "-23 hours"],
+    [uuid(), bettyUserId, mariaUserId, convBettyMaria, "Pete called this morning and said the garden center has tomato seedlings! Can you help me plant some this spring?", "-5 hours"],
+    [uuid(), mariaUserId, bettyUserId, convBettyMaria, "I would LOVE that! Let's pick a nice sunny day next month. We can set up the pots by the back window where they'll get lots of light.", "-4 hours"],
+  ];
+
+  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of bettyMariaMsgs) {
+    await db.prepare(`
+      INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, 1, NOW() + ?::interval)
+    `).run(id, senderId, recipientId, conversationId, content, timeOffset);
+  }
+
+  // David ↔ Maria: coordination while Pete travels
+  const davidMariaMsgs = [
+    [uuid(), davidLeeId, mariaUserId, convDavidMaria, "Hi Maria, this is David — Pete's brother. I'll be coordinating Mom's care this week while Pete is traveling for work.", "-4 days"],
+    [uuid(), mariaUserId, davidLeeId, convDavidMaria, "Hi David! No problem at all. Betty and I have our routine down pat. I'll send you updates after each visit, same as I do with Pete.", "-4 days"],
+    [uuid(), davidLeeId, mariaUserId, convDavidMaria, "That's great, thanks. Also, my kids want to video call Grandma on Wednesday. Pete said you could help her with the iPad?", "-3 days"],
+    [uuid(), mariaUserId, davidLeeId, convDavidMaria, "Absolutely! She loves seeing the grandkids. I'll have the iPad charged and ready. What time works?", "-3 days"],
+    [uuid(), davidLeeId, mariaUserId, convDavidMaria, "How about 2pm? The kids get home from school at 1:30.", "-3 days"],
+    [uuid(), mariaUserId, davidLeeId, convDavidMaria, "Perfect! Quick update from today's visit: Betty was in wonderful spirits. She ate a full lunch, we did some gentle stretches, and she napped from 2-3. Whiskers didn't leave her side all day.", "-2 days"],
+    [uuid(), davidLeeId, mariaUserId, convDavidMaria, "Thank you Maria, you're truly the best. Mom always says you feel like family.", "-2 days"],
+  ];
+
+  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of davidMariaMsgs) {
+    await db.prepare(`
+      INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, 1, NOW() + ?::interval)
+    `).run(id, senderId, recipientId, conversationId, content, timeOffset);
+  }
+
+  // Susan ↔ Maria: medication coordination
+  const susanMariaMsgs = [
+    [uuid(), susanLeeId, mariaUserId, convSusanMaria, "Maria, it's Susan. Could you check if Mom has enough of her Donepezil? I want to make sure we're not running low before the weekend.", "-2 days"],
+    [uuid(), mariaUserId, susanLeeId, convSusanMaria, "Hi Susan! I checked today — she has 5 tablets left. That'll get her through Friday but we should refill by then.", "-2 days"],
+    [uuid(), susanLeeId, mariaUserId, convSusanMaria, "I'll call Dr. Patel's office tomorrow for the refill. Can you pick it up from CVS when it's ready?", "-2 days"],
+    [uuid(), mariaUserId, susanLeeId, convSusanMaria, "Of course! Just text me when it's ready and I'll grab it on my way to Betty's. Also, she mentioned her knee has been bothering her more — Pete said to mention it at the next appointment.", "-2 days"],
+    [uuid(), susanLeeId, mariaUserId, convSusanMaria, "Noted — I'll add it to the list for Dr. Patel. Thanks for keeping such a close eye on her, Maria. We really appreciate it.", "-1 day"],
+  ];
+
+  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of susanMariaMsgs) {
+    await db.prepare(`
+      INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, 1, NOW() + ?::interval)
+    `).run(id, senderId, recipientId, conversationId, content, timeOffset);
+  }
+
+  console.log("✅ Messages created (48 across 5 conversations)");
 
   // ─── Recipient Notes ───
   const notes = [
-    [uuid(), bettyId, bettyUserId, "Need to pick up: sourdough bread, yogurt, bananas, and cat food for Whiskers", "grocery", "-2 days"],
-    [uuid(), bettyId, bettyUserId, "Ask doctor about the new knee pain — started last Tuesday", "medical", "-1 day"],
-    [uuid(), bettyId, bettyUserId, "Remind Maria about the tomato soup recipe from last month", "general", "-3 hours"],
-    [uuid(), bettyId, peteId, "Mom mentioned she's been sleeping poorly. Let's ask Dr. Patel about it at the next visit.", "medical", "-6 hours"],
+    // Betty's own notes
+    [uuid(), bettyId, bettyUserId, "Need to pick up: sourdough bread, yogurt, bananas, and cat food for Whiskers", "personal", "-5 days"],
+    [uuid(), bettyId, bettyUserId, "Ask doctor about the new knee pain — started last Tuesday. Gets worse when climbing stairs.", "health", "-3 days"],
+    [uuid(), bettyId, bettyUserId, "Remind Maria about the tomato soup recipe from last month — she used fresh basil and it was perfect", "personal", "-2 days"],
+    [uuid(), bettyId, bettyUserId, "Susan is calling in the Donepezil refill to CVS. Maria will pick it up Friday.", "health", "-1 day"],
+    [uuid(), bettyId, bettyUserId, "David's kids want to video call Wednesday at 2pm! Need to charge the iPad.", "family", "-12 hours"],
+    // Pete's notes about Betty
+    [uuid(), bettyId, peteId, "Mom mentioned she's been sleeping poorly — waking up around 3am. Let's ask Dr. Patel about it at the next visit (March 3).", "health", "-4 days"],
+    [uuid(), bettyId, peteId, "Maria said Mom was rubbing her left knee more than usual. PT recommended gentle exercises — printed the sheet and left it on the fridge.", "health", "-2 days"],
+    [uuid(), bettyId, peteId, "Mom wants to plant tomatoes this spring. Susan is getting seedlings from the garden center. Let's set up pots by the back window where she'll get afternoon sun.", "general", "-6 hours"],
+    [uuid(), bettyId, peteId, "Daily routine that works best: Wake 7:30, breakfast 8, medication 8:30, activity/walk 10-12, lunch 12:30, nap 2-3, afternoon tea 3:30, light activity 4-5, dinner 6, medication 6:30, TV/relax 7-9, bed 9:30.", "general", "-5 days"],
+    // David's note
+    [uuid(), bettyId, davidLeeId, "Covering for Pete this week. Maria has everything under control. Mom seemed in great spirits on our video call — was laughing with the grandkids.", "family", "-1 day"],
+    // Susan's note
+    [uuid(), bettyId, susanLeeId, "Called CVS — Donepezil refill will be ready Friday after 10am. Also asked Dr. Patel's nurse about the knee pain — she said Ibuprofen PRN is fine, ice 15min after walks.", "health", "-8 hours"],
   ];
 
   for (const [id, recipId, authorId, content, noteType, timeOffset] of notes) {
@@ -723,7 +846,7 @@ async function seed() {
     `).run(id, recipId, authorId, content, noteType, timeOffset, timeOffset);
   }
 
-  console.log("✅ Recipient notes created (4)");
+  console.log("✅ Recipient notes created (11 — Betty 5, Pete 4, David 1, Susan 1)");
 
   // ─── Share Betty with siblings ───
   // Pete shares Betty's care recipient record with David and Susan
@@ -786,14 +909,19 @@ async function seed() {
     ).run(uuid(), bettyCareTeamConvId, userId, role);
   }
 
-  // Seed group messages in the care team chat
+  // Seed group messages in the care team chat — more realistic family coordination
   const teamMsgs = [
-    [uuid(), peteId, bettyCareTeamConvId, "Hey everyone — I set up this group chat so we can coordinate Mom's care more easily. Let's use it for updates!", "-2 days"],
-    [uuid(), davidLeeId, bettyCareTeamConvId, "Great idea Pete. I'm covering this week while you're traveling. Maria has everything under control.", "-2 days"],
-    [uuid(), susanLeeId, bettyCareTeamConvId, "Thanks David! Can someone check if Mom's Donepezil is running low? I want to call in a refill if needed.", "-1 day"],
-    [uuid(), peteId, bettyCareTeamConvId, "I asked Maria to check tomorrow. She said Mom had about a week's supply. I'll call Dr. Patel's office for a refill just in case.", "-12 hours"],
-    [uuid(), davidLeeId, bettyCareTeamConvId, "Perfect. Also, Mom mentioned she wants to plant tomatoes this spring. Maybe we can set that up next weekend?", "-6 hours"],
-    [uuid(), susanLeeId, bettyCareTeamConvId, "She would love that! I'll pick up some seedlings from the garden center.", "-3 hours"],
+    [uuid(), peteId, bettyCareTeamConvId, "Hey everyone — I set up this group chat so we can coordinate Mom's care more easily. Let's use it for updates, scheduling, and anything urgent.", "-5 days"],
+    [uuid(), davidLeeId, bettyCareTeamConvId, "Great idea Pete. I'm covering this week while you're traveling. Maria and I already connected — she'll send me daily updates.", "-5 days"],
+    [uuid(), susanLeeId, bettyCareTeamConvId, "Love this! I'll handle the medication side — tracking refills and Dr. Patel appointments.", "-5 days"],
+    [uuid(), peteId, bettyCareTeamConvId, "Perfect division of labor. Quick update: Mom's next appointment with Dr. Patel is March 3. I'll be back by then. Things to discuss: knee pain, sleep issues, Donepezil dosage review.", "-4 days"],
+    [uuid(), davidLeeId, bettyCareTeamConvId, "Update from today: Maria said Mom was in wonderful spirits. Ate a full lunch, did gentle stretches, and napped from 2-3. The kids video called her at 2pm and she was laughing the whole time.", "-2 days"],
+    [uuid(), susanLeeId, bettyCareTeamConvId, "Can someone check if Mom's Donepezil is running low? I want to call in the refill before the weekend.", "-2 days"],
+    [uuid(), peteId, bettyCareTeamConvId, "Maria checked — she has 5 tablets left, enough through Friday. Susan, can you call Dr. Patel's office for the refill?", "-1 day"],
+    [uuid(), susanLeeId, bettyCareTeamConvId, "Done! CVS will have it ready Friday after 10am. Maria said she'd pick it up on her way to Mom's. Also I asked the nurse about the knee — Ibuprofen PRN is fine, plus ice 15 min after walks.", "-1 day"],
+    [uuid(), davidLeeId, bettyCareTeamConvId, "Mom mentioned she wants to plant tomatoes this spring. Maybe we can set that up next weekend? She was so excited talking about it.", "-8 hours"],
+    [uuid(), susanLeeId, bettyCareTeamConvId, "She would love that! I'll pick up some seedlings from the garden center. Pete — does she still have the pots from last year?", "-5 hours"],
+    [uuid(), peteId, bettyCareTeamConvId, "The pots are in the garage! I'll ask Maria to move them to the back patio this week. Mom will be over the moon.", "-2 hours"],
   ];
 
   for (const [id, senderId, conversationId, content, timeOffset] of teamMsgs) {
@@ -803,7 +931,7 @@ async function seed() {
     `).run(id, senderId, conversationId, content, timeOffset);
   }
 
-  console.log("✅ Care team conversation created (Betty's team with 6 group messages)");
+  console.log("✅ Care team conversation created (Betty's team with 11 group messages)");
 
   // ─── Seed Version Marker ───
   // Store version in waitlist with special internal email so server.js can detect stale demo data
