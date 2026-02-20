@@ -1,7 +1,7 @@
 // ─── Caregiver Onboarding Flow ───
 // Multi-step wizard shown when a user visits ?invite=TOKEN
 // Creates user account + caregiver profile + uploads documents in one flow.
-const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onComplete }) => {
+const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupToken, signupEmail, onComplete }) => {
   const [step, setStep] = useState(1);
   const [inviteInfo, setInviteInfo] = useState(null);
   const [inviteError, setInviteError] = useState(null);
@@ -44,10 +44,18 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
   const CERT_TYPES = ['CNA', 'HHA', 'LPN', 'RN', 'CPR/First Aid', 'BLS', 'ACLS', 'Other'];
   const RADIUS_OPTIONS = ['5', '10', '15', '25', '50'];
 
-  // Validate invite token on mount
+  // Validate invite or signup token on mount
   useEffect(() => { validateInvite(); }, []);
 
   const validateInvite = async () => {
+    // Signup token flow (email-first signup from splash page)
+    if (signupToken && signupEmail) {
+      setInviteInfo({ email: signupEmail, role: 'caregiver', viaSignup: true });
+      setForm(f => ({ ...f, email: signupEmail }));
+      setLoading(false);
+      return;
+    }
+    // Platform invite flow (admin-sent invite link)
     try {
       const res = await fetch(`/api/platform-invites/info?token=${inviteToken}`);
       if (res.ok) {
@@ -117,14 +125,17 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
     if (!validateStep(1)) return;
     setSaving(true);
     try {
+      const regBody = {
+        email: form.email, password: form.password,
+        firstName: form.firstName, lastName: form.lastName,
+        role: inviteInfo.role || 'caregiver',
+      };
+      if (signupToken) regBody.signupToken = signupToken;
+
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: form.email, password: form.password,
-          firstName: form.firstName, lastName: form.lastName,
-          role: inviteInfo.role || 'caregiver',
-        }),
+        body: JSON.stringify(regBody),
       });
       const data = await res.json();
       if (!res.ok) { setErrors({ submit: data.error || 'Registration failed' }); setSaving(false); return; }
@@ -135,12 +146,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
       localStorage.setItem('auth_token', token);
       window.AUTH_TOKEN = token;
 
-      // Accept invite
-      await fetch('/api/platform-invites/accept-invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ token: inviteToken }),
-      });
+      // Accept platform invite (skip for email-first signup flow)
+      if (inviteToken && !signupToken) {
+        await fetch('/api/platform-invites/accept-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ token: inviteToken }),
+        });
+      }
 
       setStep(2);
     } catch (err) {
@@ -414,7 +427,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, onCompl
             marginBottom: '12px',
           }}>iP</div>
           <h1 style={{ fontSize: '22px', color: '#1b6b5a', margin: '0 0 4px' }}>Join InPlace</h1>
-          {inviteInfo && (
+          {inviteInfo && inviteInfo.inviterName && (
             <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>
               Invited by {inviteInfo.inviterName}
             </p>

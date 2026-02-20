@@ -246,7 +246,8 @@ const App = () => {
         .then(data => {
           if (data.email && data.role) {
             setSignupPrefill({ email: data.email, role: data.role, signupToken });
-            setAppState('register');
+            // Route caregivers to the full onboarding wizard, families to registration
+            setAppState(data.role === 'caregiver' ? 'signup-onboarding' : 'register');
           } else {
             setVerifyMessage({ type: 'error', text: data.error || 'Invalid signup link.' });
           }
@@ -353,6 +354,34 @@ const App = () => {
     return <CaregiverOnboarding inviteToken={platformInviteToken} onComplete={(token) => {
       setPlatformInviteToken(null);
       // Restore user from the token
+      if (token) {
+        AUTH_TOKEN = token;
+        localStorage.setItem('auth_token', token);
+        if (typeof connectSocket === 'function') connectSocket(token);
+        apiFetch('/api/auth/me').then(async r => {
+          if (r?.ok) {
+            const data = await r.json();
+            if (data.user) {
+              setCurrentUser({
+                id: data.user.id, email: data.user.email, role: data.user.role,
+                firstName: data.user.first_name, lastName: data.user.last_name,
+                emailVerified: !!data.user.email_verified, isDemo: false,
+                isAdmin: !!data.user.is_admin,
+              });
+              setAppState('app');
+            }
+          }
+        }).catch(() => setAppState('splash'));
+      } else {
+        setAppState('splash');
+      }
+    }} />;
+  }
+
+  // Email-first signup → caregiver onboarding (same wizard, no platform invite needed)
+  if (appState === 'signup-onboarding' && signupPrefill) {
+    return <CaregiverOnboarding signupToken={signupPrefill.signupToken} signupEmail={signupPrefill.email} onComplete={(token) => {
+      setSignupPrefill(null);
       if (token) {
         AUTH_TOKEN = token;
         localStorage.setItem('auth_token', token);
