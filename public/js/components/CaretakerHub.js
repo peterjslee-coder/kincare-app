@@ -18,6 +18,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   // Stripe Connect state
   const [stripeStatus, setStripeStatus] = useState(null);
   const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeError, setStripeError] = useState(null);
 
   // Documents state
   const [documents, setDocuments] = useState([]);
@@ -157,28 +158,32 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   // Stripe Connect onboarding handler
   const handleStripeOnboard = async () => {
     setStripeLoading(true);
+    setStripeError(null);
     try {
       const res = await apiFetch('/api/payments/connect/onboard', { method: 'POST' });
       if (res?.ok) {
         const d = await res.json();
         if (d.url) window.location.href = d.url;
       } else {
-        const err = await res?.json();
-        alert(err?.error || 'Failed to start Stripe onboarding');
+        const err = await res?.json().catch(() => ({}));
+        setStripeError(err?.error || 'Failed to start Stripe onboarding. Please try again later.');
       }
-    } catch (err) { alert('Could not connect to payment service'); }
+    } catch (err) { setStripeError('Could not connect to payment service. Please try again later.'); }
     setStripeLoading(false);
   };
 
   // Open Stripe Express Dashboard
   const handleStripeDashboard = async () => {
+    setStripeError(null);
     try {
       const res = await apiFetch('/api/payments/connect/dashboard');
       if (res?.ok) {
         const d = await res.json();
         if (d.url) window.open(d.url, '_blank');
+      } else {
+        setStripeError('Could not open Stripe dashboard. Please try again.');
       }
-    } catch (err) { alert('Could not open Stripe dashboard'); }
+    } catch (err) { setStripeError('Could not open Stripe dashboard. Please try again.'); }
   };
 
   // Load stoplight from profile (must be before early returns — React hook order rules)
@@ -536,15 +541,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
       {activeTab === 'earnings' && (
         <div>
           {/* Stripe Connect Banner */}
-          <div className="card" style={{ marginBottom: '16px', border: stripeStatus?.status === 'active' ? '1px solid #4caf50' : '1px solid #ff9800' }}>
+          <div className="card" style={{ marginBottom: '16px', border: stripeStatus?.status === 'active' ? '1px solid #4caf50' : stripeStatus?.status === 'not_configured' ? '1px solid #e0e0e0' : '1px solid #ff9800' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: '15px', color: '#333', marginBottom: '4px' }}>
-                  {stripeStatus?.status === 'active' ? '✅ Stripe Connected' : '💳 Payment Setup'}
+                  {stripeStatus?.status === 'active' ? '✅ Stripe Connected'
+                    : stripeStatus?.status === 'not_configured' ? '🔧 Payment Setup Coming Soon'
+                    : '💳 Payment Setup'}
                 </div>
                 <div style={{ fontSize: '13px', color: '#666' }}>
                   {stripeStatus?.status === 'active'
                     ? 'Your Stripe account is active. Payouts are enabled.'
+                    : stripeStatus?.status === 'not_configured'
+                    ? 'Stripe payments are being set up for InPlace. You\'ll be able to connect your account here soon.'
                     : stripeStatus?.status === 'pending'
                     ? 'Your Stripe account is pending verification. Click below to complete setup.'
                     : 'Connect your Stripe account to receive payouts for care sessions.'}
@@ -555,13 +564,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
                   <button onClick={handleStripeDashboard} className="btn btn-secondary" style={{ fontSize: '13px', padding: '8px 16px' }}>
                     View Stripe Dashboard
                   </button>
-                ) : (
+                ) : stripeStatus?.status === 'not_configured' ? null : (
                   <button onClick={handleStripeOnboard} disabled={stripeLoading} className="btn btn-primary" style={{ fontSize: '13px', padding: '8px 16px' }}>
                     {stripeLoading ? 'Loading...' : stripeStatus?.status === 'pending' ? 'Complete Setup' : 'Connect with Stripe'}
                   </button>
                 )}
               </div>
             </div>
+            {stripeError && (
+              <div style={{
+                marginTop: '10px', padding: '10px 14px', background: '#fce4ec', color: '#c62828',
+                borderRadius: '8px', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <span>{stripeError}</span>
+                <button onClick={() => setStripeError(null)} style={{
+                  background: 'none', border: 'none', color: '#c62828', fontSize: '16px', cursor: 'pointer', padding: '0 4px',
+                }}>&times;</button>
+              </div>
+            )}
           </div>
 
           <div className="earnings-grid">

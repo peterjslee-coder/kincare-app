@@ -34,7 +34,10 @@ router.use(authenticate);
 // Create a Stripe Connect Express account for a caregiver and return the onboarding link
 router.post("/connect/onboard", requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
-  const stripe = getStripe();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured yet. Please check back later.", notConfigured: true });
+  }
 
   const user = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
@@ -96,7 +99,10 @@ router.post("/connect/onboard", requireRole("caregiver"), async (req, res) => {
 // Check caregiver's Stripe Connect account status
 router.get("/connect/status", requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
-  const stripe = getStripe();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.json({ connected: false, status: "not_configured" });
+  }
 
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
@@ -135,7 +141,10 @@ router.get("/connect/status", requireRole("caregiver"), async (req, res) => {
 // Generate a Stripe Express dashboard login link for the caregiver
 router.get("/connect/dashboard", requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
-  const stripe = getStripe();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured yet." });
+  }
 
   const profile = await db.prepare("SELECT stripe_account_id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile?.stripe_account_id) {
