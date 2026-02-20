@@ -186,6 +186,11 @@ async function initializeDatabase() {
     // v1.5.0 — Message type for special messages (video_call, system, etc.)
     `ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type TEXT DEFAULT 'text'`,
     `ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata TEXT`,
+    // Profile photo for user avatars
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo TEXT`,
+    // Medical care disclaimer
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS disclaimer_accepted_at TIMESTAMPTZ`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS disclaimer_version TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

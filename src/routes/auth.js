@@ -326,7 +326,7 @@ router.post("/change-password", authenticate, async (req, res) => {
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
   const user = await db.prepare(
-    "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, email_verified, is_demo, is_admin, password_changed_at, created_at FROM users WHERE id = ?"
+    "SELECT id, email, role, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, email_verified, is_demo, is_admin, password_changed_at, disclaimer_accepted_at, disclaimer_version, created_at FROM users WHERE id = ?"
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -467,6 +467,48 @@ router.post("/resend-verification", authenticate, async (req, res) => {
   } catch (err) {
     console.error("Resend verification error:", err);
     res.status(500).json({ error: "Failed to send verification email." });
+  }
+});
+
+// ─── PUT /api/auth/me/photo ─── Upload profile photo (base64)
+router.put("/me/photo", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { photo } = req.body; // base64 data URL
+    if (!photo) return res.status(400).json({ error: "No photo provided" });
+    if (photo.length > 2 * 1024 * 1024) return res.status(400).json({ error: "Photo too large (max 1.5MB)" });
+    await db.prepare("UPDATE users SET profile_photo = ?, updated_at = NOW() WHERE id = ?").run(photo, req.user.id);
+    res.json({ message: "Profile photo updated", photoUrl: photo });
+  } catch (err) {
+    console.error("Photo upload error:", err);
+    res.status(500).json({ error: "Failed to upload photo" });
+  }
+});
+
+// ─── DELETE /api/auth/me/photo ─── Remove profile photo
+router.delete("/me/photo", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    await db.prepare("UPDATE users SET profile_photo = NULL, updated_at = NOW() WHERE id = ?").run(req.user.id);
+    res.json({ message: "Profile photo removed" });
+  } catch (err) {
+    console.error("Photo delete error:", err);
+    res.status(500).json({ error: "Failed to remove photo" });
+  }
+});
+
+// ─── PUT /api/auth/me/disclaimer ─── Accept platform disclaimer
+router.put("/me/disclaimer", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const version = "1.0";
+    await db.prepare(
+      "UPDATE users SET disclaimer_accepted_at = NOW(), disclaimer_version = ?, updated_at = NOW() WHERE id = ?"
+    ).run(version, req.user.id);
+    res.json({ message: "Disclaimer acknowledged", version });
+  } catch (err) {
+    console.error("Disclaimer accept error:", err);
+    res.status(500).json({ error: "Failed to accept disclaimer" });
   }
 });
 

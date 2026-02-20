@@ -165,8 +165,9 @@ router.post("/conversations", async (req, res) => {
 });
 
 // ─── GET /api/messages/contacts ─── List/search users available to message
-// Demo users only see demo users; real users only see real users
-// Optional ?q=search param to filter by name or email
+// Only return users the requesting user is connected to via:
+// - Care team membership (both users are members of the same care_team)
+// - Caregiver assignment (caregiver assigned to a family's care recipient)
 router.get("/contacts", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
@@ -176,21 +177,56 @@ router.get("/contacts", async (req, res) => {
   const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(userId);
   const isDemo = me && me.is_demo ? 1 : 0;
 
+  // Build list of connected user IDs from care teams and caregiver assignments
+  // 1. Users in the same care team
+  const teamMembers = await db.prepare(`
+    SELECT DISTINCT ctm2.user_id
+    FROM care_team_members ctm1
+    JOIN care_team_members ctm2 ON ctm1.care_team_id = ctm2.care_team_id
+    WHERE ctm1.user_id = ? AND ctm2.user_id != ?
+  `).all(userId, userId);
+
+  // 2. For family users: caregivers assigned to their care recipients
+  // For caregivers: families who assigned them
+  const assignmentContacts = await db.prepare(`
+    SELECT DISTINCT u.id as user_id FROM caregiver_assignments ca
+    JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+    JOIN users u ON (
+      CASE WHEN cp.user_id = ? THEN u.id = ca.family_user_id
+           WHEN ca.family_user_id = ? THEN u.id = cp.user_id
+      END
+    )
+    WHERE (cp.user_id = ? OR ca.family_user_id = ?) AND ca.is_active = 1
+  `).all(userId, userId, userId, userId);
+
+  const connectedIds = new Set([
+    ...teamMembers.map(r => r.user_id),
+    ...assignmentContacts.map(r => r.user_id),
+  ]);
+
+  if (connectedIds.size === 0) {
+    return res.json({ contacts: [] });
+  }
+
+  const idList = [...connectedIds];
+  // Build parameterized query for connected users
+  const placeholders = idList.map(() => '?').join(',');
+
   let users;
   if (search) {
     users = await db.prepare(`
       SELECT id, first_name, last_name, role, email FROM users
-      WHERE id != ? AND COALESCE(is_demo, 0) = ?
+      WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ?
         AND (LOWER(first_name || ' ' || last_name) LIKE ? OR LOWER(email) LIKE ?)
       ORDER BY first_name ASC
       LIMIT 20
-    `).all(userId, isDemo, `%${search}%`, `%${search}%`);
+    `).all(...idList, isDemo, `%${search}%`, `%${search}%`);
   } else {
     users = await db.prepare(`
       SELECT id, first_name, last_name, role, email FROM users
-      WHERE id != ? AND COALESCE(is_demo, 0) = ?
+      WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ?
       ORDER BY first_name ASC
-    `).all(userId, isDemo);
+    `).all(...idList, isDemo);
   }
 
   const contacts = users.map(u => ({

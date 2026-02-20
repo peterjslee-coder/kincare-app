@@ -333,33 +333,124 @@
 - Sessions route: accepts `status: 'open'` for care requests without caregiver, added `open` to valid status transitions
 - Cache version bumped to v1.1.0
 
+### v1.5.0–v1.5.7 — Email-First Signup & Caregiver Onboarding Fixes (2026-02-20)
+
+**v1.5.0 — Email-First Signup Flow**
+- Replaced direct registration with email-first invite flow: Admin sends invite → caregiver receives branded email → clicks link → lands on onboarding wizard with email pre-filled
+- New `signup_tokens` table for invite-to-signup token chain
+- POST /api/auth/confirm-signup validates token and routes to role-specific onboarding
+
+**v1.5.1–v1.5.3 — Onboarding Hardening**
+- Fixed CaregiverOnboarding step navigation, form validation, and submit flow
+- Fixed request body too large for document uploads (skip body size check for multipart)
+- Added client-side image resizing (1600px max, JPEG 85%) and mobile-friendly upload buttons
+
+**v1.5.4 — CaretakerHub No-Profile Fix**
+- Fixed React hooks order violation crashing CaretakerHub for caregivers with no profile
+- Added friendly "Welcome to InPlace!" empty state with "Complete Your Profile" button
+- Resume-onboarding flow for existing users who need to finish profile setup
+
+**v1.5.5 — Already-Registered Flow**
+- confirm-signup endpoint detects already-registered emails, returns `alreadyRegistered`/`needsProfile` flags
+- Frontend redirects to login with info banner instead of showing generic error
+- Admin reset-password and delete-user endpoints
+
+**v1.5.6 — Mobile Photo Upload Fix**
+- Fixed DL front photo upload not displaying (mobile browsers return empty MIME type for camera captures)
+- Accept empty-type files, try-catch with URL.createObjectURL fallback, 15s timeout on resizeImage
+
+**v1.5.7 — Self-Service Account Deletion**
+- DELETE /api/auth/me with comprehensive FK-safe cascade delete (all 20+ dependent tables)
+- "Delete My Account" section in MyAccount with "type DELETE to confirm" safeguard
+- Admin DELETE /api/admin/users/:id with same cascade logic
+
 ---
 
-## Next Up — v1.5.0: Payments & Marketplace
+## Next Up — v1.6.0: Bug Fixes & Core UX
 
-Priority: **HIGH** — Enable real transactions.
+Priority: **HIGH** — Fix broken flows before adding features.
 
-- [ ] **Stripe Connect integration:** Marketplace payments (families pay, caregivers get paid, platform takes 20% fee)
-- [ ] **Caregiver earnings dashboard:** Real payment history, pending payouts, tax summary (1099 support)
-- [ ] **Family billing:** Payment methods, invoices, spending history
-- [ ] **Session payment flow:** Charge on session completion, hold on confirmation
-
----
-
-## Setup Tasks (no code needed)
-
-- [ ] **Plausible Analytics:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html. $9/mo for up to 10K pageviews. 30-day free trial available. Admin panel has a direct link to the Plausible dashboard.
-- [x] ~~**Set is_admin on Pete's account:** Now auto-migrated in database.js on every server start. No manual SQL needed.~~
-- [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — free)
+- [ ] **Fix "Invalid Date" in messages:** Sent messages show "Invalid Date" timestamp. Likely backend `created_at` format mismatch with frontend date parser.
+- [ ] **Fix contact visibility:** Real users can see/message any other user without an accepted connection. Gate contacts by: accepted care team invite, caregiver assignment, or new connection request flow.
+- [ ] **Profile photo upload:** First Steps says "Upload profile photo" but there's no upload UI. Add upload flow + display avatar next to iP logo in sidebar/header.
+- [ ] **Dashboard "Latest" status section:** Context-aware status banner at top of every role's dashboard. Shows current state and next action (e.g., "Pending background check," "2 sessions this week," "Care request awaiting caregiver").
+- [ ] **Caregiver document review:** Let caregivers view their submitted onboarding documents (DL, selfie, info) in their profile. Allow re-upload if needed.
+- [ ] **Medical care disclaimer banner:** Full-screen modal on first login. Bold statements: "InPlace does not provide at-home medical care in accordance with Virginia state law" and "You are personally liable for any medical care you provide beyond calling professional medical attention when warranted." Must scroll + acknowledge. Stored with version for re-prompting.
 
 ---
 
-## Future — Full Platform
+## v1.7.0: Caregiver Onboarding Completion
 
-Priority: **MEDIUM** — Scale and polish.
+Priority: **HIGH** — Complete the caregiver registration experience.
 
-- [ ] **Google Maps geocoding upgrade:** Swap Nominatim for Google Maps for better residential address accuracy (one function change)
+- [ ] **Pets/allergies/medical conditions in onboarding:** Add collection step to CaregiverOnboarding for pets, food allergies, medical conditions. Also add to family and care recipient registration (full "Onboarding profile questions — all roles" spec in TASKS.md).
+- [ ] **Multiple certifications:** Dynamic list in signup wizard — "Add another certification" with name, issuing body, expiration.
+- [ ] **Registration disclosures & agreements:** Legal step before final submit — background check notice, payment/tax disclosures, platform terms. Checkbox + acceptance timestamp.
+- [ ] **Remove availability from signup:** Move to First Steps checklist post-registration. Add preferred work zip code + travel radius to Personal Info step instead.
+- [ ] **Stoplight chart (First Steps):** Green/yellow/red task categorization for caregiver comfort levels. Drag-and-drop or tap-to-assign UI.
+
+---
+
+## v1.8.0: Stripe & Background Checks
+
+Priority: **HIGH** — Enable payments. *Blocked on Pete's action items (see below).*
+
+- [ ] **Stripe payment for background check:** Collect credit card via Stripe Elements during CaregiverOnboarding. One-time charge for Checkr background check. Requires `STRIPE_SECRET_KEY` + `STRIPE_PUBLISHABLE_KEY` on Railway.
+- [ ] **Checkr integration:** Submit background check via Checkr API after payment. Webhook for results. Requires `CHECKR_API_KEY` on Railway.
+- [ ] **Stripe Connect marketplace:** Families pay, caregivers get paid, platform takes configurable fee (20% base). Express accounts, destination charges, 2-day rolling payouts.
+- [ ] **Caregiver earnings dashboard:** Real payment history from Stripe, pending payouts, tax summary.
+- [ ] **Family billing:** Payment methods, invoices, spending history.
+
+---
+
+## v1.9.0: Availability & Scheduling UX
+
+Priority: **MEDIUM** — Better scheduling experience.
+
+- [ ] **Interactive drag-to-select availability calendar (Outlook-style):** Weekly grid with Available/Blocked brush modes. Click-drag to paint time blocks, resize handles on edges. 30-min granularity. Recurring rules as overlay blocks.
+- [ ] **Caregiver work location zip code:** Replace free-text town name with zip code input. Fix AreaMap centering on work coordinates.
+
+---
+
+## v2.0.0: Connections & Messaging
+
+Priority: **MEDIUM** — Real social model.
+
+- [ ] **Connection request flow:** Search users by email, send connection request, accept/decline. Auto-connect via care team invite or caregiver assignment. Messaging gated by accepted connection.
+- [ ] **Message push deep-links:** Push notification opens directly to conversation. Service worker `notificationclick` handler with `/?conversation=ID`.
+- [ ] **Video chat — Meet link in messages:** "Video Call" button generates Google Meet link, sent as clickable card message.
+
+---
+
+## v2.1.0: Dashboard & CaretakerHub Overhaul
+
+Priority: **MEDIUM** — Polish the daily experience.
+
+- [ ] **CaretakerHub stat card drill-downs:** Clickable cards → detail views (assigned families list, itemized jobs, hours breakdown, merged earnings/payments).
+- [ ] **Push notification expansion:** Push for session updates, care requests, care team activity. Per-type toggles in MyAccount. Admin-only push for waitlist signups and new registrations.
+- [ ] **Remove Uber references:** Reword comparisons in CLAUDE.md and SplashPage.js.
+
+---
+
+## Future — Infrastructure & Scale
+
+Priority: **LOW** — When growth demands it.
+
+- [ ] **S3/R2 for visit photos:** Replace base64 PostgreSQL storage with object storage
+- [ ] **Cloudflare R2 database backup pipeline:** Daily automated backups to R2 bucket
 - [ ] **Build step for frontend:** Move to Vite when component count demands it
+- [ ] **Google Maps geocoding upgrade:** Swap Nominatim for better residential accuracy
 - [ ] **Apple Sign-In:** After Google OAuth is proven
-- [ ] **S3/R2 for photos:** Replace base64 PostgreSQL storage with object storage for visit photos
-- [ ] **Push notification expansion:** Push for session updates, care requests, and care team activity (currently messages only)
+
+---
+
+## Pete's Action Items (External Setup)
+
+> These unblock dev tasks above. Check them off as you go.
+
+- [ ] **Stripe: Add test API keys to Railway** — Dashboard → Developers → API keys → copy `sk_test_` and `pk_test_` → Railway env vars `STRIPE_SECRET_KEY` + `STRIPE_PUBLISHABLE_KEY`. Unblocks v1.8.0.
+- [ ] **Checkr: Sign up for partner account** — Get `CHECKR_API_KEY`, add to Railway. Checkr has sandbox mode for dev. Unblocks v1.8.0.
+- [ ] **Stripe: Decide background check price** — Checkr basic check ~$25–$35. Pass through, mark up, or subsidize? Unblocks payment step UI.
+- [ ] **Plausible Analytics: Sign up at plausible.io** — Add `yourinplace.com`. Script tag already in index.html.
+- [ ] **Google OAuth: Set up in Google Cloud Console** — Create OAuth 2.0 credentials (free). Add `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` to Railway.
+- [ ] **Google Maps API key (optional, later)** — For better residential geocoding. One-function swap in `src/utils/geocode.js`.

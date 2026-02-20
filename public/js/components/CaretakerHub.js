@@ -15,6 +15,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
 
+  // Documents state
+  const [documents, setDocuments] = useState([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+
   // Availability state
   const [availRules, setAvailRules] = useState([]);
   const [availLoading, setAvailLoading] = useState(false);
@@ -43,6 +47,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
       }
     } catch (err) { console.error('Availability fetch error:', err); }
     setAvailLoading(false);
+  };
+
+  const fetchDocuments = async () => {
+    setDocsLoading(true);
+    try {
+      const res = await apiFetch('/api/caregiver-onboarding/documents');
+      if (res?.ok) {
+        const d = await res.json();
+        setDocuments(d.documents || []);
+      }
+    } catch (err) { console.error('Documents fetch error:', err); }
+    setDocsLoading(false);
   };
 
   const handleSaveRule = async () => {
@@ -131,6 +147,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
       setStoplightForm(parsed);
     } catch { /* ignore */ }
   }, [data?.profile?.care_stoplight]);
+
+  // Fetch documents when documents tab is active
+  useEffect(() => {
+    if (activeTab === 'documents') fetchDocuments();
+  }, [activeTab]);
 
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []).slice(0, 5);
@@ -263,6 +284,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
     { id: 'map', label: 'Area Map', icon: '🗺️' },
     { id: 'earnings', label: 'Earnings', icon: '💰' },
     { id: 'reviews', label: 'Reviews', icon: '⭐' },
+    { id: 'documents', label: 'Documents', icon: '📄' },
     { id: 'preferences', label: 'Care Preferences', icon: '🚦' },
   ];
 
@@ -291,6 +313,39 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
           </div>
         </div>
       </div>
+
+      {/* Latest Status */}
+      {(() => {
+        const onboardingDone = profile.onboardingComplete;
+        const checkrStatus = profile.checkrStatus;
+        const upcomingCount = sessions.length;
+        let statusIcon = '📋';
+        let statusText = "You're all set! No upcoming sessions right now.";
+        let borderColor = '#1b6b5a';
+
+        if (!onboardingDone) {
+          statusIcon = '⏳';
+          statusText = 'Pending background check and onboarding completion. Complete your profile to start receiving care requests.';
+          borderColor = '#e8724a';
+        } else if (checkrStatus === 'pending') {
+          statusIcon = '🔄';
+          statusText = 'Your background check is in progress. You\'ll be notified once it clears.';
+          borderColor = '#f59e0b';
+        } else if (upcomingCount > 0) {
+          statusIcon = '📅';
+          statusText = `You have ${upcomingCount} upcoming session${upcomingCount > 1 ? 's' : ''}.`;
+        }
+
+        return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: `4px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>{statusIcon}</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Latest</div>
+              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{statusText}</div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* First Steps Banner */}
       {showFirstSteps && (
@@ -628,6 +683,97 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
                 No preferences set yet. Click "Set Preferences" to get started.
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'documents' && (
+        <div>
+          <div className="card">
+            <div className="card-header"><span className="card-icon">📄</span>Uploaded Documents</div>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>
+              Documents submitted during onboarding. Contact support if you need to update your identity documents.
+            </p>
+            {docsLoading ? (
+              <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>Loading documents...</div>
+            ) : documents.length > 0 ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {documents.map(doc => {
+                  const typeLabels = { dl_front: "Driver's License (Front)", dl_back: "Driver's License (Back)", selfie: 'Selfie / Photo ID', certification: 'Certification' };
+                  return (
+                    <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: '#f8f9fa', borderRadius: 8 }}>
+                      <div style={{ width: 60, height: 60, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: '#e0e0e0' }}>
+                        <img src={`/api/caregiver-onboarding/documents/${doc.id}/image`} alt={doc.document_type}
+                          style={{ width: 60, height: 60, objectFit: 'cover' }}
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{typeLabels[doc.document_type] || doc.document_type}</div>
+                        {doc.file_name && <div style={{ fontSize: 12, color: '#888' }}>{doc.file_name}</div>}
+                        <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>
+                          Uploaded {new Date(doc.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div style={{ padding: '4px 10px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+                        Submitted
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
+                No documents uploaded yet. Documents are submitted during the onboarding process.
+              </div>
+            )}
+          </div>
+
+          {/* Profile Summary */}
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-header"><span className="card-icon">👤</span>Onboarding Information</div>
+            <div className="info-grid">
+              <div className="info-item">
+                <div className="info-label">Legal Name</div>
+                <div className="info-value">{profile.legalFirstName && profile.legalLastName ? `${profile.legalFirstName} ${profile.legalLastName}` : 'Not provided'}</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Date of Birth</div>
+                <div className="info-value">{profile.dateOfBirth || 'Not provided'}</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">SSN (last 4)</div>
+                <div className="info-value">{profile.ssnLast4 ? `***-**-${profile.ssnLast4}` : 'Not provided'}</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Driver's License</div>
+                <div className="info-value">{profile.dlNumber ? `${profile.dlNumber} (${profile.dlState})` : 'Not provided'}</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Background Check</div>
+                <div className="info-value">
+                  <span style={{
+                    padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
+                    background: profile.checkrStatus === 'clear' ? '#e8f5e9' : profile.checkrStatus === 'pending' ? '#fff8e1' : '#fce4ec',
+                    color: profile.checkrStatus === 'clear' ? '#2e7d32' : profile.checkrStatus === 'pending' ? '#f57f17' : '#c62828',
+                  }}>
+                    {(profile.checkrStatus || 'pending').charAt(0).toUpperCase() + (profile.checkrStatus || 'pending').slice(1)}
+                  </span>
+                </div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Onboarding Status</div>
+                <div className="info-value">
+                  <span style={{
+                    padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
+                    background: profile.onboardingComplete ? '#e8f5e9' : '#fff8e1',
+                    color: profile.onboardingComplete ? '#2e7d32' : '#f57f17',
+                  }}>
+                    {profile.onboardingComplete ? 'Complete' : 'Incomplete'}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

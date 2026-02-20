@@ -156,6 +156,7 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
 
   // Expose modal opener for child components (Schedule empty state CTA)
   useEffect(() => {
@@ -190,9 +191,14 @@ const App = () => {
             setCurrentUser({
               id: data.user.id, email: data.user.email, role: data.user.role,
               firstName: data.user.first_name, lastName: data.user.last_name,
+              profilePhoto: data.user.profile_photo || null,
               emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
               isAdmin: !!data.user.is_admin,
             });
+            // Check if disclaimer needs to be accepted
+            if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+              setShowDisclaimer(true);
+            }
             setAppState('app');
           }
         }
@@ -294,7 +300,25 @@ const App = () => {
   }, []);
 
   const handleLogin = (user) => {
-    setCurrentUser(user);
+    // Fetch full user data to get disclaimer status
+    apiFetch('/api/auth/me').then(async r => {
+      if (r?.ok) {
+        const data = await r.json();
+        if (data.user) {
+          setCurrentUser({
+            id: data.user.id, email: data.user.email, role: data.user.role,
+            firstName: data.user.first_name, lastName: data.user.last_name,
+            profilePhoto: data.user.profile_photo || null,
+            emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
+            isAdmin: !!data.user.is_admin,
+          });
+          // Check if disclaimer needs to be accepted
+          if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+            setShowDisclaimer(true);
+          }
+        }
+      }
+    }).catch(() => {});
     setCurrentPage('dashboard');
     setAppState('app');
     // Subscribe to push notifications after login (non-blocking)
@@ -372,9 +396,14 @@ const App = () => {
               setCurrentUser({
                 id: data.user.id, email: data.user.email, role: data.user.role,
                 firstName: data.user.first_name, lastName: data.user.last_name,
+                profilePhoto: data.user.profile_photo || null,
                 emailVerified: !!data.user.email_verified, isDemo: false,
                 isAdmin: !!data.user.is_admin,
               });
+              // Check if disclaimer needs to be accepted
+              if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+                setShowDisclaimer(true);
+              }
               setAppState('app');
             }
           }
@@ -415,9 +444,14 @@ const App = () => {
               setCurrentUser({
                 id: data.user.id, email: data.user.email, role: data.user.role,
                 firstName: data.user.first_name, lastName: data.user.last_name,
+                profilePhoto: data.user.profile_photo || null,
                 emailVerified: !!data.user.email_verified, isDemo: false,
                 isAdmin: !!data.user.is_admin,
               });
+              // Check if disclaimer needs to be accepted
+              if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+                setShowDisclaimer(true);
+              }
               setAppState('app');
             }
           }
@@ -531,11 +565,22 @@ const App = () => {
 
   const appContent = (
     <React.Fragment>
+      {showDisclaimer && <DisclaimerModal onAccept={() => setShowDisclaimer(false)} />}
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-logo">
           <InPlaceIcon width={36} height={36} />
           <div className="sidebar-logo-text"><span className="logo-in">in</span><span className="logo-place">Place</span></div>
+          {currentUser && (
+            <div className="sidebar-avatar" style={{
+              width: 32, height: 32, borderRadius: '50%', marginLeft: 'auto',
+              background: currentUser.profilePhoto ? `url(${currentUser.profilePhoto}) center/cover` : '#e8724a',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontSize: 12, fontWeight: 600, flexShrink: 0, overflow: 'hidden',
+            }}>
+              {!currentUser.profilePhoto && (currentUser.firstName?.[0] || '?').toUpperCase()}
+            </div>
+          )}
           <button className="sidebar-close" onClick={() => setSidebarOpen(false)} aria-label="Close menu">&times;</button>
         </div>
         <div style={{ padding: '0 16px 12px', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px' }}>

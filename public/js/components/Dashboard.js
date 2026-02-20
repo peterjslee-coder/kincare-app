@@ -48,8 +48,17 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
 
   const formatActivityTime = (createdAt) => {
     if (!createdAt) return '';
-    const dateStr = createdAt.replace(' ', 'T') + 'Z';
+    // PostgreSQL timestamps may have timezone offset (+00, +00:00) or not
+    let dateStr = createdAt;
+    if (!dateStr.includes('T')) {
+      dateStr = dateStr.replace(' ', 'T');
+    }
+    // Only append Z if there's no timezone indicator already
+    if (!/[Zz]$/.test(dateStr) && !/[+-]\d{2}(:\d{2})?$/.test(dateStr)) {
+      dateStr += 'Z';
+    }
     const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '';
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
@@ -189,6 +198,35 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       <div className="page-header">
         <h1 className="greeting">Welcome back, {firstName}!</h1>
       </div>
+
+      {/* Latest Status */}
+      {!isNewUser && (() => {
+        const upcomingCount = upcoming.length;
+        const unreadCount = stats.unreadNotifications || 0;
+        let statusIcon = '📋';
+        let statusText = "Everything's on track. No upcoming sessions scheduled.";
+        let borderColor = '#1b6b5a';
+
+        if (upcomingCount > 0) {
+          statusIcon = '📅';
+          statusText = `You have ${upcomingCount} upcoming session${upcomingCount > 1 ? 's' : ''} this week.`;
+          if (unreadCount > 0) statusText += ` ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}.`;
+        } else if (stats.assignedCaregivers === 0 && !parent) {
+          statusIcon = '🔍';
+          statusText = 'Get started by adding a loved one and finding caregivers in your area.';
+          borderColor = '#e8724a';
+        }
+
+        return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: `4px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>{statusIcon}</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Latest</div>
+              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{statusText}</div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Onboarding Checklist (real users with some progress but not complete) */}
       {showOnboarding && (
