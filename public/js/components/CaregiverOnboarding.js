@@ -1,20 +1,23 @@
 // ─── Caregiver Onboarding Flow ───
 // Multi-step wizard shown when a user visits ?invite=TOKEN
 // Creates user account + caregiver profile + uploads documents in one flow.
-const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupToken, signupEmail, onComplete }) => {
-  const [step, setStep] = useState(1);
-  const [inviteInfo, setInviteInfo] = useState(null);
+const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupToken, signupEmail, resumeMode, resumeUser, onComplete }) => {
+  // resumeMode: true when user already has account but no caregiver profile
+  // resumeUser: { firstName, lastName, email } from existing account
+  const [step, setStep] = useState(resumeMode ? 2 : 1);
+  const [inviteInfo, setInviteInfo] = useState(resumeMode ? { email: resumeUser?.email, role: 'caregiver', viaResume: true } : null);
   const [inviteError, setInviteError] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(resumeMode ? false : true);
   const [saving, setSaving] = useState(false);
-  const [authToken, setAuthTokenState] = useState(null);
+  const [authToken, setAuthTokenState] = useState(resumeMode ? (window.AUTH_TOKEN || localStorage.getItem('auth_token')) : null);
   const [profileId, setProfileId] = useState(null);
   const [errors, setErrors] = useState({});
 
   // Form data across all steps
   const [form, setForm] = useState({
     // Step 1 — Account
-    firstName: '', lastName: '', email: '', password: '', confirmPassword: '',
+    firstName: resumeUser?.firstName || '', lastName: resumeUser?.lastName || '',
+    email: resumeUser?.email || '', password: '', confirmPassword: '',
     // Step 2 — Disclosures & Terms
     acceptBackgroundCheck: false,
     acceptStripePayments: false,
@@ -48,6 +51,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   useEffect(() => { validateInvite(); }, []);
 
   const validateInvite = async () => {
+    // Resume mode — already validated, skip token checks
+    if (resumeMode) { setLoading(false); return; }
     // Signup token flow (email-first signup from splash page)
     if (signupToken && signupEmail) {
       setInviteInfo({ email: signupEmail, role: 'caregiver', viaSignup: true });
@@ -567,7 +572,12 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
-              {backBtn(1)}
+              {resumeMode ? (
+                <button onClick={() => onComplete && onComplete(null)} style={{
+                  padding: '14px 24px', background: '#f0f0f0', color: '#555', border: 'none',
+                  borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                }}>Cancel</button>
+              ) : backBtn(1)}
               {nextBtn(handleAcceptTerms, 'I Understand — Continue')}
             </div>
           </div>

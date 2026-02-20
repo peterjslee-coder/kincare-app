@@ -1,6 +1,7 @@
-const CaretakerHub = window.CaretakerHub = () => {
+const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [noProfile, setNoProfile] = useState(false);
   const [activeTab, setActiveTab] = useState('schedule');
   const [visitLogSession, setVisitLogSession] = useState(null);
   const [logSummary, setLogSummary] = useState('');
@@ -23,6 +24,11 @@ const CaretakerHub = window.CaretakerHub = () => {
     type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00',
     isRecurring: true, specificDate: '', note: '',
   });
+
+  // Stoplight chart state (must be before early returns — React hook order rules)
+  const [stoplightData, setStoplightData] = useState(null);
+  const [editingStoplight, setEditingStoplight] = useState(false);
+  const [stoplightForm, setStoplightForm] = useState({});
 
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -86,6 +92,8 @@ const CaretakerHub = window.CaretakerHub = () => {
         if (res?.ok) {
           const d = await res.json();
           setData(d);
+        } else if (res?.status === 404) {
+          setNoProfile(true);
         }
       } catch (err) {
         console.error('CaretakerHub fetch error:', err);
@@ -113,6 +121,16 @@ const CaretakerHub = window.CaretakerHub = () => {
     };
     fetchCompleted();
   }, [activeTab]);
+
+  // Load stoplight from profile (must be before early returns — React hook order rules)
+  useEffect(() => {
+    if (!data?.profile?.care_stoplight) return;
+    try {
+      const parsed = typeof data.profile.care_stoplight === 'string' ? JSON.parse(data.profile.care_stoplight) : data.profile.care_stoplight;
+      setStoplightData(parsed);
+      setStoplightForm(parsed);
+    } catch { /* ignore */ }
+  }, [data?.profile?.care_stoplight]);
 
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []).slice(0, 5);
@@ -173,18 +191,35 @@ const CaretakerHub = window.CaretakerHub = () => {
   };
 
   if (loading) return <LoadingSpinner text="Loading your dashboard..." />;
-  if (!data) return <EmptyState icon="⚠️" title="Couldn't load dashboard" text="Please try refreshing the page." />;
+  if (noProfile || !data) return (
+    <div style={{ maxWidth: '480px', margin: '60px auto', textAlign: 'center', padding: '40px 24px' }}>
+      <div style={{ fontSize: '56px', marginBottom: '16px' }}>👋</div>
+      <h2 style={{ margin: '0 0 12px', color: '#333', fontSize: '22px' }}>Welcome to InPlace!</h2>
+      <p style={{ color: '#666', fontSize: '15px', lineHeight: '1.6', margin: '0 0 24px' }}>
+        {noProfile
+          ? "It looks like your caregiver profile isn't set up yet. Complete your onboarding to start receiving care requests and connecting with families."
+          : "We couldn't load your dashboard. Please try refreshing the page."}
+      </p>
+      {noProfile && onNeedsOnboarding && (
+        <button onClick={onNeedsOnboarding} style={{
+          padding: '14px 32px', background: '#1b6b5a', color: '#fff', border: 'none',
+          borderRadius: '10px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
+        }}>Complete Your Profile</button>
+      )}
+      {!noProfile && (
+        <button onClick={() => window.location.reload()} style={{
+          padding: '12px 24px', background: '#1b6b5a', color: '#fff', border: 'none',
+          borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+        }}>Refresh Page</button>
+      )}
+    </div>
+  );
 
   const profile = data.profile || {};
   const assignments = data.assignments || [];
   const sessions = data.upcomingSessions || [];
   const reviews = data.reviews || [];
   const stats = data.stats || {};
-
-  // Stoplight chart state
-  const [stoplightData, setStoplightData] = useState(null);
-  const [editingStoplight, setEditingStoplight] = useState(false);
-  const [stoplightForm, setStoplightForm] = useState({});
 
   const CARE_TASKS = [
     'Bathing / Showering', 'Toileting', 'Dressing', 'Feeding / Meal Assistance',
@@ -194,16 +229,6 @@ const CaretakerHub = window.CaretakerHub = () => {
     'Dementia / Memory Care', 'Hospice / End-of-Life',
   ];
 
-  useEffect(() => {
-    // Load stoplight from profile
-    if (profile.care_stoplight) {
-      try {
-        const parsed = typeof profile.care_stoplight === 'string' ? JSON.parse(profile.care_stoplight) : profile.care_stoplight;
-        setStoplightData(parsed);
-        setStoplightForm(parsed);
-      } catch { /* ignore */ }
-    }
-  }, [profile.care_stoplight]);
 
   const saveStoplight = async () => {
     try {

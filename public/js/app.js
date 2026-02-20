@@ -378,6 +378,21 @@ const App = () => {
     }} />;
   }
 
+  // Resume onboarding — logged-in caregiver with no profile
+  if (appState === 'resume-onboarding' && currentUser) {
+    return <CaregiverOnboarding resumeMode={true} resumeUser={{ firstName: currentUser.firstName, lastName: currentUser.lastName, email: currentUser.email }} onComplete={(token) => {
+      // Token is null if cancelled, or the existing token on success
+      if (token) {
+        // Profile was created — reload dashboard
+        setCurrentPage('dashboard');
+        setAppState('app');
+      } else {
+        // Cancelled — go back to dashboard (will show the "no profile" state)
+        setAppState('app');
+      }
+    }} />;
+  }
+
   // Email-first signup → caregiver onboarding (same wizard, no platform invite needed)
   if (appState === 'signup-onboarding' && signupPrefill) {
     return <CaregiverOnboarding signupToken={signupPrefill.signupToken} signupEmail={signupPrefill.email} onComplete={(token) => {
@@ -462,7 +477,7 @@ const App = () => {
     // Role-aware page rendering
     // key={currentPage} forces full remount on page switch — fixes stale state bugs (e.g., calendar heat map)
     if (currentPage === 'dashboard') {
-      if (role === 'caregiver') return <CaretakerHub key={currentPage} />;
+      if (role === 'caregiver') return <CaretakerHub key={currentPage} onNeedsOnboarding={() => setAppState('resume-onboarding')} />;
       if (role === 'care_for') return <CaredForView key={currentPage} />;
       return <Dashboard key={currentPage} onNavigate={setCurrentPage} />;
     }
