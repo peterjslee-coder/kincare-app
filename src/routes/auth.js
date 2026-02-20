@@ -10,10 +10,131 @@ const { sendPushToAdmins } = require("./push");
 
 const router = express.Router();
 
+// ─── POST /api/auth/signup-intent ───
+// Email-first signup: captures email + role, sends confirmation link
+router.post("/signup-intent", async (req, res) => {
+  try {
+    const { email, role = "family" } = req.body;
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email is required" });
+    }
+    if (!["family", "caregiver"].includes(role)) {
+      return res.status(400).json({ error: "Role must be 'family' or 'caregiver'" });
+    }
+
+    const db = await getDb();
+
+    // Check if already registered
+    const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    if (existing) {
+      return res.status(409).json({ error: "This email is already registered. Try signing in instead." });
+    }
+
+    // Check for existing pending intent — reuse token if still valid
+    const pendingIntent = await db.prepare(
+      "SELECT id, token, expires_at FROM signup_intents WHERE email = ?"
+    ).get(email);
+
+    let token;
+    if (pendingIntent && new Date(pendingIntent.expires_at) > new Date()) {
+      token = pendingIntent.token;
+      // Update role in case they changed their mind
+      await db.prepare("UPDATE signup_intents SET role = ? WHERE id = ?").run(role, pendingIntent.id);
+    } else {
+      // Delete any expired intent
+      if (pendingIntent) {
+        await db.prepare("DELETE FROM signup_intents WHERE id = ?").run(pendingIntent.id);
+      }
+      // Create new intent
+      token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+      await db.prepare(
+        "INSERT INTO signup_intents (id, email, role, token, expires_at) VALUES (?, ?, ?, ?, ?)"
+      ).run(uuid(), email, role, token, expiresAt);
+    }
+
+    const APP_URL = process.env.APP_URL || "https://yourinplace.com";
+    const signupUrl = `${APP_URL}?signupToken=${token}`;
+    const roleName = role === "caregiver" ? "a caregiver" : "a family member";
+
+    // Send confirmation email
+    sendEmail({
+      to: email,
+      subject: "Complete Your InPlace Signup",
+      html: brandedHtml({
+        title: "InPlace",
+        greeting: "Welcome!",
+        body: `You're one step away from joining InPlace as ${roleName}. Click the button below to create your account:`,
+        ctaUrl: signupUrl,
+        ctaText: "Complete Your Signup",
+        footnote: "This link expires in 7 days. If you didn't request this, you can safely ignore this email.",
+      }),
+    }).catch(err => console.error("  [email] Signup intent email failed:", err.message));
+
+    // Notify Pete (same as waitlist)
+    const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || "peterjslee@gmail.com";
+    sendEmail({
+      to: NOTIFY_EMAIL,
+      subject: `New InPlace signup interest: ${email} (${role})`,
+      html: brandedHtml({
+        title: "New Signup Interest",
+        greeting: "Hey Pete,",
+        body: `<strong>${email}</strong> wants to sign up as <strong>${roleName}</strong>.<br/>A confirmation email has been sent to them.`,
+      }),
+    }).catch(() => {});
+
+    // Push notification to admins
+    sendPushToAdmins("new_signup_intent", {
+      title: "New Signup Interest",
+      body: `${email} wants to join as ${roleName}`,
+      data: { type: "new_signup_intent", email, role },
+    });
+
+    console.log(`  [auth] Signup intent: ${email} (${role})`);
+    res.json({ message: "Check your email! We sent you a link to finish signing up." });
+  } catch (err) {
+    console.error("Signup intent error:", err);
+    res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
+// ─── GET /api/auth/confirm-signup?token=xxx ───
+// Validates a signup intent token, returns email + role for frontend
+router.get("/confirm-signup", async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: "Signup token required" });
+
+    const db = await getDb();
+    const intent = await db.prepare("SELECT * FROM signup_intents WHERE token = ?").get(token);
+
+    if (!intent) {
+      return res.status(400).json({ error: "Invalid or expired signup link. Please sign up again." });
+    }
+    if (new Date(intent.expires_at) < new Date()) {
+      await db.prepare("DELETE FROM signup_intents WHERE id = ?").run(intent.id);
+      return res.status(400).json({ error: "This signup link has expired. Please sign up again." });
+    }
+
+    // Check if someone already registered with this email
+    const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(intent.email);
+    if (existing) {
+      await db.prepare("DELETE FROM signup_intents WHERE id = ?").run(intent.id);
+      return res.status(409).json({ error: "This email is already registered. Try signing in." });
+    }
+
+    res.json({ email: intent.email, role: intent.role });
+  } catch (err) {
+    console.error("Confirm signup error:", err);
+    res.status(500).json({ error: "Verification failed. Please try again." });
+  }
+});
+
 // ─── POST /api/auth/register ───
 router.post("/register", validateRegister, async (req, res) => {
   try {
-    const { email, password, firstName, lastName, phone, role = "family" } = req.body;
+    const { email, password, firstName, lastName, phone, role = "family", signupToken } = req.body;
 
     if (!email || !password || !firstName || !lastName) {
       return res.status(400).json({ error: "Missing required fields: email, password, firstName, lastName" });
@@ -24,6 +145,17 @@ router.post("/register", validateRegister, async (req, res) => {
     }
 
     const db = await getDb();
+
+    // Validate signup token if provided
+    if (signupToken) {
+      const intent = await db.prepare(
+        "SELECT * FROM signup_intents WHERE token = ? AND email = ?"
+      ).get(signupToken, email);
+      if (!intent || new Date(intent.expires_at) < new Date()) {
+        return res.status(400).json({ error: "Signup link expired or invalid. Please sign up again." });
+      }
+    }
+
     const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
     if (existing) {
       return res.status(409).json({ error: "Email already registered" });
@@ -39,6 +171,11 @@ router.post("/register", validateRegister, async (req, res) => {
 
     const user = { id, email, role, firstName, lastName, emailVerified: false };
     const token = generateToken(user);
+
+    // Clean up signup intent if one was used
+    if (signupToken) {
+      await db.prepare("DELETE FROM signup_intents WHERE token = ?").run(signupToken).catch(() => {});
+    }
 
     // Send verification email (fire-and-forget)
     sendVerificationEmail(db, id, email, firstName).catch(err =>

@@ -1,39 +1,39 @@
 const SplashPage = window.SplashPage = ({ onNavigate }) => {
-  const [waitlistEmail, setWaitlistEmail] = React.useState('');
-  const [waitlistName, setWaitlistName] = React.useState('');
-  const [waitlistStatus, setWaitlistStatus] = React.useState(null);
-  const [waitlistMsg, setWaitlistMsg] = React.useState('');
-  const [waitlistSubmitting, setWaitlistSubmitting] = React.useState(false);
+  const [signupEmail, setSignupEmail] = React.useState('');
+  const [signupRole, setSignupRole] = React.useState('family');
+  const [signupStatus, setSignupStatus] = React.useState(null); // null, 'success', 'error'
+  const [signupMsg, setSignupMsg] = React.useState('');
+  const [signupSubmitting, setSignupSubmitting] = React.useState(false);
   const [showInstallTip, setShowInstallTip] = React.useState(false);
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   const showInstallBtn = !isStandalone;
 
-  const handleWaitlistSubmit = async (e) => {
+  const handleSignupSubmit = async (e) => {
     e.preventDefault();
-    if (!waitlistEmail) return;
-    setWaitlistSubmitting(true);
+    if (!signupEmail) return;
+    setSignupSubmitting(true);
+    setSignupStatus(null);
     try {
-      const res = await fetch('/api/waitlist', {
+      const res = await fetch('/api/auth/signup-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: waitlistEmail, name: waitlistName }),
+        body: JSON.stringify({ email: signupEmail, role: signupRole }),
       });
       const data = await res.json();
       if (res.ok) {
-        setWaitlistStatus(data.alreadyExists ? 'exists' : 'success');
-        setWaitlistMsg(data.message);
-        if (!data.alreadyExists) { setWaitlistEmail(''); setWaitlistName(''); }
+        setSignupStatus('success');
+        setSignupMsg(data.message);
       } else {
-        setWaitlistStatus('error');
-        setWaitlistMsg(data.error || 'Something went wrong.');
+        setSignupStatus('error');
+        setSignupMsg(data.error || 'Something went wrong.');
       }
     } catch {
-      setWaitlistStatus('error');
-      setWaitlistMsg('Network error. Please try again.');
+      setSignupStatus('error');
+      setSignupMsg('Network error. Please try again.');
     }
-    setWaitlistSubmitting(false);
+    setSignupSubmitting(false);
   };
 
   const scrollTo = (id) => {
@@ -113,8 +113,8 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             inPlace is on-demand home care that matches families with vetted caregivers in hours, not weeks. Think of it as the missing infrastructure for aging in place.
           </p>
 
-          {/* Primary CTA */}
-          <div className="hero-cta" style={{ marginBottom: '32px' }}>
+          {/* Primary CTA Row */}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
             <button onClick={() => onNavigate('demo')} style={{
               padding: '16px 48px', fontSize: '18px', fontWeight: 600,
               background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '8px',
@@ -122,25 +122,75 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
             }}>View Live Demo</button>
           </div>
 
-          {/* Audience Buttons */}
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
-            <button onClick={() => scrollTo('for-family')} style={{
-              padding: '10px 24px', fontSize: '14px', fontWeight: 600,
-              background: 'rgba(255,255,255,0.15)', color: 'white', border: '1.5px solid rgba(255,255,255,0.5)',
-              borderRadius: '24px', cursor: 'pointer', transition: 'all 0.3s', backdropFilter: 'blur(4px)',
-            }}>For Family & Friends</button>
-            <button onClick={() => scrollTo('for-recipients')} style={{
-              padding: '10px 24px', fontSize: '14px', fontWeight: 600,
-              background: 'rgba(255,255,255,0.15)', color: 'white', border: '1.5px solid rgba(255,255,255,0.5)',
-              borderRadius: '24px', cursor: 'pointer', transition: 'all 0.3s', backdropFilter: 'blur(4px)',
-            }}>For Care Recipients</button>
-            <button onClick={() => scrollTo('for-caregivers')} style={{
-              padding: '10px 24px', fontSize: '14px', fontWeight: 600,
-              background: 'rgba(255,255,255,0.15)', color: 'white', border: '1.5px solid rgba(255,255,255,0.5)',
-              borderRadius: '24px', cursor: 'pointer', transition: 'all 0.3s', backdropFilter: 'blur(4px)',
-            }}>For Caregivers</button>
-          </div>
+        </div>
+      </section>
 
+      {/* ── Signup Form — Email-First ── */}
+      <section style={{ padding: '48px 32px', background: '#fff', textAlign: 'center' }}>
+        <div style={{ maxWidth: '520px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '26px', color: '#1b6b5a', marginBottom: '8px' }}>Get Started</h2>
+          <p style={{ fontSize: '15px', color: '#666', marginBottom: '24px' }}>
+            Enter your email and we'll send you a link to create your account.
+          </p>
+
+          {signupStatus === 'success' ? (
+            <div style={{
+              background: '#f0faf8', borderRadius: '12px', padding: '28px',
+              border: '1px solid #d0e8e3', fontSize: '16px', color: '#1b6b5a',
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>&#9993;</div>
+              <div style={{ fontWeight: 600, marginBottom: '4px' }}>Check your email!</div>
+              <div style={{ fontSize: '14px', color: '#555' }}>{signupMsg}</div>
+            </div>
+          ) : (
+            <form onSubmit={handleSignupSubmit}>
+              {/* Role pills */}
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '16px' }}>
+                <button type="button" onClick={() => setSignupRole('family')} style={{
+                  padding: '10px 20px', borderRadius: '24px', fontSize: '14px', fontWeight: 600,
+                  border: signupRole === 'family' ? '2px solid #1b6b5a' : '2px solid #ddd',
+                  background: signupRole === 'family' ? '#f0faf8' : '#fff',
+                  color: signupRole === 'family' ? '#1b6b5a' : '#666',
+                  cursor: 'pointer', transition: 'all 0.2s',
+                }}>I need care for a loved one</button>
+                <button type="button" onClick={() => setSignupRole('caregiver')} style={{
+                  padding: '10px 20px', borderRadius: '24px', fontSize: '14px', fontWeight: 600,
+                  border: signupRole === 'caregiver' ? '2px solid #1b6b5a' : '2px solid #ddd',
+                  background: signupRole === 'caregiver' ? '#f0faf8' : '#fff',
+                  color: signupRole === 'caregiver' ? '#1b6b5a' : '#666',
+                  cursor: 'pointer', transition: 'all 0.2s',
+                }}>I want to provide care</button>
+              </div>
+
+              {/* Email + Submit */}
+              <div style={{ display: 'flex', gap: '10px', maxWidth: '440px', margin: '0 auto' }}>
+                <input
+                  type="email" placeholder="Your email address" value={signupEmail} required
+                  onChange={(e) => setSignupEmail(e.target.value)}
+                  style={{
+                    flex: 1, padding: '14px 16px', borderRadius: '8px', border: '1.5px solid #ddd',
+                    fontSize: '15px', outline: 'none', color: '#333',
+                  }}
+                />
+                <button type="submit" disabled={signupSubmitting} style={{
+                  padding: '14px 24px', background: '#e8724a', color: 'white', border: 'none',
+                  borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+                  opacity: signupSubmitting ? 0.7 : 1, transition: 'all 0.3s', whiteSpace: 'nowrap',
+                }}>
+                  {signupSubmitting ? 'Sending...' : 'Sign Up'}
+                </button>
+              </div>
+
+              {signupStatus === 'error' && (
+                <div style={{ color: '#c0392b', fontSize: '14px', marginTop: '8px' }}>{signupMsg}</div>
+              )}
+
+              <div style={{ marginTop: '16px', fontSize: '13px', color: '#888' }}>
+                Already have an account?{' '}
+                <a onClick={() => onNavigate('login')} style={{ color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Sign in</a>
+              </div>
+            </form>
+          )}
         </div>
       </section>
 
@@ -542,53 +592,23 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         </div>
       </section>
 
-      {/* ── Email Capture / Waitlist ── */}
+      {/* ── Bottom CTA ── */}
       <section style={{ padding: '64px 32px', background: 'linear-gradient(135deg, #1b6b5a 0%, #0f4238 100%)', color: 'white', textAlign: 'center' }}>
         <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <h2 style={{ fontSize: '30px', marginBottom: '12px', color: 'white' }}>Get Early Access</h2>
-          <p style={{ fontSize: '16px', opacity: 0.9, marginBottom: '32px' }}>
-            We're opening beta to families in select metro areas. Drop your email and we'll let you know when it's your turn.
+          <h2 style={{ fontSize: '30px', marginBottom: '12px', color: 'white' }}>Ready to Get Started?</h2>
+          <p style={{ fontSize: '16px', opacity: 0.9, marginBottom: '28px' }}>
+            Whether you need care for a loved one or want to provide care, we'd love to have you.
           </p>
-          {waitlistStatus === 'success' || waitlistStatus === 'exists' ? (
-            <div style={{
-              background: 'rgba(255,255,255,0.15)', borderRadius: '10px', padding: '24px',
-              border: '1px solid rgba(255,255,255,0.25)', fontSize: '16px',
-            }}>
-              {waitlistMsg}
-            </div>
-          ) : (
-            <form onSubmit={handleWaitlistSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '12px', width: '100%', flexWrap: 'wrap', justifyContent: 'center' }}>
-                <input
-                  type="text" placeholder="Your name (optional)" value={waitlistName}
-                  onChange={(e) => setWaitlistName(e.target.value)}
-                  style={{
-                    flex: '1 1 180px', maxWidth: '220px', padding: '14px 16px', borderRadius: '8px', border: 'none',
-                    fontSize: '15px', outline: 'none', color: '#333',
-                  }}
-                />
-                <input
-                  type="email" placeholder="Your email" value={waitlistEmail} required
-                  onChange={(e) => setWaitlistEmail(e.target.value)}
-                  style={{
-                    flex: '1 1 220px', maxWidth: '280px', padding: '14px 16px', borderRadius: '8px', border: 'none',
-                    fontSize: '15px', outline: 'none', color: '#333',
-                  }}
-                />
-                <button type="submit" disabled={waitlistSubmitting} style={{
-                  padding: '14px 28px', background: '#e8724a', color: 'white', border: 'none',
-                  borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
-                  opacity: waitlistSubmitting ? 0.7 : 1, transition: 'all 0.3s',
-                }}>
-                  {waitlistSubmitting ? 'Joining...' : 'Join Waitlist'}
-                </button>
-              </div>
-              {waitlistStatus === 'error' && (
-                <div style={{ color: '#ffb4a0', fontSize: '14px', marginTop: '4px' }}>{waitlistMsg}</div>
-              )}
-              <div style={{ fontSize: '12px', opacity: 0.6, marginTop: '4px' }}>No spam. Just an update when beta opens in your area.</div>
-            </form>
-          )}
+          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} style={{
+              padding: '14px 32px', background: '#e8724a', color: 'white', border: 'none',
+              borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
+            }}>Sign Up Now</button>
+            <button onClick={() => onNavigate('demo')} style={{
+              padding: '14px 32px', background: 'transparent', color: 'white', border: '2px solid rgba(255,255,255,0.5)',
+              borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
+            }}>View Live Demo</button>
+          </div>
         </div>
       </section>
 

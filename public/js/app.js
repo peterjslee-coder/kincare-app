@@ -167,6 +167,8 @@ const App = () => {
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
   const [platformInviteToken, setPlatformInviteToken] = useState(null);
   const [selectedCareTeamId, setSelectedCareTeamId] = useState(null);
+  // Email-first signup: prefilled from signup intent token
+  const [signupPrefill, setSignupPrefill] = useState(null); // { email, role, signupToken }
 
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token');
@@ -232,6 +234,26 @@ const App = () => {
       setPlatformInviteToken(pInvite);
       setAppState('platform-onboarding');
       window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    // Check for email-first signup confirmation token
+    const signupToken = params.get('signupToken');
+    if (signupToken) {
+      window.history.replaceState({}, '', window.location.pathname);
+      // Validate the token and get email + role
+      fetch(`/api/auth/confirm-signup?token=${signupToken}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.email && data.role) {
+            setSignupPrefill({ email: data.email, role: data.role, signupToken });
+            setAppState('register');
+          } else {
+            setVerifyMessage({ type: 'error', text: data.error || 'Invalid signup link.' });
+          }
+        })
+        .catch(() => {
+          setVerifyMessage({ type: 'error', text: 'Failed to validate signup link.' });
+        });
     }
 
     // Deep-link from push notification — open conversation or page
@@ -358,7 +380,7 @@ const App = () => {
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} />;
   if (appState === 'demo') return <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />;
   if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} />;
-  if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} />;
+  if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} />;
   if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;
   if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
 

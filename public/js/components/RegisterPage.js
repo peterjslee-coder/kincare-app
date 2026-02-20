@@ -1,8 +1,9 @@
-const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate }) => {
-  const [track, setTrack] = useState(null);
-  const [step, setStep] = useState(1);
+const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken }) => {
+  // If prefill props are provided (from email-first signup flow), skip the role picker
+  const [track, setTrack] = useState(prefilledRole === 'caregiver' ? 'caregiver' : prefilledRole === 'family' ? 'family' : null);
+  const [step, setStep] = useState(prefilledRole ? 1 : 1);
   const [formData, setFormData] = useState({
-    firstName: '', lastName: '', email: '', phone: '', password: '',
+    firstName: '', lastName: '', email: prefilledEmail || '', phone: '', password: '',
     lovedOneName: '', lovedOneAge: '', relationship: '', city: '', state: '',
     careNeeds: {}, careNotes: '', bgCheckConsent: false,
     certifications: [], certType: '', certNumber: '', certExpiry: '',
@@ -51,7 +52,10 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate }) => {
   };
 
   const handleBack = () => {
-    if (step === 1) { setTrack(null); return; }
+    if (step === 1) {
+      if (prefilledRole) { onNavigate('splash'); return; }
+      setTrack(null); return;
+    }
     if (step > 1) setStep(step - 1);
   };
 
@@ -71,7 +75,8 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate }) => {
           firstName: formData.firstName,
           lastName: formData.lastName,
           phone: formData.phone,
-          role
+          role,
+          ...(signupToken ? { signupToken } : {})
         })
       });
       if (res.error) {
@@ -150,7 +155,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate }) => {
                 </div>
                 <div className="form-group">
                   <label>Email</label>
-                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="jane@example.com" />
+                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="jane@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : {}} />
                   {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
                 </div>
                 <div className="form-group">
@@ -247,7 +252,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate }) => {
                 </div>
                 <div className="form-group">
                   <label>Email</label>
-                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="maria@example.com" />
+                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="maria@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : {}} />
                   {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
                 </div>
                 <div className="form-group">
