@@ -42,13 +42,16 @@ const ActivityFeed = window.ActivityFeed = () => {
   };
 
   const formatActivityTime = (createdAt) => {
-    const dateStr = createdAt.replace(' ', 'T') + 'Z';
-    const date = new Date(dateStr);
+    if (!createdAt) return '';
+    // Handle ISO strings, PostgreSQL TIMESTAMPTZ, or Date objects
+    const date = new Date(createdAt);
+    if (isNaN(date.getTime())) return '';
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return 'just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;

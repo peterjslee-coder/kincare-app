@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.5.0';
+const DEMO_SEED_VERSION = '1.7.1';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -331,10 +331,12 @@ async function seed() {
   await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), dorothyId, hendersonFamilyId, sarahId);
   await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), arunId, patelFamilyId, jamesId);
 
-  // Sibling assignments (David and Susan also have Maria and James for Betty)
-  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 1)`).run(uuid(), bettyForDavidId, davidLeeId, mariaId);
+  // Sibling assignments (David and Susan also have James for Betty; Maria is already assigned via Pete's Betty)
   await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), bettyForDavidId, davidLeeId, jamesId);
-  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 1)`).run(uuid(), bettyForSusanId, susanLeeId, mariaId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), bettyForSusanId, susanLeeId, jamesId);
+
+  // Maria also works with Arun Patel
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), arunId, patelFamilyId, mariaId);
 
   console.log("✅ Caregiver assignments created (8)");
 

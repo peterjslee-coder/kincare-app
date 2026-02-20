@@ -223,6 +223,22 @@ router.get("/:id", async (req, res) => {
   });
 });
 
+// ─── GET /api/caregivers/me ───
+// Get the current caregiver's own profile (for map centering, etc.)
+router.get("/me", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  const profile = await db.prepare(`
+    SELECT cp.*, u.first_name, u.last_name, u.email, u.phone, u.avatar_url
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE cp.user_id = ?
+  `).get(req.user.id);
+
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  res.json({ profile });
+});
+
 // ─── POST /api/caregivers/profile ───
 // Create or update caregiver profile (for caregiver users)
 router.post("/profile", requireRole("caregiver"), async (req, res) => {

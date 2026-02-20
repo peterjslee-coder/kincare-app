@@ -326,7 +326,7 @@ router.post("/change-password", authenticate, async (req, res) => {
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
   const user = await db.prepare(
-    "SELECT id, email, role, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, email_verified, is_demo, is_admin, password_changed_at, disclaimer_accepted_at, disclaimer_version, created_at FROM users WHERE id = ?"
+    "SELECT id, email, role, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, email_verified, is_demo, is_admin, password_changed_at, disclaimer_accepted_at, disclaimer_version, pets, pet_allergies, food_allergies, medical_conditions, created_at FROM users WHERE id = ?"
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -380,7 +380,7 @@ router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
 
     // Return updated user
     const user = await db.prepare(
-      "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, created_at FROM users WHERE id = ?"
+      "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, pets, pet_allergies, food_allergies, medical_conditions, created_at FROM users WHERE id = ?"
     ).get(req.user.id);
 
     res.json({ user });

@@ -6,29 +6,44 @@ const AreaMap = window.AreaMap = () => {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [radiusMiles, setRadiusMiles] = useState(10);
+  const [profileCenter, setProfileCenter] = useState(null); // caregiver's registered location
 
   useEffect(() => {
-    const fetchAssignments = async () => {
+    const fetchData = async () => {
       try {
-        const res = await apiFetch('/api/assignments');
-        if (res?.ok) {
-          const data = await res.json();
+        // Fetch assignments and caregiver profile in parallel
+        const [assignRes, profileRes] = await Promise.all([
+          apiFetch('/api/assignments'),
+          apiFetch('/api/caregivers/me'),
+        ]);
+        if (assignRes?.ok) {
+          const data = await assignRes.json();
           setAssignments(data.assignments || []);
+        }
+        if (profileRes?.ok) {
+          const data = await profileRes.json();
+          const p = data.profile || data.caregiver;
+          if (p?.latitude && p?.longitude) {
+            setProfileCenter([p.latitude, p.longitude]);
+          }
         }
       } catch (err) {
         console.error('AreaMap fetch error:', err);
       }
       setLoading(false);
     };
-    fetchAssignments();
+    fetchData();
   }, []);
 
-  // Initialize Leaflet map
+  // Initialize Leaflet map — use caregiver's registered location if available
   useEffect(() => {
     if (!mapRef.current || leafletMap.current) return;
 
+    // Default to caregiver's registered location, fall back to Blacksburg
+    const center = profileCenter || [37.2296, -80.4139];
+
     const map = L.map(mapRef.current, {
-      center: [37.2296, -80.4139], // Blacksburg default
+      center,
       zoom: 13,
       zoomControl: true,
       scrollWheelZoom: true,
@@ -48,7 +63,7 @@ const AreaMap = window.AreaMap = () => {
         leafletMap.current = null;
       }
     };
-  }, []);
+  }, [profileCenter]); // re-init when profile center loads
 
   // Add markers when assignments load — use real lat/lng from API
   useEffect(() => {
@@ -79,7 +94,7 @@ const AreaMap = window.AreaMap = () => {
         ">
           <div>${a.is_favorite ? '⭐' : '📍'} ${a.recipient_first_name} ${a.recipient_last_name}</div>
           <div style="font-size:10px;font-weight:400;opacity:0.85;margin-top:2px">
-            ${a.location_address ? a.location_address + ', ' : ''}${a.location_city || 'Blacksburg'}
+            ${a.location_address ? a.location_address + ', ' : ''}${a.location_city || 'Unknown'}
           </div>
         </div>`,
         iconSize: [0, 0],
@@ -97,7 +112,7 @@ const AreaMap = window.AreaMap = () => {
         <div style="min-width:180px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">
           <div style="font-weight:700;font-size:14px;margin-bottom:4px">${a.recipient_first_name} ${a.recipient_last_name}</div>
           <div style="font-size:12px;color:#666;margin-bottom:4px">Family: ${a.family_first_name} ${a.family_last_name}</div>
-          <div style="font-size:12px;color:#888;margin-bottom:6px">📍 ${a.location_address ? a.location_address + ', ' : ''}${a.location_city || 'Blacksburg'}, ${a.location_state || 'VA'}</div>
+          <div style="font-size:12px;color:#888;margin-bottom:6px">📍 ${a.location_address ? a.location_address + ', ' : ''}${a.location_city || 'Unknown'}, ${a.location_state || ''}</div>
           ${healthBadges ? '<div style="margin-top:4px">' + healthBadges + '</div>' : ''}
           ${a.is_favorite ? '<div style="margin-top:6px;font-size:11px;color:#1b6b5a;font-weight:600">⭐ Favorite assignment</div>' : ''}
         </div>
@@ -107,15 +122,20 @@ const AreaMap = window.AreaMap = () => {
       bounds.push([lat, lng]);
     });
 
+    // Include caregiver's own location in bounds if available
+    if (profileCenter) {
+      bounds.push(profileCenter);
+    }
+
     // Fit map to show all pins
     if (bounds.length > 0) {
       map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
     }
-  }, [assignments]);
+  }, [assignments, profileCenter]);
 
-  // Draw radius circle around the centroid of all assignments
+  // Draw radius circle around the caregiver's location (or centroid of assignments)
   useEffect(() => {
-    if (!leafletMap.current || assignments.length === 0) return;
+    if (!leafletMap.current) return;
     const map = leafletMap.current;
 
     // Remove old circle
@@ -124,12 +144,17 @@ const AreaMap = window.AreaMap = () => {
       circleRef.current = null;
     }
 
-    // Calculate centroid of all assignment locations
-    const validAssignments = assignments.filter(a => a.latitude && a.longitude);
-    if (validAssignments.length === 0) return;
-
-    const centerLat = validAssignments.reduce((s, a) => s + a.latitude, 0) / validAssignments.length;
-    const centerLng = validAssignments.reduce((s, a) => s + a.longitude, 0) / validAssignments.length;
+    // Prefer caregiver's registered location for the radius circle center
+    let centerLat, centerLng;
+    if (profileCenter) {
+      [centerLat, centerLng] = profileCenter;
+    } else {
+      // Fall back to centroid of assignments
+      const validAssignments = assignments.filter(a => a.latitude && a.longitude);
+      if (validAssignments.length === 0) return;
+      centerLat = validAssignments.reduce((s, a) => s + a.latitude, 0) / validAssignments.length;
+      centerLng = validAssignments.reduce((s, a) => s + a.longitude, 0) / validAssignments.length;
+    }
 
     // Draw radius circle (miles → meters: 1 mile = 1609.34m)
     circleRef.current = L.circle([centerLat, centerLng], {
@@ -140,7 +165,7 @@ const AreaMap = window.AreaMap = () => {
       weight: 2,
       dashArray: '6 4',
     }).addTo(map);
-  }, [assignments, radiusMiles]);
+  }, [assignments, radiusMiles, profileCenter]);
 
   const flyToAssignment = (a) => {
     if (leafletMap.current && a.latitude && a.longitude) {
@@ -191,7 +216,7 @@ const AreaMap = window.AreaMap = () => {
                   {a.recipient_first_name} {a.recipient_last_name}
                 </div>
                 <div style={{ fontSize: '11px', color: '#888' }}>
-                  {a.location_city || 'Blacksburg'}, {a.location_state || 'VA'}
+                  {a.location_city || 'Unknown'}, {a.location_state || ''}
                 </div>
               </div>
             </div>

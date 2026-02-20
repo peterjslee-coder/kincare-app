@@ -511,7 +511,7 @@ const CaredForView = window.CaredForView = () => {
                       </div>
                     </div>
                     <div style={{ fontSize: '14px', color: '#333', lineHeight: 1.5 }}>{n.content}</div>
-                    <div style={{ fontSize: '11px', color: '#aaa', marginTop: '6px' }}>{n.createdAt}</div>
+                    <div style={{ fontSize: '11px', color: '#aaa', marginTop: '6px' }}>{n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
                   </div>
                 )}
               </div>

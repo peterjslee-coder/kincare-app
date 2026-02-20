@@ -85,7 +85,10 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
           <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
           <h3 style={{ margin: '0 0 8px' }}>Setup Error</h3>
           <p style={{ color: '#666', fontSize: 14, margin: '0 0 16px' }}>{error}</p>
-          <button onClick={onCancel} style={secondaryBtn}>Go Back</button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button onClick={onCancel} style={secondaryBtn}>Go Back</button>
+            <button onClick={() => { setError(null); setStep('loading'); }} style={primaryBtn}>Retry</button>
+          </div>
         </div>
       </div>
     );
