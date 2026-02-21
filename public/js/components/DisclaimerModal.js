@@ -6,21 +6,16 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
   const handleScroll = () => {
     const el = contentRef.current;
     if (!el) return;
-    // More forgiving threshold (50px) for different browsers/zoom levels
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     if (atBottom) setScrolledToBottom(true);
   };
 
   useEffect(() => {
     const el = contentRef.current;
-    // Check if content doesn't need scrolling (short enough to fit)
+    // If content fits without scrolling, enable immediately
     if (el && el.scrollHeight <= el.clientHeight + 20) {
       setScrolledToBottom(true);
     }
-    // Fallback: if scroll detection fails after 8 seconds, enable the button
-    // so users aren't permanently stuck
-    const fallback = setTimeout(() => setScrolledToBottom(true), 8000);
-    return () => clearTimeout(fallback);
   }, []);
 
   const handleAccept = async () => {
@@ -39,27 +34,35 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000,
-      background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-      padding: '0',
+      background: '#f5f5f5',
+      display: 'flex', flexDirection: 'column',
     }}>
+      {/* Header — fixed at top */}
       <div style={{
-        background: 'white', borderRadius: '16px 16px 0 0', maxWidth: '560px', width: '100%',
-        maxHeight: '85dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        boxShadow: '0 -4px 40px rgba(0,0,0,0.3)',
+        padding: '16px 20px', background: 'white',
+        borderBottom: '1px solid #e0e0e0', flexShrink: 0,
       }}>
-        <div style={{ padding: '20px 20px 12px', borderBottom: '1px solid #e0e0e0', flexShrink: 0 }}>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: '#333', marginBottom: '4px' }}>
+        <div style={{ maxWidth: '560px', margin: '0 auto' }}>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: '#333', marginBottom: '2px' }}>
             Important Notice
           </div>
           <div style={{ fontSize: '13px', color: '#999' }}>
-            Please read and acknowledge before continuing
+            Please read and scroll to the bottom to continue
           </div>
         </div>
+      </div>
 
-        <div ref={contentRef} onScroll={handleScroll} style={{
-          flex: '1 1 0', overflowY: 'auto', padding: '20px',
+      {/* Scrollable content — takes all remaining space */}
+      <div
+        ref={contentRef}
+        onScroll={handleScroll}
+        style={{
+          flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        <div style={{
+          maxWidth: '560px', margin: '0 auto', padding: '20px',
           fontSize: '14px', lineHeight: '1.7', color: '#444',
-          minHeight: 0,
         }}>
           <p style={{ margin: '0 0 16px' }}>
             Welcome to InPlace. Before you begin using our platform, please carefully read and acknowledge the following important disclosures.
@@ -103,16 +106,18 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
             Disclaimer version 1.0 — Last updated February 2026
           </p>
         </div>
+      </div>
 
-        <div style={{
-          padding: '14px 20px', borderTop: '1px solid #e0e0e0',
-          display: 'flex', flexDirection: 'column', gap: '8px',
-          flexShrink: 0,
-          paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
-        }}>
+      {/* Footer — fixed at bottom */}
+      <div style={{
+        padding: '14px 20px', background: 'white',
+        borderTop: '1px solid #e0e0e0', flexShrink: 0,
+        paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+      }}>
+        <div style={{ maxWidth: '560px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {!scrolledToBottom && (
             <div style={{ textAlign: 'center', fontSize: '12px', color: '#999', fontStyle: 'italic' }}>
-              Please scroll to read the full notice
+              ↓ Scroll down to read the full notice ↓
             </div>
           )}
           <button onClick={handleAccept} disabled={!scrolledToBottom || accepting} style={{
