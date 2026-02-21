@@ -38,7 +38,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     documents: [], // { type, file, preview, fileName }
   });
 
-  const TOTAL_STEPS = 7;
+  const [bgCheckPaid, setBgCheckPaid] = useState(false);
+  const TOTAL_STEPS = 8;
   const US_STATES = [
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
     'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY',
@@ -115,7 +116,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!form.dlState) errs.dlState = 'Required';
       if (!form.backgroundCheckConsent) errs.backgroundCheckConsent = 'You must consent to proceed';
     }
-    if (stepNum === 6) {
+    if (stepNum === 7) {
       const hasDLFront = form.documents.some(d => d.type === 'dl_front');
       const hasDLBack = form.documents.some(d => d.type === 'dl_back');
       if (!hasDLFront) errs.dl_front = "Driver's license front is required";
@@ -252,16 +253,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           certifications: validCerts.map(c => `${c.certType}${c.certNumber ? ' #' + c.certNumber : ''}`),
         }),
       });
-      setStep(6);
+      setStep(6); // → Background Check Payment
     } catch (err) {
       setErrors({ submit: 'Network error' });
     }
     setSaving(false);
   };
 
-  // Step 6: Upload documents
+  // Step 7: Upload documents
   const handleUploadDocuments = async () => {
-    if (!validateStep(6)) return;
+    if (!validateStep(7)) return;
     setSaving(true);
     try {
       const token = authToken || window.AUTH_TOKEN;
@@ -284,7 +285,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         body: formData,
       });
       if (!res.ok) { const data = await res.json(); setErrors({ submit: data.error }); setSaving(false); return; }
-      setStep(7);
+      setStep(8);
     } catch (err) {
       setErrors({ submit: 'Upload failed — please try again' });
     }
@@ -450,8 +451,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     3: 'Personal Info',
     4: 'Background Check Info',
     5: 'Certifications',
-    6: 'Document Upload',
-    7: 'Review & Complete',
+    6: 'Background Check Payment',
+    7: 'Document Upload',
+    8: 'Review & Complete',
   };
 
   const backBtn = (targetStep) => (
@@ -842,8 +844,62 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           </div>
         )}
 
-        {/* ─── Step 6: Document Upload ─── */}
+        {/* ─── Step 6: Background Check Payment ($30) ─── */}
         {step === 6 && (
+          <div className="card" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Background Check Payment</h2>
+            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
+              A one-time $30 fee is required to initiate your Checkr background check. This covers criminal history, driving record, and identity verification.
+            </p>
+
+            {bgCheckPaid ? (
+              <div style={{
+                textAlign: 'center', padding: '32px 20px', background: '#e8f5e9',
+                borderRadius: '12px', marginBottom: '20px',
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#9989;</div>
+                <h3 style={{ color: '#2e7d32', margin: '0 0 8px', fontSize: '18px' }}>Payment Received!</h3>
+                <p style={{ color: '#4caf50', margin: 0, fontSize: '14px' }}>
+                  Your background check has been initiated. You can continue with your application.
+                </p>
+              </div>
+            ) : (
+              <div style={{ marginBottom: '20px' }}>
+                <StripePaymentForm
+                  amount={30}
+                  description="This charge will appear as 'InPlace' on your statement."
+                  buttonText="Pay $30.00 — Background Check"
+                  onSuccess={(intent) => {
+                    setBgCheckPaid(true);
+                  }}
+                  onError={(msg) => {
+                    setErrors({ submit: msg });
+                  }}
+                />
+              </div>
+            )}
+
+            <div style={{
+              padding: '14px', background: '#f0faf8', borderRadius: '8px', marginBottom: '16px',
+              border: '1px solid #d0e8e2', fontSize: '13px', color: '#1b6b5a', lineHeight: '1.6',
+            }}>
+              <strong>Refund policy:</strong> Your $30 background check fee will be refunded to your InPlace account after you complete 10 care sessions. That's our way of investing in caregivers who stay with us.
+            </div>
+
+            {errors.submit && <div style={{ color: '#e74c3c', fontSize: '12px', marginBottom: '12px' }}>{errors.submit}</div>}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {backBtn(5)}
+              <button onClick={() => setStep(7)} disabled={!bgCheckPaid} style={{
+                flex: 1, padding: '14px', background: bgCheckPaid ? '#1b6b5a' : '#ccc',
+                color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px',
+                fontWeight: 600, cursor: bgCheckPaid ? 'pointer' : 'not-allowed',
+              }}>Continue</button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Step 7: Document Upload ─── */}
+        {step === 7 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Upload Documents</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
@@ -960,14 +1016,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
-              {backBtn(5)}
+              {backBtn(6)}
               {nextBtn(handleUploadDocuments, 'Upload & Continue')}
             </div>
           </div>
         )}
 
-        {/* ─── Step 7: Review & Complete ─── */}
-        {step === 7 && (
+        {/* ─── Step 8: Review & Complete ─── */}
+        {step === 8 && (
           <div className="card" style={{ padding: '24px' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#127881;</div>

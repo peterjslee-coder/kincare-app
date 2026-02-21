@@ -1,4 +1,4 @@
-const SplashPage = window.SplashPage = ({ onNavigate }) => {
+const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
   const [signupEmail, setSignupEmail] = React.useState('');
   const [signupRole, setSignupRole] = React.useState('family');
   const [signupStatus, setSignupStatus] = React.useState(null); // null, 'success', 'error'
@@ -42,6 +42,33 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
 
   return (
     <div className="splash-page">
+      {/* ── Care Team Invite Banner ── */}
+      {inviteInfo && (
+        <div style={{
+          background: 'linear-gradient(135deg, #e8f5e9 0%, #f0faf8 100%)',
+          borderBottom: '2px solid #1b6b5a',
+          padding: '16px 20px',
+          textAlign: 'center',
+          position: 'sticky', top: 0, zIndex: 100,
+        }}>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: '#1b6b5a', marginBottom: '4px' }}>
+            👋 {inviteInfo.inviterName} invited you to join {inviteInfo.recipientName}'s Care Team
+          </div>
+          <div style={{ fontSize: '14px', color: '#555', marginBottom: '12px' }}>
+            Sign in or create an account to start coordinating care together.
+          </div>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => onNavigate('login')} style={{
+              padding: '10px 24px', background: '#1b6b5a', color: '#fff', border: 'none',
+              borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+            }}>Sign In</button>
+            <button onClick={() => onNavigate('register')} style={{
+              padding: '10px 24px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a',
+              borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+            }}>Create Account</button>
+          </div>
+        </div>
+      )}
       {/* ── Clean Header: Logo Only ── */}
       <nav className="splash-nav">
         <div className="splash-nav-logo">

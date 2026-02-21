@@ -10,7 +10,7 @@ const router = express.Router();
 let _stripe = null;
 function getStripe() {
   if (!_stripe) {
-    const key = process.env.STRIPE_SECRET_KEY;
+    const key = process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key;
     if (!key) throw new Error("STRIPE_SECRET_KEY not configured");
     _stripe = require("stripe")(key);
   }
@@ -18,8 +18,8 @@ function getStripe() {
 }
 
 const PLATFORM_FEE_PERCENT = 15; // InPlace takes 15%
-const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || "";
-const BASE_URL = process.env.BASE_URL || "https://yourinplace.com";
+const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || process.env.stripe_publishable_key || "";
+const BASE_URL = process.env.BASE_URL || process.env.base_url || "https://yourinplace.com";
 
 // ─── GET /api/payments/config ───
 // Return publishable key to frontend (no auth required for checkout)
@@ -198,11 +198,23 @@ router.post("/checkout", requireRole("family"), async (req, res) => {
   const hourlyRate = session.hourly_rate || 28;
   const durationHours = session.duration_hours || 2;
   const totalCents = Math.round(hourlyRate * durationHours * 100);
-  const platformFeeCents = Math.round(totalCents * PLATFORM_FEE_PERCENT / 100);
+  let platformFeeCents = Math.round(totalCents * PLATFORM_FEE_PERCENT / 100);
+
+  // Check caregiver payout speed — if instant, add 2% surcharge to platform fee
+  const payoutPref = await db.prepare(
+    "SELECT speed FROM payout_preferences WHERE user_id = ?"
+  ).get(session.caregiver_user_id);
+  const payoutSpeed = payoutPref?.speed || "standard";
+  let instantSurchargeCents = 0;
+  if (payoutSpeed === "instant") {
+    instantSurchargeCents = Math.round(totalCents * 2 / 100); // 2% surcharge
+    platformFeeCents += instantSurchargeCents;
+  }
 
   try {
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: "payment",
+      payment_method_types: ["card", "us_bank_account"],
       line_items: [{
         price_data: {
           currency: "usd",
@@ -226,18 +238,19 @@ router.post("/checkout", requireRole("family"), async (req, res) => {
         inplace_session_id: sessionId,
         inplace_family_user_id: req.user.id,
         inplace_caregiver_id: session.caregiver_id,
+        payout_speed: payoutSpeed,
       },
     });
 
     // Create a pending payment record
     const paymentId = uuid();
     await db.prepare(`
-      INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_checkout_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', 'stripe', ?, NOW())
+      INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_checkout_id, payout_speed, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', 'stripe', ?, ?, NOW())
     `).run(
       paymentId, sessionId, req.user.id, session.caregiver_id,
       totalCents / 100, platformFeeCents / 100, (totalCents - platformFeeCents) / 100,
-      checkoutSession.id
+      checkoutSession.id, payoutSpeed
     );
 
     res.json({
@@ -246,6 +259,8 @@ router.post("/checkout", requireRole("family"), async (req, res) => {
       amount: totalCents / 100,
       platformFee: platformFeeCents / 100,
       caregiverPayout: (totalCents - platformFeeCents) / 100,
+      payoutSpeed,
+      achAvailable: true,
     });
   } catch (err) {
     console.error("Stripe checkout error:", err);
@@ -360,6 +375,127 @@ router.get("/history", requireRole("family"), async (req, res) => {
       createdAt: p.created_at,
     })),
   });
+});
+
+// ─── POST /api/payments/background-check ───
+// Create a PaymentIntent for the $30 background check fee (caregiver)
+router.post("/background-check", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured yet.", notConfigured: true });
+  }
+
+  const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  // Check if already paid
+  if (profile.background_check_paid) {
+    return res.status(400).json({ error: "Background check already paid" });
+  }
+
+  // Check for existing pending payment
+  const existing = await db.prepare(
+    "SELECT * FROM background_check_payments WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1"
+  ).get(req.user.id);
+
+  if (existing?.stripe_payment_intent) {
+    // Return existing client secret if still valid
+    try {
+      const intent = await stripe.paymentIntents.retrieve(existing.stripe_payment_intent);
+      if (intent.status === "requires_payment_method" || intent.status === "requires_confirmation") {
+        return res.json({ clientSecret: intent.client_secret, paymentId: existing.id });
+      }
+    } catch (e) { /* intent may have expired, create new one */ }
+  }
+
+  try {
+    const user = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+    const intent = await stripe.paymentIntents.create({
+      amount: 3000, // $30.00
+      currency: "usd",
+      metadata: {
+        type: "background_check",
+        inplace_user_id: req.user.id,
+        caregiver_name: `${user.first_name} ${user.last_name}`,
+      },
+    });
+
+    const paymentId = uuid();
+    await db.prepare(
+      "INSERT INTO background_check_payments (id, user_id, stripe_payment_intent, amount, status, created_at) VALUES (?, ?, ?, 30, 'pending', NOW())"
+    ).run(paymentId, req.user.id, intent.id);
+
+    res.json({ clientSecret: intent.client_secret, paymentId });
+  } catch (err) {
+    console.error("Background check PaymentIntent error:", err);
+    res.status(500).json({ error: "Failed to create payment" });
+  }
+});
+
+// ─── POST /api/payments/background-check/confirm ───
+// Confirm background check payment succeeded
+router.post("/background-check/confirm", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured yet." });
+  }
+
+  const { paymentIntentId } = req.body;
+  if (!paymentIntentId) return res.status(400).json({ error: "paymentIntentId is required" });
+
+  try {
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (intent.status !== "succeeded") {
+      return res.status(400).json({ error: `Payment not yet succeeded (status: ${intent.status})` });
+    }
+
+    // Update background_check_payments
+    await db.prepare(
+      "UPDATE background_check_payments SET status = 'completed', completed_at = NOW() WHERE stripe_payment_intent = ? AND user_id = ?"
+    ).run(paymentIntentId, req.user.id);
+
+    // Mark caregiver profile as paid
+    await db.prepare(
+      "UPDATE caregiver_profiles SET background_check_paid = 1, updated_at = NOW() WHERE user_id = ?"
+    ).run(req.user.id);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Background check confirm error:", err);
+    res.status(500).json({ error: "Failed to confirm payment" });
+  }
+});
+
+// ─── GET /api/payments/payout-preference ───
+// Get caregiver's payout speed preference
+router.get("/payout-preference", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  const pref = await db.prepare("SELECT * FROM payout_preferences WHERE user_id = ?").get(req.user.id);
+  res.json({
+    speed: pref?.speed || "standard",
+    surchargePercent: 2,
+  });
+});
+
+// ─── PUT /api/payments/payout-preference ───
+// Set caregiver's payout speed preference
+router.put("/payout-preference", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  const { speed } = req.body;
+  if (!speed || !["standard", "instant"].includes(speed)) {
+    return res.status(400).json({ error: "speed must be 'standard' or 'instant'" });
+  }
+
+  const existing = await db.prepare("SELECT id FROM payout_preferences WHERE user_id = ?").get(req.user.id);
+  if (existing) {
+    await db.prepare("UPDATE payout_preferences SET speed = ?, updated_at = NOW() WHERE user_id = ?").run(speed, req.user.id);
+  } else {
+    await db.prepare("INSERT INTO payout_preferences (id, user_id, speed, updated_at) VALUES (?, ?, ?, NOW())").run(uuid(), req.user.id, speed);
+  }
+
+  res.json({ speed, surchargePercent: 2 });
 });
 
 module.exports = router;

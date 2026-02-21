@@ -1,4 +1,4 @@
-const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBanner }) => {
+const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBanner, inviteInfo }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -237,8 +237,20 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
             <span style={{ fontWeight: 200, color: '#999' }}>in</span><span style={{ fontWeight: 800, color: '#1b6b5a' }}>Place</span>
           </div>
         </div>
-        <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>Welcome Back</h2>
-        <p className="login-subtitle" style={{ textAlign: 'center', color: '#666', fontSize: 14, margin: '0 0 20px' }}>Sign in to manage care for your loved ones</p>
+        <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>{inviteInfo ? 'Join the Care Team' : 'Welcome Back'}</h2>
+        <p className="login-subtitle" style={{ textAlign: 'center', color: '#666', fontSize: 14, margin: '0 0 20px' }}>
+          {inviteInfo ? `Sign in to join ${inviteInfo.recipientName}'s care team` : 'Sign in to manage care for your loved ones'}
+        </p>
+
+        {inviteInfo && (
+          <div style={{
+            padding: '12px 14px', marginBottom: '16px', borderRadius: '8px', fontSize: '13px',
+            background: '#e8f5e9', border: '1px solid #c8e6c9', color: '#2e7d32',
+          }}>
+            👋 <strong>{inviteInfo.inviterName}</strong> invited you to help coordinate care for <strong>{inviteInfo.recipientName}</strong>.
+            Sign in below, or <a onClick={() => onNavigate('register')} style={{ color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>create an account</a>.
+          </div>
+        )}
 
         {banner && (
           <div style={{

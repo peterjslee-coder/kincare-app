@@ -1,8 +1,8 @@
-const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
+const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
-  const [activeTab, setActiveTab] = useState('schedule');
+  const [activeTab, setActiveTab] = useState(initialTab || 'schedule');
   const [visitLogSession, setVisitLogSession] = useState(null);
   const [logSummary, setLogSummary] = useState('');
   const [logMood, setLogMood] = useState('good');
@@ -21,6 +21,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   const [stripeStatus, setStripeStatus] = useState(null);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState(null);
+
+  // Payout preference state
+  const [payoutSpeed, setPayoutSpeed] = useState('standard');
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [payoutSaving, setPayoutSaving] = useState(false);
+  const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
   // Documents state
   const [documents, setDocuments] = useState([]);
@@ -66,6 +72,30 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
       }
     } catch (err) { console.error('Documents fetch error:', err); }
     setDocsLoading(false);
+  };
+
+  const fetchPayoutPreference = async () => {
+    setPayoutLoading(true);
+    try {
+      const res = await apiFetch('/api/payments/payout-preference');
+      if (res?.ok) {
+        const d = await res.json();
+        setPayoutSpeed(d.speed || 'standard');
+      }
+    } catch (err) { console.error('Payout pref fetch error:', err); }
+    setPayoutLoading(false);
+  };
+
+  const savePayoutPreference = async (speed) => {
+    setPayoutSaving(true);
+    try {
+      const res = await apiFetch('/api/payments/payout-preference', {
+        method: 'PUT',
+        body: JSON.stringify({ speed }),
+      });
+      if (res?.ok) setPayoutSpeed(speed);
+    } catch (err) { console.error('Payout pref save error:', err); }
+    setPayoutSaving(false);
   };
 
   const handleSaveRule = async () => {
@@ -201,6 +231,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
   // Fetch documents when documents tab is active
   useEffect(() => {
     if (activeTab === 'documents') fetchDocuments();
+  }, [activeTab]);
+
+  // Fetch payout preference when financials tab is active
+  useEffect(() => {
+    if (activeTab === 'financials') {
+      fetchPayoutPreference();
+      setBgCheckPaid(!!profile?.background_check_paid);
+    }
   }, [activeTab]);
 
   const handlePhotoSelect = (e) => {
@@ -355,6 +393,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
     { id: 'availability', label: 'Set your availability', done: availRules.length > 0 },
     { id: 'stoplight', label: 'Set your care preferences (stoplight)', done: !!stoplightData },
     { id: 'photo', label: 'Upload a profile photo', done: !!profile.avatar_url },
+    { id: 'payments', label: 'Set up payments (Stripe)', done: stripeStatus?.status === 'active' },
+    { id: 'bgcheck', label: 'Pay for background check ($30)', done: !!profile.background_check_paid },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
   const showFirstSteps = firstStepsDone < firstSteps.length;
@@ -370,6 +410,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
     { id: 'families', label: 'My Families', icon: '👪' },
     { id: 'map', label: 'Area Map', icon: '🗺️' },
     { id: 'earnings', label: 'Earnings', icon: '💰' },
+    { id: 'financials', label: 'Financials', icon: '🏦' },
     { id: 'reviews', label: 'Reviews', icon: '⭐' },
     { id: 'documents', label: 'Documents', icon: '📄' },
     { id: 'preferences', label: 'Care Preferences', icon: '🚦' },
@@ -712,6 +753,139 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
             ) : (
               <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>No completed sessions this month</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'financials' && (
+        <div>
+          {/* Card 1: Stripe Connect Status */}
+          <div className="card" style={{ marginBottom: '16px', border: stripeStatus?.status === 'active' ? '1px solid #4caf50' : '1px solid #e0e0e0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '16px', marginBottom: '4px' }}>
+                  {stripeStatus?.status === 'active' ? '✅ Stripe Connected' : '🏦 Set Up Stripe to Get Paid'}
+                </div>
+                <div style={{ fontSize: '13px', color: '#666' }}>
+                  {stripeStatus?.status === 'active'
+                    ? 'Your bank account is connected. Earnings are deposited automatically.'
+                    : 'Connect your bank account through Stripe to receive payments for care sessions.'}
+                </div>
+              </div>
+              {stripeStatus?.status === 'active' ? (
+                <a href={stripeStatus.dashboardUrl || '#'} target="_blank" rel="noopener noreferrer"
+                  style={{ padding: '8px 16px', background: '#635bff', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: '13px', fontWeight: 600 }}>
+                  Stripe Dashboard →
+                </a>
+              ) : (
+                <button onClick={async () => {
+                  setStripeLoading(true);
+                  try {
+                    const res = await apiFetch('/api/payments/connect/onboard', { method: 'POST' });
+                    if (res?.ok) {
+                      const d = await res.json();
+                      if (d.url) window.location.href = d.url;
+                    }
+                  } catch (err) { setStripeError(err.message); }
+                  setStripeLoading(false);
+                }} disabled={stripeLoading}
+                  style={{ padding: '10px 20px', background: stripeLoading ? '#999' : '#635bff', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: stripeLoading ? 'wait' : 'pointer' }}>
+                  {stripeLoading ? '⏳ Loading...' : 'Connect with Stripe'}
+                </button>
+              )}
+            </div>
+            {stripeError && <div style={{ color: '#c62828', fontSize: '13px', marginTop: '8px' }}>{stripeError}</div>}
+          </div>
+
+          {/* Card 2: Payout Speed */}
+          <div className="card" style={{ marginBottom: '16px' }}>
+            <div className="card-header"><span className="card-icon">⚡</span>Payout Speed</div>
+            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 16px' }}>
+              Choose how fast you receive your earnings after each completed session.
+            </p>
+            {payoutLoading ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Loading...</div>
+            ) : (
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {[
+                  { id: 'standard', label: 'Standard (1–2 business days)', desc: 'Free — no additional fees', icon: '🏦' },
+                  { id: 'instant', label: 'Instant (same day)', desc: '+2% surcharge per session', icon: '⚡' },
+                ].map(opt => (
+                  <div key={opt.id} onClick={() => !payoutSaving && setPayoutSpeed(opt.id)}
+                    style={{
+                      padding: '16px', borderRadius: '10px', cursor: payoutSaving ? 'wait' : 'pointer',
+                      border: payoutSpeed === opt.id ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                      background: payoutSpeed === opt.id ? '#f0faf8' : '#fff',
+                      transition: 'all 0.2s',
+                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '24px' }}>{opt.icon}</span>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '14px', color: payoutSpeed === opt.id ? '#1b6b5a' : '#333' }}>{opt.label}</div>
+                        <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{opt.desc}</div>
+                      </div>
+                      {payoutSpeed === opt.id && (
+                        <div style={{ marginLeft: 'auto', color: '#1b6b5a', fontSize: '18px' }}>✓</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <button onClick={() => savePayoutPreference(payoutSpeed)} disabled={payoutSaving}
+                  style={{
+                    padding: '10px 20px', borderRadius: '8px', border: 'none',
+                    background: payoutSaving ? '#999' : '#1b6b5a', color: '#fff',
+                    fontSize: '14px', fontWeight: 600, cursor: payoutSaving ? 'wait' : 'pointer',
+                    marginTop: '4px',
+                  }}>
+                  {payoutSaving ? '⏳ Saving...' : 'Save Preference'}
+                </button>
+                {payoutSpeed === 'instant' && (
+                  <div style={{ fontSize: '13px', color: '#e65100', background: '#fff3e0', padding: '10px 14px', borderRadius: '8px' }}>
+                    💡 <strong>Example:</strong> On a $100 session, instant payout costs you $2.00 (2% surcharge). Standard payout is always free.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Card 3: Background Check Payment */}
+          <div className="card" style={{ marginBottom: '16px' }}>
+            <div className="card-header"><span className="card-icon">🔍</span>Background Check</div>
+            {bgCheckPaid || profile?.background_check_paid ? (
+              <div style={{ padding: '16px', background: '#e8f5e9', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '28px' }}>✅</span>
+                <div>
+                  <div style={{ fontWeight: 600, color: '#2e7d32' }}>Background check payment received</div>
+                  <div style={{ fontSize: '13px', color: '#558b2f', marginTop: '2px' }}>Your Checkr screening is being processed.</div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontSize: '13px', color: '#666', margin: '0 0 16px' }}>
+                  A $30 background check fee is required before you can accept care requests. This covers your Checkr background screening.
+                </p>
+                <StripePaymentForm
+                  amount={30}
+                  description="One-time background check fee for Checkr screening"
+                  buttonText="Pay $30.00 — Background Check"
+                  onSuccess={() => {
+                    setBgCheckPaid(true);
+                    // Refresh profile data
+                    apiFetch('/api/caretaker/dashboard').then(r => r?.ok && r.json().then(d => setData(d))).catch(() => {});
+                  }}
+                  onError={(msg) => console.error('BG check payment error:', msg)}
+                />
+                <p style={{ fontSize: '12px', color: '#999', marginTop: '12px', textAlign: 'center' }}>
+                  🔄 $30 refunded to your InPlace account after 10 completed sessions.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Fee Breakdown Info */}
+          <div style={{ padding: '14px 16px', background: '#f8f9fa', borderRadius: '8px', fontSize: '13px', color: '#666' }}>
+            💡 <strong>How fees work:</strong> InPlace charges a 15% platform fee on each session. Families pay via card or ACH at checkout.
+            Your earnings (85% of session cost) are deposited to your Stripe account based on your payout speed preference above.
           </div>
         </div>
       )}

@@ -166,6 +166,7 @@ const App = () => {
   const [resetToken, setResetToken] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState(null);
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
+  const [inviteInfo, setInviteInfo] = useState(null); // { email, role, teamName, recipientName, inviterName }
   const [platformInviteToken, setPlatformInviteToken] = useState(null);
   const [selectedCareTeamId, setSelectedCareTeamId] = useState(null);
   // Email-first signup: prefilled from signup intent token
@@ -200,6 +201,25 @@ const App = () => {
               setShowDisclaimer(true);
             }
             setAppState('app');
+            // If returning user has a pending invite token, accept it now
+            const inviteParam = new URLSearchParams(window.location.search).get('invite') || pendingInviteToken;
+            if (inviteParam) {
+              apiFetch('/api/care-teams/accept-invite', {
+                method: 'POST',
+                body: JSON.stringify({ token: inviteParam }),
+              }).then(async r => {
+                if (r?.ok) {
+                  const d = await r.json();
+                  setVerifyMessage({ type: 'success', text: d.message || "You've joined the care team!" });
+                  if (d.careTeamId) { setSelectedCareTeamId(d.careTeamId); setCurrentPage('care-team'); }
+                } else {
+                  const d = await r?.json();
+                  setVerifyMessage({ type: 'error', text: d?.error || 'Failed to accept invite' });
+                }
+              }).catch(() => {});
+              setPendingInviteToken(null);
+              setInviteInfo(null);
+            }
           }
         }
       }).catch(() => {});
@@ -232,6 +252,13 @@ const App = () => {
     if (inviteToken) {
       setPendingInviteToken(inviteToken);
       window.history.replaceState({}, '', window.location.pathname);
+      // Fetch invite details for pre-login display
+      fetch(`/api/care-teams/invite-info?token=${inviteToken}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.invite) setInviteInfo(data.invite);
+        })
+        .catch(() => {});
     }
 
     // Check for platform (onboarding) invite token
@@ -462,9 +489,9 @@ const App = () => {
     }} />;
   }
 
-  if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} />;
+  if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} inviteInfo={inviteInfo} />;
   if (appState === 'demo') return <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />;
-  if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} />;
+  if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />;
   if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} />;
   if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;
   if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
@@ -477,6 +504,7 @@ const App = () => {
       return [
         { id: 'dashboard', icon: '🩺', label: 'My Dashboard' },
         { id: 'find-work', icon: '🔍', label: 'Find Work' },
+        { id: 'financials', icon: '💰', label: 'Financials' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'account', icon: '👤', label: 'My Account' },
       ];
@@ -498,6 +526,7 @@ const App = () => {
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'recipients', icon: '👥', label: 'Recipients' },
       { id: 'messages', icon: '💬', label: 'Messages' },
+      { id: 'payments', icon: '💳', label: 'Payments' },
       { id: 'account', icon: '👤', label: 'My Account' },
     ];
     if (currentUser?.isAdmin) {
@@ -531,6 +560,8 @@ const App = () => {
     if (currentPage === 'recipients') return <CareRecipients key={currentPage} />;
     if (currentPage === 'messages') return <Messages key={currentPage} />;
     if (currentPage === 'account') return <MyAccount key={currentPage} setCurrentUser={setCurrentUser} />;
+    if (currentPage === 'financials') return <CaretakerHub key={currentPage} onNeedsOnboarding={() => setAppState('resume-onboarding')} initialTab="financials" />;
+    if (currentPage === 'payments') return <FamilyPayments key={currentPage} />;
     if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={currentPage} />;
     return <Dashboard key={currentPage} onNavigate={setCurrentPage} />;
   };
@@ -541,6 +572,7 @@ const App = () => {
       return [
         { id: 'dashboard', icon: '🩺', label: 'Home' },
         { id: 'find-work', icon: '🔍', label: 'Find Work' },
+        { id: 'financials', icon: '💰', label: 'Money' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'account', icon: '👤', label: 'Account' },
       ];
