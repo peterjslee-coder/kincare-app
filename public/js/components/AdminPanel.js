@@ -7,6 +7,7 @@ const AdminPanel = window.AdminPanel = () => {
   const [usersTotal, setUsersTotal] = useState(0);
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('');
+  const [userDemoFilter, setUserDemoFilter] = useState('');
   const [waitlist, setWaitlist] = useState([]);
   const [waitlistTotal, setWaitlistTotal] = useState(0);
   const [activity, setActivity] = useState(null);
@@ -43,6 +44,11 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'feedback') loadFeedback();
   }, [activeTab]);
 
+  // Auto-reload users when filters change
+  useEffect(() => {
+    if (activeTab === 'users') loadUsers();
+  }, [userRoleFilter, userDemoFilter]);
+
   // Auto-trigger search when switching to invites tab with pre-filled email (e.g. from waitlist Invite button)
   useEffect(() => {
     if (activeTab === 'invites' && inviteSearch.trim() && !searchResult && !searchLoading) {
@@ -63,6 +69,7 @@ const AdminPanel = window.AdminPanel = () => {
       const params = new URLSearchParams({ limit: '100' });
       if (userSearch) params.set('search', userSearch);
       if (userRoleFilter) params.set('role', userRoleFilter);
+      if (userDemoFilter) params.set('demo', userDemoFilter);
       const res = await apiFetch(`/api/admin/users?${params}`);
       if (res?.ok) {
         const data = await res.json();
@@ -188,7 +195,7 @@ const AdminPanel = window.AdminPanel = () => {
     const headers = ['Email', 'Name', 'Role', 'Source', 'Date'];
     const rows = waitlist.map(w => [
       w.email, w.name || '', w.role || 'family', w.source || 'splash',
-      w.created_at ? new Date(w.created_at).toLocaleDateString() : '',
+      w.created_at ? (parseTimestamp(w.created_at) || new Date(0)).toLocaleDateString() : '',
     ]);
     const csv = [headers, ...rows].map(r => r.map(c => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -298,7 +305,7 @@ const AdminPanel = window.AdminPanel = () => {
                         <rect x={x} y={100 - barH} width="24" height={barH} rx="4" fill="#1b6b5a" opacity="0.85" />
                         <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="10" fill="#333" fontWeight="600">{d.count}</text>
                         <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill="#999">
-                          {new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          {(parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </text>
                       </g>
                     );
@@ -323,7 +330,7 @@ const AdminPanel = window.AdminPanel = () => {
                         <rect x={x} y={100 - barH} width="24" height={barH} rx="4" fill="#e8724a" opacity="0.85" />
                         <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="10" fill="#333" fontWeight="600">{d.count}</text>
                         <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill="#999">
-                          {new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          {(parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </text>
                       </g>
                     );
@@ -393,6 +400,12 @@ const AdminPanel = window.AdminPanel = () => {
               <option value="family">Family</option>
               <option value="caregiver">Caregiver</option>
               <option value="care_for">Care Recipient</option>
+            </select>
+            <select value={userDemoFilter} onChange={(e) => { setUserDemoFilter(e.target.value); }}
+              style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}>
+              <option value="">Demo & Real</option>
+              <option value="false">Real Only</option>
+              <option value="true">Demo Only</option>
             </select>
             <button onClick={loadUsers} style={{
               padding: '10px 20px', background: '#1b6b5a', color: 'white', border: 'none',
@@ -618,7 +631,7 @@ const AdminPanel = window.AdminPanel = () => {
                 </thead>
                 <tbody>
                   {invites.map((inv) => {
-                    const isExpired = inv.status === 'pending' && new Date(inv.expires_at) < new Date();
+                    const isExpired = inv.status === 'pending' && (parseTimestamp(inv.expires_at) || new Date(0)) < new Date();
                     const displayStatus = isExpired ? 'expired' : inv.status;
                     return (
                       <tr key={inv.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
@@ -825,7 +838,7 @@ const AdminPanel = window.AdminPanel = () => {
                         background: (statusColors[fb.status] || '#999') + '18', color: statusColors[fb.status] || '#999',
                       }}>{fb.status}</span>
                       <span style={{ fontSize: 11, color: '#bbb', whiteSpace: 'nowrap' }}>
-                        {new Date(fb.createdAt).toLocaleDateString()}
+                        {(parseTimestamp(fb.createdAt) || new Date(0)).toLocaleDateString()}
                       </span>
                     </div>
 
@@ -839,7 +852,7 @@ const AdminPanel = window.AdminPanel = () => {
                           <span>Role: {fb.userRole || '—'}</span>
                           {fb.pageContext && <span>Page: {fb.pageContext.page}</span>}
                           {fb.pageContext?.device && <span>Device: {fb.pageContext.device}</span>}
-                          <span>{new Date(fb.createdAt).toLocaleString()}</span>
+                          <span>{(parseTimestamp(fb.createdAt) || new Date(0)).toLocaleString()}</span>
                         </div>
 
                         {/* Rich device context (collapsible) */}
@@ -864,7 +877,7 @@ const AdminPanel = window.AdminPanel = () => {
                                 <strong style={{ color: '#c62828' }}>Console Errors ({fb.pageContext.recentErrors.length}):</strong>
                                 {fb.pageContext.recentErrors.map((err, i) => (
                                   <div key={i} style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11, color: '#c62828', wordBreak: 'break-all' }}>
-                                    {err.message}{err.timestamp ? ` (${new Date(err.timestamp).toLocaleTimeString()})` : ''}
+                                    {err.message}{err.timestamp ? ` (${(parseTimestamp(err.timestamp) || new Date(0)).toLocaleTimeString()})` : ''}
                                   </div>
                                 ))}
                               </div>

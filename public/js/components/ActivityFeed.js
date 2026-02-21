@@ -43,9 +43,8 @@ const ActivityFeed = window.ActivityFeed = () => {
 
   const formatActivityTime = (createdAt) => {
     if (!createdAt) return '';
-    // Handle ISO strings, PostgreSQL TIMESTAMPTZ, or Date objects
-    const date = new Date(createdAt);
-    if (isNaN(date.getTime())) return '';
+    const date = parseTimestamp(createdAt);
+    if (!date) return '';
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);

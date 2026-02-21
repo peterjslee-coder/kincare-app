@@ -183,57 +183,9 @@ async function seed() {
     "Parkinson's disease (early stage), mild depression, occasional hand tremors"
   );
 
-  // ─── Care Recipient (Betty — David's view, same person) ───
-  const bettyForDavidId = uuid();
-  await db.prepare(`
-    INSERT INTO care_recipients
-    (id, family_user_id, first_name, last_name, age,
-     location_address, location_city, location_state, location_zip,
-     latitude, longitude,
-     health_conditions, medications, preferences,
-     emergency_contact_name, emergency_contact_phone,
-     pets, pet_allergies, food_allergies, medical_conditions)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    bettyForDavidId, davidLeeId, "Betty", "Lee", 78,
-    "123 Main Street", "Blacksburg", "VA", "24060",
-    37.2296, -80.4139,
-    JSON.stringify(["Early-stage dementia", "Mild arthritis"]),
-    JSON.stringify(["Donepezil 10mg", "Ibuprofen PRN"]),
-    "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals.",
-    "Pete Lee", "(626) 555-0142",
-    "1 cat (Whiskers — orange tabby, indoor, friendly)",
-    "None",
-    "Shellfish allergy (mild — causes hives)",
-    "Early-stage dementia, mild arthritis, occasional knee pain"
-  );
+  // David and Susan share Pete's Betty record via care_recipient_shares (no duplicate care_recipient rows)
 
-  // ─── Care Recipient (Betty — Susan's view, same person) ───
-  const bettyForSusanId = uuid();
-  await db.prepare(`
-    INSERT INTO care_recipients
-    (id, family_user_id, first_name, last_name, age,
-     location_address, location_city, location_state, location_zip,
-     latitude, longitude,
-     health_conditions, medications, preferences,
-     emergency_contact_name, emergency_contact_phone,
-     pets, pet_allergies, food_allergies, medical_conditions)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    bettyForSusanId, susanLeeId, "Betty", "Lee", 78,
-    "123 Main Street", "Blacksburg", "VA", "24060",
-    37.2296, -80.4139,
-    JSON.stringify(["Early-stage dementia", "Mild arthritis"]),
-    JSON.stringify(["Donepezil 10mg", "Ibuprofen PRN"]),
-    "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals.",
-    "Pete Lee", "(626) 555-0142",
-    "1 cat (Whiskers — orange tabby, indoor, friendly)",
-    "None",
-    "Shellfish allergy (mild — causes hives)",
-    "Early-stage dementia, mild arthritis, occasional knee pain"
-  );
-
-  console.log("✅ Care recipients created (5 — Betty×3, Dorothy, Arun)");
+  console.log("✅ Care recipients created (3 — Betty, Dorothy, Arun)");
 
   // ─── Caregiver Profiles ───
   const mariaId = uuid();
@@ -322,11 +274,20 @@ async function seed() {
       workLocations[i], travelRadii[i], JSON.stringify(stoplights[stoplightKeys[i]]));
   }
 
-  // Set Maria's avatar (SVG data URI — professional headshot placeholder)
-  await db.prepare(`UPDATE users SET avatar_url = ? WHERE id = ?`).run(
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%231b6b5a'/%3E%3Ctext x='50%25' y='52%25' font-family='system-ui' font-size='48' font-weight='700' fill='white' text-anchor='middle' dominant-baseline='central'%3EMS%3C/text%3E%3C/svg%3E",
-    mariaUserId
-  );
+  // Set avatars for all demo users (consistent placeholder photos via i.pravatar.cc)
+  const avatarAssignments = [
+    [mariaUserId, "https://i.pravatar.cc/150?u=maria@inplace.care"],
+    [jamesUserId, "https://i.pravatar.cc/150?u=james@inplace.care"],
+    [sarahUserId, "https://i.pravatar.cc/150?u=sarah@inplace.care"],
+    [davidUserId, "https://i.pravatar.cc/150?u=david@inplace.care"],
+    [peteId, "https://i.pravatar.cc/150?u=pete@inplace.care"],
+    [bettyUserId, "https://i.pravatar.cc/150?u=betty@inplace.care"],
+    [davidLeeId, "https://i.pravatar.cc/150?u=david.lee@inplace.care"],
+    [susanLeeId, "https://i.pravatar.cc/150?u=susan.lee@inplace.care"],
+  ];
+  for (const [userId, avatarUrl] of avatarAssignments) {
+    await db.prepare(`UPDATE users SET avatar_url = ?, profile_photo = ? WHERE id = ?`).run(avatarUrl, avatarUrl, userId);
+  }
 
   // Complete Maria's onboarding — she's the primary demo caregiver
   await db.prepare(`
@@ -361,8 +322,8 @@ async function seed() {
   await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), arunId, patelFamilyId, jamesId);
 
   // Sibling assignments (David and Susan also have James for Betty; Maria is already assigned via Pete's Betty)
-  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), bettyForDavidId, davidLeeId, jamesId);
-  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), bettyForSusanId, susanLeeId, jamesId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), bettyId, davidLeeId, jamesId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), bettyId, susanLeeId, jamesId);
 
   // Maria also works with Arun Patel
   await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), arunId, patelFamilyId, mariaId);
@@ -526,8 +487,8 @@ async function seed() {
 
   // ─── Care Sessions (David Lee / Betty) ───
   const davidSessions = [
-    [uuid(), bettyForDavidId, davidLeeId, mariaId, "meals", "confirmed", "2026-02-22", "12:00", 4, "Mom likes her soup warm, not hot. David coordinating this week.", 136],
-    [uuid(), bettyForDavidId, davidLeeId, jamesId, "companion", "pending", "2026-02-27", "10:00", 3, "Puzzles and light gardening. David will check in after.", 75],
+    [uuid(), bettyId, davidLeeId, mariaId, "meals", "confirmed", "2026-02-22", "12:00", 4, "Mom likes her soup warm, not hot. David coordinating this week.", 136],
+    [uuid(), bettyId, davidLeeId, jamesId, "companion", "pending", "2026-02-27", "10:00", 3, "Puzzles and light gardening. David will check in after.", 75],
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of davidSessions) {
@@ -542,7 +503,7 @@ async function seed() {
 
   // ─── Care Sessions (Susan Lee / Betty) ───
   const susanSessions = [
-    [uuid(), bettyForSusanId, susanLeeId, mariaId, "companion", "confirmed", "2026-02-23", "14:00", 4, "Susan requested a garden walk if weather permits.", 136],
+    [uuid(), bettyId, susanLeeId, mariaId, "companion", "confirmed", "2026-02-23", "14:00", 4, "Susan requested a garden walk if weather permits.", 136],
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of susanSessions) {
@@ -641,9 +602,9 @@ async function seed() {
 
   // Activity feed for David Lee — his own set
   const davidActivities = [
-    [uuid(), davidLeeId, bettyForDavidId, "session_confirmed", "Meal Prep confirmed for Feb 22",
+    [uuid(), davidLeeId, bettyId, "session_confirmed", "Meal Prep confirmed for Feb 22",
       "Maria Santos will prepare lunch for Betty — David coordinating this week.", "-1 day"],
-    [uuid(), davidLeeId, bettyForDavidId, "visit_complete", "Video call with grandkids",
+    [uuid(), davidLeeId, bettyId, "visit_complete", "Video call with grandkids",
       "Maria helped Betty video call with David's kids at 2pm. Betty was laughing and showing them Whiskers. Great interaction!", "-4 hours"],
   ];
 
@@ -656,9 +617,9 @@ async function seed() {
 
   // Activity feed for Susan Lee
   const susanActivities = [
-    [uuid(), susanLeeId, bettyForSusanId, "session_confirmed", "Companionship confirmed for Feb 23",
+    [uuid(), susanLeeId, bettyId, "session_confirmed", "Companionship confirmed for Feb 23",
       "Maria Santos will visit Betty for an afternoon garden walk if weather permits.", "-6 hours"],
-    [uuid(), susanLeeId, bettyForSusanId, "medication_reminder", "Donepezil refill ready Friday",
+    [uuid(), susanLeeId, bettyId, "medication_reminder", "Donepezil refill ready Friday",
       "CVS will have the refill ready after 10am. Maria will pick it up.", "-3 hours"],
   ];
 

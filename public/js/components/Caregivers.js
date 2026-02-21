@@ -139,6 +139,18 @@ const Caregivers = window.Caregivers = () => {
 
       leafletMap.current = map;
       map.invalidateSize();
+
+      // If no search center, try browser geolocation as fallback
+      if (!searchCenter && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude, longitude } = pos.coords;
+            if (leafletMap.current) leafletMap.current.setView([latitude, longitude], 12);
+          },
+          () => {},
+          { timeout: 5000, maximumAge: 300000 }
+        );
+      }
     }, 100);
 
     return () => {

@@ -57,6 +57,18 @@ const AreaMap = window.AreaMap = () => {
     leafletMap.current = map;
     setTimeout(() => map.invalidateSize(), 100);
 
+    // If no profile center, try browser geolocation as fallback
+    if (!profileCenter && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          map.setView([latitude, longitude], 13);
+        },
+        () => {}, // silently fall back to default center
+        { timeout: 5000, maximumAge: 300000 }
+      );
+    }
+
     return () => {
       if (leafletMap.current) {
         leafletMap.current.remove();

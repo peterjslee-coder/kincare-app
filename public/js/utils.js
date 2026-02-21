@@ -16,6 +16,23 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   return response;
 };
 
+// ─── Shared timestamp parser ───
+// PostgreSQL TIMESTAMPTZ comes back as "2026-02-20 01:29:26.086383+00"
+// Some browsers choke on the space (need T) and bare "+00" (need +00:00 or Z).
+// This normalizes to ISO 8601 so new Date() works everywhere.
+const parseTimestamp = window.parseTimestamp = (ts) => {
+  if (!ts) return null;
+  let d = String(ts);
+  // Replace space with T if no T present
+  if (!d.includes('T')) d = d.replace(' ', 'T');
+  // If bare offset like +00 or -05 (no colon, no minutes), append :00
+  d = d.replace(/([+-]\d{2})$/, '$1:00');
+  // If no timezone indicator at all, assume UTC
+  if (!/[Zz]$/.test(d) && !/[+-]\d{2}:\d{2}$/.test(d)) d += 'Z';
+  const date = new Date(d);
+  return isNaN(date.getTime()) ? null : date;
+};
+
 // Caregiver Availability Data (simulated)
 const CAREGIVER_AVAILABILITY = window.CAREGIVER_AVAILABILITY = {
   'Maria Santos': {

@@ -680,7 +680,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
                     {completedSessions.map((s) => (
                       <tr key={s.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                         <td style={{ padding: '10px 12px' }}>
-                          {new Date(s.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          {(parseTimestamp(s.scheduled_date) || new Date(0)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </td>
                         <td style={{ padding: '10px 12px', fontWeight: 500 }}>{s.recipient_name || '—'}</td>
                         <td style={{ padding: '10px 12px' }}>
@@ -867,7 +867,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding }) => {
                         <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{typeLabels[doc.document_type] || doc.document_type}</div>
                         {doc.file_name && <div style={{ fontSize: 12, color: '#888' }}>{doc.file_name}</div>}
                         <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>
-                          Uploaded {new Date(doc.created_at).toLocaleDateString()}
+                          Uploaded {(parseTimestamp(doc.created_at) || new Date(0)).toLocaleDateString()}
                         </div>
                       </div>
                       <div style={{ padding: '4px 10px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>

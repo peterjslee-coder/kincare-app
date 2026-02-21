@@ -266,17 +266,8 @@ const Messages = window.Messages = () => {
 
   const formatTime = (ts) => {
     if (!ts) return '';
-    // PostgreSQL timestamps may have timezone offset (+00, +00:00) or not
-    let dateStr = ts;
-    if (!dateStr.includes('T')) {
-      dateStr = dateStr.replace(' ', 'T');
-    }
-    // Only append Z if there's no timezone indicator already
-    if (!/[Zz]$/.test(dateStr) && !/[+-]\d{2}(:\d{2})?$/.test(dateStr)) {
-      dateStr += 'Z';
-    }
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return '';
+    const date = parseTimestamp(ts);
+    if (!date) return '';
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
@@ -537,7 +528,7 @@ const Messages = window.Messages = () => {
               const prevMsg = i > 0 ? messages[i - 1] : null;
               const showName = showSenderName && (!prevMsg || prevMsg.sender_id !== m.sender_id || prevMsg.type !== m.type);
 
-              const parseTs = (t) => { if (!t) return new Date(0); let d = t.includes('T') ? t : t.replace(' ', 'T'); if (!/[Zz]$/.test(d) && !/[+-]\d{2}(:\d{2})?$/.test(d)) d += 'Z'; return new Date(d); };
+              const parseTs = (t) => parseTimestamp(t) || new Date(0);
 
               return (
                 <React.Fragment key={m.id || i}>

@@ -233,7 +233,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{inv.email}</div>
                 <div style={{ fontSize: 12, color: '#888' }}>
-                  Invited as {inv.role} · Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                  Invited as {inv.role} · Expires {(parseTimestamp(inv.expiresAt) || new Date(0)).toLocaleDateString()}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>

@@ -430,7 +430,7 @@ const MyAccount = window.MyAccount = () => {
               <div>
                 <p style={{ color: '#666', fontSize: 14, margin: '0 0 12px' }}>
                   {user?.password_changed_at
-                    ? `Last changed ${new Date(user.password_changed_at).toLocaleDateString()}`
+                    ? `Last changed ${(parseTimestamp(user.password_changed_at) || new Date(0)).toLocaleDateString()}`
                     : 'Manage your account password'}
                 </p>
                 <button onClick={() => setChangingPassword(true)}
@@ -481,7 +481,7 @@ const MyAccount = window.MyAccount = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                   <span style={{ background: '#e0f2e9', color: '#1b6b5a', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>Enabled</span>
                   {twoFAStatus.setupDate && (
-                    <span style={{ color: '#999', fontSize: 13 }}>since {new Date(twoFAStatus.setupDate).toLocaleDateString()}</span>
+                    <span style={{ color: '#999', fontSize: 13 }}>since {(parseTimestamp(twoFAStatus.setupDate) || new Date(0)).toLocaleDateString()}</span>
                   )}
                 </div>
                 <p style={{ color: '#666', fontSize: 14, margin: '0 0 16px' }}>
@@ -567,7 +567,7 @@ const MyAccount = window.MyAccount = () => {
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>{d.device_name || 'Unknown Device'}</div>
                       <div style={{ fontSize: 12, color: '#888' }}>
-                        Last used: {new Date(d.last_used).toLocaleDateString()} · Expires: {new Date(d.expires_at).toLocaleDateString()}
+                        Last used: {(parseTimestamp(d.last_used) || new Date(0)).toLocaleDateString()} · Expires: {(parseTimestamp(d.expires_at) || new Date(0)).toLocaleDateString()}
                       </div>
                     </div>
                     <button onClick={() => revokeDevice(d.id)}

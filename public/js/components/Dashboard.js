@@ -57,17 +57,8 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
 
   const formatActivityTime = (createdAt) => {
     if (!createdAt) return '';
-    // PostgreSQL timestamps may have timezone offset (+00, +00:00) or not
-    let dateStr = createdAt;
-    if (!dateStr.includes('T')) {
-      dateStr = dateStr.replace(' ', 'T');
-    }
-    // Only append Z if there's no timezone indicator already
-    if (!/[Zz]$/.test(dateStr) && !/[+-]\d{2}(:\d{2})?$/.test(dateStr)) {
-      dateStr += 'Z';
-    }
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return '';
+    const date = parseTimestamp(createdAt);
+    if (!date) return '';
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
@@ -105,7 +96,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   // Onboarding checklist for real (non-demo) users
   const hasProfile = user?.phone;
   const hasRecipient = (data?.parent || stats.assignedCaregivers > 0);
-  const hasCareTeam = careTeams.length > 0 && careTeams.some(t => t.memberCount > 1);
+  const hasCareTeam = careTeams.length > 0;
   const onboardingSteps = [
     { id: 'profile', label: 'Complete your profile', done: !!hasProfile, action: () => onNavigate && onNavigate('account'), actionText: 'Go to Profile' },
     { id: 'recipient', label: 'Add a loved one to care for', done: !!hasRecipient, action: () => onNavigate && onNavigate('recipients'), actionText: 'Add Recipient' },

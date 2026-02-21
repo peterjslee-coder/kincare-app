@@ -91,6 +91,11 @@ router.get("/users", async (req, res) => {
       params.push(role);
       sql += ` AND role = ?`;
     }
+    if (req.query.demo === 'true') {
+      sql += ` AND COALESCE(is_demo, 0) = 1`;
+    } else if (req.query.demo === 'false') {
+      sql += ` AND COALESCE(is_demo, 0) = 0`;
+    }
 
     // Validate sort column to prevent SQL injection
     const validSorts = ["created_at", "email", "first_name", "role"];
@@ -113,6 +118,11 @@ router.get("/users", async (req, res) => {
     if (role) {
       countParams.push(role);
       countSql += ` AND role = ?`;
+    }
+    if (req.query.demo === 'true') {
+      countSql += ` AND COALESCE(is_demo, 0) = 1`;
+    } else if (req.query.demo === 'false') {
+      countSql += ` AND COALESCE(is_demo, 0) = 0`;
     }
     const total = await db.prepare(countSql).get(...countParams);
 

@@ -173,9 +173,10 @@ async function caregiverDashboard(db, userId, res) {
 
   const user = await db.prepare("SELECT first_name, last_name, avatar_url FROM users WHERE id = ?").get(userId);
 
-  // Assigned families
+  // Assigned families (deduplicate by care_recipient — siblings may each have an assignment for same recipient)
   const assignments = await db.prepare(`
-    SELECT ca.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+    SELECT DISTINCT ON (ca.care_recipient_id)
+      ca.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
       cr.location_address, cr.location_city, cr.location_state, cr.latitude, cr.longitude,
       cr.health_conditions, cr.preferences,
       fu.first_name AS family_first_name, fu.last_name AS family_last_name
@@ -183,6 +184,7 @@ async function caregiverDashboard(db, userId, res) {
     JOIN care_recipients cr ON ca.care_recipient_id = cr.id
     JOIN users fu ON ca.family_user_id = fu.id
     WHERE ca.caregiver_profile_id = ? AND ca.is_active = 1
+    ORDER BY ca.care_recipient_id, ca.is_favorite DESC, ca.created_at ASC
   `).all(profile.id);
 
   // Upcoming sessions
