@@ -229,6 +229,37 @@ async function start() {
     console.error("  ⚠️  Seed failed — starting server anyway:", seedErr.message);
   }
 
+  // ─── Demo data patch ───
+  // Ensures key demo profile fields are correct even when full reseed is skipped
+  try {
+    const mariaUser = await db.prepare(
+      "SELECT id FROM users WHERE email = 'maria@inplace.care' AND is_demo = 1"
+    ).get();
+    if (mariaUser) {
+      await db.prepare(`
+        UPDATE caregiver_profiles SET
+          onboarding_complete = 1,
+          checkr_status = 'clear',
+          legal_first_name = COALESCE(NULLIF(legal_first_name, ''), 'Maria'),
+          legal_last_name = COALESCE(NULLIF(legal_last_name, ''), 'Santos'),
+          date_of_birth = COALESCE(date_of_birth, '1992-03-15'),
+          ssn_last4 = COALESCE(NULLIF(ssn_last4, ''), '4567'),
+          dl_number = COALESCE(NULLIF(dl_number, ''), 'V12-34-5678'),
+          dl_state = COALESCE(NULLIF(dl_state, ''), 'VA')
+        WHERE user_id = ?
+      `).run(mariaUser.id);
+      // Ensure avatar is set
+      await db.prepare(`
+        UPDATE users SET avatar_url = COALESCE(avatar_url,
+          'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' width=''120'' height=''120''%3E%3Crect width=''120'' height=''120'' fill=''%231b6b5a''/%3E%3Ctext x=''50%25'' y=''52%25'' font-family=''system-ui'' font-size=''48'' font-weight=''700'' fill=''white'' text-anchor=''middle'' dominant-baseline=''central''%3EMS%3C/text%3E%3C/svg%3E')
+        WHERE id = ?
+      `).run(mariaUser.id);
+      console.log("  Demo data patch applied (Maria profile)");
+    }
+  } catch (patchErr) {
+    console.error("  Demo patch failed:", patchErr.message);
+  }
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n  InPlace API v0.9.0 running on port ${PORT}\n`);
     console.log(`  WebSocket server ready`);
