@@ -34,7 +34,7 @@ router.get("/conversations", async (req, res) => {
     const unreadRow = await db.prepare(`
       SELECT COUNT(*) AS count FROM messages
       WHERE conversation_id = ? AND sender_id != ?
-        AND created_at > COALESCE(?, '1970-01-01')
+        AND created_at > COALESCE(?::TIMESTAMPTZ, '1970-01-01'::TIMESTAMPTZ)
     `).get(conv.id, userId, conv.last_read_at);
 
     // Get members
