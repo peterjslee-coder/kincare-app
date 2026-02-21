@@ -8,6 +8,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
+  const [editingLabel, setEditingLabel] = useState(false);
+  const [labelText, setLabelText] = useState('');
   const { showToast } = useToast();
 
   const fetchTeam = async () => {
@@ -119,12 +121,33 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
     }
   };
 
+  const handleSaveLabel = async () => {
+    try {
+      const res = await apiFetch(`/api/care-teams/${careTeamId}/my-label`, {
+        method: 'PUT',
+        body: JSON.stringify({ relationshipLabel: labelText.trim() }),
+      });
+      if (res?.ok) {
+        showToast('Relationship updated', 'success');
+        setEditingLabel(false);
+        fetchTeam();
+      }
+    } catch {
+      showToast('Failed to update', 'error');
+    }
+  };
+
   if (loading) return <LoadingSpinner text="Loading care team..." />;
   if (!team) return <div className="card"><p style={{ color: '#666' }}>Care team not found.</p></div>;
 
+  const [expandedMember, setExpandedMember] = useState(null);
   const isLeader = team.myRole === 'leader';
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' };
   const roleColors = { leader: '#1b6b5a', member: '#0066cc', viewer: '#888' };
+  const roleLabels = { leader: 'Team Leader', member: 'Member', viewer: 'View Only' };
+
+  const myUserId = team.myUserId;
+  const myMember = team.members?.find(m => m.userId === myUserId);
 
   return (
     <div>
@@ -158,6 +181,42 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         )}
       </div>
 
+      {/* My Relationship Label */}
+      <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 13, color: '#555' }}>
+            <span style={{ fontWeight: 600 }}>My relationship to {team.recipient_first_name}:</span>{' '}
+            {editingLabel ? (
+              <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                <input value={labelText} onChange={(e) => setLabelText(e.target.value)}
+                  placeholder="e.g. Mother, Grandmother, Family friend"
+                  style={{ padding: '4px 8px', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 13, width: 200 }}
+                  autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleSaveLabel(); if (e.key === 'Escape') setEditingLabel(false); }} />
+                <button onClick={handleSaveLabel} style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+                <button onClick={() => setEditingLabel(false)} style={{ padding: '4px 10px', background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+              </span>
+            ) : (
+              <span>
+                {(() => {
+                  const label = myMember?.relationshipLabel;
+                  return label ? (
+                    <span style={{ fontStyle: 'italic' }}>{label}</span>
+                  ) : (
+                    <span style={{ color: '#bbb', fontStyle: 'italic' }}>Not set</span>
+                  );
+                })()}
+                <button onClick={() => {
+                  setLabelText(myMember?.relationshipLabel || '');
+                  setEditingLabel(true);
+                }} style={{ background: 'none', border: 'none', fontSize: 12, color: '#1b6b5a', cursor: 'pointer', marginLeft: 6, fontWeight: 600 }}>
+                  Edit
+                </button>
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Invite Form */}
       {showInviteForm && isLeader && (
         <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1b6b5a' }}>
@@ -189,39 +248,63 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
       {/* Members */}
       <div className="card">
         <div className="card-header">Team Members ({team.members?.length || 0})</div>
-        {team.members?.map((m) => (
-          <div key={m.userId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f0f4f8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: '#1b6b5a' }}>
-                {m.firstName?.[0]}{m.lastName?.[0]}
+        {team.members?.map((m) => {
+          const isExpanded = expandedMember === m.userId;
+          const canManage = isLeader && m.role !== 'leader';
+          return (
+            <div key={m.userId} style={{ borderBottom: '1px solid #f0f0f0' }}>
+              <div
+                onClick={() => canManage && setExpandedMember(isExpanded ? null : m.userId)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0',
+                  cursor: canManage ? 'pointer' : 'default', transition: 'background 0.15s',
+                  ...(isExpanded ? { background: '#f8faf9', margin: '0 -16px', padding: '14px 16px' } : {}) }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: '50%',
+                    background: m.role === 'leader' ? '#e0f2e9' : '#f0f4f8',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 16, fontWeight: 700, color: roleColors[m.role] || '#1b6b5a' }}>
+                    {m.firstName?.[0]}{m.lastName?.[0]}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{m.firstName} {m.lastName}</div>
+                    <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>
+                      {m.relationshipLabel ? <span style={{ color: '#666' }}>{m.relationshipLabel} · </span> : ''}{m.email}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: roleColors[m.role],
+                    background: m.role === 'leader' ? '#e0f2e9' : m.role === 'viewer' ? '#f5f5f5' : '#e8f0fe',
+                    padding: '4px 10px', borderRadius: 12 }}>
+                    {roleLabels[m.role] || m.role}
+                  </span>
+                  {canManage && <span style={{ fontSize: 14, color: '#bbb', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>}
+                </div>
               </div>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{m.firstName} {m.lastName}</div>
-                <div style={{ fontSize: 12, color: '#888' }}>{m.email}</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {isLeader && m.role !== 'leader' ? (
-                <select value={m.role} onChange={(e) => handleChangeRole(m.userId, e.target.value)}
-                  style={{ padding: '4px 8px', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, color: roleColors[m.role] || '#333' }}>
-                  <option value="member">Member</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-              ) : (
-                <span style={{ fontSize: 12, fontWeight: 600, color: roleColors[m.role], textTransform: 'capitalize',
-                  background: m.role === 'leader' ? '#e0f2e9' : '#f0f4f8', padding: '4px 10px', borderRadius: 12 }}>
-                  {m.role}
-                </span>
-              )}
-              {isLeader && m.role !== 'leader' && (
-                <button onClick={() => handleRemoveMember(m.userId, `${m.firstName} ${m.lastName}`)}
-                  style={{ padding: '4px 10px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  Remove
-                </button>
+              {isExpanded && canManage && (
+                <div style={{ padding: '0 0 14px', margin: '0 -16px', padding: '0 16px 14px', background: '#f8faf9', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'member'); }}
+                    style={{ padding: '6px 14px', background: m.role === 'member' ? '#1b6b5a' : '#fff', color: m.role === 'member' ? '#fff' : '#1b6b5a',
+                      border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Member
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'viewer'); }}
+                    style={{ padding: '6px 14px', background: m.role === 'viewer' ? '#666' : '#fff', color: m.role === 'viewer' ? '#fff' : '#666',
+                      border: '1px solid #999', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    View Only
+                  </button>
+                  <div style={{ flex: 1 }}></div>
+                  <button onClick={(e) => { e.stopPropagation(); handleRemoveMember(m.userId, `${m.firstName} ${m.lastName}`); }}
+                    style={{ padding: '6px 14px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545',
+                      borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Remove from Team
+                  </button>
+                </div>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Pending Invites */}

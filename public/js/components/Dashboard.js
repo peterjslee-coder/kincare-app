@@ -277,15 +277,23 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       )}
 
       {parent && (
-        <div className="betty-card">
+        <div className="betty-card" onClick={() => onNavigate && onNavigate('care-profile')}
+          style={{ cursor: 'pointer', position: 'relative' }}>
           <div style={{ fontSize: 40 }}>👵</div>
           <div className="betty-name">{parent.name}</div>
-          <div className="betty-info">Your mother &bull; Living in {parent.location}</div>
+          <div className="betty-info">
+            {(() => {
+              const myLabel = careTeams.find(t => t.my_relationship_label)?.my_relationship_label;
+              return myLabel ? `Your ${myLabel.toLowerCase()} · ` : '';
+            })()}
+            Living in {parent.location}
+          </div>
           {parent.healthConditions && parent.healthConditions.length > 0 && (
             <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
               {parent.healthConditions.join(' · ')}
             </div>
           )}
+          <div style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: '#1b6b5a', fontSize: 18 }}>→</div>
         </div>
       )}
 

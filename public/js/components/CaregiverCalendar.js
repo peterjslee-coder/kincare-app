@@ -1,5 +1,5 @@
 // ─── CaregiverCalendar — Weekly calendar with availability overlay + care requests ───
-// Green = available, Blue = booked session, Pink/Orange = care request, Red = blocked, Gray = off
+// Green = available, Blue = booked session, Orange = care request, Red striped = blocked, Gray = off
 const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, availRules, fetchAvailability, onLogVisit }) => {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -203,11 +203,11 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   };
 
   const cellColors = {
-    available: { bg: '#e8f5e9', border: '#a5d6a7' },
-    booked: { bg: '#e3f2fd', border: '#90caf9' },
-    request: { bg: '#fce4ec', border: '#f48fb1' },
-    blocked: { bg: '#ffebee', border: '#ef9a9a' },
-    off: { bg: '#fafafa', border: '#f0f0f0' },
+    available: { bg: '#e8f5e9', border: '#a5d6a7', label: '', overlay: '' },
+    booked: { bg: '#e3f2fd', border: '#64b5f6', label: '●', overlay: '#1e88e5' },
+    request: { bg: '#fff3e0', border: '#ffb74d', label: '!', overlay: '#fb8c00' },
+    blocked: { bg: '#fce4ec', border: '#e57373', label: '✕', overlay: '' },
+    off: { bg: '#fafafa', border: '#f0f0f0', label: '', overlay: '' },
   };
 
   // Selected day details
@@ -245,11 +245,19 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 11, color: '#666', flexWrap: 'wrap' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: cellColors.available.bg, border: `1px solid ${cellColors.available.border}`, display: 'inline-block' }}></span> Available</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: cellColors.booked.bg, border: `1px solid ${cellColors.booked.border}`, display: 'inline-block' }}></span> Booked</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: cellColors.request.bg, border: `1px solid ${cellColors.request.border}`, display: 'inline-block' }}></span> Care Request</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: cellColors.blocked.bg, border: `1px solid ${cellColors.blocked.border}`, display: 'inline-block' }}></span> Blocked</span>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12, fontSize: 11, color: '#666', flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 14, height: 14, borderRadius: 3, background: cellColors.available.bg, border: `2px solid ${cellColors.available.border}`, display: 'inline-block' }}></span> Available
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 14, height: 14, borderRadius: 3, background: '#1e88e5', display: 'inline-block' }}></span> Booked
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 14, height: 14, borderRadius: 3, background: '#fb8c00', display: 'inline-block' }}></span> Care Request
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 14, height: 14, borderRadius: 3, background: `repeating-linear-gradient(-45deg, #fce4ec, #fce4ec 2px, #e57373 2px, #e57373 4px)`, border: '1px solid #e57373', display: 'inline-block' }}></span> Blocked
+        </span>
       </div>
 
       {/* Calendar Grid */}
@@ -268,7 +276,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                     <div style={{ fontWeight: 600, color: today ? '#1b6b5a' : '#555' }}>{dayNames[d.getDay()]}</div>
                     <div style={{ fontSize: 13, fontWeight: today ? 800 : 600, color: today ? '#fff' : '#333', background: today ? '#1b6b5a' : 'transparent', borderRadius: '50%', width: 24, height: 24, lineHeight: '24px', margin: '2px auto 0', display: 'inline-block' }}>{d.getDate()}</div>
                     {hasRequests && (
-                      <div style={{ fontSize: 9, color: '#c62828', fontWeight: 600, marginTop: 2 }}>help needed</div>
+                      <div style={{ fontSize: 9, color: '#e65100', fontWeight: 600, marginTop: 2 }}>help needed</div>
                     )}
                   </th>
                 );
@@ -292,22 +300,31 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         onClick={() => setSelectedDay(d)}
                         title={cell.type === 'booked' ? `${cell.session.recipientName || cell.session.recipient_name || ''} — ${cell.session.serviceType || cell.session.service_type || ''}` : cell.type === 'request' ? `Care request: ${cell.session.service_type || cell.session.serviceType || ''}` : cell.type === 'blocked' ? `Blocked${cell.note ? ': ' + cell.note : ''}` : cell.type}
                         style={{
-                          background: colors.bg,
+                          background: cell.type === 'blocked'
+                            ? 'repeating-linear-gradient(-45deg, #fce4ec, #fce4ec 3px, #f8bbd0 3px, #f8bbd0 6px)'
+                            : colors.bg,
                           borderBottom: '1px solid #f0f0f0',
                           borderRight: '1px solid #f5f5f5',
+                          borderLeft: cell.type === 'booked' ? '3px solid #1e88e5' : cell.type === 'request' ? '3px solid #fb8c00' : cell.type === 'blocked' ? '3px solid #e57373' : 'none',
                           cursor: 'pointer',
                           height: 28,
                           position: 'relative',
                           transition: 'opacity 0.1s',
                         }}>
                         {cell.type === 'booked' && (
-                          <div style={{ position: 'absolute', inset: 1, background: '#42a5f5', borderRadius: 3, opacity: 0.7 }}></div>
+                          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(30,136,229,0.35) 0%, rgba(30,136,229,0.12) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#1565c0' }}>●</span>
+                          </div>
                         )}
                         {cell.type === 'request' && (
-                          <div style={{ position: 'absolute', inset: 1, background: '#f48fb1', borderRadius: 3, opacity: 0.6 }}></div>
+                          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(251,140,0,0.3) 0%, rgba(251,140,0,0.1) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#e65100' }}>!</span>
+                          </div>
                         )}
                         {cell.type === 'blocked' && (
-                          <div style={{ position: 'absolute', inset: 1, background: '#ef5350', borderRadius: 3, opacity: 0.25 }}></div>
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 8, fontWeight: 800, color: '#c62828', opacity: 0.6 }}>✕</span>
+                          </div>
                         )}
                       </td>
                     );
@@ -356,9 +373,9 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
           {/* Care Requests */}
           {selectedRequests.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#c62828', marginBottom: 8 }}>Care Requests</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#e65100', marginBottom: 8 }}>Care Requests</div>
               {selectedRequests.map((s, idx) => (
-                <div key={idx} style={{ padding: '10px 12px', background: '#fce4ec', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #f48fb1' }}>
+                <div key={idx} style={{ padding: '10px 12px', background: '#fff3e0', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #fb8c00' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>

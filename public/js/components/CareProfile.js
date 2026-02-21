@@ -5,7 +5,34 @@ const CareProfile = window.CareProfile = () => {
   const [editData, setEditData] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [notes, setNotes] = useState([]);
+  const [newNote, setNewNote] = useState('');
+  const [addingNote, setAddingNote] = useState(false);
   const { showToast } = useToast();
+
+  const fetchNotes = async (recipientId) => {
+    try {
+      const res = await apiFetch(`/api/notes/${recipientId}`);
+      if (res?.ok) { const d = await res.json(); setNotes(d.notes || []); }
+    } catch {}
+  };
+
+  const handleAddNote = async () => {
+    if (!newNote.trim() || !profile?.id) return;
+    setAddingNote(true);
+    try {
+      const res = await apiFetch('/api/notes', {
+        method: 'POST',
+        body: JSON.stringify({ careRecipientId: profile.id, content: newNote.trim(), noteType: 'general' }),
+      });
+      if (res?.ok) {
+        setNewNote('');
+        showToast('Note added', 'success');
+        fetchNotes(profile.id);
+      }
+    } catch { showToast('Failed to add note', 'error'); }
+    setAddingNote(false);
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -15,6 +42,7 @@ const CareProfile = window.CareProfile = () => {
           const data = await response.json();
           if (data.careRecipients && data.careRecipients.length > 0) {
             setProfile(data.careRecipients[0]);
+            fetchNotes(data.careRecipients[0].id);
           }
         }
       } catch (error) {
@@ -113,6 +141,7 @@ const CareProfile = window.CareProfile = () => {
   if (loading) return <LoadingSpinner text="Loading care profile..." />;
   if (!profile) return <EmptyState icon="👵" title="No care recipient found" text="Add a care recipient to get started." />;
 
+  const canEdit = profile.access_level !== 'view';
   const healthConditions = parseJsonField(profile.health_conditions);
   const medications = parseJsonField(profile.medications);
 
@@ -125,7 +154,7 @@ const CareProfile = window.CareProfile = () => {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 className="page-title">Care Profile</h1>
         {!editing ? (
-          <button onClick={startEditing} style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          canEdit && <button onClick={startEditing} style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             Edit Profile
           </button>
         ) : (
@@ -255,6 +284,32 @@ const CareProfile = window.CareProfile = () => {
               <div className="info-value">{profile.emergency_contact_phone}</div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Care Notes */}
+      <div className="card">
+        <div className="card-header"><span className="card-icon">📝</span>Care Notes</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: notes.length > 0 ? 12 : 0 }}>
+          <input value={newNote} onChange={(e) => setNewNote(e.target.value)}
+            placeholder="Add a note about care, observations, updates..."
+            style={{ flex: 1, padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit' }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && newNote.trim()) handleAddNote(); }} />
+          <button onClick={handleAddNote} disabled={addingNote || !newNote.trim()}
+            style={{ padding: '10px 20px', background: addingNote ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+            {addingNote ? '...' : 'Add'}
+          </button>
+        </div>
+        {notes.length > 0 ? notes.map((n) => (
+          <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5 }}>{n.content}</div>
+            <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
+              {n.author_first_name} {n.author_last_name}
+              {' · '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+            </div>
+          </div>
+        )) : (
+          <p style={{ color: '#999', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
         )}
       </div>
 

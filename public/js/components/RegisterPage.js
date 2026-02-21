@@ -9,6 +9,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     certifications: [], certType: '', certNumber: '', certExpiry: '',
     availability: {}, prefTimes: {}
   });
+  const [showFieldErrors, setShowFieldErrors] = useState(false);
 
   // When registering via care team invite, family users skip "About Your Loved One" and "Care Needs"
   // since they're joining an existing care team (they can add their own cared-for later)
@@ -21,6 +22,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    if (showFieldErrors) setShowFieldErrors(false);
   };
 
   const handleCheckboxChange = (field, value) => {
@@ -33,6 +35,30 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   // Validation helpers
   const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isValidPhone = (phone) => phone.replace(/\D/g, '').length === 10;
+  const getStepErrors = () => {
+    const errs = [];
+    if (step === 1) {
+      if (!formData.firstName.trim()) errs.push('First name');
+      if (!formData.lastName.trim()) errs.push('Last name');
+      if (!formData.email.trim() || !isValidEmail(formData.email)) errs.push('Valid email');
+      if (!isValidPhone(formData.phone)) errs.push('10-digit phone number');
+      if (formData.password.length < 6) errs.push('Password (min 6 characters)');
+    }
+    if (track === 'family' && !isInviteFlow) {
+      if (step === 2) {
+        if (!formData.lovedOneName.trim()) errs.push("Loved one's name");
+        if (!formData.lovedOneAge) errs.push('Age');
+        if (!formData.relationship) errs.push('Relationship');
+      }
+      if (step === 3 && !Object.values(formData.careNeeds).some(v => v)) errs.push('At least one care need');
+    }
+    if (track === 'caregiver') {
+      if (step === 2 && !formData.bgCheckConsent) errs.push('Background check consent');
+      if (step === 3 && !formData.certType) errs.push('Certification type');
+      if (step === 4 && !Object.values(formData.availability).some(v => v)) errs.push('At least one available day');
+    }
+    return errs;
+  };
 
   const isStepValid = () => {
     if (track === 'family') {
@@ -57,7 +83,10 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   };
 
   const handleNext = () => {
-    if (step < maxStep && isStepValid()) setStep(step + 1);
+    if (step < maxStep) {
+      if (isStepValid()) { setShowFieldErrors(false); setStep(step + 1); }
+      else { setShowFieldErrors(true); }
+    }
   };
 
   const handleBack = () => {
@@ -204,6 +233,11 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             </div>
           ))}
         </div>
+        {showFieldErrors && getStepErrors().length > 0 && (
+          <div style={{ background: '#fdf0ed', border: '1px solid #e74c3c', borderRadius: '8px', padding: '12px 16px', marginBottom: '12px', fontSize: '13px', color: '#c0392b' }}>
+            <strong>Please complete:</strong> {getStepErrors().join(', ')}
+          </div>
+        )}
         {track === 'family' && (
           <>
             {step === 1 && (

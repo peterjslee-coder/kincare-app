@@ -13,7 +13,7 @@ router.get("/", requireRole("family"), async (req, res) => {
   try {
     const db = await getDb();
     const teams = await db.prepare(`
-      SELECT ct.*, ctm.role AS my_role,
+      SELECT ct.*, ctm.role AS my_role, ctm.relationship_label AS my_relationship_label,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
       FROM care_team_members ctm
       JOIN care_teams ct ON ctm.care_team_id = ct.id
@@ -58,7 +58,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
 
     // Get members
     const members = await db.prepare(`
-      SELECT ctm.id AS membership_id, ctm.role, ctm.joined_at,
+      SELECT ctm.id AS membership_id, ctm.role, ctm.joined_at, ctm.relationship_label,
         u.id AS user_id, u.first_name, u.last_name, u.email, u.avatar_url
       FROM care_team_members ctm
       JOIN users u ON ctm.user_id = u.id
@@ -78,6 +78,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
       careTeam: {
         ...team,
         myRole: membership.role,
+        myUserId: req.user.id,
         members: members.map(m => ({
           membershipId: m.membership_id,
           userId: m.user_id,
@@ -87,6 +88,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
           avatarUrl: m.avatar_url,
           role: m.role,
           joinedAt: m.joined_at,
+          relationshipLabel: m.relationship_label,
         })),
         invites: invites.map(i => ({
           id: i.id,
@@ -445,6 +447,26 @@ router.put("/:id/members/:userId", requireRole("family"), async (req, res) => {
   } catch (err) {
     console.error("Change role error:", err);
     res.status(500).json({ error: "Failed to change role" });
+  }
+});
+
+// ─── PUT /api/care-teams/:id/my-label ─── Update own relationship label
+router.put("/:id/my-label", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const membership = await db.prepare(
+      "SELECT id FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
+    ).get(req.params.id, req.user.id);
+    if (!membership) return res.status(404).json({ error: "Not a member of this care team" });
+
+    const { relationshipLabel } = req.body;
+    await db.prepare("UPDATE care_team_members SET relationship_label = ? WHERE care_team_id = ? AND user_id = ?")
+      .run(relationshipLabel?.trim() || null, req.params.id, req.user.id);
+
+    res.json({ message: "Relationship label updated" });
+  } catch (err) {
+    console.error("Update relationship label error:", err);
+    res.status(500).json({ error: "Failed to update relationship label" });
   }
 });
 

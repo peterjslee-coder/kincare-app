@@ -318,6 +318,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         <div style={{ textAlign: 'center', marginTop: 12 }}>
           <a onClick={() => onNavigate('splash')} style={{ fontSize: 13, color: '#888', cursor: 'pointer' }}>← Back to home</a>
         </div>
+        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 11, color: '#ccc' }}>v{window.APP_VERSION || '?'}</div>
       </div>
     </div>
   );

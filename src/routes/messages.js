@@ -199,9 +199,17 @@ router.get("/contacts", async (req, res) => {
     WHERE (cp.user_id = ? OR ca.family_user_id = ?) AND ca.is_active = 1
   `).all(userId, userId, userId, userId);
 
+  // 3. Accepted connections (user search + connection request system)
+  const connectionContacts = await db.prepare(`
+    SELECT CASE WHEN requester_id = ? THEN recipient_id ELSE requester_id END AS user_id
+    FROM connections
+    WHERE (requester_id = ? OR recipient_id = ?) AND status = 'accepted'
+  `).all(userId, userId, userId);
+
   const connectedIds = new Set([
     ...teamMembers.map(r => r.user_id),
     ...assignmentContacts.map(r => r.user_id),
+    ...connectionContacts.map(r => r.user_id),
   ]);
 
   if (connectedIds.size === 0) {

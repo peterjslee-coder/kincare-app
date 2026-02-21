@@ -12,8 +12,14 @@ const Messages = window.Messages = () => {
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [groupName, setGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [showFindPeople, setShowFindPeople] = useState(false);
+  const [peopleSearch, setPeopleSearch] = useState('');
+  const [peopleResults, setPeopleResults] = useState([]);
+  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState([]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const { showToast } = useToast();
 
   const isMobile = window.innerWidth <= 768;
 
@@ -69,6 +75,55 @@ const Messages = window.Messages = () => {
     setContactsLoading(false);
   };
 
+  // Search all platform users
+  const searchPeople = async (query) => {
+    if (!query || query.trim().length < 2) { setPeopleResults([]); return; }
+    setPeopleLoading(true);
+    try {
+      const res = await apiFetch(`/api/connections/search?q=${encodeURIComponent(query)}`);
+      if (res?.ok) { const data = await res.json(); setPeopleResults(data.users || []); }
+    } catch {}
+    setPeopleLoading(false);
+  };
+
+  // Fetch pending connection requests received
+  const fetchPendingRequests = async () => {
+    try {
+      const res = await apiFetch('/api/connections');
+      if (res?.ok) {
+        const data = await res.json();
+        setPendingRequests((data.connections || []).filter(c => c.status === 'pending' && c.direction === 'received'));
+      }
+    } catch {}
+  };
+
+  const handleSendConnectionRequest = async (userId) => {
+    try {
+      const res = await apiFetch('/api/connections', {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      });
+      if (res?.ok) {
+        showToast('Connection request sent!', 'success');
+        searchPeople(peopleSearch); // Refresh results
+      }
+    } catch { showToast('Failed to send request', 'error'); }
+  };
+
+  const handleRespondConnection = async (connectionId, action) => {
+    try {
+      const res = await apiFetch(`/api/connections/${connectionId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ action }),
+      });
+      if (res?.ok) {
+        showToast(action === 'accept' ? 'Connected!' : 'Request declined', 'success');
+        fetchPendingRequests();
+        fetchContacts(); // Refresh contacts list since new connection is now messageable
+      }
+    } catch { showToast('Failed to respond', 'error'); }
+  };
+
   // Handle deep-link from push notification or URL param
   useEffect(() => {
     fetchConversations().then(() => {
@@ -79,6 +134,7 @@ const Messages = window.Messages = () => {
         fetchMessages(pendingConv);
       }
     });
+    fetchPendingRequests();
   }, []);
 
   // Listen for real-time incoming messages
@@ -386,16 +442,114 @@ const Messages = window.Messages = () => {
     </div>
   );
 
+  // ─── Find People Panel ───
+  const renderFindPeople = () => (
+    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="msg-chat-header">
+        <button className="msg-back-btn" onClick={() => { setShowFindPeople(false); setPeopleSearch(''); setPeopleResults([]); }}
+          style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#1b6b5a', padding: '4px 8px', marginRight: '8px' }}>
+          ‹
+        </button>
+        <div style={{ fontWeight: 600, fontSize: '16px', color: '#333' }}>Find People</div>
+      </div>
+      <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0' }}>
+        <input type="text" placeholder="Search by name or email..." value={peopleSearch}
+          onChange={e => { setPeopleSearch(e.target.value); searchPeople(e.target.value); }}
+          autoFocus
+          style={{ width: '100%', padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 14, background: '#f8f9fa' }} />
+      </div>
+
+      {/* Pending connection requests */}
+      {pendingRequests.length > 0 && !peopleSearch && (
+        <div style={{ borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{ padding: '10px 16px', fontSize: 12, fontWeight: 600, color: '#e65100', background: '#fff8f0' }}>
+            Connection Requests ({pendingRequests.length})
+          </div>
+          {pendingRequests.map(req => (
+            <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid #f5f5f5' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#0066cc' }}>
+                {req.otherFirstName?.[0]}{req.otherLastName?.[0]}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{req.otherFirstName} {req.otherLastName}</div>
+                <div style={{ fontSize: 12, color: '#888' }}>{req.otherEmail}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => handleRespondConnection(req.id, 'accept')}
+                  style={{ padding: '6px 12px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  Accept
+                </button>
+                <button onClick={() => handleRespondConnection(req.id, 'decline')}
+                  style={{ padding: '6px 12px', background: '#fff', color: '#999', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                  Decline
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {peopleLoading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Searching...</div>
+        ) : peopleSearch.length < 2 ? (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: '#999', fontSize: 14 }}>
+            Type at least 2 characters to search for people on InPlace.
+          </div>
+        ) : peopleResults.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 14 }}>No users found.</div>
+        ) : (
+          peopleResults.map(u => (
+            <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: '1px solid #f0f0f0' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: u.role === 'caregiver' ? '#e8f5e9' : '#f0f4f8',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: u.role === 'caregiver' ? '#1b6b5a' : '#0066cc' }}>
+                {u.firstName?.[0]}{u.lastName?.[0]}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{u.firstName} {u.lastName}</div>
+                <div style={{ fontSize: 12, color: '#888' }}>{u.email}</div>
+              </div>
+              {u.connection?.status === 'accepted' ? (
+                <span style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600 }}>✓ Connected</span>
+              ) : u.connection?.status === 'pending' ? (
+                <span style={{ fontSize: 12, color: '#888', fontWeight: 500 }}>
+                  {u.connection.direction === 'sent' ? 'Request sent' : 'Pending'}
+                </span>
+              ) : (
+                <button onClick={() => handleSendConnectionRequest(u.id)}
+                  style={{ padding: '6px 14px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  Connect
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
   // ─── Conversation List ───
   const renderConversationList = () => (
     <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="msg-list-header">
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#333', margin: 0 }}>Messages</h1>
-        <button onClick={handleNewChat}
-          style={{ background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
-          title="New message">
-          +
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => { setShowFindPeople(true); fetchPendingRequests(); }}
+            style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', position: 'relative' }}
+            title="Find people to connect with">
+            🔍 Find People
+            {pendingRequests.length > 0 && (
+              <span style={{ position: 'absolute', top: -6, right: -6, background: '#e65100', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {pendingRequests.length}
+              </span>
+            )}
+          </button>
+          <button onClick={handleNewChat}
+            style={{ background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+            title="New message">
+            +
+          </button>
+        </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {conversations.length > 0 ? conversations.map(c => {
@@ -604,6 +758,7 @@ const Messages = window.Messages = () => {
 
   // ─── Layout ───
   if (isMobile) {
+    if (showFindPeople) return renderFindPeople();
     if (showNewChat) return renderNewChatPicker();
     if (activeConvId) return renderChatView();
     return renderConversationList();
@@ -613,7 +768,7 @@ const Messages = window.Messages = () => {
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 120px)', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
       <div style={{ width: '320px', borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
-        {showNewChat ? renderNewChatPicker() : renderConversationList()}
+        {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : renderConversationList()}
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {activeConvId ? renderChatView() : (
