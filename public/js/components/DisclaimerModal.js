@@ -6,16 +6,21 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
   const handleScroll = () => {
     const el = contentRef.current;
     if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    // More forgiving threshold (50px) for different browsers/zoom levels
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     if (atBottom) setScrolledToBottom(true);
   };
 
   useEffect(() => {
-    // Check if content doesn't need scrolling (short enough to fit)
     const el = contentRef.current;
-    if (el && el.scrollHeight <= el.clientHeight + 10) {
+    // Check if content doesn't need scrolling (short enough to fit)
+    if (el && el.scrollHeight <= el.clientHeight + 20) {
       setScrolledToBottom(true);
     }
+    // Fallback: if scroll detection fails after 8 seconds, enable the button
+    // so users aren't permanently stuck
+    const fallback = setTimeout(() => setScrolledToBottom(true), 8000);
+    return () => clearTimeout(fallback);
   }, []);
 
   const handleAccept = async () => {
