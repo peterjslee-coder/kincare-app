@@ -39,16 +39,16 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000,
-      background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '20px',
+      background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      padding: '0',
     }}>
       <div style={{
-        background: 'white', borderRadius: '16px', maxWidth: '560px', width: '100%',
-        maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        background: 'white', borderRadius: '16px 16px 0 0', maxWidth: '560px', width: '100%',
+        maxHeight: '85dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        boxShadow: '0 -4px 40px rgba(0,0,0,0.3)',
       }}>
-        <div style={{ padding: '24px 24px 16px', borderBottom: '1px solid #e0e0e0' }}>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: '#333', marginBottom: '4px' }}>
+        <div style={{ padding: '20px 20px 12px', borderBottom: '1px solid #e0e0e0', flexShrink: 0 }}>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: '#333', marginBottom: '4px' }}>
             Important Notice
           </div>
           <div style={{ fontSize: '13px', color: '#999' }}>
@@ -57,8 +57,9 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
         </div>
 
         <div ref={contentRef} onScroll={handleScroll} style={{
-          flex: 1, overflowY: 'auto', padding: '24px',
+          flex: '1 1 0', overflowY: 'auto', padding: '20px',
           fontSize: '14px', lineHeight: '1.7', color: '#444',
+          minHeight: 0,
         }}>
           <p style={{ margin: '0 0 16px' }}>
             Welcome to InPlace. Before you begin using our platform, please carefully read and acknowledge the following important disclosures.
@@ -104,8 +105,10 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
         </div>
 
         <div style={{
-          padding: '16px 24px', borderTop: '1px solid #e0e0e0',
+          padding: '14px 20px', borderTop: '1px solid #e0e0e0',
           display: 'flex', flexDirection: 'column', gap: '8px',
+          flexShrink: 0,
+          paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
         }}>
           {!scrolledToBottom && (
             <div style={{ textAlign: 'center', fontSize: '12px', color: '#999', fontStyle: 'italic' }}>
