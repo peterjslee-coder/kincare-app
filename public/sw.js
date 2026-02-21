@@ -1,5 +1,5 @@
-// InPlace Service Worker — v1.9.0
-const CACHE_NAME = 'inplace-v1.9.0';
+// InPlace Service Worker — v1.9.1
+const CACHE_NAME = 'inplace-v1.9.1';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -7,6 +7,7 @@ const STATIC_ASSETS = [
   '/js/app.js',
   '/js/components/InPlaceIcon.js',
   '/js/components/SplashPage.js',
+  '/js/components/InviteLandingPage.js',
   '/js/components/LoginPage.js',
   '/js/components/RegisterPage.js',
   '/js/components/ForgotPasswordPage.js',

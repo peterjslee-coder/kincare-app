@@ -202,7 +202,9 @@ const App = () => {
             }
             setAppState('app');
             // If returning user has a pending invite token, accept it now
-            const inviteParam = new URLSearchParams(window.location.search).get('invite') || pendingInviteToken;
+            // Note: must re-read URL here since replaceState may not have run yet at this point
+            const inviteParam = new URLSearchParams(window.location.search).get('invite')
+              || new URLSearchParams(window.__originalSearch || '').get('invite');
             if (inviteParam) {
               apiFetch('/api/care-teams/accept-invite', {
                 method: 'POST',
@@ -225,6 +227,8 @@ const App = () => {
       }).catch(() => {});
     }
     const params = new URLSearchParams(window.location.search);
+    // Preserve original search params before any replaceState calls strip them
+    window.__originalSearch = window.location.search;
 
     // Check for email verification token in URL
     const vt = params.get('verify');
@@ -252,13 +256,21 @@ const App = () => {
     if (inviteToken) {
       setPendingInviteToken(inviteToken);
       window.history.replaceState({}, '', window.location.pathname);
-      // Fetch invite details for pre-login display
+      // Fetch invite details and route to dedicated invite page
       fetch(`/api/care-teams/invite-info?token=${inviteToken}`)
         .then(r => r.ok ? r.json() : null)
         .then(data => {
-          if (data?.invite) setInviteInfo(data.invite);
+          if (data?.invite) {
+            setInviteInfo(data.invite);
+            // Only show invite page if user is NOT already logged in
+            if (!localStorage.getItem('auth_token')) {
+              setAppState('invite');
+            }
+          }
         })
         .catch(() => {});
+      // Show invite page immediately (inviteInfo populates async)
+      if (!savedToken) setAppState('invite');
     }
 
     // Check for platform (onboarding) invite token
@@ -489,6 +501,7 @@ const App = () => {
     }} />;
   }
 
+  if (appState === 'invite') return <InviteLandingPage inviteInfo={inviteInfo} onNavigate={handleNavigate} />;
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} inviteInfo={inviteInfo} />;
   if (appState === 'demo') return <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />;
   if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />;
