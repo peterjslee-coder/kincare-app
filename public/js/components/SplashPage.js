@@ -359,8 +359,62 @@ const SplashPage = window.SplashPage = ({ onNavigate }) => {
         </div>
       </section>
 
+      {/* ── Nursing Student Clinical Hours ── */}
+      <section style={{ padding: '80px 32px', background: '#fff' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+            <div style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '16px', color: '#1b6b5a', fontWeight: 600 }}>
+              For Nursing Students
+            </div>
+            <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '16px' }}>
+              Earn Clinical Hours While Making a Real Difference
+            </h2>
+            <p style={{ fontSize: '18px', color: '#555', maxWidth: '700px', margin: '0 auto', lineHeight: 1.7 }}>
+              Nursing and allied health students can earn supervised clinical hours through inPlace — gaining hands-on patient experience with real families while getting paid. It is the practicum that prepares you for the real world, not just the textbook.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', justifyContent: 'center', marginBottom: '56px' }}>
+            {[
+              { icon: '🩺', title: 'Real Patient Experience', desc: 'Work directly with elderly patients in their homes — medication reminders, mobility assistance, vital sign monitoring, and daily care coordination.' },
+              { icon: '📋', title: 'Tracked Clinical Hours', desc: 'Every visit is logged and verified. Export your hours for your nursing program, practicum coordinator, or accreditation requirements.' },
+              { icon: '💰', title: 'Get Paid to Learn', desc: 'Unlike unpaid clinical rotations, inPlace students earn competitive pay while building the skills that will define their careers.' },
+              { icon: '🎓', title: 'School Partnerships', desc: 'We partner with local nursing programs so your hours count. Your practicum coordinator gets visibility into your placements and progress.' },
+              { icon: '📅', title: 'Flexible Around Your Schedule', desc: 'Pick visits that work around your class schedule. Mornings, evenings, weekends — you choose when and where you work.' },
+              { icon: '⭐', title: 'Build Your Career Early', desc: 'Graduate with real reviews, verified experience, and a network of families who already trust you. Stand out in a competitive job market.' },
+            ].map((item, i) => (
+              <div key={i} style={{
+                flex: '1 1 280px', maxWidth: '460px', padding: '28px',
+                background: '#f0faf8', borderRadius: '12px', border: '1px solid #d0e8e3',
+              }}>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: '28px', flexShrink: 0 }}>{item.icon}</div>
+                  <div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: '#1b6b5a', marginBottom: '6px' }}>{item.title}</div>
+                    <div style={{ fontSize: '14px', color: '#555', lineHeight: 1.6 }}>{item.desc}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{
+            background: 'linear-gradient(135deg, #1b6b5a 0%, #0f4238 100%)',
+            borderRadius: '16px', padding: '48px 32px', textAlign: 'center', color: 'white',
+          }}>
+            <h3 style={{ fontSize: '28px', marginBottom: '12px', color: 'white' }}>The Care Workforce of Tomorrow</h3>
+            <p style={{ fontSize: '16px', opacity: 0.9, maxWidth: '600px', margin: '0 auto 20px' }}>
+              There are over 250,000 nursing students enrolled in U.S. programs every year — many of them looking for meaningful clinical experience. inPlace connects them with families who need help, creating a pipeline of trained, compassionate caregivers who already know the work before they graduate.
+            </p>
+            <p style={{ fontSize: '14px', opacity: 0.7 }}>
+              Nursing program partnerships launching soon. Join the waitlist to bring inPlace to your school.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ── Working Product CTA ── */}
-      <section style={{ padding: '80px 32px', background: '#fff', textAlign: 'center' }}>
+      <section style={{ padding: '80px 32px', background: '#f8f9fa', textAlign: 'center' }}>
         <div style={{ maxWidth: '700px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '36px', color: '#1b6b5a', marginBottom: '16px' }}>This Is Not a Deck. It Is a Working App.</h2>
           <p style={{ fontSize: '18px', color: '#555', lineHeight: 1.7, marginBottom: '40px' }}>
