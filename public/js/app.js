@@ -166,6 +166,7 @@ const App = () => {
   const [resetToken, setResetToken] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState(null);
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
+  const pendingInviteRef = useRef(null); // Ref mirror — survives closures
   const [inviteInfo, setInviteInfo] = useState(null); // { email, role, teamName, recipientName, inviterName }
   const [platformInviteToken, setPlatformInviteToken] = useState(null);
   const [selectedCareTeamId, setSelectedCareTeamId] = useState(null);
@@ -220,6 +221,7 @@ const App = () => {
                 }
               }).catch(() => {});
               setPendingInviteToken(null);
+              pendingInviteRef.current = null;
               setInviteInfo(null);
             }
           }
@@ -255,6 +257,7 @@ const App = () => {
     const inviteToken = params.get('invite');
     if (inviteToken) {
       setPendingInviteToken(inviteToken);
+      pendingInviteRef.current = inviteToken;
       window.history.replaceState({}, '', window.location.pathname);
       // Fetch invite details and route to dedicated invite page
       fetch(`/api/care-teams/invite-info?token=${inviteToken}`)
@@ -369,11 +372,12 @@ const App = () => {
     if (token && typeof connectSocket === 'function') {
       connectSocket(token);
     }
-    // Accept pending care team invite if one exists
-    if (pendingInviteToken) {
+    // Accept pending care team invite if one exists (use ref to avoid stale closure)
+    const inviteTokenNow = pendingInviteRef.current;
+    if (inviteTokenNow) {
       apiFetch('/api/care-teams/accept-invite', {
         method: 'POST',
-        body: JSON.stringify({ token: pendingInviteToken }),
+        body: JSON.stringify({ token: inviteTokenNow }),
       }).then(async r => {
         if (r?.ok) {
           const data = await r.json();
@@ -385,6 +389,7 @@ const App = () => {
         }
       }).catch(() => {});
       setPendingInviteToken(null);
+      pendingInviteRef.current = null;
     }
   };
 

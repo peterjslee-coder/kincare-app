@@ -71,7 +71,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     setRegError('');
     try {
       const role = track === 'caregiver' ? 'caregiver' : 'family';
-      const res = await apiFetch('/api/auth/register', {
+      const response = await apiFetch('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           email: formData.email,
@@ -83,8 +83,10 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
           ...(signupToken ? { signupToken } : {})
         })
       });
-      if (res.error) {
-        setRegError(res.error);
+      if (!response) throw new Error('Registration failed');
+      const res = await response.json();
+      if (!response.ok || res.error) {
+        setRegError(res.error || 'Registration failed');
         setRegistering(false);
         return;
       }
