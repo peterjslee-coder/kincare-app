@@ -2,5 +2,4 @@ node_modules/
 *.db
 .env
 .DS_Store
-archive/
 FEEDBACK.md
