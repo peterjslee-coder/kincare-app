@@ -34,6 +34,9 @@ const STATIC_ASSETS = [
   '/js/components/DemoPickerPage.js',
   '/js/components/CaregiverOnboarding.js',
   '/js/components/AdminPanel.js',
+  '/js/components/DisclaimerModal.js',
+  '/js/components/FeedbackButton.js',
+  '/js/components/FindWork.js',
   '/icons/icon-48.png',
   '/icons/icon-72.png',
   '/icons/icon-96.png',
@@ -90,11 +93,11 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for static
+// Fetch strategy
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // API calls: always go to network
+  // API calls: always network
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request).catch(() =>
@@ -107,17 +110,35 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first, fallback to network
+  // CDN assets (React, Babel): cache-first (they never change)
+  if (url.hostname.includes('cdnjs') || url.hostname.includes('unpkg')) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // App assets (HTML, JS, CSS): network-first, fall back to cache
+  // This ensures updates are always picked up when online
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Cache successful responses
-        if (response.ok && (url.origin === self.location.origin || url.hostname.includes('cdnjs'))) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
+    fetch(event.request).then((response) => {
+      if (response.ok && url.origin === self.location.origin) {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+      }
+      return response;
+    }).catch(() => {
+      return caches.match(event.request).then((cached) => {
+        return cached || new Response('Offline', { status: 503 });
       });
     })
   );
