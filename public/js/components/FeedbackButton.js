@@ -215,7 +215,8 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
         style={{
           position: 'fixed',
           bottom: isMobile ? 80 : 24,
-          right: 20,
+          left: isMobile ? 16 : 'auto',
+          right: isMobile ? 'auto' : 20,
           width: 48,
           height: 48,
           borderRadius: '50%',
@@ -233,7 +234,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
         onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.25)'; }}
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" />
         </svg>
       </button>
 

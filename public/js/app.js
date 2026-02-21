@@ -465,7 +465,7 @@ const App = () => {
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} />;
   if (appState === 'demo') return <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />;
   if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} />;
-  if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} />;
+  if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} />;
   if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;
   if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
 
@@ -552,13 +552,17 @@ const App = () => {
         { id: 'account', icon: '👤', label: 'Account' },
       ];
     }
-    return [
+    const familyBottom = [
       { id: 'dashboard', icon: '🏠', label: 'Home' },
       { id: 'schedule', icon: '📅', label: 'Schedule' },
       { id: 'caregivers', icon: '👨‍⚕️', label: 'Care' },
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'account', icon: '👤', label: 'More' },
     ];
+    if (currentUser?.isAdmin) {
+      familyBottom.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
+    }
+    return familyBottom;
   };
 
   const isDemo = currentUser?.isDemo;

@@ -99,9 +99,11 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   const db = await getDb();
 
-  // Check admin
-  const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
-  if (!user || !user.is_admin) return res.status(403).json({ error: "Admin access required" });
+  // Check admin (API key auth sets req.isAdmin directly)
+  if (!req.isAdmin) {
+    const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (!user || !user.is_admin) return res.status(403).json({ error: "Admin access required" });
+  }
 
   const { category, status, limit = 50, offset = 0 } = req.query;
 
@@ -201,8 +203,10 @@ router.get("/:id/screenshot", async (req, res) => {
 // Update feedback status/notes/tags (admin only)
 router.put("/:id", async (req, res) => {
   const db = await getDb();
-  const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
-  if (!user || !user.is_admin) return res.status(403).json({ error: "Admin access required" });
+  if (!req.isAdmin) {
+    const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (!user || !user.is_admin) return res.status(403).json({ error: "Admin access required" });
+  }
 
   const { status, adminNotes, tags } = req.body;
 

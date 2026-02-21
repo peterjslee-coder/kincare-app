@@ -1,4 +1,4 @@
-const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken }) => {
+const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken, pendingInviteToken }) => {
   // If prefill props are provided (from email-first signup flow), skip the role picker
   const [track, setTrack] = useState(prefilledRole === 'caregiver' ? 'caregiver' : prefilledRole === 'family' ? 'family' : null);
   const [step, setStep] = useState(prefilledRole ? 1 : 1);
@@ -10,7 +10,10 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     availability: {}, prefTimes: {}
   });
 
-  const familySteps = ['Basic Info', 'About Your Loved One', 'Care Needs', 'Review & Submit'];
+  // When registering via care team invite, family users skip "About Your Loved One" and "Care Needs"
+  // since they're joining an existing care team (they can add their own cared-for later)
+  const isInviteFlow = !!pendingInviteToken;
+  const familySteps = isInviteFlow ? ['Basic Info', 'Review & Submit'] : ['Basic Info', 'About Your Loved One', 'Care Needs', 'Review & Submit'];
   const caregiverSteps = ['Basic Info', 'Background Check', 'Certifications', 'Availability', 'Review & Submit'];
   const steps = track === 'family' ? familySteps : caregiverSteps;
   const maxStep = track ? steps.length : 0;
@@ -33,6 +36,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   const isStepValid = () => {
     if (track === 'family') {
       if (step === 1) return formData.firstName.trim() && formData.lastName.trim() && isValidEmail(formData.email) && isValidPhone(formData.phone) && formData.password.length >= 6;
+      if (isInviteFlow) return true; // Invite flow: step 1 = Basic Info, step 2 = Review (always valid)
       if (step === 2) return formData.lovedOneName.trim() && formData.lovedOneAge && formData.relationship;
       if (step === 3) return Object.values(formData.careNeeds).some(v => v);
       return true;
@@ -170,7 +174,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 </div>
               </>
             )}
-            {step === 2 && (
+            {!isInviteFlow && step === 2 && (
               <>
                 <div className="form-group">
                   <label>Loved One's Name</label>
@@ -204,7 +208,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 </div>
               </>
             )}
-            {step === 3 && (
+            {!isInviteFlow && step === 3 && (
               <>
                 <div className="form-group">
                   <label>What type of care is needed?</label>
@@ -223,14 +227,15 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 </div>
               </>
             )}
-            {step === 4 && (
+            {step === steps.length && (
               <div>
                 <h3 style={{ marginBottom: '16px' }}>Review Your Information</h3>
                 <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
                   <p><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
                   <p><strong>Email:</strong> {formData.email}</p>
-                  <p><strong>Loved One:</strong> {formData.lovedOneName}, {formData.lovedOneAge}</p>
-                  <p><strong>Care Needs:</strong> {Object.keys(formData.careNeeds).filter(k => formData.careNeeds[k]).join(', ') || 'None selected'}</p>
+                  {!isInviteFlow && <p><strong>Loved One:</strong> {formData.lovedOneName}, {formData.lovedOneAge}</p>}
+                  {!isInviteFlow && <p><strong>Care Needs:</strong> {Object.keys(formData.careNeeds).filter(k => formData.careNeeds[k]).join(', ') || 'None selected'}</p>}
+                  {isInviteFlow && <p style={{ color: '#1b6b5a', fontSize: '14px' }}>You're joining an existing care team. You can add your own care recipients later.</p>}
                 </div>
                 {regError && <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{regError}</div>}
                 <button type="button" className="btn btn-primary" onClick={handleComplete} disabled={registering} style={{ width: '100%', opacity: registering ? 0.6 : 1 }}>{registering ? 'Creating Account...' : 'Complete Registration'}</button>
@@ -334,7 +339,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 </div>
               </>
             )}
-            {step === 5 && (
+            {step === caregiverSteps.length && (
               <div>
                 <h3 style={{ marginBottom: '16px' }}>Review Your Application</h3>
                 <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>

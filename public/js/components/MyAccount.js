@@ -121,38 +121,52 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     setLoading(false);
   };
 
+  // Resize image client-side to max 400x400 JPEG so any photo works regardless of original size
+  const resizeImage = (file, maxSize = 400, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; } }
+        else { if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; } }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
+      img.src = url;
+    });
+  };
+
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { showToast('Please select an image file', 'error'); return; }
-    if (file.size > 1.5 * 1024 * 1024) { showToast('Photo must be under 1.5 MB', 'error'); return; }
     setUploadingPhoto(true);
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const dataUrl = reader.result;
-        const res = await apiFetch('/api/auth/me/photo', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ photo: dataUrl }),
-        });
-        if (res?.ok) {
-          setUser(prev => prev ? { ...prev, profile_photo: dataUrl, avatar_url: dataUrl } : prev);
-          if (setCurrentUser) setCurrentUser(prev => prev ? { ...prev, profilePhoto: dataUrl } : prev);
-          showToast('Profile photo updated!', 'success');
-        } else {
-          const data = await res?.json();
-          showToast(data?.error || 'Failed to upload photo', 'error');
-        }
-        setUploadingPhoto(false);
-      };
-      reader.onerror = () => { showToast('Failed to read file', 'error'); setUploadingPhoto(false); };
-      reader.readAsDataURL(file);
+      const dataUrl = await resizeImage(file);
+      const res = await apiFetch('/api/auth/me/photo', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photo: dataUrl }),
+      });
+      if (res?.ok) {
+        setUser(prev => prev ? { ...prev, profile_photo: dataUrl, avatar_url: dataUrl } : prev);
+        if (setCurrentUser) setCurrentUser(prev => prev ? { ...prev, profilePhoto: dataUrl } : prev);
+        showToast('Profile photo updated!', 'success');
+      } else {
+        const data = await res?.json();
+        showToast(data?.error || 'Failed to upload photo', 'error');
+      }
     } catch (err) {
       console.error('Photo upload error:', err);
       showToast('Upload failed', 'error');
-      setUploadingPhoto(false);
     }
+    setUploadingPhoto(false);
     if (photoInputRef.current) photoInputRef.current.value = '';
   };
 
@@ -395,7 +409,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
                 }}>Remove</button>
               )}
             </div>
-            <div style={{ fontSize: 11, color: '#999', marginTop: 10 }}>JPG, PNG, or GIF. Max 1.5 MB.</div>
+            <div style={{ fontSize: 11, color: '#999', marginTop: 10 }}>JPG, PNG, or GIF — any size, we'll resize it for you.</div>
           </div>
 
           <div className="card">

@@ -7,6 +7,8 @@ const router = express.Router();
 // ─── Admin check middleware ───
 // Runs after authenticate, looks up is_admin from DB and sets req.isAdmin
 async function checkAdmin(req, res, next) {
+  // API key auth already sets isAdmin — skip DB lookup
+  if (req.isAdmin) return next();
   try {
     const db = await getDb();
     const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
@@ -205,7 +207,7 @@ router.get("/search-email", async (req, res) => {
     const db = await getDb();
     const normalizedEmail = email.trim().toLowerCase();
 
-    const [user, waitlistEntry, invite] = await Promise.all([
+    const [user, waitlistEntry, invite, careTeamInvites] = await Promise.all([
       db.prepare(`
         SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, created_at
         FROM users WHERE LOWER(email) = ?
@@ -222,12 +224,23 @@ router.get("/search-email", async (req, res) => {
         WHERE LOWER(pi.invited_email) = ?
         ORDER BY pi.created_at DESC LIMIT 1
       `).get(normalizedEmail),
+      db.prepare(`
+        SELECT cti.id, cti.invited_email, cti.role, cti.status, cti.expires_at, cti.created_at,
+               ct.name AS care_team_name,
+               u.first_name AS inviter_first_name, u.last_name AS inviter_last_name
+        FROM care_team_invites cti
+        JOIN care_teams ct ON cti.care_team_id = ct.id
+        JOIN users u ON cti.invited_by = u.id
+        WHERE LOWER(cti.invited_email) = ?
+        ORDER BY cti.created_at DESC
+      `).all(normalizedEmail),
     ]);
 
     res.json({
       user: user || null,
       waitlist: waitlistEntry || null,
       invite: invite || null,
+      careTeamInvites: careTeamInvites || [],
     });
   } catch (err) {
     console.error("Admin search-email error:", err);

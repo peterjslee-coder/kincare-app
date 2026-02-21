@@ -564,7 +564,7 @@ const Messages = window.Messages = () => {
                       }}>
                         {renderMessageContent(m.content)}
                         <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : '#bbb', marginTop: '4px', textAlign: 'right' }}>
-                          {formatTime(m.created_at)}
+                          {(() => { const d = parseTimestamp(m.created_at); return d ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''; })()}
                         </div>
                       </div>
                     </div>

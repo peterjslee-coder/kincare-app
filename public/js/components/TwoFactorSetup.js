@@ -107,8 +107,13 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
           {qrDataUrl && <img src={qrDataUrl} alt="2FA QR Code" style={{ width: 200, height: 200, borderRadius: 8, border: '1px solid #e0e0e0' }} />}
         </div>
 
-        <div style={{ background: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#999', textTransform: 'uppercase', marginBottom: 4 }}>Manual entry code</div>
+        <div
+          onClick={() => { navigator.clipboard?.writeText(secret).then(() => showToast('Code copied!', 'success')).catch(() => {}); }}
+          style={{ background: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 20, cursor: 'pointer', transition: 'background 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.background = '#e8f5e9'}
+          onMouseLeave={e => e.currentTarget.style.background = '#f8f9fa'}
+        >
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#999', textTransform: 'uppercase', marginBottom: 4 }}>Manual entry code <span style={{ fontWeight: 400 }}>— tap to copy</span></div>
           <code style={{ fontSize: 13, wordBreak: 'break-all', color: '#333' }}>{secret}</code>
         </div>
 

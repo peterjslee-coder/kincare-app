@@ -573,7 +573,22 @@ const AdminPanel = window.AdminPanel = () => {
                       </span>
                     </div>
                   )}
-                  {!searchResult.user && !searchResult.waitlist && !searchResult.invite && (
+                  {searchResult.careTeamInvites && searchResult.careTeamInvites.length > 0 && (
+                    <div style={{ marginBottom: '8px' }}>
+                      {searchResult.careTeamInvites.map((cti, idx) => (
+                        <div key={idx} style={{ marginBottom: 4 }}>
+                          <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                            background: cti.status === 'accepted' ? '#e0f2e9' : cti.status === 'pending' ? '#fff3e0' : '#f5f5f5',
+                            color: cti.status === 'accepted' ? '#1b6b5a' : cti.status === 'pending' ? '#e65100' : '#888',
+                          }}>CARE TEAM INVITE: {cti.status.toUpperCase()}</span>
+                          <span style={{ color: '#888', marginLeft: '10px', fontSize: '13px' }}>
+                            {cti.care_team_name} — sent by {cti.inviter_first_name} {cti.inviter_last_name}, {formatDate(cti.created_at)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!searchResult.user && !searchResult.waitlist && !searchResult.invite && (!searchResult.careTeamInvites || searchResult.careTeamInvites.length === 0) && (
                     <div style={{ color: '#999' }}>No records found for this email.</div>
                   )}
 

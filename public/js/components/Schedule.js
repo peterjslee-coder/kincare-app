@@ -178,10 +178,19 @@ const Schedule = window.Schedule = () => {
             const isSelected = dateStr === selectedDate;
             const hasSessions = hours > 0;
 
-            // Blue-teal shading based on hours
+            // Check if any session on this day is open/requested (unconfirmed)
+            const daySessions = sessionsByDate[dateStr] || [];
+            const hasOpenRequest = daySessions.some(s => s.status === 'open' || s.status === 'requested' || s.status === 'pending');
+            const allConfirmed = hasSessions && !hasOpenRequest;
+
+            // Color: teal for confirmed, pink/red for open requests
             let bgColor = '#fff';
             let textColor = '#333';
-            if (hasSessions && !past) {
+            if (hasSessions && !past && hasOpenRequest) {
+              // Pink for days with unconfirmed requests
+              bgColor = '#fce4ec';
+              textColor = '#c62828';
+            } else if (hasSessions && !past && allConfirmed) {
               // HSL: 160 is teal. Lightness goes from 85% (light) down to 25% (dark)
               const lightness = 85 - (saturation * 0.8);
               bgColor = `hsl(160, 60%, ${lightness}%)`;

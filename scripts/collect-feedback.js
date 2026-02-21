@@ -20,6 +20,7 @@ const LOCAL_URL = "http://localhost:3001";
 
 const ADMIN_EMAIL = "peterjslee@gmail.com";
 const ADMIN_PASSWORD = "inplace123";
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY || null;
 
 const isLocal = process.argv.includes("--local");
 const BASE_URL = isLocal ? LOCAL_URL : PROD_URL;
@@ -53,19 +54,26 @@ function request(url, options = {}) {
 async function main() {
   console.log(`\n📋 Collecting feedback from ${BASE_URL}...\n`);
 
-  // 1. Authenticate as admin
-  const loginRes = await request(`${BASE_URL}/api/auth/login`, {
-    method: "POST",
-    body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
-  });
+  // 1. Authenticate — prefer API key (bypasses 2FA), fall back to email/password login
+  let authHeaders = {};
+  if (ADMIN_API_KEY) {
+    console.log("🔑 Using ADMIN_API_KEY for authentication");
+    authHeaders = { "X-Admin-API-Key": ADMIN_API_KEY };
+  } else {
+    const loginRes = await request(`${BASE_URL}/api/auth/login`, {
+      method: "POST",
+      body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+    });
 
-  if (loginRes.status !== 200 || !loginRes.data.token) {
-    console.error("❌ Login failed:", loginRes.data);
-    process.exit(1);
+    if (loginRes.status !== 200 || !loginRes.data.token) {
+      console.error("❌ Login failed:", loginRes.data);
+      console.error("💡 Tip: Set ADMIN_API_KEY env var to bypass login/2FA");
+      process.exit(1);
+    }
+
+    authHeaders = { Authorization: `Bearer ${loginRes.data.token}` };
+    console.log("✅ Authenticated as admin");
   }
-
-  const token = loginRes.data.token;
-  console.log("✅ Authenticated as admin");
 
   // 2. Fetch all feedback (paginated, up to 500)
   let allFeedback = [];
@@ -75,7 +83,7 @@ async function main() {
   while (true) {
     const fbRes = await request(
       `${BASE_URL}/api/feedback?limit=${limit}&offset=${offset}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: authHeaders }
     );
 
     if (fbRes.status !== 200) {
