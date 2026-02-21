@@ -29,6 +29,14 @@ const AdminPanel = window.AdminPanel = () => {
   const [feedbackFilter, setFeedbackFilter] = useState({ category: '', status: '' });
   const [expandedFeedback, setExpandedFeedback] = useState(null);
   const [feedbackEditNotes, setFeedbackEditNotes] = useState('');
+  // Blocked emails state
+  const [blockedEmails, setBlockedEmails] = useState([]);
+  const [blockEmailInput, setBlockEmailInput] = useState('');
+  const [blockReasonInput, setBlockReasonInput] = useState('');
+  const [blockLoading, setBlockLoading] = useState(false);
+  // User delete state
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // userId being confirmed
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -42,6 +50,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'activity') loadActivity();
     if (activeTab === 'invites') loadInvites();
     if (activeTab === 'feedback') loadFeedback();
+    if (activeTab === 'blocked') loadBlockedEmails();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -132,6 +141,64 @@ const AdminPanel = window.AdminPanel = () => {
       });
       if (res?.ok) loadFeedback();
     } catch (err) { console.error('Feedback update error:', err); }
+  };
+
+  const loadBlockedEmails = async () => {
+    try {
+      const res = await apiFetch('/api/admin/blocked-emails');
+      if (res?.ok) {
+        const data = await res.json();
+        setBlockedEmails(data.blockedEmails || []);
+      }
+    } catch (err) { console.error('Blocked emails load error:', err); }
+  };
+
+  const handleBlockEmail = async () => {
+    if (!blockEmailInput.trim()) return;
+    setBlockLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/blocked-emails', {
+        method: 'POST',
+        body: JSON.stringify({ email: blockEmailInput.trim(), reason: blockReasonInput.trim() || null }),
+      });
+      if (res?.ok) {
+        setBlockEmailInput('');
+        setBlockReasonInput('');
+        loadBlockedEmails();
+      } else {
+        const data = await res.json();
+        alert(data?.error || 'Failed to block email');
+      }
+    } catch (err) { console.error('Block email error:', err); }
+    setBlockLoading(false);
+  };
+
+  const handleUnblockEmail = async (id) => {
+    if (!confirm('Unblock this email and allow registration?')) return;
+    try {
+      const res = await apiFetch(`/api/admin/blocked-emails/${id}`, { method: 'DELETE' });
+      if (res?.ok) loadBlockedEmails();
+    } catch (err) { console.error('Unblock error:', err); }
+  };
+
+  const handleDeleteUser = async (userId, email) => {
+    if (deleteConfirm !== userId) {
+      setDeleteConfirm(userId);
+      return; // First click — show confirm button
+    }
+    // Second click — actually delete
+    setDeleteLoading(true);
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      if (res?.ok) {
+        loadUsers();
+        setDeleteConfirm(null);
+      } else {
+        const data = await res.json();
+        alert(data?.error || 'Failed to delete user');
+      }
+    } catch (err) { console.error('Delete user error:', err); }
+    setDeleteLoading(false);
   };
 
   const handleSearchEmail = async () => {
@@ -227,6 +294,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'invites', label: 'Invites', icon: '✉️' },
     { id: 'activity', label: 'Activity', icon: '⚡' },
     { id: 'feedback', label: 'Feedback', icon: '💬' },
+    { id: 'blocked', label: 'Blocked', icon: '🚫' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 
@@ -425,6 +493,7 @@ const AdminPanel = window.AdminPanel = () => {
                   <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Verified</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Demo</th>
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Joined</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -451,6 +520,27 @@ const AdminPanel = window.AdminPanel = () => {
                     </td>
                     <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>
                       {formatDate(u.created_at)}
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      {u.is_admin ? (
+                        <span style={{ fontSize: '11px', color: '#999' }}>—</span>
+                      ) : deleteConfirm === u.id ? (
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                          <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={deleteLoading}
+                            style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                            {deleteLoading ? '...' : 'Confirm'}
+                          </button>
+                          <button onClick={() => setDeleteConfirm(null)}
+                            style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => handleDeleteUser(u.id, u.email)}
+                          style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -942,6 +1032,77 @@ const AdminPanel = window.AdminPanel = () => {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ─── Blocked Emails Tab ─── */}
+      {activeTab === 'blocked' && (
+        <div>
+          {/* Add blocked email form */}
+          <div className="card" style={{ marginBottom: '16px' }}>
+            <div className="card-header"><span className="card-icon">🚫</span>Block an Email</div>
+            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px' }}>
+              Blocked emails cannot register or create accounts. They'll see a generic error message.
+            </p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div style={{ flex: '1 1 220px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#555', marginBottom: '4px' }}>Email</label>
+                <input type="email" placeholder="user@example.com" value={blockEmailInput}
+                  onChange={(e) => setBlockEmailInput(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ flex: '1 1 180px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#555', marginBottom: '4px' }}>Reason (optional)</label>
+                <input type="text" placeholder="e.g. Spam, abuse" value={blockReasonInput}
+                  onChange={(e) => setBlockReasonInput(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box' }} />
+              </div>
+              <button onClick={handleBlockEmail} disabled={blockLoading || !blockEmailInput.trim()}
+                style={{
+                  padding: '10px 20px', background: blockLoading || !blockEmailInput.trim() ? '#ccc' : '#c62828',
+                  color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600,
+                  cursor: blockLoading ? 'wait' : 'pointer', whiteSpace: 'nowrap',
+                }}>
+                {blockLoading ? '...' : 'Block Email'}
+              </button>
+            </div>
+          </div>
+
+          {/* Blocked emails list */}
+          <div className="card">
+            <div className="card-header"><span className="card-icon">📋</span>Blocked Emails ({blockedEmails.length})</div>
+            {blockedEmails.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Reason</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Blocked By</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {blockedEmails.map(b => (
+                    <tr key={b.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 500 }}>{b.email}</td>
+                      <td style={{ padding: '10px 12px', color: '#666' }}>{b.reason || '—'}</td>
+                      <td style={{ padding: '10px 12px', color: '#666' }}>{b.blocked_by_name || '—'}</td>
+                      <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(b.created_at)}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <button onClick={() => handleUnblockEmail(b.id)}
+                          style={{ padding: '4px 12px', background: '#e8f5e9', color: '#2e7d32', border: '1px solid #c8e6c9', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                          Unblock
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No blocked emails</div>
+            )}
+          </div>
         </div>
       )}
 

@@ -25,6 +25,12 @@ router.post("/signup-intent", async (req, res) => {
 
     const db = await getDb();
 
+    // Check if email is blocked
+    const blocked = await db.prepare("SELECT id FROM blocked_emails WHERE LOWER(email) = LOWER(?)").get(email);
+    if (blocked) {
+      return res.status(403).json({ error: "This email address is not permitted to register. Contact support if you believe this is an error." });
+    }
+
     // Check if already registered
     const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
     if (existing) {
@@ -172,6 +178,12 @@ router.post("/register", validateRegister, async (req, res) => {
     const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
     if (existing) {
       return res.status(409).json({ error: "Email already registered" });
+    }
+
+    // Check if email is blocked
+    const blocked = await db.prepare("SELECT id FROM blocked_emails WHERE LOWER(email) = LOWER(?)").get(email);
+    if (blocked) {
+      return res.status(403).json({ error: "This email address is not permitted to register. Contact support if you believe this is an error." });
     }
 
     const id = uuid();

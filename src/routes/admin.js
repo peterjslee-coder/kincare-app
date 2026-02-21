@@ -319,4 +319,55 @@ router.delete("/users/:id", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/blocked-emails ─── List all blocked emails
+router.get("/blocked-emails", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      "SELECT be.*, u.first_name || ' ' || u.last_name AS blocked_by_name FROM blocked_emails be LEFT JOIN users u ON be.blocked_by = u.id ORDER BY be.created_at DESC"
+    ).all();
+    res.json({ blockedEmails: rows });
+  } catch (err) {
+    console.error("Fetch blocked emails error:", err);
+    res.status(500).json({ error: "Failed to fetch blocked emails" });
+  }
+});
+
+// ─── POST /api/admin/blocked-emails ─── Block an email from registering
+router.post("/blocked-emails", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const { email, reason } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
+    const db = await getDb();
+    const existing = await db.prepare("SELECT id FROM blocked_emails WHERE LOWER(email) = LOWER(?)").get(email);
+    if (existing) return res.status(409).json({ error: "This email is already blocked" });
+
+    const { v4: uuid } = require("uuid");
+    await db.prepare(
+      "INSERT INTO blocked_emails (id, email, reason, blocked_by) VALUES (?, LOWER(?), ?, ?)"
+    ).run(uuid(), email, reason || null, req.user.id);
+
+    res.status(201).json({ message: `${email} has been blocked from registering` });
+  } catch (err) {
+    console.error("Block email error:", err);
+    res.status(500).json({ error: "Failed to block email" });
+  }
+});
+
+// ─── DELETE /api/admin/blocked-emails/:id ─── Unblock an email
+router.delete("/blocked-emails/:id", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT email FROM blocked_emails WHERE id = ?").get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Blocked email not found" });
+
+    await db.prepare("DELETE FROM blocked_emails WHERE id = ?").run(req.params.id);
+    res.json({ message: `${row.email} has been unblocked` });
+  } catch (err) {
+    console.error("Unblock email error:", err);
+    res.status(500).json({ error: "Failed to unblock email" });
+  }
+});
+
 module.exports = router;
