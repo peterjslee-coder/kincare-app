@@ -304,6 +304,8 @@ router.delete("/users/:id", async (req, res) => {
     await db.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(id);
+    // Reset any accepted invites back to pending so the email can be re-invited
+    await db.prepare("UPDATE care_team_invites SET status = 'pending' WHERE invited_email = ? AND status = 'accepted'").run(user.email);
     await db.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM activity_feed WHERE family_user_id = ?").run(id);

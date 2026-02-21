@@ -97,10 +97,21 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const hasProfile = user?.phone;
   const hasRecipient = (data?.parent || stats.assignedCaregivers > 0);
   const hasCareTeam = careTeams.length > 0;
+  // Check if user joined via invite (is a member, not leader, of a care team)
+  const isTeamMember = careTeams.some(t => t.my_role === 'member');
+  const isTeamLeader = careTeams.some(t => t.my_role === 'leader');
   const onboardingSteps = [
     { id: 'profile', label: 'Complete your profile', done: !!hasProfile, action: () => onNavigate && onNavigate('account'), actionText: 'Go to Profile' },
-    { id: 'recipient', label: 'Add a loved one to care for', done: !!hasRecipient, action: () => onNavigate && onNavigate('recipients'), actionText: 'Add Recipient' },
-    { id: 'team', label: 'Invite family to the care team', done: hasCareTeam, action: () => onNavigate && onNavigate('care-team'), actionText: 'Manage Team' },
+    // Members who joined via invite already have a care recipient through the team — grey this out
+    ...(isTeamMember && !isTeamLeader ? [
+      { id: 'recipient', label: 'Add a loved one to care for', done: true, action: null, actionText: null },
+    ] : [
+      { id: 'recipient', label: 'Add a loved one to care for', done: !!hasRecipient, action: () => onNavigate && onNavigate('recipients'), actionText: 'Add Recipient' },
+    ]),
+    // Only leaders can invite others to the care team
+    ...(isTeamMember && !isTeamLeader ? [] : [
+      { id: 'team', label: 'Invite family to the care team', done: hasCareTeam, action: () => onNavigate && onNavigate('care-team'), actionText: 'Manage Team' },
+    ]),
     { id: 'caregiver', label: 'Search for caregivers in your area', done: stats.assignedCaregivers > 0, action: () => onNavigate && onNavigate('caregivers'), actionText: 'Find Caregivers' },
   ];
   const onboardingComplete = onboardingSteps.every(s => s.done);

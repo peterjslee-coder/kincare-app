@@ -215,10 +215,8 @@ const App = () => {
                   const d = await r.json();
                   setVerifyMessage({ type: 'success', text: d.message || "You've joined the care team!" });
                   if (d.careTeamId) { setSelectedCareTeamId(d.careTeamId); setCurrentPage('care-team'); }
-                } else {
-                  const d = await r?.json();
-                  setVerifyMessage({ type: 'error', text: d?.error || 'Failed to accept invite' });
                 }
+                // Silently ignore invite errors on auto-auth
               }).catch(() => {});
               setPendingInviteToken(null);
               pendingInviteRef.current = null;
@@ -383,13 +381,12 @@ const App = () => {
           const data = await r.json();
           setVerifyMessage({ type: 'success', text: data.message || 'You\'ve joined the care team!' });
           if (data.careTeamId) { setSelectedCareTeamId(data.careTeamId); setCurrentPage('care-team'); }
-        } else {
-          const data = await r?.json();
-          setVerifyMessage({ type: 'error', text: data?.error || 'Failed to accept invite' });
         }
+        // Silently ignore invite errors — user may have already joined, or invite was already used
       }).catch(() => {});
       setPendingInviteToken(null);
       pendingInviteRef.current = null;
+      window.__originalSearch = ''; // Clear so auto-auth won't re-try
     }
   };
 
@@ -619,7 +616,10 @@ const App = () => {
 
   const appContent = (
     <React.Fragment>
-      {showDisclaimer && <DisclaimerModal onAccept={() => setShowDisclaimer(false)} />}
+      {showDisclaimer && <DisclaimerModal onAccept={() => {
+        setShowDisclaimer(false);
+        setVerifyMessage({ type: 'success', text: 'Welcome to InPlace!' });
+      }} />}
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-logo">
