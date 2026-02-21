@@ -15,7 +15,8 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   const isInviteFlow = !!pendingInviteToken;
   const familySteps = isInviteFlow ? ['Basic Info', 'Review & Submit'] : ['Basic Info', 'About Your Loved One', 'Care Needs', 'Review & Submit'];
   const caregiverSteps = ['Basic Info', 'Background Check', 'Certifications', 'Availability', 'Review & Submit'];
-  const steps = track === 'family' ? familySteps : caregiverSteps;
+  const careForSteps = ['Basic Info', 'Review & Submit'];
+  const steps = track === 'care_for' ? careForSteps : track === 'family' ? familySteps : caregiverSteps;
   const maxStep = track ? steps.length : 0;
 
   const handleInputChange = (field, value) => {
@@ -48,6 +49,10 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
       if (step === 4) return Object.values(formData.availability).some(v => v);
       return true;
     }
+    if (track === 'care_for') {
+      if (step === 1) return formData.firstName.trim() && formData.lastName.trim() && isValidEmail(formData.email) && isValidPhone(formData.phone) && formData.password.length >= 6;
+      return true;
+    }
     return true;
   };
 
@@ -58,6 +63,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   const handleBack = () => {
     if (step === 1) {
       if (prefilledRole) { onNavigate('splash'); return; }
+      if (isInviteFlow) { onNavigate('invite'); return; } // Go back to invite landing
       setTrack(null); return;
     }
     if (step > 1) setStep(step - 1);
@@ -70,7 +76,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     setRegistering(true);
     setRegError('');
     try {
-      const role = track === 'caregiver' ? 'caregiver' : 'family';
+      const role = track === 'caregiver' ? 'caregiver' : track === 'care_for' ? 'care_for' : 'family';
       const response = await apiFetch('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
@@ -98,28 +104,79 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     }
   };
 
+  // For care team invites, auto-select family track and skip role picker
+  useEffect(() => {
+    if (isInviteFlow && !track) {
+      setTrack('family');
+      setStep(1);
+    }
+  }, [isInviteFlow]);
+
   if (!track) {
+    const roleCards = [
+      {
+        id: 'caregiver',
+        icon: '👩‍⚕️',
+        title: 'Caregiver',
+        subtitle: 'I want to be hired to care for people',
+        color: '#e8724a',
+        bgColor: '#FFF3E0',
+      },
+      {
+        id: 'family',
+        icon: '👨‍👩‍👧',
+        title: 'Family Member',
+        subtitle: 'I want to help my loved ones find care',
+        color: '#1b6b5a',
+        bgColor: '#e8f5f2',
+      },
+      {
+        id: 'care_for',
+        icon: '👴',
+        title: 'Care Recipient',
+        subtitle: 'I would like to hire some help!',
+        color: '#5c6bc0',
+        bgColor: '#e8eaf6',
+      },
+    ];
+
     return (
       <div className="register-container">
-        <div className="register-card">
+        <div className="register-card" style={{ maxWidth: '480px' }}>
           <div className="register-header">
             <div style={{ marginBottom: '16px' }}>
               <InPlaceIcon width={50} height={50} />
             </div>
             <h1>Join InPlace</h1>
-            <p>What brings you to InPlace?</p>
+            <p style={{ color: '#666', fontSize: '15px' }}>What best describes you?</p>
           </div>
-          <div className="track-selection">
-            <div className="track-option" onClick={() => { setTrack('family'); setStep(1); }}>
-              <h3>👨‍👩‍👧</h3>
-              <h3>I Need Care</h3>
-              <p>For a family member</p>
-            </div>
-            <div className="track-option" onClick={() => { setTrack('caregiver'); setStep(1); }}>
-              <h3>🩺</h3>
-              <h3>I Want to Care</h3>
-              <p>Become a caregiver</p>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '8px 0 20px' }}>
+            {roleCards.map(card => (
+              <div key={card.id} onClick={() => { setTrack(card.id === 'care_for' ? 'care_for' : card.id); setStep(1); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '16px',
+                  padding: '18px 20px', borderRadius: '12px',
+                  border: '2px solid #e8e8e8', cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  background: '#fff',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = card.color; e.currentTarget.style.background = card.bgColor; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e8e8e8'; e.currentTarget.style.background = '#fff'; }}
+              >
+                <div style={{
+                  width: '52px', height: '52px', borderRadius: '50%',
+                  background: card.bgColor, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '28px', flexShrink: 0,
+                }}>
+                  {card.icon}
+                </div>
+                <div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: '#333', marginBottom: '2px' }}>{card.title}</div>
+                  <div style={{ fontSize: '13px', color: '#777', lineHeight: 1.4 }}>{card.subtitle}</div>
+                </div>
+                <div style={{ marginLeft: 'auto', color: '#ccc', fontSize: '18px', flexShrink: 0 }}>→</div>
+              </div>
+            ))}
           </div>
           <div className="text-center">
             <p style={{ fontSize: '14px', marginBottom: '8px' }}>Already have an account? <a onClick={() => onNavigate('login')}>Sign In</a></p>
@@ -134,7 +191,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     <div className="register-container">
       <div className="register-card">
         <div className="register-header">
-          <h1>{track === 'family' ? 'Family Registration' : 'Caregiver Registration'}</h1>
+          <h1>{track === 'care_for' ? 'Care Recipient Registration' : track === 'family' ? 'Family Registration' : 'Caregiver Registration'}</h1>
           <p>{steps[step - 1]}</p>
         </div>
         <div className="step-indicator">
@@ -352,6 +409,52 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 </div>
                 {regError && <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{regError}</div>}
                 <button type="button" className="btn btn-primary" onClick={handleComplete} disabled={registering} style={{ width: '100%', opacity: registering ? 0.6 : 1 }}>{registering ? 'Creating Account...' : 'Submit Application'}</button>
+              </div>
+            )}
+          </>
+        )}
+        {track === 'care_for' && (
+          <>
+            {step === 1 && (
+              <>
+                <div className="form-group">
+                  <label>First Name</label>
+                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Betty" />
+                </div>
+                <div className="form-group">
+                  <label>Last Name</label>
+                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Smith" />
+                </div>
+                <div className="form-group">
+                  <label>Email</label>
+                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="betty@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : {}} />
+                  {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
+                </div>
+                <div className="form-group">
+                  <label>Phone</label>
+                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" />
+                  {formData.phone && !isValidPhone(formData.phone) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a 10-digit phone number</div>}
+                </div>
+                <div className="form-group">
+                  <label>Password</label>
+                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" />
+                  {formData.password && formData.password.length < 6 && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Password must be at least 6 characters</div>}
+                </div>
+              </>
+            )}
+            {step === 2 && (
+              <div>
+                <h3 style={{ marginBottom: '16px' }}>Review Your Information</h3>
+                <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+                  <p><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
+                  <p><strong>Email:</strong> {formData.email}</p>
+                  <p><strong>Account type:</strong> Care Recipient</p>
+                </div>
+                <div style={{ background: '#e8eaf6', border: '1px solid #5c6bc0', borderRadius: '8px', padding: '14px', marginBottom: '16px', fontSize: '13px', color: '#3949ab' }}>
+                  After creating your account, you'll be able to browse caregivers in your area and request care on your own schedule.
+                </div>
+                {regError && <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{regError}</div>}
+                <button type="button" className="btn btn-primary" onClick={handleComplete} disabled={registering} style={{ width: '100%', opacity: registering ? 0.6 : 1 }}>{registering ? 'Creating Account...' : 'Complete Registration'}</button>
               </div>
             )}
           </>
