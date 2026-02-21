@@ -68,12 +68,14 @@ const DeleteAccountSection = ({ onDeleted }) => {
   );
 };
 
-const MyAccount = window.MyAccount = () => {
+const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editData, setEditData] = useState({});
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('profile');
   const [notifications, setNotifications] = useState({
     sessionUpdates: true, caregiverMessages: true, healthAlerts: true, reminderEmails: false,
@@ -117,6 +119,54 @@ const MyAccount = window.MyAccount = () => {
       console.error('Fetch user error:', err);
     }
     setLoading(false);
+  };
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { showToast('Please select an image file', 'error'); return; }
+    if (file.size > 1.5 * 1024 * 1024) { showToast('Photo must be under 1.5 MB', 'error'); return; }
+    setUploadingPhoto(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result;
+        const res = await apiFetch('/api/auth/me/photo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ photo: dataUrl }),
+        });
+        if (res?.ok) {
+          setUser(prev => prev ? { ...prev, profile_photo: dataUrl, avatar_url: dataUrl } : prev);
+          if (setCurrentUser) setCurrentUser(prev => prev ? { ...prev, profilePhoto: dataUrl } : prev);
+          showToast('Profile photo updated!', 'success');
+        } else {
+          const data = await res?.json();
+          showToast(data?.error || 'Failed to upload photo', 'error');
+        }
+        setUploadingPhoto(false);
+      };
+      reader.onerror = () => { showToast('Failed to read file', 'error'); setUploadingPhoto(false); };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Photo upload error:', err);
+      showToast('Upload failed', 'error');
+      setUploadingPhoto(false);
+    }
+    if (photoInputRef.current) photoInputRef.current.value = '';
+  };
+
+  const removePhoto = async () => {
+    try {
+      const res = await apiFetch('/api/auth/me/photo', { method: 'DELETE' });
+      if (res?.ok) {
+        setUser(prev => prev ? { ...prev, profile_photo: null, avatar_url: null } : prev);
+        if (setCurrentUser) setCurrentUser(prev => prev ? { ...prev, profilePhoto: null } : prev);
+        showToast('Photo removed', 'success');
+      }
+    } catch (err) {
+      showToast('Failed to remove photo', 'error');
+    }
   };
 
   const fetch2FAStatus = async () => {
@@ -318,6 +368,36 @@ const MyAccount = window.MyAccount = () => {
       {/* ─── Profile Tab ─── */}
       {activeTab === 'profile' && (
         <div>
+          {/* Photo Upload */}
+          <div className="card" style={{ textAlign: 'center', padding: '28px 20px' }}>
+            <input type="file" ref={photoInputRef} accept="image/*" style={{ display: 'none' }} onChange={handlePhotoUpload} />
+            <div style={{
+              width: 96, height: 96, borderRadius: '50%', margin: '0 auto 16px',
+              background: user?.profile_photo ? `url(${user.profile_photo}) center/cover no-repeat` : '#e8724a',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontSize: 36, fontWeight: 700, overflow: 'hidden',
+              border: '3px solid #e0e0e0',
+            }}>
+              {!user?.profile_photo && (user?.first_name?.[0] || '?').toUpperCase()}
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto} style={{
+                padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none',
+                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: uploadingPhoto ? 'wait' : 'pointer',
+                opacity: uploadingPhoto ? 0.7 : 1,
+              }}>
+                {uploadingPhoto ? 'Uploading...' : (user?.profile_photo ? 'Change Photo' : 'Upload Photo')}
+              </button>
+              {user?.profile_photo && (
+                <button onClick={removePhoto} style={{
+                  padding: '8px 16px', background: '#fff', color: '#999', border: '1px solid #e0e0e0',
+                  borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                }}>Remove</button>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: '#999', marginTop: 10 }}>JPG, PNG, or GIF. Max 1.5 MB.</div>
+          </div>
+
           <div className="card">
             <div className="card-header">Profile Information</div>
             {editing ? (

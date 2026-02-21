@@ -530,7 +530,7 @@ const App = () => {
     if (currentPage === 'activity') return <ActivityFeed key={currentPage} />;
     if (currentPage === 'recipients') return <CareRecipients key={currentPage} />;
     if (currentPage === 'messages') return <Messages key={currentPage} />;
-    if (currentPage === 'account') return <MyAccount key={currentPage} />;
+    if (currentPage === 'account') return <MyAccount key={currentPage} setCurrentUser={setCurrentUser} />;
     if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={currentPage} />;
     return <Dashboard key={currentPage} onNavigate={setCurrentPage} />;
   };
