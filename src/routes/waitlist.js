@@ -3,7 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require("uuid");
 const { getDb } = require("../models/database");
 const { sendEmail } = require("../utils/email");
-const { sendPushToAdmins } = require("./push");
+const { sendPushToAdmins, notifyAdmins } = require("./push");
 
 // Email notification helper — sends signup alert to Pete
 async function notifyNewSignup({ email, name, role, count }) {
@@ -58,8 +58,8 @@ router.post("/", async (req, res) => {
     // Send email notification (fire-and-forget, don't block response)
     notifyNewSignup({ email: email.toLowerCase().trim(), name, role: role || "family", count: count.count });
 
-    // Push notification to admins
-    sendPushToAdmins("waitlist_signup", {
+    // Notify admins (push + email based on preferences)
+    notifyAdmins("waitlist_signup", {
       title: "New Waitlist Signup",
       body: `${name || email} just signed up (#${count.count})`,
       data: { type: "waitlist_signup", email: email.toLowerCase().trim() },

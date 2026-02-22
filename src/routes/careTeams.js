@@ -362,13 +362,20 @@ router.post("/accept-invite", authenticate, async (req, res) => {
       if (emitToUser) emitToUser(leader.user_id, "activity_update", { type: "team_join" });
 
       // Push notification to team leader
-      const { sendPushToUser } = require("./push");
+      const { sendPushToUser, notifyAdmins } = require("./push");
       const memberName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "Someone";
       sendPushToUser(leader.user_id, {
         title: "New Team Member!",
         body: `${memberName} joined ${teamInfo?.name || "your care team"}`,
         data: { type: "team_join", careTeamId: invite.care_team_id },
       }, "team_join").catch(() => {});
+
+      // Admin notification for invite acceptance
+      notifyAdmins("invite_accepted", {
+        title: `${memberName} joined a care team`,
+        body: `${memberName} is now on ${teamInfo?.name || "a care team"}`,
+        data: { type: "invite_accepted", careTeamId: invite.care_team_id },
+      });
     }
 
     res.json({ message: "You've joined the care team!", careTeamId: invite.care_team_id });

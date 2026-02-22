@@ -4,7 +4,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { validateSession } = require("../middleware/validate");
 const availabilityRouter = require("./availability");
-const { sendPushToUser } = require("./push");
+const { sendPushToUser, notifyAdmins } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
 
 const router = express.Router();
@@ -175,6 +175,13 @@ router.post("/request", async (req, res) => {
       data: { type: "care_request", sessionId: id },
     }, "care_request").catch(() => {});
   }
+
+  // Admin notification for new care requests
+  notifyAdmins("care_request_created", {
+    title: "New Care Request",
+    body: `${serviceType} for ${recipient.name || "a care recipient"} on ${scheduledDate}`,
+    data: { type: "care_request_created", sessionId: id },
+  });
 
   res.status(201).json({ session });
 });

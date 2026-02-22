@@ -6,7 +6,7 @@ const { getDb } = require("../models/database");
 const { generateToken, authenticate } = require("../middleware/auth");
 const { validateRegister, validateLogin, validateProfileUpdate } = require("../middleware/validate");
 const { sendEmail, brandedHtml } = require("../utils/email");
-const { sendPushToAdmins } = require("./push");
+const { sendPushToAdmins, notifyAdmins } = require("./push");
 
 const router = express.Router();
 
@@ -90,8 +90,8 @@ router.post("/signup-intent", async (req, res) => {
       }),
     }).catch(() => {});
 
-    // Push notification to admins
-    sendPushToAdmins("new_signup_intent", {
+    // Notify admins (push + email based on preferences)
+    notifyAdmins("new_signup_intent", {
       title: "New Signup Interest",
       body: `${email} wants to join as ${roleName}`,
       data: { type: "new_signup_intent", email, role },
@@ -207,9 +207,9 @@ router.post("/register", validateRegister, async (req, res) => {
       console.error("  [email] Failed to queue verification email:", err.message)
     );
 
-    // Push notification to admins (fire-and-forget)
+    // Notify admins (push + email based on preferences)
     const roleName = role === "caregiver" ? "Caregiver" : role === "care_for" ? "Care Recipient" : "Family";
-    sendPushToAdmins("new_registration", {
+    notifyAdmins("new_registration", {
       title: "New User Registration",
       body: `${firstName} ${lastName} (${roleName}) just created an account`,
       data: { type: "new_registration", userId: id, email },

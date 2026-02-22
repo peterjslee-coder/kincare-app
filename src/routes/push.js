@@ -73,6 +73,37 @@ async function sendPushToAdmins(eventType, payload) {
   }
 }
 
+// ─── Utility: Send email to admin users ───
+// Fire-and-forget email to all admin accounts for a given event type
+async function sendEmailToAdmins(eventType, { subject, body }) {
+  try {
+    const { sendEmail, brandedHtml } = require("../utils/email");
+    const db = await getDb();
+    const admins = await db.prepare("SELECT id, email, notification_prefs FROM users WHERE is_admin = 1").all();
+    for (const admin of admins) {
+      const prefs = admin.notification_prefs ? JSON.parse(admin.notification_prefs) : {};
+      if (prefs[`email_${eventType}`] !== true) continue; // email is opt-IN (default off)
+      const html = brandedHtml({
+        title: "InPlace Admin",
+        greeting: subject,
+        body: body,
+        ctaUrl: "https://yourinplace.com",
+        ctaText: "Open InPlace",
+      });
+      sendEmail({ to: admin.email, subject: `[InPlace] ${subject}`, html }).catch(() => {});
+    }
+  } catch (err) {
+    console.error("Admin email error:", err.message);
+  }
+}
+
+// ─── Utility: Notify admins (push + email) ───
+// Sends both push and email based on per-event preferences
+function notifyAdmins(eventType, { title, body, data }) {
+  sendPushToAdmins(eventType, { title, body, data }).catch(() => {});
+  sendEmailToAdmins(eventType, { subject: title, body }).catch(() => {});
+}
+
 // ─── Utility: Send push to a user ───
 // Used internally by other routes (sessions, messages, etc.)
 // Optional eventType param — if provided, checks user's notification_prefs before sending
@@ -132,3 +163,5 @@ async function sendPushToUser(userId, payload, eventType) {
 module.exports = router;
 module.exports.sendPushToUser = sendPushToUser;
 module.exports.sendPushToAdmins = sendPushToAdmins;
+module.exports.sendEmailToAdmins = sendEmailToAdmins;
+module.exports.notifyAdmins = notifyAdmins;

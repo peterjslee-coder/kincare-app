@@ -352,17 +352,22 @@ const AdminPanel = window.AdminPanel = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '2px solid #e0e0e0', paddingBottom: '0' }}>
+      {/* Tab Navigation — Card Grid */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+        gap: '8px', marginBottom: '20px',
+      }}>
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
-            fontSize: '13px', fontWeight: activeTab === tab.id ? 700 : 400,
-            color: activeTab === tab.id ? '#1b6b5a' : '#888',
-            borderBottom: activeTab === tab.id ? '3px solid #1b6b5a' : '3px solid transparent',
-            marginBottom: '-2px', transition: 'all 0.15s',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: '4px', padding: '14px 8px', border: 'none', borderRadius: '12px', cursor: 'pointer',
+            background: activeTab === tab.id ? '#1b6b5a' : '#f5f5f5',
+            color: activeTab === tab.id ? '#fff' : '#555',
+            transition: 'all 0.15s', minHeight: '72px',
+            boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
           }}>
-            {tab.icon} {tab.label}
+            <span style={{ fontSize: '24px', lineHeight: 1 }}>{tab.icon}</span>
+            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.3px' }}>{tab.label}</span>
           </button>
         ))}
       </div>
@@ -1170,35 +1175,91 @@ const AdminPanel = window.AdminPanel = () => {
       )}
 
       {/* ─── Settings Tab ─── */}
-      {activeTab === 'settings' && (
-        <div>
-          <div className="card">
-            <div className="card-header">Admin Push Notifications</div>
-            <p style={{ padding: '0 16px', fontSize: 13, color: '#888', margin: '0 0 8px' }}>
-              Receive push notifications on your phone for admin events.
-            </p>
-            {[
-              { key: 'push_waitlist_signup', label: 'New waitlist signups' },
-              { key: 'push_new_registration', label: 'New user registrations' },
-            ].map(({ key, label }) => {
-              const prefs = user?.notification_prefs ? (typeof user.notification_prefs === 'string' ? JSON.parse(user.notification_prefs) : user.notification_prefs) : {};
-              const checked = prefs[key] !== false;
-              return (
-                <label key={key} className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px' }}>
-                  <input type="checkbox" checked={checked} onChange={async (e) => {
-                    const newPrefs = { ...prefs, [key]: e.target.checked };
-                    try {
-                      await apiFetch('/api/auth/me', { method: 'PUT', body: JSON.stringify({ notificationPrefs: newPrefs }) });
-                      setUser(prev => ({ ...prev, notification_prefs: JSON.stringify(newPrefs) }));
-                    } catch {}
-                  }} />
-                  <span style={{ fontSize: 14 }}>{label}</span>
-                </label>
-              );
-            })}
+      {activeTab === 'settings' && (() => {
+        const prefs = user?.notification_prefs ? (typeof user.notification_prefs === 'string' ? JSON.parse(user.notification_prefs) : user.notification_prefs) : {};
+        const togglePref = async (key, value) => {
+          const newPrefs = { ...prefs, [key]: value };
+          try {
+            await apiFetch('/api/auth/me', { method: 'PUT', body: JSON.stringify({ notificationPrefs: newPrefs }) });
+            setUser(prev => ({ ...prev, notification_prefs: JSON.stringify(newPrefs) }));
+          } catch {}
+        };
+        const notifCategories = [
+          {
+            category: 'Signups & Registrations',
+            events: [
+              { event: 'waitlist_signup', label: 'New waitlist signups' },
+              { event: 'new_signup_intent', label: 'Signup interest (email submitted)' },
+              { event: 'new_registration', label: 'New account registrations' },
+            ],
+          },
+          {
+            category: 'Invites & Care Teams',
+            events: [
+              { event: 'invite_accepted', label: 'Invite accepted (joined InPlace or care team)' },
+            ],
+          },
+          {
+            category: 'Care Requests',
+            events: [
+              { event: 'care_request_created', label: 'New care request submitted' },
+            ],
+          },
+        ];
+        return (
+          <div>
+            <div className="card" style={{ padding: '16px' }}>
+              <div className="card-header" style={{ marginBottom: '4px' }}>Admin Notification Preferences</div>
+              <p style={{ fontSize: 13, color: '#888', margin: '0 0 16px' }}>
+                Choose how you're notified for each event type. Push sends to your phone; email goes to {user?.email || 'your email'}.
+              </p>
+
+              {notifCategories.map(cat => (
+                <div key={cat.category} style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1b6b5a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', paddingBottom: '4px', borderBottom: '2px solid #e8f5e9' }}>
+                    {cat.category}
+                  </div>
+                  {cat.events.map(({ event, label }) => {
+                    const pushKey = `push_${event}`;
+                    const emailKey = `email_${event}`;
+                    const pushOn = prefs[pushKey] !== false; // push defaults ON
+                    const emailOn = prefs[emailKey] === true; // email defaults OFF
+                    return (
+                      <div key={event} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '10px 12px', marginBottom: '4px', borderRadius: '8px',
+                        background: '#fafafa', gap: '8px', flexWrap: 'wrap',
+                      }}>
+                        <span style={{ fontSize: '13px', color: '#333', flex: 1, minWidth: '140px' }}>{label}</span>
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '12px' }}>
+                            <input type="checkbox" checked={pushOn} onChange={(e) => togglePref(pushKey, e.target.checked)}
+                              style={{ accentColor: '#1b6b5a' }} />
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <span style={{ fontSize: '14px' }}>🔔</span> Push
+                            </span>
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '12px' }}>
+                            <input type="checkbox" checked={emailOn} onChange={(e) => togglePref(emailKey, e.target.checked)}
+                              style={{ accentColor: '#e8724a' }} />
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <span style={{ fontSize: '14px' }}>📧</span> Email
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+
+              <div style={{ marginTop: '12px', padding: '10px', background: '#fff8e1', borderRadius: '8px', fontSize: '12px', color: '#795548' }}>
+                Push notifications require the app to be installed (Add to Home Screen). Email uses your Resend-verified sender.
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {/* Onboarding Override Modal */}
       {onboardingModal && (
         <div className="modal-overlay" onClick={() => setOnboardingModal(null)}>
