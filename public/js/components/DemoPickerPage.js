@@ -16,17 +16,17 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
     {
       email: 'maria@inplace.care',
       label: 'Maria Santos',
-      role: 'Professional Caregiver',
+      role: 'Caregiver / Companion',
       color: '#2e7d6d',
-      icon: '👩‍⚕️',
+      icon: '🤝',
       description: 'You\'re a professional caregiver assigned to the Lee family. See your schedule, earnings, assigned families, area map, and client reviews.',
     },
     {
       email: 'betty@inplace.care',
       label: 'Betty Lee',
-      role: 'Care Recipient',
+      role: 'I Would Like Help',
       color: '#e8724a',
-      icon: '👵',
+      icon: '🌷',
       description: 'You\'re the person receiving care — Pete\'s mother. See your upcoming visits on a simple calendar and write personal notes for your caregivers.',
     },
   ];
@@ -44,6 +44,8 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
         // Set token in memory only — don't persist demo sessions to localStorage
         AUTH_TOKEN = data.token;
         localStorage.removeItem('auth_token');
+        // Clear stale active role from previous demo user
+        if (window.setActiveRole) setActiveRole(null);
         if (window.connectSocket) connectSocket(data.token);
         onLogin(data.user || { role: 'family' });
       } else {

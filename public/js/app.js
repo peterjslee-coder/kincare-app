@@ -87,8 +87,8 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
 
   const demoAccounts = [
     { email: 'pete@inplace.care', label: 'Pete', icon: '👨‍👩‍👧', color: '#1b6b5a' },
-    { email: 'maria@inplace.care', label: 'Maria', icon: '👩‍⚕️', color: '#2e7d6d' },
-    { email: 'betty@inplace.care', label: 'Betty', icon: '👵', color: '#e8724a' },
+    { email: 'maria@inplace.care', label: 'Maria', icon: '🤝', color: '#2e7d6d' },
+    { email: 'betty@inplace.care', label: 'Betty', icon: '🌷', color: '#e8724a' },
   ];
 
   const handleSwitch = async (account) => {
@@ -105,6 +105,8 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
         // Set token in memory only — don't persist demo sessions to localStorage
         AUTH_TOKEN = data.token;
         localStorage.removeItem('auth_token');
+        // Clear stale active role from previous demo user
+        if (window.setActiveRole) setActiveRole(null);
         if (window.connectSocket) connectSocket(data.token);
         onSwitchAccount(data.user || { role: 'family', roles: ['family'] });
       }
@@ -349,18 +351,30 @@ const App = () => {
   }, []);
 
   const handleLogin = (user) => {
+    // Clear stale active role from any previous session
+    setActiveRole(null);
+    setActiveRoleState(null);
     // Fetch full user data to get disclaimer status
     apiFetch('/api/auth/me').then(async r => {
       if (r?.ok) {
         const data = await r.json();
         if (data.user) {
+          let userRoles;
+          try { userRoles = data.user.roles ? (typeof data.user.roles === 'string' ? JSON.parse(data.user.roles) : data.user.roles) : [data.user.role]; }
+          catch { userRoles = [data.user.role]; }
           setCurrentUser({
             id: data.user.id, email: data.user.email, role: data.user.role,
+            roles: userRoles,
             firstName: data.user.first_name, lastName: data.user.last_name,
             profilePhoto: data.user.profile_photo || null,
             emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
             isAdmin: !!data.user.is_admin,
           });
+          // Sync activeRole to new user's primary role
+          if (userRoles.length === 1) {
+            setActiveRole(userRoles[0]);
+            setActiveRoleState(userRoles[0]);
+          }
           // Check if disclaimer needs to be accepted
           if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
             setShowDisclaimer(true);
@@ -419,6 +433,9 @@ const App = () => {
   };
 
   const handleDemoSwitch = (user) => {
+    // Clear stale active role and sync to new user's role
+    setActiveRole(null);
+    setActiveRoleState(null);
     setCurrentUser(user);
     setCurrentPage('dashboard');
   };
@@ -556,10 +573,10 @@ const App = () => {
     // family (default)
     const familyNav = [
       { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
-      { id: 'care-profile', icon: '👵', label: 'Care Profile' },
+      { id: 'care-profile', icon: '🌷', label: 'Care Profile' },
       { id: 'care-team', icon: '👪', label: 'Care Team' },
       { id: 'schedule', icon: '📅', label: 'Schedule' },
-      { id: 'caregivers', icon: '👨‍⚕️', label: 'Caregivers' },
+      { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'recipients', icon: '👥', label: 'Recipients' },
       { id: 'messages', icon: '💬', label: 'Messages' },
@@ -582,27 +599,28 @@ const App = () => {
 
   const renderPage = () => {
     // Role-aware page rendering
-    // key={currentPage} forces full remount on page switch — fixes stale state bugs (e.g., calendar heat map)
+    // key includes currentUser.id so demo account switches force full remount (fresh data fetch)
+    const pageKey = currentPage + '-' + (currentUser?.id || '');
     if (currentPage === 'dashboard') {
-      if (role === 'caregiver') return <CaretakerHub key={currentPage} onNeedsOnboarding={() => setAppState('resume-onboarding')} />;
-      if (role === 'care_for') return <CaredForView key={currentPage} />;
-      return <Dashboard key={currentPage} onNavigate={setCurrentPage} />;
+      if (role === 'caregiver') return <CaretakerHub key={pageKey} onNeedsOnboarding={() => setAppState('resume-onboarding')} />;
+      if (role === 'care_for') return <CaredForView key={pageKey} />;
+      return <Dashboard key={pageKey} onNavigate={setCurrentPage} />;
     }
-    if (currentPage === 'care-profile') return <CareProfile key={currentPage} />;
-    if (currentPage === 'care-team') return <CareTeamPage key={currentPage} selectedTeamId={selectedCareTeamId} onNavigate={setCurrentPage} />;
-    if (currentPage === 'find-work') return <FindWork key={currentPage} />;
-    if (currentPage === 'schedule') return <Schedule key={currentPage} />;
-    if (currentPage === 'caregivers') return <Caregivers key={currentPage} />;
-    if (currentPage === 'analytics') return <Analytics key={currentPage} />;
-    if (currentPage === 'activity') return <ActivityFeed key={currentPage} />;
-    if (currentPage === 'recipients') return <CareRecipients key={currentPage} />;
-    if (currentPage === 'messages') return <Messages key={currentPage} />;
-    if (currentPage === 'account') return <MyAccount key={currentPage} setCurrentUser={setCurrentUser} />;
-    if (currentPage === 'help') return <HelpPage key={currentPage} currentUser={currentUser} onNavigate={setCurrentPage} />;
-    if (currentPage === 'financials') return <CaretakerHub key={currentPage} onNeedsOnboarding={() => setAppState('resume-onboarding')} initialTab="financials" />;
-    if (currentPage === 'payments') return <FamilyPayments key={currentPage} />;
-    if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={currentPage} />;
-    return <Dashboard key={currentPage} onNavigate={setCurrentPage} />;
+    if (currentPage === 'care-profile') return <CareProfile key={pageKey} />;
+    if (currentPage === 'care-team') return <CareTeamPage key={pageKey} selectedTeamId={selectedCareTeamId} onNavigate={setCurrentPage} />;
+    if (currentPage === 'find-work') return <FindWork key={pageKey} />;
+    if (currentPage === 'schedule') return <Schedule key={pageKey} />;
+    if (currentPage === 'caregivers') return <Caregivers key={pageKey} />;
+    if (currentPage === 'analytics') return <Analytics key={pageKey} />;
+    if (currentPage === 'activity') return <ActivityFeed key={pageKey} />;
+    if (currentPage === 'recipients') return <CareRecipients key={pageKey} />;
+    if (currentPage === 'messages') return <Messages key={pageKey} />;
+    if (currentPage === 'account') return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} />;
+    if (currentPage === 'help') return <HelpPage key={pageKey} currentUser={currentUser} onNavigate={setCurrentPage} />;
+    if (currentPage === 'financials') return <CaretakerHub key={pageKey} onNeedsOnboarding={() => setAppState('resume-onboarding')} initialTab="financials" />;
+    if (currentPage === 'payments') return <FamilyPayments key={pageKey} />;
+    if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={pageKey} />;
+    return <Dashboard key={pageKey} onNavigate={setCurrentPage} />;
   };
 
   // Bottom nav items (max 5 for mobile)
