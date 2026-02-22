@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.17.0';
+const DEMO_SEED_VERSION = '1.19.0';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -559,6 +559,28 @@ async function seed() {
   }
 
   // ─── Care Sessions (Maria/Carlos — Maria's brother) ───
+  // Past completed sessions — Maria earns ~$4K/mo as caregiver but spends ~$650/mo on Carlos's care
+  const carlosPastSessions = [
+    [uuid(), carlosId, mariaUserId, sarahId, "companion", "completed", "2026-01-21", "10:00", 4, "Morning routine — whiteboard schedule, breakfast, PT exercises. Carlos was focused and calm.", 128],
+    [uuid(), carlosId, mariaUserId, sarahId, "companion", "completed", "2026-01-28", "10:00", 4, "PT exercises, lunch prep, afternoon walk with Luna. Left-side grip improving!", 128],
+    [uuid(), carlosId, mariaUserId, jamesId, "companion", "completed", "2026-02-01", "14:00", 3, "Board games and a walk around the neighborhood. Carlos was chatty and relaxed.", 75],
+    [uuid(), carlosId, mariaUserId, sarahId, "companion", "completed", "2026-02-05", "10:00", 4, "Morning routine, PT exercises, watched Champions League highlights together.", 128],
+    [uuid(), carlosId, mariaUserId, sarahId, "companion", "completed", "2026-02-12", "09:00", 5, "Extended session — morning routine, PT, grocery run with Carlos (small store, low crowd). He handled it well!", 160],
+    [uuid(), carlosId, mariaUserId, jamesId, "companion", "completed", "2026-02-16", "14:00", 3, "Afternoon companionship — Scrabble, gentle stretches, walked Luna. Carlos beat James at Scrabble!", 75],
+  ];
+  // Carlos total past spend: 4×$128 + $160 + 2×$75 = $822 over ~4 weeks
+
+  for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of carlosPastSessions) {
+    await db.prepare(`
+      INSERT INTO care_sessions
+      (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+       status, scheduled_date, scheduled_time, duration_hours,
+       special_instructions, estimated_cost, actual_cost)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost, cost);
+  }
+
+  // Upcoming Carlos sessions
   const carlosSessions = [
     [uuid(), carlosId, mariaUserId, sarahId, "companion", "confirmed", "2026-02-23", "10:00", 4, "Morning routine help — whiteboard schedule, breakfast, gentle exercises. Luna loves Sarah!", 128],
     [uuid(), carlosId, mariaUserId, sarahId, "companion", "confirmed", "2026-02-26", "10:00", 4, "PT exercises and afternoon soccer highlights. Sarah knows the routine.", 128],
@@ -593,7 +615,7 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
   }
 
-  console.log("✅ Care sessions created (38 — 8 upcoming Pete/Betty, 19 past completed, 4 Henderson, 2 Patel, 2 David/Betty, 1 Susan/Betty, 3 Maria/Carlos, 4 care requests)");
+  console.log("✅ Care sessions created (44 — 8 upcoming Pete/Betty, 19 past completed, 4 Henderson, 2 Patel, 2 David/Betty, 1 Susan/Betty, 6 Carlos past + 3 upcoming, 4 care requests)");
 
   // ─── Visit Logs ───
   // pastSessions[10] = Feb 12 full 8-hr day, [13] = Feb 18 rides, [25] = James Feb 9, [26] = David Feb 6
@@ -621,7 +643,29 @@ async function seed() {
     `).run(id, sessionId, cgId, summary, mood, JSON.stringify(tasks));
   }
 
-  console.log("✅ Visit logs created (4)");
+  // Visit logs for Carlos's past sessions
+  const carlosVisitLogs = [
+    [uuid(), carlosPastSessions[3][0], sarahId,
+      "Great session! Carlos completed all his PT exercises with good form. Left grip strength continues to improve. We watched soccer highlights and he was very engaged. Luna stayed by his side the whole time.",
+      "Engaged & focused", ["Morning routine", "PT exercises", "Lunch prep", "Soccer highlights"]],
+    [uuid(), carlosPastSessions[4][0], sarahId,
+      "Extended session — tried a grocery run to the small market on College Ave. Carlos handled it well! Only 3 other customers, so low stimulation. He picked out his own snacks and carried the bag. Big milestone!",
+      "Confident", ["Morning routine", "PT exercises", "Grocery shopping", "Lunch prep", "Walk with Luna"]],
+    [uuid(), carlosPastSessions[5][0], jamesId,
+      "Played Scrabble and Carlos won! His word recall is getting noticeably better. We walked Luna around the block twice — he wanted to keep going. Energy levels are up.",
+      "Happy & energetic", ["Scrabble", "Gentle stretches", "Dog walk (2 laps)"]],
+  ];
+
+  for (const [id, sessionId, cgId, summary, mood, tasks] of carlosVisitLogs) {
+    await db.prepare(`
+      INSERT INTO visit_logs
+      (id, session_id, caregiver_id, check_in_time, check_out_time,
+       summary, mood_rating, tasks_completed)
+      VALUES (?, ?, ?, NOW() - INTERVAL '2 hours', NOW(), ?, ?, ?)
+    `).run(id, sessionId, cgId, summary, mood, JSON.stringify(tasks));
+  }
+
+  console.log("✅ Visit logs created (7 — Betty 4, Carlos 3)");
 
   // ─── Activity Feed ───
   // Pete's activity feed — spans 10 days of realistic care coordination
@@ -714,6 +758,9 @@ async function seed() {
     [uuid(), pastSessions[25][0], peteId, jamesId, 5, "James is so patient and kind. Mom really enjoys his visits."],
     [uuid(), pastSessions[13][0], peteId, mariaId, 5, "Always gets exactly what Mom needs from the store and doctor visits."],
     [uuid(), pastSessions[26][0], peteId, davidId, 4, "David was punctual and helpful. Mom was comfortable with him."],
+    // Maria reviewing caregivers for Carlos
+    [uuid(), carlosPastSessions[4][0], mariaUserId, sarahId, 5, "Sarah took Carlos grocery shopping for the first time since his accident. He handled it beautifully! She's so patient and encouraging."],
+    [uuid(), carlosPastSessions[5][0], mariaUserId, jamesId, 5, "James and Carlos played Scrabble and Carlos won! His word recall is improving so much. James is great at keeping things fun and low-pressure."],
   ];
 
   for (const [id, sessionId, famId, cgId, rating, comment] of reviews) {
@@ -723,7 +770,7 @@ async function seed() {
     `).run(id, sessionId, famId, cgId, rating, comment);
   }
 
-  console.log("✅ Reviews created (4)");
+  console.log("✅ Reviews created (6 — Pete 4, Maria 2)");
 
   // ─── Conversations ───
   // Direct conversations for existing message pairs
