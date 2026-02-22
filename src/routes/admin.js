@@ -489,4 +489,64 @@ router.get("/debug-sessions", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/debug-caregiver-query — Run the exact caregiver sessions query ───
+router.get("/debug-caregiver-query", async (req, res) => {
+  try {
+    const db = await getDb();
+    // Get Maria's profile (first caregiver)
+    const profiles = await db.prepare("SELECT id, user_id, location_city FROM caregiver_profiles").all();
+    if (profiles.length === 0) return res.json({ error: "No caregiver profiles" });
+    const profile = profiles[0];
+
+    const today = new Date().toISOString().split('T')[0];
+    const endDate = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+
+    // Run the EXACT same query the sessions route runs for caregivers
+    const query = `
+      SELECT cs.*,
+        cr.first_name || ' ' || cr.last_name AS recipient_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE (
+        cs.caregiver_id = ?
+        OR (cs.status = 'requested' AND (
+          cs.care_recipient_id IN (
+            SELECT care_recipient_id FROM caregiver_assignments
+            WHERE caregiver_profile_id = ? AND is_active = 1
+          )
+          OR cs.caregiver_id IS NULL
+        ))
+      )
+      AND cs.status = ?
+      AND cs.scheduled_date >= ?
+      AND cs.scheduled_date <= ?
+      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC LIMIT ?
+    `;
+    const params = [profile.id, profile.id, 'requested', today, endDate, 20];
+
+    const sessions = await db.prepare(query).all(...params);
+
+    // Also run the fallback query
+    const fallbackQuery = `
+      SELECT cs.id, cs.status, cs.caregiver_id, cs.scheduled_date
+      FROM care_sessions cs
+      WHERE cs.status = 'requested' AND cs.caregiver_id IS NULL
+      AND cs.scheduled_date >= ? AND cs.scheduled_date <= ?
+      ORDER BY cs.scheduled_date ASC LIMIT 50
+    `;
+    const fallbackSessions = await db.prepare(fallbackQuery).all(today, endDate);
+
+    res.json({
+      profile_used: profile,
+      date_range: { today, endDate },
+      main_query_count: sessions.length,
+      main_query_results: sessions,
+      fallback_query_count: fallbackSessions.length,
+      fallback_query_results: fallbackSessions,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
 module.exports = router;

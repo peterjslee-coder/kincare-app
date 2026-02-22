@@ -13,6 +13,7 @@ router.use(authenticate);
 // ─── GET /api/sessions ───
 // List sessions for the current user (family or caregiver)
 router.get("/", async (req, res) => {
+  try {
   const db = await getDb();
   const { status, from, to, limit = 20 } = req.query;
 
@@ -126,6 +127,10 @@ router.get("/", async (req, res) => {
   }
 
   res.json({ sessions });
+  } catch (err) {
+    console.error("GET /api/sessions error:", err.message, err.stack);
+    res.status(500).json({ error: "Failed to fetch sessions", detail: err.message });
+  }
 });
 
 // ─── Helper: generate recurring dates ───
