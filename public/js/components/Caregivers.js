@@ -20,6 +20,7 @@ const Caregivers = window.Caregivers = () => {
   const leafletMap = useRef(null);
   const markersRef = useRef([]);
   const circleRef = useRef(null);
+  const autoSearchedRef = useRef(false);
 
   const fetchData = async () => {
     try {
@@ -40,12 +41,20 @@ const Caregivers = window.Caregivers = () => {
         const d = await dashRes.json();
         setRecipients(d.careRecipients || []);
 
-        // Auto-populate search with first recipient's city
+        // Auto-populate search with first recipient's zip or city, then auto-search
         const first = (d.careRecipients || [])[0];
         if (first && !searchAddress) {
+          const zip = first.location_zip || first.locationZip;
           const city = first.location_city || first.locationCity;
           const state = first.location_state || first.locationState;
-          if (city) setSearchAddress(`${city}, ${state || 'VA'}`);
+          const addr = zip || (city ? `${city}, ${state || 'VA'}` : '');
+          if (addr) {
+            setSearchAddress(addr);
+            // Also set center from recipient coords if available
+            if (first.latitude && first.longitude) {
+              setSearchCenter({ lat: first.latitude, lng: first.longitude });
+            }
+          }
         }
       }
     } catch (err) {
@@ -55,6 +64,14 @@ const Caregivers = window.Caregivers = () => {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  // Auto-search nearby tab when address is populated from recipient
+  useEffect(() => {
+    if (searchAddress && activeTab === 'nearby' && !autoSearchedRef.current && !hasSearched) {
+      autoSearchedRef.current = true;
+      handleLocationSearch();
+    }
+  }, [searchAddress, activeTab]);
 
   const handleAssign = async (caregiverProfileId, recipientId) => {
     try {
@@ -140,7 +157,7 @@ const Caregivers = window.Caregivers = () => {
       leafletMap.current = map;
       map.invalidateSize();
 
-      // If no search center, try browser geolocation as fallback
+      // If no search center, try recipient coords or browser geolocation as fallback
       if (!searchCenter && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {

@@ -17,8 +17,15 @@ const Messages = window.Messages = () => {
   const [peopleResults, setPeopleResults] = useState([]);
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [sentRequests, setSentRequests] = useState([]);
+  const [archivedIds, setArchivedIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('msg_archived') || '[]'); } catch { return []; }
+  });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const swipeRef = useRef({ startX: 0, startY: 0, id: null });
+  const [swipingId, setSwipingId] = useState(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
   const { showToast } = useToast();
 
   const isMobile = window.innerWidth <= 768;
@@ -86,13 +93,15 @@ const Messages = window.Messages = () => {
     setPeopleLoading(false);
   };
 
-  // Fetch pending connection requests received
+  // Fetch pending connection requests (received AND sent)
   const fetchPendingRequests = async () => {
     try {
       const res = await apiFetch('/api/connections');
       if (res?.ok) {
         const data = await res.json();
-        setPendingRequests((data.connections || []).filter(c => c.status === 'pending' && c.direction === 'received'));
+        const conns = data.connections || [];
+        setPendingRequests(conns.filter(c => c.status === 'pending' && c.direction === 'received'));
+        setSentRequests(conns.filter(c => c.status === 'pending' && c.direction === 'sent'));
       }
     } catch {}
   };
@@ -108,6 +117,45 @@ const Messages = window.Messages = () => {
         searchPeople(peopleSearch); // Refresh results
       }
     } catch { showToast('Failed to send request', 'error'); }
+  };
+
+  // Archive a conversation (swipe to archive)
+  const handleArchive = (convId) => {
+    const updated = [...archivedIds, convId];
+    setArchivedIds(updated);
+    localStorage.setItem('msg_archived', JSON.stringify(updated));
+    if (activeConvId === convId) { setActiveConvId(null); setMessages([]); }
+    showToast('Conversation archived', 'success');
+  };
+
+  // Swipe gesture handlers for conversation items
+  const onConvTouchStart = (e, convId) => {
+    const touch = e.touches[0];
+    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, id: convId };
+    setSwipingId(null);
+    setSwipeOffset(0);
+  };
+
+  const onConvTouchMove = (e, convId) => {
+    if (swipeRef.current.id !== convId) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - swipeRef.current.startX;
+    const dy = Math.abs(touch.clientY - swipeRef.current.startY);
+    // Only horizontal swipe left
+    if (dx < -10 && dy < Math.abs(dx) * 0.5) {
+      setSwipingId(convId);
+      setSwipeOffset(Math.max(dx, -120));
+    }
+  };
+
+  const onConvTouchEnd = (convId) => {
+    if (swipeRef.current.id !== convId) return;
+    if (swipeOffset < -80) {
+      handleArchive(convId);
+    }
+    setSwipingId(null);
+    setSwipeOffset(0);
+    swipeRef.current = { startX: 0, startY: 0, id: null };
   };
 
   const handleRespondConnection = async (connectionId, action) => {
@@ -552,45 +600,129 @@ const Messages = window.Messages = () => {
         </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {conversations.length > 0 ? conversations.map(c => {
+        {/* Pending received connection requests — inline at top */}
+        {pendingRequests.length > 0 && (
+          <div style={{ borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ padding: '8px 16px', fontSize: 11, fontWeight: 600, color: '#e65100', background: '#fff8f0' }}>
+              Connection Requests ({pendingRequests.length})
+            </div>
+            {pendingRequests.map(req => (
+              <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid #f5f5f5' }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#0066cc' }}>
+                  {req.otherFirstName?.[0]}{req.otherLastName?.[0]}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{req.otherFirstName} {req.otherLastName}</div>
+                  <div style={{ fontSize: 12, color: '#e65100' }}>Wants to connect</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => handleRespondConnection(req.id, 'accept')}
+                    style={{ padding: '6px 12px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Accept
+                  </button>
+                  <button onClick={() => handleRespondConnection(req.id, 'decline')}
+                    style={{ padding: '6px 12px', background: '#fff', color: '#999', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Sent connection requests — shown as pseudo-conversations */}
+        {sentRequests.filter(r => !archivedIds.includes('req-' + r.id)).map(req => (
+          <div key={'req-' + req.id}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
+              borderBottom: '1px solid #f0f0f0', cursor: 'default', opacity: 0.7,
+              position: 'relative', overflow: 'hidden',
+              transform: swipingId === 'req-' + req.id ? `translateX(${swipeOffset}px)` : 'none',
+              transition: swipingId === 'req-' + req.id ? 'none' : 'transform 0.2s',
+            }}
+            onTouchStart={(e) => onConvTouchStart(e, 'req-' + req.id)}
+            onTouchMove={(e) => onConvTouchMove(e, 'req-' + req.id)}
+            onTouchEnd={() => onConvTouchEnd('req-' + req.id)}>
+            <div style={{
+              width: 44, height: 44, borderRadius: '50%',
+              background: getAvatarColor((req.otherFirstName || '') + ' ' + (req.otherLastName || '')),
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontSize: 15, fontWeight: 600, flexShrink: 0,
+            }}>
+              {(req.otherFirstName?.[0] || '')}{(req.otherLastName?.[0] || '')}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
+                {req.otherFirstName} {req.otherLastName}
+              </div>
+              <div style={{ fontSize: 13, color: '#e8724a', fontStyle: 'italic' }}>
+                Request sent — waiting for response
+              </div>
+            </div>
+            <span style={{ fontSize: 16, color: '#e8724a', flexShrink: 0 }}>⏳</span>
+          </div>
+        ))}
+
+        {conversations.filter(c => !archivedIds.includes(c.id)).length > 0 ? conversations.filter(c => !archivedIds.includes(c.id)).map(c => {
           const isGroup = isGroupConv(c);
           const typeIcon = c.type === 'care_team' ? '👥' : c.type === 'group' ? '💬' : null;
+          const isSwiping = swipingId === c.id;
           return (
-            <div key={c.id}
-              className={`msg-conv-item ${activeConvId === c.id ? 'active' : ''}`}
-              onClick={() => handleSelectConversation(c)}>
+            <div key={c.id} style={{ position: 'relative', overflow: 'hidden' }}>
+              {/* Archive background revealed on swipe */}
               <div style={{
-                width: '44px', height: '44px', borderRadius: isGroup ? '12px' : '50%',
-                background: isGroup ? '#e8f5e9' : getAvatarColor(c.name),
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: isGroup ? '#1b6b5a' : 'white', fontSize: isGroup ? '20px' : '15px',
-                fontWeight: 600, flexShrink: 0,
+                position: 'absolute', top: 0, right: 0, bottom: 0, width: 120,
+                background: '#e65100', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontWeight: 600, fontSize: 13,
+                opacity: isSwiping && swipeOffset < -30 ? 1 : 0,
+                transition: 'opacity 0.15s',
               }}>
-                {isGroup ? (typeIcon || '👥') : getInitials(c.name)}
+                Archive
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                  <span style={{ fontWeight: c.unreadCount > 0 ? 700 : 600, fontSize: '14px', color: '#333' }}>
-                    {c.name}
-                  </span>
-                  <span style={{ fontSize: '11px', color: c.unreadCount > 0 ? '#1b6b5a' : '#aaa', fontWeight: c.unreadCount > 0 ? 600 : 400, flexShrink: 0, marginLeft: '8px' }}>
-                    {formatTime(c.lastMessageAt)}
-                  </span>
+              <div
+                className={`msg-conv-item ${activeConvId === c.id ? 'active' : ''}`}
+                onClick={() => handleSelectConversation(c)}
+                onTouchStart={(e) => onConvTouchStart(e, c.id)}
+                onTouchMove={(e) => onConvTouchMove(e, c.id)}
+                onTouchEnd={() => onConvTouchEnd(c.id)}
+                style={{
+                  position: 'relative', background: '#fff',
+                  transform: isSwiping ? `translateX(${swipeOffset}px)` : 'none',
+                  transition: isSwiping ? 'none' : 'transform 0.2s',
+                }}>
+                <div style={{
+                  width: '44px', height: '44px', borderRadius: isGroup ? '12px' : '50%',
+                  background: isGroup ? '#e8f5e9' : getAvatarColor(c.name),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: isGroup ? '#1b6b5a' : 'white', fontSize: isGroup ? '20px' : '15px',
+                  fontWeight: 600, flexShrink: 0,
+                }}>
+                  {isGroup ? (typeIcon || '👥') : getInitials(c.name)}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', color: c.unreadCount > 0 ? '#555' : '#999', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: c.unreadCount > 0 ? 500 : 400 }}>
-                    {isGroup && c.members ? `${c.members.length} members` + (c.lastMessage ? ` · ${c.lastMessage}` : '') : (c.lastMessage || 'No messages yet')}
-                  </span>
-                  {c.unreadCount > 0 && (
-                    <span style={{ background: '#1b6b5a', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, flexShrink: 0, marginLeft: '8px', minWidth: '18px', textAlign: 'center' }}>
-                      {c.unreadCount}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                    <span style={{ fontWeight: c.unreadCount > 0 ? 700 : 600, fontSize: '14px', color: '#333' }}>
+                      {c.name}
                     </span>
-                  )}
+                    <span style={{ fontSize: '11px', color: c.unreadCount > 0 ? '#1b6b5a' : '#aaa', fontWeight: c.unreadCount > 0 ? 600 : 400, flexShrink: 0, marginLeft: '8px' }}>
+                      {formatTime(c.lastMessageAt)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', color: c.unreadCount > 0 ? '#555' : '#999', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: c.unreadCount > 0 ? 500 : 400 }}>
+                      {isGroup && c.members ? `${c.members.length} members` + (c.lastMessage ? ` · ${c.lastMessage}` : '') : (c.lastMessage || 'No messages yet')}
+                    </span>
+                    {c.unreadCount > 0 && (
+                      <span style={{ background: '#1b6b5a', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, flexShrink: 0, marginLeft: '8px', minWidth: '18px', textAlign: 'center' }}>
+                        {c.unreadCount}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           );
-        }) : (
+        }) : sentRequests.length === 0 && pendingRequests.length === 0 ? (
           <div style={{ padding: '60px 20px', textAlign: 'center' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>💬</div>
             <div style={{ fontSize: '15px', color: '#666', marginBottom: '8px' }}>No conversations yet</div>
@@ -600,7 +732,7 @@ const Messages = window.Messages = () => {
               New Message
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

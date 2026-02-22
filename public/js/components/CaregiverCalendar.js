@@ -346,6 +346,32 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
         </table>
       </div>
 
+      {/* Weekly Income Summary */}
+      {(() => {
+        const allWeekSessions = allSessions.length > 0 ? allSessions : (sessions || []);
+        const weekConfirmed = allWeekSessions.reduce((sum, s) => sum + parseFloat(s.estimatedCost || s.estimated_cost || s.actual_cost || 0), 0);
+        const weekPending = careRequests.reduce((sum, s) => sum + parseFloat(s.estimated_cost || s.estimatedCost || 0), 0);
+        if (weekConfirmed === 0 && weekPending === 0) return null;
+        return (
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 120, padding: '10px 14px', background: '#e3f2fd', borderRadius: 10, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#1565c0', fontWeight: 600 }}>Confirmed</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#1565c0' }}>${Math.round(weekConfirmed)}</div>
+            </div>
+            {weekPending > 0 && (
+              <div style={{ flex: 1, minWidth: 120, padding: '10px 14px', background: '#fff3e0', borderRadius: 10, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#e65100', fontWeight: 600 }}>Pending</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#e65100' }}>${Math.round(weekPending)}</div>
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 120, padding: '10px 14px', background: '#f0faf7', borderRadius: 10, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#1b6b5a', fontWeight: 600 }}>Week Total</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#1b6b5a' }}>${Math.round(weekConfirmed + weekPending)}</div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Selected Day Details */}
       {selectedDay && (
         <div className="card" style={{ marginTop: 16 }}>
@@ -394,7 +420,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>
-                          {s.recipientName || s.recipient_name || 'Client'}
+                          {s.recipientName || s.recipient_name || 'Client'}{estCost ? `, $${Math.round(parseFloat(estCost))}` : ''}
                           {shortNoticeSurcharge > 0 && (
                             <span style={{ marginLeft: 6, background: '#e8724a', color: '#fff', padding: '2px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600 }}>
                               Short Notice +20%
@@ -404,11 +430,6 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         <div style={{ fontSize: 12, color: '#666' }}>
                           {formatTimeStr(s.time || s.scheduled_time)} · {hrs}h · {s.serviceType || s.service_type}
                         </div>
-                        {estCost && (
-                          <div style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600, marginTop: 2 }}>
-                            Est. earnings: ${estCost}
-                          </div>
-                        )}
                         {budgetMax && (
                           <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
                             Budget: up to ${budgetMax}/hr
@@ -457,40 +478,57 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
           {selectedSessions.length > 0 ? (
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#1565c0', marginBottom: 8 }}>Booked Sessions</div>
-              {selectedSessions.map((s, idx) => (
-                <div key={idx} style={{ padding: '10px 12px', background: '#e3f2fd', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #42a5f5' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>
-                        {s.recipientName || s.recipient_name || 'Client'}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#666' }}>
-                        {formatTimeStr(s.time || s.scheduled_time)} · {s.durationHours || s.duration_hours}h · {s.serviceType || s.service_type}
-                      </div>
-                      {(s.specialInstructions || s.special_instructions) && (
-                        <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
-                          {s.specialInstructions || s.special_instructions}
+              {selectedSessions.map((s, idx) => {
+                const cost = parseFloat(s.estimatedCost || s.estimated_cost || s.actual_cost || 0);
+                const name = s.recipientName || s.recipient_name || 'Client';
+                return (
+                  <div key={idx} style={{ padding: '10px 12px', background: '#e3f2fd', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #42a5f5' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>
+                          {name}{cost > 0 ? `, $${Math.round(cost)}` : ''}
                         </div>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                      <span style={{
-                        padding: '3px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
-                        background: s.status === 'confirmed' ? '#e8f5e9' : s.status === 'completed' ? '#e0e0e0' : '#fff3e0',
-                        color: s.status === 'confirmed' ? '#2e7d32' : s.status === 'completed' ? '#666' : '#e65100',
-                        textTransform: 'capitalize',
-                      }}>{s.status}</span>
-                      <span style={{ fontSize: 11, color: '#666' }}>${s.estimatedCost || s.estimated_cost || s.actual_cost}</span>
-                      {s.status === 'confirmed' && onLogVisit && (
-                        <button onClick={() => onLogVisit(s)} style={{
-                          padding: '3px 8px', background: '#1b6b5a', color: '#fff', border: 'none',
-                          borderRadius: 4, fontSize: 10, cursor: 'pointer', fontWeight: 600,
-                        }}>Log Visit</button>
-                      )}
+                        <div style={{ fontSize: 12, color: '#666' }}>
+                          {formatTimeStr(s.time || s.scheduled_time)} · {s.durationHours || s.duration_hours}h · {s.serviceType || s.service_type}
+                        </div>
+                        {(s.specialInstructions || s.special_instructions) && (
+                          <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
+                            {s.specialInstructions || s.special_instructions}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                        <span style={{
+                          padding: '3px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
+                          background: s.status === 'confirmed' ? '#e8f5e9' : s.status === 'completed' ? '#e0e0e0' : '#fff3e0',
+                          color: s.status === 'confirmed' ? '#2e7d32' : s.status === 'completed' ? '#666' : '#e65100',
+                          textTransform: 'capitalize',
+                        }}>{s.status}</span>
+                        {s.status === 'confirmed' && onLogVisit && (
+                          <button onClick={() => onLogVisit(s)} style={{
+                            padding: '3px 8px', background: '#1b6b5a', color: '#fff', border: 'none',
+                            borderRadius: 4, fontSize: 10, cursor: 'pointer', fontWeight: 600,
+                          }}>Log Visit</button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+
+              {/* Daily income total */}
+              {(() => {
+                const dayTotal = selectedSessions.reduce((sum, s) => sum + parseFloat(s.estimatedCost || s.estimated_cost || s.actual_cost || 0), 0);
+                const requestTotal = selectedRequests.reduce((sum, s) => sum + parseFloat(s.estimated_cost || s.estimatedCost || 0), 0);
+                return dayTotal > 0 || requestTotal > 0 ? (
+                  <div style={{ padding: '8px 12px', background: '#f0faf7', borderRadius: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a' }}>Day Total</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#1b6b5a' }}>
+                      ${Math.round(dayTotal)}{requestTotal > 0 ? ` (+$${Math.round(requestTotal)} pending)` : ''}
+                    </span>
+                  </div>
+                ) : null;
+              })()}
             </div>
           ) : (
             selectedRequests.length === 0 && <div style={{ fontSize: 13, color: '#999' }}>No sessions booked this day</div>

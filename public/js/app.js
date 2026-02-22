@@ -172,11 +172,85 @@ const App = () => {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   // Dual-role: active role for users with multiple roles
   const [activeRole, setActiveRoleState] = useState(getActiveRole());
+  // Unread message count for nav badge
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
 
   // Expose modal opener for child components (Schedule empty state CTA)
   useEffect(() => {
     window.__openRequestCareModal = () => setShowRequestCareModal(true);
     return () => { delete window.__openRequestCareModal; };
+  }, []);
+
+  // ─── Swipe-back navigation ───
+  // Swipe from left edge → history.back() (like mobile browser back gesture)
+  useEffect(() => {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let swiping = false;
+
+    const onTouchStart = (e) => {
+      const touch = e.touches[0];
+      // Only trigger from left 30px edge
+      if (touch.clientX < 30) {
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        swiping = true;
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      if (!swiping) return;
+      swiping = false;
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - touchStartX;
+      const dy = Math.abs(touch.clientY - touchStartY);
+      // Require horizontal swipe > 80px and mostly horizontal (not vertical scroll)
+      if (dx > 80 && dy < dx * 0.5) {
+        window.history.back();
+      }
+    };
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, []);
+
+  // ─── Unread message count polling ───
+  useEffect(() => {
+    if (appState !== 'app' || !currentUser) return;
+    const fetchUnread = async () => {
+      try {
+        const res = await apiFetch('/api/messages/conversations');
+        if (res?.ok) {
+          const data = await res.json();
+          const total = (data.conversations || []).reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+          setUnreadMsgCount(total);
+        }
+      } catch {}
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000); // refresh every 30s
+    return () => clearInterval(interval);
+  }, [appState, currentUser?.id]);
+
+  // Update unread count on real-time message events
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const cleanup = onSocketEvent('new_message', () => {
+      // Bump count optimistically, then re-fetch
+      setUnreadMsgCount(c => c + 1);
+      apiFetch('/api/messages/conversations').then(async res => {
+        if (res?.ok) {
+          const data = await res.json();
+          const total = (data.conversations || []).reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+          setUnreadMsgCount(total);
+        }
+      }).catch(() => {});
+    });
+    return cleanup;
   }, []);
 
   // ─── Role-color CSS custom properties ───
@@ -477,6 +551,8 @@ const App = () => {
     setCurrentPage(page);
     setPageNavCount(c => c + 1);
     setSidebarOpen(false);
+    // Clear unread badge when opening messages
+    if (page === 'messages') setUnreadMsgCount(0);
   };
 
   // Platform invite onboarding flow (caregiver, family, or care_for)
@@ -746,9 +822,16 @@ const App = () => {
           <ul className="nav-menu">
             {getNavItems().map(item => (
               <li key={item.id} className="nav-item">
-                <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)}>
+                <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)} style={{ position: 'relative' }}>
                   <span className="nav-icon">{item.icon}</span>
                   {item.label}
+                  {item.id === 'messages' && unreadMsgCount > 0 && (
+                    <span style={{
+                      marginLeft: 'auto', background: '#e8724a', color: '#fff', borderRadius: 10,
+                      padding: '1px 6px', fontSize: 10, fontWeight: 700,
+                      minWidth: 18, textAlign: 'center', lineHeight: '16px',
+                    }}>{unreadMsgCount > 99 ? '99+' : unreadMsgCount}</span>
+                  )}
                 </button>
               </li>
             ))}
@@ -818,8 +901,17 @@ const App = () => {
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav">
         {getBottomNavItems().map(item => (
-          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)}>
+          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)} style={{ position: 'relative' }}>
             <span className="bottom-nav-icon">{item.icon}</span>
+            {item.id === 'messages' && unreadMsgCount > 0 && (
+              <span style={{
+                position: 'absolute', top: 2, right: '50%', marginRight: -18,
+                background: '#e8724a', color: '#fff', borderRadius: 10,
+                padding: '1px 5px', fontSize: 9, fontWeight: 700,
+                minWidth: 16, textAlign: 'center', lineHeight: '14px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              }}>{unreadMsgCount > 99 ? '99+' : unreadMsgCount}</span>
+            )}
             <span className="bottom-nav-label">{item.label}</span>
           </button>
         ))}

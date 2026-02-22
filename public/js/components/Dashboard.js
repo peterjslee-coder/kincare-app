@@ -7,6 +7,21 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [showPwaGuide, setShowPwaGuide] = useState(false);
+  // Dismissible dashboard sections
+  const [dismissedTiles, setDismissedTiles] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dash_dismissed') || '{}'); } catch { return {}; }
+  });
+
+  const dismissTile = (tileId) => {
+    const updated = { ...dismissedTiles, [tileId]: true };
+    setDismissedTiles(updated);
+    localStorage.setItem('dash_dismissed', JSON.stringify(updated));
+  };
+
+  const restoreTiles = () => {
+    setDismissedTiles({});
+    localStorage.removeItem('dash_dismissed');
+  };
 
   const fetchDashboard = async () => {
     try {
@@ -426,64 +441,87 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
-      <div className="card">
-        <div className="card-header"><span className="card-icon">📅</span>Upcoming Sessions</div>
-        <ul className="sessions-list">
-          {upcoming.length > 0 ? upcoming.map((s, idx) => (
-            <li key={idx} className="session-item">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div className="session-time">{s.date} at {s.time}</div>
-                  <div className="session-caregiver">{s.caregiverName} — {s.recipientName}</div>
-                  <span className="session-type">{s.serviceType}</span>
+      {!dismissedTiles.upcoming && (
+        <div className="card" style={{ position: 'relative' }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span><span className="card-icon">📅</span>Upcoming Sessions</span>
+            {upcoming.length === 0 && (
+              <button onClick={() => dismissTile('upcoming')} title="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#ccc', padding: '0 4px' }}>&times;</button>
+            )}
+          </div>
+          <ul className="sessions-list">
+            {upcoming.length > 0 ? upcoming.map((s, idx) => (
+              <li key={idx} className="session-item">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div className="session-time">{s.date} at {s.time}</div>
+                    <div className="session-caregiver">{s.caregiverName} — {s.recipientName}</div>
+                    <span className="session-type">{s.serviceType}</span>
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: '12px' }}>
+                    <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : '#e8724a', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>
+                    {s.estimatedCost && <div style={{ color: '#666', marginTop: '2px' }}>${s.estimatedCost}</div>}
+                    {s.status === 'confirmed' && s.estimatedCost && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const res = await apiFetch('/api/payments/checkout', {
+                              method: 'POST',
+                              body: JSON.stringify({ sessionId: s.id }),
+                            });
+                            if (res?.ok) {
+                              const d = await res.json();
+                              if (d.checkoutUrl) window.location.href = d.checkoutUrl;
+                            } else {
+                              const err = await res?.json();
+                              alert(err?.error || 'Payment not available yet');
+                            }
+                          } catch (err) { alert('Payment service unavailable'); }
+                        }}
+                        style={{
+                          marginTop: '6px', padding: '4px 12px', borderRadius: '6px',
+                          border: 'none', background: '#1b6b5a', color: '#fff',
+                          fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >Pay Now</button>
+                    )}
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right', fontSize: '12px' }}>
-                  <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : '#e8724a', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>
-                  {s.estimatedCost && <div style={{ color: '#666', marginTop: '2px' }}>${s.estimatedCost}</div>}
-                  {s.status === 'confirmed' && s.estimatedCost && (
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        try {
-                          const res = await apiFetch('/api/payments/checkout', {
-                            method: 'POST',
-                            body: JSON.stringify({ sessionId: s.id }),
-                          });
-                          if (res?.ok) {
-                            const d = await res.json();
-                            if (d.checkoutUrl) window.location.href = d.checkoutUrl;
-                          } else {
-                            const err = await res?.json();
-                            alert(err?.error || 'Payment not available yet');
-                          }
-                        } catch (err) { alert('Payment service unavailable'); }
-                      }}
-                      style={{
-                        marginTop: '6px', padding: '4px 12px', borderRadius: '6px',
-                        border: 'none', background: '#1b6b5a', color: '#fff',
-                        fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                      }}
-                    >Pay Now</button>
-                  )}
-                </div>
-              </div>
-            </li>
-          )) : <li style={{ color: '#999', padding: '16px' }}>No upcoming sessions</li>}
-        </ul>
-      </div>
-
-      <div className="card">
-        <div className="card-header"><span className="card-icon">📢</span>Recent Activity</div>
-        <div>
-          {activity.length > 0 ? activity.map((a, idx) => (
-            <div key={idx} className="activity-item">
-              <div className="activity-title">{a.title}</div>
-              {a.message && <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>{a.message}</div>}
-              <div className="activity-time">{formatActivityTime(a.timestamp)}</div>
-            </div>
-          )) : <div style={{ color: '#999', padding: '16px' }}>No recent activity</div>}
+              </li>
+            )) : <li style={{ color: '#999', padding: '16px' }}>No upcoming sessions</li>}
+          </ul>
         </div>
-      </div>
+      )}
+
+      {!dismissedTiles.activity && (
+        <div className="card">
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span><span className="card-icon">📢</span>Recent Activity</span>
+            {activity.length === 0 && (
+              <button onClick={() => dismissTile('activity')} title="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#ccc', padding: '0 4px' }}>&times;</button>
+            )}
+          </div>
+          <div>
+            {activity.length > 0 ? activity.map((a, idx) => (
+              <div key={idx} className="activity-item">
+                <div className="activity-title">{a.title}</div>
+                {a.message && <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>{a.message}</div>}
+                <div className="activity-time">{formatActivityTime(a.timestamp)}</div>
+              </div>
+            )) : <div style={{ color: '#999', padding: '16px' }}>No recent activity</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Restore dismissed tiles */}
+      {Object.keys(dismissedTiles).length > 0 && (
+        <div style={{ textAlign: 'center', marginTop: 8, marginBottom: 8 }}>
+          <button onClick={restoreTiles} style={{ background: 'none', border: 'none', color: '#999', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+            Restore hidden sections
+          </button>
+        </div>
+      )}
 
       {/* Inline Analytics (collapsible) */}
       {analyticsData && (() => {

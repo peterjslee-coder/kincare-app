@@ -1,5 +1,5 @@
-// InPlace Service Worker — v1.19.1
-const CACHE_NAME = 'inplace-v1.19.1';
+// InPlace Service Worker — v1.20.0
+const CACHE_NAME = 'inplace-v1.20.0';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -57,6 +57,7 @@ const STATIC_ASSETS = [
   '/icons/icon-maskable-192.png',
   '/icons/icon-maskable-384.png',
   '/icons/icon-maskable-512.png',
+  '/icons/badge-monochrome-48.png',
   '/icons/badge-monochrome-96.png',
   '/manifest.json',
 ];
@@ -160,7 +161,7 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: '/icons/icon-192.png',
+    icon: '/icons/badge-monochrome-96.png',
     badge: '/icons/badge-monochrome-96.png',
     vibrate: [100, 50, 100],
     data: data.data || {},
