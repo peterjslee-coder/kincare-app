@@ -463,4 +463,18 @@ router.put("/users/:id/onboarding", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/reseed — Re-run demo seed (wipes all data!) ───
+router.post("/reseed", async (req, res) => {
+  try {
+    const { seed } = require("../seed");
+    console.log("🔄 Admin-triggered reseed starting...");
+    await seed();
+    console.log("✅ Admin-triggered reseed complete");
+    res.json({ success: true, message: "Database reseeded with fresh demo data" });
+  } catch (err) {
+    console.error("Admin reseed error:", err);
+    res.status(500).json({ error: "Reseed failed: " + (err.message || "") });
+  }
+});
+
 module.exports = router;
