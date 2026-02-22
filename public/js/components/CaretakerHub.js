@@ -244,9 +244,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   useEffect(() => {
     if (activeTab === 'financials') {
       fetchPayoutPreference();
-      setBgCheckPaid(!!profile?.background_check_paid);
+      setBgCheckPaid(!!data?.profile?.background_check_paid);
     }
   }, [activeTab]);
+
+  // Init tiered rates from profile (must be before early returns — React hook order rules)
+  useEffect(() => {
+    if (data?.profile?.rateDaytime && !ratesDaytime) setRatesDaytime(data.profile.rateDaytime);
+    if (data?.profile?.rateNighttime && !ratesNighttime) setRatesNighttime(data.profile.rateNighttime);
+    if (data?.profile?.rateOvernight && !ratesOvernight) setRatesOvernight(data.profile.rateOvernight);
+  }, [data?.profile?.rateDaytime, data?.profile?.rateNighttime, data?.profile?.rateOvernight]);
 
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []).slice(0, 5);
@@ -336,13 +343,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const sessions = data.upcomingSessions || [];
   const reviews = data.reviews || [];
   const stats = data.stats || {};
-
-  // Init tiered rates from profile (once)
-  useEffect(() => {
-    if (profile.rateDaytime && !ratesDaytime) setRatesDaytime(profile.rateDaytime);
-    if (profile.rateNighttime && !ratesNighttime) setRatesNighttime(profile.rateNighttime);
-    if (profile.rateOvernight && !ratesOvernight) setRatesOvernight(profile.rateOvernight);
-  }, [profile.rateDaytime, profile.rateNighttime, profile.rateOvernight]);
 
   const CARE_TASKS = [
     'Bathing / Showering', 'Toileting', 'Dressing', 'Feeding / Meal Assistance',
