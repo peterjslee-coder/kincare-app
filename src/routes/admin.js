@@ -477,4 +477,16 @@ router.post("/reseed", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/debug-sessions — Raw care_sessions diagnostic ───
+router.get("/debug-sessions", async (req, res) => {
+  try {
+    const db = await getDb();
+    const all = await db.prepare("SELECT id, care_recipient_id, family_user_id, caregiver_id, service_type, status, scheduled_date, scheduled_time, estimated_cost FROM care_sessions WHERE status = 'requested' ORDER BY scheduled_date ASC").all();
+    const profiles = await db.prepare("SELECT id, user_id, location_city FROM caregiver_profiles").all();
+    res.json({ requested_sessions: all, caregiver_profiles: profiles });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
