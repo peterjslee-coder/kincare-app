@@ -167,6 +167,24 @@ const App = () => {
     window.__openRequestCareModal = () => setShowRequestCareModal(true);
     return () => { delete window.__openRequestCareModal; };
   }, []);
+
+  // ─── Role-color CSS custom properties ───
+  // Must be here (before any early returns) to satisfy Rules of Hooks
+  useEffect(() => {
+    const roleColors = {
+      family:    { main: '#1b6b5a', light: '#e0f2e9', dark: '#0f4238' },
+      caregiver: { main: '#2e5984', light: '#dce8f3', dark: '#1a3a5c' },
+      care_for:  { main: '#7b5ea7', light: '#ede7f6', dark: '#4a2d7a' },
+    };
+    const rc = roleColors[activeRole] || roleColors.family;
+    const root = document.documentElement;
+    root.style.setProperty('--role-color', rc.main);
+    root.style.setProperty('--role-color-light', rc.light);
+    root.style.setProperty('--role-color-dark', rc.dark);
+    window.ROLE_COLOR = rc.main;
+    window.ROLE_COLOR_LIGHT = rc.light;
+  }, [activeRole]);
+
   const [resetToken, setResetToken] = useState(null);
   const [verifyMessage, setVerifyMessage] = useState(null);
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
@@ -549,16 +567,6 @@ const App = () => {
     care_for:  { main: '#7b5ea7', light: '#ede7f6', dark: '#4a2d7a' },
   };
   const currentRoleColor = roleColors[role] || roleColors.family;
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--role-color', currentRoleColor.main);
-    root.style.setProperty('--role-color-light', currentRoleColor.light);
-    root.style.setProperty('--role-color-dark', currentRoleColor.dark);
-    // Global accessor so child components can read role color without props
-    window.ROLE_COLOR = currentRoleColor.main;
-    window.ROLE_COLOR_LIGHT = currentRoleColor.light;
-  }, [role]);
 
   // Role switcher handler
   const handleSwitchRole = (newRole) => {
