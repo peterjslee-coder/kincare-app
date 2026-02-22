@@ -105,7 +105,7 @@ router.get("/conversations", async (req, res) => {
       name: `${partner.first_name} ${partner.last_name}`,
       careTeamId: null,
       members: [
-        { id: userId, name: "You", role: req.user.role },
+        { id: userId, name: "You", role: req.user.activeRole || req.user.role },
         { id: partner.id, name: `${partner.first_name} ${partner.last_name}`, role: partner.role },
       ],
       lastMessage: lastMsg?.content || null,

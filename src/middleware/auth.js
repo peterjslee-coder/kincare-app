@@ -4,8 +4,17 @@ const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || null;
 
 function generateToken(user) {
+  // Dual-role support: encode roles array in JWT
+  // Parse roles from DB (JSON string) or fall back to single role
+  let roles;
+  if (user.roles) {
+    roles = typeof user.roles === "string" ? JSON.parse(user.roles) : user.roles;
+  } else {
+    roles = [user.role || "family"];
+  }
+
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, roles, role: roles[0] },
     JWT_SECRET,
     { expiresIn: "7d" }
   );
@@ -15,7 +24,7 @@ function authenticate(req, res, next) {
   // Option 1: Admin API key (for automated scripts — bypasses JWT + 2FA)
   const apiKey = req.headers["x-admin-api-key"];
   if (apiKey && ADMIN_API_KEY && apiKey === ADMIN_API_KEY) {
-    req.user = { id: "api-key-admin", email: "admin@api", role: "family" };
+    req.user = { id: "api-key-admin", email: "admin@api", roles: ["family"], role: "family" };
     req.isAdmin = true;
     return next();
   }
@@ -29,6 +38,23 @@ function authenticate(req, res, next) {
   try {
     const token = header.split(" ")[1];
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Backward compat: old tokens have role but not roles
+    if (!decoded.roles && decoded.role) {
+      decoded.roles = [decoded.role];
+    }
+    if (decoded.roles && !decoded.role) {
+      decoded.role = decoded.roles[0];
+    }
+
+    // Active role: frontend can send X-Active-Role header to select which role view
+    const activeRole = req.headers["x-active-role"];
+    if (activeRole && decoded.roles && decoded.roles.includes(activeRole)) {
+      decoded.activeRole = activeRole;
+    } else {
+      decoded.activeRole = decoded.roles ? decoded.roles[0] : decoded.role;
+    }
+
     req.user = decoded;
     next();
   } catch (err) {
@@ -38,7 +64,10 @@ function authenticate(req, res, next) {
 
 function requireRole(...roles) {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    // Dual-role: check if ANY of the user's roles match the required roles
+    const userRoles = req.user.roles || [req.user.role];
+    const hasRole = userRoles.some(r => roles.includes(r));
+    if (!hasRole) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
     next();

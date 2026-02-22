@@ -106,7 +106,7 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
         AUTH_TOKEN = data.token;
         localStorage.removeItem('auth_token');
         if (window.connectSocket) connectSocket(data.token);
-        onSwitchAccount(data.user || { role: 'family' });
+        onSwitchAccount(data.user || { role: 'family', roles: ['family'] });
       }
     } catch (err) {
       console.error('Demo switch failed:', err);
@@ -157,6 +157,8 @@ const App = () => {
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  // Dual-role: active role for users with multiple roles
+  const [activeRole, setActiveRoleState] = useState(getActiveRole());
 
   // Expose modal opener for child components (Schedule empty state CTA)
   useEffect(() => {
@@ -190,13 +192,20 @@ const App = () => {
               if (typeof disconnectSocket === 'function') disconnectSocket();
               return;
             }
+            const userRoles = data.user.roles || [data.user.role];
             setCurrentUser({
               id: data.user.id, email: data.user.email, role: data.user.role,
+              roles: userRoles,
               firstName: data.user.first_name, lastName: data.user.last_name,
               profilePhoto: data.user.profile_photo || null,
               emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
               isAdmin: !!data.user.is_admin,
             });
+            // Sync active role: use saved preference if valid, else default to first role
+            const saved = getActiveRole();
+            const validRole = saved && userRoles.includes(saved) ? saved : userRoles[0];
+            setActiveRoleState(validRole);
+            setActiveRole(validRole);
             // Check if disclaimer needs to be accepted
             if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
               setShowDisclaimer(true);
@@ -393,6 +402,8 @@ const App = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     setAuthToken(null);
+    setActiveRole(null);
+    setActiveRoleState(null);
     setCurrentPage('dashboard');
     setAppState('splash');
     // Disconnect WebSocket
@@ -511,13 +522,22 @@ const App = () => {
   if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;
   if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
 
-  const role = currentUser?.role || 'family';
+  const role = activeRole || currentUser?.role || 'family';
+
+  // Role switcher handler
+  const handleSwitchRole = (newRole) => {
+    if (!currentUser?.roles?.includes(newRole)) return;
+    setActiveRoleState(newRole);
+    setActiveRole(newRole);
+    setCurrentPage('dashboard');
+    setSidebarOpen(false);
+  };
 
   // Role-based navigation items
   const getNavItems = () => {
     if (role === 'caregiver') {
       return [
-        { id: 'dashboard', icon: '🩺', label: 'My Dashboard' },
+        { id: 'dashboard', icon: '🤝', label: 'My Dashboard' },
         { id: 'find-work', icon: '🔍', label: 'Find Work' },
         { id: 'financials', icon: '💰', label: 'Financials' },
         { id: 'messages', icon: '💬', label: 'Messages' },
@@ -585,7 +605,7 @@ const App = () => {
   const getBottomNavItems = () => {
     if (role === 'caregiver') {
       return [
-        { id: 'dashboard', icon: '🩺', label: 'Home' },
+        { id: 'dashboard', icon: '🤝', label: 'Home' },
         { id: 'find-work', icon: '🔍', label: 'Find Work' },
         { id: 'financials', icon: '💰', label: 'Money' },
         { id: 'messages', icon: '💬', label: 'Messages' },
@@ -637,9 +657,30 @@ const App = () => {
           )}
           <button className="sidebar-close" onClick={() => setSidebarOpen(false)} aria-label="Close menu">&times;</button>
         </div>
-        <div style={{ padding: '0 16px 12px', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-          {getRoleLabel()}
-        </div>
+        {currentUser?.roles?.length > 1 ? (
+          <div style={{ padding: '4px 12px 12px', display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.15)', borderRadius: '8px', margin: '0 12px 8px' }}>
+            {currentUser.roles.map(r => {
+              const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Care Recipient' };
+              const icons = { family: '👪', caregiver: '💼', care_for: '🏠' };
+              const isActive = r === role;
+              return React.createElement('button', {
+                key: r,
+                onClick: () => handleSwitchRole(r),
+                style: {
+                  flex: 1, padding: '8px 6px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                  fontSize: '11px', fontWeight: isActive ? 700 : 500, textAlign: 'center',
+                  background: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                  color: isActive ? 'white' : 'rgba(255,255,255,0.5)',
+                  transition: 'all 0.2s',
+                },
+              }, `${icons[r] || ''} ${labels[r] || r}`);
+            })}
+          </div>
+        ) : (
+          <div style={{ padding: '0 16px 12px', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            {getRoleLabel()}
+          </div>
+        )}
         <nav>
           <ul className="nav-menu">
             {getNavItems().map(item => (
@@ -673,6 +714,29 @@ const App = () => {
         <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
           <span></span><span></span><span></span>
         </button>
+        {currentUser?.roles?.length > 1 && (
+          <div className="role-switcher-bar" style={{
+            display: 'flex', gap: '4px', padding: '6px 8px', marginBottom: '12px',
+            background: '#f0f0f0', borderRadius: '10px', width: 'fit-content',
+          }}>
+            {currentUser.roles.map(r => {
+              const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Recipient' };
+              const icons = { family: '👪', caregiver: '💼', care_for: '🏠' };
+              const isActive = r === role;
+              return React.createElement('button', {
+                key: r,
+                onClick: () => handleSwitchRole(r),
+                style: {
+                  padding: '6px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                  fontSize: '13px', fontWeight: isActive ? 600 : 400,
+                  background: isActive ? '#1b6b5a' : 'transparent',
+                  color: isActive ? 'white' : '#666',
+                  transition: 'all 0.2s',
+                },
+              }, `${icons[r] || ''} ${labels[r] || r}`);
+            })}
+          </div>
+        )}
         {verifyMessage && (
           <div style={{
             padding: '12px 16px', marginBottom: '16px', borderRadius: '8px', fontSize: '14px', fontWeight: 500,

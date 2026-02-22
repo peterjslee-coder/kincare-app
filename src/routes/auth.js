@@ -19,8 +19,8 @@ router.post("/signup-intent", async (req, res) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
-    if (!["family", "caregiver"].includes(role)) {
-      return res.status(400).json({ error: "Role must be 'family' or 'caregiver'" });
+    if (!["family", "caregiver", "care_for"].includes(role)) {
+      return res.status(400).json({ error: "Role must be 'family', 'caregiver', or 'care_for'" });
     }
 
     const db = await getDb();
@@ -189,12 +189,13 @@ router.post("/register", validateRegister, async (req, res) => {
     const id = uuid();
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const roles = JSON.stringify([role]);
     await db.prepare(`
-      INSERT INTO users (id, email, password_hash, role, first_name, last_name, phone, email_verified)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-    `).run(id, email, passwordHash, role, firstName, lastName, phone || null);
+      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, email_verified)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+    `).run(id, email, passwordHash, role, roles, firstName, lastName, phone || null);
 
-    const user = { id, email, role, firstName, lastName, emailVerified: false };
+    const user = { id, email, role, roles: [role], firstName, lastName, emailVerified: false };
     const token = generateToken(user);
 
     // Clean up signup intent if one was used
@@ -265,11 +266,17 @@ router.post("/login", validateLogin, async (req, res) => {
 
     const token = generateToken(user);
 
+    // Parse roles array from DB (backfill if needed)
+    let userRoles;
+    try { userRoles = user.roles ? JSON.parse(user.roles) : [user.role]; }
+    catch { userRoles = [user.role]; }
+
     const responseData = {
       user: {
         id: user.id,
         email: user.email,
         role: user.role,
+        roles: userRoles,
         firstName: user.first_name,
         lastName: user.last_name,
         emailVerified: !!user.email_verified,
@@ -338,10 +345,15 @@ router.post("/change-password", authenticate, async (req, res) => {
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
   const user = await db.prepare(
-    "SELECT id, email, role, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, email_verified, is_demo, is_admin, password_changed_at, disclaimer_accepted_at, disclaimer_version, pets, pet_allergies, food_allergies, medical_conditions, created_at FROM users WHERE id = ?"
+    "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, email_verified, is_demo, is_admin, password_changed_at, disclaimer_accepted_at, disclaimer_version, pets, pet_allergies, food_allergies, medical_conditions, created_at FROM users WHERE id = ?"
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
+
+  // Parse roles array
+  let userRoles;
+  try { userRoles = user.roles ? JSON.parse(user.roles) : [user.role]; }
+  catch { userRoles = [user.role]; }
 
   // Check 2FA status
   const twoFa = await db.prepare("SELECT is_enabled FROM user_2fa WHERE user_id = ?").get(req.user.id);
@@ -352,6 +364,7 @@ router.get("/me", authenticate, async (req, res) => {
   res.json({
     user: {
       ...user,
+      roles: userRoles,
       email_verified: !!user.email_verified,
       is_demo: !!user.is_demo,
       is_admin: !!user.is_admin,
@@ -392,13 +405,73 @@ router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
 
     // Return updated user
     const user = await db.prepare(
-      "SELECT id, email, role, first_name, last_name, phone, avatar_url, notification_prefs, pets, pet_allergies, food_allergies, medical_conditions, created_at FROM users WHERE id = ?"
+      "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, notification_prefs, pets, pet_allergies, food_allergies, medical_conditions, created_at FROM users WHERE id = ?"
     ).get(req.user.id);
 
-    res.json({ user });
+    // Parse roles
+    let parsedRoles;
+    try { parsedRoles = user.roles ? JSON.parse(user.roles) : [user.role]; }
+    catch { parsedRoles = [user.role]; }
+
+    res.json({ user: { ...user, roles: parsedRoles } });
   } catch (err) {
     console.error("Update profile error:", err);
     res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+// ─── POST /api/auth/add-role ───
+// Add a second role to the current user's account
+router.post("/add-role", authenticate, async (req, res) => {
+  try {
+    const { role: newRole } = req.body;
+
+    if (!["family", "caregiver", "care_for"].includes(newRole)) {
+      return res.status(400).json({ error: "Role must be 'family', 'caregiver', or 'care_for'" });
+    }
+
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, role, roles, first_name, last_name, email FROM users WHERE id = ?").get(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Parse existing roles
+    let currentRoles;
+    try { currentRoles = user.roles ? JSON.parse(user.roles) : [user.role]; }
+    catch { currentRoles = [user.role]; }
+
+    if (currentRoles.includes(newRole)) {
+      return res.status(409).json({ error: "You already have this role" });
+    }
+
+    // Add the new role
+    currentRoles.push(newRole);
+    await db.prepare("UPDATE users SET roles = ? WHERE id = ?").run(JSON.stringify(currentRoles), user.id);
+
+    // If adding caregiver role, create a blank caregiver_profiles row
+    if (newRole === "caregiver") {
+      const existingProfile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(user.id);
+      if (!existingProfile) {
+        await db.prepare(
+          "INSERT INTO caregiver_profiles (id, user_id, hourly_rate, is_available) VALUES (?, ?, 25, 1)"
+        ).run(uuid(), user.id);
+      }
+    }
+
+    // Generate new token with updated roles
+    const token = generateToken({ ...user, roles: currentRoles });
+
+    // Notify admins
+    const roleLabel = newRole === "caregiver" ? "Caregiver" : newRole === "care_for" ? "Care Recipient" : "Family";
+    notifyAdmins("new_registration", {
+      title: "User Added a Role",
+      body: `${user.first_name} ${user.last_name} added the ${roleLabel} role to their account`,
+      data: { type: "role_added", userId: user.id },
+    });
+
+    res.json({ roles: currentRoles, token });
+  } catch (err) {
+    console.error("Add role error:", err);
+    res.status(500).json({ error: "Failed to add role" });
   }
 });
 

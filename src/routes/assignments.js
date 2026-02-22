@@ -12,7 +12,8 @@ router.get("/", async (req, res) => {
   const { careRecipientId } = req.query;
 
   let query, params;
-  if (req.user.role === "family") {
+  const activeRole = req.user.activeRole || req.user.role;
+  if (activeRole === "family") {
     query = `
       SELECT ca.*, cp.user_id AS caregiver_user_id,
         u.first_name, u.last_name, cp.rating_avg, cp.hourly_rate,
@@ -29,7 +30,7 @@ router.get("/", async (req, res) => {
       query += " AND ca.care_recipient_id = ?";
       params.push(careRecipientId);
     }
-  } else if (req.user.role === "caregiver") {
+  } else if (activeRole === "caregiver") {
     const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
     query = `

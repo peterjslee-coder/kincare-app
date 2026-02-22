@@ -10,7 +10,7 @@ router.use(authenticate);
 router.get("/", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
-  const role = req.user.role;
+  const role = req.user.activeRole || req.user.role;
 
   if (role === "family") {
     return familyDashboard(db, userId, res);

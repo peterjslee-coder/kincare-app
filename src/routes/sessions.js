@@ -18,7 +18,8 @@ router.get("/", async (req, res) => {
 
   let query, params;
 
-  if (req.user.role === "family") {
+  const activeRole = req.user.activeRole || req.user.role;
+  if (activeRole === "family") {
     query = `
       SELECT cs.*,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -31,7 +32,7 @@ router.get("/", async (req, res) => {
       WHERE cs.family_user_id = ?
     `;
     params = [req.user.id];
-  } else if (req.user.role === "care_for") {
+  } else if (activeRole === "care_for") {
     // Care recipient view — find their care_recipient record and show their sessions
     const recipient = await db.prepare(`
       SELECT cr.id FROM care_recipients cr
@@ -110,7 +111,8 @@ function generateRecurringDates(startDate, rule, weeks) {
 
 // ─── POST /api/sessions/request — Care recipient creates a "help wanted" request ───
 router.post("/request", async (req, res) => {
-  if (req.user.role !== "care_for") {
+  const userRoles = req.user.roles || [req.user.role];
+  if (!userRoles.includes("care_for")) {
     return res.status(403).json({ error: "Only care recipients can create care requests" });
   }
 
@@ -188,7 +190,8 @@ router.post("/request", async (req, res) => {
 
 // ─── PUT /api/sessions/:id/claim — Caregiver claims a care request ───
 router.put("/:id/claim", async (req, res) => {
-  if (req.user.role !== "caregiver") {
+  const claimRoles = req.user.roles || [req.user.role];
+  if (!claimRoles.includes("caregiver")) {
     return res.status(403).json({ error: "Only caregivers can claim care requests" });
   }
 

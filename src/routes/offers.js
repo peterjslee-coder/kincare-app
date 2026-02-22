@@ -39,7 +39,8 @@ router.post("/:sessionId/offers", async (req, res) => {
 
   // Determine who can make offers: family (session owner) or caregiver (assigned or open request)
   const isFamily = req.user.id === session.family_user_id;
-  const isCaregiver = req.user.role === "caregiver";
+  const userRoles = req.user.roles || [req.user.role];
+  const isCaregiver = userRoles.includes("caregiver");
 
   if (!isFamily && !isCaregiver) {
     return res.status(403).json({ error: "Only the family or a caregiver can make offers" });
@@ -192,7 +193,8 @@ router.get("/:sessionId/offers", async (req, res) => {
 
   const isFamily = req.user.id === session.family_user_id;
   const isCaregiver = req.user.id === session.caregiver_user_id;
-  const isAdmin = req.user.role === 'admin';
+  const offerRoles = req.user.roles || [req.user.role];
+  const isAdmin = offerRoles.includes('admin');
 
   if (!isFamily && !isCaregiver && !isAdmin) {
     return res.status(403).json({ error: "Access denied" });

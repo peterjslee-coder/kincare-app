@@ -709,6 +709,76 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         </div>
       )}
 
+      {/* Add a Role — only for non-demo users who don't have all roles yet */}
+      {!isDemo && user && (() => {
+        const currentRoles = user.roles || [user.role];
+        const availableRoles = [
+          { id: 'family', label: 'Family / Care Team', icon: '👪', desc: 'Find and manage care for a loved one' },
+          { id: 'caregiver', label: 'Caregiver', icon: '💼', desc: 'Provide care and find work opportunities' },
+          { id: 'care_for', label: 'Care Recipient', icon: '🏠', desc: 'Manage your own care and schedule' },
+        ].filter(r => !currentRoles.includes(r.id));
+
+        if (availableRoles.length === 0) return null;
+
+        return React.createElement('div', { className: 'card', style: { marginTop: 20, padding: 20 } },
+          React.createElement('div', { className: 'card-header', style: { marginBottom: 12 } }, 'Add a Role'),
+          React.createElement('p', { style: { fontSize: 13, color: '#888', margin: '0 0 16px' } },
+            'You can use InPlace in multiple ways from the same account.'
+          ),
+          availableRoles.map(r =>
+            React.createElement('button', {
+              key: r.id,
+              onClick: async () => {
+                if (!confirm(`Add the "${r.label}" role to your account?`)) return;
+                try {
+                  const res = await apiFetch('/api/auth/add-role', {
+                    method: 'POST', body: JSON.stringify({ role: r.id }),
+                  });
+                  if (res?.ok) {
+                    const data = await res.json();
+                    if (data.token) { setAuthToken(data.token); }
+                    // Refresh user data
+                    const meRes = await apiFetch('/api/auth/me');
+                    if (meRes?.ok) {
+                      const meData = await meRes.json();
+                      setUser(meData.user);
+                      if (setCurrentUser && meData.user) {
+                        const ur = meData.user.roles || [meData.user.role];
+                        setCurrentUser({
+                          id: meData.user.id, email: meData.user.email, role: meData.user.role,
+                          roles: ur,
+                          firstName: meData.user.first_name, lastName: meData.user.last_name,
+                          profilePhoto: meData.user.profile_photo || null,
+                          emailVerified: !!meData.user.email_verified, isDemo: !!meData.user.is_demo,
+                          isAdmin: !!meData.user.is_admin,
+                        });
+                      }
+                    }
+                    if (typeof showToast === 'function') showToast(`${r.label} role added!`, 'success');
+                  } else {
+                    const err = await res?.json().catch(() => ({}));
+                    if (typeof showToast === 'function') showToast(err.error || 'Failed to add role', 'error');
+                  }
+                } catch { if (typeof showToast === 'function') showToast('Failed to add role', 'error'); }
+              },
+              style: {
+                width: '100%', padding: '14px 16px', marginBottom: 8, background: '#fff',
+                border: '1px solid #e0e0e0', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                display: 'flex', alignItems: 'center', gap: 12, transition: 'border-color 0.2s',
+              },
+              onMouseOver: (e) => { e.currentTarget.style.borderColor = '#1b6b5a'; },
+              onMouseOut: (e) => { e.currentTarget.style.borderColor = '#e0e0e0'; },
+            },
+              React.createElement('span', { style: { fontSize: 28 } }, r.icon),
+              React.createElement('div', null,
+                React.createElement('div', { style: { fontWeight: 600, fontSize: 14, color: '#333' } }, r.label),
+                React.createElement('div', { style: { fontSize: 12, color: '#888', marginTop: 2 } }, r.desc),
+              ),
+            )
+          ),
+        );
+      })()}
+
       {/* Logout — always visible, especially important for mobile PWA */}
       <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid #e0e0e0' }}>
         <button onClick={handleLogoutFromAccount} style={{

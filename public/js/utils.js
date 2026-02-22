@@ -8,9 +8,19 @@ const setAuthToken = window.setAuthToken = (token) => {
   else localStorage.removeItem('auth_token');
 };
 
+// Active role for dual-role users (which view/mode they're in)
+let ACTIVE_ROLE = localStorage.getItem('active_role') || null;
+const setActiveRole = window.setActiveRole = (role) => {
+  ACTIVE_ROLE = role;
+  if (role) localStorage.setItem('active_role', role);
+  else localStorage.removeItem('active_role');
+};
+const getActiveRole = window.getActiveRole = () => ACTIVE_ROLE;
+
 const apiFetch = window.apiFetch = async (url, options = {}) => {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+  if (ACTIVE_ROLE) headers['X-Active-Role'] = ACTIVE_ROLE;
   const response = await fetch(API_BASE + url, { ...options, headers });
   if (response.status === 401) { setAuthToken(null); return null; }
   return response;
