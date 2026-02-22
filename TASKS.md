@@ -47,6 +47,11 @@
 - [ ] **Block user with legal evidence logging.** When blocking a user, collect more than just "spam or abuse" — log location data, timestamps, payment receipts, chat logs for potential legal action. Ties into admin incident management. *(Feedback — Feb 22)*
 - [ ] **Care recipient photo upload.** Families want to upload a real photo of the care recipient (not just emoji avatar). Thumbnail on profile, shows larger when tapped. Helpful for caregivers meeting the person for the first time. *(Feedback — Feb 22)*
 - [ ] **Care request not visible on family calendar.** After a family member requests care, the request doesn't appear on their Schedule calendar. Should show as pending/open status. *(Feedback — Feb 22)*
+- [ ] **Email verification UX unclear.** Users don't know if the verification email went through. Banner should show a re-send link and indicate when the last email was sent. *(Feedback — Feb 22, #23)*
+- [ ] **Fee percentage inconsistency (15% vs 20%).** Short-notice surcharge says 20% but platform fee says 15%. Confusing — needs to be consistent and clearly labeled everywhere. *(Feedback — Feb 22, #24)*
+- [ ] **Caregiver search should center on care recipient location.** "Find Caregivers" page defaults to Blacksburg (or logged-in user's location) instead of the care recipient's registered address. If Pete lives in DC but Betty lives in Blacksburg, search should center on Blacksburg. *(Feedback — Feb 22, #25)*
+- [ ] **Push notifications still not working on iOS.** Pete allowed notifications in settings but nothing comes through. Has been an ongoing issue for weeks. Needs end-to-end debug of SW registration + push subscription flow. *(Feedback — Feb 22, #26)*
+- [ ] **Admin: remove users from waitlist.** No way to remove someone from the waitlist in the admin panel. Need a delete/remove action. *(Feedback — Feb 22, #27)*
 
 
 ## Features — Up Next
@@ -208,6 +213,14 @@
 
 
 ## Done
+
+### Admin Tab Layout, Maria Dual-Role, Branding Sweep & Bug Fixes (v1.15.2–v1.16.0)
+- [x] **Branding icon sweep (v1.15.2):** Replaced all 12 remaining old icons (👩‍⚕️, 👨‍⚕️, 👵) with new branding (🤝, 🌷) across 8 component files.
+- [x] **CaretakerHub white screen fix (v1.15.2a):** useEffect placed after early returns violated React Rules of Hooks, crashing all caregiver dashboards. Moved hook before early returns.
+- [x] **Maria dual-role + Carlos care recipient (v1.15.3):** Maria now has `["caregiver","family"]` roles with brother Carlos Santos (age 34, TBI recovery) as her care recipient. Includes care team, caregiver assignments, sessions, activity items, and notes.
+- [x] **Production role switching fix (v1.15.3a):** Auto-reseed skipped on production when real users exist. Expanded demo data patch in server.js to update Maria's roles and create Carlos + care team on every server start.
+- [x] **Admin card-grid tab layout on all dashboards (v1.16.0):** Applied the AdminPanel's card-grid tab navigation pattern (icon + label cards in responsive grid) to CaretakerHub and CaredForView, replacing the old horizontal underline-style tabs. Consistent navigation UX across all roles.
+- [x] **Feedback protocol (v1.16.0):** Collected 69 items from production (27 new, 39 reviewed). Updated FEEDBACK.md with 5 new items (#23–#27) and TASKS.md with 6 new actionable bugs.
 
 ### Help/FAQ, Onboarding Fix & Demo Fixes (v1.15.0–v1.15.1)
 - [x] **Help/FAQ page (v1.15.0):** Dynamic help_articles DB table, 20 seed articles across 5 categories, role-based visibility, deep-link navigation to in-app pages, search and category filtering.

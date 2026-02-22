@@ -546,17 +546,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '2px solid #e0e0e0', paddingBottom: '0' }}>
+      {/* Tabs — card grid (matches admin panel layout) */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+        gap: '8px', marginBottom: '20px',
+      }}>
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
-            fontSize: '13px', fontWeight: activeTab === tab.id ? 700 : 400,
-            color: activeTab === tab.id ? '#1b6b5a' : '#888',
-            borderBottom: activeTab === tab.id ? '3px solid #1b6b5a' : '3px solid transparent',
-            marginBottom: '-2px', transition: 'all 0.15s',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: '4px', padding: '14px 8px', border: 'none', borderRadius: '12px', cursor: 'pointer',
+            background: activeTab === tab.id ? '#1b6b5a' : '#f5f5f5',
+            color: activeTab === tab.id ? '#fff' : '#555',
+            transition: 'all 0.15s', minHeight: '72px',
+            boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
           }}>
-            {tab.icon} {tab.label}
+            <span style={{ fontSize: '24px', lineHeight: 1 }}>{tab.icon}</span>
+            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.3px' }}>{tab.label}</span>
           </button>
         ))}
       </div>
