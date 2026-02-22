@@ -215,7 +215,7 @@ async function start() {
   try {
     if (parseInt(userCount.count) === 0) {
       console.log("  Empty database detected — running seed...");
-      await seed();
+      await seed({ force: true }); // Empty DB — safe to force
       console.log("  Seed complete");
     } else {
       // Check if demo data version is current — re-seed if stale
@@ -232,7 +232,7 @@ async function start() {
           console.log(`  Demo data stale but ${realUsers.count} real user(s) found — skipping auto-reseed`);
         } else {
           console.log(`  Demo data stale (${currentVersion || 'none'} → ${DEMO_SEED_VERSION}) — re-seeding...`);
-          await seed();
+          await seed({ force: true }); // Only runs when no real users exist (checked above)
           console.log("  Re-seed complete");
         }
       }

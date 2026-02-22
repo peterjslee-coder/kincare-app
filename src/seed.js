@@ -12,11 +12,31 @@ const { initializeDatabase, getDb } = require("./models/database");
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
 const DEMO_SEED_VERSION = '1.20.2';
 
-async function seed() {
+async function seed({ force = false } = {}) {
   console.log("🌱 Seeding InPlace database...\n");
 
   await initializeDatabase();
   const db = await getDb();
+
+  // SAFETY CHECK: Refuse to wipe if real (non-demo) users exist, unless --force
+  try {
+    const realUsers = await db.prepare(
+      "SELECT COUNT(*) as count FROM users WHERE is_demo = 0 OR is_demo IS NULL"
+    ).get();
+    const realCount = parseInt(realUsers?.count || 0);
+    if (realCount > 0 && !force) {
+      const msg = `🛑 SEED ABORTED: ${realCount} real (non-demo) user(s) found in database.\n` +
+        `   This would permanently destroy their data.\n` +
+        `   To force: npm run seed -- --force\n` +
+        `   Or call seed({ force: true }) programmatically.`;
+      console.error(msg);
+      throw new Error(`Seed aborted: ${realCount} real users exist. Use --force to override.`);
+    }
+  } catch (err) {
+    // If the users table doesn't exist yet, that's fine — first run
+    if (err.message.includes("real users exist")) throw err;
+    console.log("  (No existing users table — fresh database)");
+  }
 
   // Clear ALL data in one shot — TRUNCATE CASCADE handles FK order automatically
   await db.exec(`TRUNCATE
@@ -1129,7 +1149,8 @@ module.exports = { seed, DEMO_SEED_VERSION };
 
 // Run directly if called from CLI (npm run seed)
 if (require.main === module) {
-  seed()
+  const force = process.argv.includes("--force");
+  seed({ force })
     .then(() => process.exit(0))
     .catch((err) => {
       console.error("Seed failed:", err);

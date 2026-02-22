@@ -464,88 +464,110 @@ router.put("/users/:id/onboarding", async (req, res) => {
 });
 
 // ─── POST /api/admin/reseed — Re-run demo seed (wipes all data!) ───
+// SAFEGUARDS: Requires explicit confirmation body, backs up real users first
 router.post("/reseed", async (req, res) => {
   try {
+    const { confirm, iUnderstandThisWipesAllData } = req.body || {};
+
+    // Gate 1: Require explicit confirmation strings in the request body
+    if (confirm !== "WIPE_ALL_DATA" || iUnderstandThisWipesAllData !== true) {
+      return res.status(400).json({
+        error: "RESEED BLOCKED — This will permanently destroy ALL data.",
+        required: {
+          confirm: "WIPE_ALL_DATA",
+          iUnderstandThisWipesAllData: true,
+        },
+        hint: "Send POST with JSON body containing both fields to proceed.",
+      });
+    }
+
+    const db = await getDb();
+
+    // Gate 2: Count real (non-demo) users — warn if any exist
+    const realUsers = await db.prepare(
+      "SELECT id, email, first_name, last_name, role FROM users WHERE is_demo = 0 OR is_demo IS NULL"
+    ).all();
+    if (realUsers.length > 0) {
+      console.warn(`⚠️  RESEED: ${realUsers.length} real (non-demo) user(s) will be destroyed:`);
+      for (const u of realUsers) {
+        console.warn(`   - ${u.email} (${u.first_name} ${u.last_name}, role: ${u.role})`);
+      }
+    }
+
+    // Gate 3: Create a backup snapshot of critical tables before wiping
+    const backupTimestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backup = {
+      timestamp: backupTimestamp,
+      users: await db.prepare("SELECT * FROM users").all(),
+      care_recipients: await db.prepare("SELECT * FROM care_recipients").all(),
+      care_sessions: await db.prepare("SELECT * FROM care_sessions").all(),
+      caregiver_profiles: await db.prepare("SELECT * FROM caregiver_profiles").all(),
+      messages: await db.prepare("SELECT id, sender_id, recipient_id, content, is_read, created_at FROM messages").all(),
+      care_teams: await db.prepare("SELECT * FROM care_teams").all(),
+      care_team_members: await db.prepare("SELECT * FROM care_team_members").all(),
+      caregiver_assignments: await db.prepare("SELECT * FROM caregiver_assignments").all(),
+      activity_feed: await db.prepare("SELECT * FROM activity_feed LIMIT 500").all(),
+    };
+
+    // Store backup in a dedicated table (survives because we create it before truncation)
+    await db.exec(`CREATE TABLE IF NOT EXISTS _reseed_backups (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      data TEXT NOT NULL
+    )`);
+    await db.prepare(
+      "INSERT INTO _reseed_backups (id, data) VALUES (?, ?)"
+    ).run(backupTimestamp, JSON.stringify(backup));
+
+    console.log(`📦 Pre-reseed backup saved as _reseed_backups.${backupTimestamp} (${backup.users.length} users, ${backup.care_sessions.length} sessions, ${backup.messages.length} messages)`);
+
+    // Now proceed with actual reseed
     const { seed } = require("../seed");
     console.log("🔄 Admin-triggered reseed starting...");
-    await seed();
+    await seed({ force: true }); // force=true because the endpoint's own gates already confirmed
     console.log("✅ Admin-triggered reseed complete");
-    res.json({ success: true, message: "Database reseeded with fresh demo data" });
+    res.json({
+      success: true,
+      message: "Database reseeded with fresh demo data",
+      backup_id: backupTimestamp,
+      real_users_wiped: realUsers.length,
+      note: `Backup saved to _reseed_backups table with id '${backupTimestamp}'. Use GET /api/admin/reseed-backups to list.`,
+    });
   } catch (err) {
     console.error("Admin reseed error:", err);
     res.status(500).json({ error: "Reseed failed: " + (err.message || "") });
   }
 });
 
-// ─── GET /api/admin/debug-sessions — Raw care_sessions diagnostic ───
-router.get("/debug-sessions", async (req, res) => {
+// ─── GET /api/admin/reseed-backups — List available pre-reseed backups ───
+router.get("/reseed-backups", async (req, res) => {
   try {
     const db = await getDb();
-    const all = await db.prepare("SELECT id, care_recipient_id, family_user_id, caregiver_id, service_type, status, scheduled_date, scheduled_time, estimated_cost FROM care_sessions WHERE status = 'requested' ORDER BY scheduled_date ASC").all();
-    const profiles = await db.prepare("SELECT id, user_id, location_city FROM caregiver_profiles").all();
-    res.json({ requested_sessions: all, caregiver_profiles: profiles });
+    // Check if backup table exists
+    const tableExists = await db.prepare(
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '_reseed_backups')"
+    ).get();
+    if (!tableExists || !Object.values(tableExists)[0]) {
+      return res.json({ backups: [], message: "No backups table found — no reseeds have been performed with the safeguarded endpoint." });
+    }
+    const backups = await db.prepare(
+      "SELECT id, created_at, LENGTH(data) AS data_size_bytes FROM _reseed_backups ORDER BY created_at DESC"
+    ).all();
+    res.json({ backups });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── GET /api/admin/debug-caregiver-query — Run the exact caregiver sessions query ───
-router.get("/debug-caregiver-query", async (req, res) => {
+// ─── GET /api/admin/reseed-backups/:id — Retrieve a specific backup ───
+router.get("/reseed-backups/:id", async (req, res) => {
   try {
     const db = await getDb();
-    // Get Maria's profile (first caregiver)
-    const profiles = await db.prepare("SELECT id, user_id, location_city FROM caregiver_profiles").all();
-    if (profiles.length === 0) return res.json({ error: "No caregiver profiles" });
-    const profile = profiles[0];
-
-    const today = new Date().toISOString().split('T')[0];
-    const endDate = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
-
-    // Run the EXACT same query the sessions route runs for caregivers
-    const query = `
-      SELECT cs.*,
-        cr.first_name || ' ' || cr.last_name AS recipient_name
-      FROM care_sessions cs
-      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-      WHERE (
-        cs.caregiver_id = ?
-        OR (cs.status = 'requested' AND (
-          cs.care_recipient_id IN (
-            SELECT care_recipient_id FROM caregiver_assignments
-            WHERE caregiver_profile_id = ? AND is_active = 1
-          )
-          OR cs.caregiver_id IS NULL
-        ))
-      )
-      AND cs.status = ?
-      AND cs.scheduled_date >= ?
-      AND cs.scheduled_date <= ?
-      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC LIMIT ?
-    `;
-    const params = [profile.id, profile.id, 'requested', today, endDate, 20];
-
-    const sessions = await db.prepare(query).all(...params);
-
-    // Also run the fallback query
-    const fallbackQuery = `
-      SELECT cs.id, cs.status, cs.caregiver_id, cs.scheduled_date
-      FROM care_sessions cs
-      WHERE cs.status = 'requested' AND cs.caregiver_id IS NULL
-      AND cs.scheduled_date >= ? AND cs.scheduled_date <= ?
-      ORDER BY cs.scheduled_date ASC LIMIT 50
-    `;
-    const fallbackSessions = await db.prepare(fallbackQuery).all(today, endDate);
-
-    res.json({
-      profile_used: profile,
-      date_range: { today, endDate },
-      main_query_count: sessions.length,
-      main_query_results: sessions,
-      fallback_query_count: fallbackSessions.length,
-      fallback_query_results: fallbackSessions,
-    });
+    const backup = await db.prepare("SELECT * FROM _reseed_backups WHERE id = ?").get(req.params.id);
+    if (!backup) return res.status(404).json({ error: "Backup not found" });
+    res.json({ id: backup.id, created_at: backup.created_at, data: JSON.parse(backup.data) });
   } catch (err) {
-    res.status(500).json({ error: err.message, stack: err.stack });
+    res.status(500).json({ error: err.message });
   }
 });
 
