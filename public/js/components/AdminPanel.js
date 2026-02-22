@@ -490,7 +490,7 @@ const AdminPanel = window.AdminPanel = () => {
               <div className="stat-label">Care Sessions</div>
             </div>
             <div className="stat-card">
-              <div style={{ fontSize: 24 }}>👩‍⚕️</div>
+              <div style={{ fontSize: 24 }}>🤝</div>
               <div className="stat-number">{stats.totalCaregivers}</div>
               <div className="stat-label">Caregivers</div>
             </div>

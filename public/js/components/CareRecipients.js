@@ -128,7 +128,7 @@ const CareRecipients = window.CareRecipients = () => {
       <div className="recipient-cards">
         {recipients.map(r => (
           <div key={r.id} className={`recipient-card ${selectedId === r.id ? 'selected' : ''}`} onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}>
-            <div style={{ fontSize: '40px', marginBottom: '12px' }}>👵</div>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🌷</div>
             <div className="recipient-card-name">{getName(r)}</div>
             <p className="text-muted" style={{ fontSize: '13px' }}>{r.age} years old</p>
             {(r.location_city || r.city) && <p className="text-muted" style={{ fontSize: '13px' }}>{r.location_city ? `${r.location_city}, ${r.location_state}` : r.city}</p>}
@@ -139,7 +139,7 @@ const CareRecipients = window.CareRecipients = () => {
       {selected && !showAddForm && (
         <div className="card" style={{ marginTop: '32px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="card-header">👵 {getName(selected)}</div>
+            <div className="card-header">🌷 {getName(selected)}</div>
             <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
           </div>
           <div className="info-grid">

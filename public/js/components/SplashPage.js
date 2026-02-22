@@ -367,7 +367,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginTop: '40px', justifyContent: 'center' }}>
             {[
-              { icon: '👩‍⚕️', label: 'Caregiver Matching' },
+              { icon: '🤝', label: 'Caregiver Matching' },
               { icon: '💊', label: 'Medication Tracking' },
               { icon: '🩺', label: 'Doctor Coordination' },
               { icon: '💬', label: 'Family Messaging' },
@@ -556,7 +556,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             background: '#f0faf8', borderRadius: '16px', padding: '40px 32px', textAlign: 'center',
             border: '1px solid #d0e8e3',
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>👵</div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌷</div>
             <p style={{ fontSize: '20px', color: '#1b6b5a', fontWeight: 600, marginBottom: '8px' }}>
               70% of seniors say they want to age at home.
             </p>

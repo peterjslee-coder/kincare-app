@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.15.1';
+const DEMO_SEED_VERSION = '1.15.2';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -123,14 +123,14 @@ async function seed() {
     bettyId, peteId, "Betty", "Lee", 78,
     "123 Main Street", "Blacksburg", "VA", "24060",
     37.2296, -80.4139,
-    JSON.stringify(["Early-stage dementia", "Mild arthritis"]),
-    JSON.stringify(["Donepezil 10mg", "Ibuprofen PRN"]),
-    "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals.",
+    JSON.stringify(["Early-stage dementia (diagnosed 2024)", "Mild arthritis — both knees", "High blood pressure (controlled)", "Occasional vertigo when standing quickly", "Poor hearing in left ear — wears hearing aid"]),
+    JSON.stringify(["Donepezil 10mg daily (evening)", "Lisinopril 10mg daily (morning)", "Ibuprofen 200mg PRN for knee pain", "Calcium + Vitamin D supplement", "Baby aspirin 81mg daily"]),
+    "Prefers female caregivers. Loves gardening and old movies (especially Hitchcock). Needs gentle reminders for meals and medications. Likes her tea with honey, no sugar. Enjoys puzzles and crosswords in the afternoon.",
     "Pete Lee", "(626) 555-0142",
-    "1 cat (Whiskers — orange tabby, indoor, friendly)",
-    "None",
-    "Shellfish allergy (mild — causes hives)",
-    "Early-stage dementia, mild arthritis, occasional knee pain"
+    "2 cats — Whiskers (orange tabby, indoor, friendly, 8 yrs) and Mittens (calico, indoor, shy with strangers, 5 yrs)",
+    "None known",
+    JSON.stringify(["Peanuts (severe — carries EpiPen)", "Shellfish (mild — causes hives)"]),
+    "Early-stage dementia, mild arthritis (both knees), high blood pressure (controlled), occasional vertigo, poor hearing left ear (hearing aid)"
   );
 
   // ─── Care Recipient (Dorothy Henderson — Linda's mother) ───

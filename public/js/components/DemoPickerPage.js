@@ -45,7 +45,7 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
         AUTH_TOKEN = data.token;
         localStorage.removeItem('auth_token');
         // Clear stale active role from previous demo user
-        if (window.setActiveRole) setActiveRole(null);
+        if (window.setActiveRole) window.setActiveRole(null);
         if (window.connectSocket) connectSocket(data.token);
         onLogin(data.user || { role: 'family' });
       } else {

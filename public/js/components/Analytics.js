@@ -167,7 +167,7 @@ const Analytics = window.Analytics = () => {
           <div className="stat-label">Total Spend</div>
         </div>
         <div className="stat-card">
-          <div style={{ fontSize: 28 }}>👨‍⚕️</div>
+          <div style={{ fontSize: 28 }}>🤝</div>
           <div className="stat-number">{caregiverStats.length}</div>
           <div className="stat-label">Caregivers Used</div>
         </div>

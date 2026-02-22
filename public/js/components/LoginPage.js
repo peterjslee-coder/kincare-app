@@ -53,8 +53,8 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
 
   const demoAccounts = [
     { label: 'Pete (Family)', email: 'pete@inplace.care', icon: '👨‍👩‍👦', desc: 'Care coordinator' },
-    { label: 'Maria (Caregiver)', email: 'maria@inplace.care', icon: '🩺', desc: 'Professional caregiver' },
-    { label: 'Betty (Cared-For)', email: 'betty@inplace.care', icon: '👵', desc: 'Care recipient' },
+    { label: 'Maria (Caregiver)', email: 'maria@inplace.care', icon: '🤝', desc: 'Professional caregiver' },
+    { label: 'Betty (Cared-For)', email: 'betty@inplace.care', icon: '🌷', desc: 'Care recipient' },
     { label: 'David (Brother)', email: 'david.lee@inplace.care', icon: '👨', desc: "Pete's brother" },
     { label: 'Susan (Sister)', email: 'susan.lee@inplace.care', icon: '👩', desc: "Pete's sister" },
   ];

@@ -211,7 +211,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           <div className="card-header" style={{ fontSize: 16, fontWeight: 700 }}>How InPlace Works</div>
           <div style={{ display: 'grid', gap: 20, marginTop: 8 }}>
             {[
-              { icon: '👵', title: 'Add your loved one', desc: 'Create a care profile with health details, medications, and preferences so caregivers know exactly what\'s needed.' },
+              { icon: '🌷', title: 'Add your loved one', desc: 'Create a care profile with health details, medications, and preferences so caregivers know exactly what\'s needed.' },
               { icon: '👨‍👩‍👦', title: 'Build your care team', desc: 'Invite siblings, family members, or friends to help coordinate care. Everyone stays on the same page.' },
               { icon: '🔍', title: 'Find caregivers', desc: 'Search for qualified, background-checked caregivers in your area who match your needs.' },
               { icon: '📅', title: 'Schedule & track', desc: 'Book care sessions, get real-time updates, photos, and visit summaries. Never wonder how things went.' },
@@ -355,7 +355,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       {parent && (
         <div className="betty-card" onClick={() => onNavigate && onNavigate('care-profile')}
           style={{ cursor: 'pointer', position: 'relative' }}>
-          <div style={{ fontSize: 40 }}>👵</div>
+          <div style={{ fontSize: 40 }}>🌷</div>
           <div className="betty-name">{parent.name}</div>
           <div className="betty-info">
             {(() => {
@@ -510,7 +510,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                     { icon: '📅', val: totals.sessions, label: 'Total Sessions' },
                     { icon: '⏱️', val: totals.hours, label: 'Total Hours' },
                     { icon: '💰', val: `$${totals.spend}`, label: 'Total Spend' },
-                    { icon: '👨‍⚕️', val: cgStats.length, label: 'Caregivers' },
+                    { icon: '🤝', val: cgStats.length, label: 'Caregivers' },
                   ].map((s, i) => (
                     <div key={i} style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 18 }}>{s.icon}</div>

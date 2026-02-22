@@ -106,7 +106,7 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
         AUTH_TOKEN = data.token;
         localStorage.removeItem('auth_token');
         // Clear stale active role from previous demo user
-        if (window.setActiveRole) setActiveRole(null);
+        if (window.setActiveRole) window.setActiveRole(null);
         if (window.connectSocket) connectSocket(data.token);
         onSwitchAccount(data.user || { role: 'family', roles: ['family'] });
       }
@@ -207,7 +207,7 @@ const App = () => {
             const saved = getActiveRole();
             const validRole = saved && userRoles.includes(saved) ? saved : userRoles[0];
             setActiveRoleState(validRole);
-            setActiveRole(validRole);
+            window.setActiveRole(validRole);
             // Check if disclaimer needs to be accepted
             if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
               setShowDisclaimer(true);
@@ -352,7 +352,7 @@ const App = () => {
 
   const handleLogin = (user) => {
     // Clear stale active role from any previous session
-    setActiveRole(null);
+    window.setActiveRole(null);
     setActiveRoleState(null);
     // Fetch full user data to get disclaimer status
     apiFetch('/api/auth/me').then(async r => {
@@ -372,7 +372,7 @@ const App = () => {
           });
           // Sync activeRole to new user's primary role
           if (userRoles.length === 1) {
-            setActiveRole(userRoles[0]);
+            window.setActiveRole(userRoles[0]);
             setActiveRoleState(userRoles[0]);
           }
           // Check if disclaimer needs to be accepted
@@ -416,7 +416,7 @@ const App = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     setAuthToken(null);
-    setActiveRole(null);
+    window.setActiveRole(null);
     setActiveRoleState(null);
     setCurrentPage('dashboard');
     setAppState('splash');
@@ -434,7 +434,7 @@ const App = () => {
 
   const handleDemoSwitch = (user) => {
     // Clear stale active role and sync to new user's role
-    setActiveRole(null);
+    window.setActiveRole(null);
     setActiveRoleState(null);
     setCurrentUser(user);
     setCurrentPage('dashboard');
@@ -545,7 +545,7 @@ const App = () => {
   const handleSwitchRole = (newRole) => {
     if (!currentUser?.roles?.includes(newRole)) return;
     setActiveRoleState(newRole);
-    setActiveRole(newRole);
+    window.setActiveRole(newRole);
     setCurrentPage('dashboard');
     setSidebarOpen(false);
   };
@@ -644,7 +644,7 @@ const App = () => {
     const familyBottom = [
       { id: 'dashboard', icon: '🏠', label: 'Home' },
       { id: 'schedule', icon: '📅', label: 'Schedule' },
-      { id: 'caregivers', icon: '👨‍⚕️', label: 'Care' },
+      { id: 'caregivers', icon: '🤝', label: 'Care' },
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'account', icon: '👤', label: 'More' },
     ];

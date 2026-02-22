@@ -387,7 +387,7 @@ const AdminFinancials = window.AdminFinancials = () => {
           ) : <p style={{ color: '#999', fontSize: 13 }}>No payment data yet</p>}
         </div>
         <div className="card">
-          <div className="card-header"><span className="card-icon">👩‍⚕️</span>Top Caregivers by Earnings</div>
+          <div className="card-header"><span className="card-icon">🤝</span>Top Caregivers by Earnings</div>
           {(breakdown?.topCaregivers || []).length > 0 ? (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
