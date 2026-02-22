@@ -72,6 +72,24 @@ router.post("/accept-invite", authenticate, async (req, res) => {
 
     await db.prepare("UPDATE platform_invites SET status = 'accepted' WHERE id = ?").run(invite.id);
 
+    // Notify the admin who sent the invite via push
+    const { sendPushToAdmins } = require("./push");
+    const userName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
+    sendPushToAdmins("invite_accepted", {
+      title: "Invite Accepted!",
+      body: `${userName} just accepted your invite and joined InPlace`,
+      data: { type: "invite_accepted", email: invite.invited_email, userId: req.user.id },
+    });
+
+    // Also notify via WebSocket if available
+    const emitToUser = req.app.get("emitToUser");
+    if (invite.invited_by && emitToUser) {
+      emitToUser(invite.invited_by, "activity_update", {
+        type: "invite_accepted",
+        message: `${userName} accepted your invite`,
+      });
+    }
+
     res.json({ message: "Invite accepted" });
   } catch (err) {
     console.error("Accept invite error:", err);

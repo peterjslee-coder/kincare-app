@@ -360,6 +360,15 @@ router.post("/accept-invite", authenticate, async (req, res) => {
       // Real-time notification
       const emitToUser = req.app.get("emitToUser");
       if (emitToUser) emitToUser(leader.user_id, "activity_update", { type: "team_join" });
+
+      // Push notification to team leader
+      const { sendPushToUser } = require("./push");
+      const memberName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "Someone";
+      sendPushToUser(leader.user_id, {
+        title: "New Team Member!",
+        body: `${memberName} joined ${teamInfo?.name || "your care team"}`,
+        data: { type: "team_join", careTeamId: invite.care_team_id },
+      }, "team_join").catch(() => {});
     }
 
     res.json({ message: "You've joined the care team!", careTeamId: invite.care_team_id });

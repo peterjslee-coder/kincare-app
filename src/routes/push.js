@@ -6,7 +6,7 @@ const { authenticate } = require("../middleware/auth");
 const router = express.Router();
 
 // VAPID public key — frontend needs this to subscribe
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BAWbskb8EJhZ6Ue7pShGrgbQUMXQ1TnoJ2zvbVNknuztcNgw0tHgmrXfXiQeXUgtRPGOr9KtFfOrAawxvihL7HA";
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BPuicFkWJ1W4c4HyisIhpmuEoD20hoedAoFYlWFGiWPZ2PTVeD479AJL_l03e7BEmGEqLnb1K1r60S2URj2JciU";
 
 // ─── GET /api/push/vapid-key ───
 // Return VAPID public key for client subscription (no auth required)

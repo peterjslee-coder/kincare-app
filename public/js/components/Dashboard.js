@@ -6,6 +6,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [error, setError] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [showPwaGuide, setShowPwaGuide] = useState(false);
 
   const fetchDashboard = async () => {
     try {
@@ -114,14 +115,88 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       { id: 'team', label: 'Invite family to the care team', done: hasCareTeam, action: () => onNavigate && onNavigate('care-team'), actionText: 'Manage Team' },
     ]),
     { id: 'caregiver', label: 'Search for caregivers in your area', done: stats.assignedCaregivers > 0, action: () => onNavigate && onNavigate('caregivers'), actionText: 'Find Caregivers' },
+    { id: 'pwa', label: 'Install InPlace on your phone', done: !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || !!localStorage.getItem('pwa_setup_done'), action: () => setShowPwaGuide(true), actionText: 'Set Up' },
   ];
   const onboardingComplete = onboardingSteps.every(s => s.done);
   const showOnboarding = !isDemo && !onboardingComplete;
+
+  // ─── PWA Install Guide Modal ───
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isAndroid = /Android/.test(navigator.userAgent);
+  const pwaGuide = showPwaGuide && (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={() => setShowPwaGuide(false)}>
+      <div style={{ background: '#fff', borderRadius: 16, maxWidth: 420, width: '100%', padding: '28px 24px', maxHeight: '90vh', overflow: 'auto' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Install InPlace</h2>
+          <button onClick={() => setShowPwaGuide(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#999' }}>&times;</button>
+        </div>
+        <p style={{ fontSize: 14, color: '#555', lineHeight: 1.6, margin: '0 0 20px' }}>
+          Adding InPlace to your home screen gives you push notifications, faster loading, and a full-screen app experience.
+        </p>
+
+        {isIOS ? (
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#1b6b5a', marginBottom: 12 }}>On iPhone / iPad (Safari)</div>
+            {[
+              { num: '1', text: 'Tap the Share button at the bottom of Safari (the square with an arrow pointing up)' },
+              { num: '2', text: 'Scroll down and tap "Add to Home Screen"' },
+              { num: '3', text: 'Tap "Add" in the top right' },
+              { num: '4', text: 'Open InPlace from your home screen — you\'ll get push notifications and a full-screen experience!' },
+            ].map(s => (
+              <div key={s.num} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1b6b5a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.num}</div>
+                <div style={{ fontSize: 14, color: '#444', lineHeight: 1.5, paddingTop: 3 }}>{s.text}</div>
+              </div>
+            ))}
+            <div style={{ background: '#fff8e1', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#795548', marginTop: 8 }}>
+              <strong>Important:</strong> You must use Safari for this to work. Chrome on iPhone does not support home screen apps.
+            </div>
+          </div>
+        ) : isAndroid ? (
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#1b6b5a', marginBottom: 12 }}>On Android (Chrome)</div>
+            {[
+              { num: '1', text: 'Tap the three-dot menu in the top right of Chrome' },
+              { num: '2', text: 'Tap "Add to Home screen" or "Install app"' },
+              { num: '3', text: 'Tap "Install" to confirm' },
+              { num: '4', text: 'Open InPlace from your home screen — push notifications will work automatically!' },
+            ].map(s => (
+              <div key={s.num} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1b6b5a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.num}</div>
+                <div style={{ fontSize: 14, color: '#444', lineHeight: 1.5, paddingTop: 3 }}>{s.text}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#1b6b5a', marginBottom: 12 }}>On your phone's browser</div>
+            <p style={{ fontSize: 14, color: '#444', lineHeight: 1.6 }}>
+              Open <strong>yourinplace.com</strong> in your phone's browser, then use the browser menu to "Add to Home Screen" or "Install App". This gives you push notifications and a full-screen experience.
+            </p>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+          <button onClick={() => { localStorage.setItem('pwa_setup_done', '1'); setShowPwaGuide(false); }}
+            style={{ flex: 1, padding: '12px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            Done — I've installed it!
+          </button>
+          <button onClick={() => setShowPwaGuide(false)}
+            style={{ padding: '12px 16px', background: '#f5f5f5', color: '#666', border: 'none', borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            Later
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   // ─── Welcome screen for brand new users ───
   if (isNewUser) {
     return (
       <>
+        {pwaGuide}
         {/* Welcome Hero */}
         <div style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #2a9d8f 100%)', borderRadius: 16, padding: '40px 32px', color: '#fff', marginBottom: 24, textAlign: 'center' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>👋</div>
@@ -207,6 +282,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   // ─── Regular dashboard for users with data ───
   return (
     <>
+      {pwaGuide}
       <div className="page-header">
         <h1 className="greeting">Welcome back, {firstName}!</h1>
       </div>
