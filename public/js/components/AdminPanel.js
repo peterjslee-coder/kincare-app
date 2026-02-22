@@ -294,6 +294,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'invites', label: 'Invites', icon: '✉️' },
     { id: 'activity', label: 'Activity', icon: '⚡' },
     { id: 'feedback', label: 'Feedback', icon: '💬' },
+    { id: 'financials', label: 'Financials', icon: '💰' },
     { id: 'blocked', label: 'Blocked', icon: '🚫' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
@@ -1034,6 +1035,9 @@ const AdminPanel = window.AdminPanel = () => {
           )}
         </div>
       )}
+
+      {/* ─── Financials Tab ─── */}
+      {activeTab === 'financials' && <AdminFinancials />}
 
       {/* ─── Blocked Emails Tab ─── */}
       {activeTab === 'blocked' && (
