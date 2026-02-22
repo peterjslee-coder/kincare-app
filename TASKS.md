@@ -30,6 +30,14 @@
 - [ ] **Care team member management UX overhaul.** Member cards should look like the leader card, with options on click (remove, promote, read-only, etc.) instead of showing blunt "Member" and "Remove" buttons. Ties into authority delegation feature. *(Feedback — new)*
 - [ ] **Maria's caregiver calendar — color/block overlap confusion on busy days.** When a day has blocked time, a confirmed session, AND a care request, the color coding gets confusing. Blocks and sessions need clearer visual distinction so overlapping items make sense at a glance. *(Feedback — new)*
 - [ ] **APP_VERSION not bumped consistently.** `window.APP_VERSION` in index.html was stuck at 1.7.5 while cache-bust was at 1.8.x. Going forward, always bump APP_VERSION, cache-bust param, and SW cache name together. Fixed in v1.8.3.
+- [ ] **"Connection request sent" should persist on messages screen.** After sending a connection request, the status disappears when navigating away from messages. Should show persistent "Connection pending" state. *(Feedback — Feb 22)*
+- [ ] **Back swipe closes PWA instead of navigating back.** Browser back gesture on iOS closes the app entirely instead of going back to previous page. Need in-app history/navigation stack. *(Feedback — Feb 22)*
+- [ ] **Can't see connection invite status.** No way to tell if someone received a connection invite. Should show greyed-out chat box or "pending" status for invited contacts. *(Feedback — Feb 22)*
+- [ ] **Caregivers search should initialize at care recipient's location.** The "Find Caregivers" page always defaults to Blacksburg instead of starting at the care recipient's registered address. *(Feedback — Feb 22)*
+- [ ] **Feedback icon overlaps message send button.** The feedback FAB icon (currently a lightbulb) still overlays the message send button on some screens. *(Feedback — Feb 21)*
+- [ ] **Message timestamps — add date and time.** Messages only show time but no date. Add date context (e.g., "Feb 21, 2:30 PM") especially for older messages. *(Feedback — Carry Taker)*
+- [ ] **Photo upload crop + auto-resize.** Need in-app crop tool and auto-resize to 1.5MB before uploading profile photos. Current UX too manual. *(Feedback — reviewed)*
+- [ ] **Profile photo in sidebar/header.** Uploaded profile photo should display next to "iP" logo in the top-left sidebar. Clicking the thumbnail should show options to change/delete. *(Feedback — reviewed)*
 
 
 ## Features — Up Next

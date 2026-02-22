@@ -372,4 +372,88 @@ router.delete("/blocked-emails/:id", authenticate, checkAdmin, requireAdmin, asy
   }
 });
 
+// ─── GET /api/admin/users/:id/onboarding — Get caregiver onboarding status ───
+router.get("/users/:id/onboarding", async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, email, role, first_name, last_name FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const profile = await db.prepare(`
+      SELECT id, is_background_checked, background_check_consent, background_check_paid,
+             onboarding_complete, is_available, photo_url,
+             dl_number, dl_state
+      FROM caregiver_profiles WHERE user_id = ?
+    `).get(req.params.id);
+
+    // Check for uploaded documents
+    const docs = await db.prepare(
+      "SELECT doc_type, uploaded_at FROM caregiver_documents WHERE user_id = ? ORDER BY uploaded_at DESC"
+    ).all(req.params.id).catch(() => []);
+
+    res.json({
+      user: { id: user.id, email: user.email, role: user.role, name: `${user.first_name || ''} ${user.last_name || ''}`.trim() },
+      profile: profile || null,
+      documents: docs || [],
+      flags: profile ? {
+        backgroundCheckCleared: !!profile.is_background_checked,
+        backgroundCheckPaid: !!profile.background_check_paid,
+        backgroundCheckConsent: !!profile.background_check_consent,
+        onboardingComplete: !!profile.onboarding_complete,
+        isAvailable: !!profile.is_available,
+        hasPhoto: !!profile.photo_url,
+        hasDriversLicense: !!(profile.dl_number && profile.dl_state),
+      } : null,
+    });
+  } catch (err) {
+    console.error("Admin onboarding status error:", err);
+    res.status(500).json({ error: "Failed to load onboarding status" });
+  }
+});
+
+// ─── PUT /api/admin/users/:id/onboarding — Admin override caregiver flags ───
+router.put("/users/:id/onboarding", async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, email, role FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.params.id);
+    if (!profile) return res.status(404).json({ error: "No caregiver profile found for this user" });
+
+    const { backgroundCheckCleared, backgroundCheckPaid, onboardingComplete, isAvailable } = req.body;
+    const updates = [];
+    const params = [];
+
+    if (backgroundCheckCleared !== undefined) {
+      updates.push("is_background_checked = ?");
+      params.push(backgroundCheckCleared ? 1 : 0);
+    }
+    if (backgroundCheckPaid !== undefined) {
+      updates.push("background_check_paid = ?");
+      params.push(backgroundCheckPaid ? 1 : 0);
+    }
+    if (onboardingComplete !== undefined) {
+      updates.push("onboarding_complete = ?");
+      params.push(onboardingComplete ? 1 : 0);
+    }
+    if (isAvailable !== undefined) {
+      updates.push("is_available = ?");
+      params.push(isAvailable ? 1 : 0);
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: "No flags to update" });
+
+    updates.push("updated_at = NOW()");
+    params.push(req.params.id);
+
+    await db.prepare(`UPDATE caregiver_profiles SET ${updates.join(", ")} WHERE user_id = ?`).run(...params);
+
+    res.json({ success: true, message: `Updated onboarding flags for ${user.email}`, updatedFlags: req.body });
+  } catch (err) {
+    console.error("Admin onboarding override error:", err);
+    res.status(500).json({ error: "Failed to update onboarding flags" });
+  }
+});
+
 module.exports = router;

@@ -37,6 +37,9 @@ const AdminPanel = window.AdminPanel = () => {
   // User delete state
   const [deleteConfirm, setDeleteConfirm] = useState(null); // userId being confirmed
   const [deleteLoading, setDeleteLoading] = useState(false);
+  // Onboarding override state
+  const [onboardingModal, setOnboardingModal] = useState(null); // { userId, data }
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -199,6 +202,38 @@ const AdminPanel = window.AdminPanel = () => {
       }
     } catch (err) { console.error('Delete user error:', err); }
     setDeleteLoading(false);
+  };
+
+  // Onboarding override functions
+  const openOnboardingModal = async (userId) => {
+    setOnboardingLoading(true);
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/onboarding`);
+      if (res?.ok) {
+        const data = await res.json();
+        setOnboardingModal({ userId, ...data });
+      } else {
+        alert('Failed to load onboarding status');
+      }
+    } catch (err) { console.error('Onboarding fetch error:', err); }
+    setOnboardingLoading(false);
+  };
+
+  const toggleOnboardingFlag = async (flag, currentValue) => {
+    if (!onboardingModal) return;
+    try {
+      const res = await apiFetch(`/api/admin/users/${onboardingModal.userId}/onboarding`, {
+        method: 'PUT',
+        body: JSON.stringify({ [flag]: !currentValue }),
+      });
+      if (res?.ok) {
+        // Refresh modal data
+        openOnboardingModal(onboardingModal.userId);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || 'Failed to update flag');
+      }
+    } catch (err) { console.error('Toggle flag error:', err); }
   };
 
   const handleSearchEmail = async () => {
@@ -525,6 +560,30 @@ const AdminPanel = window.AdminPanel = () => {
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       {u.is_admin ? (
                         <span style={{ fontSize: '11px', color: '#999' }}>—</span>
+                      ) : u.role === 'caregiver' ? (
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button onClick={() => openOnboardingModal(u.id)}
+                            style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                            Manage
+                          </button>
+                          {deleteConfirm === u.id ? (
+                            <>
+                              <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={deleteLoading}
+                                style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                                {deleteLoading ? '...' : 'Confirm'}
+                              </button>
+                              <button onClick={() => setDeleteConfirm(null)}
+                                style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                                ✕
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => handleDeleteUser(u.id, u.email)}
+                              style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       ) : deleteConfirm === u.id ? (
                         <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
                           <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={deleteLoading}
@@ -1137,6 +1196,77 @@ const AdminPanel = window.AdminPanel = () => {
                 </label>
               );
             })}
+          </div>
+        </div>
+      )}
+      {/* Onboarding Override Modal */}
+      {onboardingModal && (
+        <div className="modal-overlay" onClick={() => setOnboardingModal(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, maxHeight: '80vh', overflow: 'auto' }}>
+            <button className="modal-close" onClick={() => setOnboardingModal(null)}>✕</button>
+            <div className="modal-header" style={{ fontSize: '17px' }}>
+              Caregiver Onboarding — {onboardingModal.user?.name || onboardingModal.user?.email}
+            </div>
+            <div style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>{onboardingModal.user?.email}</div>
+
+            {onboardingModal.flags ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {[
+                  { key: 'backgroundCheckCleared', label: 'Background Check Cleared', desc: 'Checkr returned OK (or admin override)' },
+                  { key: 'backgroundCheckPaid', label: 'Background Check Paid', desc: 'Paid $30 Stripe fee for background check' },
+                  { key: 'onboardingComplete', label: 'Onboarding Complete', desc: 'All registration steps finished' },
+                  { key: 'isAvailable', label: 'Available for Jobs', desc: 'Can see and accept care requests' },
+                ].map(flag => (
+                  <div key={flag.key} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '12px', background: onboardingModal.flags[flag.key] ? '#e8f5e9' : '#fce4ec',
+                    borderRadius: '8px', border: `1px solid ${onboardingModal.flags[flag.key] ? '#a5d6a7' : '#ef9a9a'}`,
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '14px', color: '#333' }}>
+                        {onboardingModal.flags[flag.key] ? '✅' : '❌'} {flag.label}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{flag.desc}</div>
+                    </div>
+                    <button onClick={() => toggleOnboardingFlag(flag.key, onboardingModal.flags[flag.key])}
+                      style={{
+                        padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+                        border: 'none', cursor: 'pointer',
+                        background: onboardingModal.flags[flag.key] ? '#ef5350' : '#1b6b5a',
+                        color: '#fff',
+                      }}>
+                      {onboardingModal.flags[flag.key] ? 'Revoke' : 'Grant'}
+                    </button>
+                  </div>
+                ))}
+
+                {/* Extra info */}
+                <div style={{ marginTop: '8px', padding: '12px', background: '#f8f9fa', borderRadius: '8px', fontSize: '13px' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '6px', color: '#555' }}>Additional Info</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                    <span style={{ color: '#888' }}>BG Check Consent:</span>
+                    <span>{onboardingModal.flags.backgroundCheckConsent ? 'Yes' : 'No'}</span>
+                    <span style={{ color: '#888' }}>Has Photo:</span>
+                    <span>{onboardingModal.flags.hasPhoto ? 'Yes' : 'No'}</span>
+                    <span style={{ color: '#888' }}>Drivers License:</span>
+                    <span>{onboardingModal.flags.hasDriversLicense ? 'Yes' : 'No'}</span>
+                  </div>
+                  {onboardingModal.documents?.length > 0 && (
+                    <div style={{ marginTop: '8px' }}>
+                      <span style={{ color: '#888' }}>Uploaded docs:</span> {onboardingModal.documents.map(d => d.doc_type).join(', ')}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginTop: '8px', padding: '10px', background: '#fff8e1', borderRadius: '8px', fontSize: '12px', color: '#795548' }}>
+                  Use "Grant" to override any pending step. For example, if Checkr isn't set up yet, you can manually clear the background check and mark them available for jobs.
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                No caregiver profile found for this user.
+              </div>
+            )}
           </div>
         </div>
       )}

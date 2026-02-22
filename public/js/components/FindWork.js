@@ -146,8 +146,10 @@ const FindWork = window.FindWork = () => {
               const service = s.service_type || s.serviceType;
               const recipient = s.recipient_name || s.recipientName || 'Client';
               const cost = s.estimated_cost || s.estimatedCost;
+              const offeredRate = s.proposed_rate || s.proposedRate;
               const instructions = s.special_instructions || s.specialInstructions;
               const dateStr = s.scheduled_date || s.date;
+              const totalDisplay = offeredRate ? (offeredRate * duration) : cost;
 
               return (
                 <div key={s.id} className="card" style={{
@@ -171,12 +173,17 @@ const FindWork = window.FindWork = () => {
                       </div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
-                      <div style={{ fontSize: '20px', fontWeight: 700, color: '#1b6b5a' }}>
-                        {cost ? `$${cost}` : '—'}
+                      <div style={{ fontSize: '22px', fontWeight: 700, color: '#1b6b5a' }}>
+                        {totalDisplay ? `$${Math.round(totalDisplay)}` : '—'}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#888' }}>
-                        {cost && duration ? `$${Math.round(cost / duration)}/hr` : ''}
+                      <div style={{ fontSize: '12px', color: offeredRate ? '#1b6b5a' : '#888', fontWeight: offeredRate ? 600 : 400 }}>
+                        {offeredRate ? `$${offeredRate}/hr offered` : (cost && duration ? `$${Math.round(cost / duration)}/hr` : '')}
                       </div>
+                      {duration && (
+                        <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                          {duration}h total
+                        </div>
+                      )}
                     </div>
                   </div>
 

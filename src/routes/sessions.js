@@ -240,6 +240,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     durationHours = 2, specialInstructions,
     recurrenceRule, recurrenceWeeks,
     status: requestedStatus,
+    proposedRate,
   } = req.body;
 
   if (!careRecipientId || !serviceType || !scheduledDate || !scheduledTime) {
@@ -347,21 +348,27 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
 
   for (const sessionDate of dates) {
     const id = uuid();
+    // If family proposed a rate, use it for estimated cost instead of caregiver's rate
+    const finalCost = proposedRate && parseFloat(proposedRate) > 0
+      ? parseFloat(proposedRate) * durationHours
+      : estimatedCost;
+
     await db.prepare(`
       INSERT INTO care_sessions
       (id, care_recipient_id, family_user_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours,
        special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
-       short_notice_surcharge, rate_tier)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       short_notice_surcharge, rate_tier, proposed_rate)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, careRecipientId, req.user.id, serviceType, sessionStatus,
       sessionDate, scheduledTime, durationHours,
-      specialInstructions || null, estimatedCost,
+      specialInstructions || null, finalCost,
       isRecurring ? recurrenceRule : null,
       recurrenceGroupId,
       costResult.surcharge || 0,
-      JSON.stringify(costResult.tierBreakdown)
+      JSON.stringify(costResult.tierBreakdown),
+      proposedRate ? parseFloat(proposedRate) : null
     );
     createdSessions.push(id);
   }

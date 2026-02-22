@@ -230,6 +230,8 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS short_notice_surcharge REAL DEFAULT 0`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS rate_tier TEXT`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS budget_max REAL`,
+    // v1.13.0 — Proposed rate (family's offered hourly rate)
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS proposed_rate REAL`,
     // v1.12.0 — Backfill tiered rates from hourly_rate
     `UPDATE caregiver_profiles SET rate_daytime = hourly_rate WHERE rate_daytime IS NULL AND hourly_rate IS NOT NULL`,
   ];

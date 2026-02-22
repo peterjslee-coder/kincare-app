@@ -14,24 +14,36 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [costPreview, setCostPreview] = useState(null);
   const [proposingRate, setProposingRate] = useState(false);
   const [proposedRate, setProposedRate] = useState('');
+  const [careRecipients, setCareRecipients] = useState([]);
+  const [selectedRecipientId, setSelectedRecipientId] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
-  // Fetch assigned caregivers on mount to determine if step 4 is needed
+  // Fetch care recipients and assigned caregivers on mount
   useEffect(() => {
-    const fetchAssignments = async () => {
+    const fetchData = async () => {
       try {
-        const res = await apiFetch('/api/assignments');
-        if (res?.ok) {
-          const data = await res.json();
+        const [assignRes, recipRes] = await Promise.all([
+          apiFetch('/api/assignments'),
+          apiFetch('/api/care-recipients'),
+        ]);
+        if (assignRes?.ok) {
+          const data = await assignRes.json();
           setAssignedCaregivers(data.assignments || []);
         } else {
           setAssignedCaregivers([]);
         }
+        if (recipRes?.ok) {
+          const data = await recipRes.json();
+          const recipients = data.careRecipients || data.recipients || [];
+          setCareRecipients(recipients);
+          if (recipients.length === 1) setSelectedRecipientId(recipients[0].id);
+        }
       } catch (err) {
-        console.error('Failed to fetch assignments:', err);
+        console.error('Failed to fetch data:', err);
         setAssignedCaregivers([]);
       }
     };
-    fetchAssignments();
+    fetchData();
   }, []);
 
   // Check if user has assigned caregivers
@@ -128,24 +140,55 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   };
 
   const handleSubmit = async () => {
+    setSubmitError('');
     const isOpenRequest = !hasCaregiverData || !selectedCaregiver;
     const recurrenceLabel = recurrence !== 'none' ? ` (${recurrence}, ${recurrenceWeeks} sessions)` : '';
-    const response = await apiFetch('/api/request-care', {
-      method: 'POST',
-      body: JSON.stringify({
-        serviceType, date, time, duration, specialInstructions: instructions,
-        caregiver: selectedCaregiver?.name,
-        status: isOpenRequest ? 'open' : undefined,
-        recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
-        recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
-      })
-    });
-    if (isOpenRequest) {
-      alert(`Care request posted!${recurrenceLabel}\n\nStatus: Open — waiting for caregiver match\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
-    } else {
-      alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
+
+    // Use selected recipient or first available
+    const recipientId = selectedRecipientId || (careRecipients.length > 0 ? careRecipients[0].id : '');
+    if (!recipientId) {
+      setSubmitError('No care recipient found. Please add a care recipient first.');
+      return;
     }
-    onClose();
+
+    const body = {
+      careRecipientId: recipientId,
+      serviceType,
+      scheduledDate: date,
+      scheduledTime: time,
+      durationHours: parseInt(duration),
+      specialInstructions: instructions || undefined,
+      status: isOpenRequest ? 'open' : undefined,
+      recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
+      recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
+      caregiverId: selectedCaregiver?.caregiverId || undefined,
+    };
+    // Include proposed rate if set
+    if (proposedRate && parseFloat(proposedRate) > 0) {
+      body.proposedRate = parseFloat(proposedRate);
+    }
+
+    try {
+      const response = await apiFetch('/api/sessions', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      if (response?.ok) {
+        const data = await response.json();
+        if (isOpenRequest) {
+          alert(`Care request posted!${recurrenceLabel}\n\nStatus: Open — waiting for caregiver match\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
+        } else {
+          alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
+        }
+        onClose();
+      } else {
+        const err = await response.json().catch(() => ({}));
+        setSubmitError(err.error || 'Failed to submit care request. Please try again.');
+      }
+    } catch (err) {
+      console.error('Submit error:', err);
+      setSubmitError('Network error. Please try again.');
+    }
   };
 
   const formatTime12 = (t) => {
@@ -215,18 +258,31 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         </div>
 
         {step === 1 && (
-          <div className="modal-section">
-            <label className="modal-label">What type of care do you need?</label>
-            <select className="modal-select" value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
-              <option value="">Select a service...</option>
-              <option value="companionship">Companionship</option>
-              <option value="personal_care">Personal Care</option>
-              <option value="housekeeping">Light Housekeeping</option>
-              <option value="meal_prep">Meal Preparation</option>
-              <option value="transportation">Transportation</option>
-              <option value="health_wellness">Health & Wellness</option>
-            </select>
-          </div>
+          <>
+            {careRecipients.length > 1 && (
+              <div className="modal-section">
+                <label className="modal-label">Who needs care?</label>
+                <select className="modal-select" value={selectedRecipientId} onChange={(e) => setSelectedRecipientId(e.target.value)}>
+                  <option value="">Select...</option>
+                  {careRecipients.map(r => (
+                    <option key={r.id} value={r.id}>{r.first_name} {r.last_name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="modal-section">
+              <label className="modal-label">What type of care do you need?</label>
+              <select className="modal-select" value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
+                <option value="">Select a service...</option>
+                <option value="companionship">Companionship</option>
+                <option value="personal_care">Personal Care</option>
+                <option value="housekeeping">Light Housekeeping</option>
+                <option value="meal_prep">Meal Preparation</option>
+                <option value="transportation">Transportation</option>
+                <option value="health_wellness">Health & Wellness</option>
+              </select>
+            </div>
+          </>
         )}
 
         {step === 2 && (
@@ -397,33 +453,36 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 </div>
               )}
 
-              {/* Propose different rate */}
-              {selectedCaregiver && (
-                <div style={{ marginTop: '10px' }}>
-                  {!proposingRate ? (
-                    <button onClick={() => setProposingRate(true)} style={{
-                      background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer',
-                      fontSize: '13px', textDecoration: 'underline', padding: 0,
-                    }}>
-                      Propose a different rate?
-                    </button>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '13px', color: '#666' }}>$</span>
-                      <input type="number" step="0.50" min="1" max="500"
-                        value={proposedRate}
-                        onChange={e => setProposedRate(e.target.value)}
-                        placeholder="Your rate/hr"
-                        style={{ width: '90px', padding: '5px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px' }}
-                      />
-                      <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
-                      <button onClick={() => setProposingRate(false)} style={{
-                        background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: '12px',
-                      }}>cancel</button>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Propose different rate — always available */}
+              <div style={{ marginTop: '10px' }}>
+                {!proposingRate ? (
+                  <button onClick={() => setProposingRate(true)} style={{
+                    background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer',
+                    fontSize: '13px', textDecoration: 'underline', padding: 0,
+                  }}>
+                    {selectedCaregiver ? 'Propose a different rate?' : 'Set your offer rate'}
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', color: '#666' }}>$</span>
+                    <input type="number" step="0.50" min="1" max="500"
+                      value={proposedRate}
+                      onChange={e => setProposedRate(e.target.value)}
+                      placeholder="Your rate/hr"
+                      style={{ width: '90px', padding: '5px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px' }}
+                    />
+                    <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
+                    {proposedRate && duration && (
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#1b6b5a' }}>
+                        = ${(parseFloat(proposedRate) * parseInt(duration)).toFixed(0)} total
+                      </span>
+                    )}
+                    <button onClick={() => { setProposingRate(false); setProposedRate(''); }} style={{
+                      background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: '12px',
+                    }}>cancel</button>
+                  </div>
+                )}
+              </div>
             </div>
             {!hasCaregiverData && (
               <div style={{ marginTop: 12, padding: 12, background: '#fff8e1', borderRadius: 8, fontSize: 13, color: '#795548' }}>
@@ -433,13 +492,18 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           </>
         )}
 
+        {submitError && (
+          <div style={{ marginTop: 12, padding: 10, background: '#fce4ec', borderRadius: 8, fontSize: 13, color: '#c62828' }}>
+            {submitError}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
           <button className="btn btn-outline" onClick={() => step > 1 ? setStep(step - 1) : onClose()} >
             {step === 1 ? 'Cancel' : 'Back'}
           </button>
           {step < reviewStep && step !== caregiverStep && (
             <button className="btn btn-primary" disabled={
-              (step === 1 && !serviceType) || (step === 2 && (!date || !time)) || (step === 3 && !duration)
+              (step === 1 && (!serviceType || (careRecipients.length > 1 && !selectedRecipientId))) || (step === 2 && (!date || !time)) || (step === 3 && !duration)
             } onClick={() => {
               const nextStep = step + 1;
               setStep(nextStep);
