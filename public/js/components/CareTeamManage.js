@@ -10,6 +10,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [newName, setNewName] = useState('');
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelText, setLabelText] = useState('');
+  const [expandedMember, setExpandedMember] = useState(null);
   const { showToast } = useToast();
 
   const fetchTeam = async () => {
@@ -140,7 +141,6 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   if (loading) return <LoadingSpinner text="Loading care team..." />;
   if (!team) return <div className="card"><p style={{ color: '#666' }}>Care team not found.</p></div>;
 
-  const [expandedMember, setExpandedMember] = useState(null);
   const isLeader = team.myRole === 'leader';
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' };
   const roleColors = { leader: '#1b6b5a', member: '#0066cc', viewer: '#888' };
