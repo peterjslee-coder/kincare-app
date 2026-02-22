@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.20.1';
+const DEMO_SEED_VERSION = '1.20.2';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -598,11 +598,16 @@ async function seed() {
   }
 
   // ─── Care Requests (Betty requesting help — status='requested', no caregiver) ───
+  // Dates are dynamic: today, +4 days, +7 days, +10 days — so they always appear in FindWork
+  const reqDate = (daysFromNow) => {
+    const d = new Date(); d.setDate(d.getDate() + daysFromNow);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
   const careRequests = [
-    [uuid(), bettyId, peteId, null, "companion", "requested", "2026-02-22", "14:00", 2, "Would love some company this afternoon — maybe a walk if the weather is nice.", 50],
-    [uuid(), bettyId, peteId, null, "meals", "requested", "2026-02-26", "11:00", 3, "Need help with meal prep for the week. Running low on groceries.", 90],
-    [uuid(), bettyId, peteId, null, "rides", "requested", "2026-03-01", "09:00", 1.5, "Need a ride to the pharmacy and back.", 42],
-    [uuid(), bettyId, peteId, null, "companion", "requested", "2026-03-04", "10:00", 3, "Morning companionship — puzzles and tea.", 75],
+    [uuid(), bettyId, peteId, null, "companion", "requested", reqDate(0), "14:00", 2, "Would love some company this afternoon — maybe a walk if the weather is nice.", 50],
+    [uuid(), bettyId, peteId, null, "meals", "requested", reqDate(4), "11:00", 3, "Need help with meal prep for the week. Running low on groceries.", 90],
+    [uuid(), bettyId, peteId, null, "rides", "requested", reqDate(7), "09:00", 1.5, "Need a ride to the pharmacy and back.", 42],
+    [uuid(), bettyId, peteId, null, "companion", "requested", reqDate(10), "10:00", 3, "Morning companionship — puzzles and tea.", 75],
   ];
 
   for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of careRequests) {

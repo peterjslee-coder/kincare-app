@@ -445,20 +445,25 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         <div className="card" style={{ position: 'relative' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span><span className="card-icon">📅</span>Upcoming Sessions</span>
-            <button onClick={() => dismissTile('upcoming')} title="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#ccc', padding: '0 4px' }}>&times;</button>
+            <button onClick={() => dismissTile('upcoming')} title="Hide this section" style={{
+              background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
+              color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}>✕ Hide</button>
           </div>
           <ul className="sessions-list">
             {upcoming.length > 0 ? upcoming.map((s, idx) => (
               <li key={idx} className="session-item">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a2e' }}>
+                      {s.recipientName}{s.estimatedCost ? `, $${Math.round(parseFloat(s.estimatedCost))}` : ''}
+                    </div>
                     <div className="session-time">{s.date} at {s.time}</div>
-                    <div className="session-caregiver">{s.caregiverName} — {s.recipientName}</div>
-                    <span className="session-type">{s.serviceType}</span>
+                    <div style={{ fontSize: 12, color: '#666' }}>{s.caregiverName} · <span style={{ textTransform: 'capitalize' }}>{(s.serviceType || '').replace(/_/g, ' ')}</span></div>
                   </div>
                   <div style={{ textAlign: 'right', fontSize: '12px' }}>
                     <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : '#e8724a', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>
-                    {s.estimatedCost && <div style={{ color: '#666', marginTop: '2px' }}>${s.estimatedCost}</div>}
                     {s.status === 'confirmed' && s.estimatedCost && (
                       <button
                         onClick={async (e) => {
@@ -496,7 +501,11 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span><span className="card-icon">📢</span>Recent Activity</span>
-            <button onClick={() => dismissTile('activity')} title="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#ccc', padding: '0 4px' }}>&times;</button>
+            <button onClick={() => dismissTile('activity')} title="Hide this section" style={{
+              background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
+              color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}>✕ Hide</button>
           </div>
           <div>
             {activity.length > 0 ? activity.map((a, idx) => (
@@ -512,9 +521,12 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
 
       {/* Restore dismissed tiles */}
       {Object.keys(dismissedTiles).length > 0 && (
-        <div style={{ textAlign: 'center', marginTop: 8, marginBottom: 8 }}>
-          <button onClick={restoreTiles} style={{ background: 'none', border: 'none', color: '#999', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
-            Restore hidden sections
+        <div style={{ textAlign: 'center', marginTop: 12, marginBottom: 12 }}>
+          <button onClick={restoreTiles} style={{
+            background: '#f5f5f5', border: '1px solid #e0e0e0', color: '#666', fontSize: 13,
+            cursor: 'pointer', padding: '8px 20px', borderRadius: 8, fontWeight: 600,
+          }}>
+            ↩ Restore hidden sections
           </button>
         </div>
       )}

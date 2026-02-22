@@ -54,21 +54,27 @@ router.get("/", async (req, res) => {
     `;
     params = [recipient.id];
   } else {
-    // Caregiver view — own sessions + care requests from assigned recipients
-    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    // Caregiver view — own sessions + ALL open care requests (assigned + nearby)
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
     query = `
       SELECT cs.*,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
-        cr.preferences AS recipient_preferences
+        cr.preferences AS recipient_preferences,
+        cr.location_city AS recipient_city,
+        cr.location_lat AS recipient_lat,
+        cr.location_lng AS recipient_lng
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       WHERE (
         cs.caregiver_id = ?
-        OR (cs.status = 'requested' AND cs.care_recipient_id IN (
-          SELECT care_recipient_id FROM caregiver_assignments
-          WHERE caregiver_profile_id = ? AND is_active = 1
+        OR (cs.status = 'requested' AND (
+          cs.care_recipient_id IN (
+            SELECT care_recipient_id FROM caregiver_assignments
+            WHERE caregiver_profile_id = ? AND is_active = 1
+          )
+          OR cs.caregiver_id IS NULL
         ))
       )
     `;
