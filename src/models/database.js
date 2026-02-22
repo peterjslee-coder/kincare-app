@@ -244,6 +244,8 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS needs_hour_reports INTEGER DEFAULT 0`,
     // v1.12.0 — Backfill tiered rates from hourly_rate
     `UPDATE caregiver_profiles SET rate_daytime = hourly_rate WHERE rate_daytime IS NULL AND hourly_rate IS NOT NULL`,
+    // v1.20.2 — Allow group/team messages without a single recipient
+    `ALTER TABLE messages ALTER COLUMN recipient_id DROP NOT NULL`,
     // v1.14.0 — Dual-role support: users can have multiple roles
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS roles TEXT`,
     // Backfill roles from existing single role column
