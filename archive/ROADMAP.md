@@ -378,49 +378,90 @@
 
 ---
 
-## Next Up — v1.6.1: Floating Feedback Button
+## Completed — v1.8.0–v1.8.3: Feedback, Photo Upload & Polish (2026-02-21)
 
-Priority: **HIGH** — Collect real user feedback to drive iteration.
-
-- [ ] **Floating feedback button (FAB):** Persistent circular button (bottom-right, above mobile nav) on every screen for all authenticated users. Speech bubble icon. Doesn't block content.
-- [ ] **Feedback form modal:** Category (Bug Report / Feature Request / General Feedback / Complaint / Praise), description (required), mood (emoji row), optional screenshot, auto-captured page context (page, role, version, device).
-- [ ] **Backend:** New `feedback` table. POST `/api/feedback` (any user), GET `/api/feedback` (admin, paginated/filterable), PUT `/api/feedback/:id` (admin status + notes).
-- [ ] **Admin Feedback tab:** New tab in AdminPanel. Sortable table: date, user, category, mood, status, preview. Click to expand full detail + screenshot. Status workflow: New → Reviewed → Planned → Done → Dismissed. Admin internal notes. Filter by category/status/date.
-- [ ] **Feedback triage:** Admin tagging (bug, feature, ux, content). Group similar items. Clustered feedback informs next dev batch.
-- [ ] **Push notification to admin on new feedback.**
+- [x] **Floating feedback button:** FeedbackButton.js FAB on all pages, feedback form with category/mood/screenshot/page context, admin review panel, feedback table
+- [x] **Feedback button refinement:** Moved FAB to left on mobile (was blocking send button), changed to lightbulb icon
+- [x] **Profile photo upload for all roles:** MyAccount photo upload with client-side auto-resize (400x400 JPEG 80%). Sidebar avatar updates real-time
+- [x] **Photo upload server fix:** Route-specific 5MB JSON limit, limitBodySize bypass for photo endpoint
+- [x] **Care requests show on calendar:** Schedule calendar shows pink/red shading for open/requested/pending sessions
+- [x] **Message timestamps fixed:** Replaced relative ("5m") with actual time (h:mm AM/PM)
+- [x] **2FA tap-to-copy:** Manual entry code is now clickable to copy
+- [x] **Admin care team invites:** Search-email endpoint queries care_team_invites alongside platform_invites
+- [x] **Care team invite registration:** Family users via invite link skip care recipient steps, join team after login
+- [x] **Admin API key:** ADMIN_API_KEY env var for script auth bypassing JWT + 2FA
+- [x] **Admin in mobile nav:** Admin users see 🛡️ in bottom nav
+- [x] **SW network-first:** Network-first fetch for app assets, cache-first for CDN. Prevents stale cache
+- [x] **APP_VERSION fix:** Now bumped alongside cache-bust param consistently
 
 ---
 
-## v1.7.0: Caregiver Onboarding Completion
+## Completed — v1.14.0: Dual-Role System (2026-02-22)
+
+- [x] **Dual-role support:** Users can hold multiple roles (family + caregiver). Roles stored as JSON array. JWT encodes roles array. Role switcher on My Account
+- [x] **"Add a Role" card:** My Account shows option to add caregiver or family role
+- [x] **Database migration:** Backfills roles column for ALL existing users (production-wide)
+- [x] **Registration page branding:** Maria 🤝 "Caregiver / Companion", Betty 🌷 "I Would Like Help"
+
+---
+
+## Completed — v1.15.0–v1.15.1: Help/FAQ, Onboarding Fix & Demo Fixes (2026-02-22)
+
+- [x] **Help/FAQ page:** Dynamic help_articles DB table, 20 seed articles across 5 categories, role-based visibility, deep-link navigation, search and category filtering
+- [x] **Admin help management:** Help/FAQ tab in AdminPanel with CRUD, publish/unpublish, "Create FAQ from this" on feedback items
+- [x] **Onboarding status fix:** Fixed admin endpoint — removed non-existent column references (photo_url, doc_type, uploaded_at)
+- [x] **Demo account switching:** Fixed stale activeRole persisting across demo switches. Added user ID to component keys for forced remount
+- [x] **Branding icon updates:** Demo picker and sidebar match v1.14.0 branding — Maria 🤝, Betty 🌷
+- [x] **Seed roles + re-trigger:** Demo users include explicit roles JSON array. DEMO_SEED_VERSION bumped to 1.15.1
+
+---
+
+## Next Up — v1.16.0: Admin Polish & Quick Wins
+
+Priority: **HIGH** — Address fresh feedback, improve admin panel, fix visible bugs.
+
+- [ ] **Admin stats exclude demo data:** Filter demo accounts and demo sessions from admin stats. Keep demo intact for demo picker.
+- [ ] **Admin 2FA gate:** Require 2FA/biometrics to access admin panel. Extra verification for destructive actions.
+- [ ] **Merge waitlist + invites:** Combine into unified "People" tab. Stale invite detection (already-registered users). Cancel/remove invites.
+- [ ] **Show app version on login screen:** Discreet version at bottom of login. Auto-include in feedback submissions.
+- [ ] **Caretaker signup inline validation:** Replace generic "insufficient information" with field-level red highlights.
+- [ ] **Care request visible on family calendar:** Ensure requested/open sessions appear on Schedule calendar.
+- [ ] **Invalid dates on activity feed + Betty's calendar:** Audit TIMESTAMPTZ parsing in ActivityFeed.js and CaredForView.js.
+
+---
+
+## v1.17.0: Caregiver Onboarding Completion
 
 Priority: **HIGH** — Complete the caregiver registration experience.
 
-- [ ] **Pets/allergies/medical conditions in onboarding:** Add collection step to CaregiverOnboarding for pets, food allergies, medical conditions. Also add to family and care recipient registration (full "Onboarding profile questions — all roles" spec in TASKS.md).
-- [ ] **Multiple certifications:** Dynamic list in signup wizard — "Add another certification" with name, issuing body, expiration.
-- [ ] **Registration disclosures & agreements:** Legal step before final submit — background check notice, payment/tax disclosures, platform terms. Checkbox + acceptance timestamp.
-- [ ] **Remove availability from signup:** Move to First Steps checklist post-registration. Add preferred work zip code + travel radius to Personal Info step instead.
-- [ ] **Stoplight chart (First Steps):** Green/yellow/red task categorization for caregiver comfort levels. Drag-and-drop or tap-to-assign UI.
+- [ ] **Pets/allergies/medical conditions in onboarding:** Add collection step for pets, food allergies, medical conditions. Also add to family and care recipient registration.
+- [ ] **Multiple certifications:** Dynamic list — "Add another certification" with name, issuing body, expiration.
+- [ ] **Registration disclosures & agreements:** Legal step before final submit — background check notice, payment/tax disclosures, platform terms.
+- [ ] **Remove availability from signup:** Move to First Steps checklist post-registration. Add preferred work zip code + travel radius instead.
+- [ ] **Stoplight chart (First Steps):** Green/yellow/red task categorization for caregiver comfort levels.
+- [ ] **Care recipient photo upload:** Real photo on care profile (thumbnail → full size on tap).
 
 ---
 
-## v1.8.0: Stripe & Background Checks
+## v1.18.0: Stripe & Background Checks
 
 Priority: **HIGH** — Enable payments. *Blocked on Pete's action items (see below).*
 
-- [ ] **Stripe payment for background check:** Collect credit card via Stripe Elements during CaregiverOnboarding. One-time charge for Checkr background check. Requires `STRIPE_SECRET_KEY` + `STRIPE_PUBLISHABLE_KEY` on Railway.
-- [ ] **Checkr integration:** Submit background check via Checkr API after payment. Webhook for results. Requires `CHECKR_API_KEY` on Railway.
-- [ ] **Stripe Connect marketplace:** Families pay, caregivers get paid, platform takes configurable fee (20% base). Express accounts, destination charges, 2-day rolling payouts.
+- [ ] **Stripe payment for background check:** Collect credit card via Stripe Elements during CaregiverOnboarding. One-time charge for Checkr background check.
+- [ ] **Checkr integration:** Submit background check via Checkr API after payment. Webhook for results.
+- [ ] **Stripe Connect marketplace:** Families pay, caregivers get paid, platform takes configurable fee (20% base). Express accounts, destination charges, 2-day rolling payouts. ACH standard free, instant payout ~2% fee (worker opts in).
 - [ ] **Caregiver earnings dashboard:** Real payment history from Stripe, pending payouts, tax summary.
 - [ ] **Family billing:** Payment methods, invoices, spending history.
 
 ---
 
-## v1.9.0: Availability & Scheduling UX
+## v1.19.0: Availability & Scheduling UX
 
 Priority: **MEDIUM** — Better scheduling experience.
 
-- [ ] **Interactive drag-to-select availability calendar (Outlook-style):** Weekly grid with Available/Blocked brush modes. Click-drag to paint time blocks, resize handles on edges. 30-min granularity. Recurring rules as overlay blocks.
+- [ ] **Interactive drag-to-select availability calendar (Outlook-style):** Weekly grid with Available/Blocked brush modes. Click-drag to paint time blocks, resize handles on edges. 30-min granularity.
 - [ ] **Caregiver work location zip code:** Replace free-text town name with zip code input. Fix AreaMap centering on work coordinates.
+- [ ] **Maria's caregiver calendar color fix:** Clearer visual hierarchy when blocked time, confirmed sessions, and care requests overlap.
 
 ---
 
@@ -428,9 +469,11 @@ Priority: **MEDIUM** — Better scheduling experience.
 
 Priority: **MEDIUM** — Real social model.
 
-- [ ] **Connection request flow:** Search users by email, send connection request, accept/decline. Auto-connect via care team invite or caregiver assignment. Messaging gated by accepted connection.
-- [ ] **Message push deep-links:** Push notification opens directly to conversation. Service worker `notificationclick` handler with `/?conversation=ID`.
-- [ ] **Video chat — Meet link in messages:** "Video Call" button generates Google Meet link, sent as clickable card message.
+- [ ] **Connection request flow:** Search users by email, send connection request, accept/decline. Auto-connect via care team invite or caregiver assignment.
+- [ ] **Connection status persistence:** "Connection pending" state visible in messages list. Greyed-out chat for pending connections.
+- [ ] **Message push deep-links:** Push notification opens directly to conversation.
+- [ ] **Video chat — Meet link in messages:** "Video Call" button generates Google Meet link, sent as clickable card.
+- [ ] **Back swipe navigation:** In-app history stack so iOS back gesture navigates instead of closing PWA.
 
 ---
 
@@ -438,8 +481,10 @@ Priority: **MEDIUM** — Real social model.
 
 Priority: **MEDIUM** — Polish the daily experience.
 
-- [ ] **CaretakerHub stat card drill-downs:** Clickable cards → detail views (assigned families list, itemized jobs, hours breakdown, merged earnings/payments).
-- [ ] **Push notification expansion:** Push for session updates, care requests, care team activity. Per-type toggles in MyAccount. Admin-only push for waitlist signups and new registrations.
+- [ ] **CaretakerHub stat card drill-downs:** Clickable cards → detail views.
+- [ ] **Push notification expansion:** Push for session updates, care requests, care team activity. Debug existing push flow.
+- [ ] **Care team member UX overhaul:** Member cards match leader card style, options on click (remove, promote, read-only).
+- [ ] **Block user with evidence logging:** Collect location data, timestamps, payment receipts, chat logs for potential legal action.
 - [ ] **Remove Uber references:** Reword comparisons in CLAUDE.md and SplashPage.js.
 
 ---
@@ -453,6 +498,8 @@ Priority: **LOW** — When growth demands it.
 - [ ] **Build step for frontend:** Move to Vite when component count demands it
 - [ ] **Google Maps geocoding upgrade:** Swap Nominatim for better residential accuracy
 - [ ] **Apple Sign-In:** After Google OAuth is proven
+- [ ] **Admin panel UX overhaul:** Card-based navigation, collapsible sections, cleaner information hierarchy
+- [ ] **Admin incident management:** Escalated support cases with full evidence (chat logs, payments, location)
 
 ---
 
@@ -460,8 +507,8 @@ Priority: **LOW** — When growth demands it.
 
 > These unblock dev tasks above. Check them off as you go.
 
-- [ ] **Stripe: Add test API keys to Railway** — Dashboard → Developers → API keys → copy `sk_test_` and `pk_test_` → Railway env vars `STRIPE_SECRET_KEY` + `STRIPE_PUBLISHABLE_KEY`. Unblocks v1.8.0.
-- [ ] **Checkr: Sign up for partner account** — Get `CHECKR_API_KEY`, add to Railway. Checkr has sandbox mode for dev. Unblocks v1.8.0.
+- [ ] **Stripe: Add test API keys to Railway** — Dashboard → Developers → API keys → copy `sk_test_` and `pk_test_` → Railway env vars `STRIPE_SECRET_KEY` + `STRIPE_PUBLISHABLE_KEY`. Unblocks v1.18.0.
+- [ ] **Checkr: Sign up for partner account** — Get `CHECKR_API_KEY`, add to Railway. Checkr has sandbox mode for dev. Unblocks v1.18.0.
 - [ ] **Stripe: Decide background check price** — Checkr basic check ~$25–$35. Pass through, mark up, or subsidize? Unblocks payment step UI.
 - [ ] **Plausible Analytics: Sign up at plausible.io** — Add `yourinplace.com`. Script tag already in index.html.
 - [ ] **Google OAuth: Set up in Google Cloud Console** — Create OAuth 2.0 credentials (free). Add `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` to Railway.

@@ -29,7 +29,9 @@
 - [ ] **Show app version on login/splash screen.** Users want to see the current app version somewhere discreet at the bottom of the login screen. Also include version in feedback submissions automatically. *(Feedback — new)*
 - [ ] **Care team member management UX overhaul.** Member cards should look like the leader card, with options on click (remove, promote, read-only, etc.) instead of showing blunt "Member" and "Remove" buttons. Ties into authority delegation feature. *(Feedback — new)*
 - [ ] **Maria's caregiver calendar — color/block overlap confusion on busy days.** When a day has blocked time, a confirmed session, AND a care request, the color coding gets confusing. Blocks and sessions need clearer visual distinction so overlapping items make sense at a glance. *(Feedback — new)*
-- [ ] **APP_VERSION not bumped consistently.** `window.APP_VERSION` in index.html was stuck at 1.7.5 while cache-bust was at 1.8.x. Going forward, always bump APP_VERSION, cache-bust param, and SW cache name together. Fixed in v1.8.3.
+- [x] ~~**APP_VERSION not bumped consistently.** Fixed in v1.8.3. Going forward, always bump APP_VERSION, cache-bust param, and SW cache name together.~~
+- [x] ~~**Caregiver onboarding status "failed to load".** Fixed in v1.15.0. SQL query referenced non-existent columns (`photo_url` on `caregiver_profiles`, `doc_type`/`uploaded_at` on `caregiver_documents`).~~
+- [x] ~~**Demo accounts show wrong dashboard on switch.** Fixed in v1.15.1. `activeRole` in localStorage persisted across demo account switches, causing "Welcome back Pete" for all accounts. Cleared activeRole on all login/switch paths and added user ID to component keys for forced remount.~~
 - [ ] **"Connection request sent" should persist on messages screen.** After sending a connection request, the status disappears when navigating away from messages. Should show persistent "Connection pending" state. *(Feedback — Feb 22)*
 - [ ] **Back swipe closes PWA instead of navigating back.** Browser back gesture on iOS closes the app entirely instead of going back to previous page. Need in-app history/navigation stack. *(Feedback — Feb 22)*
 - [ ] **Can't see connection invite status.** No way to tell if someone received a connection invite. Should show greyed-out chat box or "pending" status for invited contacts. *(Feedback — Feb 22)*
@@ -38,6 +40,13 @@
 - [ ] **Message timestamps — add date and time.** Messages only show time but no date. Add date context (e.g., "Feb 21, 2:30 PM") especially for older messages. *(Feedback — Carry Taker)*
 - [ ] **Photo upload crop + auto-resize.** Need in-app crop tool and auto-resize to 1.5MB before uploading profile photos. Current UX too manual. *(Feedback — reviewed)*
 - [ ] **Profile photo in sidebar/header.** Uploaded profile photo should display next to "iP" logo in the top-left sidebar. Clicking the thumbnail should show options to change/delete. *(Feedback — reviewed)*
+- [ ] **Admin stats include demo data.** Admin panel sessions/users counts include demo accounts and demo sessions. Should filter to real data only, while keeping demo intact for the demo picker. *(Feedback — Feb 22)*
+- [ ] **Admin 2FA/biometrics gate.** Admin panel should require 2FA or biometrics to access. Destructive actions (delete users, override background checks) should require additional verification. *(Feedback — Feb 22)*
+- [ ] **Merge waitlist + invites in admin.** Users don't understand the distinction between waitlist and invites tabs. Combine into a unified "People" tab showing all leads/invites/signups in one view. *(Feedback — Feb 22)*
+- [ ] **Cancel/remove stale invites.** Admin can't remove or cancel pending invites. Also need stale invite detection (invite sent to already-registered user). *(Feedback — Feb 22)*
+- [ ] **Block user with legal evidence logging.** When blocking a user, collect more than just "spam or abuse" — log location data, timestamps, payment receipts, chat logs for potential legal action. Ties into admin incident management. *(Feedback — Feb 22)*
+- [ ] **Care recipient photo upload.** Families want to upload a real photo of the care recipient (not just emoji avatar). Thumbnail on profile, shows larger when tapped. Helpful for caregivers meeting the person for the first time. *(Feedback — Feb 22)*
+- [ ] **Care request not visible on family calendar.** After a family member requests care, the request doesn't appear on their Schedule calendar. Should show as pending/open status. *(Feedback — Feb 22)*
 
 
 ## Features — Up Next
@@ -199,6 +208,20 @@
 
 
 ## Done
+
+### Help/FAQ, Onboarding Fix & Demo Fixes (v1.15.0–v1.15.1)
+- [x] **Help/FAQ page (v1.15.0):** Dynamic help_articles DB table, 20 seed articles across 5 categories, role-based visibility, deep-link navigation to in-app pages, search and category filtering.
+- [x] **Admin help management (v1.15.0):** Help/FAQ tab in AdminPanel with CRUD, publish/unpublish, "Create FAQ from this" button on feedback items.
+- [x] **Onboarding status fix (v1.15.0):** Fixed admin onboarding endpoint — removed references to non-existent `photo_url` column, corrected `doc_type`→`document_type` and `uploaded_at`→`created_at`.
+- [x] **Demo account switching (v1.15.1):** Fixed stale `activeRole` persisting across demo switches. Cleared activeRole on all login/switch paths. Added user ID to page component keys for forced remount.
+- [x] **Branding icon updates (v1.15.1):** Demo picker and sidebar icons updated to match v1.14.0 branding — Maria 🤝, Betty 🌷, Caregivers 🤝, Care Profile 🌷.
+- [x] **Seed roles column (v1.15.1):** All demo user INSERTs now include explicit `roles` JSON array. Bumped DEMO_SEED_VERSION to 1.15.1 to trigger re-seed.
+
+### Dual-Role System (v1.14.0)
+- [x] **Dual-role support:** Users can hold multiple roles (e.g., family + caregiver). Roles stored as JSON array in `roles` column. JWT encodes roles array. Role switcher card on My Account page.
+- [x] **"Add a Role" card:** My Account shows option to add caregiver or family role if user only has one.
+- [x] **Database migration:** Backfills `roles` column for ALL existing users (production-wide, not just demo).
+- [x] **Registration page branding:** Updated icons — Maria 🤝 "Caregiver / Companion", Betty 🌷 "I Would Like Help".
 
 ### Feedback Fixes, Photo Upload & Invite Flow (v1.8.0–v1.8.3)
 - [x] **Floating feedback button (v1.8.0):** FeedbackButton.js FAB on all pages, feedback form with category/mood/screenshot/page context, admin review panel in AdminPanel.js, feedback table in database.
