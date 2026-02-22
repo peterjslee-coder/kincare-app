@@ -151,6 +151,16 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
   );
 };
 
+// Dynamic calendar icon showing today's date number
+const _DayIcon = () => {
+  const day = new Date().getDate();
+  return React.createElement('svg', { width: 20, height: 20, viewBox: '0 0 20 20', style: { display: 'inline-block', verticalAlign: 'middle' } },
+    React.createElement('rect', { x: 0, y: 0, width: 20, height: 20, rx: 3, fill: 'none', stroke: 'currentColor', strokeWidth: 1.5 }),
+    React.createElement('rect', { x: 0, y: 0, width: 20, height: 6, rx: 3, fill: 'currentColor' }),
+    React.createElement('text', { x: 10, y: 15.5, textAnchor: 'middle', fontSize: 9, fontWeight: 700, fill: 'currentColor' }, day)
+  );
+};
+
 // Main App Component — role-aware routing & sidebar
 const App = () => {
   const [appState, setAppState] = useState('splash');
@@ -604,7 +614,7 @@ const App = () => {
       { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { id: 'care-profile', icon: '🌷', label: 'Care Profile' },
       { id: 'care-team', icon: '👪', label: 'Care Team' },
-      { id: 'schedule', icon: '📅', label: 'Schedule' },
+      { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
       { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'recipients', icon: '👥', label: 'Recipients' },
@@ -672,7 +682,7 @@ const App = () => {
     }
     const familyBottom = [
       { id: 'dashboard', icon: '🏠', label: 'Home' },
-      { id: 'schedule', icon: '📅', label: 'Schedule' },
+      { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
       { id: 'caregivers', icon: '🤝', label: 'Care' },
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'account', icon: '👤', label: 'More' },

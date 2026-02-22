@@ -270,14 +270,23 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
               {weekDates.map((d, i) => {
                 const today = isToday(d);
                 const dateStr = d.toISOString().split('T')[0];
-                const hasRequests = getRequestsForDate(dateStr).length > 0;
+                const daySessions = getSessionsForDate(dateStr);
+                const dayRequests = getRequestsForDate(dateStr);
+                const { blocked: dayBlocked } = getAvailForDay(d.getDay(), dateStr);
+                const hasBooked = daySessions.length > 0;
+                const hasRequests = dayRequests.length > 0;
+                const hasBlocked = dayBlocked.length > 0;
                 return (
                   <th key={i} onClick={() => setSelectedDay(d)}
                     style={{ padding: '8px 2px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', cursor: 'pointer', background: today ? '#e8f5e9' : selectedDay && d.toDateString() === selectedDay.toDateString() ? '#f0f4ff' : '#fafafa' }}>
                     <div style={{ fontWeight: 600, color: today ? '#1b6b5a' : '#555' }}>{dayNames[d.getDay()]}</div>
                     <div style={{ fontSize: 13, fontWeight: today ? 800 : 600, color: today ? '#fff' : '#333', background: today ? '#1b6b5a' : 'transparent', borderRadius: '50%', width: 24, height: 24, lineHeight: '24px', margin: '2px auto 0', display: 'inline-block' }}>{d.getDate()}</div>
-                    {hasRequests && (
-                      <div style={{ fontSize: 9, color: '#e65100', fontWeight: 600, marginTop: 2 }}>help needed</div>
+                    {(hasBooked || hasRequests || hasBlocked) && (
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 3, marginTop: 3 }}>
+                        {hasBooked && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1e88e5', display: 'inline-block' }} title={`${daySessions.length} confirmed`}></span>}
+                        {hasRequests && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fb8c00', display: 'inline-block' }} title={`${dayRequests.length} request(s)`}></span>}
+                        {hasBlocked && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e57373', display: 'inline-block' }} title="Blocked time"></span>}
+                      </div>
                     )}
                   </th>
                 );

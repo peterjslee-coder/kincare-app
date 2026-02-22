@@ -138,6 +138,13 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!hasDLBack) errs.dl_back = "Driver's license back is required";
     }
     setErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      // Scroll to top of card so user sees the error summary
+      setTimeout(() => {
+        const card = document.querySelector('.card');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    }
     return Object.keys(errs).length === 0;
   };
 
@@ -472,6 +479,25 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     9: 'Review & Complete',
   };
 
+  // Error summary banner — shows at top of step when validation fails
+  const errorSummary = () => {
+    const errorKeys = Object.keys(errors).filter(k => k !== 'submit' && errors[k]);
+    if (errorKeys.length === 0) return null;
+    return (
+      <div style={{
+        padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+        borderRadius: '8px', marginBottom: '16px',
+      }}>
+        <div style={{ fontSize: '14px', fontWeight: 600, color: '#dc2626', marginBottom: '4px' }}>
+          Please fix {errorKeys.length} {errorKeys.length === 1 ? 'issue' : 'issues'} below
+        </div>
+        <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#b91c1c', lineHeight: '1.6' }}>
+          {errorKeys.map(k => <li key={k}>{errors[k]}</li>)}
+        </ul>
+      </div>
+    );
+  };
+
   const backBtn = (targetStep) => (
     <button onClick={() => setStep(targetStep)} style={{
       padding: '14px 24px', background: '#f0f0f0', color: '#555', border: 'none',
@@ -544,6 +570,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {step === 1 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '16px' }}>Create Your Account</h2>
+            {errorSummary()}
             <div style={rowStyle}>
               <div style={fieldGroup}>
                 <label style={labelStyle}>First Name *</label>
@@ -588,7 +615,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
               Please review and acknowledge the following terms to continue with your application.
             </p>
-
+            {errorSummary()}
             {disclosureCheck('acceptBackgroundCheck',
               'Background Check Required',
               'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($35). This includes criminal history, driving record, and identity verification.'
@@ -631,6 +658,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {step === 3 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '16px' }}>Personal Information</h2>
+            {errorSummary()}
             <div style={fieldGroup}>
               <label style={labelStyle}>Phone *</label>
               <input style={errors.phone ? inputErrorStyle : inputStyle} value={form.phone}
@@ -734,6 +762,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
               This information is required for your background check and will be kept secure.
             </p>
+            {errorSummary()}
             <div style={rowStyle}>
               <div style={fieldGroup}>
                 <label style={labelStyle}>Legal First Name *</label>
@@ -894,7 +923,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
                 Some caregivers are enrolled in educational programs that require tracking hours and types of work performed. Let us know if this applies to you.
               </p>
-
+              {errorSummary()}
               <div style={{ marginBottom: '20px' }}>
                 <label style={labelStyle}>Do you need InPlace to generate reports on your care hours and work types for a school or training program?</label>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
@@ -1055,7 +1084,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <strong>Tip:</strong> Place your ID on a flat, well-lit surface. Make sure all text and the photo are clearly readable. Images are automatically optimized for upload.
               </p>
             </div>
-
+            {errorSummary()}
             {/* DL Front */}
             <div style={fieldGroup}>
               <label style={labelStyle}>Driver's License — Front *</label>
