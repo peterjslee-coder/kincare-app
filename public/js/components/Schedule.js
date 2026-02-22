@@ -92,7 +92,7 @@ const Schedule = window.Schedule = () => {
       cancelled: { bg: '#fce4ec', text: '#c62828' },
     };
     const c = colors[status] || colors.pending;
-    const label = status === 'open' ? 'Open — waiting' : status;
+    const label = status === 'open' ? 'Pending — awaiting caregiver' : status === 'requested' ? 'Requested — awaiting response' : status === 'pending' ? 'Pending' : status;
     return { style: { background: c.bg, color: c.text, padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }, label };
   };
 
@@ -143,13 +143,16 @@ const Schedule = window.Schedule = () => {
       {/* Legend */}
       <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '12px', color: '#666', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 75%)', display: 'inline-block' }}></span> Light day (1-2hrs)
+          <span style={{ width: 14, height: 14, borderRadius: 3, background: '#fce4ec', display: 'inline-block', border: '1px solid #f8bbd0' }}></span> Pending request
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 50%)', display: 'inline-block' }}></span> Moderate (3-5hrs)
+          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 75%)', display: 'inline-block' }}></span> Confirmed (1-2hrs)
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 30%)', display: 'inline-block' }}></span> Full day (6+ hrs)
+          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 50%)', display: 'inline-block' }}></span> Confirmed (3-5hrs)
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 30%)', display: 'inline-block' }}></span> Confirmed (6+ hrs)
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <span style={{ width: 14, height: 14, borderRadius: 3, background: '#f0f0f0', display: 'inline-block', border: '1px solid #ddd' }}></span> Past

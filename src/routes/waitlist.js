@@ -83,4 +83,25 @@ router.get("/count", async (req, res) => {
   }
 });
 
+// DELETE /api/waitlist/:id — remove from waitlist (admin only)
+const { authenticate } = require("../middleware/auth");
+router.delete("/:id", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    // Verify admin
+    const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (!user || !user.is_admin) return res.status(403).json({ error: "Admin access required" });
+
+    const entry = await db.prepare("SELECT * FROM waitlist WHERE id = ?").get(req.params.id);
+    if (!entry) return res.status(404).json({ error: "Waitlist entry not found" });
+
+    await db.prepare("DELETE FROM waitlist WHERE id = ?").run(req.params.id);
+    console.log(`  Admin removed ${entry.email} from waitlist`);
+    res.json({ success: true, removed: entry.email });
+  } catch (err) {
+    console.error("Waitlist delete error:", err);
+    res.status(500).json({ error: "Failed to remove from waitlist" });
+  }
+});
+
 module.exports = router;

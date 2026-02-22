@@ -657,15 +657,15 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
             ) : (
               <div>
                 {devices.map((d, i) => (
-                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: i < devices.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
-                    <div>
+                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 0', borderBottom: i < devices.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                    <div style={{ minWidth: 0 }}
                       <div style={{ fontWeight: 600, fontSize: 14 }}>{d.device_name || 'Unknown Device'}</div>
                       <div style={{ fontSize: 12, color: '#888' }}>
                         Last used: {(parseTimestamp(d.last_used) || new Date(0)).toLocaleDateString()} · Expires: {(parseTimestamp(d.expires_at) || new Date(0)).toLocaleDateString()}
                       </div>
                     </div>
                     <button onClick={() => revokeDevice(d.id)}
-                      style={{ padding: '6px 14px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      style={{ padding: '6px 14px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       Revoke
                     </button>
                   </div>

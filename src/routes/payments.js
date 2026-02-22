@@ -18,7 +18,7 @@ function getStripe() {
   return _stripe;
 }
 
-const PLATFORM_FEE_PERCENT = 15; // InPlace takes 15%
+const PLATFORM_FEE_PERCENT = 20; // InPlace takes 20%, caregivers keep 80%
 const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || process.env.stripe_publishable_key || "";
 const BASE_URL = process.env.BASE_URL || process.env.base_url || "https://yourinplace.com";
 

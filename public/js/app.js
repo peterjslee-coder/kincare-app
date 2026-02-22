@@ -156,6 +156,7 @@ const App = () => {
   const [appState, setAppState] = useState('splash');
   const [currentUser, setCurrentUser] = useState(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [pageNavCount, setPageNavCount] = useState(0);
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -464,6 +465,7 @@ const App = () => {
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+    setPageNavCount(c => c + 1);
     setSidebarOpen(false);
   };
 
@@ -627,7 +629,7 @@ const App = () => {
   const renderPage = () => {
     // Role-aware page rendering
     // key includes currentUser.id so demo account switches force full remount (fresh data fetch)
-    const pageKey = currentPage + '-' + (currentUser?.id || '');
+    const pageKey = currentPage + '-' + (currentUser?.id || '') + '-' + pageNavCount;
     if (currentPage === 'dashboard') {
       if (role === 'caregiver') return <CaretakerHub key={pageKey} onNeedsOnboarding={() => setAppState('resume-onboarding')} />;
       if (role === 'care_for') return <CaredForView key={pageKey} />;

@@ -1003,8 +1003,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
           {/* Fee Breakdown Info */}
           <div style={{ padding: '14px 16px', background: '#f8f9fa', borderRadius: '8px', fontSize: '13px', color: '#666' }}>
-            💡 <strong>How fees work:</strong> InPlace charges a 15% platform fee on each session. Families pay via card or ACH at checkout.
-            Your earnings (85% of session cost) are deposited to your Stripe account based on your payout speed preference above.
+            💡 <strong>How fees work:</strong> InPlace charges a 20% platform fee on each session. You keep 80% of the session cost. Families pay via card or ACH at checkout.
+            Your earnings are deposited to your Stripe account based on your payout speed preference above.
           </div>
         </div>
       )}

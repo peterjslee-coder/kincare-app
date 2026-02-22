@@ -755,11 +755,19 @@ const AdminPanel = window.AdminPanel = () => {
                     <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{w.role || 'family'}</td>
                     <td style={{ padding: '10px 12px', color: '#888' }}>{w.source || 'splash'}</td>
                     <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(w.created_at)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                    <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <button onClick={() => { setInviteSearch(w.email); setActiveTab('invites'); }} style={{
                         padding: '4px 12px', background: '#e8724a', color: 'white', border: 'none',
-                        borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                        borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '6px',
                       }}>Invite</button>
+                      <button onClick={async () => {
+                        if (!confirm(`Remove ${w.email} from waitlist?`)) return;
+                        const res = await apiFetch(`/api/waitlist/${w.id}`, { method: 'DELETE' });
+                        if (res?.ok) { setWaitlist(prev => prev.filter(x => x.id !== w.id)); }
+                      }} style={{
+                        padding: '4px 10px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545',
+                        borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                      }}>Remove</button>
                     </td>
                   </tr>
                 ))}

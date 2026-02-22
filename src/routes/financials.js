@@ -604,13 +604,13 @@ router.get("/insights", async (req, res) => {
         "SELECT COALESCE(SUM(platform_fee), 0) AS total FROM payments WHERE status = 'completed'"
       ).get();
       const effectiveRate = Math.round((allPlatformFee.total / totalAllRevenue.total) * 1000) / 10;
-      if (effectiveRate < 14) {
+      if (effectiveRate < 18) {
         insights.push({
           id: 'fee_rate_low', type: 'revenue', severity: 'warning',
           title: 'Effective Platform Rate Below Target',
-          description: `Your effective platform fee rate is ${effectiveRate}%, below the 15% target.`,
+          description: `Your effective platform fee rate is ${effectiveRate}%, below the 20% target.`,
           metric: `${effectiveRate}%`,
-          recommendation: 'Check if any discount codes or fee waivers are active. Ensure all checkout sessions correctly apply the 15% platform fee.',
+          recommendation: 'Check if any discount codes or fee waivers are active. Ensure all checkout sessions correctly apply the 20% platform fee.',
         });
       }
     }
