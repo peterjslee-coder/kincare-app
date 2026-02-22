@@ -1311,6 +1311,14 @@ const AdminPanel = window.AdminPanel = () => {
                     <span>{onboardingModal.flags.hasPhoto ? 'Yes' : 'No'}</span>
                     <span style={{ color: '#888' }}>Drivers License:</span>
                     <span>{onboardingModal.flags.hasDriversLicense ? 'Yes' : 'No'}</span>
+                    <span style={{ color: '#888' }}>Program Reports:</span>
+                    <span>{onboardingModal.flags.needsHourReports ? 'Yes' : 'No'}</span>
+                    {onboardingModal.flags.academicProgram && <>
+                      <span style={{ color: '#888' }}>Program:</span>
+                      <span>{onboardingModal.flags.academicProgram}</span>
+                      <span style={{ color: '#888' }}>Program Year:</span>
+                      <span>{onboardingModal.flags.academicProgramYear || '—'}</span>
+                    </>}
                   </div>
                   {onboardingModal.documents?.length > 0 && (
                     <div style={{ marginTop: '8px' }}>

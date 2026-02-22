@@ -232,6 +232,10 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS budget_max REAL`,
     // v1.13.0 — Proposed rate (family's offered hourly rate)
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS proposed_rate REAL`,
+    // v1.13.2 — Academic program tracking for caregivers
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS academic_program TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS academic_program_year TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS needs_hour_reports INTEGER DEFAULT 0`,
     // v1.12.0 — Backfill tiered rates from hourly_rate
     `UPDATE caregiver_profiles SET rate_daytime = hourly_rate WHERE rate_daytime IS NULL AND hourly_rate IS NOT NULL`,
   ];

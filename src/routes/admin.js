@@ -382,7 +382,8 @@ router.get("/users/:id/onboarding", async (req, res) => {
     const profile = await db.prepare(`
       SELECT id, is_background_checked, background_check_consent, background_check_paid,
              onboarding_complete, is_available, photo_url,
-             dl_number, dl_state
+             dl_number, dl_state,
+             academic_program, academic_program_year, needs_hour_reports
       FROM caregiver_profiles WHERE user_id = ?
     `).get(req.params.id);
 
@@ -403,6 +404,9 @@ router.get("/users/:id/onboarding", async (req, res) => {
         isAvailable: !!profile.is_available,
         hasPhoto: !!profile.photo_url,
         hasDriversLicense: !!(profile.dl_number && profile.dl_state),
+        needsHourReports: !!profile.needs_hour_reports,
+        academicProgram: profile.academic_program || null,
+        academicProgramYear: profile.academic_program_year || null,
       } : null,
     });
   } catch (err) {

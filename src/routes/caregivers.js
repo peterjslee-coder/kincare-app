@@ -262,6 +262,8 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     // v1.5.0 — work location, stoplight, terms
     workLocationAddress, travelRadius, careStoplight,
     termsAcceptedAt, termsVersion,
+    // v1.13.2 — academic program tracking
+    academicProgram, academicProgramYear, needsHourReports,
   } = req.body;
 
   if (!hourlyRate) {
@@ -313,6 +315,9 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
         care_stoplight = COALESCE(?, care_stoplight),
         terms_accepted_at = COALESCE(?, terms_accepted_at),
         terms_version = COALESCE(?, terms_version),
+        academic_program = COALESCE(?, academic_program),
+        academic_program_year = COALESCE(?, academic_program_year),
+        needs_hour_reports = COALESCE(?, needs_hour_reports),
         updated_at = NOW()
       WHERE user_id = ?
     `).run(
@@ -329,6 +334,8 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       workLocationAddress || null,
       careStoplight ? JSON.stringify(careStoplight) : null,
       termsAcceptedAt || null, termsVersion || null,
+      academicProgram || null, academicProgramYear || null,
+      needsHourReports != null ? (needsHourReports ? 1 : 0) : null,
       req.user.id
     );
 
@@ -344,8 +351,9 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
      certifications, max_travel_miles, location_city, location_state,
      latitude, longitude, legal_first_name, legal_last_name,
      date_of_birth, ssn_last4, address_line1, address_line2, zip,
-     dl_number, dl_state, background_check_consent, background_check_consent_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"})
+     dl_number, dl_state, background_check_consent, background_check_consent_at,
+     academic_program, academic_program_year, needs_hour_reports)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"}, ?, ?, ?)
   `).run(
     id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
     JSON.stringify(specialties || []),
@@ -356,7 +364,9 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     dateOfBirth || null, ssnLast4 || null,
     addressLine1 || null, addressLine2 || null, zip || null,
     dlNumber || null, dlState || null,
-    backgroundCheckConsent ? 1 : 0
+    backgroundCheckConsent ? 1 : 0,
+    academicProgram || null, academicProgramYear || null,
+    needsHourReports ? 1 : 0
   );
 
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);

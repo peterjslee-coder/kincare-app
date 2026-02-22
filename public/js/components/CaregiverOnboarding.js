@@ -34,12 +34,18 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     dlNumber: '', dlState: '', backgroundCheckConsent: false,
     // Step 5 — Certifications
     certifications: [{ certType: '', certNumber: '', issuer: '', expiryDate: '' }],
-    // Step 6 — Documents
+    // Step 6 — Academic Program
+    needsProgramReports: null, // null=unanswered, true/false
+    programYear: '',
+    programName: '',
+    programNameOther: '',
+    acknowledgeNoMedicalCare: false,
+    // Step 7 — Documents
     documents: [], // { type, file, preview, fileName }
   });
 
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
-  const TOTAL_STEPS = 8;
+  const TOTAL_STEPS = 9;
   const US_STATES = [
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
     'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY',
@@ -116,7 +122,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!form.dlState) errs.dlState = 'Required';
       if (!form.backgroundCheckConsent) errs.backgroundCheckConsent = 'You must consent to proceed';
     }
-    if (stepNum === 7) {
+    if (stepNum === 6) {
+      if (form.needsProgramReports === true) {
+        if (!form.programName) errs.programName = 'Please select your program';
+        if (form.programName === 'other' && !form.programNameOther.trim()) errs.programNameOther = 'Please enter your program name';
+        if (!form.programYear) errs.programYear = 'Please select your year';
+        const isNursing = ['radford_nursing', 'nrcc_nurse_aide'].includes(form.programName) || (form.programName === 'other' && /nurs/i.test(form.programNameOther));
+        if (isNursing && !form.acknowledgeNoMedicalCare) errs.acknowledgeNoMedicalCare = 'You must acknowledge this to continue';
+      }
+    }
+    if (stepNum === 8) {
       const hasDLFront = form.documents.some(d => d.type === 'dl_front');
       const hasDLBack = form.documents.some(d => d.type === 'dl_back');
       if (!hasDLFront) errs.dl_front = "Driver's license front is required";
@@ -253,7 +268,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           certifications: validCerts.map(c => `${c.certType}${c.certNumber ? ' #' + c.certNumber : ''}`),
         }),
       });
-      setStep(6); // → Background Check Payment
+      setStep(6); // → Academic Program
     } catch (err) {
       setErrors({ submit: 'Network error' });
     }
@@ -285,7 +300,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         body: formData,
       });
       if (!res.ok) { const data = await res.json(); setErrors({ submit: data.error }); setSaving(false); return; }
-      setStep(8);
+      setStep(9);
     } catch (err) {
       setErrors({ submit: 'Upload failed — please try again' });
     }
@@ -451,9 +466,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     3: 'Personal Info',
     4: 'Background Check Info',
     5: 'Certifications',
-    6: 'Background Check Payment',
-    7: 'Document Upload',
-    8: 'Review & Complete',
+    6: 'Academic Program',
+    7: 'Background Check Payment',
+    8: 'Document Upload',
+    9: 'Review & Complete',
   };
 
   const backBtn = (targetStep) => (
@@ -844,8 +860,137 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           </div>
         )}
 
-        {/* ─── Step 6: Background Check Payment ($30) ─── */}
-        {step === 6 && (
+        {/* ─── Step 6: Academic Program ─── */}
+        {step === 6 && (() => {
+          const isNursing = ['radford_nursing', 'nrcc_nurse_aide'].includes(form.programName) || (form.programName === 'other' && /nurs/i.test(form.programNameOther));
+          const handleProgramContinue = async () => {
+            if (form.needsProgramReports === true) {
+              if (!validateStep(6)) return;
+              // Save program info to caregiver profile
+              setSaving(true);
+              try {
+                const token = authToken || window.AUTH_TOKEN;
+                const programLabel = form.programName === 'radford_nursing' ? 'Radford University Nursing'
+                  : form.programName === 'nrcc_nurse_aide' ? 'NRCC Nurse Aide Program'
+                  : form.programNameOther || form.programName;
+                await fetch('/api/caregivers/profile', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                  body: JSON.stringify({
+                    hourlyRate: parseFloat(form.hourlyRate) || 25,
+                    academicProgram: programLabel,
+                    academicProgramYear: form.programYear,
+                    needsHourReports: true,
+                  }),
+                });
+              } catch (err) { /* non-blocking */ }
+              setSaving(false);
+            }
+            setStep(7);
+          };
+          return (
+            <div className="card" style={{ padding: '24px' }}>
+              <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Academic Program</h2>
+              <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
+                Some caregivers are enrolled in educational programs that require tracking hours and types of work performed. Let us know if this applies to you.
+              </p>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={labelStyle}>Do you need InPlace to generate reports on your care hours and work types for a school or training program?</label>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                  {[{ val: true, label: 'Yes, I need program reports' }, { val: false, label: 'No, this doesn\'t apply to me' }].map(opt => (
+                    <button key={String(opt.val)} onClick={() => updateForm('needsProgramReports', opt.val)} style={{
+                      flex: 1, padding: '14px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
+                      border: form.needsProgramReports === opt.val ? '2px solid #1b6b5a' : '2px solid #ddd',
+                      background: form.needsProgramReports === opt.val ? '#e8f5f1' : '#fff',
+                      color: form.needsProgramReports === opt.val ? '#1b6b5a' : '#555',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}>{opt.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {form.needsProgramReports === true && (
+                <div style={{ padding: '16px', background: '#f0faf8', borderRadius: '10px', border: '1px solid #d0e8e2', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '15px', color: '#1b6b5a', margin: '0 0 12px' }}>Program Details</h3>
+
+                  <div style={fieldGroup}>
+                    <label style={labelStyle}>Which program are you enrolled in? *</label>
+                    <select style={errors.programName ? inputErrorStyle : inputStyle} value={form.programName}
+                      onChange={(e) => updateForm('programName', e.target.value)}>
+                      <option value="">Select your program</option>
+                      <option value="radford_nursing">Radford University — Nursing Program</option>
+                      <option value="nrcc_nurse_aide">New River Community College (NRCC) — Nurse Aide Program</option>
+                      <option value="other">Other program</option>
+                    </select>
+                    {errors.programName && <div style={errorStyle}>{errors.programName}</div>}
+                  </div>
+
+                  {form.programName === 'other' && (
+                    <div style={fieldGroup}>
+                      <label style={labelStyle}>Program Name *</label>
+                      <input style={errors.programNameOther ? inputErrorStyle : inputStyle} value={form.programNameOther}
+                        onChange={(e) => updateForm('programNameOther', e.target.value)}
+                        placeholder="e.g. Virginia Tech Health Sciences" />
+                      {errors.programNameOther && <div style={errorStyle}>{errors.programNameOther}</div>}
+                    </div>
+                  )}
+
+                  <div style={fieldGroup}>
+                    <label style={labelStyle}>What year are you in? *</label>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year+', 'Certificate Program'].map(yr => (
+                        <button key={yr} onClick={() => updateForm('programYear', yr)} style={{
+                          padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 600,
+                          border: form.programYear === yr ? '2px solid #1b6b5a' : '2px solid #ddd',
+                          background: form.programYear === yr ? '#e8f5f1' : '#fff',
+                          color: form.programYear === yr ? '#1b6b5a' : '#666',
+                          cursor: 'pointer',
+                        }}>{yr}</button>
+                      ))}
+                    </div>
+                    {errors.programYear && <div style={errorStyle}>{errors.programYear}</div>}
+                  </div>
+
+                  {isNursing && (
+                    <div style={{
+                      padding: '14px', background: '#fff8e1', borderRadius: '8px', marginTop: '8px',
+                      border: '1px solid #ffe082',
+                    }}>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={form.acknowledgeNoMedicalCare}
+                          onChange={(e) => updateForm('acknowledgeNoMedicalCare', e.target.checked)}
+                          style={{ marginTop: '3px', width: '18px', height: '18px', flexShrink: 0 }} />
+                        <div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#e65100', marginBottom: '4px' }}>
+                            Important: No Medical Care
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#795548', lineHeight: '1.6' }}>
+                            I understand that while participating on InPlace, I am <strong>not</strong> practicing medical care, clinical nursing, or any licensed healthcare activities. My role is limited to non-medical companionship, personal assistance, and daily living support as defined by InPlace's service categories. My nursing/aide program hours logged through InPlace reflect caregiving experience only.
+                          </div>
+                        </div>
+                      </label>
+                      {errors.acknowledgeNoMedicalCare && <div style={errorStyle}>{errors.acknowledgeNoMedicalCare}</div>}
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px', fontSize: '12px', color: '#888', lineHeight: '1.5' }}>
+                    We'll keep track of your hours and work types so you can generate reports for your program coordinator. You can access these reports anytime from your dashboard.
+                  </div>
+                </div>
+              )}
+
+              {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {backBtn(5)}
+                {nextBtn(handleProgramContinue, form.needsProgramReports === null ? 'Select an option above' : 'Continue', form.needsProgramReports === null)}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ─── Step 7: Background Check Payment ($30) ─── */}
+        {step === 7 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Background Check Payment</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
@@ -888,8 +1033,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {errors.submit && <div style={{ color: '#e74c3c', fontSize: '12px', marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
-              {backBtn(5)}
-              <button onClick={() => setStep(7)} disabled={!bgCheckPaid} style={{
+              {backBtn(6)}
+              <button onClick={() => setStep(8)} disabled={!bgCheckPaid} style={{
                 flex: 1, padding: '14px', background: bgCheckPaid ? '#1b6b5a' : '#ccc',
                 color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px',
                 fontWeight: 600, cursor: bgCheckPaid ? 'pointer' : 'not-allowed',
@@ -898,8 +1043,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           </div>
         )}
 
-        {/* ─── Step 7: Document Upload ─── */}
-        {step === 7 && (
+        {/* ─── Step 8: Document Upload ─── */}
+        {step === 8 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Upload Documents</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
@@ -1016,14 +1161,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
-              {backBtn(6)}
+              {backBtn(7)}
               {nextBtn(handleUploadDocuments, 'Upload & Continue')}
             </div>
           </div>
         )}
 
-        {/* ─── Step 8: Review & Complete ─── */}
-        {step === 8 && (
+        {/* ─── Step 9: Review & Complete ─── */}
+        {step === 9 && (
           <div className="card" style={{ padding: '24px' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#127881;</div>
@@ -1045,6 +1190,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <div><span style={{ color: '#888' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
                 <div><span style={{ color: '#888' }}>Documents:</span> {form.documents.length} uploaded</div>
                 <div><span style={{ color: '#888' }}>Travel radius:</span> {form.travelRadius} miles</div>
+                {form.needsProgramReports && (
+                  <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#888' }}>Program:</span> {form.programName === 'radford_nursing' ? 'Radford University Nursing' : form.programName === 'nrcc_nurse_aide' ? 'NRCC Nurse Aide' : form.programNameOther || '—'} ({form.programYear})</div>
+                )}
               </div>
             </div>
 
