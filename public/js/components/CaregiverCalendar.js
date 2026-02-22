@@ -2,7 +2,7 @@
 // Green = available, Blue = booked session, Orange = care request, Red striped = blocked, Gray = off
 const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, availRules, fetchAvailability, onLogVisit }) => {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedDay, setSelectedDay] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(() => new Date());
   const [allSessions, setAllSessions] = useState([]);
   const [careRequests, setCareRequests] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
@@ -28,8 +28,10 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   };
 
   const weekDates = getWeekDates();
-  const weekStart = weekDates[0].toISOString().split('T')[0];
-  const weekEnd = weekDates[6].toISOString().split('T')[0];
+  // Use local date formatting to avoid UTC timezone shift
+  const toLocalDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const weekStart = toLocalDateStr(weekDates[0]);
+  const weekEnd = toLocalDateStr(weekDates[6]);
 
   // Fetch all sessions (upcoming + past) for this caregiver in the visible range
   useEffect(() => {
@@ -212,7 +214,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   };
 
   // Selected day details
-  const selectedDateStr = selectedDay ? selectedDay.toISOString().split('T')[0] : null;
+  const selectedDateStr = selectedDay ? toLocalDateStr(selectedDay) : null;
   const selectedSessions = selectedDateStr ? getSessionsForDate(selectedDateStr) : [];
   const selectedRequests = selectedDateStr ? getRequestsForDate(selectedDateStr) : [];
   const selectedAvail = selectedDay ? getAvailForDay(selectedDay.getDay(), selectedDateStr) : { available: [], blocked: [] };
@@ -245,6 +247,32 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
         <button onClick={() => setWeekOffset(w => w + 1)} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>Next →</button>
       </div>
 
+      {/* Care request alert banner */}
+      {careRequests.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: '1px solid #ffb74d',
+          borderRadius: 10, padding: '12px 16px', marginBottom: 14, display: 'flex',
+          alignItems: 'center', gap: 10, cursor: 'pointer',
+        }} onClick={() => {
+          const firstReq = careRequests[0];
+          if (firstReq) {
+            const d = new Date((firstReq.scheduled_date || firstReq.date) + 'T12:00:00');
+            setSelectedDay(d);
+          }
+        }}>
+          <span style={{ fontSize: 22 }}>🔔</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#e65100' }}>
+              {careRequests.length} Care Request{careRequests.length !== 1 ? 's' : ''} This Week
+            </div>
+            <div style={{ fontSize: 12, color: '#bf360c' }}>
+              Tap a day to view details and accept
+            </div>
+          </div>
+          <span style={{ fontSize: 18, color: '#e65100' }}>→</span>
+        </div>
+      )}
+
       {/* Legend */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 12, fontSize: 11, color: '#666', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -269,7 +297,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
               <th style={{ width: 44, padding: '8px 4px', borderBottom: '2px solid #e0e0e0', background: '#fafafa', position: 'sticky', left: 0, zIndex: 1 }}></th>
               {weekDates.map((d, i) => {
                 const today = isToday(d);
-                const dateStr = d.toISOString().split('T')[0];
+                const dateStr = toLocalDateStr(d);
                 const daySessions = getSessionsForDate(dateStr);
                 const dayRequests = getRequestsForDate(dateStr);
                 const { blocked: dayBlocked } = getAvailForDay(d.getDay(), dateStr);
@@ -302,7 +330,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                     {hour <= 12 ? hour : hour - 12}{hour < 12 ? 'a' : 'p'}
                   </td>
                   {weekDates.map((d, di) => {
-                    const dateStr = d.toISOString().split('T')[0];
+                    const dateStr = toLocalDateStr(d);
                     const cell = getCellType(dateStr, d.getDay(), hour);
                     const colors = cellColors[cell.type];
                     return (

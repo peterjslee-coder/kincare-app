@@ -445,9 +445,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         <div className="card" style={{ position: 'relative' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span><span className="card-icon">📅</span>Upcoming Sessions</span>
-            {upcoming.length === 0 && (
-              <button onClick={() => dismissTile('upcoming')} title="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#ccc', padding: '0 4px' }}>&times;</button>
-            )}
+            <button onClick={() => dismissTile('upcoming')} title="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#ccc', padding: '0 4px' }}>&times;</button>
           </div>
           <ul className="sessions-list">
             {upcoming.length > 0 ? upcoming.map((s, idx) => (
@@ -498,9 +496,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span><span className="card-icon">📢</span>Recent Activity</span>
-            {activity.length === 0 && (
-              <button onClick={() => dismissTile('activity')} title="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#ccc', padding: '0 4px' }}>&times;</button>
-            )}
+            <button onClick={() => dismissTile('activity')} title="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#ccc', padding: '0 4px' }}>&times;</button>
           </div>
           <div>
             {activity.length > 0 ? activity.map((a, idx) => (

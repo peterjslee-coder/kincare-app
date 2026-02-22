@@ -12,8 +12,10 @@ const FindWork = window.FindWork = () => {
 
   const fetchData = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const twoWeeks = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+      const toLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const today = toLocal(new Date());
+      const tw = new Date(); tw.setDate(tw.getDate() + 14);
+      const twoWeeks = toLocal(tw);
 
       const [reqRes, sessRes, availRes] = await Promise.all([
         apiFetch(`/api/sessions?status=requested&from=${today}&to=${twoWeeks}`),
