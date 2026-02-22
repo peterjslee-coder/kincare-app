@@ -241,6 +241,10 @@ async function start() {
       "SELECT id FROM users WHERE email = 'maria@inplace.care' AND is_demo = 1"
     ).get();
     if (mariaUser) {
+      // Ensure Maria has dual role (caregiver + family) for role-switching demo
+      await db.prepare(`
+        UPDATE users SET roles = '["caregiver","family"]' WHERE id = ? AND (roles IS NULL OR roles = '["caregiver"]')
+      `).run(mariaUser.id);
       await db.prepare(`
         UPDATE caregiver_profiles SET
           onboarding_complete = 1,
@@ -259,7 +263,47 @@ async function start() {
           'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' width=''120'' height=''120''%3E%3Crect width=''120'' height=''120'' fill=''%231b6b5a''/%3E%3Ctext x=''50%25'' y=''52%25'' font-family=''system-ui'' font-size=''48'' font-weight=''700'' fill=''white'' text-anchor=''middle'' dominant-baseline=''central''%3EMS%3C/text%3E%3C/svg%3E')
         WHERE id = ?
       `).run(mariaUser.id);
-      console.log("  Demo data patch applied (Maria profile)");
+      // Ensure Carlos (Maria's brother) care recipient exists for family view
+      const carlosExists = await db.prepare(
+        "SELECT id FROM care_recipients WHERE family_user_id = ? AND first_name = 'Carlos'"
+      ).get(mariaUser.id);
+      if (!carlosExists) {
+        const { v4: uuid } = require("uuid");
+        const carlosId = uuid();
+        await db.prepare(`
+          INSERT INTO care_recipients
+          (id, family_user_id, first_name, last_name, age,
+           location_address, location_city, location_state, location_zip,
+           latitude, longitude,
+           health_conditions, medications, preferences,
+           emergency_contact_name, emergency_contact_phone,
+           pets, pet_allergies, food_allergies, medical_conditions)
+          VALUES (?, ?, 'Carlos', 'Santos', 34,
+                  '215 College Avenue', 'Blacksburg', 'VA', '24060',
+                  37.2285, -80.4155,
+                  ?, ?, ?,
+                  'Maria Santos', '(540) 555-0201',
+                  '1 dog — Luna (golden retriever, therapy dog, very gentle, 3 yrs)',
+                  'None known', ?, ?)
+        `).run(
+          carlosId, mariaUser.id,
+          JSON.stringify(["Traumatic brain injury — recovery phase", "Short-term memory difficulties", "Mild left-side weakness", "Anxiety in crowded environments"]),
+          JSON.stringify(["Sertraline 50mg daily", "Gabapentin 300mg twice daily", "Melatonin 5mg at bedtime"]),
+          "Needs patient, calm communication. Prefers structured routines. Loves soccer. Music helps him focus.",
+          JSON.stringify(["Dairy (moderate — causes stomach cramps)"]),
+          "Traumatic brain injury (recovery), short-term memory issues, mild left-side weakness, anxiety"
+        );
+        // Create Carlos's care team
+        const teamId = uuid();
+        await db.prepare(
+          "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
+        ).run(teamId, "Carlos Santos's Care Team", carlosId, mariaUser.id);
+        await db.prepare(
+          "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
+        ).run(uuid(), teamId, mariaUser.id, mariaUser.id);
+        console.log("  Demo data patch: created Carlos care recipient + care team for Maria");
+      }
+      console.log("  Demo data patch applied (Maria dual-role + profile)");
     }
   } catch (patchErr) {
     console.error("  Demo patch failed:", patchErr.message);
