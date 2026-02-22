@@ -98,6 +98,10 @@ router.get("/", async (req, res) => {
   params.push(parseInt(limit));
 
   const sessions = await db.prepare(query).all(...params);
+  // Debug logging for caregiver sessions (temporary)
+  if (sessions.length === 0 && (activeRole === 'caregiver' || req.user.role === 'caregiver')) {
+    console.log('[DEBUG] Caregiver sessions query returned 0 rows. activeRole:', activeRole, 'userId:', req.user.id, 'params:', params.map((p,i) => `$${i+1}=${typeof p === 'string' ? p.substring(0,12) : p}`));
+  }
   res.json({ sessions });
 });
 

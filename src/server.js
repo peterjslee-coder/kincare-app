@@ -64,6 +64,7 @@ app.set("io", io);
 app.set("emitToUser", emitToUser);
 
 // ─── Middleware ───
+app.set("trust proxy", 1); // Trust first proxy (Cloudflare/Railway) for X-Forwarded-For
 app.use(cors());
 app.use(require("cookie-parser")());
 app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
@@ -77,6 +78,7 @@ const authLimiter = rateLimit({
   message: { error: "Too many attempts — please try again in 15 minutes" },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
 });
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
@@ -88,6 +90,7 @@ const apiLimiter = rateLimit({
   message: { error: "Too many requests — please slow down" },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
 });
 app.use("/api/", apiLimiter);
 
