@@ -97,11 +97,34 @@ router.get("/", async (req, res) => {
   query += " ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC LIMIT ?";
   params.push(parseInt(limit));
 
-  const sessions = await db.prepare(query).all(...params);
-  // Debug logging for caregiver sessions (temporary)
-  if (sessions.length === 0 && (activeRole === 'caregiver' || req.user.role === 'caregiver')) {
-    console.log('[DEBUG] Caregiver sessions query returned 0 rows. activeRole:', activeRole, 'userId:', req.user.id, 'params:', params.map((p,i) => `$${i+1}=${typeof p === 'string' ? p.substring(0,12) : p}`));
+  let sessions = await db.prepare(query).all(...params);
+
+  // For caregivers: also fetch ALL open care requests separately to ensure none are missed
+  if (activeRole !== 'family' && activeRole !== 'care_for') {
+    const openQuery = `
+      SELECT cs.*,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        cr.preferences AS recipient_preferences,
+        cr.location_city AS recipient_city,
+        cr.location_lat AS recipient_lat,
+        cr.location_lng AS recipient_lng
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.status = 'requested' AND cs.caregiver_id IS NULL
+    `;
+    let openParams = [];
+    let openFilters = '';
+    if (from) { openFilters += " AND cs.scheduled_date >= ?"; openParams.push(from); }
+    if (to) { openFilters += " AND cs.scheduled_date <= ?"; openParams.push(to); }
+    openFilters += " ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC LIMIT 50";
+    const openSessions = await db.prepare(openQuery + openFilters).all(...openParams);
+    // Merge: add any open requests not already in the result set
+    const existingIds = new Set(sessions.map(s => s.id));
+    for (const s of openSessions) {
+      if (!existingIds.has(s.id)) sessions.push(s);
+    }
   }
+
   res.json({ sessions });
 });
 
