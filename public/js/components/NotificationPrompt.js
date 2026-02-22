@@ -18,8 +18,15 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
     setPermState(perm);
 
     if (perm === 'granted') {
-      // Already granted — try to silently resubscribe (in case subscription expired)
-      subscribeToPush().catch(() => {});
+      // Already granted — silently re-subscribe (handles VAPID key changes, expired subs)
+      // subscribeToPush() detects key mismatches and re-subscribes automatically
+      subscribeToPush().then(sub => {
+        if (!sub) {
+          // Subscription failed even though permission is granted — show prompt to retry
+          console.warn('Push: permission granted but subscription failed — showing re-enable prompt');
+          setVisible(true);
+        }
+      }).catch(() => {});
       return;
     }
 

@@ -270,6 +270,25 @@ const onSocketEvent = window.onSocketEvent = (event, callback) => {
 };
 
 // ─── Push Notification Helpers ───
+
+// Convert URL-safe base64 VAPID key to Uint8Array
+const _urlBase64ToUint8Array = (base64String) => {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+};
+
+// Compare two ArrayBuffers for equality
+const _arrayBuffersEqual = (buf1, buf2) => {
+  if (!buf1 || !buf2) return false;
+  const a = new Uint8Array(buf1);
+  const b = new Uint8Array(buf2);
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) return false; }
+  return true;
+};
+
 // Subscribe to push notifications (requires user gesture for permission prompt)
 const subscribeToPush = window.subscribeToPush = async () => {
   try {
@@ -280,19 +299,7 @@ const subscribeToPush = window.subscribeToPush = async () => {
 
     const reg = await navigator.serviceWorker.ready;
 
-    // Check if already subscribed
-    let sub = await reg.pushManager.getSubscription();
-    if (sub) {
-      // Already subscribed — just save to server (may have changed endpoints)
-      await apiFetch('/api/push/subscribe', {
-        method: 'POST',
-        body: JSON.stringify({ subscription: sub }),
-      });
-      console.log('Push: existing subscription synced to server');
-      return sub;
-    }
-
-    // Get VAPID public key from server
+    // Get current VAPID public key from server
     const keyRes = await apiFetch('/api/push/vapid-key');
     if (!keyRes || !keyRes.ok) {
       console.warn('Push: server VAPID key not available');
@@ -303,19 +310,33 @@ const subscribeToPush = window.subscribeToPush = async () => {
       console.warn('Push: server returned empty VAPID key');
       return null;
     }
+    const currentKeyBytes = _urlBase64ToUint8Array(publicKey);
 
-    // Convert URL-safe base64 VAPID key to Uint8Array
-    const urlBase64ToUint8Array = (base64String) => {
-      const padding = '='.repeat((4 - base64String.length % 4) % 4);
-      const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-      const rawData = atob(base64);
-      return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
-    };
+    // Check if already subscribed
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      // Verify the subscription was created with the current VAPID key
+      const subKey = sub.options && sub.options.applicationServerKey;
+      if (subKey && _arrayBuffersEqual(subKey, currentKeyBytes.buffer)) {
+        // Keys match — sync to server
+        await apiFetch('/api/push/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({ subscription: sub }),
+        });
+        console.log('Push: existing subscription synced (key matches)');
+        return sub;
+      } else {
+        // VAPID key changed — unsubscribe old and re-subscribe with new key
+        console.log('Push: VAPID key changed — re-subscribing...');
+        await sub.unsubscribe();
+        sub = null; // fall through to create new subscription
+      }
+    }
 
-    // This triggers the browser's notification permission prompt (needs user gesture)
+    // Create new subscription (triggers browser permission prompt if needed)
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
+      applicationServerKey: currentKeyBytes,
     });
 
     // Save subscription to server
@@ -324,7 +345,7 @@ const subscribeToPush = window.subscribeToPush = async () => {
       body: JSON.stringify({ subscription: sub }),
     });
 
-    console.log('Push: subscribed successfully');
+    console.log('Push: subscribed successfully with current VAPID key');
     return sub;
   } catch (err) {
     if (err.name === 'NotAllowedError') {

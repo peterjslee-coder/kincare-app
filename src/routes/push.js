@@ -163,12 +163,29 @@ router.post("/test", authenticate, async (req, res) => {
   }
 
   try {
-    await sendPushToUser(req.user.id, {
+    const result = await sendPushToUser(req.user.id, {
       title: "InPlace Test Notification",
       body: "Push notifications are working! 🎉",
       data: { type: "test" },
     });
-    res.json({ success: true, subscriptionsNotified: subs.length });
+    const sent = result ? result.sent : 0;
+    const removed = result ? result.removed : 0;
+    if (sent === 0 && removed > 0) {
+      // All subscriptions were stale (VAPID key mismatch) — tell user to re-enable
+      res.json({
+        success: false,
+        error: "Your notification subscriptions were outdated and have been cleared. Please disable and re-enable notifications to receive them.",
+        sent: 0, removed,
+      });
+    } else if (sent === 0) {
+      res.json({
+        success: false,
+        error: "No notifications were delivered. Try disabling and re-enabling notifications.",
+        sent: 0,
+      });
+    } else {
+      res.json({ success: true, sent, total: subs.length, removed });
+    }
   } catch (err) {
     res.status(500).json({ error: "Failed to send test push: " + err.message });
   }
@@ -273,10 +290,12 @@ async function sendPushToUser(userId, payload, eventType) {
         await webpush.sendNotification(JSON.parse(sub.subscription_json), notificationPayload);
         sent++;
       } catch (err) {
-        if (err.statusCode === 404 || err.statusCode === 410) {
-          // Subscription expired or invalid — remove it
+        if (err.statusCode === 403 || err.statusCode === 404 || err.statusCode === 410) {
+          // 403 = VAPID key mismatch (subscription created with different key)
+          // 404/410 = subscription expired or invalid
           await db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(sub.id);
           removed++;
+          console.log(`  Push: removed stale subscription (${err.statusCode}) for user ${userId}`);
         } else {
           console.error(`Push delivery error (user ${userId}):`, err.statusCode, err.message);
         }
@@ -284,10 +303,12 @@ async function sendPushToUser(userId, payload, eventType) {
     }
 
     if (sent > 0 || removed > 0) {
-      console.log(`  Push: sent ${sent}/${subs.length} to user ${userId}${removed ? ` (${removed} expired removed)` : ""}`);
+      console.log(`  Push: sent ${sent}/${subs.length} to user ${userId}${removed ? ` (${removed} stale removed)` : ""}`);
     }
+    return { sent, failed: subs.length - sent, removed };
   } catch (err) {
     console.error("Push notification error:", err.message);
+    return { sent: 0, failed: 0, removed: 0, error: err.message };
   }
 }
 
