@@ -7,6 +7,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   const [careRequests, setCareRequests] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [claimingId, setClaimingId] = useState(null);
+  const [offeringOnId, setOfferingOnId] = useState(null); // session id where offer UI is open
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const hourStart = 6;
@@ -374,33 +375,72 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
           {selectedRequests.length > 0 && (
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#e65100', marginBottom: 8 }}>Care Requests</div>
-              {selectedRequests.map((s, idx) => (
-                <div key={idx} style={{ padding: '10px 12px', background: '#fff3e0', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #fb8c00' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>
-                        {s.recipientName || s.recipient_name || 'Client'}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#666' }}>
-                        {formatTimeStr(s.time || s.scheduled_time)} · {s.durationHours || s.duration_hours}h · {s.serviceType || s.service_type}
-                      </div>
-                      {(s.specialInstructions || s.special_instructions) && (
-                        <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
-                          {s.specialInstructions || s.special_instructions}
+              {selectedRequests.map((s, idx) => {
+                const hrs = s.durationHours || s.duration_hours || 2;
+                const estCost = s.estimated_cost || s.estimatedCost;
+                const budgetMax = s.budget_max || s.budgetMax;
+                const shortNoticeSurcharge = s.short_notice_surcharge || s.shortNoticeSurcharge || 0;
+                return (
+                  <div key={idx} style={{ padding: '10px 12px', background: '#fff3e0', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #fb8c00' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>
+                          {s.recipientName || s.recipient_name || 'Client'}
+                          {shortNoticeSurcharge > 0 && (
+                            <span style={{ marginLeft: 6, background: '#e8724a', color: '#fff', padding: '2px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600 }}>
+                              Short Notice +20%
+                            </span>
+                          )}
                         </div>
-                      )}
+                        <div style={{ fontSize: 12, color: '#666' }}>
+                          {formatTimeStr(s.time || s.scheduled_time)} · {hrs}h · {s.serviceType || s.service_type}
+                        </div>
+                        {estCost && (
+                          <div style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600, marginTop: 2 }}>
+                            Est. earnings: ${estCost}
+                          </div>
+                        )}
+                        {budgetMax && (
+                          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                            Budget: up to ${budgetMax}/hr
+                          </div>
+                        )}
+                        {(s.specialInstructions || s.special_instructions) && (
+                          <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
+                            {s.specialInstructions || s.special_instructions}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 8 }}>
+                        <button onClick={() => handleClaim(s.id)} disabled={claimingId === s.id}
+                          style={{
+                            padding: '6px 16px', background: '#1b6b5a', color: '#fff', border: 'none',
+                            borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                            opacity: claimingId === s.id ? 0.5 : 1,
+                          }}>
+                          {claimingId === s.id ? 'Accepting...' : 'Accept'}
+                        </button>
+                        <button onClick={() => setOfferingOnId(offeringOnId === s.id ? null : s.id)}
+                          style={{
+                            padding: '5px 12px', background: '#fff', color: '#e8724a', border: '1px solid #e8724a',
+                            borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                          }}>
+                          {offeringOnId === s.id ? 'Cancel' : 'Make Offer'}
+                        </button>
+                      </div>
                     </div>
-                    <button onClick={() => handleClaim(s.id)} disabled={claimingId === s.id}
-                      style={{
-                        padding: '6px 16px', background: '#1b6b5a', color: '#fff', border: 'none',
-                        borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                        opacity: claimingId === s.id ? 0.5 : 1,
-                      }}>
-                      {claimingId === s.id ? 'Accepting...' : 'Accept'}
-                    </button>
+                    {offeringOnId === s.id && (
+                      <div style={{ marginTop: 8 }}>
+                        <OfferNegotiationPanel sessionId={s.id} currentUser={{ id: 'me', role: 'caregiver' }} compact onAccepted={() => {
+                          setOfferingOnId(null);
+                          // Refresh
+                          const fetchRes = apiFetch(`/api/sessions?from=${weekStart}&to=${weekEnd}`);
+                        }} />
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

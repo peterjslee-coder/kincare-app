@@ -5,6 +5,7 @@ const { authenticate, requireRole } = require("../middleware/auth");
 const { validateSession } = require("../middleware/validate");
 const availabilityRouter = require("./availability");
 const { sendPushToUser } = require("./push");
+const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
 
 const router = express.Router();
 router.use(authenticate);
@@ -113,7 +114,7 @@ router.post("/request", async (req, res) => {
     return res.status(403).json({ error: "Only care recipients can create care requests" });
   }
 
-  const { serviceType, scheduledDate, scheduledTime, durationHours = 2, note } = req.body;
+  const { serviceType, scheduledDate, scheduledTime, durationHours = 2, note, budgetMax } = req.body;
   if (!serviceType || !scheduledDate || !scheduledTime) {
     return res.status(400).json({ error: "Required: serviceType, scheduledDate, scheduledTime" });
   }
@@ -130,21 +131,31 @@ router.post("/request", async (req, res) => {
 
   if (!recipient) return res.status(404).json({ error: "Care recipient record not found" });
 
-  const rates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
-  const baseRate = rates[serviceType] || 28;
-  const estimatedCost = baseRate * durationHours;
+  // Estimate cost using default service-type rates (no specific caregiver yet)
+  const defaultRates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
+  const baseRate = defaultRates[serviceType] || 28;
+  const shortNotice = isShortNotice(`${scheduledDate}T${scheduledTime}`);
+  const costResult = calculateSessionCost(scheduledTime, null, { base: baseRate }, {
+    scheduledDate,
+    durationHours,
+    shortNotice,
+  });
+  const estimatedCost = costResult.total;
 
   const id = uuid();
   await db.prepare(`
     INSERT INTO care_sessions
     (id, care_recipient_id, family_user_id, service_type, status,
      scheduled_date, scheduled_time, duration_hours,
-     special_instructions, estimated_cost)
-    VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?)
+     special_instructions, estimated_cost, short_notice_surcharge, rate_tier, budget_max)
+    VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, recipient.id, recipient.family_user_id, serviceType,
     scheduledDate, scheduledTime, durationHours,
-    note || null, estimatedCost
+    note || null, estimatedCost,
+    costResult.surcharge || 0,
+    JSON.stringify(costResult.tierBreakdown),
+    budgetMax || null
   );
 
   const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(id);
@@ -294,10 +305,31 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     }
   }
 
-  // Estimate cost based on service type and duration
-  const rates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
-  const baseRate = rates[serviceType] || 28;
-  const estimatedCost = baseRate * durationHours;
+  // Estimate cost using caregiver's tiered rates (or service-type defaults)
+  let costRates = { base: 28 };
+  if (bookCaregiverId) {
+    const cgProfile = await db.prepare(
+      "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight FROM caregiver_profiles WHERE id = ?"
+    ).get(bookCaregiverId);
+    if (cgProfile) {
+      costRates = {
+        daytime: cgProfile.rate_daytime || cgProfile.hourly_rate || 28,
+        nighttime: cgProfile.rate_nighttime || cgProfile.hourly_rate || 28,
+        overnight: cgProfile.rate_overnight || cgProfile.hourly_rate || 28,
+        base: cgProfile.hourly_rate || 28,
+      };
+    }
+  } else {
+    const defaultRates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
+    costRates.base = defaultRates[serviceType] || 28;
+  }
+  const shortNotice = isShortNotice(`${scheduledDate}T${scheduledTime}`);
+  const costResult = calculateSessionCost(scheduledTime, null, costRates, {
+    scheduledDate,
+    durationHours,
+    shortNotice,
+  });
+  const estimatedCost = costResult.total;
 
   // Determine dates to create
   const validRules = ["weekly", "biweekly"];
@@ -319,14 +351,17 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       INSERT INTO care_sessions
       (id, care_recipient_id, family_user_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours,
-       special_instructions, estimated_cost, recurrence_rule, recurrence_group_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
+       short_notice_surcharge, rate_tier)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, careRecipientId, req.user.id, serviceType, sessionStatus,
       sessionDate, scheduledTime, durationHours,
       specialInstructions || null, estimatedCost,
       isRecurring ? recurrenceRule : null,
-      recurrenceGroupId
+      recurrenceGroupId,
+      costResult.surcharge || 0,
+      JSON.stringify(costResult.tierBreakdown)
     );
     createdSessions.push(id);
   }
@@ -462,17 +497,58 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
   });
 });
 
+// ─── GET /api/sessions/cost-preview ───
+// Calculate cost breakdown without creating a session (for live preview in booking UI)
+router.get("/cost-preview", async (req, res) => {
+  const { caregiverId, scheduledDate, scheduledTime, durationHours = 2 } = req.query;
+
+  if (!scheduledDate || !scheduledTime) {
+    return res.status(400).json({ error: "scheduledDate and scheduledTime are required" });
+  }
+
+  const db = await getDb();
+  let costRates = { base: 28 };
+
+  if (caregiverId) {
+    const cgProfile = await db.prepare(
+      "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight FROM caregiver_profiles WHERE id = ?"
+    ).get(caregiverId);
+    if (cgProfile) {
+      costRates = {
+        daytime: cgProfile.rate_daytime || cgProfile.hourly_rate || 28,
+        nighttime: cgProfile.rate_nighttime || cgProfile.hourly_rate || 28,
+        overnight: cgProfile.rate_overnight || cgProfile.hourly_rate || 28,
+        base: cgProfile.hourly_rate || 28,
+      };
+    }
+  }
+
+  const shortNotice = isShortNotice(`${scheduledDate}T${scheduledTime}`);
+  const costResult = calculateSessionCost(scheduledTime, null, costRates, {
+    scheduledDate,
+    durationHours: parseFloat(durationHours),
+    shortNotice,
+  });
+
+  res.json({
+    ...costResult,
+    shortNotice,
+    rates: costRates,
+  });
+});
+
 // ─── PUT /api/sessions/:id/status ───
 // Update session status (caregiver check-in, complete, cancel)
 router.put("/:id/status", async (req, res) => {
   const { status } = req.body;
   const validTransitions = {
-    open: ["pending", "confirmed", "cancelled"],
-    requested: ["confirmed", "cancelled"],
+    open: ["pending", "confirmed", "cancelled", "negotiating"],
+    requested: ["confirmed", "cancelled", "negotiating"],
     confirmed: ["in_progress", "cancelled"],
     in_progress: ["completed", "cancelled"],
-    pending: ["confirmed", "cancelled"],
+    pending: ["confirmed", "cancelled", "negotiating"],
     matching: ["confirmed", "cancelled"],
+    negotiating: ["confirmed", "cancelled", "open", "requested", "pending"],
   };
 
   const db = await getDb();

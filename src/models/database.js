@@ -147,6 +147,9 @@ async function initializeDatabase() {
   // Blocked emails (admin-managed registration blocklist)
   await db.exec(`CREATE TABLE IF NOT EXISTS blocked_emails (id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, reason TEXT, blocked_by TEXT REFERENCES users(id), created_at TIMESTAMPTZ DEFAULT NOW())`);
 
+  // Session offers (negotiation / counter-offer chain)
+  await db.exec(`CREATE TABLE IF NOT EXISTS session_offers (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES care_sessions(id), from_user_id TEXT NOT NULL REFERENCES users(id), to_user_id TEXT NOT NULL REFERENCES users(id), offered_rate REAL NOT NULL, message TEXT, status TEXT NOT NULL DEFAULT 'pending', parent_offer_id TEXT, round_number INTEGER NOT NULL DEFAULT 1, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`);
+
   // Migrations for existing databases
   const migrations = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs TEXT`,
@@ -218,6 +221,17 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS background_check_paid INTEGER DEFAULT 0`,
     // v1.10.0 — Per-user relationship label for care team members
     `ALTER TABLE care_team_members ADD COLUMN IF NOT EXISTS relationship_label TEXT`,
+    // v1.12.0 — Tiered rates for caregivers (daytime / nighttime / overnight)
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS rate_daytime REAL`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS rate_nighttime REAL`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS rate_overnight REAL`,
+    // v1.12.0 — Session pricing: agreed rate, surcharge, tier breakdown, budget
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS agreed_rate REAL`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS short_notice_surcharge REAL DEFAULT 0`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS rate_tier TEXT`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS budget_max REAL`,
+    // v1.12.0 — Backfill tiered rates from hourly_rate
+    `UPDATE caregiver_profiles SET rate_daytime = hourly_rate WHERE rate_daytime IS NULL AND hourly_rate IS NOT NULL`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

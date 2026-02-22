@@ -70,6 +70,9 @@ router.get("/", async (req, res) => {
       bio: c.bio,
       yearsExperience: c.years_experience,
       hourlyRate: c.hourly_rate,
+      rateDaytime: c.rate_daytime || c.hourly_rate,
+      rateNighttime: c.rate_nighttime || c.hourly_rate,
+      rateOvernight: c.rate_overnight || c.hourly_rate,
       specialties: JSON.parse(c.specialties || "[]"),
       certifications: JSON.parse(c.certifications || "[]"),
       rating: c.rating_avg,
@@ -144,6 +147,9 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
       bio: c.bio,
       yearsExperience: c.years_experience,
       hourlyRate: c.hourly_rate,
+      rateDaytime: c.rate_daytime || c.hourly_rate,
+      rateNighttime: c.rate_nighttime || c.hourly_rate,
+      rateOvernight: c.rate_overnight || c.hourly_rate,
       specialties: JSON.parse(c.specialties || "[]"),
       certifications: JSON.parse(c.certifications || "[]"),
       rating: c.rating_avg,
@@ -205,6 +211,9 @@ router.get("/:id", async (req, res) => {
       bio: cg.bio,
       yearsExperience: cg.years_experience,
       hourlyRate: cg.hourly_rate,
+      rateDaytime: cg.rate_daytime || cg.hourly_rate,
+      rateNighttime: cg.rate_nighttime || cg.hourly_rate,
+      rateOvernight: cg.rate_overnight || cg.hourly_rate,
       specialties: JSON.parse(cg.specialties || "[]"),
       certifications: JSON.parse(cg.certifications || "[]"),
       rating: cg.rating_avg,
@@ -352,6 +361,50 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
 
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);
   res.status(201).json({ profile });
+});
+
+// ─── PUT /api/caregivers/rates ───
+// Update tiered rates (daytime / nighttime / overnight)
+router.put("/rates", requireRole("caregiver"), async (req, res) => {
+  const { rateDaytime, rateNighttime, rateOvernight } = req.body;
+
+  // Validate
+  const rates = [rateDaytime, rateNighttime, rateOvernight];
+  for (const r of rates) {
+    if (r !== undefined && r !== null) {
+      if (typeof r !== 'number' || r <= 0 || r > 500) {
+        return res.status(400).json({ error: "Rates must be between $0.01 and $500/hr" });
+      }
+    }
+  }
+
+  if (!rateDaytime && !rateNighttime && !rateOvernight) {
+    return res.status(400).json({ error: "At least one rate is required" });
+  }
+
+  const db = await getDb();
+  const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  await db.prepare(`
+    UPDATE caregiver_profiles SET
+      rate_daytime = COALESCE(?, rate_daytime),
+      rate_nighttime = COALESCE(?, rate_nighttime),
+      rate_overnight = COALESCE(?, rate_overnight),
+      hourly_rate = COALESCE(?, hourly_rate),
+      updated_at = NOW()
+    WHERE user_id = ?
+  `).run(rateDaytime || null, rateNighttime || null, rateOvernight || null, rateDaytime || null, req.user.id);
+
+  const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  res.json({
+    rates: {
+      daytime: updated.rate_daytime,
+      nighttime: updated.rate_nighttime,
+      overnight: updated.rate_overnight,
+      base: updated.hourly_rate,
+    }
+  });
 });
 
 module.exports = router;

@@ -108,6 +108,7 @@ app.use((req, res, next) => {
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/care-recipients", require("./routes/careRecipients"));
 app.use("/api/sessions", require("./routes/sessions"));
+app.use("/api/sessions", require("./routes/offers"));
 app.use("/api/caregivers", require("./routes/caregivers"));
 app.use("/api/activity", require("./routes/activity"));
 app.use("/api/dashboard", require("./routes/dashboard"));

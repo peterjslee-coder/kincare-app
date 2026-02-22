@@ -222,7 +222,7 @@ const Caregivers = window.Caregivers = () => {
         <div style="min-width:160px;font-family:sans-serif">
           <div style="font-weight:700;font-size:13px;margin-bottom:3px">${cg.name}</div>
           <div style="font-size:11px;color:#666">${cg.distance} miles away</div>
-          <div style="font-size:11px;color:#888;margin-top:2px">⭐ ${cg.rating || '—'} &bull; $${cg.hourlyRate}/hr</div>
+          <div style="font-size:11px;color:#888;margin-top:2px">⭐ ${cg.rating || '—'} &bull; Day $${cg.rateDaytime || cg.hourlyRate}${cg.rateNighttime && cg.rateNighttime !== cg.rateDaytime ? ` · Night $${cg.rateNighttime}` : ''}/hr</div>
           <div style="font-size:10px;color:#1b6b5a;margin-top:4px">${(cg.specialties || []).join(', ')}</div>
         </div>
       `);
@@ -265,7 +265,11 @@ const Caregivers = window.Caregivers = () => {
               )}
             </div>
             <div style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>
-              ⭐ {cg.rating || '—'} &bull; {cg.reviewCount || 0} reviews &bull; ${cg.hourlyRate || '—'}/hr
+              ⭐ {cg.rating || '—'} &bull; {cg.reviewCount || 0} reviews &bull;
+              {(cg.rateDaytime && cg.rateNighttime && cg.rateDaytime !== cg.rateNighttime)
+                ? <> Day ${cg.rateDaytime} · Night ${cg.rateNighttime} · Overnight ${cg.rateOvernight}/hr</>
+                : <> ${cg.hourlyRate || '—'}/hr</>
+              }
               {cg.city && ` &bull; ${cg.city}, ${cg.state || ''}`}
             </div>
             {cg.bio && (
@@ -357,7 +361,11 @@ const Caregivers = window.Caregivers = () => {
                     </div>
                     {cg && (
                       <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
-                        ⭐ {cg.rating || '—'} &bull; ${cg.hourlyRate || '—'}/hr &bull; {(cg.specialties || []).join(', ') || 'General care'}
+                        ⭐ {cg.rating || '—'} &bull;
+                        {(cg.rateDaytime && cg.rateNighttime && cg.rateDaytime !== cg.rateNighttime)
+                          ? <> Day ${cg.rateDaytime} · Night ${cg.rateNighttime} · Overnight ${cg.rateOvernight}/hr</>
+                          : <> ${cg.hourlyRate || '—'}/hr</>
+                        } &bull; {(cg.specialties || []).join(', ') || 'General care'}
                       </div>
                     )}
                   </div>

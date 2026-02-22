@@ -17,6 +17,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
 
+  // Tiered rates state
+  const [ratesDaytime, setRatesDaytime] = useState('');
+  const [ratesNighttime, setRatesNighttime] = useState('');
+  const [ratesOvernight, setRatesOvernight] = useState('');
+  const [ratesSaving, setRatesSaving] = useState(false);
+  const [ratesMsg, setRatesMsg] = useState('');
+
   // Stripe Connect state
   const [stripeStatus, setStripeStatus] = useState(null);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -330,6 +337,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const reviews = data.reviews || [];
   const stats = data.stats || {};
 
+  // Init tiered rates from profile (once)
+  useEffect(() => {
+    if (profile.rateDaytime && !ratesDaytime) setRatesDaytime(profile.rateDaytime);
+    if (profile.rateNighttime && !ratesNighttime) setRatesNighttime(profile.rateNighttime);
+    if (profile.rateOvernight && !ratesOvernight) setRatesOvernight(profile.rateOvernight);
+  }, [profile.rateDaytime, profile.rateNighttime, profile.rateOvernight]);
+
   const CARE_TASKS = [
     'Bathing / Showering', 'Toileting', 'Dressing', 'Feeding / Meal Assistance',
     'Medication Reminders', 'Mobility / Transfer', 'Light Housekeeping', 'Laundry',
@@ -623,6 +637,98 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {activeTab === 'earnings' && (
         <div>
+          {/* My Rates Card */}
+          <div className="card" style={{ marginBottom: '16px' }}>
+            <div className="card-header"><span className="card-icon">💲</span>My Rates</div>
+            <div style={{ fontSize: '13px', color: '#666', marginBottom: '10px' }}>
+              Set different rates for daytime, nighttime, and overnight shifts.
+              Overnight sessions have a 6-hour minimum.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                  Daytime (7am–6pm)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ color: '#666' }}>$</span>
+                  <input type="number" step="0.50" min="1" max="500"
+                    value={ratesDaytime}
+                    onChange={e => setRatesDaytime(e.target.value)}
+                    style={{ width: '80px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
+                  />
+                  <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                  Nighttime (6pm–12am)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ color: '#666' }}>$</span>
+                  <input type="number" step="0.50" min="1" max="500"
+                    value={ratesNighttime}
+                    onChange={e => setRatesNighttime(e.target.value)}
+                    style={{ width: '80px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
+                  />
+                  <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                  Overnight (12am–7am)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ color: '#666' }}>$</span>
+                  <input type="number" step="0.50" min="1" max="500"
+                    value={ratesOvernight}
+                    onChange={e => setRatesOvernight(e.target.value)}
+                    style={{ width: '80px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
+                  />
+                  <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
+                  <span style={{ fontSize: '10px', color: '#e8724a', fontWeight: 600 }}>6hr min</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                disabled={ratesSaving}
+                onClick={async () => {
+                  setRatesSaving(true); setRatesMsg('');
+                  try {
+                    const res = await apiFetch('/api/caregivers/rates', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        rateDaytime: parseFloat(ratesDaytime) || null,
+                        rateNighttime: parseFloat(ratesNighttime) || null,
+                        rateOvernight: parseFloat(ratesOvernight) || null,
+                      }),
+                    });
+                    if (res?.ok) {
+                      setRatesMsg('Rates saved!');
+                      setTimeout(() => setRatesMsg(''), 3000);
+                    } else {
+                      const err = await res.json();
+                      setRatesMsg(err.error || 'Failed to save');
+                    }
+                  } catch { setRatesMsg('Network error'); }
+                  setRatesSaving(false);
+                }}
+                className="btn btn-primary"
+                style={{ fontSize: '13px', padding: '7px 18px' }}>
+                {ratesSaving ? 'Saving...' : 'Save Rates'}
+              </button>
+              {ratesMsg && (
+                <span style={{ fontSize: '13px', color: ratesMsg === 'Rates saved!' ? '#2e7d32' : '#c62828' }}>
+                  {ratesMsg}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '11px', color: '#999', marginTop: '8px' }}>
+              Sessions booked less than 24 hours in advance incur a 20% short-notice surcharge (75% goes to you).
+            </div>
+          </div>
+
           {/* Stripe Connect Banner */}
           <div className="card" style={{ marginBottom: '16px', border: stripeStatus?.status === 'active' ? '1px solid #4caf50' : stripeStatus?.status === 'not_configured' ? '1px solid #e0e0e0' : '1px solid #ff9800' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
@@ -689,8 +795,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 <div style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>{stats.hoursThisMonth || 0}</div>
               </div>
               <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>Hourly Rate</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>${profile.hourlyRate || '—'}/hr</div>
+                <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>Rates</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', lineHeight: 1.5 }}>
+                  Day ${profile.rateDaytime || profile.hourlyRate || '—'}<br/>
+                  Night ${profile.rateNighttime || profile.hourlyRate || '—'}<br/>
+                  Overnight ${profile.rateOvernight || profile.hourlyRate || '—'}
+                </div>
               </div>
               <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
                 <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>Mileage</div>

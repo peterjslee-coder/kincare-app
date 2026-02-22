@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { calculateSessionCost, isShortNotice, SURCHARGE_CAREGIVER_SHARE, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
 
 const router = express.Router();
 
@@ -172,7 +173,8 @@ router.post("/checkout", requireRole("family"), async (req, res) => {
   // Get the care session
   const session = await db.prepare(`
     SELECT cs.*, cp.stripe_account_id, cp.stripe_onboard_complete,
-      cp.hourly_rate, cp.user_id AS caregiver_user_id,
+      cp.hourly_rate, cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
+      cp.user_id AS caregiver_user_id,
       u.first_name || ' ' || u.last_name AS caregiver_name,
       cr.first_name || ' ' || cr.last_name AS recipient_name
     FROM care_sessions cs
@@ -194,11 +196,37 @@ router.post("/checkout", requireRole("family"), async (req, res) => {
   ).get(sessionId);
   if (existingPayment) return res.status(400).json({ error: "Payment already processed for this session" });
 
-  // Calculate amounts
-  const hourlyRate = session.hourly_rate || 28;
+  // Calculate amounts — use agreed_rate if negotiated, else caregiver's tiered rates
   const durationHours = session.duration_hours || 2;
-  const totalCents = Math.round(hourlyRate * durationHours * 100);
-  let platformFeeCents = Math.round(totalCents * PLATFORM_FEE_PERCENT / 100);
+  let totalCents, baseCostCents, surchargeCents = 0;
+
+  if (session.agreed_rate) {
+    // Negotiated flat rate — simple calculation
+    baseCostCents = Math.round(session.agreed_rate * durationHours * 100);
+    surchargeCents = Math.round((session.short_notice_surcharge || 0) * 100);
+    totalCents = baseCostCents + surchargeCents;
+  } else {
+    // Use tiered rate calculation
+    const costResult = calculateSessionCost(session.scheduled_time, null, {
+      daytime: session.rate_daytime || session.hourly_rate || 28,
+      nighttime: session.rate_nighttime || session.hourly_rate || 28,
+      overnight: session.rate_overnight || session.hourly_rate || 28,
+      base: session.hourly_rate || 28,
+    }, {
+      scheduledDate: session.scheduled_date,
+      durationHours,
+      shortNotice: (session.short_notice_surcharge || 0) > 0,
+    });
+    baseCostCents = Math.round(costResult.subtotal * 100);
+    surchargeCents = Math.round(costResult.surcharge * 100);
+    totalCents = Math.round(costResult.total * 100);
+  }
+
+  // Platform fee: 15% of base cost + 25% of short-notice surcharge (platform gets smaller share of surcharge)
+  let platformFeeCents = Math.round(baseCostCents * PLATFORM_FEE_PERCENT / 100);
+  if (surchargeCents > 0) {
+    platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
+  }
 
   // Check caregiver payout speed — if instant, add 2% surcharge to platform fee
   const payoutPref = await db.prepare(

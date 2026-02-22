@@ -11,6 +11,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [matchedCaregivers, setMatchedCaregivers] = useState([]);
   const [loadingCaregivers, setLoadingCaregivers] = useState(false);
   const [assignedCaregivers, setAssignedCaregivers] = useState(null); // null = not loaded yet
+  const [costPreview, setCostPreview] = useState(null);
+  const [proposingRate, setProposingRate] = useState(false);
+  const [proposedRate, setProposedRate] = useState('');
 
   // Fetch assigned caregivers on mount to determine if step 4 is needed
   useEffect(() => {
@@ -60,6 +63,10 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         const cgName = `${cg.first_name} ${cg.last_name}`;
         const hasSkill = caregiverMatchesService(cgName, serviceType);
         const rate = cg.hourly_rate || 30;
+        const rateDaytime = cg.rate_daytime || rate;
+        const rateNighttime = cg.rate_nighttime || rate;
+        const rateOvernight = cg.rate_overnight || rate;
+        const hasTieredRates = rateDaytime !== rateNighttime || rateDaytime !== rateOvernight;
 
         // Fetch real availability slots from API
         try {
@@ -82,13 +89,13 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             if (isAvailable) {
               matches.push({
                 name: cgName, caregiverId: cg.caregiver_profile_id,
-                skills: cg.specialties || [], rate: `$${rate}/hr`,
+                skills: cg.specialties || [], rate: hasTieredRates ? `Day $${rateDaytime} · Night $${rateNighttime}` : `$${rate}/hr`,
                 skillMatch: hasSkill, available: true,
               });
             } else {
               matches.push({
                 name: cgName, caregiverId: cg.caregiver_profile_id,
-                skills: cg.specialties || [], rate: `$${rate}/hr`,
+                skills: cg.specialties || [], rate: hasTieredRates ? `Day $${rateDaytime} · Night $${rateNighttime}` : `$${rate}/hr`,
                 skillMatch: hasSkill, available: false,
                 reason: daySlots.length === 0 ? 'Not scheduled this day' : 'Not available at this time',
               });
@@ -155,6 +162,22 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       findMatchingCaregivers();
     }
   }, [step]);
+
+  // Fetch cost preview when reaching review step
+  useEffect(() => {
+    if (step === reviewStep && date && time && duration) {
+      const fetchCost = async () => {
+        try {
+          const cgId = selectedCaregiver?.caregiverId || '';
+          const params = new URLSearchParams({ scheduledDate: date, scheduledTime: time, durationHours: duration });
+          if (cgId) params.set('caregiverId', cgId);
+          const res = await apiFetch(`/api/sessions/cost-preview?${params}`);
+          if (res?.ok) setCostPreview(await res.json());
+        } catch (err) { console.error('Cost preview error:', err); }
+      };
+      fetchCost();
+    }
+  }, [step, selectedCaregiver]);
 
   // While assignments haven't loaded yet, show loading
   if (assignedCaregivers === null) {
@@ -344,10 +367,63 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 ) : (
                   <><div style={{ color: '#666' }}>Status</div><div style={{ fontWeight: 600, color: '#e8724a' }}>Open — waiting for caregiver</div></>
                 )}
-                {selectedCaregiver && (
-                  <><div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${parseInt((selectedCaregiver.rate || '$30').replace(/[^0-9]/g, '')) * parseInt(duration)}</div></>
-                )}
               </div>
+
+              {/* Cost Breakdown */}
+              {costPreview && (
+                <div style={{ marginTop: '12px', padding: '10px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Cost Breakdown</div>
+                  {costPreview.tierBreakdown?.map((t, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', marginBottom: '3px' }}>
+                      <span>{t.hours}h {t.tier} @ ${t.rate}/hr</span>
+                      <span>${t.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {costPreview.surcharge > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#e8724a', marginBottom: '3px' }}>
+                      <span>Short-notice surcharge (20%)</span>
+                      <span>+${costPreview.surcharge.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #eee', paddingTop: '6px', marginTop: '4px' }}>
+                    <span>Total</span>
+                    <span>${costPreview.total.toFixed(2)}</span>
+                  </div>
+                  {costPreview.shortNotice && (
+                    <div style={{ fontSize: '11px', color: '#e8724a', marginTop: '4px' }}>
+                      Sessions booked &lt;24 hours out include a 20% surcharge. Schedule earlier to avoid this.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Propose different rate */}
+              {selectedCaregiver && (
+                <div style={{ marginTop: '10px' }}>
+                  {!proposingRate ? (
+                    <button onClick={() => setProposingRate(true)} style={{
+                      background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer',
+                      fontSize: '13px', textDecoration: 'underline', padding: 0,
+                    }}>
+                      Propose a different rate?
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '13px', color: '#666' }}>$</span>
+                      <input type="number" step="0.50" min="1" max="500"
+                        value={proposedRate}
+                        onChange={e => setProposedRate(e.target.value)}
+                        placeholder="Your rate/hr"
+                        style={{ width: '90px', padding: '5px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px' }}
+                      />
+                      <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
+                      <button onClick={() => setProposingRate(false)} style={{
+                        background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: '12px',
+                      }}>cancel</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             {!hasCaregiverData && (
               <div style={{ marginTop: 12, padding: 12, background: '#fff8e1', borderRadius: 8, fontSize: 13, color: '#795548' }}>
