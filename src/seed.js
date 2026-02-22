@@ -902,6 +902,58 @@ async function seed() {
 
   // ─── Seed Version Marker ───
   // Store version in waitlist with special internal email so server.js can detect stale demo data
+  // ─── Help/FAQ Articles ───
+  console.log("📖 Creating help articles...");
+
+  const helpArticles = [
+    // Getting Started
+    { category: 'getting-started', question: 'How do I install InPlace on my iPhone or iPad?', answer: 'Open Safari and navigate to yourinplace.com. Tap the Share button (the square with an arrow pointing up) at the bottom of the screen, then scroll down and tap "Add to Home Screen." Name it "InPlace" and tap Add. The app icon will appear on your home screen and works just like a native app — with push notifications, offline access, and full-screen mode.', sort_order: 1 },
+    { category: 'getting-started', question: 'How do I install InPlace on my Android phone?', answer: 'Open Chrome and go to yourinplace.com. You should see a banner at the bottom saying "Add InPlace to Home screen" — tap it and confirm. If the banner doesn\'t appear, tap the three-dot menu in the top right corner, then tap "Install app" or "Add to Home screen." The app will install and appear in your app drawer.', sort_order: 2 },
+    { category: 'getting-started', question: 'How do I install InPlace on my computer?', answer: 'Open Chrome, Edge, or Brave and go to yourinplace.com. Look for the install icon in the address bar (a small monitor with a down arrow) and click it. Or click the three-dot menu and select "Install InPlace." The app will open in its own window and you can pin it to your taskbar or dock.', sort_order: 3 },
+    { category: 'getting-started', question: 'What are the different account types?', answer: 'InPlace has three account types:\n\n**Family Member** — For people coordinating care for a loved one. You can search for caregivers, schedule sessions, manage your care team, and track care activity.\n\n**Caregiver** — For people providing care services. You can set your availability, accept care requests, track your earnings, and manage your schedule.\n\n**Care Recipient** — For the person receiving care. You can view your calendar, make care requests, and keep personal notes.\n\nYou can add a second role to your account anytime from My Account.', sort_order: 4 },
+    { category: 'getting-started', question: 'How do I add a second role to my account?', answer: 'Go to My Account (in the sidebar) and scroll down to the "Add a Role" section. You\'ll see the roles you don\'t have yet — click one to add it. Once added, a role switcher will appear at the top of your screen so you can flip between views without logging out.', link_page: 'account', link_label: 'Go to My Account', sort_order: 5 },
+    { category: 'getting-started', question: 'How do I create an account?', answer: 'Go to yourinplace.com and click "Get Started" or "Sign Up." Choose the type of account you need — finding care for a loved one, providing care, or getting help for yourself. Fill in your name, email, and a password, then follow the setup steps for your account type.', sort_order: 6 },
+
+    // Families
+    { category: 'families', question: 'How do I find caregivers near me?', answer: 'Go to the Caregivers page from your sidebar. You\'ll see a map and a list of available caregivers in your area. You can filter by distance, availability, specialties, and rates. Click on any caregiver to see their full profile, reviews, and schedule.', link_page: 'caregivers', link_label: 'Find Caregivers', role_visibility: '["family"]', sort_order: 1 },
+    { category: 'families', question: 'How do I request care for my loved one?', answer: 'Click the "Request Care" button in the sidebar (or on the dashboard). The care request wizard will walk you through selecting your loved one, choosing a date and time, picking a caregiver (or posting an open request), and reviewing the details before submitting.', role_visibility: '["family"]', sort_order: 2 },
+    { category: 'families', question: 'How do I invite family members to help manage care?', answer: 'Go to the Care Team page and click "Invite Member." Enter their email address and select their role (admin or member). They\'ll receive an email invitation to join your care team. Once they accept, they can help manage scheduling, communicate with caregivers, and view care activity.', link_page: 'care-team', link_label: 'Go to Care Team', role_visibility: '["family"]', sort_order: 3 },
+    { category: 'families', question: 'How do I view my care schedule?', answer: 'The Schedule page shows a calendar heat map of all care sessions. Click on any day to see the sessions scheduled for that day, including caregiver details, times, and status. Darker shading means more care hours scheduled for that day.', link_page: 'schedule', link_label: 'View Schedule', role_visibility: '["family"]', sort_order: 4 },
+
+    // Caregivers
+    { category: 'caregivers', question: 'How do I set my available hours?', answer: 'Go to your Schedule page and click on any day to set your availability for that day. You can set recurring weekly availability or mark specific dates. Families will only be able to book you during the hours you\'ve marked as available.', link_page: 'schedule', link_label: 'Set My Schedule', role_visibility: '["caregiver"]', sort_order: 1 },
+    { category: 'caregivers', question: 'How do I find families who need care?', answer: 'Check your dashboard for open care requests in your area. You can also go to Find Work to browse available opportunities. The area map shows families near you who are looking for caregivers. When you see a request that fits your schedule, you can accept it or make an offer.', link_page: 'find-work', link_label: 'Find Work', role_visibility: '["caregiver"]', sort_order: 2 },
+    { category: 'caregivers', question: 'How do I update my rates?', answer: 'Go to your dashboard and look for the rates section. You can set different rates for daytime (7am–6pm), nighttime (6pm–midnight), and overnight (midnight–7am) hours. Your rates are visible to families when they browse caregivers or request care.', role_visibility: '["caregiver"]', sort_order: 3 },
+    { category: 'caregivers', question: 'How do I accept a care request?', answer: 'When a family sends you a care request, you\'ll see it on your dashboard and receive a notification. Open the request to see the details — the care recipient, date/time, tasks needed, and rate. Click "Accept" to confirm, or "Decline" if you\'re not available.', role_visibility: '["caregiver"]', sort_order: 4 },
+
+    // Technical
+    { category: 'technical', question: 'Why am I not receiving notifications?', answer: 'Make sure you\'ve enabled push notifications for InPlace. On iPhone, go to Settings > Notifications > InPlace and ensure notifications are allowed. On Android, long-press the InPlace app icon, tap App Info > Notifications, and enable them. Also check that you have notifications turned on within the app under My Account > Notifications.', link_page: 'account', link_label: 'Notification Settings', sort_order: 1 },
+    { category: 'technical', question: 'The app looks outdated or broken — what do I do?', answer: 'This usually means your browser is showing a cached (old) version of InPlace. Try these steps:\n\n1. **Hard refresh**: Press Ctrl+Shift+R (Windows) or Cmd+Shift+R (Mac) while on the site\n2. **Clear site data**: In Chrome, click the lock icon in the address bar > Site settings > Clear data\n3. **Reinstall PWA**: If you installed InPlace as an app, uninstall it and reinstall from yourinplace.com\n\nIf the problem persists, use the feedback button (💡) to let us know what you\'re seeing.', sort_order: 2 },
+    { category: 'technical', question: 'How do I reset my password?', answer: 'On the login page, click "Forgot password?" and enter the email address associated with your account. You\'ll receive an email with a link to create a new password. The link expires after 1 hour. If you don\'t see the email, check your spam folder.', sort_order: 3 },
+    { category: 'technical', question: 'Which browsers work best with InPlace?', answer: 'InPlace works on all modern browsers. For the best experience, we recommend:\n\n- **iPhone/iPad**: Safari (required for "Add to Home Screen" feature)\n- **Android**: Chrome\n- **Windows/Mac**: Chrome, Edge, or Brave\n\nFirefox works for browsing but doesn\'t support installing InPlace as a standalone app.', sort_order: 4 },
+
+    // Billing
+    { category: 'billing', question: 'How much does InPlace cost?', answer: 'InPlace is currently in beta and **completely free** for all users. When we launch paid plans, early beta users will receive special pricing as a thank-you for helping us build the platform. We\'ll give you plenty of advance notice before any pricing changes.', sort_order: 1 },
+    { category: 'billing', question: 'How do caregivers get paid?', answer: 'Payment processing is coming soon. During the beta period, families and caregivers arrange payment directly. When we launch Stripe-powered payments, caregivers will be paid automatically after each completed session, with options for instant or standard (2-day) payouts.', sort_order: 2 },
+  ];
+
+  for (const article of helpArticles) {
+    await db.prepare(`
+      INSERT INTO help_articles (id, category, question, answer, link_page, link_label, role_visibility, sort_order, is_published)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `).run(
+      uuid(),
+      article.category,
+      article.question,
+      article.answer,
+      article.link_page || null,
+      article.link_label || null,
+      article.role_visibility || null,
+      article.sort_order || 0
+    );
+  }
+  console.log(`  ✅ ${helpArticles.length} help articles created`);
+
   await db.prepare(`
     INSERT INTO waitlist (id, email, name, created_at)
     VALUES (?, '_seed_version@inplace.internal', ?, NOW())

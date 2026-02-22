@@ -376,12 +376,12 @@ router.delete("/blocked-emails/:id", authenticate, checkAdmin, requireAdmin, asy
 router.get("/users/:id/onboarding", async (req, res) => {
   try {
     const db = await getDb();
-    const user = await db.prepare("SELECT id, email, role, first_name, last_name FROM users WHERE id = ?").get(req.params.id);
+    const user = await db.prepare("SELECT id, email, role, first_name, last_name, profile_photo, avatar_url FROM users WHERE id = ?").get(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const profile = await db.prepare(`
       SELECT id, is_background_checked, background_check_consent, background_check_paid,
-             onboarding_complete, is_available, photo_url,
+             onboarding_complete, is_available,
              dl_number, dl_state,
              academic_program, academic_program_year, needs_hour_reports
       FROM caregiver_profiles WHERE user_id = ?
@@ -389,8 +389,11 @@ router.get("/users/:id/onboarding", async (req, res) => {
 
     // Check for uploaded documents
     const docs = await db.prepare(
-      "SELECT doc_type, uploaded_at FROM caregiver_documents WHERE user_id = ? ORDER BY uploaded_at DESC"
+      "SELECT document_type, created_at FROM caregiver_documents WHERE user_id = ? ORDER BY created_at DESC"
     ).all(req.params.id).catch(() => []);
+
+    // Check photo from users table (profile_photo or avatar_url)
+    const hasPhoto = !!(user.profile_photo || user.avatar_url);
 
     res.json({
       user: { id: user.id, email: user.email, role: user.role, name: `${user.first_name || ''} ${user.last_name || ''}`.trim() },
@@ -402,7 +405,7 @@ router.get("/users/:id/onboarding", async (req, res) => {
         backgroundCheckConsent: !!profile.background_check_consent,
         onboardingComplete: !!profile.onboarding_complete,
         isAvailable: !!profile.is_available,
-        hasPhoto: !!profile.photo_url,
+        hasPhoto,
         hasDriversLicense: !!(profile.dl_number && profile.dl_state),
         needsHourReports: !!profile.needs_hour_reports,
         academicProgram: profile.academic_program || null,

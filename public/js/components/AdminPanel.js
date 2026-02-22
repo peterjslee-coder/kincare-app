@@ -40,6 +40,11 @@ const AdminPanel = window.AdminPanel = () => {
   // Onboarding override state
   const [onboardingModal, setOnboardingModal] = useState(null); // { userId, data }
   const [onboardingLoading, setOnboardingLoading] = useState(false);
+  // Help/FAQ management state
+  const [helpArticles, setHelpArticles] = useState([]);
+  const [helpLoading, setHelpLoading] = useState(false);
+  const [helpEditModal, setHelpEditModal] = useState(null); // null or article object (empty for new)
+  const [helpForm, setHelpForm] = useState({ category: 'getting-started', question: '', answer: '', link_page: '', link_label: '', role_visibility: null, sort_order: 0 });
 
   useEffect(() => {
     loadStats();
@@ -54,6 +59,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'invites') loadInvites();
     if (activeTab === 'feedback') loadFeedback();
     if (activeTab === 'blocked') loadBlockedEmails();
+    if (activeTab === 'help') loadHelpArticles();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -236,6 +242,96 @@ const AdminPanel = window.AdminPanel = () => {
     } catch (err) { console.error('Toggle flag error:', err); }
   };
 
+  // Help/FAQ management functions
+  const loadHelpArticles = async () => {
+    setHelpLoading(true);
+    try {
+      const res = await apiFetch('/api/help/admin');
+      if (res?.ok) {
+        const data = await res.json();
+        setHelpArticles(data.articles || []);
+      }
+    } catch (err) { console.error('Help articles load error:', err); }
+    setHelpLoading(false);
+  };
+
+  const openHelpEditor = (article = null) => {
+    if (article) {
+      setHelpForm({
+        category: article.category || 'getting-started',
+        question: article.question || '',
+        answer: article.answer || '',
+        link_page: article.link_page || '',
+        link_label: article.link_label || '',
+        role_visibility: article.role_visibility || null,
+        sort_order: article.sort_order || 0,
+      });
+      setHelpEditModal(article);
+    } else {
+      setHelpForm({ category: 'getting-started', question: '', answer: '', link_page: '', link_label: '', role_visibility: null, sort_order: 0 });
+      setHelpEditModal({ id: null }); // new article
+    }
+  };
+
+  const saveHelpArticle = async () => {
+    if (!helpForm.question.trim() || !helpForm.answer.trim()) {
+      alert('Question and answer are required');
+      return;
+    }
+    try {
+      const isNew = !helpEditModal?.id;
+      const url = isNew ? '/api/help' : `/api/help/${helpEditModal.id}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const res = await apiFetch(url, {
+        method,
+        body: JSON.stringify({
+          ...helpForm,
+          role_visibility: helpForm.role_visibility,
+        }),
+      });
+      if (res?.ok) {
+        setHelpEditModal(null);
+        loadHelpArticles();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || 'Failed to save article');
+      }
+    } catch (err) { console.error('Save help article error:', err); }
+  };
+
+  const toggleHelpPublished = async (article) => {
+    try {
+      const res = await apiFetch(`/api/help/${article.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_published: !article.is_published }),
+      });
+      if (res?.ok) loadHelpArticles();
+    } catch (err) { console.error('Toggle help published error:', err); }
+  };
+
+  const deleteHelpArticle = async (id) => {
+    if (!confirm('Unpublish this article?')) return;
+    try {
+      const res = await apiFetch(`/api/help/${id}`, { method: 'DELETE' });
+      if (res?.ok) loadHelpArticles();
+    } catch (err) { console.error('Delete help article error:', err); }
+  };
+
+  // Create FAQ from feedback item
+  const createFaqFromFeedback = (feedbackItem) => {
+    setHelpForm({
+      category: 'technical',
+      question: feedbackItem.description?.slice(0, 200) || '',
+      answer: '',
+      link_page: '',
+      link_label: '',
+      role_visibility: null,
+      sort_order: 0,
+    });
+    setHelpEditModal({ id: null, related_feedback_ids: [feedbackItem.id] });
+    setActiveTab('help');
+  };
+
   const handleSearchEmail = async () => {
     if (!inviteSearch.trim()) return;
     setSearchLoading(true);
@@ -329,6 +425,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'invites', label: 'Invites', icon: '✉️' },
     { id: 'activity', label: 'Activity', icon: '⚡' },
     { id: 'feedback', label: 'Feedback', icon: '💬' },
+    { id: 'help', label: 'Help/FAQ', icon: '❓' },
     { id: 'financials', label: 'Financials', icon: '💰' },
     { id: 'blocked', label: 'Blocked', icon: '🚫' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -1074,6 +1171,13 @@ const AdminPanel = window.AdminPanel = () => {
                           ))}
                         </div>
 
+                        {/* Create FAQ from feedback */}
+                        <button onClick={() => createFaqFromFeedback(fb)} style={{
+                          padding: '6px 14px', background: '#e8f5f0', color: '#1b6b5a',
+                          border: '1px solid #1b6b5a', borderRadius: '8px', cursor: 'pointer',
+                          fontSize: '12px', fontWeight: 600, marginBottom: 12, display: 'inline-block',
+                        }}>❓ Create FAQ from this</button>
+
                         {/* Admin notes */}
                         <div>
                           <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Admin Notes</label>
@@ -1102,6 +1206,130 @@ const AdminPanel = window.AdminPanel = () => {
 
       {/* ─── Financials Tab ─── */}
       {activeTab === 'financials' && <AdminFinancials />}
+
+      {/* ─── Help/FAQ Management Tab ─── */}
+      {activeTab === 'help' && (
+        <div>
+          {/* Header with Add button */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, color: '#1b6b5a' }}>Help Articles ({helpArticles.length})</h3>
+            <button onClick={() => openHelpEditor()} style={{
+              padding: '8px 16px', background: '#1b6b5a', color: 'white', border: 'none',
+              borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+            }}>+ New Article</button>
+          </div>
+
+          {helpLoading && <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>Loading...</div>}
+
+          {/* Articles table */}
+          {!helpLoading && helpArticles.map(article => (
+            <div key={article.id} className="card" style={{
+              marginBottom: '8px', opacity: article.is_published ? 1 : 0.5,
+              border: article.is_published ? '1px solid #e5e5e5' : '1px solid #ffa500',
+            }}>
+              <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '13px', color: '#999', marginBottom: '4px' }}>
+                    <span style={{
+                      display: 'inline-block', padding: '2px 8px', background: '#f0f0f0',
+                      borderRadius: '4px', fontSize: '11px', fontWeight: 600, marginRight: '8px'
+                    }}>{article.category}</span>
+                    {!article.is_published && <span style={{ color: '#e8724a', fontWeight: 600 }}>DRAFT</span>}
+                    {article.link_page && <span style={{ color: '#1b6b5a', marginLeft: '8px' }}>→ {article.link_page}</span>}
+                  </div>
+                  <div style={{ fontWeight: 500, fontSize: '14px', marginBottom: '4px' }}>{article.question}</div>
+                  <div style={{ fontSize: '12px', color: '#888', maxHeight: '40px', overflow: 'hidden' }}>
+                    {article.answer?.slice(0, 120)}{article.answer?.length > 120 ? '...' : ''}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                  <button onClick={() => openHelpEditor(article)} style={{
+                    padding: '6px 12px', background: '#f0f0f0', border: 'none',
+                    borderRadius: '6px', cursor: 'pointer', fontSize: '12px'
+                  }}>Edit</button>
+                  <button onClick={() => toggleHelpPublished(article)} style={{
+                    padding: '6px 12px', background: article.is_published ? '#fff3cd' : '#d4edda',
+                    border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px'
+                  }}>{article.is_published ? 'Unpublish' : 'Publish'}</button>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Edit/Create Modal */}
+          {helpEditModal && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', zIndex: 1000, padding: '20px',
+            }} onClick={(e) => { if (e.target === e.currentTarget) setHelpEditModal(null); }}>
+              <div style={{
+                background: 'white', borderRadius: '16px', padding: '24px',
+                maxWidth: '600px', width: '100%', maxHeight: '80vh', overflow: 'auto',
+              }}>
+                <h3 style={{ margin: '0 0 16px', color: '#1b6b5a' }}>
+                  {helpEditModal.id ? 'Edit Article' : 'New Help Article'}
+                </h3>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Category</label>
+                  <select value={helpForm.category} onChange={e => setHelpForm({...helpForm, category: e.target.value})}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }}>
+                    <option value="getting-started">Getting Started</option>
+                    <option value="families">For Families</option>
+                    <option value="caregivers">For Caregivers</option>
+                    <option value="technical">Technical</option>
+                    <option value="billing">Billing</option>
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Question</label>
+                  <input type="text" value={helpForm.question} onChange={e => setHelpForm({...helpForm, question: e.target.value})}
+                    placeholder="How do I...?" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Answer</label>
+                  <textarea value={helpForm.answer} onChange={e => setHelpForm({...helpForm, answer: e.target.value})}
+                    placeholder="Use **bold** for emphasis. Each line becomes a paragraph."
+                    rows={6} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', resize: 'vertical' }} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Link to page (optional)</label>
+                    <input type="text" value={helpForm.link_page} onChange={e => setHelpForm({...helpForm, link_page: e.target.value})}
+                      placeholder="e.g. schedule, caregivers" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Link label</label>
+                    <input type="text" value={helpForm.link_label} onChange={e => setHelpForm({...helpForm, link_label: e.target.value})}
+                      placeholder="e.g. Go to Schedule" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Sort order</label>
+                  <input type="number" value={helpForm.sort_order} onChange={e => setHelpForm({...helpForm, sort_order: parseInt(e.target.value) || 0})}
+                    style={{ width: '80px', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }} />
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <button onClick={() => setHelpEditModal(null)} style={{
+                    padding: '8px 20px', background: '#f0f0f0', border: 'none',
+                    borderRadius: '8px', cursor: 'pointer', fontSize: '14px',
+                  }}>Cancel</button>
+                  <button onClick={saveHelpArticle} style={{
+                    padding: '8px 20px', background: '#1b6b5a', color: 'white', border: 'none',
+                    borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 600,
+                  }}>{helpEditModal.id ? 'Save Changes' : 'Create Article'}</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── Blocked Emails Tab ─── */}
       {activeTab === 'blocked' && (

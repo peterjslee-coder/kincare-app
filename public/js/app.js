@@ -541,6 +541,7 @@ const App = () => {
         { id: 'find-work', icon: '🔍', label: 'Find Work' },
         { id: 'financials', icon: '💰', label: 'Financials' },
         { id: 'messages', icon: '💬', label: 'Messages' },
+        { id: 'help', icon: '❓', label: 'Help' },
         { id: 'account', icon: '👤', label: 'My Account' },
       ];
     }
@@ -548,6 +549,7 @@ const App = () => {
       return [
         { id: 'dashboard', icon: '🏠', label: 'My Home' },
         { id: 'messages', icon: '💬', label: 'Messages' },
+        { id: 'help', icon: '❓', label: 'Help' },
         { id: 'account', icon: '👤', label: 'My Account' },
       ];
     }
@@ -562,6 +564,7 @@ const App = () => {
       { id: 'recipients', icon: '👥', label: 'Recipients' },
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'payments', icon: '💳', label: 'Payments' },
+      { id: 'help', icon: '❓', label: 'Help' },
       { id: 'account', icon: '👤', label: 'My Account' },
     ];
     if (currentUser?.isAdmin) {
@@ -595,6 +598,7 @@ const App = () => {
     if (currentPage === 'recipients') return <CareRecipients key={currentPage} />;
     if (currentPage === 'messages') return <Messages key={currentPage} />;
     if (currentPage === 'account') return <MyAccount key={currentPage} setCurrentUser={setCurrentUser} />;
+    if (currentPage === 'help') return <HelpPage key={currentPage} currentUser={currentUser} onNavigate={setCurrentPage} />;
     if (currentPage === 'financials') return <CaretakerHub key={currentPage} onNeedsOnboarding={() => setAppState('resume-onboarding')} initialTab="financials" />;
     if (currentPage === 'payments') return <FamilyPayments key={currentPage} />;
     if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={currentPage} />;
