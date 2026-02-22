@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.15.2';
+const DEMO_SEED_VERSION = '1.15.3';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -56,7 +56,20 @@ async function seed() {
     [davidUserId, "david@inplace.care", "David", "Kim", "(540) 555-0204"],
   ];
 
-  for (const [id, email, first, last, phone] of caregiverUsers) {
+  // Maria gets dual role (caregiver + family) — she also cares for her brother
+  await db.prepare(`
+    INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, is_demo)
+    VALUES (?, ?, ?, 'caregiver', '["caregiver","family"]', ?, ?, ?, 1)
+  `).run(mariaUserId, "maria@inplace.care", passwordHash, "Maria", "Santos", "(540) 555-0201");
+
+  // Other caregivers (single role)
+  const otherCaregiverUsers = [
+    [jamesUserId, "james@inplace.care", "James", "Okafor", "(540) 555-0202"],
+    [sarahUserId, "sarah@inplace.care", "Sarah", "Chen", "(540) 555-0203"],
+    [davidUserId, "david@inplace.care", "David", "Kim", "(540) 555-0204"],
+  ];
+
+  for (const [id, email, first, last, phone] of otherCaregiverUsers) {
     await db.prepare(`
       INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, is_demo)
       VALUES (?, ?, ?, 'caregiver', '["caregiver"]', ?, ?, ?, 1)
@@ -183,9 +196,34 @@ async function seed() {
     "Parkinson's disease (early stage), mild depression, occasional hand tremors"
   );
 
+  // ─── Care Recipient (Carlos Santos — Maria's brother, TBI recovery) ───
+  const carlosId = uuid();
+  await db.prepare(`
+    INSERT INTO care_recipients
+    (id, family_user_id, first_name, last_name, age,
+     location_address, location_city, location_state, location_zip,
+     latitude, longitude,
+     health_conditions, medications, preferences,
+     emergency_contact_name, emergency_contact_phone,
+     pets, pet_allergies, food_allergies, medical_conditions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    carlosId, mariaUserId, "Carlos", "Santos", 34,
+    "215 College Avenue", "Blacksburg", "VA", "24060",
+    37.2285, -80.4155,
+    JSON.stringify(["Traumatic brain injury — recovery phase (6 months post-accident)", "Short-term memory difficulties", "Mild left-side weakness", "Anxiety in crowded environments"]),
+    JSON.stringify(["Sertraline 50mg daily (morning)", "Gabapentin 300mg twice daily", "Melatonin 5mg at bedtime"]),
+    "Needs patient, calm communication. Prefers structured routines — write schedule on the whiteboard each morning. Loves soccer (watching, not playing yet). Music helps him focus — has a Spotify playlist. No sudden loud noises please.",
+    "Maria Santos", "(540) 555-0201",
+    "1 dog — Luna (golden retriever, therapy dog, very gentle, 3 yrs)",
+    "None known",
+    JSON.stringify(["Dairy (moderate — causes stomach cramps)"]),
+    "Traumatic brain injury (recovery), short-term memory issues, mild left-side weakness, anxiety"
+  );
+
   // David and Susan share Pete's Betty record via care_recipient_shares (no duplicate care_recipient rows)
 
-  console.log("✅ Care recipients created (3 — Betty, Dorothy, Arun)");
+  console.log("✅ Care recipients created (4 — Betty, Dorothy, Arun, Carlos)");
 
   // ─── Caregiver Profiles ───
   const mariaId = uuid();
@@ -328,7 +366,11 @@ async function seed() {
   // Maria also works with Arun Patel
   await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), arunId, patelFamilyId, mariaId);
 
-  console.log("✅ Caregiver assignments created (8)");
+  // Carlos (Maria's brother) — Sarah Chen helps with his care
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 1)`).run(uuid(), carlosId, mariaUserId, sarahId);
+  await db.prepare(`INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite) VALUES (?, ?, ?, ?, 1, 0)`).run(uuid(), carlosId, mariaUserId, jamesId);
+
+  console.log("✅ Caregiver assignments created (10)");
 
   // ─── Availability Windows ───
   // Maria: Mon-Fri 8am-5pm available, Wed 2-4pm blocked
@@ -516,6 +558,23 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
   }
 
+  // ─── Care Sessions (Maria/Carlos — Maria's brother) ───
+  const carlosSessions = [
+    [uuid(), carlosId, mariaUserId, sarahId, "companion", "confirmed", "2026-02-23", "10:00", 4, "Morning routine help — whiteboard schedule, breakfast, gentle exercises. Luna loves Sarah!", 128],
+    [uuid(), carlosId, mariaUserId, sarahId, "companion", "confirmed", "2026-02-26", "10:00", 4, "PT exercises and afternoon soccer highlights. Sarah knows the routine.", 128],
+    [uuid(), carlosId, mariaUserId, jamesId, "companion", "pending", "2026-03-02", "14:00", 3, "Afternoon companionship — Carlos likes quiet board games and walks with Luna.", 75],
+  ];
+
+  for (const [id, recipId, famId, cgId, type, status, date, time, hours, notes, cost] of carlosSessions) {
+    await db.prepare(`
+      INSERT INTO care_sessions
+      (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+       status, scheduled_date, scheduled_time, duration_hours,
+       special_instructions, estimated_cost)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
+  }
+
   // ─── Care Requests (Betty requesting help — status='requested', no caregiver) ───
   const careRequests = [
     [uuid(), bettyId, peteId, null, "companion", "requested", "2026-02-22", "14:00", 2, "Would love some company this afternoon — maybe a walk if the weather is nice.", 50],
@@ -534,7 +593,7 @@ async function seed() {
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
   }
 
-  console.log("✅ Care sessions created (35 — 8 upcoming Pete/Betty, 19 past completed, 4 Henderson, 2 Patel, 2 David/Betty, 1 Susan/Betty, 4 care requests)");
+  console.log("✅ Care sessions created (38 — 8 upcoming Pete/Betty, 19 past completed, 4 Henderson, 2 Patel, 2 David/Betty, 1 Susan/Betty, 3 Maria/Carlos, 4 care requests)");
 
   // ─── Visit Logs ───
   // pastSessions[10] = Feb 12 full 8-hr day, [13] = Feb 18 rides, [25] = James Feb 9, [26] = David Feb 6
@@ -630,7 +689,24 @@ async function seed() {
     `).run(id, famId, recipId, type, title, msg, timeOffset);
   }
 
-  console.log("✅ Activity feed populated (15 — Pete 11, David 2, Susan 2)");
+  // Maria's family-side activity feed (for Carlos)
+  const mariaFamilyActivities = [
+    [uuid(), mariaUserId, carlosId, "session_confirmed", "Sarah confirmed for Sunday",
+      "Sarah Chen will help Carlos with his morning routine and PT exercises on Sunday at 10am. Luna will be thrilled!", "-1 day"],
+    [uuid(), mariaUserId, carlosId, "visit_complete", "Tuesday visit went well",
+      "Sarah helped Carlos with exercises and they watched the Champions League highlights together. His left-side strength is improving — he's gripping better.", "-3 days"],
+    [uuid(), mariaUserId, carlosId, "note_added", "PT progress update",
+      "Carlos's physical therapist said he's ahead of schedule on recovery milestones. Keep up the daily exercises and walks with Luna.", "-5 days"],
+  ];
+
+  for (const [id, famId, recipId, type, title, msg, timeOffset] of mariaFamilyActivities) {
+    await db.prepare(`
+      INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW() + ?::interval)
+    `).run(id, famId, recipId, type, title, msg, timeOffset);
+  }
+
+  console.log("✅ Activity feed populated (18 — Pete 11, David 2, Susan 2, Maria 3)");
 
   // ─── Reviews ───
   const reviews = [
@@ -813,7 +889,21 @@ async function seed() {
     `).run(id, recipId, authorId, content, noteType, timeOffset, timeOffset);
   }
 
-  console.log("✅ Recipient notes created (11 — Betty 5, Pete 4, David 1, Susan 1)");
+  // Maria's notes about Carlos
+  const carlosNotes = [
+    [uuid(), carlosId, mariaUserId, "Carlos's daily routine: Wake 8am, breakfast 8:30, PT exercises 9:30-10:30, lunch 12, rest 1-2pm, walk Luna 3pm, free time 4-6, dinner 6:30, wind down 8, bed 9:30. Write on whiteboard each morning.", "general", "-4 days"],
+    [uuid(), carlosId, mariaUserId, "PT milestones: Left grip strength up from 15 to 28 lbs since October. Walking unassisted for 20 min. Next goal: light jogging by April. Dr. Reyes impressed with progress.", "health", "-2 days"],
+    [uuid(), carlosId, mariaUserId, "Carlos gets anxious in crowds — avoid busy stores and restaurants. Small groups (3-4 people) are fine. Luna helps a lot as his therapy dog. Music calms him — his Spotify playlist is called 'Recovery Jams'.", "general", "-6 days"],
+  ];
+
+  for (const [id, recipId, authorId, content, noteType, timeOffset] of carlosNotes) {
+    await db.prepare(`
+      INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, NOW() + ?::interval, NOW() + ?::interval)
+    `).run(id, recipId, authorId, content, noteType, timeOffset, timeOffset);
+  }
+
+  console.log("✅ Recipient notes created (14 — Betty 5, Pete 4, David 1, Susan 1, Maria/Carlos 3)");
 
   // ─── Share Betty with siblings ───
   // Pete shares Betty's care recipient record with David and Susan
@@ -861,7 +951,16 @@ async function seed() {
     "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
   ).run(uuid(), arunCareTeamId, patelFamilyId, patelFamilyId);
 
-  console.log("✅ Care teams created (3 — Betty with 3 members, Dorothy, Arun)");
+  // Carlos's Care Team (Maria is leader — she coordinates her brother's care)
+  const carlosCareTeamId = uuid();
+  await db.prepare(
+    "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
+  ).run(carlosCareTeamId, "Carlos Santos's Care Team", carlosId, mariaUserId);
+  await db.prepare(
+    "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
+  ).run(uuid(), carlosCareTeamId, mariaUserId, mariaUserId);
+
+  console.log("✅ Care teams created (4 — Betty with 3 members, Dorothy, Arun, Carlos)");
 
   // ─── Care Team Conversations ───
   const bettyCareTeamConvId = uuid();
@@ -966,7 +1065,7 @@ async function seed() {
   console.log("  Care Team:       pete@inplace.care       / inplace123");
   console.log("  Sibling (David): david.lee@inplace.care  / inplace123");
   console.log("  Sibling (Susan): susan.lee@inplace.care  / inplace123");
-  console.log("  Caretaker:       maria@inplace.care      / inplace123");
+  console.log("  Caretaker+Family:maria@inplace.care      / inplace123  (dual role — also manages brother Carlos)");
   console.log("  Cared-For:       betty@inplace.care      / inplace123\n");
 
 }
