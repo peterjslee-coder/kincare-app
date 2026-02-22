@@ -64,8 +64,8 @@ router.get("/", async (req, res) => {
         cr.first_name || ' ' || cr.last_name AS recipient_name,
         cr.preferences AS recipient_preferences,
         cr.location_city AS recipient_city,
-        cr.location_lat AS recipient_lat,
-        cr.location_lng AS recipient_lng
+        cr.latitude AS recipient_lat,
+        cr.longitude AS recipient_lng
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       WHERE (
@@ -107,8 +107,8 @@ router.get("/", async (req, res) => {
         cr.first_name || ' ' || cr.last_name AS recipient_name,
         cr.preferences AS recipient_preferences,
         cr.location_city AS recipient_city,
-        cr.location_lat AS recipient_lat,
-        cr.location_lng AS recipient_lng
+        cr.latitude AS recipient_lat,
+        cr.longitude AS recipient_lng
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       WHERE cs.status = 'requested' AND cs.caregiver_id IS NULL
