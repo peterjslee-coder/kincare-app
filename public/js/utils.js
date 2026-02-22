@@ -270,46 +270,68 @@ const onSocketEvent = window.onSocketEvent = (event, callback) => {
 };
 
 // ─── Push Notification Helpers ───
-// Subscribe to push notifications (call after login)
+// Subscribe to push notifications (requires user gesture for permission prompt)
 const subscribeToPush = window.subscribeToPush = async () => {
   try {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.warn('Push: not supported in this browser');
+      return null;
+    }
+
     const reg = await navigator.serviceWorker.ready;
+
     // Check if already subscribed
     let sub = await reg.pushManager.getSubscription();
     if (sub) {
-      // Already subscribed — just save to server
+      // Already subscribed — just save to server (may have changed endpoints)
       await apiFetch('/api/push/subscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription: sub }),
       });
+      console.log('Push: existing subscription synced to server');
       return sub;
     }
-    // Get VAPID key from server
-    const keyRes = await fetch('/api/push/vapid-key');
-    if (!keyRes.ok) return null;
+
+    // Get VAPID public key from server
+    const keyRes = await apiFetch('/api/push/vapid-key');
+    if (!keyRes || !keyRes.ok) {
+      console.warn('Push: server VAPID key not available');
+      return null;
+    }
     const { publicKey } = await keyRes.json();
-    // Convert VAPID key to Uint8Array
+    if (!publicKey) {
+      console.warn('Push: server returned empty VAPID key');
+      return null;
+    }
+
+    // Convert URL-safe base64 VAPID key to Uint8Array
     const urlBase64ToUint8Array = (base64String) => {
       const padding = '='.repeat((4 - base64String.length % 4) % 4);
       const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
       const rawData = atob(base64);
       return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
     };
+
+    // This triggers the browser's notification permission prompt (needs user gesture)
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     });
+
     // Save subscription to server
     await apiFetch('/api/push/subscribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subscription: sub }),
     });
+
+    console.log('Push: subscribed successfully');
     return sub;
   } catch (err) {
-    console.log('Push subscription error:', err);
+    if (err.name === 'NotAllowedError') {
+      console.warn('Push: user denied notification permission');
+    } else {
+      console.error('Push subscription error:', err);
+    }
     return null;
   }
 };

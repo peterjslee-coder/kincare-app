@@ -384,8 +384,8 @@ const App = () => {
     }).catch(() => {});
     setCurrentPage('dashboard');
     setAppState('app');
-    // Subscribe to push notifications after login (non-blocking)
-    if (typeof subscribeToPush === 'function') {
+    // Re-sync push subscription if already granted (doesn't prompt — needs user gesture for new)
+    if (typeof subscribeToPush === 'function' && 'Notification' in window && Notification.permission === 'granted') {
       subscribeToPush().catch(() => {});
     }
     // Connect WebSocket for real-time updates
@@ -540,6 +540,25 @@ const App = () => {
   if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
 
   const role = activeRole || currentUser?.role || 'family';
+
+  // ─── Role-specific color theming ───
+  // Changes sidebar active color, role switcher accent, and other themed elements per role
+  const roleColors = {
+    family:    { main: '#1b6b5a', light: '#e0f2e9', dark: '#0f4238' },
+    caregiver: { main: '#2e5984', light: '#dce8f3', dark: '#1a3a5c' },
+    care_for:  { main: '#7b5ea7', light: '#ede7f6', dark: '#4a2d7a' },
+  };
+  const currentRoleColor = roleColors[role] || roleColors.family;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--role-color', currentRoleColor.main);
+    root.style.setProperty('--role-color-light', currentRoleColor.light);
+    root.style.setProperty('--role-color-dark', currentRoleColor.dark);
+    // Global accessor so child components can read role color without props
+    window.ROLE_COLOR = currentRoleColor.main;
+    window.ROLE_COLOR_LIGHT = currentRoleColor.light;
+  }, [role]);
 
   // Role switcher handler
   const handleSwitchRole = (newRole) => {
@@ -717,7 +736,7 @@ const App = () => {
         </nav>
         <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           {role === 'family' && (
-            <button className="nav-link" onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ background: '#1b6b5a', marginBottom: '12px' }}>
+            <button className="nav-link" onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ background: currentRoleColor.main, marginBottom: '12px' }}>
               <span className="nav-icon">➕</span> Request Care
             </button>
           )}
@@ -744,6 +763,7 @@ const App = () => {
             {currentUser.roles.map(r => {
               const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Recipient' };
               const icons = { family: '👪', caregiver: '💼', care_for: '🏠' };
+              const btnColor = (roleColors[r] || roleColors.family).main;
               const isActive = r === role;
               return React.createElement('button', {
                 key: r,
@@ -751,7 +771,7 @@ const App = () => {
                 style: {
                   padding: '6px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
                   fontSize: '13px', fontWeight: isActive ? 600 : 400,
-                  background: isActive ? '#1b6b5a' : 'transparent',
+                  background: isActive ? btnColor : 'transparent',
                   color: isActive ? 'white' : '#666',
                   transition: 'all 0.2s',
                 },

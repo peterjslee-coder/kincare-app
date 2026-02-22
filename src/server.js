@@ -200,6 +200,10 @@ app.use((err, req, res, next) => {
 async function start() {
   await initializeDatabase();
 
+  // Initialize VAPID keys for push notifications (env → DB → auto-generate)
+  const { initializeVapidKeys } = require("./routes/push");
+  await initializeVapidKeys();
+
   // Auto-seed if database is empty OR demo data is stale
   const db = await getDb();
   const userCount = await db.prepare("SELECT COUNT(*) as count FROM users").get();

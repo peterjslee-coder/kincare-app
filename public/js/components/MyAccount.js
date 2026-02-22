@@ -679,6 +679,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
       {/* ─── Notifications Tab ─── */}
       {activeTab === 'notifications' && (
         <div>
+          {/* Push notification enable/test section */}
+          {typeof NotificationSettings !== 'undefined' && React.createElement(NotificationSettings, null)}
           <div className="card">
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Email Notifications</span>

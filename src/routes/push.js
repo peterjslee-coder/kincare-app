@@ -5,13 +5,101 @@ const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 
-// VAPID public key — frontend needs this to subscribe
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BPuicFkWJ1W4c4HyisIhpmuEoD20hoedAoFYlWFGiWPZ2PTVeD479AJL_l03e7BEmGEqLnb1K1r60S2URj2JciU";
+// ─── VAPID Key Management ───
+// Keys are set during server startup via initializeVapidKeys()
+// Priority: env vars → database → auto-generate
+let _vapidPublicKey = null;
+let _vapidPrivateKey = null;
+let _vapidInitialized = false;
+
+// Called by server.js on startup to set VAPID keys
+function setVapidKeys(publicKey, privateKey) {
+  _vapidPublicKey = publicKey;
+  _vapidPrivateKey = privateKey;
+  _vapidInitialized = true;
+  console.log("  Push notifications: VAPID keys loaded ✓");
+}
+
+// Initialize VAPID keys: env → DB → generate new pair
+// Called once during server startup
+async function initializeVapidKeys() {
+  // 1. Check environment variables first
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    setVapidKeys(process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+    console.log("  Push notifications: using VAPID keys from environment");
+    return;
+  }
+
+  // 2. Check database for previously generated keys
+  try {
+    const db = await getDb();
+    const pubRow = await db.prepare(
+      "SELECT value FROM platform_settings WHERE key = 'vapid_public_key'"
+    ).get();
+    const privRow = await db.prepare(
+      "SELECT value FROM platform_settings WHERE key = 'vapid_private_key'"
+    ).get();
+
+    if (pubRow && privRow) {
+      setVapidKeys(pubRow.value, privRow.value);
+      console.log("  Push notifications: using VAPID keys from database");
+      return;
+    }
+  } catch (err) {
+    console.warn("  Push: could not read VAPID keys from DB:", err.message);
+  }
+
+  // 3. Auto-generate new VAPID key pair
+  try {
+    const webpush = require("web-push");
+    const keys = webpush.generateVAPIDKeys();
+    console.log("  Push notifications: generated new VAPID key pair");
+    console.log(`  VAPID_PUBLIC_KEY=${keys.publicKey}`);
+    console.log(`  VAPID_PRIVATE_KEY=${keys.privateKey}`);
+    console.log("  (Set these as environment variables for persistence across deploys)");
+
+    // Save to database for persistence across restarts
+    try {
+      const db = await getDb();
+      await db.prepare(
+        "INSERT INTO platform_settings (key, value) VALUES ('vapid_public_key', ?) ON CONFLICT (key) DO UPDATE SET value = ?, updated_at = NOW()"
+      ).run(keys.publicKey, keys.publicKey);
+      await db.prepare(
+        "INSERT INTO platform_settings (key, value) VALUES ('vapid_private_key', ?) ON CONFLICT (key) DO UPDATE SET value = ?, updated_at = NOW()"
+      ).run(keys.privateKey, keys.privateKey);
+      console.log("  Push notifications: VAPID keys saved to database");
+    } catch (dbErr) {
+      console.warn("  Push: could not save VAPID keys to DB:", dbErr.message);
+    }
+
+    setVapidKeys(keys.publicKey, keys.privateKey);
+  } catch (err) {
+    console.error("  ⚠️  Push notifications DISABLED — could not generate VAPID keys:", err.message);
+  }
+}
 
 // ─── GET /api/push/vapid-key ───
 // Return VAPID public key for client subscription (no auth required)
 router.get("/vapid-key", (req, res) => {
-  res.json({ publicKey: VAPID_PUBLIC_KEY });
+  if (!_vapidPublicKey) {
+    return res.status(503).json({ error: "Push notifications not configured" });
+  }
+  res.json({ publicKey: _vapidPublicKey });
+});
+
+// ─── GET /api/push/status ───
+// Debug endpoint: check push notification readiness (auth required)
+router.get("/status", authenticate, async (req, res) => {
+  const db = await getDb();
+  const subCount = await db.prepare(
+    "SELECT COUNT(*) as count FROM push_subscriptions WHERE user_id = ?"
+  ).get(req.user.id);
+
+  res.json({
+    vapidConfigured: _vapidInitialized && !!_vapidPublicKey && !!_vapidPrivateKey,
+    userSubscriptions: parseInt(subCount.count),
+    ready: _vapidInitialized && !!_vapidPrivateKey && parseInt(subCount.count) > 0,
+  });
 });
 
 // ─── POST /api/push/subscribe ───
@@ -38,6 +126,7 @@ router.post("/subscribe", authenticate, async (req, res) => {
     ).run(uuid(), req.user.id, subscription.endpoint, JSON.stringify(subscription));
   }
 
+  console.log(`  Push: subscription saved for user ${req.user.id}`);
   res.json({ success: true });
 });
 
@@ -55,6 +144,34 @@ router.delete("/unsubscribe", authenticate, async (req, res) => {
   ).run(req.user.id, endpoint);
 
   res.json({ success: true });
+});
+
+// ─── POST /api/push/test ───
+// Send a test push notification to the current user (for debugging)
+router.post("/test", authenticate, async (req, res) => {
+  if (!_vapidPublicKey || !_vapidPrivateKey) {
+    return res.status(503).json({ error: "VAPID keys not configured" });
+  }
+
+  const db = await getDb();
+  const subs = await db.prepare(
+    "SELECT id FROM push_subscriptions WHERE user_id = ?"
+  ).all(req.user.id);
+
+  if (subs.length === 0) {
+    return res.status(400).json({ error: "No push subscriptions found — enable notifications first" });
+  }
+
+  try {
+    await sendPushToUser(req.user.id, {
+      title: "InPlace Test Notification",
+      body: "Push notifications are working! 🎉",
+      data: { type: "test" },
+    });
+    res.json({ success: true, subscriptionsNotified: subs.length });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to send test push: " + err.message });
+  }
 });
 
 // ─── Utility: Send push to admin users ───
@@ -108,9 +225,11 @@ function notifyAdmins(eventType, { title, body, data }) {
 // Used internally by other routes (sessions, messages, etc.)
 // Optional eventType param — if provided, checks user's notification_prefs before sending
 async function sendPushToUser(userId, payload, eventType) {
-  // Only attempt if web-push is configured
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  if (!privateKey || !VAPID_PUBLIC_KEY) return;
+  // Only attempt if VAPID keys are configured
+  if (!_vapidPublicKey || !_vapidPrivateKey) {
+    console.warn("Push: skipping — VAPID keys not initialized (run initializeVapidKeys on startup)");
+    return;
+  }
 
   // Check user notification preferences if eventType is provided
   if (eventType) {
@@ -128,14 +247,16 @@ async function sendPushToUser(userId, payload, eventType) {
     const webpush = require("web-push");
     webpush.setVapidDetails(
       "mailto:noreply@yourinplace.com",
-      VAPID_PUBLIC_KEY,
-      privateKey
+      _vapidPublicKey,
+      _vapidPrivateKey
     );
 
     const db = await getDb();
     const subs = await db.prepare(
       "SELECT id, subscription_json FROM push_subscriptions WHERE user_id = ?"
     ).all(userId);
+
+    if (subs.length === 0) return; // no subscriptions for this user
 
     const notificationPayload = JSON.stringify({
       title: payload.title || "InPlace",
@@ -145,15 +266,25 @@ async function sendPushToUser(userId, payload, eventType) {
       data: payload.data || {},
     });
 
+    let sent = 0;
+    let removed = 0;
     for (const sub of subs) {
       try {
         await webpush.sendNotification(JSON.parse(sub.subscription_json), notificationPayload);
+        sent++;
       } catch (err) {
         if (err.statusCode === 404 || err.statusCode === 410) {
           // Subscription expired or invalid — remove it
           await db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(sub.id);
+          removed++;
+        } else {
+          console.error(`Push delivery error (user ${userId}):`, err.statusCode, err.message);
         }
       }
+    }
+
+    if (sent > 0 || removed > 0) {
+      console.log(`  Push: sent ${sent}/${subs.length} to user ${userId}${removed ? ` (${removed} expired removed)` : ""}`);
     }
   } catch (err) {
     console.error("Push notification error:", err.message);
@@ -165,3 +296,5 @@ module.exports.sendPushToUser = sendPushToUser;
 module.exports.sendPushToAdmins = sendPushToAdmins;
 module.exports.sendEmailToAdmins = sendEmailToAdmins;
 module.exports.notifyAdmins = notifyAdmins;
+module.exports.initializeVapidKeys = initializeVapidKeys;
+module.exports.setVapidKeys = setVapidKeys;

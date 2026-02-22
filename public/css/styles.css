@@ -1,3 +1,15 @@
+    /* ─── Role-Specific Color Theme ───
+       Set via JS: document.documentElement.style.setProperty('--role-color', '#...')
+       Family:         #1b6b5a (teal — nurturing, care)
+       Caregiver:      #2e5984 (ocean blue — professional, trustworthy)
+       Care Recipient: #7b5ea7 (soft purple — comfort, dignity)
+    */
+    :root {
+      --role-color: #1b6b5a;
+      --role-color-light: #e0f2e9;
+      --role-color-dark: #0f4238;
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -887,7 +899,7 @@
     }
 
     .nav-link.active {
-      background: #1b6b5a;
+      background: var(--role-color, #1b6b5a);
       color: white;
     }
 

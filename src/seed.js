@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.16.0';
+const DEMO_SEED_VERSION = '1.17.0';
 
 async function seed() {
   console.log("🌱 Seeding InPlace database...\n");
@@ -782,13 +782,15 @@ async function seed() {
     [uuid(), mariaUserId, peteId, convPeteMaria, "Good morning! Just arrived at Betty's. She was already up and dressed — had Whiskers on her lap watching the birds outside. Great start to the day!", "-2 hours"],
     [uuid(), peteId, mariaUserId, convPeteMaria, "That's wonderful! She must be having a good day. I'll try to call around noon if that's okay.", "-1 hour"],
     [uuid(), mariaUserId, peteId, convPeteMaria, "Sounds great! We're about to start breakfast — oatmeal with blueberries, her favorite.", "-45 minutes"],
+    // Recent unread — Pete hasn't seen these yet (is_read = 0)
+    [uuid(), mariaUserId, peteId, convPeteMaria, "Update: finished breakfast, medication taken. She's asking if you can bring that photo album next time — the one with pictures from Virginia Beach.", "-20 minutes", 0],
   ];
 
-  for (const [id, senderId, recipientId, conversationId, content, timeOffset] of peteMariaMsgs) {
+  for (const [id, senderId, recipientId, conversationId, content, timeOffset, isRead] of peteMariaMsgs) {
     await db.prepare(`
       INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, is_read, created_at)
-      VALUES (?, ?, ?, ?, ?, 1, NOW() + ?::interval)
-    `).run(id, senderId, recipientId, conversationId, content, timeOffset);
+      VALUES (?, ?, ?, ?, ?, ?, NOW() + ?::interval)
+    `).run(id, senderId, recipientId, conversationId, content, isRead !== undefined ? isRead : 1, timeOffset);
   }
 
   // Pete ↔ James: companionship check-ins

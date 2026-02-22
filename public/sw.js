@@ -1,5 +1,5 @@
-// InPlace Service Worker — v1.16.0
-const CACHE_NAME = 'inplace-v1.16.0';
+// InPlace Service Worker — v1.17.0
+const CACHE_NAME = 'inplace-v1.17.0';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -39,6 +39,7 @@ const STATIC_ASSETS = [
   '/js/components/AdminPanel.js',
   '/js/components/DisclaimerModal.js',
   '/js/components/FeedbackButton.js',
+  '/js/components/NotificationPrompt.js',
   '/js/components/FindWork.js',
   '/icons/icon-48.png',
   '/icons/icon-72.png',

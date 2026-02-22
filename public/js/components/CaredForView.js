@@ -219,10 +219,13 @@ const CaredForView = window.CaredForView = () => {
 
   return (
     <div>
+      {/* Push notification prompt — shows if not yet enabled */}
+      {typeof NotificationPrompt !== 'undefined' && React.createElement(NotificationPrompt, null)}
       <h1 className="greeting" style={{ marginBottom: '4px' }}>Hello, {userName}!</h1>
       <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Here's what's coming up for you</p>
 
       {/* Tabs — card grid (matches admin panel layout) */}
+      {(() => { const rc = window.ROLE_COLOR || '#1b6b5a'; return (
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
         gap: '8px', marginBottom: '20px',
@@ -234,16 +237,17 @@ const CaredForView = window.CaredForView = () => {
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             gap: '4px', padding: '14px 8px', border: 'none', borderRadius: '12px', cursor: 'pointer',
-            background: activeTab === tab.id ? '#1b6b5a' : '#f5f5f5',
+            background: activeTab === tab.id ? rc : '#f5f5f5',
             color: activeTab === tab.id ? '#fff' : '#555',
             transition: 'all 0.15s', minHeight: '72px',
-            boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
+            boxShadow: activeTab === tab.id ? `0 2px 8px ${rc}4d` : 'none',
           }}>
             <span style={{ fontSize: '24px', lineHeight: 1 }}>{tab.icon}</span>
             <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.3px' }}>{tab.label}</span>
           </button>
         ))}
       </div>
+      ); })()}
 
       {activeTab === 'calendar' && (
         <div>

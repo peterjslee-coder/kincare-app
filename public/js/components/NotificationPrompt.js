@@ -1,0 +1,287 @@
+// NotificationPrompt — In-app prompt to enable push notifications
+// Shows a dismissible banner when notifications aren't enabled yet.
+// Requires user click (gesture) to trigger browser permission prompt.
+const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
+  const [visible, setVisible] = useState(false);
+  const [permState, setPermState] = useState('default'); // 'default' | 'granted' | 'denied'
+  const [subscribing, setSubscribing] = useState(false);
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  useEffect(() => {
+    // Check if push is supported and permission state
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      return; // Push not supported on this browser
+    }
+
+    const perm = Notification.permission;
+    setPermState(perm);
+
+    if (perm === 'granted') {
+      // Already granted — try to silently resubscribe (in case subscription expired)
+      subscribeToPush().catch(() => {});
+      return;
+    }
+
+    if (perm === 'denied') {
+      return; // User blocked notifications — can't prompt again
+    }
+
+    // Permission is 'default' — check if user dismissed the prompt before
+    const dismissed = localStorage.getItem('push_prompt_dismissed');
+    if (dismissed) {
+      // Show again after 7 days
+      const dismissedAt = parseInt(dismissed, 10);
+      if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return;
+    }
+
+    // Show the prompt
+    setVisible(true);
+  }, []);
+
+  const handleEnable = async () => {
+    setSubscribing(true);
+    try {
+      const sub = await subscribeToPush();
+      if (sub) {
+        setPermState('granted');
+        setVisible(false);
+        if (onSubscribed) onSubscribed();
+      } else {
+        // Permission was denied or subscription failed
+        setPermState(Notification.permission);
+      }
+    } catch (err) {
+      console.error('Push subscribe error:', err);
+    }
+    setSubscribing(false);
+  };
+
+  const handleDismiss = () => {
+    setVisible(false);
+    localStorage.setItem('push_prompt_dismissed', String(Date.now()));
+  };
+
+  const handleSendTest = async () => {
+    setTestSending(true);
+    setTestResult(null);
+    try {
+      const res = await apiFetch('/api/push/test', { method: 'POST' });
+      if (res && res.ok) {
+        setTestResult({ type: 'success', message: 'Test notification sent! Check your notifications.' });
+      } else {
+        const data = res ? await res.json() : {};
+        setTestResult({ type: 'error', message: data.error || 'Failed to send test notification' });
+      }
+    } catch (err) {
+      setTestResult({ type: 'error', message: err.message });
+    }
+    setTestSending(false);
+  };
+
+  if (!visible) return null;
+
+  return React.createElement('div', {
+    style: {
+      background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)',
+      color: '#fff',
+      padding: '14px 20px',
+      borderRadius: '12px',
+      marginBottom: '16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '14px',
+      boxShadow: '0 2px 8px rgba(27,107,90,0.25)',
+    },
+  },
+    // Bell icon
+    React.createElement('span', { style: { fontSize: '28px', flexShrink: 0 } }, '🔔'),
+    // Text
+    React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+      React.createElement('div', { style: { fontWeight: 600, fontSize: '14px', marginBottom: '2px' } },
+        'Enable Push Notifications'
+      ),
+      React.createElement('div', { style: { fontSize: '12px', opacity: 0.9 } },
+        'Get alerts when you receive messages, care requests, or updates.'
+      ),
+    ),
+    // Enable button
+    React.createElement('button', {
+      onClick: handleEnable,
+      disabled: subscribing,
+      style: {
+        background: '#fff',
+        color: '#1b6b5a',
+        border: 'none',
+        borderRadius: '8px',
+        padding: '8px 18px',
+        fontSize: '13px',
+        fontWeight: 700,
+        cursor: subscribing ? 'wait' : 'pointer',
+        opacity: subscribing ? 0.7 : 1,
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+      },
+    }, subscribing ? 'Enabling...' : 'Enable'),
+    // Dismiss X
+    React.createElement('button', {
+      onClick: handleDismiss,
+      style: {
+        background: 'transparent',
+        color: 'rgba(255,255,255,0.7)',
+        border: 'none',
+        fontSize: '18px',
+        cursor: 'pointer',
+        padding: '4px',
+        lineHeight: 1,
+        flexShrink: 0,
+      },
+      title: 'Dismiss',
+    }, '×'),
+  );
+};
+
+// Notification settings section for MyAccount page
+const NotificationSettings = window.NotificationSettings = () => {
+  const [permState, setPermState] = useState('unknown');
+  const [subCount, setSubCount] = useState(null);
+  const [vapidReady, setVapidReady] = useState(null);
+  const [subscribing, setSubscribing] = useState(false);
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  useEffect(() => {
+    // Check browser permission
+    if ('Notification' in window) {
+      setPermState(Notification.permission);
+    } else {
+      setPermState('unsupported');
+    }
+
+    // Check server-side status
+    apiFetch('/api/push/status').then(async (res) => {
+      if (res && res.ok) {
+        const data = await res.json();
+        setSubCount(data.userSubscriptions);
+        setVapidReady(data.vapidConfigured);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleEnable = async () => {
+    setSubscribing(true);
+    try {
+      const sub = await subscribeToPush();
+      if (sub) {
+        setPermState('granted');
+        // Re-check status
+        const res = await apiFetch('/api/push/status');
+        if (res && res.ok) {
+          const data = await res.json();
+          setSubCount(data.userSubscriptions);
+        }
+      } else {
+        setPermState(Notification.permission);
+      }
+    } catch (err) {
+      console.error('Push subscribe error:', err);
+    }
+    setSubscribing(false);
+  };
+
+  const handleSendTest = async () => {
+    setTestSending(true);
+    setTestResult(null);
+    try {
+      const res = await apiFetch('/api/push/test', { method: 'POST' });
+      if (res && res.ok) {
+        setTestResult({ type: 'success', message: 'Test notification sent! You should see it now.' });
+      } else {
+        const data = res ? await res.json() : {};
+        setTestResult({ type: 'error', message: data.error || 'Failed to send test notification' });
+      }
+    } catch (err) {
+      setTestResult({ type: 'error', message: err.message });
+    }
+    setTestSending(false);
+  };
+
+  const statusColor = permState === 'granted' ? '#22c55e' : permState === 'denied' ? '#ef4444' : '#f59e0b';
+  const statusText = permState === 'granted' ? 'Enabled' :
+                     permState === 'denied' ? 'Blocked' :
+                     permState === 'unsupported' ? 'Not Supported' : 'Not Enabled';
+
+  return React.createElement('div', {
+    style: {
+      background: '#fff',
+      borderRadius: '12px',
+      padding: '20px',
+      border: '1px solid #e5e7eb',
+      marginBottom: '16px',
+    },
+  },
+    React.createElement('h3', {
+      style: { margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600, color: '#1b6b5a' },
+    }, '🔔 Push Notifications'),
+
+    // Status row
+    React.createElement('div', {
+      style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' },
+    },
+      React.createElement('span', {
+        style: {
+          display: 'inline-block', width: '10px', height: '10px',
+          borderRadius: '50%', background: statusColor,
+        },
+      }),
+      React.createElement('span', { style: { fontSize: '14px', fontWeight: 500 } }, statusText),
+      subCount !== null && React.createElement('span', {
+        style: { fontSize: '12px', color: '#888', marginLeft: '8px' },
+      }, `(${subCount} device${subCount !== 1 ? 's' : ''} registered)`),
+    ),
+
+    // Action buttons
+    permState === 'default' && React.createElement('button', {
+      onClick: handleEnable,
+      disabled: subscribing,
+      style: {
+        background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '8px',
+        padding: '10px 20px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+        marginRight: '8px',
+      },
+    }, subscribing ? 'Enabling...' : 'Enable Notifications'),
+
+    permState === 'granted' && React.createElement('button', {
+      onClick: handleSendTest,
+      disabled: testSending,
+      style: {
+        background: '#f0f9f6', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: '8px',
+        padding: '10px 20px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+      },
+    }, testSending ? 'Sending...' : 'Send Test Notification'),
+
+    permState === 'denied' && React.createElement('p', {
+      style: { fontSize: '13px', color: '#666', margin: '8px 0 0 0' },
+    },
+      'Notifications are blocked by your browser. To enable them, open your browser settings and allow notifications for this site, then refresh the page.'
+    ),
+
+    // Test result
+    testResult && React.createElement('div', {
+      style: {
+        marginTop: '12px', padding: '10px 14px', borderRadius: '8px',
+        background: testResult.type === 'success' ? '#f0fdf4' : '#fef2f2',
+        color: testResult.type === 'success' ? '#166534' : '#991b1b',
+        fontSize: '13px',
+      },
+    }, testResult.message),
+
+    // Server status
+    vapidReady === false && React.createElement('div', {
+      style: {
+        marginTop: '12px', padding: '10px 14px', borderRadius: '8px',
+        background: '#fffbeb', color: '#92400e', fontSize: '13px',
+      },
+    }, '⚠️ Push notification server is not fully configured. Contact the admin.'),
+  );
+};

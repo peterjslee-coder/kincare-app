@@ -283,6 +283,8 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   return (
     <>
       {pwaGuide}
+      {/* Push notification prompt — shows if not yet enabled */}
+      {typeof NotificationPrompt !== 'undefined' && React.createElement(NotificationPrompt, null)}
       <div className="page-header">
         <h1 className="greeting">Welcome back, {firstName}!</h1>
       </div>
