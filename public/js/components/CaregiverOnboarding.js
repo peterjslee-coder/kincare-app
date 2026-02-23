@@ -12,6 +12,48 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const [authToken, setAuthTokenState] = useState(resumeMode ? (window.AUTH_TOKEN || localStorage.getItem('auth_token')) : null);
   const [profileId, setProfileId] = useState(null);
   const [errors, setErrors] = useState({});
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  // ─── Online/offline detection ───
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
+
+  // ─── Resilient fetch: auto-retry on transient network failures ───
+  const resilientFetch = async (url, options, retries = 2) => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        if (!navigator.onLine) {
+          throw new Error('OFFLINE');
+        }
+        const res = await fetch(url, options);
+        return res;
+      } catch (err) {
+        if (err.message === 'OFFLINE') throw err;
+        if (attempt < retries) {
+          // Wait briefly before retry (500ms, then 1500ms)
+          await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+          continue;
+        }
+        throw err;
+      }
+    }
+  };
+
+  // Network error message helper
+  const networkErrorMsg = (err) => {
+    if (!navigator.onLine || (err && err.message === 'OFFLINE')) {
+      return 'You appear to be offline. Please check your internet connection and try again.';
+    }
+    return 'Network error — please check your connection and try again.';
+  };
 
   // Form data across all steps
   const [form, setForm] = useState({
@@ -45,6 +87,57 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   });
 
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
+
+  // ─── Persist form progress to localStorage ───
+  const STORAGE_KEY = 'inplace_onboarding_progress';
+  // Restore saved progress on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Restore form fields (except password and documents which can't be serialized)
+        if (parsed.form) {
+          setForm(f => ({
+            ...f,
+            ...parsed.form,
+            password: '', confirmPassword: '',
+            documents: [], // can't persist File objects
+          }));
+        }
+        // Restore step if past account creation (don't go back to step 1 if account exists)
+        if (parsed.step && parsed.step > 1 && parsed.authToken) {
+          setStep(parsed.step);
+          setAuthTokenState(parsed.authToken);
+          if (typeof setAuthToken === 'function') setAuthToken(parsed.authToken);
+          window.AUTH_TOKEN = parsed.authToken;
+          // Mark invite as resolved so we skip the validation
+          if (!inviteInfo && parsed.inviteInfo) setInviteInfo(parsed.inviteInfo);
+          setLoading(false);
+        }
+        if (parsed.profileId) setProfileId(parsed.profileId);
+        if (parsed.bgCheckPaid) setBgCheckPaid(true);
+      }
+    } catch (e) { /* ignore corrupt storage */ }
+  }, []);
+  // Save progress whenever form or step changes
+  useEffect(() => {
+    try {
+      const token = authToken || window.AUTH_TOKEN;
+      if (step > 1 && token) {
+        // Only save serializable form data (strip documents/files)
+        const saveable = { ...form, documents: [], password: '', confirmPassword: '', ssnLast4: '' };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          form: saveable, step, authToken: token, inviteInfo, profileId, bgCheckPaid,
+        }));
+      }
+    } catch (e) { /* ignore */ }
+  }, [form, step, authToken, profileId, bgCheckPaid]);
+  // Clear saved progress when onboarding completes
+  const clearSavedProgress = () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+  };
+
   const TOTAL_STEPS = 9;
   const US_STATES = [
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
@@ -67,9 +160,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       setLoading(false);
       return;
     }
+    // If we restored from localStorage and already have invite info, skip
+    if (inviteInfo && !inviteToken) { setLoading(false); return; }
     // Platform invite flow (admin-sent invite link)
     try {
-      const res = await fetch(`/api/platform-invites/info?token=${inviteToken}`);
+      const res = await resilientFetch(`/api/platform-invites/info?token=${inviteToken}`);
       if (res.ok) {
         const data = await res.json();
         setInviteInfo(data.invite);
@@ -79,7 +174,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         setInviteError(data.error || 'Invalid invite');
       }
     } catch (err) {
-      setInviteError('Failed to validate invite');
+      setInviteError(networkErrorMsg(err));
     }
     setLoading(false);
   };
@@ -160,7 +255,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       };
       if (signupToken) regBody.signupToken = signupToken;
 
-      const res = await fetch('/api/auth/register', {
+      const res = await resilientFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(regBody),
@@ -176,7 +271,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
       // Accept platform invite (skip for email-first signup flow)
       if (inviteToken && !signupToken) {
-        await fetch('/api/platform-invites/accept-invite', {
+        await resilientFetch('/api/platform-invites/accept-invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ token: inviteToken }),
@@ -185,7 +280,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
       setStep(2);
     } catch (err) {
-      setErrors({ submit: 'Network error — please try again' });
+      setErrors({ submit: networkErrorMsg(err) });
     }
     setSaving(false);
   };
@@ -202,7 +297,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     setSaving(true);
     try {
       const token = authToken || window.AUTH_TOKEN;
-      const res = await fetch('/api/caregivers/profile', {
+      const res = await resilientFetch('/api/caregivers/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
@@ -222,16 +317,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!res.ok) { setErrors({ submit: data.error || 'Failed to save profile' }); setSaving(false); return; }
       setProfileId(data.profile?.id);
 
-      // Also update user phone
-      await fetch('/api/auth/me', {
+      // Also update user phone (non-blocking — don't fail the step if this errors)
+      resilientFetch('/api/auth/me', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ phone: form.phone }),
-      });
+      }).catch(() => {});
 
       setStep(4);
     } catch (err) {
-      setErrors({ submit: 'Network error — please try again' });
+      setErrors({ submit: networkErrorMsg(err) });
     }
     setSaving(false);
   };
@@ -242,7 +337,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     setSaving(true);
     try {
       const token = authToken || window.AUTH_TOKEN;
-      const res = await fetch('/api/caregivers/profile', {
+      const res = await resilientFetch('/api/caregivers/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
@@ -256,7 +351,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!res.ok) { const data = await res.json(); setErrors({ submit: data.error }); setSaving(false); return; }
       setStep(5);
     } catch (err) {
-      setErrors({ submit: 'Network error' });
+      setErrors({ submit: networkErrorMsg(err) });
     }
     setSaving(false);
   };
@@ -267,7 +362,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     try {
       const token = authToken || window.AUTH_TOKEN;
       const validCerts = form.certifications.filter(c => c.certType);
-      await fetch('/api/caregivers/profile', {
+      await resilientFetch('/api/caregivers/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
@@ -277,7 +372,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       });
       setStep(6); // → Academic Program
     } catch (err) {
-      setErrors({ submit: 'Network error' });
+      setErrors({ submit: networkErrorMsg(err) });
     }
     setSaving(false);
   };
@@ -301,15 +396,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       formData.append('types', JSON.stringify(types));
       formData.append('metadata', JSON.stringify(metadata));
 
-      const res = await fetch('/api/caregiver-onboarding/documents', {
+      const res = await resilientFetch('/api/caregiver-onboarding/documents', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
-      });
+      }, 1); // only 1 retry for uploads (they're larger)
       if (!res.ok) { const data = await res.json(); setErrors({ submit: data.error }); setSaving(false); return; }
       setStep(9);
     } catch (err) {
-      setErrors({ submit: 'Upload failed — please try again' });
+      setErrors({ submit: !navigator.onLine ? 'You appear to be offline. Please check your connection and try again.' : 'Upload failed — please check your connection and try again.' });
     }
     setSaving(false);
   };
@@ -424,6 +519,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   // Handle complete
   const handleComplete = () => {
+    clearSavedProgress();
     if (typeof onComplete === 'function') onComplete(authToken || window.AUTH_TOKEN);
   };
 
@@ -558,6 +654,22 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             }} />
           ))}
         </div>
+
+        {/* Offline banner */}
+        {isOffline && (
+          <div style={{
+            padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+            borderRadius: '10px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px',
+          }}>
+            <span style={{ fontSize: '20px' }}>&#9888;&#65039;</span>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#dc2626' }}>You're offline</div>
+              <div style={{ fontSize: '13px', color: '#b91c1c' }}>
+                Please check your internet connection. Your progress has been saved and you can continue when you're back online.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Step label */}
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -902,7 +1014,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 const programLabel = form.programName === 'radford_nursing' ? 'Radford University Nursing'
                   : form.programName === 'nrcc_nurse_aide' ? 'NRCC Nurse Aide Program'
                   : form.programNameOther || form.programName;
-                await fetch('/api/caregivers/profile', {
+                await resilientFetch('/api/caregivers/profile', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                   body: JSON.stringify({
