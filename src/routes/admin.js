@@ -692,6 +692,19 @@ router.post("/repair-demo", async (req, res) => {
       results.push("Carlos Santos created");
     } else { results.push("Carlos skipped (exists)"); }
 
+    // ─── Look up actual care recipient IDs from DB (some may have been skipped if they already existed) ───
+    const actualBetty = peteId ? await db.prepare("SELECT id FROM care_recipients WHERE first_name='Barbara' AND last_name='Lowe' AND family_user_id=?").get(peteId) : null;
+    const actualDorothy = hendersonFamilyId ? await db.prepare("SELECT id FROM care_recipients WHERE first_name='Dorothy' AND last_name='Henderson' AND family_user_id=?").get(hendersonFamilyId) : null;
+    const actualArun = patelFamilyId ? await db.prepare("SELECT id FROM care_recipients WHERE first_name='Arun' AND last_name='Patel' AND family_user_id=?").get(patelFamilyId) : null;
+    const actualCarlos = mariaUserId ? await db.prepare("SELECT id FROM care_recipients WHERE first_name='Carlos' AND last_name='Santos' AND family_user_id=?").get(mariaUserId) : null;
+
+    // Use actual DB IDs (not the UUID variables which may not have been inserted)
+    const realBettyId = actualBetty?.id;
+    const realDorothyId = actualDorothy?.id;
+    const realArunId = actualArun?.id;
+    const realCarlosId = actualCarlos?.id;
+    results.push(`Resolved care recipient IDs: Betty=${!!realBettyId}, Dorothy=${!!realDorothyId}, Arun=${!!realArunId}, Carlos=${!!realCarlosId}`);
+
     // ─── Caregiver Profiles ───
     const existingProfiles = await db.prepare("SELECT COUNT(*) as count FROM caregiver_profiles WHERE user_id IN (SELECT id FROM users WHERE is_demo = 1)").get();
     const mariaId = uuid(), jamesId = uuid(), sarahId = uuid(), davidId = uuid();
@@ -735,17 +748,23 @@ router.post("/repair-demo", async (req, res) => {
 
     const existingAssign = await db.prepare("SELECT COUNT(*) as count FROM caregiver_assignments WHERE family_user_id IN (SELECT id FROM users WHERE is_demo = 1)").get();
     if (parseInt(existingAssign.count) === 0 && mProf && jProf && sProf) {
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,1)`).run(uuid(), bettyId, peteId, mProf.id);
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,0)`).run(uuid(), bettyId, peteId, jProf.id);
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,1)`).run(uuid(), dorothyId, hendersonFamilyId, mProf.id);
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,0)`).run(uuid(), dorothyId, hendersonFamilyId, sProf.id);
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,0)`).run(uuid(), arunId, patelFamilyId, jProf.id);
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,0)`).run(uuid(), bettyId, davidLeeId, jProf.id);
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,0)`).run(uuid(), bettyId, susanLeeId, jProf.id);
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,0)`).run(uuid(), arunId, patelFamilyId, mProf.id);
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,1)`).run(uuid(), carlosId, mariaUserId, sProf.id);
-      await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,0)`).run(uuid(), carlosId, mariaUserId, jProf.id);
-      results.push("10 caregiver assignments created");
+      let assignCount = 0;
+      const tryAssign = async (crId, famId, profId, fav) => {
+        if (!crId || !famId || !profId) return;
+        await db.prepare(`INSERT INTO caregiver_assignments (id,care_recipient_id,family_user_id,caregiver_profile_id,is_active,is_favorite) VALUES (?,?,?,?,1,?)`).run(uuid(), crId, famId, profId, fav);
+        assignCount++;
+      };
+      await tryAssign(realBettyId, peteId, mProf.id, 1);
+      await tryAssign(realBettyId, peteId, jProf.id, 0);
+      await tryAssign(realDorothyId, hendersonFamilyId, mProf.id, 1);
+      await tryAssign(realDorothyId, hendersonFamilyId, sProf.id, 0);
+      await tryAssign(realArunId, patelFamilyId, jProf.id, 0);
+      await tryAssign(realBettyId, davidLeeId, jProf.id, 0);
+      await tryAssign(realBettyId, susanLeeId, jProf.id, 0);
+      await tryAssign(realArunId, patelFamilyId, mProf.id, 0);
+      await tryAssign(realCarlosId, mariaUserId, sProf.id, 1);
+      await tryAssign(realCarlosId, mariaUserId, jProf.id, 0);
+      results.push(`${assignCount} caregiver assignments created`);
     } else {
       results.push("Assignments already exist or profiles missing — skipped");
     }
@@ -764,8 +783,12 @@ router.post("/repair-demo", async (req, res) => {
 
     // ─── Sibling shares ───
     try {
-      await db.prepare(`INSERT INTO care_recipient_shares (id,care_recipient_id,owner_user_id,shared_with_user_id,permission) VALUES (?,?,?,?,'edit')`).run(uuid(), bettyId, peteId, davidLeeId);
-      await db.prepare(`INSERT INTO care_recipient_shares (id,care_recipient_id,owner_user_id,shared_with_user_id,permission) VALUES (?,?,?,?,'edit')`).run(uuid(), bettyId, peteId, susanLeeId);
+      if (realBettyId && peteId && davidLeeId) {
+        await db.prepare(`INSERT INTO care_recipient_shares (id,care_recipient_id,owner_user_id,shared_with_user_id,permission) VALUES (?,?,?,?,'edit')`).run(uuid(), realBettyId, peteId, davidLeeId);
+      }
+      if (realBettyId && peteId && susanLeeId) {
+        await db.prepare(`INSERT INTO care_recipient_shares (id,care_recipient_id,owner_user_id,shared_with_user_id,permission) VALUES (?,?,?,?,'edit')`).run(uuid(), realBettyId, peteId, susanLeeId);
+      }
       results.push("Barbara shared with siblings");
     } catch (e) { results.push("Shares skipped (may already exist)"); }
 
