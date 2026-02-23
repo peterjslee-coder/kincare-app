@@ -463,75 +463,40 @@ router.put("/users/:id/onboarding", async (req, res) => {
   }
 });
 
-// ─── POST /api/admin/reseed — Re-run demo seed (wipes all data!) ───
-// SAFEGUARDS: Requires explicit confirmation body, backs up real users first
+// ─── POST /api/admin/reseed — Refresh demo data (PRESERVES real users) ───
+// Always uses demoOnly mode — real user data is NEVER touched.
+// Still requires confirmation as a safety measure.
 router.post("/reseed", async (req, res) => {
   try {
-    const { confirm, iUnderstandThisWipesAllData } = req.body || {};
+    const { confirm } = req.body || {};
 
-    // Gate 1: Require explicit confirmation strings in the request body
-    if (confirm !== "WIPE_ALL_DATA" || iUnderstandThisWipesAllData !== true) {
+    // Gate: Require confirmation string
+    if (confirm !== "REFRESH_DEMO_DATA") {
       return res.status(400).json({
-        error: "RESEED BLOCKED — This will permanently destroy ALL data.",
-        required: {
-          confirm: "WIPE_ALL_DATA",
-          iUnderstandThisWipesAllData: true,
-        },
-        hint: "Send POST with JSON body containing both fields to proceed.",
+        error: "Reseed requires confirmation.",
+        required: { confirm: "REFRESH_DEMO_DATA" },
+        hint: "This will delete and re-insert all demo (is_demo=1) data. Real user data is preserved.",
       });
     }
 
     const db = await getDb();
 
-    // Gate 2: Count real (non-demo) users — warn if any exist
-    const realUsers = await db.prepare(
-      "SELECT id, email, first_name, last_name, role FROM users WHERE is_demo = 0 OR is_demo IS NULL"
-    ).all();
-    if (realUsers.length > 0) {
-      console.warn(`⚠️  RESEED: ${realUsers.length} real (non-demo) user(s) will be destroyed:`);
-      for (const u of realUsers) {
-        console.warn(`   - ${u.email} (${u.first_name} ${u.last_name}, role: ${u.role})`);
-      }
-    }
+    // Count what exists before reseed for logging
+    const demoCount = await db.prepare("SELECT COUNT(*) as count FROM users WHERE is_demo = 1").get();
+    const realCount = await db.prepare("SELECT COUNT(*) as count FROM users WHERE is_demo = 0 OR is_demo IS NULL").get();
 
-    // Gate 3: Create a backup snapshot of critical tables before wiping
-    const backupTimestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const backup = {
-      timestamp: backupTimestamp,
-      users: await db.prepare("SELECT * FROM users").all(),
-      care_recipients: await db.prepare("SELECT * FROM care_recipients").all(),
-      care_sessions: await db.prepare("SELECT * FROM care_sessions").all(),
-      caregiver_profiles: await db.prepare("SELECT * FROM caregiver_profiles").all(),
-      messages: await db.prepare("SELECT id, sender_id, recipient_id, content, is_read, created_at FROM messages").all(),
-      care_teams: await db.prepare("SELECT * FROM care_teams").all(),
-      care_team_members: await db.prepare("SELECT * FROM care_team_members").all(),
-      caregiver_assignments: await db.prepare("SELECT * FROM caregiver_assignments").all(),
-      activity_feed: await db.prepare("SELECT * FROM activity_feed LIMIT 500").all(),
-    };
+    console.log(`🔄 Admin-triggered demo reseed: ${demoCount.count} demo users to refresh, ${realCount.count} real user(s) preserved`);
 
-    // Store backup in a dedicated table (survives because we create it before truncation)
-    await db.exec(`CREATE TABLE IF NOT EXISTS _reseed_backups (
-      id TEXT PRIMARY KEY,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      data TEXT NOT NULL
-    )`);
-    await db.prepare(
-      "INSERT INTO _reseed_backups (id, data) VALUES (?, ?)"
-    ).run(backupTimestamp, JSON.stringify(backup));
-
-    console.log(`📦 Pre-reseed backup saved as _reseed_backups.${backupTimestamp} (${backup.users.length} users, ${backup.care_sessions.length} sessions, ${backup.messages.length} messages)`);
-
-    // Now proceed with actual reseed
+    // Proceed with demo-only reseed — real data untouched
     const { seed } = require("../seed");
-    console.log("🔄 Admin-triggered reseed starting...");
-    await seed({ force: true }); // force=true because the endpoint's own gates already confirmed
-    console.log("✅ Admin-triggered reseed complete");
+    await seed({ demoOnly: true });
+
+    console.log("✅ Admin-triggered demo reseed complete");
     res.json({
       success: true,
-      message: "Database reseeded with fresh demo data",
-      backup_id: backupTimestamp,
-      real_users_wiped: realUsers.length,
-      note: `Backup saved to _reseed_backups table with id '${backupTimestamp}'. Use GET /api/admin/reseed-backups to list.`,
+      message: "Demo data refreshed. Real user data preserved.",
+      demo_users_refreshed: parseInt(demoCount.count),
+      real_users_preserved: parseInt(realCount.count),
     });
   } catch (err) {
     console.error("Admin reseed error:", err);
@@ -567,6 +532,54 @@ router.get("/reseed-backups/:id", async (req, res) => {
     if (!backup) return res.status(404).json({ error: "Backup not found" });
     res.json({ id: backup.id, created_at: backup.created_at, data: JSON.parse(backup.data) });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/admin/restore-user — Restore a user from a backup snapshot ───
+router.post("/restore-user", async (req, res) => {
+  try {
+    const { backup_id, email } = req.body || {};
+    if (!backup_id || !email) {
+      return res.status(400).json({ error: "Required: backup_id and email" });
+    }
+
+    const db = await getDb();
+    const backupRow = await db.prepare("SELECT data FROM _reseed_backups WHERE id = ?").get(backup_id);
+    if (!backupRow) return res.status(404).json({ error: "Backup not found" });
+
+    const data = JSON.parse(backupRow.data);
+    const user = data.users?.find(u => u.email === email);
+    if (!user) return res.status(404).json({ error: `User ${email} not found in backup ${backup_id}` });
+
+    // Check if user already exists
+    const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    if (existing) {
+      return res.status(409).json({ error: `User ${email} already exists (id: ${existing.id}). Delete first or use a different approach.` });
+    }
+
+    // Re-insert the user with their original data
+    await db.prepare(`
+      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone,
+        is_active, is_demo, is_admin, email_verified, notification_prefs,
+        pets, pet_allergies, food_allergies, medical_conditions, disclaimer_accepted_at, disclaimer_version)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      user.id, user.email, user.password_hash, user.role, user.roles,
+      user.first_name, user.last_name, user.phone,
+      user.is_active ?? 1, user.is_demo ?? 0, user.is_admin ?? 0,
+      user.email_verified ?? 0, user.notification_prefs,
+      user.pets, user.pet_allergies, user.food_allergies, user.medical_conditions,
+      user.disclaimer_accepted_at, user.disclaimer_version
+    );
+
+    res.json({
+      success: true,
+      message: `User ${email} restored from backup ${backup_id}`,
+      user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name, role: user.role },
+    });
+  } catch (err) {
+    console.error("Restore user error:", err);
     res.status(500).json({ error: err.message });
   }
 });

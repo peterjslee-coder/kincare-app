@@ -10,47 +10,131 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.20.2';
+const DEMO_SEED_VERSION = '1.20.3';
 
-async function seed({ force = false } = {}) {
+async function seed({ force = false, demoOnly = false } = {}) {
   console.log("🌱 Seeding InPlace database...\n");
 
   await initializeDatabase();
   const db = await getDb();
 
-  // SAFETY CHECK: Refuse to wipe if real (non-demo) users exist, unless --force
-  try {
-    const realUsers = await db.prepare(
-      "SELECT COUNT(*) as count FROM users WHERE is_demo = 0 OR is_demo IS NULL"
-    ).get();
-    const realCount = parseInt(realUsers?.count || 0);
-    if (realCount > 0 && !force) {
-      const msg = `🛑 SEED ABORTED: ${realCount} real (non-demo) user(s) found in database.\n` +
-        `   This would permanently destroy their data.\n` +
-        `   To force: npm run seed -- --force\n` +
-        `   Or call seed({ force: true }) programmatically.`;
-      console.error(msg);
-      throw new Error(`Seed aborted: ${realCount} real users exist. Use --force to override.`);
-    }
-  } catch (err) {
-    // If the users table doesn't exist yet, that's fine — first run
-    if (err.message.includes("real users exist")) throw err;
-    console.log("  (No existing users table — fresh database)");
-  }
+  if (demoOnly) {
+    // ─── OPTION B: Demo-only reseed ───
+    // Only delete records belonging to demo users, then re-insert demo data.
+    // Real user data is NEVER touched.
+    console.log("🛡️  Demo-only mode: preserving all real user data\n");
 
-  // Clear ALL data in one shot — TRUNCATE CASCADE handles FK order automatically
-  await db.exec(`TRUNCATE
-    trusted_devices, user_2fa, oauth_accounts,
-    conversation_members, conversations,
-    care_team_invites, care_team_members, care_teams,
-    care_recipient_shares, push_subscriptions,
-    caregiver_assignments, recipient_notes, messages,
-    visit_photos, visit_logs, activity_feed, reviews,
-    payments, care_sessions, availability,
-    caregiver_documents, platform_invites,
-    password_reset_tokens, email_verification_tokens,
-    caregiver_profiles, care_recipients, users, waitlist
-  CASCADE`);
+    // Get all demo user IDs so we can surgically delete their related records
+    const demoUsers = await db.prepare("SELECT id FROM users WHERE is_demo = 1").all();
+    const demoIds = demoUsers.map(u => u.id);
+
+    if (demoIds.length > 0) {
+      // Build a parameterized IN clause
+      const placeholders = demoIds.map(() => '?').join(',');
+
+      // Delete in FK-safe order (children before parents)
+      // Tables that reference user IDs directly or transitively
+      await db.prepare(`DELETE FROM trusted_devices WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM user_2fa WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM oauth_accounts WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM push_subscriptions WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM password_reset_tokens WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM email_verification_tokens WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM platform_invites WHERE invited_by IN (${placeholders})`).run(...demoIds);
+
+      // Activity feed, notes, visit data
+      await db.prepare(`DELETE FROM activity_feed WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM recipient_notes WHERE author_id IN (${placeholders})`).run(...demoIds);
+
+      // Care sessions and their children (visit_logs → visit_photos)
+      const demoSessions = await db.prepare(
+        `SELECT id FROM care_sessions WHERE family_user_id IN (${placeholders}) OR caregiver_id IN (${placeholders})`
+      ).all(...demoIds, ...demoIds);
+      const sessionIds = demoSessions.map(s => s.id);
+      if (sessionIds.length > 0) {
+        const sp = sessionIds.map(() => '?').join(',');
+        await db.prepare(`DELETE FROM visit_photos WHERE visit_log_id IN (SELECT id FROM visit_logs WHERE session_id IN (${sp}))`).run(...sessionIds);
+        await db.prepare(`DELETE FROM visit_logs WHERE session_id IN (${sp})`).run(...sessionIds);
+        await db.prepare(`DELETE FROM reviews WHERE session_id IN (${sp})`).run(...sessionIds);
+        await db.prepare(`DELETE FROM payments WHERE session_id IN (${sp})`).run(...sessionIds);
+        await db.prepare(`DELETE FROM care_sessions WHERE id IN (${sp})`).run(...sessionIds);
+      }
+
+      // Messages and conversations involving demo users
+      await db.prepare(`DELETE FROM messages WHERE sender_id IN (${placeholders}) OR recipient_id IN (${placeholders})`).run(...demoIds, ...demoIds);
+      // Delete conversation members for demo users, then orphaned conversations
+      await db.prepare(`DELETE FROM conversation_members WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.exec(`DELETE FROM conversations WHERE id NOT IN (SELECT DISTINCT conversation_id FROM conversation_members)`);
+
+      // Care teams created by demo users
+      const demoTeams = await db.prepare(`SELECT id FROM care_teams WHERE created_by IN (${placeholders})`).all(...demoIds);
+      const teamIds = demoTeams.map(t => t.id);
+      if (teamIds.length > 0) {
+        const tp = teamIds.map(() => '?').join(',');
+        await db.prepare(`DELETE FROM care_team_invites WHERE team_id IN (${tp})`).run(...teamIds);
+        await db.prepare(`DELETE FROM care_team_members WHERE team_id IN (${tp})`).run(...teamIds);
+        await db.prepare(`DELETE FROM care_teams WHERE id IN (${tp})`).run(...teamIds);
+      }
+
+      // Caregiver assignments and shares
+      await db.prepare(`DELETE FROM caregiver_assignments WHERE family_user_id IN (${placeholders}) OR caregiver_user_id IN (${placeholders})`).run(...demoIds, ...demoIds);
+      await db.prepare(`DELETE FROM care_recipient_shares WHERE shared_by IN (${placeholders}) OR shared_with IN (${placeholders})`).run(...demoIds, ...demoIds);
+
+      // Availability and caregiver profiles
+      await db.prepare(`DELETE FROM availability WHERE caregiver_id IN (SELECT id FROM caregiver_profiles WHERE user_id IN (${placeholders}))`).run(...demoIds);
+      await db.prepare(`DELETE FROM caregiver_documents WHERE caregiver_profile_id IN (SELECT id FROM caregiver_profiles WHERE user_id IN (${placeholders}))`).run(...demoIds);
+      await db.prepare(`DELETE FROM caregiver_profiles WHERE user_id IN (${placeholders})`).run(...demoIds);
+
+      // Care recipients owned by demo family users
+      await db.prepare(`DELETE FROM care_recipients WHERE family_user_id IN (${placeholders})`).run(...demoIds);
+
+      // Finally, delete the demo users themselves
+      await db.prepare(`DELETE FROM users WHERE is_demo = 1`).run();
+
+      console.log(`🗑️  Cleaned ${demoIds.length} demo users and all their related records`);
+    } else {
+      console.log("  No existing demo users to clean");
+    }
+
+    // Clear demo waitlist entries (waitlist has no user FK, just clear demo seed marker)
+    await db.prepare("DELETE FROM waitlist WHERE email LIKE '%@inplace.care' OR email = '_seed_version@inplace.internal'").run();
+
+  } else {
+    // ─── Full wipe mode (original behavior) ───
+    // SAFETY CHECK: Refuse to wipe if real (non-demo) users exist, unless --force
+    try {
+      const realUsers = await db.prepare(
+        "SELECT COUNT(*) as count FROM users WHERE is_demo = 0 OR is_demo IS NULL"
+      ).get();
+      const realCount = parseInt(realUsers?.count || 0);
+      if (realCount > 0 && !force) {
+        const msg = `🛑 SEED ABORTED: ${realCount} real (non-demo) user(s) found in database.\n` +
+          `   This would permanently destroy their data.\n` +
+          `   To force: npm run seed -- --force\n` +
+          `   Or call seed({ force: true }) programmatically.`;
+        console.error(msg);
+        throw new Error(`Seed aborted: ${realCount} real users exist. Use --force to override.`);
+      }
+    } catch (err) {
+      // If the users table doesn't exist yet, that's fine — first run
+      if (err.message.includes("real users exist")) throw err;
+      console.log("  (No existing users table — fresh database)");
+    }
+
+    // Clear ALL data in one shot — TRUNCATE CASCADE handles FK order automatically
+    await db.exec(`TRUNCATE
+      trusted_devices, user_2fa, oauth_accounts,
+      conversation_members, conversations,
+      care_team_invites, care_team_members, care_teams,
+      care_recipient_shares, push_subscriptions,
+      caregiver_assignments, recipient_notes, messages,
+      visit_photos, visit_logs, activity_feed, reviews,
+      payments, care_sessions, availability,
+      caregiver_documents, platform_invites,
+      password_reset_tokens, email_verification_tokens,
+      caregiver_profiles, care_recipients, users, waitlist
+    CASCADE`);
+  }
 
   // ─── Users ───
   const passwordHash = await bcrypt.hash("inplace123", 10);
@@ -117,13 +201,27 @@ async function seed({ force = false } = {}) {
   `).run(susanLeeId, "susan.lowe@inplace.care", passwordHash, "Susan", "Lowe", "(626) 555-0144");
 
   // ─── Real admin account (Pete's actual login) ───
-  const realPeteId = uuid();
-  await db.prepare(`
-    INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, is_demo, is_admin, email_verified)
-    VALUES (?, ?, ?, 'family', '["family"]', ?, ?, ?, 0, 1, 1)
-  `).run(realPeteId, "peterjslee@gmail.com", passwordHash, "Pete", "Lee", "(626) 555-0142");
-
-  console.log("✅ Users created (10 — Pete real + Paul demo, David, Susan, 4 caregivers, Barbara)");
+  // In demoOnly mode, the real account already exists — don't re-insert
+  let realPeteId;
+  if (demoOnly) {
+    const existing = await db.prepare("SELECT id FROM users WHERE email = 'peterjslee@gmail.com'").get();
+    realPeteId = existing?.id || uuid();
+    if (!existing) {
+      // Real account somehow missing — re-create it
+      await db.prepare(`
+        INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, is_demo, is_admin, email_verified)
+        VALUES (?, ?, ?, 'family', '["family"]', ?, ?, ?, 0, 1, 1)
+      `).run(realPeteId, "peterjslee@gmail.com", passwordHash, "Pete", "Lee", "(626) 555-0142");
+    }
+    console.log("✅ Demo users created (9 — Paul, David, Susan, 4 caregivers, Barbara, 2 families). Real admin preserved.");
+  } else {
+    realPeteId = uuid();
+    await db.prepare(`
+      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, is_demo, is_admin, email_verified)
+      VALUES (?, ?, ?, 'family', '["family"]', ?, ?, ?, 0, 1, 1)
+    `).run(realPeteId, "peterjslee@gmail.com", passwordHash, "Pete", "Lee", "(626) 555-0142");
+    console.log("✅ Users created (10 — Pete real + Paul demo, David, Susan, 4 caregivers, Barbara)");
+  }
 
   // ─── Additional Family Users (Maria's other clients) ───
   const hendersonFamilyId = uuid();
@@ -1150,7 +1248,8 @@ module.exports = { seed, DEMO_SEED_VERSION };
 // Run directly if called from CLI (npm run seed)
 if (require.main === module) {
   const force = process.argv.includes("--force");
-  seed({ force })
+  const demoOnly = process.argv.includes("--demo-only");
+  seed({ force, demoOnly })
     .then(() => process.exit(0))
     .catch((err) => {
       console.error("Seed failed:", err);
