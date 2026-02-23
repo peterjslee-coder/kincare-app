@@ -9,6 +9,7 @@
 - [x] ~~**PWA not updating to latest version on phone:** Fixed in v1.2.1. Service worker cache name was stuck at `inplace-v0.9.0` — bumped to `inplace-v1.2.1`. Also added missing components (TwoFactorSetup, CareTeamManage, CareTeamPage, EmailVerificationBanner) to SW static asset list.~~
 - [x] ~~**Caregiver onboarding document upload — request body too large:** Fixed in v1.5.3. `limitBodySize` middleware was rejecting multipart/form-data before multer could process it. Fix: skip body size check for multipart requests. Also bumped multer per-file limit to 10MB, added client-side image resizing (1600px max, JPEG 85%), and replaced bare file inputs with "Take Photo" / "Choose Photo" buttons for mobile.~~
 - [x] ~~**No profile photo upload for family/care-recipient roles.** Fixed in v1.8.2–v1.8.3. Photo upload added to MyAccount (Profile tab) for all roles with client-side auto-resize (400x400 JPEG). Sidebar avatar updates in real-time. Route-specific 5mb JSON body limit added to prevent server errors.~~
+- [x] ~~**Dashboard needs a "Latest" / status section.** Every role's dashboard should have a prominent section at the top showing their current status and next action. For a caregiver like Carry Taiker who just registered, it would say something like "Pending background check and onboarding — complete your First Steps to get started." For a family member, it might show "2 upcoming sessions this week" or "Care request awaiting caregiver." Context-aware, always tells the user what's happening and what to do next. (Fixed in v1.6.0 with DisclaimerModal + Latest section)~~
 - [ ] **No thumbnail photos on any demo profile.** None of the demo users (Pete, Maria, Betty, other caregivers) have real profile photos — just emoji placeholders or SVG initials. Need: seed realistic avatar images for all demo users so the app looks polished during demos. Consider using generated placeholder headshots or styled SVG avatars with distinct colors per person.
 - [ ] **Caregiver dashboard too cluttered — icon/text overload.** The CaretakerHub tab bar (My Families, Area Map, Earnings, Reviews, etc.) has too many small icons with text labels crammed together. Suggestion: use larger, more illustrative icons without text labels, and show the text label on hover (tooltip) or when selected. Reduce visual noise so the dashboard feels cleaner.
 - [x] ~~**Messages show "Invalid Date" on sent messages.** Fixed in v1.8.3. Replaced relative timestamps ("5m", "2h") with actual time display (h:mm AM/PM) using `toLocaleTimeString()`.~~
@@ -21,7 +22,7 @@
 - [ ] **Real users can see/message other users without an accepted connection.** Currently any real user can find and message any other real user via the contacts list. Two strangers (e.g., peterjslee@gmail.com and peter@yourinplace.com) should NOT be able to see each other unless one has invited the other and the invite was accepted. Contacts should be gated by: (a) accepted care team invite, (b) caregiver assignment, or (c) a new "connection request" flow — search by email or proximity, send invite, other party accepts. Until accepted, neither party appears in the other's contact list or can start a conversation.
 - [ ] **Invalid dates on activity feed.** Pete reports "Invalid Date" on the activity feed page. Likely a timezone or parsing issue with TIMESTAMPTZ strings in ActivityFeed.js. *(Feedback #7)*
 - [ ] **Invalid dates on Betty's calendar.** Betty's CaredForView calendar shows "Invalid Date". Same root cause as activity feed — audit date formatting in CaredForView.js. *(Feedback #12)*
-- [ ] **Maria has 3 duplicate Betty families.** Demo seed gives Maria 3 copies of the Betty Lee family instead of distinct families. Need 2 more realistic families in seed data. *(Feedback #19)*
+- [x] ~~**Maria has 3 duplicate Betty families.** Demo seed gives Maria 3 copies of the Betty Lee family instead of distinct families. Need 2 more realistic families in seed data. (Fixed by demo reseed in v1.22.1) *(Feedback #19)*~~
 - [ ] **Map centered on Blacksburg, not caregiver's registered zip.** AreaMap defaults to Blacksburg instead of the caregiver's `work_latitude`/`work_longitude` or home zip. *(Feedback #26)*
 - [ ] **Caregiver pet/health info not showing on account page.** Carry Taker entered pet info and health conditions during onboarding but MyAccount doesn't display those fields. Need to surface caregiver profile fields in MyAccount. *(Feedback #22)*
 - [ ] **2FA won't load for caregiver role.** TwoFactorSetup component may be conditionally hidden for caregiver role on MyAccount page. Debug rendering. *(Feedback #23, #24)*
@@ -61,13 +62,43 @@
 - [ ] **Leaflet map doesn't display until tab switch.** On Caregivers page, the map doesn't render until switching from Find Nearby to Browse All and back. Classic Leaflet `invalidateSize()` race condition — map container not sized when initialized. *(Feedback — Feb 23, #10)*
 - [ ] **AI insights cross-contamination between care recipients.** Carlos's care insights cite Betty's meal reminder needs. The insights query is scoped to caregiver user ID rather than specific care_recipient_id. Fix scoping. *(Feedback — Feb 23, #11)*
 - [ ] **Carlos has gendered female avatar.** Default care recipient placeholder shows female/grandma icon for Carlos (male, 34). RecipientAvatar should show initials ("CS") not gendered emoji. Verify v1.20.4 RecipientAvatar component is rendering for all care recipients. *(Feedback — Feb 23, #12)*
+- [ ] **"Latest" tile should be clickable.** Tapping the "Latest" status tile (e.g., "3 upcoming sessions") should navigate to the relevant page (schedule, activity feed, etc.). Currently it's just informational text. *(Feedback — Feb 23, #21)*
+- [ ] **Activity feed "Mark read" button text overflow.** The "Mark read" button text spills outside its container on the activity feed page. Fix padding/width. *(Feedback — Feb 23, #23)*
+- [ ] **Inbox not sorted by recency.** Messages/conversations list should always show most recent conversation at top. Currently Cary's chat appears below older connection requests. *(Feedback — Feb 23, #25)*
+- [ ] **Find People doesn't show recent connections.** The "Find People" search in Messages should show recent connections or searches. Also should allow messaging someone already connected when using Find People. *(Feedback — Feb 23, #26)*
+- [ ] **Session color mismatch for open vs confirmed.** Cary accepted one of Pete's requests but the second request still shows blue (confirmed) instead of its actual open status. Session status colors need audit. *(Feedback — Feb 23, #31)*
+- [ ] **Alert clicks should show request details.** When a caretaker clicks on a pending request alert/notification, it should navigate to or expand the details of that specific request. *(Feedback — Feb 23, #32)*
+- [ ] **Demo data leaking into real user views.** Demo accounts/sessions should never appear in real user views. Ensure is_demo isolation is airtight in all queries. Fixed once in v1.22.1 reseed but needs ongoing vigilance. *(Feedback — Feb 23, #33)*
+- [ ] **Getting Started checklist not auto-completing.** After completing steps (e.g., searching for caregivers, booking one), the Getting Started checklist items don't auto-mark as done. Should detect completed actions. Also needs a dismiss/hide option. *(Feedback — Feb 23, #39)*
+- [ ] **Caregiver name too small on profile.** Cary Taker's name appears in small font near the bottom of the caregiver profile. Should be bigger and positioned at the top, under/near the photo. *(Feedback — Feb 23, #40)*
+- [ ] **Dashboard spend shows amount with no confirmed appointments.** Dashboard shows $256 spend even when there are no confirmed/completed sessions — appears to count requested sessions. Should only count confirmed or completed. *(Feedback — Feb 23, #52)*
 
 
 ## Features — Up Next
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
+- [ ] **Session check-in/checkout + time extension.** Protocol for caregivers to check in when they arrive and check out when they leave. If they're there 2:30 but it was a 2hr appt, mechanism to request an additional half hour. Caretaker coordinates with care team to approve, gets paid for extra time. *(Feedback — Feb 23, #1)*
 - [ ] **Short-notice upcharge description on financials page.** The <24hr booking surcharge (15% upcharge, worker gets 10% more) is not explained anywhere on the caregiver financials view. Add visible description of pricing rules. Ties into fee percentage inconsistency bug. *(Feedback — Feb 23, #2)*
+- [ ] **Nursing student discount program.** Reduced platform fee (15% vs 20%) for verified nursing students. Validated via email confirmation to partnering school. Advertise the 5% savings to make student caregivers more competitive for matching. *(Feedback — Feb 23, #3)*
+- [ ] **Nursing student program badge + hour reports.** If caregiver signed up as a nursing student with a supported program, show badge on their profile. Generate hour reports they can send to their school. *(Feedback — Feb 23, #4)*
+- [ ] **Off-platform liability acknowledgment.** All users must acknowledge they're not covered by InPlace protections if they arrange care outside the app (no payment/matching through platform). Users are 100% liable for anything off-app. *(Feedback — Feb 23, #5)*
+- [ ] **Care preferences as caregiver branding.** Enhance the stoplight/preferences system to serve as a caregiver's brand identity. Add happy emoji for tasks they love. Signal to families that caregivers have agency and enjoy their work. *(Feedback — Feb 23, #6, #7)*
+- [ ] **Expand care categories beyond elderly.** Add babysitting (toddlers, babies, school-age), special needs (behavioral, Down syndrome, etc.), and adult care beyond elderly. Medical task selections should trigger the "InPlace is not a medical provider" disclaimer. *(Feedback — Feb 23, #8)*
+- [ ] **Emergency contact 911 shortcut.** Clicking emergency contact section opens instructions with "Call 911" shortcut that could trigger auto-recording of audio or auto-message to care team. *(Feedback — Feb 23, #14)*
+- [ ] **AI insights on care profile.** When entering health conditions (e.g., "dementia"), AI suggests relevant care questions: "Is bedtime problematic?" or "Does [Betty] deal with daily dangers like stairs or cooking?" Helps families think through care needs. *(Feedback — Feb 23, #15)*
+- [ ] **Care location address with private instructions.** Specific address with gate codes, parking instructions, door combos etc. Visible only to confirmed caregivers when they accept an appointment. *(Feedback — Feb 23, #16)*
+- [ ] **Photo upload in care notes.** Allow photo attachments in care notes — "Don't let her wear this coat, it's not warm enough but it's the only one she remembers!" Visual context for caregivers. *(Feedback — Feb 23, #17)*
+- [ ] **Medication section CRUD.** Editable medication list — med name, dosage, frequency, reminder times. Future: AI insights and automatic reminders to cared-for to take medicine. *(Feedback — Feb 23, #18)*
+- [ ] **Calendar icon consistency.** Replace the static "17" calendar emoji with one showing the actual date. Match the red/white color scheme of the footer calendar icon. *(Feedback — Feb 23, #20)*
+- [ ] **Dismissable dashboard tiles.** Add hide/dismiss (X) button to Latest tile and other dashboard blocks. Users should be able to hide tiles they don't need. *(Feedback — Feb 23, #53, #55)*
+- [ ] **Calendar bottom nav icon color.** Change the green calendar emoji in the bottom nav to red and white to match app color scheme. *(Feedback — Feb 23, #54)*
+- [ ] **Caregivers page default to map view.** The Caregivers/Find Work page should populate with the map as the default view rather than requiring a tab switch. *(Feedback — Feb 23, #57)*
+- [ ] **Admin default to real users.** Admin user list should default to showing only real (non-demo) users. Demo users available via filter toggle. *(Feedback — Feb 23, #35)*
+- [ ] **Biometric sign-in (WebAuthn/passkeys).** Support fingerprint/Face ID authentication. *(Feedback — Feb 23, #36)*
+- [ ] **AI fraud detection.** Explore how AI could detect possible fraud patterns through the platform — unusual booking patterns, identity mismatches, payment anomalies. *(Feedback — Feb 23, #28)*
+- [ ] **Care profile enrichment — doctor contacts, shopping areas.** Add doctor/physician contact info and favorite shopping areas to care recipient profile. Useful for caregivers who take the person out. *(Feedback — Feb 23, #38)*
+- [ ] **Connection request → auto-open chat.** When someone sends a connection request and you accept it, the chat history should stay as an initial message. Currently Cary sent a request to connect but Pete can't find how to message her back. *(Feedback — Feb 23, #27)*
 - [ ] **Weekly availability rules (multi-day repeat).** Current availability rules are per-day only. Caregivers want to set "available 8-5 Mon-Thu" as one rule instead of 4 separate entries. Add multi-day selection to the "Add Recurring Rule" modal. Intermediate step before the full drag-to-select calendar rewrite. *(Feedback — Feb 23, #6)*
 - [ ] **Plausible Analytics setup:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html.
 - [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
@@ -161,7 +192,7 @@
 - [ ] **Remove all Uber references:** Reword any "Uber for X" comparisons in CLAUDE.md and SplashPage.js (The Problem section). Replace with language that describes what InPlace does without inviting the comparison.
 - [x] ~~**Floating feedback button (v1.6.1):** Implemented in v1.6.1, refined in v1.8.3 (moved to left on mobile, changed icon to lightbulb to avoid blocking send button).~~
 - [ ] **Admin API key for automated scripts.** Added in v1.8.3 — `ADMIN_API_KEY` env var bypasses JWT/2FA for the collect-feedback script. Set on Railway. Future: extend to other admin automation.
-- [ ] **Demo data enrichment — realistic messages.** Seed realistic conversations between Maria/Pete/Betty including group messages and video chat references. Currently messages are empty/placeholder. *(Feedback #6, #14, #15)*
+- [x] ~~**Demo data enrichment — realistic messages.** Seed realistic conversations between Maria/Pete/Betty including group messages and video chat references. Currently messages are empty/placeholder. (Fixed by demo reseed with full rich data) *(Feedback #6, #14, #15)*~~
 - [ ] **Maria demo profile polish.** Maria needs: profile photo, completed onboarding/background check status shown as "done", fake license photos, distinct families (not 3x Betty). *(Feedback #17, #18, #19, #20)*
 - [ ] **Caregiver schedule → "Find Work" view.** Caregiver schedule page shows "Request Care" which makes no sense for caregivers. Should show nearby care needs they can sign up for, with availability and job discovery. *(Feedback #3)*
 - [ ] **Calendar import (Apple/Google/Microsoft).** Caregivers want to import existing calendar events and see them alongside InPlace availability on one unified view. *(Feedback #3)*
@@ -216,11 +247,11 @@
 
 | Role | Email | Password | Notes |
 |------|-------|----------|-------|
-| Care Team | pete@inplace.care | inplace123 | Primary — manages Betty's care |
-| Caretaker | maria@inplace.care | inplace123 | Assigned to Betty + 1 other family |
-| Cared-For | betty@inplace.care | inplace123 | Limited view, controlled by Pete |
+| Care Team | paul@inplace.care | inplace123 | Primary — manages Barbara's care |
+| Caretaker | maria@inplace.care | inplace123 | Assigned to families + manages brother Carlos |
+| Cared-For | barbara@inplace.care | inplace123 | Limited view, controlled by Paul |
 
-> David (david.lee@inplace.care) and Susan (susan.lee@inplace.care) still exist in the database with messages and sessions, but are hidden from the demo picker and banner switcher as of v1.3.6.
+> David Lowe (david.lowe@inplace.care) and Susan Lowe (susan.lowe@inplace.care) still exist in the database with messages and sessions, but are hidden from the demo picker and banner switcher as of v1.3.6.
 
 
 ## Done

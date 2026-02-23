@@ -416,36 +416,84 @@
 
 ---
 
-## Next Up — v1.16.0: Admin Polish & Quick Wins
+## Completed — v1.15.2–v1.16.0: Admin Tab Layout, Maria Dual-Role, Branding (2026-02-22)
 
-Priority: **HIGH** — Address fresh feedback, improve admin panel, fix visible bugs.
-
-- [ ] **Admin stats exclude demo data:** Filter demo accounts and demo sessions from admin stats. Keep demo intact for demo picker.
-- [ ] **Admin 2FA gate:** Require 2FA/biometrics to access admin panel. Extra verification for destructive actions.
-- [ ] **Merge waitlist + invites:** Combine into unified "People" tab. Stale invite detection (already-registered users). Cancel/remove invites.
-- [ ] **Show app version on login screen:** Discreet version at bottom of login. Auto-include in feedback submissions.
-- [ ] **Caretaker signup inline validation:** Replace generic "insufficient information" with field-level red highlights.
-- [ ] **Care request visible on family calendar:** Ensure requested/open sessions appear on Schedule calendar.
-- [ ] **Invalid dates on activity feed + Betty's calendar:** Audit TIMESTAMPTZ parsing in ActivityFeed.js and CaredForView.js.
+- [x] **Branding icon sweep (v1.15.2):** Replaced all 12 remaining old icons across 8 component files
+- [x] **CaretakerHub white screen fix (v1.15.2a):** useEffect before early returns violated React hooks rules
+- [x] **Maria dual-role + Carlos (v1.15.3):** Maria now has caregiver+family roles with brother Carlos Santos as care recipient
+- [x] **Admin card-grid tab layout (v1.16.0):** Applied card-grid tab navigation to CaretakerHub and CaredForView
+- [x] **Feedback protocol (v1.16.0):** Collected 69 items from production, updated TASKS.md with 6 new bugs
 
 ---
 
-## v1.17.0: Caregiver Onboarding Completion
+## Completed — v1.20.4: Care Recipient Photos (2026-02-22)
 
-Priority: **HIGH** — Complete the caregiver registration experience.
+- [x] **Care recipient photo upload:** Photo upload on CareRecipients page with RecipientAvatar component
+- [x] **Care request visible on family calendar:** Sessions API returns requested-status sessions to family users
 
-- [ ] **Pets/allergies/medical conditions in onboarding:** Add collection step for pets, food allergies, medical conditions. Also add to family and care recipient registration.
-- [ ] **Multiple certifications:** Dynamic list — "Add another certification" with name, issuing body, expiration.
-- [ ] **Registration disclosures & agreements:** Legal step before final submit — background check notice, payment/tax disclosures, platform terms.
-- [ ] **Remove availability from signup:** Move to First Steps checklist post-registration. Add preferred work zip code + travel radius instead.
-- [ ] **Stoplight chart (First Steps):** Green/yellow/red task categorization for caregiver comfort levels.
-- [ ] **Care recipient photo upload:** Real photo on care profile (thumbnail → full size on tap).
+---
+
+## Completed — v1.21.9: Onboarding Resilience (2026-02-23)
+
+- [x] **resilientFetch:** Network-resilient fetch wrapper with retry logic and offline detection
+- [x] **localStorage persistence:** Onboarding progress saved locally so users don't lose work on network drops
+- [x] **Offline indicator:** Banner shown when device goes offline during onboarding
+
+---
+
+## Completed — v1.22.0–v1.22.1: Auth Event Tracking & Demo Repair (2026-02-23)
+
+- [x] **Onboarding event tracking:** `onboarding_events` table, POST/GET endpoints, admin panel "Auth Events" tab
+- [x] **Auth tracking across all flows:** Extended event tracking to login, registration, password reset, demo login flows with `flow` field
+- [x] **Demo data repair:** Added `POST /api/admin/reseed-demo` endpoint that safely reseeds all demo data (sessions, messages, notes, reviews, care teams) without touching real user data
+- [x] **Feedback table FK fix:** Added feedback and onboarding_events cleanup to demoOnly seed path
+
+---
+
+## Next Up — v1.23.0: Quick Wins & Bug Fixes
+
+Priority: **HIGH** — Address fresh user feedback (58 items from Feb 23), fix visible bugs.
+
+**Bugs:**
+- [ ] **Leaflet map doesn't display until tab switch.** Classic `invalidateSize()` race condition. *(Feedback #38, #50)*
+- [ ] **Duplicate help/FAQ articles.** Same questions shown 3 times. *(Feedback #48)*
+- [ ] **Inbox not sorted by recency.** Most recent conversation should be at top. *(Feedback #25)*
+- [ ] **Dashboard spend miscalculation.** Shows $256 with no confirmed sessions — counting requested ones. *(Feedback #52)*
+- [ ] **Activity feed "Mark read" text overflow.** Button text spills outside container. *(Feedback #23)*
+- [ ] **Session color mismatch.** Open sessions showing as confirmed (blue instead of orange/pink). *(Feedback #31)*
+- [ ] **Getting Started checklist not auto-completing.** Completed steps not detected. Needs dismiss option. *(Feedback #39)*
+- [ ] **Caregiver name too small on profile.** Name should be bigger, at top near photo. *(Feedback #40)*
+
+**Quick improvements:**
+- [ ] **"Latest" tile clickable.** Navigate to relevant page on tap. *(Feedback #21)*
+- [ ] **Dismissable dashboard tiles.** Hide X on Latest and other blocks. *(Feedback #53, #55)*
+- [ ] **Help/Account/Logout pinned to sidebar bottom.** Standard app pattern. *(Feedback #47)*
+- [ ] **Admin default to real users.** Filter demo users by default. *(Feedback #35)*
+- [ ] **Calendar icon consistency.** Show actual date, red/white color scheme. *(Feedback #20, #54)*
+- [ ] **Caregivers page default to map view.** *(Feedback #57)*
+- [ ] **First Steps links navigate to destination.** Clicking "finish profile" takes you there. *(Feedback #11, #12)*
+- [ ] **Alert clicks show request details.** *(Feedback #32)*
+
+---
+
+## v1.23.1: Caregiver Experience Polish
+
+Priority: **HIGH** — Real user (Cary Taker) submitted 20 feedback items. Fix caregiver flow.
+
+- [ ] **Caregiver rates saved from onboarding.** Rates entered during signup must persist to caregiver_profiles and show on financials page. *(Feedback #44)*
+- [ ] **DL/cert photo upload in onboarding.** At least ask for DL front/back. Skip allowed with acknowledgment but no jobs until uploaded. *(Feedback #45)*
+- [ ] **Stripe Connect status refresh.** Return URL from Stripe triggers dashboard re-fetch of First Steps. *(Feedback #41)*
+- [ ] **Profile photo upload working for all roles.** Debug upload for caregiver role specifically. *(Feedback #49)*
+- [ ] **Weekly availability rules.** Set "available 8-5 Mon-Thu" as one rule instead of 4. *(Feedback #46)*
+- [ ] **Short-notice upcharge description.** 15% upcharge for <24hr bookings, worker gets 10% more — explain on financials page. *(Feedback #42)*
+- [ ] **Caregiver document storage.** Area to upload/view nursing certs, DL, CPR cards. *(Feedback #30)*
+- [ ] **Fee percentage consistency.** 15% vs 20% confusion — make consistent everywhere. *(Existing bug)*
 
 ---
 
 ## v1.18.0: Stripe & Background Checks
 
-Priority: **HIGH** — Enable payments. *Blocked on Pete's action items (see below).*
+Priority: **HIGH** — Enable payments. *Blocked on Pete's Stripe and Checkr action items (see bottom of file).*
 
 - [ ] **Stripe payment for background check:** Collect credit card via Stripe Elements during CaregiverOnboarding. One-time charge for Checkr background check.
 - [ ] **Checkr integration:** Submit background check via Checkr API after payment. Webhook for results.
@@ -455,37 +503,44 @@ Priority: **HIGH** — Enable payments. *Blocked on Pete's action items (see bel
 
 ---
 
-## v1.19.0: Availability & Scheduling UX
+## v1.24.0: Care Profile & Medication
 
-Priority: **MEDIUM** — Better scheduling experience.
+Priority: **MEDIUM** — Enriching the core care experience.
 
-- [ ] **Interactive drag-to-select availability calendar (Outlook-style):** Weekly grid with Available/Blocked brush modes. Click-drag to paint time blocks, resize handles on edges. 30-min granularity.
-- [ ] **Caregiver work location zip code:** Replace free-text town name with zip code input. Fix AreaMap centering on work coordinates.
-- [ ] **Maria's caregiver calendar color fix:** Clearer visual hierarchy when blocked time, confirmed sessions, and care requests overlap.
-
----
-
-## v2.0.0: Connections & Messaging
-
-Priority: **MEDIUM** — Real social model.
-
-- [ ] **Connection request flow:** Search users by email, send connection request, accept/decline. Auto-connect via care team invite or caregiver assignment.
-- [ ] **Connection status persistence:** "Connection pending" state visible in messages list. Greyed-out chat for pending connections.
-- [ ] **Message push deep-links:** Push notification opens directly to conversation.
-- [ ] **Video chat — Meet link in messages:** "Video Call" button generates Google Meet link, sent as clickable card.
-- [ ] **Back swipe navigation:** In-app history stack so iOS back gesture navigates instead of closing PWA.
+- [ ] **Medication section CRUD.** Editable med list — name, dosage, frequency, reminders. *(Feedback #18)*
+- [ ] **Care location address with private instructions.** Gate codes, parking, door combos — visible only to confirmed caregivers. *(Feedback #16)*
+- [ ] **Photo upload in care notes.** Visual context for caregivers. *(Feedback #17)*
+- [ ] **Care profile enrichment.** Doctor contacts, favorite shopping areas. *(Feedback #38)*
+- [ ] **Expand care categories beyond elderly.** Babysitting, special needs, adult care. Medical selections trigger disclaimer. *(Feedback #8)*
+- [ ] **AI insights on care profile.** Suggest relevant care questions based on conditions entered. *(Feedback #15)*
+- [ ] **Multiple emergency contacts + 911 shortcut.** *(Feedback #14)*
 
 ---
 
-## v2.1.0: Dashboard & CaretakerHub Overhaul
+## v2.0.0: Connections, Messaging & Navigation
 
-Priority: **MEDIUM** — Polish the daily experience.
+Priority: **MEDIUM** — Real social model + navigation fixes.
 
-- [ ] **CaretakerHub stat card drill-downs:** Clickable cards → detail views.
-- [ ] **Push notification expansion:** Push for session updates, care requests, care team activity. Debug existing push flow.
-- [ ] **Care team member UX overhaul:** Member cards match leader card style, options on click (remove, promote, read-only).
-- [ ] **Block user with evidence logging:** Collect location data, timestamps, payment receipts, chat logs for potential legal action.
-- [ ] **Remove Uber references:** Reword comparisons in CLAUDE.md and SplashPage.js.
+- [ ] **Connection request → auto-open chat.** Accept request and immediately see the conversation. *(Feedback #27)*
+- [ ] **Connection status persistence.** "Pending" state visible in messages list. *(Existing)*
+- [ ] **Find People shows recent connections.** *(Feedback #26)*
+- [ ] **Back swipe navigation.** In-app history stack so iOS back gesture works. *(Feedback #22, existing)*
+- [ ] **Message push deep-links.** Push notification opens directly to conversation.
+- [ ] **Video chat — Meet link in messages.**
+- [ ] **Session check-in/checkout + time extension.** Check in/out protocol with mechanism to request extra time. *(Feedback #1)*
+
+---
+
+## v2.1.0: Platform Business Features
+
+Priority: **MEDIUM** — Revenue and trust features.
+
+- [ ] **Nursing student discount program.** 15% fee vs 20%, verified via school email. *(Feedback #3)*
+- [ ] **Nursing student badge + hour reports.** Show on profile, generate school reports. *(Feedback #4)*
+- [ ] **Off-platform liability acknowledgment.** Users acknowledge no InPlace protection for off-app arrangements. *(Feedback #5)*
+- [ ] **Care preferences as caregiver branding.** Stoplight system as identity/brand. *(Feedback #6, #7)*
+- [ ] **"Average in your area" rate data + job alerts.** *(Existing future feature)*
+- [ ] **AI fraud detection.** Detect unusual patterns. *(Feedback #28)*
 
 ---
 
@@ -500,6 +555,7 @@ Priority: **LOW** — When growth demands it.
 - [ ] **Apple Sign-In:** After Google OAuth is proven
 - [ ] **Admin panel UX overhaul:** Card-based navigation, collapsible sections, cleaner information hierarchy
 - [ ] **Admin incident management:** Escalated support cases with full evidence (chat logs, payments, location)
+- [ ] **Biometric sign-in (WebAuthn/passkeys):** Fingerprint/Face ID authentication. *(Feedback #36)*
 
 ---
 
