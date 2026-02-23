@@ -52,11 +52,11 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
   };
 
   const demoAccounts = [
-    { label: 'Pete (Family)', email: 'pete@inplace.care', icon: '👨‍👩‍👦', desc: 'Care coordinator' },
+    { label: 'Paul (Family)', email: 'paul@inplace.care', icon: '👨‍👩‍👦', desc: 'Care coordinator' },
     { label: 'Maria (Caregiver)', email: 'maria@inplace.care', icon: '🤝', desc: 'Professional caregiver' },
-    { label: 'Betty (Cared-For)', email: 'betty@inplace.care', icon: '🌷', desc: 'Care recipient' },
-    { label: 'David (Brother)', email: 'david.lee@inplace.care', icon: '👨', desc: "Pete's brother" },
-    { label: 'Susan (Sister)', email: 'susan.lee@inplace.care', icon: '👩', desc: "Pete's sister" },
+    { label: 'Barbara (Cared-For)', email: 'barbara@inplace.care', icon: '🌷', desc: 'Care recipient' },
+    { label: 'David (Brother)', email: 'david.lowe@inplace.care', icon: '👨', desc: "Paul's brother" },
+    { label: 'Susan (Sister)', email: 'susan.lowe@inplace.care', icon: '👩', desc: "Paul's sister" },
   ];
 
   const handleSubmit = async (e) => {

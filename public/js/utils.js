@@ -58,9 +58,9 @@ const CAREGIVER_AVAILABILITY = window.CAREGIVER_AVAILABILITY = {
       'Sun': [],
     },
     bookedSlots: [
-      { date: '2026-02-16', start: '10:00 AM', end: '12:00 PM', client: 'Betty Lee' },
+      { date: '2026-02-16', start: '10:00 AM', end: '12:00 PM', client: 'Barbara Lowe' },
       { date: '2026-02-17', start: '8:00 AM', end: '10:00 AM', client: 'Another Client' },
-      { date: '2026-02-18', start: '2:00 PM', end: '4:00 PM', client: 'Betty Lee' },
+      { date: '2026-02-18', start: '2:00 PM', end: '4:00 PM', client: 'Barbara Lowe' },
       { date: '2026-02-19', start: '8:00 AM', end: '11:00 AM', client: 'Another Client' },
     ],
   },
@@ -78,7 +78,7 @@ const CAREGIVER_AVAILABILITY = window.CAREGIVER_AVAILABILITY = {
     },
     bookedSlots: [
       { date: '2026-02-16', start: '9:00 AM', end: '11:00 AM', client: 'Another Client' },
-      { date: '2026-02-20', start: '1:00 PM', end: '3:00 PM', client: 'Betty Lee' },
+      { date: '2026-02-20', start: '1:00 PM', end: '3:00 PM', client: 'Barbara Lowe' },
     ],
   },
   'James Okafor': {
@@ -94,7 +94,7 @@ const CAREGIVER_AVAILABILITY = window.CAREGIVER_AVAILABILITY = {
       'Sun': [],
     },
     bookedSlots: [
-      { date: '2026-02-17', start: '7:00 AM', end: '9:00 AM', client: 'Betty Lee' },
+      { date: '2026-02-17', start: '7:00 AM', end: '9:00 AM', client: 'Barbara Lowe' },
       { date: '2026-02-18', start: '11:00 AM', end: '1:00 PM', client: 'Another Client' },
     ],
   },

@@ -6,12 +6,12 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
 
   const demoAccounts = [
     {
-      email: 'pete@inplace.care',
-      label: 'Pete Lee',
+      email: 'paul@inplace.care',
+      label: 'Paul Lowe',
       role: 'Family (Care Team)',
       color: '#1b6b5a',
       icon: '👨‍👩‍👧',
-      description: 'You\'re managing care for your 78-year-old mother Betty, who has early-stage dementia. See the full dashboard — scheduling, caregiver management, care profile, messaging, and analytics.',
+      description: 'You\'re managing care for your 78-year-old mother Barbara, who has early-stage dementia. See the full dashboard — scheduling, caregiver management, care profile, messaging, and analytics.',
     },
     {
       email: 'maria@inplace.care',
@@ -19,15 +19,15 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
       role: 'Caregiver / Companion',
       color: '#2e7d6d',
       icon: '🤝',
-      description: 'You\'re a professional caregiver assigned to the Lee family. See your schedule, earnings, assigned families, area map, and client reviews.',
+      description: 'You\'re a professional caregiver assigned to the Lowe family. See your schedule, earnings, assigned families, area map, and client reviews.',
     },
     {
-      email: 'betty@inplace.care',
-      label: 'Betty Lee',
+      email: 'barbara@inplace.care',
+      label: 'Barbara Lowe',
       role: 'I Would Like Help',
       color: '#e8724a',
       icon: '🌷',
-      description: 'You\'re the person receiving care — Pete\'s mother. See your upcoming visits on a simple calendar and write personal notes for your caregivers.',
+      description: 'You\'re the person receiving care — Paul\'s mother. See your upcoming visits on a simple calendar and write personal notes for your caregivers.',
     },
   ];
 
