@@ -750,12 +750,11 @@ router.put("/:id/cancel", async (req, res) => {
     const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
 
     // Activity feed entry
-    const { v4: actUuid } = require("uuid");
     const cancellerName = cancelledBy === "caregiver" ? "Caregiver" : "Family";
     await db.prepare(
-      "INSERT INTO activity_feed (id, user_id, type, title, description) VALUES (?, ?, 'session_cancelled', ?, ?)"
+      "INSERT INTO activity_feed (id, family_user_id, event_type, title, message) VALUES (?, ?, 'session_cancelled', ?, ?)"
     ).run(
-      actUuid(),
+      uuid(),
       session.family_user_id,
       `Session Cancelled by ${cancellerName}`,
       `${session.service_type} session on ${session.scheduled_date} was cancelled${isLateCancel ? " (late cancellation)" : ""}.${reason ? " Reason: " + reason : ""}`
