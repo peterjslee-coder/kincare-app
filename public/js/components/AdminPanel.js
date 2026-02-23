@@ -22,6 +22,8 @@ const AdminPanel = window.AdminPanel = () => {
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteMsg, setInviteMsg] = useState(null);
   const [user, setUser] = useState(null);
+  // Care team invites state
+  const [careTeamInvites, setCareTeamInvites] = useState([]);
   // Feedback tab state
   const [feedbackItems, setFeedbackItems] = useState([]);
   const [feedbackTotal, setFeedbackTotal] = useState(0);
@@ -56,7 +58,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'users') loadUsers();
     if (activeTab === 'waitlist') loadWaitlist();
     if (activeTab === 'activity') loadActivity();
-    if (activeTab === 'invites') loadInvites();
+    if (activeTab === 'invites') { loadInvites(); loadCareTeamInvites(); }
     if (activeTab === 'feedback') loadFeedback();
     if (activeTab === 'blocked') loadBlockedEmails();
     if (activeTab === 'help') loadHelpArticles();
@@ -124,6 +126,16 @@ const AdminPanel = window.AdminPanel = () => {
         setInvitesTotal(data.total || 0);
       }
     } catch (err) { console.error('Admin invites error:', err); }
+  };
+
+  const loadCareTeamInvites = async () => {
+    try {
+      const res = await apiFetch('/api/admin/care-team-invites');
+      if (res?.ok) {
+        const data = await res.json();
+        setCareTeamInvites(data.careTeamInvites || []);
+      }
+    } catch (err) { console.error('Admin care team invites error:', err); }
   };
 
   const loadFeedback = async () => {
@@ -957,6 +969,59 @@ const AdminPanel = window.AdminPanel = () => {
               </table>
               {invites.length === 0 && (
                 <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No invites sent yet</div>
+              )}
+            </div>
+          </div>
+
+          {/* Care Team Invites */}
+          <div className="card" style={{ marginTop: '20px' }}>
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span><span className="card-icon">👨‍👩‍👦</span>Care Team Invites</span>
+              <span style={{ fontSize: '13px', color: '#888', fontWeight: 400 }}>{careTeamInvites.length} total</span>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Care Team</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Sent By</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {careTeamInvites.map((cti) => {
+                    const isExpired = cti.status === 'pending' && cti.expires_at && (parseTimestamp(cti.expires_at) || new Date(0)) < new Date();
+                    const displayStatus = isExpired ? 'expired' : cti.status;
+                    return (
+                      <tr key={cti.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: '10px 12px', fontWeight: 500 }}>{cti.invited_email}</td>
+                        <td style={{ padding: '10px 12px', color: '#555' }}>{cti.team_name}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, textTransform: 'capitalize',
+                            background: cti.role === 'caregiver' ? '#e3f2fd' : '#e0f2e9',
+                            color: cti.role === 'caregiver' ? '#1565c0' : '#1b6b5a',
+                          }}>{cti.role}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, textTransform: 'capitalize',
+                            background: displayStatus === 'accepted' ? '#e0f2e9' : displayStatus === 'pending' ? '#e3f2fd' : '#fff3e0',
+                            color: displayStatus === 'accepted' ? '#1b6b5a' : displayStatus === 'pending' ? '#1565c0' : '#e65100',
+                          }}>{displayStatus}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#555', fontSize: '12px' }}>{cti.inviter_first_name} {cti.inviter_last_name}</td>
+                        <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(cti.created_at)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {careTeamInvites.length === 0 && (
+                <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No care team invites yet</div>
               )}
             </div>
           </div>

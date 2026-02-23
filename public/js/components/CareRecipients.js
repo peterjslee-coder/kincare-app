@@ -10,6 +10,7 @@ const CareRecipients = window.CareRecipients = () => {
     emergencyContactName: '', emergencyContactPhone: ''
   });
   const [saveMsg, setSaveMsg] = useState('');
+  const [photoUploading, setPhotoUploading] = useState(false);
   const { showToast } = useToast();
 
   const fetchRecipients = async () => {
@@ -109,6 +110,68 @@ const CareRecipients = window.CareRecipients = () => {
     }
   };
 
+  const handlePhotoUpload = async (recipientId) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 1.5 * 1024 * 1024) {
+        showToast('Photo too large — max 1.5MB', 'error');
+        return;
+      }
+      setPhotoUploading(true);
+      try {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          const base64 = ev.target.result;
+          const res = await apiFetch(`/api/care-recipients/${recipientId}/photo`, {
+            method: 'PUT',
+            body: JSON.stringify({ photo: base64 }),
+          });
+          if (res?.ok) {
+            showToast('Photo updated!', 'success');
+            await fetchRecipients();
+          } else {
+            showToast('Failed to upload photo', 'error');
+          }
+          setPhotoUploading(false);
+        };
+        reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Photo upload error:', err);
+        showToast('Failed to upload photo', 'error');
+        setPhotoUploading(false);
+      }
+    };
+    input.click();
+  };
+
+  const handleRemovePhoto = async (recipientId) => {
+    const res = await apiFetch(`/api/care-recipients/${recipientId}/photo`, { method: 'DELETE' });
+    if (res?.ok) {
+      showToast('Photo removed', 'success');
+      await fetchRecipients();
+    }
+  };
+
+  const RecipientAvatar = ({ r, size = 40, clickable = false }) => {
+    if (r.photo) {
+      return React.createElement('div', {
+        style: { width: size, height: size, borderRadius: '50%', overflow: 'hidden', cursor: clickable ? 'pointer' : 'default', flexShrink: 0 },
+        onClick: clickable ? (e) => { e.stopPropagation(); handlePhotoUpload(r.id); } : undefined,
+        title: clickable ? 'Click to change photo' : undefined,
+      }, React.createElement('img', { src: r.photo, alt: getName(r), style: { width: '100%', height: '100%', objectFit: 'cover' } }));
+    }
+    const initials = ((r.first_name || r.firstName || '')[0] || '') + ((r.last_name || r.lastName || '')[0] || '');
+    return React.createElement('div', {
+      style: { width: size, height: size, borderRadius: '50%', background: '#e0f2e9', color: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.4, fontWeight: 700, cursor: clickable ? 'pointer' : 'default', flexShrink: 0 },
+      onClick: clickable ? (e) => { e.stopPropagation(); handlePhotoUpload(r.id); } : undefined,
+      title: clickable ? 'Click to add photo' : undefined,
+    }, initials.toUpperCase());
+  };
+
   const getName = (r) => r.first_name ? `${r.first_name} ${r.last_name}` : `${r.firstName || ''} ${r.lastName || ''}`.trim();
   const selected = recipients.find(r => r.id === selectedId);
   const fd = (field, val) => setFormData({ ...formData, [field]: val });
@@ -128,7 +191,7 @@ const CareRecipients = window.CareRecipients = () => {
       <div className="recipient-cards">
         {recipients.map(r => (
           <div key={r.id} className={`recipient-card ${selectedId === r.id ? 'selected' : ''}`} onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}>
-            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🌷</div>
+            <div style={{ marginBottom: '12px' }}><RecipientAvatar r={r} size={56} /></div>
             <div className="recipient-card-name">{getName(r)}</div>
             <p className="text-muted" style={{ fontSize: '13px' }}>{r.age} years old</p>
             {(r.location_city || r.city) && <p className="text-muted" style={{ fontSize: '13px' }}>{r.location_city ? `${r.location_city}, ${r.location_state}` : r.city}</p>}
@@ -139,8 +202,19 @@ const CareRecipients = window.CareRecipients = () => {
       {selected && !showAddForm && (
         <div className="card" style={{ marginTop: '32px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="card-header">🌷 {getName(selected)}</div>
-            <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <RecipientAvatar r={selected} size={48} clickable={true} />
+              <span>{getName(selected)}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button onClick={() => handlePhotoUpload(selected.id)} disabled={photoUploading} style={{ padding: '6px 14px', background: '#f0f0f0', color: '#555', border: '1px solid #ddd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>
+                {photoUploading ? 'Uploading...' : (selected.photo ? 'Change Photo' : 'Add Photo')}
+              </button>
+              {selected.photo && (
+                <button onClick={() => handleRemovePhoto(selected.id)} style={{ padding: '6px 10px', background: '#fff0f0', color: '#c00', border: '1px solid #fdd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>Remove</button>
+              )}
+              <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
+            </div>
           </div>
           <div className="info-grid">
             <div className="info-item"><div className="info-label">Age</div><div className="info-value">{selected.age}</div></div>

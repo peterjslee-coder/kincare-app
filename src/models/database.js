@@ -250,6 +250,8 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS roles TEXT`,
     // Backfill roles from existing single role column
     `UPDATE users SET roles = '["' || role || '"]' WHERE roles IS NULL AND role IS NOT NULL`,
+    // v1.20.4 — Care recipient photo
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS photo TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

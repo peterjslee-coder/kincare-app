@@ -7,15 +7,23 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [showPwaGuide, setShowPwaGuide] = useState(false);
-  // Dismissible dashboard sections
+  // Dismissible dashboard sections — stores a content fingerprint per tile.
+  // Tile stays hidden until the content changes (new data arrives).
   const [dismissedTiles, setDismissedTiles] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dash_dismissed') || '{}'); } catch { return {}; }
   });
 
-  const dismissTile = (tileId) => {
-    const updated = { ...dismissedTiles, [tileId]: true };
+  // Dismiss a tile, recording a fingerprint of its current content
+  const dismissTile = (tileId, contentFingerprint) => {
+    const updated = { ...dismissedTiles, [tileId]: contentFingerprint || 'dismissed' };
     setDismissedTiles(updated);
     localStorage.setItem('dash_dismissed', JSON.stringify(updated));
+  };
+
+  // Check if a tile should show: hidden only if fingerprint matches (no new data)
+  const isTileDismissed = (tileId, contentFingerprint) => {
+    if (!dismissedTiles[tileId]) return false;
+    return dismissedTiles[tileId] === (contentFingerprint || 'dismissed');
   };
 
   const restoreTiles = () => {
@@ -322,13 +330,20 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           borderColor = '#e8724a';
         }
 
+        const latestFingerprint = `${upcomingCount}-${unreadCount}-${stats.assignedCaregivers}`;
+        if (isTileDismissed('latest', latestFingerprint)) return null;
+
         return (
-          <div className="card" style={{ marginBottom: 16, borderLeft: `4px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="card" style={{ marginBottom: 16, borderLeft: `4px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
             <span style={{ fontSize: 24 }}>{statusIcon}</span>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Latest</div>
               <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{statusText}</div>
             </div>
+            <button onClick={() => dismissTile('latest', latestFingerprint)} title="Hide until there's something new" style={{
+              background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
+              color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
+            }}>✕</button>
           </div>
         );
       })()}
@@ -441,11 +456,11 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
-      {!dismissedTiles.upcoming && (
+      {!isTileDismissed('upcoming', `${upcoming.length}-${upcoming.map(s=>s.id).join(',')}`) && (
         <div className="card" style={{ position: 'relative' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span><span className="card-icon">📅</span>Upcoming Sessions</span>
-            <button onClick={() => dismissTile('upcoming')} title="Hide this section" style={{
+            <button onClick={() => dismissTile('upcoming', `${upcoming.length}-${upcoming.map(s=>s.id).join(',')}`)} title="Hide until there's something new" style={{
               background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
               color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
               display: 'flex', alignItems: 'center', gap: 4,
@@ -497,11 +512,11 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
-      {!dismissedTiles.activity && (
+      {!isTileDismissed('activity', `${activity.length}-${activity.map(a=>a.id).join(',')}`) && (
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span><span className="card-icon">📢</span>Recent Activity</span>
-            <button onClick={() => dismissTile('activity')} title="Hide this section" style={{
+            <button onClick={() => dismissTile('activity', `${activity.length}-${activity.map(a=>a.id).join(',')}`)} title="Hide until there's something new" style={{
               background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
               color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
               display: 'flex', alignItems: 'center', gap: 4,

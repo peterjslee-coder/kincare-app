@@ -151,13 +151,13 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
   );
 };
 
-// Dynamic calendar icon showing today's date number
+// Dynamic calendar icon showing today's date number (red/white theme)
 const _DayIcon = () => {
   const day = new Date().getDate();
   return React.createElement('svg', { width: 20, height: 20, viewBox: '0 0 20 20', style: { display: 'inline-block', verticalAlign: 'middle' } },
-    React.createElement('rect', { x: 0, y: 0, width: 20, height: 20, rx: 3, fill: 'none', stroke: 'currentColor', strokeWidth: 1.5 }),
-    React.createElement('rect', { x: 0, y: 0, width: 20, height: 6, rx: 3, fill: 'currentColor' }),
-    React.createElement('text', { x: 10, y: 15.5, textAnchor: 'middle', fontSize: 9, fontWeight: 700, fill: 'currentColor' }, day)
+    React.createElement('rect', { x: 0, y: 0, width: 20, height: 20, rx: 3, fill: '#fff', stroke: '#ccc', strokeWidth: 1 }),
+    React.createElement('rect', { x: 0, y: 0, width: 20, height: 6, rx: 3, fill: '#d32f2f' }),
+    React.createElement('text', { x: 10, y: 15.5, textAnchor: 'middle', fontSize: 9, fontWeight: 700, fill: '#333' }, day)
   );
 };
 

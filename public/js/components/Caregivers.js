@@ -4,7 +4,7 @@ const Caregivers = window.Caregivers = () => {
   const [recipients, setRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [schedulingCaregiver, setSchedulingCaregiver] = useState(null);
-  const [activeTab, setActiveTab] = useState('assigned');
+  const [activeTab, setActiveTab] = useState('nearby');
   const { showToast } = useToast();
 
   // Location search state

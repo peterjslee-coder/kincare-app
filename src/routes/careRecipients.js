@@ -289,4 +289,38 @@ router.delete("/:id/share/:shareId", requireRole("family"), async (req, res) => 
   res.json({ success: true });
 });
 
+// ─── PUT /api/care-recipients/:id/photo ─── Upload care recipient photo (base64)
+router.put("/:id/photo", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const access = await hasAccess(db, req.params.id, req.user.id);
+    if (!access || access === "view") return res.status(403).json({ error: "No edit access" });
+
+    const { photo } = req.body; // base64 data URL
+    if (!photo) return res.status(400).json({ error: "No photo provided" });
+    if (photo.length > 2 * 1024 * 1024) return res.status(400).json({ error: "Photo too large (max 1.5MB)" });
+
+    await db.prepare("UPDATE care_recipients SET photo = ?, updated_at = NOW() WHERE id = ?").run(photo, req.params.id);
+    res.json({ message: "Photo updated", photoUrl: photo });
+  } catch (err) {
+    console.error("Care recipient photo upload error:", err);
+    res.status(500).json({ error: "Failed to upload photo" });
+  }
+});
+
+// ─── DELETE /api/care-recipients/:id/photo ─── Remove care recipient photo
+router.delete("/:id/photo", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const access = await hasAccess(db, req.params.id, req.user.id);
+    if (!access || access === "view") return res.status(403).json({ error: "No edit access" });
+
+    await db.prepare("UPDATE care_recipients SET photo = NULL, updated_at = NOW() WHERE id = ?").run(req.params.id);
+    res.json({ message: "Photo removed" });
+  } catch (err) {
+    console.error("Care recipient photo delete error:", err);
+    res.status(500).json({ error: "Failed to remove photo" });
+  }
+});
+
 module.exports = router;

@@ -47,8 +47,10 @@ async function familyDashboard(db, userId, res) {
         COUNT(*) as total_sessions,
         SUM(duration_hours) as total_hours,
         SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
-      FROM care_sessions
-      WHERE family_user_id = ? AND scheduled_date >= ?
+      FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.family_user_id = ? AND cs.scheduled_date >= ?
+        AND COALESCE(u.is_demo, 0) = 0
     `).get(userId, monthStr);
 
     const today = new Date().toISOString().split("T")[0];

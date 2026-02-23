@@ -198,6 +198,29 @@ router.get("/activity", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/care-team-invites — List all care team invites ───
+router.get("/care-team-invites", async (req, res) => {
+  try {
+    const db = await getDb();
+    const invites = await db.prepare(`
+      SELECT cti.id, cti.invited_email, cti.role, cti.status, cti.token, cti.expires_at, cti.created_at,
+             ct.name AS team_name,
+             cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+             u.first_name AS inviter_first_name, u.last_name AS inviter_last_name
+      FROM care_team_invites cti
+      JOIN care_teams ct ON cti.care_team_id = ct.id
+      JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+      JOIN users u ON cti.invited_by = u.id
+      ORDER BY cti.created_at DESC
+      LIMIT 100
+    `).all();
+    res.json({ careTeamInvites: invites, total: invites.length });
+  } catch (err) {
+    console.error("Admin care-team-invites error:", err);
+    res.status(500).json({ error: "Failed to load care team invites" });
+  }
+});
+
 // ─── GET /api/admin/search-email — Search across users, waitlist, and invites ───
 router.get("/search-email", async (req, res) => {
   try {
