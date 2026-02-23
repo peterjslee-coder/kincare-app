@@ -130,6 +130,20 @@ router.get("/", async (req, res) => {
     }
   }
 
+  // Add platform fee info: estimated_cost = family price, caregiver gets (100 - fee)%
+  const feePercent = await getPlatformFeePercent(db);
+  sessions = sessions.map(s => {
+    const familyPrice = parseFloat(s.estimated_cost) || 0;
+    const fee = Math.round(familyPrice * (feePercent / 100) * 100) / 100;
+    return {
+      ...s,
+      platform_fee_percent: feePercent,
+      platform_fee: fee,
+      caregiver_payout: Math.round((familyPrice - fee) * 100) / 100,
+      family_total: familyPrice,
+    };
+  });
+
   res.json({ sessions });
   } catch (err) {
     console.error("GET /api/sessions error:", err.message, err.stack);
@@ -561,8 +575,17 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
   });
 });
 
+// ─── Helper: get platform fee percent from DB (default 20) ───
+async function getPlatformFeePercent(db) {
+  try {
+    const row = await db.prepare("SELECT value FROM platform_settings WHERE key = 'platform_fee_percent'").get();
+    return row ? parseFloat(row.value) : 20;
+  } catch { return 20; }
+}
+
 // ─── GET /api/sessions/cost-preview ───
 // Calculate cost breakdown without creating a session (for live preview in booking UI)
+// Returns caregiver payout + family total (with platform markup)
 router.get("/cost-preview", async (req, res) => {
   const { caregiverId, scheduledDate, scheduledTime, durationHours = 2 } = req.query;
 
@@ -594,10 +617,21 @@ router.get("/cost-preview", async (req, res) => {
     shortNotice,
   });
 
+  // Platform fee: estimated_cost = family price, caregiver gets (100 - fee)%
+  const feePercent = await getPlatformFeePercent(db);
+  const familyTotal = costResult.total; // this IS what the family pays
+  const platformFee = Math.round(familyTotal * (feePercent / 100) * 100) / 100;
+  const caregiverPayout = Math.round((familyTotal - platformFee) * 100) / 100;
+
   res.json({
     ...costResult,
     shortNotice,
     rates: costRates,
+    // Platform fee breakdown
+    platformFeePercent: feePercent,
+    platformFee,
+    caregiverPayout,
+    familyTotal,
   });
 });
 

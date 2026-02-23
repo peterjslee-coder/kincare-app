@@ -472,10 +472,15 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a2e' }}>
-                      {s.recipientName}{s.estimatedCost ? `, $${Math.round(parseFloat(s.estimatedCost))}` : ''}
+                      {s.recipientName}{s.familyTotal ? `, $${Math.round(parseFloat(s.familyTotal))}` : s.estimatedCost ? `, $${Math.round(parseFloat(s.estimatedCost))}` : ''}
                     </div>
                     <div className="session-time">{s.date} at {s.time}</div>
                     <div style={{ fontSize: 12, color: '#666' }}>{s.caregiverName} · <span style={{ textTransform: 'capitalize' }}>{(s.serviceType || '').replace(/_/g, ' ')}</span></div>
+                    {s.caregiverPayout && s.platformFee > 0 && (
+                      <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                        Caregiver receives ${parseFloat(s.caregiverPayout).toFixed(0)} · Platform fee ${parseFloat(s.platformFee).toFixed(0)}
+                      </div>
+                    )}
                   </div>
                   <div style={{ textAlign: 'right', fontSize: '12px' }}>
                     <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : '#e8724a', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>

@@ -759,7 +759,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             <div style={{ fontWeight: 700, fontSize: '15px', color: '#333', marginBottom: '10px' }}>📋 How Pricing Works</div>
             <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.7 }}>
               <div style={{ marginBottom: '8px' }}>
-                <strong>Platform fee:</strong> 15% of the base session cost goes to InPlace.
+                <strong>Platform fee:</strong> Families pay a {data?.platformFeePercent || 20}% platform fee on top of your rate. You keep 100% of your listed rate — the fee is added to the family's total, not deducted from yours.
               </div>
               <div style={{ marginBottom: '8px' }}>
                 <strong>Short-notice bookings (&lt;24 hours):</strong> A 20% surcharge is added to sessions booked less than 24 hours in advance. Of that surcharge, <strong>75% goes to you</strong> (the caregiver) and 25% goes to the platform. This means you earn more for last-minute work.
@@ -865,7 +865,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Client</th>
                       <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Service</th>
                       <th style={{ padding: '10px 12px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Hours</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Amount</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Your Earnings</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -883,7 +883,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>{s.duration_hours || '—'}h</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#1b6b5a' }}>
-                          ${(s.actual_cost || s.estimated_cost || 0).toFixed(2)}
+                          ${(s.caregiver_payout || s.actual_cost || s.estimated_cost || 0).toFixed(2)}
                         </td>
                       </tr>
                     ))}
@@ -895,7 +895,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         {completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0).toFixed(1)}h
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: '#1b6b5a' }}>
-                        ${completedSessions.reduce((sum, s) => sum + (s.actual_cost || s.estimated_cost || 0), 0).toFixed(2)}
+                        ${completedSessions.reduce((sum, s) => sum + (s.caregiver_payout || s.actual_cost || s.estimated_cost || 0), 0).toFixed(2)}
                       </td>
                     </tr>
                   </tfoot>
@@ -1035,8 +1035,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
           {/* Fee Breakdown Info */}
           <div style={{ padding: '14px 16px', background: '#f8f9fa', borderRadius: '8px', fontSize: '13px', color: '#666' }}>
-            💡 <strong>How fees work:</strong> InPlace charges a 20% platform fee on each session. You keep 80% of the session cost. Families pay via card or ACH at checkout.
-            Your earnings are deposited to your Stripe account based on your payout speed preference above.
+            💡 <strong>How fees work:</strong> InPlace charges a {data?.platformFeePercent || 20}% platform fee on each session. You keep {100 - (data?.platformFeePercent || 20)}% of the session cost.
+            For example, on a $100 session you earn ${100 - (data?.platformFeePercent || 20)}.
+            Families pay via card or ACH at checkout. Your earnings are deposited to your Stripe account based on your payout speed preference above.
           </div>
         </div>
       )}

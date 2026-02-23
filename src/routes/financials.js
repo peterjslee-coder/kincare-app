@@ -622,4 +622,34 @@ router.get("/insights", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/financials/platform-fee ───
+// Get current platform fee percentage
+router.get("/platform-fee", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT value FROM platform_settings WHERE key = 'platform_fee_percent'").get();
+    res.json({ platformFeePercent: row ? parseFloat(row.value) : 20 });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch platform fee" });
+  }
+});
+
+// ─── PUT /api/admin/financials/platform-fee ───
+// Update platform fee percentage
+router.put("/platform-fee", async (req, res) => {
+  const { platformFeePercent } = req.body;
+  if (platformFeePercent == null || platformFeePercent < 0 || platformFeePercent > 50) {
+    return res.status(400).json({ error: "platformFeePercent must be between 0 and 50" });
+  }
+  try {
+    const db = await getDb();
+    await db.prepare(
+      "INSERT INTO platform_settings (key, value) VALUES ('platform_fee_percent', ?) ON CONFLICT (key) DO UPDATE SET value = ?, updated_at = NOW()"
+    ).run(String(platformFeePercent), String(platformFeePercent));
+    res.json({ platformFeePercent });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update platform fee" });
+  }
+});
+
 module.exports = router;

@@ -427,7 +427,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
               {/* Cost Breakdown */}
               {costPreview && (
-                <div style={{ marginTop: '12px', padding: '10px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                <div style={{ marginTop: '12px', padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Cost Breakdown</div>
                   {costPreview.tierBreakdown?.map((t, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', marginBottom: '3px' }}>
@@ -441,9 +441,19 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                       <span>+${costPreview.surcharge.toFixed(2)}</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #eee', paddingTop: '6px', marginTop: '4px' }}>
-                    <span>Total</span>
-                    <span>${costPreview.total.toFixed(2)}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', marginBottom: '3px', borderTop: '1px solid #f0f0f0', paddingTop: '4px', marginTop: '4px' }}>
+                    <span>Caregiver receives</span>
+                    <span>${(costPreview.caregiverPayout || costPreview.total).toFixed(2)}</span>
+                  </div>
+                  {costPreview.platformFee > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#888', marginBottom: '3px' }}>
+                      <span>Platform fee ({costPreview.platformFeePercent || 20}%)</span>
+                      <span>${costPreview.platformFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #eee', paddingTop: '6px', marginTop: '4px' }}>
+                    <span>You pay</span>
+                    <span>${(costPreview.familyTotal || costPreview.total).toFixed(2)}</span>
                   </div>
                   {costPreview.shortNotice && (
                     <div style={{ fontSize: '11px', color: '#e8724a', marginTop: '4px' }}>

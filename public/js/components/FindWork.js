@@ -163,7 +163,7 @@ const FindWork = window.FindWork = () => {
           transform:translate(-50%,-100%);
         ">
           <div>${recipient}</div>
-          <div style="font-size:10px;font-weight:400;opacity:0.9">${service}${cost ? ' · $' + Math.round(parseFloat(cost)) : ''}</div>
+          <div style="font-size:10px;font-weight:400;opacity:0.9">${service}${cost ? ' · $' + Math.round(parseFloat(s.caregiver_payout || cost)) : ''}</div>
         </div>`,
         iconSize: [0, 0], iconAnchor: [0, 40],
       });
@@ -174,7 +174,7 @@ const FindWork = window.FindWork = () => {
           <div style="font-weight:700;font-size:14px;margin-bottom:4px">${recipient}</div>
           <div style="font-size:12px;color:#666;margin-bottom:2px">${service}</div>
           <div style="font-size:12px;color:#666;margin-bottom:2px">📅 ${dateStr} 🕐 ${time || ''}</div>
-          ${cost ? '<div style="font-size:14px;font-weight:700;color:#1b6b5a;margin-top:4px">$' + Math.round(parseFloat(cost)) + '</div>' : ''}
+          ${cost ? '<div style="font-size:14px;font-weight:700;color:#1b6b5a;margin-top:4px">$' + Math.round(parseFloat(s.caregiver_payout || cost)) + ' <span style=\\"font-size:10px;font-weight:600;color:#1b6b5a\\">your earnings</span></div>' : ''}
           <button onclick="document.dispatchEvent(new CustomEvent('findwork-claim',{detail:'${s.id}'}))" style="
             margin-top:8px;width:100%;padding:8px;background:#1b6b5a;color:#fff;border:none;border-radius:6px;
             font-size:13px;font-weight:600;cursor:pointer;
@@ -446,10 +446,11 @@ const FindWork = window.FindWork = () => {
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
                         <div style={{ fontSize: 24, fontWeight: 700, color: '#1b6b5a' }}>
-                          {cost ? `$${Math.round(parseFloat(cost))}` : '\u2014'}
+                          {cost ? `$${Math.round(parseFloat(s.caregiver_payout || cost))}` : '\u2014'}
                         </div>
-                        <div style={{ fontSize: 12, color: '#888' }}>
-                          {cost && duration ? `$${Math.round(cost / duration)}/hr` : ''}
+                        <div style={{ fontSize: 11, color: '#1b6b5a', fontWeight: 600 }}>Your earnings</div>
+                        <div style={{ fontSize: 11, color: '#888' }}>
+                          {cost && duration ? `$${Math.round((s.caregiver_payout || cost) / duration)}/hr` : ''}
                         </div>
                       </div>
                     </div>
@@ -532,7 +533,7 @@ const FindWork = window.FindWork = () => {
                 const duration = s.duration_hours || s.durationHours;
                 const service = s.service_type || s.serviceType;
                 const recipient = s.recipient_name || s.recipientName || 'Client';
-                const cost = s.estimated_cost || s.estimatedCost || s.actual_cost;
+                const cost = s.caregiver_payout || s.estimated_cost || s.estimatedCost || s.actual_cost;
                 const statusColors = {
                   confirmed: { bg: '#e8f5e9', text: '#2e7d32' },
                   pending: { bg: '#fff3e0', text: '#e65100' },

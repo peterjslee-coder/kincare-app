@@ -5,6 +5,14 @@ const { authenticate } = require("../middleware/auth");
 const router = express.Router();
 router.use(authenticate);
 
+// Helper: get platform fee percent from DB (default 20)
+async function getPlatformFeePercent(db) {
+  try {
+    const row = await db.prepare("SELECT value FROM platform_settings WHERE key = 'platform_fee_percent'").get();
+    return row ? parseFloat(row.value) : 20;
+  } catch { return 20; }
+}
+
 // ─── GET /api/dashboard ───
 // Role-aware dashboard data
 router.get("/", async (req, res) => {
@@ -26,6 +34,8 @@ router.get("/", async (req, res) => {
 // ─── Family Dashboard (Pete's view) ───
 async function familyDashboard(db, userId, res) {
   try {
+    const feePercent = await getPlatformFeePercent(db);
+
     // Get owned + shared recipients
     const ownedRecipients = await db.prepare(
       "SELECT * FROM care_recipients WHERE family_user_id = ?"
@@ -131,19 +141,27 @@ async function familyDashboard(db, userId, res) {
         unreadNotifications: (unreadCount && unreadCount.count) || 0,
         assignedCaregivers: (assignedCount && assignedCount.count) || 0,
       },
-      upcomingSessions: upcoming.map((s) => ({
-        id: s.id,
-        date: s.scheduled_date,
-        time: s.scheduled_time,
-        serviceType: s.service_type,
-        status: s.status,
-        durationHours: s.duration_hours,
-        caregiverName: s.caregiver_name,
-        caregiverRating: s.caregiver_rating,
-        recipientName: s.recipient_name,
-        specialInstructions: s.special_instructions,
-        estimatedCost: s.estimated_cost,
-      })),
+      platformFeePercent: feePercent,
+      upcomingSessions: upcoming.map((s) => {
+        const familyPrice = parseFloat(s.estimated_cost) || 0;
+        const fee = Math.round(familyPrice * (feePercent / 100) * 100) / 100;
+        return {
+          id: s.id,
+          date: s.scheduled_date,
+          time: s.scheduled_time,
+          serviceType: s.service_type,
+          status: s.status,
+          durationHours: s.duration_hours,
+          caregiverName: s.caregiver_name,
+          caregiverRating: s.caregiver_rating,
+          recipientName: s.recipient_name,
+          specialInstructions: s.special_instructions,
+          estimatedCost: s.estimated_cost,
+          caregiverPayout: Math.round((familyPrice - fee) * 100) / 100,
+          platformFee: fee,
+          familyTotal: familyPrice,
+        };
+      }),
       recentActivity: recentActivity.map((a) => ({
         id: a.id,
         eventType: a.event_type,
@@ -230,8 +248,11 @@ async function caregiverDashboard(db, userId, res) {
     ORDER BY r.created_at DESC LIMIT 5
   `).all(profile.id);
 
+  const feePercentCg = await getPlatformFeePercent(db);
+
   res.json({
     role: "caregiver",
+    platformFeePercent: feePercentCg,
     profile: {
       id: profile.id,
       name: `${user.first_name} ${user.last_name}`,
@@ -264,19 +285,24 @@ async function caregiverDashboard(db, userId, res) {
       ...a,
       health_conditions: a.health_conditions ? JSON.parse(a.health_conditions) : [],
     })),
-    upcomingSessions: upcoming.map(s => ({
-      id: s.id,
-      date: s.scheduled_date,
-      time: s.scheduled_time,
-      serviceType: s.service_type,
-      status: s.status,
-      durationHours: s.duration_hours,
-      recipientName: s.recipient_name,
-      location: s.location_address ? `${s.location_address}, ${s.location_city}` : s.location_city,
-      specialInstructions: s.special_instructions,
-      recipientPreferences: s.recipient_preferences,
-      estimatedCost: s.estimated_cost,
-    })),
+    upcomingSessions: upcoming.map(s => {
+      const sessionCost = parseFloat(s.estimated_cost) || 0;
+      const cgFee = Math.round(sessionCost * (feePercentCg / 100) * 100) / 100;
+      return {
+        id: s.id,
+        date: s.scheduled_date,
+        time: s.scheduled_time,
+        serviceType: s.service_type,
+        status: s.status,
+        durationHours: s.duration_hours,
+        recipientName: s.recipient_name,
+        location: s.location_address ? `${s.location_address}, ${s.location_city}` : s.location_city,
+        specialInstructions: s.special_instructions,
+        recipientPreferences: s.recipient_preferences,
+        estimatedCost: s.estimated_cost,
+        caregiverPayout: Math.round((sessionCost - cgFee) * 100) / 100,
+      };
+    }),
     reviews: reviews.map(r => ({
       id: r.id,
       rating: r.rating,
@@ -286,9 +312,9 @@ async function caregiverDashboard(db, userId, res) {
     })),
     stats: {
       completedThisMonth: monthlyStats.completed_sessions || 0,
-      monthlyEarnings: Math.round((monthlyStats.total_earnings || 0) * 100) / 100,
+      monthlyEarnings: Math.round((monthlyStats.total_earnings || 0) * (1 - feePercentCg / 100) * 100) / 100,
       hoursThisMonth: Math.round((monthlyStats.total_hours || 0) * 10) / 10,
-      pendingEarnings: Math.round((pending.pending_earnings || 0) * 100) / 100,
+      pendingEarnings: Math.round((pending.pending_earnings || 0) * (1 - feePercentCg / 100) * 100) / 100,
       assignedFamilies: assignments.length,
     },
   });

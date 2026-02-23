@@ -13,26 +13,63 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [showAllInsights, setShowAllInsights] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Platform fee settings
+  const [feePercent, setFeePercent] = useState(20);
+  const [feeInput, setFeeInput] = useState('20');
+  const [feeSaving, setFeeSaving] = useState(false);
+  const [feeMsg, setFeeMsg] = useState('');
 
   const fetchAll = async (showRefresh) => {
     if (showRefresh) setRefreshing(true);
     try {
-      const [sumRes, brkRes, insRes, txRes] = await Promise.all([
+      const [sumRes, brkRes, insRes, txRes, feeRes] = await Promise.all([
         apiFetch('/api/admin/financials/summary'),
         apiFetch('/api/admin/financials/breakdown'),
         apiFetch('/api/admin/financials/insights'),
         apiFetch(`/api/admin/financials/transactions?page=${txPage}&limit=25`),
+        apiFetch('/api/admin/financials/platform-fee'),
       ]);
       if (sumRes?.ok) setSummary(await sumRes.json());
       if (brkRes?.ok) setBreakdown(await brkRes.json());
       if (insRes?.ok) { const d = await insRes.json(); setInsights(d.insights || []); }
       if (txRes?.ok) setTransactions(await txRes.json());
+      if (feeRes?.ok) {
+        const fd = await feeRes.json();
+        setFeePercent(fd.platformFeePercent);
+        setFeeInput(String(fd.platformFeePercent));
+      }
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Financials fetch error:', err);
     }
     setLoading(false);
     setRefreshing(false);
+  };
+
+  const saveFee = async () => {
+    const val = parseFloat(feeInput);
+    if (isNaN(val) || val < 0 || val > 50) {
+      setFeeMsg('Must be 0–50%');
+      return;
+    }
+    setFeeSaving(true); setFeeMsg('');
+    try {
+      const res = await apiFetch('/api/admin/financials/platform-fee', {
+        method: 'PUT',
+        body: JSON.stringify({ platformFeePercent: val }),
+      });
+      if (res?.ok) {
+        const d = await res.json();
+        setFeePercent(d.platformFeePercent);
+        setFeeInput(String(d.platformFeePercent));
+        setFeeMsg('Saved!');
+        setTimeout(() => setFeeMsg(''), 3000);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setFeeMsg(err.error || 'Failed to save');
+      }
+    } catch { setFeeMsg('Network error'); }
+    setFeeSaving(false);
   };
 
   useEffect(() => { fetchAll(); }, []);
@@ -298,6 +335,40 @@ const AdminFinancials = window.AdminFinancials = () => {
         <KpiCard icon="📅" label="Sessions" current={kpi.totalSessions?.current} previous={kpi.totalSessions?.previous} isMoney={false} />
         <KpiCard icon="💎" label="Avg Session Value" current={kpi.avgSessionValue?.current} previous={kpi.avgSessionValue?.previous} />
         <KpiCard icon="🔍" label="BG Check Revenue" current={kpi.bgCheckRevenue?.current} previous={kpi.bgCheckRevenue?.previous} />
+      </div>
+
+      {/* Platform Fee Settings */}
+      <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1b6b5a' }}>
+        <div className="card-header"><span className="card-icon">⚙️</span>Platform Fee Rate</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, color: '#555', flex: '1 1 200px' }}>
+            The platform takes <strong>{feePercent}%</strong> of every session. Families pay the full rate, caregivers receive <strong>{100 - feePercent}%</strong>.
+            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+              Example: $100 session → Caregiver gets ${100 - feePercent}, Platform gets ${feePercent}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input
+                type="number" step="1" min="0" max="50"
+                value={feeInput}
+                onChange={e => setFeeInput(e.target.value)}
+                style={{ width: 60, padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 14, textAlign: 'center' }}
+              />
+              <span style={{ fontSize: 14, color: '#666' }}>%</span>
+            </div>
+            <button onClick={saveFee} disabled={feeSaving} style={{
+              padding: '6px 16px', borderRadius: 6, border: 'none',
+              background: feeSaving ? '#999' : '#1b6b5a', color: '#fff',
+              fontSize: 13, fontWeight: 600, cursor: feeSaving ? 'wait' : 'pointer',
+            }}>
+              {feeSaving ? 'Saving...' : 'Update'}
+            </button>
+            {feeMsg && (
+              <span style={{ fontSize: 12, color: feeMsg === 'Saved!' ? '#2e7d32' : '#c62828', fontWeight: 600 }}>{feeMsg}</span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* All-time summary */}
