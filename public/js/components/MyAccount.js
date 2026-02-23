@@ -122,24 +122,38 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   };
 
   // Resize image client-side to max 400x400 JPEG so any photo works regardless of original size
-  const resizeImage = (file, maxSize = 400, quality = 0.8) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        const canvas = document.createElement('canvas');
-        let w = img.width, h = img.height;
-        if (w > h) { if (w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; } }
-        else { if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; } }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
-      img.src = url;
-    });
+  // Uses createImageBitmap first (handles HEIC, WEBP, AVIF on supported browsers), falls back to Image element
+  const resizeImage = async (file, maxSize = 400, quality = 0.8) => {
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file);
+    } catch {
+      // Fallback to Image element for older browsers
+      bitmap = await new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          const name = file.name?.toLowerCase() || '';
+          if (name.endsWith('.heic') || name.endsWith('.heif')) {
+            reject(new Error('HEIC photos are not supported by your browser. Please convert to JPG first, or use Safari.'));
+          } else {
+            reject(new Error('Could not load this image. Try a JPG or PNG file.'));
+          }
+        };
+        img.src = url;
+      });
+    }
+    const canvas = document.createElement('canvas');
+    let w = bitmap.width, h = bitmap.height;
+    if (w > h) { if (w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; } }
+    else { if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; } }
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    if (bitmap.close) bitmap.close(); // Free ImageBitmap memory
+    return canvas.toDataURL('image/jpeg', quality);
   };
 
   const handlePhotoUpload = async (e) => {
@@ -164,7 +178,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
       }
     } catch (err) {
       console.error('Photo upload error:', err);
-      showToast('Upload failed', 'error');
+      showToast(err.message || 'Upload failed — try a JPG or PNG file', 'error');
     }
     setUploadingPhoto(false);
     if (photoInputRef.current) photoInputRef.current.value = '';

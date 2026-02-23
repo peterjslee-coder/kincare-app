@@ -360,20 +360,38 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setUploadingAvatar(true);
     try {
       // Resize image to max 400px and convert to JPEG
+      // Use createImageBitmap first (handles HEIC, WEBP, AVIF), fall back to Image element
+      let bitmap;
+      try {
+        bitmap = await createImageBitmap(file);
+      } catch {
+        bitmap = await new Promise((resolve, reject) => {
+          const img = new Image();
+          const url = URL.createObjectURL(file);
+          img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            const name = file.name?.toLowerCase() || '';
+            if (name.endsWith('.heic') || name.endsWith('.heif')) {
+              reject(new Error('HEIC photos are not supported by your browser. Please convert to JPG first, or use Safari.'));
+            } else {
+              reject(new Error('Could not load this image. Try a JPG or PNG file.'));
+            }
+          };
+          img.src = url;
+        });
+      }
       const canvas = document.createElement('canvas');
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      await new Promise(r => { img.onload = r; });
       const maxDim = 400;
-      let w = img.width, h = img.height;
+      let w = bitmap.width, h = bitmap.height;
       if (w > maxDim || h > maxDim) {
         if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
         else { w = Math.round(w * maxDim / h); h = maxDim; }
       }
       canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+      if (bitmap.close) bitmap.close();
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      URL.revokeObjectURL(img.src);
 
       const res = await apiFetch('/api/auth/me/photo', {
         method: 'PUT',
@@ -386,7 +404,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       } else {
         showToast('Failed to upload photo', 'error');
       }
-    } catch (err) { console.error('Avatar upload error:', err); showToast('Failed to upload photo', 'error'); }
+    } catch (err) { console.error('Avatar upload error:', err); showToast(err.message || 'Failed to upload photo — try a JPG or PNG', 'error'); }
     setUploadingAvatar(false);
     if (avatarInputRef.current) avatarInputRef.current.value = '';
   };
