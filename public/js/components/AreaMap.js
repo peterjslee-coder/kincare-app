@@ -35,12 +35,12 @@ const AreaMap = window.AreaMap = () => {
     fetchData();
   }, []);
 
-  // Initialize Leaflet map — use caregiver's registered location if available
+  // Initialize Leaflet map once
   useEffect(() => {
     if (!mapRef.current || leafletMap.current) return;
 
-    // Default to caregiver's registered location, fall back to Blacksburg
-    const center = profileCenter || [37.2296, -80.4139];
+    // Default to Blacksburg — will re-center when profile loads
+    const center = [37.2296, -80.4139];
 
     const map = L.map(mapRef.current, {
       center,
@@ -57,25 +57,31 @@ const AreaMap = window.AreaMap = () => {
     leafletMap.current = map;
     setTimeout(() => map.invalidateSize(), 100);
 
-    // If no profile center, try browser geolocation as fallback
-    if (!profileCenter && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          map.setView([latitude, longitude], 13);
-        },
-        () => {}, // silently fall back to default center
-        { timeout: 5000, maximumAge: 300000 }
-      );
-    }
-
     return () => {
       if (leafletMap.current) {
         leafletMap.current.remove();
         leafletMap.current = null;
       }
     };
-  }, [profileCenter]); // re-init when profile center loads
+  }, []);
+
+  // Re-center map when caregiver's profile location loads
+  useEffect(() => {
+    if (!leafletMap.current) return;
+    if (profileCenter) {
+      leafletMap.current.setView(profileCenter, 13);
+    } else if (!loading && navigator.geolocation) {
+      // Only use browser geolocation as last resort when profile has no coordinates
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          if (leafletMap.current) leafletMap.current.setView([latitude, longitude], 13);
+        },
+        () => {},
+        { timeout: 5000, maximumAge: 300000 }
+      );
+    }
+  }, [profileCenter, loading]);
 
   // Add markers when assignments load — use real lat/lng from API
   useEffect(() => {

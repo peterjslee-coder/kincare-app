@@ -37,18 +37,12 @@ const FindWork = window.FindWork = () => {
       const end = new Date(); end.setDate(end.getDate() + rangeDays);
       const endStr = toLocal(end);
 
-      const [reqRes, sessRes] = await Promise.all([
-        apiFetch(`/api/sessions?status=requested&from=${today}&to=${endStr}`),
-        apiFetch(`/api/sessions?from=${today}&to=${endStr}`),
-      ]);
-
-      if (reqRes?.ok) {
-        const d = await reqRes.json();
-        setOpenRequests((d.sessions || []).filter(s => s.status === 'requested'));
-      }
-      if (sessRes?.ok) {
-        const d = await sessRes.json();
-        setUpcomingSessions((d.sessions || []).filter(s => s.status !== 'requested'));
+      const res = await apiFetch(`/api/sessions?from=${today}&to=${endStr}`);
+      if (res?.ok) {
+        const d = await res.json();
+        const all = d.sessions || [];
+        setOpenRequests(all.filter(s => ['requested', 'open', 'pending'].includes(s.status) && !s.caregiver_id));
+        setUpcomingSessions(all.filter(s => !['requested', 'open', 'pending'].includes(s.status) || s.caregiver_id));
       }
       setLastFetched(new Date());
     } catch (err) {

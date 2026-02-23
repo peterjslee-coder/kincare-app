@@ -70,7 +70,7 @@ router.get("/", async (req, res) => {
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       WHERE (
         cs.caregiver_id = ?
-        OR (cs.status = 'requested' AND (
+        OR (cs.status IN ('requested', 'open', 'pending') AND (
           cs.care_recipient_id IN (
             SELECT care_recipient_id FROM caregiver_assignments
             WHERE caregiver_profile_id = ? AND is_active = 1
@@ -111,7 +111,7 @@ router.get("/", async (req, res) => {
         cr.longitude AS recipient_lng
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-      WHERE cs.status = 'requested' AND cs.caregiver_id IS NULL
+      WHERE cs.status IN ('requested', 'open', 'pending') AND cs.caregiver_id IS NULL
     `;
     let openParams = [];
     let openFilters = '';
@@ -244,7 +244,7 @@ router.put("/:id/claim", async (req, res) => {
 
   const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
   if (!session) return res.status(404).json({ error: "Session not found" });
-  if (session.status !== "requested") {
+  if (!["requested", "open", "pending"].includes(session.status)) {
     return res.status(400).json({ error: "This session is not available for claiming (status: " + session.status + ")" });
   }
 

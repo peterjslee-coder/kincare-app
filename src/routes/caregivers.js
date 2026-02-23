@@ -363,8 +363,10 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
      latitude, longitude, legal_first_name, legal_last_name,
      date_of_birth, ssn_last4, address_line1, address_line2, zip,
      dl_number, dl_state, background_check_consent, background_check_consent_at,
+     work_location_address, care_stoplight, terms_accepted_at, terms_version,
      academic_program, academic_program_year, needs_hour_reports)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"}, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
+     ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
     hourlyRate, hourlyRate, hourlyRate,
@@ -377,6 +379,9 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     addressLine1 || null, addressLine2 || null, zip || null,
     dlNumber || null, dlState || null,
     backgroundCheckConsent ? 1 : 0,
+    workLocationAddress || null,
+    careStoplight ? JSON.stringify(careStoplight) : null,
+    termsAcceptedAt || null, termsVersion || null,
     academicProgram || null, academicProgramYear || null,
     needsHourReports ? 1 : 0
   );
