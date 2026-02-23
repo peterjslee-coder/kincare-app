@@ -9,9 +9,26 @@ const FindWork = window.FindWork = () => {
   const [filterService, setFilterService] = useState('all');
   const [rangeDays, setRangeDays] = useState(14); // 7, 14, 30
   const [lastFetched, setLastFetched] = useState(null);
+  const [bgCheckPaid, setBgCheckPaid] = useState(null); // null=loading, true/false
   const { showToast } = useToast();
 
   const toLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  // Check background check status
+  useEffect(() => {
+    const checkBgStatus = async () => {
+      try {
+        const res = await apiFetch('/api/caretaker/dashboard');
+        if (res?.ok) {
+          const data = await res.json();
+          setBgCheckPaid(!!data?.profile?.background_check_paid);
+        } else {
+          setBgCheckPaid(false);
+        }
+      } catch { setBgCheckPaid(false); }
+    };
+    checkBgStatus();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -40,7 +57,7 @@ const FindWork = window.FindWork = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [rangeDays]);
+  useEffect(() => { if (bgCheckPaid !== null) fetchData(); }, [rangeDays, bgCheckPaid]);
 
   // Claim / accept a care request
   const handleClaim = async (sessionId) => {
@@ -97,7 +114,7 @@ const FindWork = window.FindWork = () => {
   });
   const sortedDates = Object.keys(sessionsByDate).sort();
 
-  if (loading) return <LoadingSpinner text="Finding available work..." />;
+  if (loading || bgCheckPaid === null) return <LoadingSpinner text="Finding available work..." />;
 
   return (
     <div>
@@ -108,6 +125,28 @@ const FindWork = window.FindWork = () => {
         <p className="page-subtitle">Open care requests from families in your area</p>
       </div>
 
+      {/* Background check gate */}
+      {!bgCheckPaid && (
+        <div className="card" style={{
+          padding: '32px 24px', textAlign: 'center', marginBottom: '24px',
+          borderLeft: '4px solid #f59e0b',
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔒</div>
+          <h3 style={{ color: '#92400e', margin: '0 0 8px', fontSize: '18px' }}>Background Check Required</h3>
+          <p style={{ color: '#78716c', fontSize: '14px', margin: '0 0 16px', maxWidth: '400px', marginLeft: 'auto', marginRight: 'auto', lineHeight: '1.6' }}>
+            You need to complete your background check payment before you can view available care requests or accept jobs on the platform.
+          </p>
+          <button onClick={() => {
+            if (typeof setPage === 'function') setPage('caretaker-hub');
+            else if (typeof window.navigateTo === 'function') window.navigateTo('caretaker-hub');
+          }} style={{
+            padding: '12px 28px', background: '#1b6b5a', color: '#fff', border: 'none',
+            borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+          }}>Go to Dashboard to Complete</button>
+        </div>
+      )}
+
+      {bgCheckPaid && <>
       {/* Search Controls */}
       <div style={{
         display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center',
@@ -328,6 +367,7 @@ const FindWork = window.FindWork = () => {
           </div>
         )}
       </div>
+      </>}
     </div>
   );
 };

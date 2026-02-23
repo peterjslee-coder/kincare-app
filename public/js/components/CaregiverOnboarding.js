@@ -1063,12 +1063,21 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             {errors.submit && <div style={{ color: '#e74c3c', fontSize: '12px', marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
               {backBtn(6)}
-              <button onClick={() => setStep(8)} disabled={!bgCheckPaid} style={{
-                flex: 1, padding: '14px', background: bgCheckPaid ? '#1b6b5a' : '#ccc',
+              <button onClick={() => setStep(8)} style={{
+                flex: 1, padding: '14px', background: '#1b6b5a',
                 color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px',
-                fontWeight: 600, cursor: bgCheckPaid ? 'pointer' : 'not-allowed',
-              }}>Continue</button>
+                fontWeight: 600, cursor: 'pointer',
+              }}>{bgCheckPaid ? 'Continue' : 'Continue Without Payment'}</button>
             </div>
+
+            {!bgCheckPaid && (
+              <div style={{
+                marginTop: '12px', padding: '14px', background: '#fff8e1', borderRadius: '8px',
+                border: '1px solid #ffe082', fontSize: '13px', color: '#b45309', lineHeight: '1.6',
+              }}>
+                <strong>Note:</strong> You can continue registration without paying now, but you won't be able to view available care requests or accept jobs on the platform until your background check payment is complete. You can pay later from your dashboard.
+              </div>
+            )}
           </div>
         )}
 
@@ -1225,12 +1234,27 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               </div>
             </div>
 
+            {!bgCheckPaid && (
+              <div style={{
+                padding: '14px', background: '#fef2f2', borderRadius: '8px', marginBottom: '16px',
+                border: '1px solid #fecaca',
+              }}>
+                <p style={{ fontSize: '14px', color: '#dc2626', margin: 0, fontWeight: 600 }}>
+                  Background check payment not yet completed
+                </p>
+                <p style={{ fontSize: '13px', color: '#b91c1c', margin: '6px 0 0', lineHeight: '1.5' }}>
+                  You'll need to complete your $30 background check payment from your dashboard before you can view available work or accept care requests.
+                </p>
+              </div>
+            )}
+
             <div style={{ padding: '14px', background: '#fff8f0', borderRadius: '8px', marginBottom: '16px', border: '1px solid #ffe0c0' }}>
               <p style={{ fontSize: '13px', color: '#b45309', margin: 0, lineHeight: '1.5' }}>
                 <strong>What happens next:</strong>
               </p>
               <ul style={{ fontSize: '13px', color: '#b45309', margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>Your background check is being processed (typically 2-5 business days)</li>
+                {!bgCheckPaid && <li>Pay for your background check ($30) from your dashboard</li>}
+                <li>Your background check {bgCheckPaid ? 'is being' : 'will be'} processed (typically 2-5 business days)</li>
                 <li>Once verified, complete your First Steps checklist to start accepting care requests</li>
                 <li>Set your availability and care preferences from your dashboard</li>
               </ul>

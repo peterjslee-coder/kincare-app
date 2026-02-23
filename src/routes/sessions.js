@@ -234,8 +234,13 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   const db = await getDb();
-  const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  const profile = await db.prepare("SELECT id, background_check_paid FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  // Gate: must have completed background check payment
+  if (!profile.background_check_paid) {
+    return res.status(403).json({ error: "You must complete your background check payment before accepting care requests. Visit your dashboard to pay." });
+  }
 
   const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
   if (!session) return res.status(404).json({ error: "Session not found" });
