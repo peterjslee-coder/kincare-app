@@ -70,6 +70,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       fetch('/api/onboarding-events', {
         method: 'POST', headers,
         body: JSON.stringify({
+          flow: 'onboarding',
           eventType,
           step: stepNum,
           stepName: stepNames[stepNum] || null,

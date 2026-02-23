@@ -104,8 +104,9 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   const handleComplete = async () => {
     setRegistering(true);
     setRegError('');
+    const role = track === 'caregiver' ? 'caregiver' : track === 'care_for' ? 'care_for' : 'family';
+    trackAuthEvent('registration', 'registration_submit', { email: formData.email, role, step, isInviteFlow });
     try {
-      const role = track === 'caregiver' ? 'caregiver' : track === 'care_for' ? 'care_for' : 'family';
       const response = await apiFetch('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
@@ -121,13 +122,16 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
       if (!response) throw new Error('Registration failed');
       const res = await response.json();
       if (!response.ok || res.error) {
+        trackAuthEvent('registration', 'error', { email: formData.email, role, error: res.error || 'Registration failed', source: 'api' });
         setRegError(res.error || 'Registration failed');
         setRegistering(false);
         return;
       }
+      trackAuthEvent('registration', 'registration_success', { email: formData.email, role });
       setAuthToken(res.token);
       onLogin(res.user);
     } catch (err) {
+      trackAuthEvent('registration', 'error', { email: formData.email, role, error: err.message, source: 'network' });
       setRegError(err.message || 'Registration failed. Please try again.');
       setRegistering(false);
     }
@@ -181,7 +185,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '8px 0 20px' }}>
             {roleCards.map(card => (
-              <div key={card.id} onClick={() => { setTrack(card.id === 'care_for' ? 'care_for' : card.id); setStep(1); }}
+              <div key={card.id} onClick={() => { trackAuthEvent('registration', 'role_selected', { role: card.id }); setTrack(card.id === 'care_for' ? 'care_for' : card.id); setStep(1); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '16px',
                   padding: '18px 20px', borderRadius: '12px',

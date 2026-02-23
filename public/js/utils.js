@@ -26,6 +26,36 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   return response;
 };
 
+// ─── Auth/Flow Event Tracking ───
+// Fire-and-forget event tracker for login, registration, password reset, demo, etc.
+// Never blocks UI. Silently fails. Used across all auth-related pages.
+const trackAuthEvent = window.trackAuthEvent = (flow, eventType, extra = {}) => {
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+    fetch('/api/onboarding-events', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        flow,
+        eventType,
+        email: extra.email || null,
+        step: extra.step || null,
+        stepName: extra.stepName || null,
+        errorMessage: extra.error || null,
+        errorSource: extra.source || null,
+        metadata: {
+          ...extra,
+          online: navigator.onLine,
+          screenWidth: window.innerWidth,
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+        },
+      }),
+    }).catch(() => {});
+  } catch (e) { /* ignore tracking errors */ }
+};
+
 // ─── Shared timestamp parser ───
 // PostgreSQL TIMESTAMPTZ comes back as "2026-02-20 01:29:26.086383+00"
 // Some browsers choke on the space (need T) and bare "+00" (need +00:00 or Z).

@@ -279,6 +279,9 @@ async function initializeDatabase() {
     `CREATE INDEX IF NOT EXISTS idx_onboarding_events_user ON onboarding_events(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_onboarding_events_type ON onboarding_events(event_type)`,
     `CREATE INDEX IF NOT EXISTS idx_onboarding_events_created ON onboarding_events(created_at)`,
+    // v1.22.1 — Add flow column to distinguish login/register/onboarding/password-reset/demo events
+    `ALTER TABLE onboarding_events ADD COLUMN IF NOT EXISTS flow TEXT DEFAULT 'onboarding'`,
+    `CREATE INDEX IF NOT EXISTS idx_onboarding_events_flow ON onboarding_events(flow)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

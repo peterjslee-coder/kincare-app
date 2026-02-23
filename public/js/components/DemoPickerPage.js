@@ -33,6 +33,7 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
 
   const handleDemoLogin = async (account) => {
     setLoading(account.email);
+    trackAuthEvent('demo', 'demo_login', { email: account.email, role: account.role, label: account.label, source: 'demo_picker' });
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -47,12 +48,15 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
         // Clear stale active role from previous demo user
         if (window.setActiveRole) window.setActiveRole(null);
         if (window.connectSocket) connectSocket(data.token);
+        trackAuthEvent('demo', 'demo_success', { email: account.email, label: account.label });
         onLogin(data.user || { role: 'family' });
       } else {
+        trackAuthEvent('demo', 'error', { email: account.email, error: 'No token returned', source: 'demo_login' });
         setLoading(null);
       }
     } catch (err) {
       console.error('Demo login failed:', err);
+      trackAuthEvent('demo', 'error', { email: account.email, error: err.message, source: 'demo_login' });
       setLoading(null);
     }
   };

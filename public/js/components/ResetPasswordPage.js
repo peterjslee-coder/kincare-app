@@ -17,18 +17,22 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
     }
     setResetting(true);
     setError('');
+    trackAuthEvent('password_reset', 'reset_submit', {});
     try {
       const res = await apiFetch('/api/password-reset/confirm', {
         method: 'POST',
         body: JSON.stringify({ token, password })
       });
       if (res.error) {
+        trackAuthEvent('password_reset', 'error', { error: res.error, source: 'api' });
         setError(res.error);
         setResetting(false);
         return;
       }
+      trackAuthEvent('password_reset', 'reset_success', {});
       setSuccess(true);
     } catch (err) {
+      trackAuthEvent('password_reset', 'error', { error: err.message || 'Network error', source: 'network' });
       setError('Something went wrong. Please try again.');
       setResetting(false);
     }

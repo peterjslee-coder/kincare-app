@@ -456,7 +456,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'feedback', label: 'Feedback', icon: '💬' },
     { id: 'help', label: 'Help/FAQ', icon: '❓' },
     { id: 'financials', label: 'Financials', icon: '💰' },
-    { id: 'onboarding', label: 'Onboarding', icon: '🚦' },
+    { id: 'onboarding', label: 'Auth Events', icon: '🚦' },
     { id: 'blocked', label: 'Blocked', icon: '🚫' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
@@ -1295,34 +1295,63 @@ const AdminPanel = window.AdminPanel = () => {
         </div>
       )}
 
-      {/* ─── Onboarding Events Tab ─── */}
+      {/* ─── Auth Events Tab (Login, Registration, Onboarding, Password Reset, Demo) ─── */}
       {activeTab === 'onboarding' && (
         <div>
-          {obEventsLoading && <LoadingSpinner text="Loading onboarding data..." />}
+          {obEventsLoading && <LoadingSpinner text="Loading auth event data..." />}
           {obEvents && (
             <div>
-              {/* Summary stats */}
-              <div className="stats-grid" style={{ marginBottom: '20px' }}>
-                {(obEvents.stats || []).map(s => (
-                  <div key={s.event_type} className="stat-card">
-                    <div className="stat-number">{s.count}</div>
-                    <div className="stat-label">
-                      {s.event_type === 'error' ? 'Errors' :
-                       s.event_type === 'step_complete' ? 'Step Completions' :
-                       s.event_type === 'onboarding_complete' ? 'Completed Onboarding' :
-                       s.event_type === 'session_started' ? 'Sessions Started' :
-                       s.event_type === 'session_resumed' ? 'Sessions Resumed' :
-                       s.event_type}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#999' }}>{s.unique_users} unique users (30d)</div>
-                  </div>
-                ))}
-              </div>
+              {/* Flow summary cards */}
+              {obEvents.flowSummary && obEvents.flowSummary.length > 0 && (
+                <div className="stats-grid" style={{ marginBottom: '20px' }}>
+                  {obEvents.flowSummary.map(f => {
+                    const flowColors = { login: '#0369a1', registration: '#7c3aed', onboarding: '#1b6b5a', password_reset: '#d97706', demo: '#6b7280' };
+                    const flowIcons = { login: '🔑', registration: '📝', onboarding: '🚦', password_reset: '🔄', demo: '🎭' };
+                    const flowLabels = { login: 'Logins', registration: 'Registrations', onboarding: 'Caregiver Onboarding', password_reset: 'Password Resets', demo: 'Demo Logins' };
+                    return (
+                      <div key={f.flow} className="stat-card" style={{ borderLeft: `4px solid ${flowColors[f.flow] || '#999'}` }}>
+                        <div style={{ fontSize: '20px', marginBottom: '4px' }}>{flowIcons[f.flow] || '📊'}</div>
+                        <div className="stat-number">{f.total_events}</div>
+                        <div className="stat-label">{flowLabels[f.flow] || f.flow}</div>
+                        <div style={{ fontSize: '11px', color: '#999' }}>{f.unique_users} users, {f.error_count} errors (30d)</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-              {/* Funnel */}
+              {/* Per-flow event breakdown */}
+              {obEvents.stats && obEvents.stats.length > 0 && (
+                <div className="card" style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#1b6b5a' }}>Event Breakdown by Flow (30 days)</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {obEvents.stats.map((s, i) => {
+                      const flowColors = { login: '#0369a1', registration: '#7c3aed', onboarding: '#1b6b5a', password_reset: '#d97706', demo: '#6b7280' };
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', fontSize: '12px' }}>
+                          <span style={{
+                            padding: '1px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600,
+                            background: (flowColors[s.flow] || '#999') + '18', color: flowColors[s.flow] || '#999',
+                            minWidth: '80px', textAlign: 'center',
+                          }}>{s.flow}</span>
+                          <span style={{
+                            padding: '1px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600,
+                            background: s.event_type === 'error' ? '#fef2f2' : s.event_type.includes('success') || s.event_type.includes('complete') ? '#ecfdf5' : '#f0f9ff',
+                            color: s.event_type === 'error' ? '#dc2626' : s.event_type.includes('success') || s.event_type.includes('complete') ? '#059669' : '#0369a1',
+                          }}>{s.event_type}</span>
+                          <span style={{ fontWeight: 600, color: '#333' }}>{s.count}</span>
+                          <span style={{ color: '#999' }}>({s.unique_users} users)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Onboarding Funnel */}
               {obEvents.funnel && obEvents.funnel.length > 0 && (
                 <div className="card" style={{ marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#1b6b5a' }}>Step Completion Funnel (30 days)</h3>
+                  <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#1b6b5a' }}>Caregiver Onboarding Funnel (30 days)</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {obEvents.funnel.map(f => {
                       const maxCount = Math.max(...obEvents.funnel.map(x => x.completions));
@@ -1349,30 +1378,33 @@ const AdminPanel = window.AdminPanel = () => {
                 </div>
               )}
 
-              {/* Recent Errors */}
+              {/* Recent Errors (all flows) */}
               <div className="card" style={{ marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#dc2626' }}>Recent Errors</h3>
+                <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#dc2626' }}>Recent Errors (All Flows)</h3>
                 {(!obEvents.recentErrors || obEvents.recentErrors.length === 0) ? (
                   <p style={{ color: '#888', fontSize: '13px', margin: 0 }}>No errors recorded yet.</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {obEvents.recentErrors.map(e => {
                       const meta = e.metadata ? JSON.parse(e.metadata) : {};
+                      const flowColors = { login: '#0369a1', registration: '#7c3aed', onboarding: '#1b6b5a', password_reset: '#d97706', demo: '#6b7280' };
+                      const eFlow = e.flow || 'onboarding';
                       return (
                         <div key={e.id} style={{
                           padding: '10px 12px', background: '#fef2f2', borderRadius: '8px',
-                          border: '1px solid #fecaca', fontSize: '13px',
+                          border: '1px solid #fecaca', fontSize: '13px', borderLeft: `4px solid ${flowColors[eFlow] || '#dc2626'}`,
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                             <span style={{ fontWeight: 600, color: '#dc2626' }}>
-                              Step {e.step}: {e.step_name}
+                              <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '10px', background: (flowColors[eFlow] || '#999') + '18', color: flowColors[eFlow] || '#999', marginRight: '6px' }}>{eFlow}</span>
+                              {e.step ? `Step ${e.step}: ${e.step_name}` : e.error_source || 'Error'}
                             </span>
                             <span style={{ color: '#888', fontSize: '11px' }}>
                               {new Date(e.created_at).toLocaleString()}
                             </span>
                           </div>
                           <div style={{ color: '#b91c1c' }}>{e.error_message}</div>
-                          <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: '#888' }}>
+                          <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: '#888', flexWrap: 'wrap' }}>
                             <span>User: {e.email || e.user_id || 'anon'}</span>
                             <span>Source: {e.error_source || '?'}</span>
                             <span>Online: {meta.online !== undefined ? String(meta.online) : '?'}</span>
@@ -1399,6 +1431,7 @@ const AdminPanel = window.AdminPanel = () => {
                     <thead>
                       <tr style={{ borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
                         <th style={{ padding: '6px 8px' }}>Time</th>
+                        <th style={{ padding: '6px 8px' }}>Flow</th>
                         <th style={{ padding: '6px 8px' }}>Type</th>
                         <th style={{ padding: '6px 8px' }}>Step</th>
                         <th style={{ padding: '6px 8px' }}>User</th>
@@ -1406,16 +1439,25 @@ const AdminPanel = window.AdminPanel = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {(obEvents.events || []).map(e => (
+                      {(obEvents.events || []).map(e => {
+                        const flowColors = { login: '#0369a1', registration: '#7c3aed', onboarding: '#1b6b5a', password_reset: '#d97706', demo: '#6b7280' };
+                        const eFlow = e.flow || 'onboarding';
+                        return (
                         <tr key={e.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                           <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: '#888' }}>
                             {new Date(e.created_at).toLocaleString()}
                           </td>
                           <td style={{ padding: '6px 8px' }}>
                             <span style={{
+                              padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600,
+                              background: (flowColors[eFlow] || '#999') + '18', color: flowColors[eFlow] || '#999',
+                            }}>{eFlow}</span>
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span style={{
                               padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
-                              background: e.event_type === 'error' ? '#fef2f2' : e.event_type === 'onboarding_complete' ? '#ecfdf5' : '#f0f9ff',
-                              color: e.event_type === 'error' ? '#dc2626' : e.event_type === 'onboarding_complete' ? '#059669' : '#0369a1',
+                              background: e.event_type === 'error' ? '#fef2f2' : e.event_type.includes('success') || e.event_type.includes('complete') ? '#ecfdf5' : '#f0f9ff',
+                              color: e.event_type === 'error' ? '#dc2626' : e.event_type.includes('success') || e.event_type.includes('complete') ? '#059669' : '#0369a1',
                             }}>{e.event_type}</span>
                           </td>
                           <td style={{ padding: '6px 8px' }}>
@@ -1428,7 +1470,8 @@ const AdminPanel = window.AdminPanel = () => {
                             {e.error_message || '—'}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

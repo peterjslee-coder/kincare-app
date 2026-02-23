@@ -35,10 +35,15 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         const user = JSON.parse(decodeURIComponent(oauthUser));
         setAuthToken(oauthToken);
         window.history.replaceState({}, '', window.location.pathname);
+        trackAuthEvent('login', 'oauth_success', { email: user.email, provider: 'google' });
         onLogin(user);
-      } catch (e) { console.error('OAuth parse error:', e); }
+      } catch (e) {
+        console.error('OAuth parse error:', e);
+        trackAuthEvent('login', 'error', { error: 'OAuth parse error', source: 'oauth_callback' });
+      }
     }
     if (oauthError) {
+      trackAuthEvent('login', 'error', { error: 'Google sign-in failed', source: 'oauth' });
       setError('Google sign-in failed. Please try again.');
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -63,6 +68,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     e.preventDefault();
     setLoading(true);
     setError(null);
+    trackAuthEvent('login', 'login_attempt', { email });
     try {
       const response = await apiFetch('/api/auth/login', {
         method: 'POST',
@@ -73,6 +79,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       if (!response.ok) throw new Error(data?.error || 'Login failed');
 
       if (data.requires2FA) {
+        trackAuthEvent('login', '2fa_prompted', { email });
         setTempToken(data.tempToken);
         setShow2FA(true);
         setLoading(false);
@@ -80,6 +87,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       }
 
       if (data.mustChangePassword) {
+        trackAuthEvent('login', 'password_change_required', { email });
         setPendingUser(data.user);
         setCurrentPw(password);
         setAuthToken(data.token);
@@ -89,10 +97,12 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       }
 
       if (data.token && data.user) {
+        trackAuthEvent('login', 'login_success', { email, role: data.user.role });
         setAuthToken(data.token);
         onLogin(data.user);
       }
     } catch (err) {
+      trackAuthEvent('login', 'error', { email, error: err.message, source: 'login_submit' });
       setError(err.message);
     }
     setLoading(false);
@@ -102,6 +112,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     e.preventDefault();
     setLoading(true);
     setError(null);
+    trackAuthEvent('login', '2fa_attempt', { email });
     try {
       const response = await apiFetch('/api/auth/2fa/verify', {
         method: 'POST',
@@ -115,10 +126,14 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Verification failed');
       if (data.token && data.user) {
+        trackAuthEvent('login', '2fa_success', { email, rememberDevice });
         setAuthToken(data.token);
         onLogin(data.user);
       }
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      trackAuthEvent('login', 'error', { email, error: err.message, source: '2fa_verify' });
+      setError(err.message);
+    }
     setLoading(false);
   };
 
@@ -135,8 +150,12 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       if (!response) throw new Error('Password change failed');
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Password change failed');
+      trackAuthEvent('login', 'password_changed', { email });
       onLogin(pendingUser);
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      trackAuthEvent('login', 'error', { email, error: err.message, source: 'password_change' });
+      setError(err.message);
+    }
     setLoading(false);
   };
 
@@ -145,6 +164,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     setPassword('inplace123');
     setLoading(true);
     setError(null);
+    trackAuthEvent('demo', 'demo_login', { email: acct.email, label: acct.label, source: 'login_page' });
     try {
       const response = await apiFetch('/api/auth/login', {
         method: 'POST',
@@ -153,7 +173,10 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       if (!response || !response.ok) throw new Error('Login failed');
       const data = await response.json();
       if (data.token && data.user) { setAuthToken(data.token); onLogin(data.user); }
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      trackAuthEvent('demo', 'error', { email: acct.email, error: err.message, source: 'quick_login' });
+      setError(err.message);
+    }
     setLoading(false);
   };
 

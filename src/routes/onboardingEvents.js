@@ -6,12 +6,12 @@ const { authenticate } = require("../middleware/auth");
 const router = express.Router();
 
 // ─── POST /api/onboarding-events ───
-// Log an onboarding event (step completion, error, drop-off)
+// Log an auth/onboarding event (step completion, error, drop-off, login, register, etc.)
 // Can be called with or without auth (pre-registration errors have no token)
 router.post("/", async (req, res) => {
   try {
     const db = await getDb();
-    const { eventType, step, stepName, errorMessage, errorSource, email, metadata } = req.body;
+    const { eventType, step, stepName, errorMessage, errorSource, email, metadata, flow } = req.body;
 
     if (!eventType) {
       return res.status(400).json({ error: "eventType is required" });
@@ -33,25 +33,26 @@ router.post("/", async (req, res) => {
 
     const userAgent = req.headers["user-agent"] || null;
     const ip = req.headers["x-forwarded-for"] || req.connection?.remoteAddress || null;
+    const eventFlow = flow || 'onboarding';
 
     await db.prepare(`
-      INSERT INTO onboarding_events (id, user_id, email, event_type, step, step_name, error_message, error_source, metadata, user_agent, ip_address)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO onboarding_events (id, user_id, email, event_type, step, step_name, error_message, error_source, metadata, user_agent, ip_address, flow)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       uuid(), userId, userEmail, eventType,
       step || null, stepName || null,
       errorMessage || null, errorSource || null,
       metadata ? JSON.stringify(metadata) : null,
-      userAgent, ip
+      userAgent, ip, eventFlow
     );
 
     // Log to console for Railway logs too
-    const emoji = eventType === 'error' ? '❌' : eventType === 'step_complete' ? '✅' : 'ℹ️';
-    console.log(`  [onboarding] ${emoji} ${eventType} | step=${step || '?'} (${stepName || '?'}) | user=${userEmail || userId || 'anon'}${errorMessage ? ' | error=' + errorMessage : ''}`);
+    const emoji = eventType === 'error' ? '❌' : eventType.includes('success') || eventType.includes('complete') ? '✅' : 'ℹ️';
+    console.log(`  [${eventFlow}] ${emoji} ${eventType} | user=${userEmail || userId || 'anon'}${step ? ' | step=' + step : ''}${errorMessage ? ' | error=' + errorMessage : ''}`);
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("  [onboarding-events] Failed to log event:", err.message);
+    console.error("  [auth-events] Failed to log event:", err.message);
     // Don't fail the user's flow — always return 200
     res.json({ ok: true });
   }
@@ -68,7 +69,7 @@ router.get("/", authenticate, async (req, res) => {
       return res.status(403).json({ error: "Admin access required" });
     }
 
-    const { eventType, email, limit = 100, offset = 0, since } = req.query;
+    const { eventType, email, flow: flowFilter, limit = 100, offset = 0, since } = req.query;
 
     let query = "SELECT * FROM onboarding_events WHERE 1=1";
     const params = [];
@@ -81,6 +82,10 @@ router.get("/", authenticate, async (req, res) => {
       query += " AND email ILIKE ?";
       params.push(`%${email}%`);
     }
+    if (flowFilter) {
+      query += " AND flow = ?";
+      params.push(flowFilter);
+    }
     if (since) {
       query += " AND created_at >= ?";
       params.push(since);
@@ -91,19 +96,20 @@ router.get("/", authenticate, async (req, res) => {
 
     const events = await db.prepare(query).all(...params);
 
-    // Also get summary stats
+    // Summary stats (30 days) — grouped by flow + event_type
     const stats = await db.prepare(`
       SELECT
+        COALESCE(flow, 'onboarding') as flow,
         event_type,
         COUNT(*) as count,
         COUNT(DISTINCT COALESCE(user_id, email)) as unique_users
       FROM onboarding_events
       WHERE created_at >= NOW() - INTERVAL '30 days'
-      GROUP BY event_type
-      ORDER BY count DESC
+      GROUP BY COALESCE(flow, 'onboarding'), event_type
+      ORDER BY flow, count DESC
     `).all();
 
-    // Step completion funnel (last 30 days)
+    // Step completion funnel (last 30 days) — onboarding only
     const funnel = await db.prepare(`
       SELECT
         step, step_name,
@@ -111,12 +117,13 @@ router.get("/", authenticate, async (req, res) => {
         COUNT(DISTINCT COALESCE(user_id, email)) as unique_users
       FROM onboarding_events
       WHERE event_type = 'step_complete'
+        AND COALESCE(flow, 'onboarding') = 'onboarding'
         AND created_at >= NOW() - INTERVAL '30 days'
       GROUP BY step, step_name
       ORDER BY step
     `).all();
 
-    // Recent errors
+    // Recent errors (all flows)
     const recentErrors = await db.prepare(`
       SELECT *
       FROM onboarding_events
@@ -125,7 +132,20 @@ router.get("/", authenticate, async (req, res) => {
       LIMIT 20
     `).all();
 
-    res.json({ events, stats, funnel, recentErrors });
+    // Flow summary (30 days) — high-level counts per flow
+    const flowSummary = await db.prepare(`
+      SELECT
+        COALESCE(flow, 'onboarding') as flow,
+        COUNT(*) as total_events,
+        COUNT(DISTINCT COALESCE(user_id, email)) as unique_users,
+        COUNT(*) FILTER (WHERE event_type = 'error') as error_count
+      FROM onboarding_events
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY COALESCE(flow, 'onboarding')
+      ORDER BY total_events DESC
+    `).all();
+
+    res.json({ events, stats, funnel, recentErrors, flowSummary });
   } catch (err) {
     console.error("  [onboarding-events] GET error:", err.message);
     res.status(500).json({ error: "Failed to load events" });

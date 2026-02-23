@@ -12,18 +12,22 @@ const ForgotPasswordPage = window.ForgotPasswordPage = ({ onNavigate }) => {
     }
     setSending(true);
     setError('');
+    trackAuthEvent('password_reset', 'reset_requested', { email });
     try {
       const res = await apiFetch('/api/password-reset/request', {
         method: 'POST',
         body: JSON.stringify({ email })
       });
       if (res.error) {
+        trackAuthEvent('password_reset', 'error', { email, error: res.error, source: 'api' });
         setError(res.error);
         setSending(false);
         return;
       }
+      trackAuthEvent('password_reset', 'reset_email_sent', { email });
       setSent(true);
     } catch (err) {
+      trackAuthEvent('password_reset', 'error', { email, error: err.message || 'Network error', source: 'network' });
       setError('Something went wrong. Please try again.');
       setSending(false);
     }
