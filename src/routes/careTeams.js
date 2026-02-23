@@ -6,6 +6,43 @@ const { authenticate, requireRole } = require("../middleware/auth");
 const { sendEmail, brandedHtml } = require("../utils/email");
 
 const router = express.Router();
+
+// ─── PUBLIC (no auth) invite endpoints — must be BEFORE router.use(authenticate) ───
+
+// GET /api/care-teams/invite-info?token=... — Pre-login invite details
+// This MUST be unauthenticated so new users can see who invited them
+router.get("/invite-info", async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: "Token required" });
+
+    const db = await getDb();
+    const invite = await db.prepare(
+      "SELECT cti.*, ct.name AS team_name, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name FROM care_team_invites cti JOIN care_teams ct ON cti.care_team_id = ct.id JOIN care_recipients cr ON ct.care_recipient_id = cr.id WHERE cti.token = ? AND cti.status = 'pending'"
+    ).get(token);
+
+    if (!invite) return res.status(404).json({ error: "Invalid or expired invite" });
+    if (new Date(invite.expires_at) < new Date()) return res.status(400).json({ error: "This invite has expired" });
+
+    const inviter = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(invite.invited_by);
+
+    res.json({
+      invite: {
+        email: invite.invited_email,
+        role: invite.role,
+        teamName: invite.team_name,
+        recipientName: `${invite.recipient_first_name} ${invite.recipient_last_name}`,
+        inviterName: inviter ? `${inviter.first_name} ${inviter.last_name}` : "Someone",
+        expiresAt: invite.expires_at,
+      },
+    });
+  } catch (err) {
+    console.error("Invite info error:", err);
+    res.status(500).json({ error: "Failed to get invite info" });
+  }
+});
+
+// ─── All routes below require authentication ───
 router.use(authenticate);
 
 // ─── GET /api/care-teams ─── List care teams the current user belongs to
@@ -385,37 +422,7 @@ router.post("/accept-invite", authenticate, async (req, res) => {
   }
 });
 
-// ─── GET /api/care-teams/invite-info?token=... ─── Get invite details (for pre-login display)
-router.get("/invite-info", async (req, res) => {
-  try {
-    const { token } = req.query;
-    if (!token) return res.status(400).json({ error: "Token required" });
-
-    const db = await getDb();
-    const invite = await db.prepare(
-      "SELECT cti.*, ct.name AS team_name, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name FROM care_team_invites cti JOIN care_teams ct ON cti.care_team_id = ct.id JOIN care_recipients cr ON ct.care_recipient_id = cr.id WHERE cti.token = ? AND cti.status = 'pending'"
-    ).get(token);
-
-    if (!invite) return res.status(404).json({ error: "Invalid or expired invite" });
-    if (new Date(invite.expires_at) < new Date()) return res.status(400).json({ error: "This invite has expired" });
-
-    const inviter = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(invite.invited_by);
-
-    res.json({
-      invite: {
-        email: invite.invited_email,
-        role: invite.role,
-        teamName: invite.team_name,
-        recipientName: `${invite.recipient_first_name} ${invite.recipient_last_name}`,
-        inviterName: inviter ? `${inviter.first_name} ${inviter.last_name}` : "Someone",
-        expiresAt: invite.expires_at,
-      },
-    });
-  } catch (err) {
-    console.error("Invite info error:", err);
-    res.status(500).json({ error: "Failed to get invite info" });
-  }
-});
+// (invite-info endpoint is defined above, before authenticate middleware)
 
 // ─── DELETE /api/care-teams/:id/members/:userId ─── Remove a member (leader only, can't remove self)
 router.delete("/:id/members/:userId", requireRole("family"), async (req, res) => {
