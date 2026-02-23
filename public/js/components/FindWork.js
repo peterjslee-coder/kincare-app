@@ -21,7 +21,7 @@ const FindWork = window.FindWork = () => {
         const res = await apiFetch('/api/caretaker/dashboard');
         if (res?.ok) {
           const data = await res.json();
-          setBgCheckPaid(!!data?.profile?.background_check_paid);
+          setBgCheckPaid(!!data?.profile?.background_check_paid || !!data?.profile?.isBackgroundChecked);
         } else {
           setBgCheckPaid(false);
         }

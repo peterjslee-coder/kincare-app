@@ -5,7 +5,7 @@ const CareRecipients = window.CareRecipients = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
-    firstName: '', lastName: '', age: '', relationship: '', nickname: '', city: '', state: '',
+    firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', city: '', state: '',
     sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
     emergencyContactName: '', emergencyContactPhone: ''
   });
@@ -27,7 +27,7 @@ const CareRecipients = window.CareRecipients = () => {
 
   const resetForm = () => {
     setFormData({
-      firstName: '', lastName: '', age: '', relationship: '', nickname: '', city: '', state: '',
+      firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', city: '', state: '',
       sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
       emergencyContactName: '', emergencyContactPhone: ''
     });
@@ -46,6 +46,7 @@ const CareRecipients = window.CareRecipients = () => {
       age: r.age || '',
       relationship: r.relationship || '',
       nickname: r.nickname || '',
+      emoji: r.emoji || '',
       city: r.location_city || r.city || '',
       state: r.location_state || r.state || '',
       sameAddress: false,
@@ -72,6 +73,7 @@ const CareRecipients = window.CareRecipients = () => {
       lastName: formData.lastName,
       age: parseInt(formData.age) || 0,
       address: null,
+      emoji: formData.emoji || null,
       city: formData.city,
       state: formData.state,
       zip: null,
@@ -163,6 +165,14 @@ const CareRecipients = window.CareRecipients = () => {
         onClick: clickable ? (e) => { e.stopPropagation(); handlePhotoUpload(r.id); } : undefined,
         title: clickable ? 'Click to change photo' : undefined,
       }, React.createElement('img', { src: r.photo, alt: getName(r), style: { width: '100%', height: '100%', objectFit: 'cover' } }));
+    }
+    // Show emoji if set, otherwise show initials
+    if (r.emoji) {
+      return React.createElement('div', {
+        style: { width: size, height: size, borderRadius: '50%', background: '#f5f0ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.55, cursor: clickable ? 'pointer' : 'default', flexShrink: 0 },
+        onClick: clickable ? (e) => { e.stopPropagation(); handlePhotoUpload(r.id); } : undefined,
+        title: clickable ? 'Click to add photo' : undefined,
+      }, r.emoji);
     }
     const initials = ((r.first_name || r.firstName || '')[0] || '') + ((r.last_name || r.lastName || '')[0] || '');
     return React.createElement('div', {
@@ -306,6 +316,24 @@ const CareRecipients = window.CareRecipients = () => {
                 <option value="Grandparent">Grandparent</option>
                 <option value="Other">Other</option>
               </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Avatar Emoji (optional)</label>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+              {['👵', '👴', '👩', '👨', '🧓', '👶', '🧑', '🌷', '💜', '💙', '🌻', '🐕'].map(em => (
+                <button key={em} type="button" onClick={() => fd('emoji', formData.emoji === em ? '' : em)} style={{
+                  width: 40, height: 40, fontSize: 22, border: formData.emoji === em ? '2px solid #1b6b5a' : '1px solid #ddd',
+                  borderRadius: 8, background: formData.emoji === em ? '#e0f2e9' : '#fff', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>{em}</button>
+              ))}
+              {formData.emoji && (
+                <button type="button" onClick={() => fd('emoji', '')} style={{
+                  padding: '4px 10px', fontSize: 11, border: '1px solid #ddd', borderRadius: 8,
+                  background: '#f5f5f5', color: '#888', cursor: 'pointer', alignSelf: 'center',
+                }}>Clear</button>
+              )}
             </div>
           </div>
           <div className="form-row">

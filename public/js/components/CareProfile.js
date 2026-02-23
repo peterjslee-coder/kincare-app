@@ -316,10 +316,35 @@ const CareProfile = window.CareProfile = () => {
       <div className="ai-insights">
         <div className="ai-insights-header"><span className="card-icon">🧠</span>AI Care Insights</div>
         <ul className="ai-insights-list">
-          <li className="ai-insights-item">Betty responds best to visual cues and gentle reminders for meals</li>
-          <li className="ai-insights-item">Morning hours (9-11 AM) show highest engagement and alertness</li>
-          <li className="ai-insights-item">Photo albums and gardening activities reduce anxiety episodes</li>
-          <li className="ai-insights-item">Consistent daily routines help maintain cognitive function</li>
+          {(() => {
+            const name = profile?.first_name || 'Your loved one';
+            const hc = parseJsonField(profile?.health_conditions);
+            const prefs = profile?.preferences || '';
+            const insights = [];
+            // Generate insights based on actual care recipient data
+            if (hc.some(c => /dementia|alzheimer|memory|cognitive/i.test(c))) {
+              insights.push(`${name} responds best to visual cues and gentle reminders for meals`);
+              insights.push('Consistent daily routines help maintain cognitive function');
+            }
+            if (hc.some(c => /anxiety|stress/i.test(c))) {
+              insights.push('Calming activities and familiar routines help reduce anxiety episodes');
+            }
+            if (hc.some(c => /tbi|brain injury|traumatic/i.test(c))) {
+              insights.push(`Structured schedules with visual aids (whiteboards, checklists) support ${name}'s daily routine`);
+              insights.push('Short, focused activity sessions work better than extended ones');
+            }
+            if (hc.some(c => /arthritis|mobility|weakness|walker|wheelchair/i.test(c))) {
+              insights.push('Gentle movement and stretching during alert periods supports physical wellbeing');
+            }
+            if (prefs) {
+              insights.push(`Care preferences: ${prefs.substring(0, 100)}${prefs.length > 100 ? '...' : ''}`);
+            }
+            insights.push('Morning hours (9-11 AM) typically show highest engagement and alertness');
+            // Return up to 4 insights
+            return insights.slice(0, 4).map((text, i) =>
+              React.createElement('li', { key: i, className: 'ai-insights-item' }, text)
+            );
+          })()}
         </ul>
       </div>
     </>

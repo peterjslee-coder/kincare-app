@@ -48,7 +48,7 @@ router.post("/", requireRole("family"), async (req, res) => {
   const {
     firstName, lastName, age, address, city, state, zip,
     healthConditions, medications, preferences,
-    emergencyContactName, emergencyContactPhone,
+    emergencyContactName, emergencyContactPhone, emoji,
   } = req.body;
 
   if (!firstName || !lastName) {
@@ -71,8 +71,8 @@ router.post("/", requireRole("family"), async (req, res) => {
      location_address, location_city, location_state, location_zip,
      latitude, longitude,
      health_conditions, medications, preferences,
-     emergency_contact_name, emergency_contact_phone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     emergency_contact_name, emergency_contact_phone, emoji)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.user.id, firstName, lastName, age || null,
     address || null, city || null, state || null, zip || null,
@@ -80,7 +80,8 @@ router.post("/", requireRole("family"), async (req, res) => {
     JSON.stringify(healthConditions || []),
     JSON.stringify(medications || []),
     preferences || null,
-    emergencyContactName || null, emergencyContactPhone || null
+    emergencyContactName || null, emergencyContactPhone || null,
+    emoji || null
   );
 
   const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);
@@ -174,7 +175,7 @@ router.put("/:id", requireRole("family"), async (req, res) => {
   const {
     firstName, lastName, age, address, city, state, zip,
     healthConditions, medications, preferences,
-    emergencyContactName, emergencyContactPhone,
+    emergencyContactName, emergencyContactPhone, emoji,
   } = req.body;
 
   // Re-geocode if address changed
@@ -206,6 +207,7 @@ router.put("/:id", requireRole("family"), async (req, res) => {
       preferences = COALESCE(?, preferences),
       emergency_contact_name = COALESCE(?, emergency_contact_name),
       emergency_contact_phone = COALESCE(?, emergency_contact_phone),
+      emoji = ${('emoji' in req.body) ? '?' : 'emoji'},
       updated_at = NOW()
     WHERE id = ?
   `).run(
@@ -216,6 +218,7 @@ router.put("/:id", requireRole("family"), async (req, res) => {
     medications ? JSON.stringify(medications) : null,
     preferences,
     emergencyContactName, emergencyContactPhone,
+    ...('emoji' in req.body ? [emoji || null] : []),
     req.params.id
   );
 

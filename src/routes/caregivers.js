@@ -339,6 +339,17 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       req.user.id
     );
 
+    // Backfill tiered rates from hourly_rate if they're still NULL
+    if (hourlyRate) {
+      await db.prepare(`
+        UPDATE caregiver_profiles SET
+          rate_daytime = COALESCE(rate_daytime, ?),
+          rate_nighttime = COALESCE(rate_nighttime, ?),
+          rate_overnight = COALESCE(rate_overnight, ?)
+        WHERE user_id = ? AND (rate_daytime IS NULL OR rate_nighttime IS NULL OR rate_overnight IS NULL)
+      `).run(hourlyRate, hourlyRate, hourlyRate, req.user.id);
+    }
+
     const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     return res.json({ profile: updated });
   }
@@ -347,15 +358,16 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
   const id = uuid();
   await db.prepare(`
     INSERT INTO caregiver_profiles
-    (id, user_id, bio, years_experience, hourly_rate, specialties,
-     certifications, max_travel_miles, location_city, location_state,
+    (id, user_id, bio, years_experience, hourly_rate, rate_daytime, rate_nighttime, rate_overnight,
+     specialties, certifications, max_travel_miles, location_city, location_state,
      latitude, longitude, legal_first_name, legal_last_name,
      date_of_birth, ssn_last4, address_line1, address_line2, zip,
      dl_number, dl_state, background_check_consent, background_check_consent_at,
      academic_program, academic_program_year, needs_hour_reports)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"}, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"}, ?, ?, ?)
   `).run(
     id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
+    hourlyRate, hourlyRate, hourlyRate,
     JSON.stringify(specialties || []),
     JSON.stringify(certifications || []),
     maxTravelMiles || 10, city || null, state || null,

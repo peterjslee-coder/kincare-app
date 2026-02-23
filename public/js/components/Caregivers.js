@@ -155,7 +155,10 @@ const Caregivers = window.Caregivers = () => {
       }).addTo(map);
 
       leafletMap.current = map;
+      // Force multiple invalidateSize calls to handle layout timing
       map.invalidateSize();
+      setTimeout(() => { if (leafletMap.current) leafletMap.current.invalidateSize(); }, 200);
+      setTimeout(() => { if (leafletMap.current) leafletMap.current.invalidateSize(); }, 500);
 
       // If no search center, try recipient coords or browser geolocation as fallback
       if (!searchCenter && navigator.geolocation) {

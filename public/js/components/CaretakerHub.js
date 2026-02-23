@@ -1,4 +1,5 @@
 const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) => {
+  const { showToast } = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
@@ -244,7 +245,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   useEffect(() => {
     if (activeTab === 'financials') {
       fetchPayoutPreference();
-      setBgCheckPaid(!!data?.profile?.background_check_paid);
+      setBgCheckPaid(!!data?.profile?.background_check_paid || !!data?.profile?.isBackgroundChecked);
     }
   }, [activeTab]);
 
@@ -381,11 +382,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       if (res?.ok) {
         // Update local state to reflect the new avatar
         setData(prev => prev ? { ...prev, profile: { ...prev.profile, avatar_url: dataUrl } } : prev);
-        if (typeof showToast === 'function' || (window.useToast && typeof useToast === 'function')) {
-          try { useToast().showToast('Profile photo updated!', 'success'); } catch(e) {}
-        }
+        showToast('Profile photo updated!', 'success');
+      } else {
+        showToast('Failed to upload photo', 'error');
       }
-    } catch (err) { console.error('Avatar upload error:', err); }
+    } catch (err) { console.error('Avatar upload error:', err); showToast('Failed to upload photo', 'error'); }
     setUploadingAvatar(false);
     if (avatarInputRef.current) avatarInputRef.current.value = '';
   };
@@ -408,7 +409,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     { id: 'stoplight', label: 'Set your care preferences (stoplight)', done: !!stoplightData },
     { id: 'photo', label: 'Upload a profile photo', done: !!profile.avatar_url },
     { id: 'payments', label: 'Set up payments (Stripe)', done: stripeStatus?.status === 'active' },
-    { id: 'bgcheck', label: 'Pay for background check ($30)', done: !!profile.background_check_paid },
+    { id: 'bgcheck', label: 'Pay for background check ($30)', done: !!profile.background_check_paid || !!profile.isBackgroundChecked },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
   const showFirstSteps = firstStepsDone < firstSteps.length;
@@ -733,8 +734,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 </span>
               )}
             </div>
-            <div style={{ fontSize: '11px', color: '#999', marginTop: '8px' }}>
-              Sessions booked less than 24 hours in advance incur a 20% short-notice surcharge (75% goes to you).
+          </div>
+
+          {/* Pricing Rules Card */}
+          <div className="card" style={{ marginBottom: '16px', background: '#f8f9fa', border: '1px solid #e0e0e0' }}>
+            <div style={{ fontWeight: 700, fontSize: '15px', color: '#333', marginBottom: '10px' }}>📋 How Pricing Works</div>
+            <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.7 }}>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>Platform fee:</strong> 15% of the base session cost goes to InPlace.
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>Short-notice bookings (&lt;24 hours):</strong> A 20% surcharge is added to sessions booked less than 24 hours in advance. Of that surcharge, <strong>75% goes to you</strong> (the caregiver) and 25% goes to the platform. This means you earn more for last-minute work.
+              </div>
+              <div>
+                <strong>Instant payouts:</strong> If you opt for same-day payouts, a 2% surcharge applies per session. Standard payouts (2-3 business days) are always free.
+              </div>
             </div>
           </div>
 
@@ -970,7 +984,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           {/* Card 3: Background Check Payment */}
           <div className="card" style={{ marginBottom: '16px' }}>
             <div className="card-header"><span className="card-icon">🔍</span>Background Check</div>
-            {bgCheckPaid || profile?.background_check_paid ? (
+            {bgCheckPaid || profile?.background_check_paid || profile?.isBackgroundChecked ? (
               <div style={{ padding: '16px', background: '#e8f5e9', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: '28px' }}>✅</span>
                 <div>

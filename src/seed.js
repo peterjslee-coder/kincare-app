@@ -1179,6 +1179,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
   // Store version in waitlist with special internal email so server.js can detect stale demo data
   // ─── Help/FAQ Articles ───
   console.log("📖 Creating help articles...");
+  // Clear all help articles to prevent duplicates on reseed
+  await db.prepare("DELETE FROM help_articles").run();
 
   const helpArticles = [
     // Getting Started

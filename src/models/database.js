@@ -252,6 +252,8 @@ async function initializeDatabase() {
     `UPDATE users SET roles = '["' || role || '"]' WHERE roles IS NULL AND role IS NOT NULL`,
     // v1.20.4 — Care recipient photo
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS photo TEXT`,
+    // v1.21.0 — Care recipient emoji avatar
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS emoji TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

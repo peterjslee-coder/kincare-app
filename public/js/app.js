@@ -424,6 +424,13 @@ const App = () => {
         });
     }
 
+    // Stripe Connect return — redirect to caretaker financials tab
+    const hash = window.location.hash;
+    if (hash === '#payments-complete' || hash === '#payments-refresh') {
+      setCurrentPage('financials');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     // Deep-link from push notification — open conversation or page
     const convId = params.get('conversation');
     if (convId) {
@@ -665,7 +672,7 @@ const App = () => {
     setSidebarOpen(false);
   };
 
-  // Role-based navigation items
+  // Role-based navigation items — main nav (top) and bottom nav (pinned to sidebar bottom)
   const getNavItems = () => {
     if (role === 'caregiver') {
       return [
@@ -673,16 +680,12 @@ const App = () => {
         { id: 'find-work', icon: '🔍', label: 'Find Work' },
         { id: 'financials', icon: '💰', label: 'Financials' },
         { id: 'messages', icon: '💬', label: 'Messages' },
-        { id: 'help', icon: '❓', label: 'Help' },
-        { id: 'account', icon: '👤', label: 'My Account' },
       ];
     }
     if (role === 'care_for') {
       return [
         { id: 'dashboard', icon: '🏠', label: 'My Home' },
         { id: 'messages', icon: '💬', label: 'Messages' },
-        { id: 'help', icon: '❓', label: 'Help' },
-        { id: 'account', icon: '👤', label: 'My Account' },
       ];
     }
     // family (default)
@@ -696,14 +699,18 @@ const App = () => {
       { id: 'recipients', icon: '👥', label: 'Recipients' },
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'payments', icon: '💳', label: 'Payments' },
-      { id: 'help', icon: '❓', label: 'Help' },
-      { id: 'account', icon: '👤', label: 'My Account' },
     ];
     if (currentUser?.isAdmin) {
       familyNav.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
     }
     return familyNav;
   };
+
+  // Bottom sidebar items — Help + Account pinned at bottom for all roles
+  const getBottomSidebarItems = () => [
+    { id: 'help', icon: '❓', label: 'Help' },
+    { id: 'account', icon: '👤', label: 'My Account' },
+  ];
 
   // Role label for sidebar header
   const getRoleLabel = () => {
@@ -818,7 +825,7 @@ const App = () => {
             {getRoleLabel()}
           </div>
         )}
-        <nav>
+        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <ul className="nav-menu">
             {getNavItems().map(item => (
               <li key={item.id} className="nav-item">
@@ -836,23 +843,33 @@ const App = () => {
               </li>
             ))}
           </ul>
-        </nav>
-        <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           {role === 'family' && (
-            <button className="nav-link" onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ background: currentRoleColor.main, marginBottom: '12px' }}>
+            <button className="nav-link" onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ background: currentRoleColor.main, margin: '8px 0' }}>
               <span className="nav-icon">➕</span> Request Care
             </button>
           )}
-          <div style={{ padding: '8px 16px', fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>
-            {currentUser?.firstName || 'User'} {currentUser?.lastName || ''}
+          <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <ul className="nav-menu" style={{ marginBottom: 0 }}>
+              {getBottomSidebarItems().map(item => (
+                <li key={item.id} className="nav-item">
+                  <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)} style={{ position: 'relative' }}>
+                    <span className="nav-icon">{item.icon}</span>
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div style={{ padding: '8px 16px', fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
+              {currentUser?.firstName || 'User'} {currentUser?.lastName || ''}
+            </div>
+            <button className="nav-link" onClick={isDemo ? handleExitDemo : handleLogout}>
+              <span className="nav-icon">🚪</span> {isDemo ? 'Exit Demo' : 'Logout'}
+            </button>
+            <div style={{ padding: '4px 16px 4px', fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>
+              v{window.APP_VERSION || '?'}
+            </div>
           </div>
-          <button className="nav-link" onClick={isDemo ? handleExitDemo : handleLogout}>
-            <span className="nav-icon">{isDemo ? '🚪' : '🚪'}</span> {isDemo ? 'Exit Demo' : 'Logout'}
-          </button>
-          <div style={{ padding: '8px 16px 4px', fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>
-            v{window.APP_VERSION || '?'}
-          </div>
-        </div>
+        </nav>
       </aside>
       <main className="main-content">
         <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">

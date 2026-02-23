@@ -574,7 +574,7 @@ router.put("/me/photo", authenticate, async (req, res) => {
 router.delete("/me/photo", authenticate, async (req, res) => {
   try {
     const db = await getDb();
-    await db.prepare("UPDATE users SET profile_photo = NULL, updated_at = NOW() WHERE id = ?").run(req.user.id);
+    await db.prepare("UPDATE users SET profile_photo = NULL, avatar_url = NULL, updated_at = NOW() WHERE id = ?").run(req.user.id);
     res.json({ message: "Profile photo removed" });
   } catch (err) {
     console.error("Photo delete error:", err);

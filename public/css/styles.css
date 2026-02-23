@@ -845,6 +845,8 @@
       padding: 20px;
       overflow-y: auto;
       flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
     }
 
     .sidebar-logo {

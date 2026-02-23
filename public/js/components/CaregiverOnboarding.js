@@ -282,9 +282,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     setSaving(false);
   };
 
-  // Step 7: Upload documents
+  // Step 8: Upload documents
   const handleUploadDocuments = async () => {
-    if (!validateStep(7)) return;
+    if (!validateStep(8)) return;
     setSaving(true);
     try {
       const token = authToken || window.AUTH_TOKEN;
