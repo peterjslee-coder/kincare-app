@@ -64,6 +64,8 @@ router.get("/", async (req, res) => {
         cr.first_name || ' ' || cr.last_name AS recipient_name,
         cr.preferences AS recipient_preferences,
         cr.location_city AS recipient_city,
+        cr.location_state AS recipient_state,
+        cr.location_zip AS recipient_zip,
         cr.latitude AS recipient_lat,
         cr.longitude AS recipient_lng
       FROM care_sessions cs
@@ -107,6 +109,8 @@ router.get("/", async (req, res) => {
         cr.first_name || ' ' || cr.last_name AS recipient_name,
         cr.preferences AS recipient_preferences,
         cr.location_city AS recipient_city,
+        cr.location_state AS recipient_state,
+        cr.location_zip AS recipient_zip,
         cr.latitude AS recipient_lat,
         cr.longitude AS recipient_lng
       FROM care_sessions cs
