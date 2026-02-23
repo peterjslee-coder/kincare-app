@@ -41,6 +41,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
       await db.prepare(`DELETE FROM password_reset_tokens WHERE user_id IN (${placeholders})`).run(...demoIds);
       await db.prepare(`DELETE FROM email_verification_tokens WHERE user_id IN (${placeholders})`).run(...demoIds);
       await db.prepare(`DELETE FROM platform_invites WHERE invited_by IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM feedback WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM onboarding_events WHERE user_id IN (${placeholders})`).run(...demoIds);
 
       // Activity feed, notes, visit data
       await db.prepare(`DELETE FROM activity_feed WHERE family_user_id IN (${placeholders})`).run(...demoIds);
