@@ -261,6 +261,24 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancelled_caregiver_id TEXT`,
     // v1.21.7 — Reviews: allow review_type to track cancellation reviews
     `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS review_type TEXT DEFAULT 'completion'`,
+    // v1.21.9 — Onboarding event tracking (errors, completions, drop-offs)
+    `CREATE TABLE IF NOT EXISTS onboarding_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      email TEXT,
+      event_type TEXT NOT NULL,
+      step INTEGER,
+      step_name TEXT,
+      error_message TEXT,
+      error_source TEXT,
+      metadata TEXT,
+      user_agent TEXT,
+      ip_address TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_onboarding_events_user ON onboarding_events(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_onboarding_events_type ON onboarding_events(event_type)`,
+    `CREATE INDEX IF NOT EXISTS idx_onboarding_events_created ON onboarding_events(created_at)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

@@ -55,6 +55,39 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     return 'Network error — please check your connection and try again.';
   };
 
+  // ─── Onboarding event tracking ───
+  // Sends events to server for admin visibility (fire-and-forget, never blocks UI)
+  const stepNames = {
+    1: 'Create Account', 2: 'Disclosures & Terms', 3: 'Personal Info',
+    4: 'Background Check Info', 5: 'Certifications', 6: 'Academic Program',
+    7: 'Background Check Payment', 8: 'Document Upload', 9: 'Review & Complete',
+  };
+  const trackEvent = (eventType, stepNum, extra = {}) => {
+    try {
+      const token = authToken || window.AUTH_TOKEN;
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      fetch('/api/onboarding-events', {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          eventType,
+          step: stepNum,
+          stepName: stepNames[stepNum] || null,
+          email: form.email || null,
+          errorMessage: extra.error || null,
+          errorSource: extra.source || null,
+          metadata: {
+            ...extra,
+            online: navigator.onLine,
+            userAgent: navigator.userAgent,
+            screenWidth: window.innerWidth,
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      }).catch(() => {}); // never block or error
+    } catch (e) { /* ignore */ }
+  };
+
   // Form data across all steps
   const [form, setForm] = useState({
     // Step 1 — Account
@@ -147,6 +180,12 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const CERT_TYPES = ['CNA', 'HHA', 'LPN', 'RN', 'CPR/First Aid', 'BLS', 'ACLS', 'Other'];
   const RADIUS_OPTIONS = ['5', '10', '15', '25', '50'];
 
+  // Track page load / resume
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    trackEvent(saved ? 'session_resumed' : 'session_started', step, { resumeMode: !!resumeMode });
+  }, []);
+
   // Validate invite or signup token on mount
   useEffect(() => { validateInvite(); }, []);
 
@@ -174,6 +213,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         setInviteError(data.error || 'Invalid invite');
       }
     } catch (err) {
+      trackEvent('error', 0, { error: networkErrorMsg(err), source: 'invite_validate' });
       setInviteError(networkErrorMsg(err));
     }
     setLoading(false);
@@ -261,7 +301,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         body: JSON.stringify(regBody),
       });
       const data = await res.json();
-      if (!res.ok) { setErrors({ submit: data.error || 'Registration failed' }); setSaving(false); return; }
+      if (!res.ok) {
+        trackEvent('error', 1, { error: data.error || 'Registration failed', source: 'api', status: res.status });
+        setErrors({ submit: data.error || 'Registration failed' }); setSaving(false); return;
+      }
 
       const token = data.token;
       setAuthTokenState(token);
@@ -278,8 +321,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         });
       }
 
+      trackEvent('step_complete', 1);
       setStep(2);
     } catch (err) {
+      trackEvent('error', 1, { error: networkErrorMsg(err), source: 'network' });
       setErrors({ submit: networkErrorMsg(err) });
     }
     setSaving(false);
@@ -288,6 +333,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   // Step 2: Disclosures & Terms (just validation, no API call)
   const handleAcceptTerms = () => {
     if (!validateStep(2)) return;
+    trackEvent('step_complete', 2);
     setStep(3);
   };
 
@@ -314,7 +360,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setErrors({ submit: data.error || 'Failed to save profile' }); setSaving(false); return; }
+      if (!res.ok) {
+        trackEvent('error', 3, { error: data.error || 'Failed to save profile', source: 'api', status: res.status });
+        setErrors({ submit: data.error || 'Failed to save profile' }); setSaving(false); return;
+      }
       setProfileId(data.profile?.id);
 
       // Also update user phone (non-blocking — don't fail the step if this errors)
@@ -324,8 +373,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         body: JSON.stringify({ phone: form.phone }),
       }).catch(() => {});
 
+      trackEvent('step_complete', 3);
       setStep(4);
     } catch (err) {
+      trackEvent('error', 3, { error: networkErrorMsg(err), source: 'network' });
       setErrors({ submit: networkErrorMsg(err) });
     }
     setSaving(false);
@@ -348,9 +399,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           backgroundCheckConsent: form.backgroundCheckConsent,
         }),
       });
-      if (!res.ok) { const data = await res.json(); setErrors({ submit: data.error }); setSaving(false); return; }
+      if (!res.ok) {
+        const data = await res.json();
+        trackEvent('error', 4, { error: data.error, source: 'api', status: res.status });
+        setErrors({ submit: data.error }); setSaving(false); return;
+      }
+      trackEvent('step_complete', 4);
       setStep(5);
     } catch (err) {
+      trackEvent('error', 4, { error: networkErrorMsg(err), source: 'network' });
       setErrors({ submit: networkErrorMsg(err) });
     }
     setSaving(false);
@@ -370,8 +427,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           certifications: validCerts.map(c => `${c.certType}${c.certNumber ? ' #' + c.certNumber : ''}`),
         }),
       });
+      trackEvent('step_complete', 5);
       setStep(6); // → Academic Program
     } catch (err) {
+      trackEvent('error', 5, { error: networkErrorMsg(err), source: 'network' });
       setErrors({ submit: networkErrorMsg(err) });
     }
     setSaving(false);
@@ -401,10 +460,17 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       }, 1); // only 1 retry for uploads (they're larger)
-      if (!res.ok) { const data = await res.json(); setErrors({ submit: data.error }); setSaving(false); return; }
+      if (!res.ok) {
+        const data = await res.json();
+        trackEvent('error', 8, { error: data.error, source: 'api', status: res.status });
+        setErrors({ submit: data.error }); setSaving(false); return;
+      }
+      trackEvent('step_complete', 8);
       setStep(9);
     } catch (err) {
-      setErrors({ submit: !navigator.onLine ? 'You appear to be offline. Please check your connection and try again.' : 'Upload failed — please check your connection and try again.' });
+      const msg = !navigator.onLine ? 'You appear to be offline. Please check your connection and try again.' : 'Upload failed — please check your connection and try again.';
+      trackEvent('error', 8, { error: msg, source: 'network' });
+      setErrors({ submit: msg });
     }
     setSaving(false);
   };
@@ -519,6 +585,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   // Handle complete
   const handleComplete = () => {
+    trackEvent('onboarding_complete', 9);
     clearSavedProgress();
     if (typeof onComplete === 'function') onComplete(authToken || window.AUTH_TOKEN);
   };
@@ -1027,6 +1094,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               } catch (err) { /* non-blocking */ }
               setSaving(false);
             }
+            trackEvent('step_complete', 6, { needsProgramReports: !!form.needsProgramReports });
             setStep(7);
           };
           return (

@@ -131,6 +131,7 @@ app.use("/api/admin", require("./routes/admin"));
 app.use("/api/admin/financials", require("./routes/financials"));
 app.use("/api/platform-invites", require("./routes/platformInvites"));
 app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
+app.use("/api/onboarding-events", require("./routes/onboardingEvents"));
 app.use("/api/feedback", require("./routes/feedback"));
 app.use("/api/payments", require("./routes/payments"));
 app.use("/api/connections", require("./routes/connections"));

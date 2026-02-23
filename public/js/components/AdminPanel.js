@@ -47,6 +47,10 @@ const AdminPanel = window.AdminPanel = () => {
   const [helpLoading, setHelpLoading] = useState(false);
   const [helpEditModal, setHelpEditModal] = useState(null); // null or article object (empty for new)
   const [helpForm, setHelpForm] = useState({ category: 'getting-started', question: '', answer: '', link_page: '', link_label: '', role_visibility: null, sort_order: 0 });
+  // Onboarding events state
+  const [obEvents, setObEvents] = useState(null); // { events, stats, funnel, recentErrors }
+  const [obEventsLoading, setObEventsLoading] = useState(false);
+  const [obEventFilter, setObEventFilter] = useState('all'); // 'all', 'errors', 'completions'
 
   useEffect(() => {
     loadStats();
@@ -62,6 +66,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'feedback') loadFeedback();
     if (activeTab === 'blocked') loadBlockedEmails();
     if (activeTab === 'help') loadHelpArticles();
+    if (activeTab === 'onboarding') loadOnboardingEvents();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -162,6 +167,18 @@ const AdminPanel = window.AdminPanel = () => {
       });
       if (res?.ok) loadFeedback();
     } catch (err) { console.error('Feedback update error:', err); }
+  };
+
+  const loadOnboardingEvents = async () => {
+    setObEventsLoading(true);
+    try {
+      const res = await apiFetch('/api/onboarding-events');
+      if (res?.ok) {
+        const data = await res.json();
+        setObEvents(data);
+      }
+    } catch (err) { console.error('Onboarding events load error:', err); }
+    setObEventsLoading(false);
   };
 
   const loadBlockedEmails = async () => {
@@ -439,6 +456,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'feedback', label: 'Feedback', icon: '💬' },
     { id: 'help', label: 'Help/FAQ', icon: '❓' },
     { id: 'financials', label: 'Financials', icon: '💰' },
+    { id: 'onboarding', label: 'Onboarding', icon: '🚦' },
     { id: 'blocked', label: 'Blocked', icon: '🚫' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
@@ -1272,6 +1290,149 @@ const AdminPanel = window.AdminPanel = () => {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Onboarding Events Tab ─── */}
+      {activeTab === 'onboarding' && (
+        <div>
+          {obEventsLoading && <LoadingSpinner text="Loading onboarding data..." />}
+          {obEvents && (
+            <div>
+              {/* Summary stats */}
+              <div className="stats-grid" style={{ marginBottom: '20px' }}>
+                {(obEvents.stats || []).map(s => (
+                  <div key={s.event_type} className="stat-card">
+                    <div className="stat-number">{s.count}</div>
+                    <div className="stat-label">
+                      {s.event_type === 'error' ? 'Errors' :
+                       s.event_type === 'step_complete' ? 'Step Completions' :
+                       s.event_type === 'onboarding_complete' ? 'Completed Onboarding' :
+                       s.event_type === 'session_started' ? 'Sessions Started' :
+                       s.event_type === 'session_resumed' ? 'Sessions Resumed' :
+                       s.event_type}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#999' }}>{s.unique_users} unique users (30d)</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Funnel */}
+              {obEvents.funnel && obEvents.funnel.length > 0 && (
+                <div className="card" style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#1b6b5a' }}>Step Completion Funnel (30 days)</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {obEvents.funnel.map(f => {
+                      const maxCount = Math.max(...obEvents.funnel.map(x => x.completions));
+                      const pct = maxCount > 0 ? (f.completions / maxCount * 100) : 0;
+                      return (
+                        <div key={f.step} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ width: '140px', fontSize: '12px', color: '#555', flexShrink: 0 }}>
+                            Step {f.step}: {f.step_name}
+                          </div>
+                          <div style={{ flex: 1, background: '#f0f0f0', borderRadius: '4px', height: '22px', position: 'relative' }}>
+                            <div style={{
+                              width: pct + '%', height: '100%', borderRadius: '4px',
+                              background: f.step === 9 ? '#22c55e' : '#1b6b5a',
+                              transition: 'width 0.3s',
+                            }} />
+                            <span style={{ position: 'absolute', left: '8px', top: '3px', fontSize: '11px', fontWeight: 600, color: pct > 30 ? '#fff' : '#333' }}>
+                              {f.completions} ({f.unique_users} users)
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent Errors */}
+              <div className="card" style={{ marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#dc2626' }}>Recent Errors</h3>
+                {(!obEvents.recentErrors || obEvents.recentErrors.length === 0) ? (
+                  <p style={{ color: '#888', fontSize: '13px', margin: 0 }}>No errors recorded yet.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {obEvents.recentErrors.map(e => {
+                      const meta = e.metadata ? JSON.parse(e.metadata) : {};
+                      return (
+                        <div key={e.id} style={{
+                          padding: '10px 12px', background: '#fef2f2', borderRadius: '8px',
+                          border: '1px solid #fecaca', fontSize: '13px',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <span style={{ fontWeight: 600, color: '#dc2626' }}>
+                              Step {e.step}: {e.step_name}
+                            </span>
+                            <span style={{ color: '#888', fontSize: '11px' }}>
+                              {new Date(e.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <div style={{ color: '#b91c1c' }}>{e.error_message}</div>
+                          <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: '#888' }}>
+                            <span>User: {e.email || e.user_id || 'anon'}</span>
+                            <span>Source: {e.error_source || '?'}</span>
+                            <span>Online: {meta.online !== undefined ? String(meta.online) : '?'}</span>
+                            {meta.screenWidth && <span>Screen: {meta.screenWidth}px</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* All Events */}
+              <div className="card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '15px', margin: 0, color: '#333' }}>All Events (recent)</h3>
+                  <button onClick={loadOnboardingEvents} style={{
+                    padding: '6px 12px', background: '#1b6b5a', color: '#fff', border: 'none',
+                    borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
+                  }}>Refresh</button>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
+                        <th style={{ padding: '6px 8px' }}>Time</th>
+                        <th style={{ padding: '6px 8px' }}>Type</th>
+                        <th style={{ padding: '6px 8px' }}>Step</th>
+                        <th style={{ padding: '6px 8px' }}>User</th>
+                        <th style={{ padding: '6px 8px' }}>Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(obEvents.events || []).map(e => (
+                        <tr key={e.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                          <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: '#888' }}>
+                            {new Date(e.created_at).toLocaleString()}
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span style={{
+                              padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
+                              background: e.event_type === 'error' ? '#fef2f2' : e.event_type === 'onboarding_complete' ? '#ecfdf5' : '#f0f9ff',
+                              color: e.event_type === 'error' ? '#dc2626' : e.event_type === 'onboarding_complete' ? '#059669' : '#0369a1',
+                            }}>{e.event_type}</span>
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            {e.step ? `${e.step}. ${e.step_name || ''}` : '—'}
+                          </td>
+                          <td style={{ padding: '6px 8px', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {e.email || e.user_id || '—'}
+                          </td>
+                          <td style={{ padding: '6px 8px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', color: '#666' }}>
+                            {e.error_message || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
         </div>

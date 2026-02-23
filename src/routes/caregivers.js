@@ -251,143 +251,150 @@ router.get("/me", requireRole("caregiver"), async (req, res) => {
 // ─── POST /api/caregivers/profile ───
 // Create or update caregiver profile (for caregiver users)
 router.post("/profile", requireRole("caregiver"), async (req, res) => {
-  const db = await getDb();
-  const {
-    bio, yearsExperience, hourlyRate, specialties,
-    certifications, maxTravelMiles, city, state, address,
-    // Checkr / onboarding fields
-    legalFirstName, legalLastName, dateOfBirth, ssnLast4,
-    addressLine1, addressLine2, zip, dlNumber, dlState,
-    backgroundCheckConsent,
-    // v1.5.0 — work location, stoplight, terms
-    workLocationAddress, travelRadius, careStoplight,
-    termsAcceptedAt, termsVersion,
-    // v1.13.2 — academic program tracking
-    academicProgram, academicProgramYear, needsHourReports,
-  } = req.body;
+  try {
+    const db = await getDb();
+    const {
+      bio, yearsExperience, hourlyRate, specialties,
+      certifications, maxTravelMiles, city, state, address,
+      // Checkr / onboarding fields
+      legalFirstName, legalLastName, dateOfBirth, ssnLast4,
+      addressLine1, addressLine2, zip, dlNumber, dlState,
+      backgroundCheckConsent,
+      // v1.5.0 — work location, stoplight, terms
+      workLocationAddress, travelRadius, careStoplight,
+      termsAcceptedAt, termsVersion,
+      // v1.13.2 — academic program tracking
+      academicProgram, academicProgramYear, needsHourReports,
+    } = req.body;
 
-  if (!hourlyRate) {
-    return res.status(400).json({ error: "hourlyRate is required" });
-  }
-
-  // Auto-geocode if city/state provided
-  let lat = null;
-  let lng = null;
-  if (city || address) {
-    const addrStr = buildAddressString({ address, city, state });
-    const geo = await geocodeAddress(addrStr);
-    if (geo) {
-      lat = geo.lat;
-      lng = geo.lng;
+    if (!hourlyRate) {
+      return res.status(400).json({ error: "hourlyRate is required" });
     }
-  }
 
-  const existing = await db.prepare(
-    "SELECT id FROM caregiver_profiles WHERE user_id = ?"
-  ).get(req.user.id);
+    // Auto-geocode if city/state provided
+    let lat = null;
+    let lng = null;
+    if (city || address) {
+      const addrStr = buildAddressString({ address, city, state });
+      const geo = await geocodeAddress(addrStr);
+      if (geo) {
+        lat = geo.lat;
+        lng = geo.lng;
+      }
+    }
 
-  if (existing) {
-    // Update
+    const existing = await db.prepare(
+      "SELECT id FROM caregiver_profiles WHERE user_id = ?"
+    ).get(req.user.id);
+
+    if (existing) {
+      // Update
+      await db.prepare(`
+        UPDATE caregiver_profiles SET
+          bio = COALESCE(?, bio),
+          years_experience = COALESCE(?, years_experience),
+          hourly_rate = COALESCE(?, hourly_rate),
+          specialties = COALESCE(?, specialties),
+          certifications = COALESCE(?, certifications),
+          max_travel_miles = COALESCE(?, max_travel_miles),
+          location_city = COALESCE(?, location_city),
+          location_state = COALESCE(?, location_state),
+          latitude = COALESCE(?, latitude),
+          longitude = COALESCE(?, longitude),
+          legal_first_name = COALESCE(?, legal_first_name),
+          legal_last_name = COALESCE(?, legal_last_name),
+          date_of_birth = COALESCE(?, date_of_birth),
+          ssn_last4 = COALESCE(?, ssn_last4),
+          address_line1 = COALESCE(?, address_line1),
+          address_line2 = COALESCE(?, address_line2),
+          zip = COALESCE(?, zip),
+          dl_number = COALESCE(?, dl_number),
+          dl_state = COALESCE(?, dl_state),
+          background_check_consent = COALESCE(?, background_check_consent),
+          background_check_consent_at = CASE WHEN ? = 1 THEN NOW() ELSE background_check_consent_at END,
+          work_location_address = COALESCE(?, work_location_address),
+          care_stoplight = COALESCE(?, care_stoplight),
+          terms_accepted_at = COALESCE(?, terms_accepted_at),
+          terms_version = COALESCE(?, terms_version),
+          academic_program = COALESCE(?, academic_program),
+          academic_program_year = COALESCE(?, academic_program_year),
+          needs_hour_reports = COALESCE(?, needs_hour_reports),
+          updated_at = NOW()
+        WHERE user_id = ?
+      `).run(
+        bio, yearsExperience, hourlyRate,
+        specialties ? JSON.stringify(specialties) : null,
+        certifications ? JSON.stringify(certifications) : null,
+        travelRadius || maxTravelMiles, city, state,
+        lat, lng,
+        legalFirstName || null, legalLastName || null,
+        dateOfBirth || null, ssnLast4 || null,
+        addressLine1 || null, addressLine2 || null, zip || null,
+        dlNumber || null, dlState || null,
+        backgroundCheckConsent ? 1 : null, backgroundCheckConsent ? 1 : 0,
+        workLocationAddress || null,
+        careStoplight ? JSON.stringify(careStoplight) : null,
+        termsAcceptedAt || null, termsVersion || null,
+        academicProgram || null, academicProgramYear || null,
+        needsHourReports != null ? (needsHourReports ? 1 : 0) : null,
+        req.user.id
+      );
+
+      // Backfill tiered rates from hourly_rate if they're still NULL
+      if (hourlyRate) {
+        await db.prepare(`
+          UPDATE caregiver_profiles SET
+            rate_daytime = COALESCE(rate_daytime, ?),
+            rate_nighttime = COALESCE(rate_nighttime, ?),
+            rate_overnight = COALESCE(rate_overnight, ?)
+          WHERE user_id = ? AND (rate_daytime IS NULL OR rate_nighttime IS NULL OR rate_overnight IS NULL)
+        `).run(hourlyRate, hourlyRate, hourlyRate, req.user.id);
+      }
+
+      const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+      console.log(`  [caregiver-profile] Updated profile for user=${req.user.id} (${req.user.email})`);
+      return res.json({ profile: updated });
+    }
+
+    // Create
+    const id = uuid();
     await db.prepare(`
-      UPDATE caregiver_profiles SET
-        bio = COALESCE(?, bio),
-        years_experience = COALESCE(?, years_experience),
-        hourly_rate = COALESCE(?, hourly_rate),
-        specialties = COALESCE(?, specialties),
-        certifications = COALESCE(?, certifications),
-        max_travel_miles = COALESCE(?, max_travel_miles),
-        location_city = COALESCE(?, location_city),
-        location_state = COALESCE(?, location_state),
-        latitude = COALESCE(?, latitude),
-        longitude = COALESCE(?, longitude),
-        legal_first_name = COALESCE(?, legal_first_name),
-        legal_last_name = COALESCE(?, legal_last_name),
-        date_of_birth = COALESCE(?, date_of_birth),
-        ssn_last4 = COALESCE(?, ssn_last4),
-        address_line1 = COALESCE(?, address_line1),
-        address_line2 = COALESCE(?, address_line2),
-        zip = COALESCE(?, zip),
-        dl_number = COALESCE(?, dl_number),
-        dl_state = COALESCE(?, dl_state),
-        background_check_consent = COALESCE(?, background_check_consent),
-        background_check_consent_at = CASE WHEN ? = 1 THEN NOW() ELSE background_check_consent_at END,
-        work_location_address = COALESCE(?, work_location_address),
-        care_stoplight = COALESCE(?, care_stoplight),
-        terms_accepted_at = COALESCE(?, terms_accepted_at),
-        terms_version = COALESCE(?, terms_version),
-        academic_program = COALESCE(?, academic_program),
-        academic_program_year = COALESCE(?, academic_program_year),
-        needs_hour_reports = COALESCE(?, needs_hour_reports),
-        updated_at = NOW()
-      WHERE user_id = ?
+      INSERT INTO caregiver_profiles
+      (id, user_id, bio, years_experience, hourly_rate, rate_daytime, rate_nighttime, rate_overnight,
+       specialties, certifications, max_travel_miles, location_city, location_state,
+       latitude, longitude, legal_first_name, legal_last_name,
+       date_of_birth, ssn_last4, address_line1, address_line2, zip,
+       dl_number, dl_state, background_check_consent, background_check_consent_at,
+       work_location_address, care_stoplight, terms_accepted_at, terms_version,
+       academic_program, academic_program_year, needs_hour_reports)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
+       ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      bio, yearsExperience, hourlyRate,
-      specialties ? JSON.stringify(specialties) : null,
-      certifications ? JSON.stringify(certifications) : null,
-      travelRadius || maxTravelMiles, city, state,
+      id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
+      hourlyRate, hourlyRate, hourlyRate,
+      JSON.stringify(specialties || []),
+      JSON.stringify(certifications || []),
+      maxTravelMiles || 10, city || null, state || null,
       lat, lng,
       legalFirstName || null, legalLastName || null,
       dateOfBirth || null, ssnLast4 || null,
       addressLine1 || null, addressLine2 || null, zip || null,
       dlNumber || null, dlState || null,
-      backgroundCheckConsent ? 1 : null, backgroundCheckConsent ? 1 : 0,
+      backgroundCheckConsent ? 1 : 0,
       workLocationAddress || null,
       careStoplight ? JSON.stringify(careStoplight) : null,
       termsAcceptedAt || null, termsVersion || null,
       academicProgram || null, academicProgramYear || null,
-      needsHourReports != null ? (needsHourReports ? 1 : 0) : null,
-      req.user.id
+      needsHourReports ? 1 : 0
     );
 
-    // Backfill tiered rates from hourly_rate if they're still NULL
-    if (hourlyRate) {
-      await db.prepare(`
-        UPDATE caregiver_profiles SET
-          rate_daytime = COALESCE(rate_daytime, ?),
-          rate_nighttime = COALESCE(rate_nighttime, ?),
-          rate_overnight = COALESCE(rate_overnight, ?)
-        WHERE user_id = ? AND (rate_daytime IS NULL OR rate_nighttime IS NULL OR rate_overnight IS NULL)
-      `).run(hourlyRate, hourlyRate, hourlyRate, req.user.id);
-    }
-
-    const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
-    return res.json({ profile: updated });
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);
+    console.log(`  [caregiver-profile] Created new profile id=${id} for user=${req.user.id} (${req.user.email})`);
+    res.status(201).json({ profile });
+  } catch (err) {
+    console.error(`  [caregiver-profile] ❌ Error for user=${req.user?.id} (${req.user?.email}):`, err.message);
+    res.status(500).json({ error: "Failed to save caregiver profile. Please try again." });
   }
-
-  // Create
-  const id = uuid();
-  await db.prepare(`
-    INSERT INTO caregiver_profiles
-    (id, user_id, bio, years_experience, hourly_rate, rate_daytime, rate_nighttime, rate_overnight,
-     specialties, certifications, max_travel_miles, location_city, location_state,
-     latitude, longitude, legal_first_name, legal_last_name,
-     date_of_birth, ssn_last4, address_line1, address_line2, zip,
-     dl_number, dl_state, background_check_consent, background_check_consent_at,
-     work_location_address, care_stoplight, terms_accepted_at, terms_version,
-     academic_program, academic_program_year, needs_hour_reports)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
-     ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
-    hourlyRate, hourlyRate, hourlyRate,
-    JSON.stringify(specialties || []),
-    JSON.stringify(certifications || []),
-    maxTravelMiles || 10, city || null, state || null,
-    lat, lng,
-    legalFirstName || null, legalLastName || null,
-    dateOfBirth || null, ssnLast4 || null,
-    addressLine1 || null, addressLine2 || null, zip || null,
-    dlNumber || null, dlState || null,
-    backgroundCheckConsent ? 1 : 0,
-    workLocationAddress || null,
-    careStoplight ? JSON.stringify(careStoplight) : null,
-    termsAcceptedAt || null, termsVersion || null,
-    academicProgram || null, academicProgramYear || null,
-    needsHourReports ? 1 : 0
-  );
-
-  const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);
-  res.status(201).json({ profile });
 });
 
 // ─── PUT /api/caregivers/rates ───
