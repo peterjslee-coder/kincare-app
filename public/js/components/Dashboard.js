@@ -7,6 +7,15 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [showPwaGuide, setShowPwaGuide] = useState(false);
+  // Cancel + review state
+  const [cancellingId, setCancellingId] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [reviewSession, setReviewSession] = useState(null); // session that can be reviewed after late cancel
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
+
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
   const [dismissedTiles, setDismissedTiles] = useState(() => {
@@ -66,6 +75,51 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       const res = await apiFetch('/api/analytics');
       if (res?.ok) setAnalyticsData(await res.json());
     } catch {}
+  };
+
+  const handleCancel = async (sessionId) => {
+    setCancelLoading(true);
+    try {
+      const res = await apiFetch(`/api/sessions/${sessionId}/cancel`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason: cancelReason || 'Cancelled by family' }),
+      });
+      if (res?.ok) {
+        const d = await res.json();
+        setCancellingId(null);
+        setCancelReason('');
+        fetchDashboard();
+        // If caregiver late-cancelled, prompt for review (won't happen for family cancel, but check anyway)
+        if (d.canReview) {
+          setReviewSession(d.session);
+        }
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        alert(err?.error || 'Failed to cancel session');
+      }
+    } catch { alert('Failed to cancel session'); }
+    setCancelLoading(false);
+  };
+
+  const handleReview = async () => {
+    if (!reviewRating) return;
+    setReviewLoading(true);
+    try {
+      const res = await apiFetch(`/api/sessions/${reviewSession.id}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
+      });
+      if (res?.ok) {
+        setReviewSession(null);
+        setReviewRating(0);
+        setReviewComment('');
+        fetchDashboard();
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        alert(err?.error || 'Failed to submit review');
+      }
+    } catch { alert('Failed to submit review'); }
+    setReviewLoading(false);
   };
 
   useEffect(() => { fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); }, []);
@@ -484,31 +538,43 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                   </div>
                   <div style={{ textAlign: 'right', fontSize: '12px' }}>
                     <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : '#e8724a', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>
-                    {s.status === 'confirmed' && s.estimatedCost && (
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          try {
-                            const res = await apiFetch('/api/payments/checkout', {
-                              method: 'POST',
-                              body: JSON.stringify({ sessionId: s.id }),
-                            });
-                            if (res?.ok) {
-                              const d = await res.json();
-                              if (d.checkoutUrl) window.location.href = d.checkoutUrl;
-                            } else {
-                              const err = await res?.json();
-                              alert(err?.error || 'Payment not available yet');
-                            }
-                          } catch (err) { alert('Payment service unavailable'); }
-                        }}
-                        style={{
-                          marginTop: '6px', padding: '4px 12px', borderRadius: '6px',
-                          border: 'none', background: '#1b6b5a', color: '#fff',
-                          fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >Pay Now</button>
-                    )}
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
+                      {s.status === 'confirmed' && s.estimatedCost && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const res = await apiFetch('/api/payments/checkout', {
+                                method: 'POST',
+                                body: JSON.stringify({ sessionId: s.id }),
+                              });
+                              if (res?.ok) {
+                                const d = await res.json();
+                                if (d.checkoutUrl) window.location.href = d.checkoutUrl;
+                              } else {
+                                const err = await res?.json();
+                                alert(err?.error || 'Payment not available yet');
+                              }
+                            } catch (err) { alert('Payment service unavailable'); }
+                          }}
+                          style={{
+                            padding: '4px 12px', borderRadius: '6px',
+                            border: 'none', background: '#1b6b5a', color: '#fff',
+                            fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >Pay Now</button>
+                      )}
+                      {['confirmed', 'pending', 'open', 'requested'].includes(s.status) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
+                          style={{
+                            padding: '4px 10px', borderRadius: '6px',
+                            border: '1px solid #e0e0e0', background: '#fff', color: '#c62828',
+                            fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >Cancel</button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </li>
@@ -625,6 +691,82 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           </div>
         );
       })()}
+      {/* Cancel Confirmation Modal */}
+      {cancellingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 18 }}>Cancel Session</h3>
+            {(() => {
+              const s = upcoming.find(x => x.id === cancellingId);
+              if (!s) return null;
+              const sessionDT = new Date(`${s.date}T${s.time || '00:00'}`);
+              const hoursAway = (sessionDT - new Date()) / (1000 * 60 * 60);
+              const isLate = hoursAway < 24;
+              return (
+                <div>
+                  <div style={{ fontSize: 14, color: '#333', marginBottom: 12 }}>
+                    {s.recipientName} — {s.date} at {s.time}
+                  </div>
+                  {isLate && (
+                    <div style={{ padding: '10px 14px', background: '#fff3e0', borderRadius: 8, border: '1px solid #ffe082', marginBottom: 12, fontSize: 13, color: '#e65100' }}>
+                      This is a <strong>late cancellation</strong> (less than 24 hours before the session). You will still be charged for this session.
+                    </div>
+                  )}
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: 12, color: '#888', marginBottom: 4 }}>Reason (optional)</label>
+                    <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                      placeholder="Why are you cancelling?"
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, minHeight: 60, resize: 'vertical' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setCancellingId(null); setCancelReason(''); }}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Keep Session
+                    </button>
+                    <button onClick={() => handleCancel(cancellingId)} disabled={cancelLoading}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: cancelLoading ? '#999' : '#c62828', color: '#fff', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'wait' : 'pointer' }}>
+                      {cancelLoading ? 'Cancelling...' : 'Cancel Session'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Review Modal (when caregiver late-cancelled) */}
+      {reviewSession && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 18 }}>Rate This Caregiver</h3>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>
+              This caregiver cancelled less than 24 hours before the session. Your review helps other families.
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, justifyContent: 'center' }}>
+              {[1, 2, 3, 4, 5].map(star => (
+                <button key={star} onClick={() => setReviewRating(star)}
+                  style={{ fontSize: 28, background: 'none', border: 'none', cursor: 'pointer', color: star <= reviewRating ? '#f59e0b' : '#d0d0d0' }}>
+                  ★
+                </button>
+              ))}
+            </div>
+            <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
+              placeholder="Optional comment..."
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, minHeight: 60, resize: 'vertical', marginBottom: 12 }} />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setReviewSession(null); setReviewRating(0); setReviewComment(''); }}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Skip
+              </button>
+              <button onClick={handleReview} disabled={!reviewRating || reviewLoading}
+                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: (!reviewRating || reviewLoading) ? '#999' : '#1b6b5a', color: '#fff', fontSize: 13, fontWeight: 600, cursor: (!reviewRating || reviewLoading) ? 'default' : 'pointer' }}>
+                {reviewLoading ? 'Submitting...' : 'Submit Review'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

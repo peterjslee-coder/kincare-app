@@ -679,6 +679,180 @@ router.put("/:id/status", async (req, res) => {
   res.json({ session: updated });
 });
 
+// ─── PUT /api/sessions/:id/cancel ───
+// Cancel a confirmed/pending session with late-cancel tracking
+router.put("/:id/cancel", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { reason } = req.body;
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // Only confirmed/pending/open/requested sessions can be cancelled
+    const cancellableStatuses = ["confirmed", "pending", "open", "requested", "in_progress"];
+    if (!cancellableStatuses.includes(session.status)) {
+      return res.status(400).json({ error: `Cannot cancel a session with status '${session.status}'` });
+    }
+
+    // Determine who is cancelling
+    let cancelledBy;
+    if (activeRole === "caregiver" || userId === session.caregiver_user_id) {
+      cancelledBy = "caregiver";
+    } else if (userId === session.family_user_id) {
+      cancelledBy = "family";
+    } else {
+      return res.status(403).json({ error: "You are not authorized to cancel this session" });
+    }
+
+    // Check if this is a late cancellation (<24 hours before session)
+    const sessionDateTime = new Date(`${session.scheduled_date}T${session.scheduled_time || "00:00"}`);
+    const hoursUntilSession = (sessionDateTime - new Date()) / (1000 * 60 * 60);
+    const isLateCancel = hoursUntilSession < 24;
+
+    if (cancelledBy === "caregiver") {
+      // Caregiver drops the job — revert to open so other caregivers can claim it
+      // Store cancelled_caregiver_id so family can still review them for late cancel
+      await db.prepare(`
+        UPDATE care_sessions
+        SET status = 'open',
+            cancelled_caregiver_id = caregiver_id,
+            caregiver_id = NULL,
+            cancellation_reason = ?,
+            cancelled_by = ?,
+            cancelled_at = NOW(),
+            late_cancel = ?,
+            updated_at = NOW()
+        WHERE id = ?
+      `).run(reason || null, cancelledBy, isLateCancel ? 1 : 0, req.params.id);
+    } else {
+      // Family cancels — session is fully cancelled
+      await db.prepare(`
+        UPDATE care_sessions
+        SET status = 'cancelled',
+            cancellation_reason = ?,
+            cancelled_by = ?,
+            cancelled_at = NOW(),
+            late_cancel = ?,
+            updated_at = NOW()
+        WHERE id = ?
+      `).run(reason || null, cancelledBy, isLateCancel ? 1 : 0, req.params.id);
+    }
+
+    const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+
+    // Activity feed entry
+    const { v4: actUuid } = require("uuid");
+    const cancellerName = cancelledBy === "caregiver" ? "Caregiver" : "Family";
+    await db.prepare(
+      "INSERT INTO activity_feed (id, user_id, type, title, description) VALUES (?, ?, 'session_cancelled', ?, ?)"
+    ).run(
+      actUuid(),
+      session.family_user_id,
+      `Session Cancelled by ${cancellerName}`,
+      `${session.service_type} session on ${session.scheduled_date} was cancelled${isLateCancel ? " (late cancellation)" : ""}.${reason ? " Reason: " + reason : ""}`
+    );
+
+    // Notify the other party via WebSocket
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      const notifyUserId = cancelledBy === "caregiver" ? session.family_user_id : session.caregiver_user_id;
+      if (notifyUserId) {
+        emitToUser(notifyUserId, "session_update", {
+          sessionId: req.params.id,
+          status: updated.status,
+          cancelledBy,
+          isLateCancel,
+          canReview: cancelledBy === "caregiver" && isLateCancel,
+        });
+      }
+    }
+
+    res.json({
+      session: updated,
+      cancelledBy,
+      isLateCancel,
+      // Family can review caregiver if caregiver late-cancelled
+      canReview: cancelledBy === "caregiver" && isLateCancel,
+      cancelledCaregiverId: cancelledBy === "caregiver" ? session.caregiver_id : null,
+      // Family still owes payment if they late-cancelled
+      chargeApplies: cancelledBy === "family" && isLateCancel,
+    });
+  } catch (err) {
+    console.error("Cancel session error:", err);
+    res.status(500).json({ error: "Failed to cancel session" });
+  }
+});
+
+// ─── POST /api/sessions/:id/review ───
+// Submit a review for a session (completion or late-cancel)
+router.post("/:id/review", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const { rating, comment } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be 1-5" });
+    }
+
+    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // Only the family user can review
+    if (userId !== session.family_user_id) {
+      return res.status(403).json({ error: "Only the family can leave a review" });
+    }
+
+    // Determine review type and caregiver to review
+    let reviewType = "completion";
+    let caregiverId = session.caregiver_id;
+
+    if (session.cancelled_by === "caregiver" && session.late_cancel && session.cancelled_caregiver_id) {
+      reviewType = "late_cancellation";
+      caregiverId = session.cancelled_caregiver_id;
+    } else if (session.status !== "completed") {
+      return res.status(400).json({ error: "Can only review completed sessions or late-cancelled sessions" });
+    }
+
+    if (!caregiverId) {
+      return res.status(400).json({ error: "No caregiver associated with this session" });
+    }
+
+    // Check for duplicate review
+    const existing = await db.prepare(
+      "SELECT id FROM reviews WHERE session_id = ? AND family_user_id = ?"
+    ).get(req.params.id, userId);
+    if (existing) return res.status(409).json({ error: "You already reviewed this session" });
+
+    const reviewId = uuid();
+    await db.prepare(
+      "INSERT INTO reviews (id, session_id, family_user_id, caregiver_id, rating, comment, review_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(reviewId, req.params.id, userId, caregiverId, rating, comment || null, reviewType);
+
+    // Update caregiver average rating
+    const stats = await db.prepare(
+      "SELECT AVG(rating) AS avg_rating, COUNT(*) AS count FROM reviews WHERE caregiver_id = ?"
+    ).get(caregiverId);
+    await db.prepare(
+      "UPDATE caregiver_profiles SET rating_avg = ?, rating_count = ? WHERE id = ?"
+    ).run(Math.round(stats.avg_rating * 10) / 10, stats.count, caregiverId);
+
+    res.json({ review: { id: reviewId, rating, comment, reviewType } });
+  } catch (err) {
+    console.error("Review error:", err);
+    res.status(500).json({ error: "Failed to submit review" });
+  }
+});
+
 // ─── GET /api/sessions/:id ───
 router.get("/:id", async (req, res) => {
   const db = await getDb();

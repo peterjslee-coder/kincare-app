@@ -280,6 +280,9 @@ async function caregiverDashboard(db, userId, res) {
       dlState: profile.dl_state,
       care_stoplight: profile.care_stoplight,
       avatar_url: user.avatar_url || null,
+      academicProgram: profile.academic_program || null,
+      academicProgramYear: profile.academic_program_year || null,
+      needsHourReports: !!profile.needs_hour_reports,
     },
     assignments: assignments.map(a => ({
       ...a,

@@ -447,6 +447,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     { id: 'reviews', label: 'Reviews', icon: '⭐' },
     { id: 'documents', label: 'Documents', icon: '📄' },
     { id: 'preferences', label: 'Care Preferences', icon: '🚦' },
+    { id: 'reports', label: 'Hour Reports', icon: '📊' },
   ];
 
   return (
@@ -1257,6 +1258,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'reports' && (
+        <HourReports profileName={profile.name} academicProgram={profile.academicProgram} />
       )}
 
       {/* Visit Log Modal */}

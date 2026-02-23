@@ -13,6 +13,9 @@ const FindWork = window.FindWork = () => {
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
   const [zipFilter, setZipFilter] = useState('');
   const [profileCenter, setProfileCenter] = useState(null);
+  const [cancellingId, setCancellingId] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState(10);
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
@@ -68,6 +71,25 @@ const FindWork = window.FindWork = () => {
       console.error('FindWork fetch error:', err);
     }
     setLoading(false);
+  };
+
+  const handleCancelSession = async (sessionId) => {
+    setCancelLoading(true);
+    try {
+      const res = await apiFetch(`/api/sessions/${sessionId}/cancel`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason: cancelReason || 'Cancelled by caregiver' }),
+      });
+      if (res?.ok) {
+        setCancellingId(null);
+        setCancelReason('');
+        fetchData();
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        alert(err?.error || 'Failed to cancel');
+      }
+    } catch { alert('Failed to cancel session'); }
+    setCancelLoading(false);
   };
 
   useEffect(() => { if (bgCheckPaid !== null) fetchData(); }, [rangeDays, bgCheckPaid]);
@@ -554,10 +576,18 @@ const FindWork = window.FindWork = () => {
                           {formatTimeStr(time)} · {duration}h · <span style={{ textTransform: 'capitalize' }}>{(service || '').replace(/_/g, ' ')}</span>
                         </div>
                       </div>
-                      <span style={{
-                        padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                        background: sc.bg, color: sc.text, textTransform: 'capitalize',
-                      }}>{s.status}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: sc.bg, color: sc.text, textTransform: 'capitalize',
+                        }}>{s.status}</span>
+                        {['confirmed', 'pending'].includes(s.status) && (
+                          <button onClick={() => setCancellingId(s.id)} style={{
+                            padding: '3px 10px', borderRadius: 6, border: '1px solid #e0e0e0',
+                            background: '#fff', color: '#c62828', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          }}>Cancel</button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -575,6 +605,50 @@ const FindWork = window.FindWork = () => {
         </>
       )}
       </>}
+
+      {/* Cancel Confirmation Modal */}
+      {cancellingId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 18 }}>Cancel Session</h3>
+            {(() => {
+              const s = upcomingSessions.find(x => x.id === cancellingId);
+              if (!s) return null;
+              const sessionDT = new Date(`${s.scheduled_date || s.date}T${s.scheduled_time || s.time || '00:00'}`);
+              const hoursAway = (sessionDT - new Date()) / (1000 * 60 * 60);
+              const isLate = hoursAway < 24;
+              return (
+                <div>
+                  <div style={{ fontSize: 14, color: '#333', marginBottom: 12 }}>
+                    {s.recipient_name || s.recipientName} — {s.scheduled_date || s.date}
+                  </div>
+                  {isLate && (
+                    <div style={{ padding: '10px 14px', background: '#fce4ec', borderRadius: 8, border: '1px solid #ef9a9a', marginBottom: 12, fontSize: 13, color: '#c62828' }}>
+                      This is a <strong>late cancellation</strong> (less than 24 hours before the session). The family will be able to leave a review.
+                    </div>
+                  )}
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: 12, color: '#888', marginBottom: 4 }}>Reason (optional)</label>
+                    <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                      placeholder="Why are you cancelling?"
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, minHeight: 60, resize: 'vertical' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setCancellingId(null); setCancelReason(''); }}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Keep Session
+                    </button>
+                    <button onClick={() => handleCancelSession(cancellingId)} disabled={cancelLoading}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: cancelLoading ? '#999' : '#c62828', color: '#fff', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'wait' : 'pointer' }}>
+                      {cancelLoading ? 'Cancelling...' : 'Cancel Session'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

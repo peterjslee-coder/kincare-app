@@ -254,6 +254,13 @@ async function initializeDatabase() {
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS photo TEXT`,
     // v1.21.0 — Care recipient emoji avatar
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS emoji TEXT`,
+    // v1.21.7 — Cancellation tracking
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancelled_by TEXT`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS late_cancel INTEGER DEFAULT 0`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancelled_caregiver_id TEXT`,
+    // v1.21.7 — Reviews: allow review_type to track cancellation reviews
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS review_type TEXT DEFAULT 'completion'`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

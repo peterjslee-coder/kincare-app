@@ -135,6 +135,7 @@ app.use("/api/feedback", require("./routes/feedback"));
 app.use("/api/payments", require("./routes/payments"));
 app.use("/api/connections", require("./routes/connections"));
 app.use("/api/help", require("./routes/help"));
+app.use("/api/reports", require("./routes/reports"));
 
 // ─── Health check ───
 app.get("/api/health", (req, res) => {
