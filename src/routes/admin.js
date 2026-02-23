@@ -817,4 +817,21 @@ router.post("/repair-demo", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/reseed-demo ───
+// Full demo-only reseed: deletes all demo user data (cascading), then re-creates
+// everything from seed.js with rich data (sessions, messages, notes, reviews, etc.)
+// Real user data is NEVER touched.
+router.post("/reseed-demo", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    console.log("🔄 Admin triggered demo-only reseed...");
+    const { seed } = require("../seed");
+    await seed({ demoOnly: true });
+    console.log("✅ Demo reseed complete");
+    res.json({ ok: true, message: "Demo data fully reseeded with all rich data (sessions, messages, notes, reviews, care teams, etc.)" });
+  } catch (err) {
+    console.error("❌ Demo reseed error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
