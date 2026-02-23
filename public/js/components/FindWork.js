@@ -18,7 +18,7 @@ const FindWork = window.FindWork = () => {
   useEffect(() => {
     const checkBgStatus = async () => {
       try {
-        const res = await apiFetch('/api/caretaker/dashboard');
+        const res = await apiFetch('/api/dashboard');
         if (res?.ok) {
           const data = await res.json();
           setBgCheckPaid(!!data?.profile?.background_check_paid || !!data?.profile?.isBackgroundChecked);
