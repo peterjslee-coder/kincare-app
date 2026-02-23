@@ -636,55 +636,61 @@ router.post("/repair-demo", async (req, res) => {
       return res.status(400).json({ error: "Required demo users not found", found: demoUsers.map(u => u.email) });
     }
 
-    // Check if care recipients already exist for demo users
-    const existingCR = await db.prepare("SELECT COUNT(*) as count FROM care_recipients WHERE family_user_id IN (SELECT id FROM users WHERE is_demo = 1)").get();
-    if (parseInt(existingCR.count) > 0) {
-      return res.json({ message: "Demo care recipients already exist", count: existingCR.count });
-    }
+    // Check which care recipients already exist per demo family user
+    const existingCR = await db.prepare("SELECT family_user_id FROM care_recipients WHERE family_user_id IN (SELECT id FROM users WHERE is_demo = 1)").all();
+    const existingFamilyIds = new Set(existingCR.map(r => r.family_user_id));
 
     // ─── Care Recipients ───
     const bettyId = uuid(), dorothyId = uuid(), arunId = uuid(), carlosId = uuid();
 
-    await db.prepare(`INSERT INTO care_recipients (id, family_user_id, first_name, last_name, age, location_address, location_city, location_state, location_zip, latitude, longitude, health_conditions, medications, preferences, emergency_contact_name, emergency_contact_phone, pets, pet_allergies, food_allergies, medical_conditions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      bettyId, peteId, "Barbara", "Lowe", 78, "123 Main Street", "Blacksburg", "VA", "24060", 37.2296, -80.4139,
-      JSON.stringify(["Early-stage dementia (diagnosed 2024)","Mild arthritis — both knees","High blood pressure (controlled)","Occasional vertigo when standing quickly","Poor hearing in left ear — wears hearing aid"]),
-      JSON.stringify(["Donepezil 10mg daily (evening)","Lisinopril 10mg daily (morning)","Ibuprofen 200mg PRN for knee pain","Calcium + Vitamin D supplement","Baby aspirin 81mg daily"]),
-      "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals and medications.",
-      "Paul Lowe", "(626) 555-0142",
-      "2 cats — Whiskers (orange tabby) and Mittens (calico)", "None known",
-      JSON.stringify(["Peanuts (severe — carries EpiPen)","Shellfish (mild — causes hives)"]),
-      "Early-stage dementia, mild arthritis, high blood pressure, occasional vertigo, poor hearing left ear"
-    );
-    results.push("Barbara Lowe created");
+    if (peteId && !existingFamilyIds.has(peteId)) {
+      await db.prepare(`INSERT INTO care_recipients (id, family_user_id, first_name, last_name, age, location_address, location_city, location_state, location_zip, latitude, longitude, health_conditions, medications, preferences, emergency_contact_name, emergency_contact_phone, pets, pet_allergies, food_allergies, medical_conditions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        bettyId, peteId, "Barbara", "Lowe", 78, "123 Main Street", "Blacksburg", "VA", "24060", 37.2296, -80.4139,
+        JSON.stringify(["Early-stage dementia (diagnosed 2024)","Mild arthritis — both knees","High blood pressure (controlled)","Occasional vertigo when standing quickly","Poor hearing in left ear — wears hearing aid"]),
+        JSON.stringify(["Donepezil 10mg daily (evening)","Lisinopril 10mg daily (morning)","Ibuprofen 200mg PRN for knee pain","Calcium + Vitamin D supplement","Baby aspirin 81mg daily"]),
+        "Prefers female caregivers. Loves gardening and old movies. Needs gentle reminders for meals and medications.",
+        "Paul Lowe", "(626) 555-0142",
+        "2 cats — Whiskers (orange tabby) and Mittens (calico)", "None known",
+        JSON.stringify(["Peanuts (severe — carries EpiPen)","Shellfish (mild — causes hives)"]),
+        "Early-stage dementia, mild arthritis, high blood pressure, occasional vertigo, poor hearing left ear"
+      );
+      results.push("Barbara Lowe created");
+    } else { results.push("Barbara skipped (exists or no Paul)"); }
 
-    await db.prepare(`INSERT INTO care_recipients (id, family_user_id, first_name, last_name, age, location_address, location_city, location_state, location_zip, latitude, longitude, health_conditions, medications, preferences, emergency_contact_name, emergency_contact_phone, pets, pet_allergies, food_allergies, medical_conditions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      dorothyId, hendersonFamilyId, "Dorothy", "Henderson", 82, "456 Oak Avenue", "Blacksburg", "VA", "24060", 37.2340, -80.4180,
-      JSON.stringify(["Type 2 diabetes","Hearing loss"]), JSON.stringify(["Metformin 500mg twice daily","Vitamin B12"]),
-      "Enjoys reading and birdwatching. Needs help with meal prep and grocery shopping.",
-      "Linda Henderson", "(540) 555-0301", "1 cat — Pepper (black, indoor, senior, 14 yrs)", "None known", JSON.stringify([]),
-      "Type 2 diabetes, hearing loss"
-    );
-    results.push("Dorothy Henderson created");
+    if (hendersonFamilyId && !existingFamilyIds.has(hendersonFamilyId)) {
+      await db.prepare(`INSERT INTO care_recipients (id, family_user_id, first_name, last_name, age, location_address, location_city, location_state, location_zip, latitude, longitude, health_conditions, medications, preferences, emergency_contact_name, emergency_contact_phone, pets, pet_allergies, food_allergies, medical_conditions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        dorothyId, hendersonFamilyId, "Dorothy", "Henderson", 82, "456 Oak Avenue", "Blacksburg", "VA", "24060", 37.2340, -80.4180,
+        JSON.stringify(["Type 2 diabetes","Hearing loss"]), JSON.stringify(["Metformin 500mg twice daily","Vitamin B12"]),
+        "Enjoys reading and birdwatching. Needs help with meal prep and grocery shopping.",
+        "Linda Henderson", "(540) 555-0301", "1 cat — Pepper (black, indoor, senior, 14 yrs)", "None known", JSON.stringify([]),
+        "Type 2 diabetes, hearing loss"
+      );
+      results.push("Dorothy Henderson created");
+    } else { results.push("Dorothy skipped (exists or no Linda)"); }
 
-    await db.prepare(`INSERT INTO care_recipients (id, family_user_id, first_name, last_name, age, location_address, location_city, location_state, location_zip, latitude, longitude, health_conditions, medications, preferences, emergency_contact_name, emergency_contact_phone, pets, pet_allergies, food_allergies, medical_conditions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      arunId, patelFamilyId, "Arun", "Patel", 85, "789 Elm Drive", "Christiansburg", "VA", "24073", 37.1320, -80.4100,
-      JSON.stringify(["Parkinson's disease (early stage)","Mild cognitive impairment"]), JSON.stringify(["Levodopa/Carbidopa","Memantine 10mg daily"]),
-      "Speaks Hindi and English. Vegetarian. Enjoys chess and cricket on TV.",
-      "Raj Patel", "(540) 555-0302", "None", "None known", JSON.stringify(["None"]),
-      "Parkinson's disease (early stage), mild cognitive impairment"
-    );
-    results.push("Arun Patel created");
+    if (patelFamilyId && !existingFamilyIds.has(patelFamilyId)) {
+      await db.prepare(`INSERT INTO care_recipients (id, family_user_id, first_name, last_name, age, location_address, location_city, location_state, location_zip, latitude, longitude, health_conditions, medications, preferences, emergency_contact_name, emergency_contact_phone, pets, pet_allergies, food_allergies, medical_conditions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        arunId, patelFamilyId, "Arun", "Patel", 85, "789 Elm Drive", "Christiansburg", "VA", "24073", 37.1320, -80.4100,
+        JSON.stringify(["Parkinson's disease (early stage)","Mild cognitive impairment"]), JSON.stringify(["Levodopa/Carbidopa","Memantine 10mg daily"]),
+        "Speaks Hindi and English. Vegetarian. Enjoys chess and cricket on TV.",
+        "Raj Patel", "(540) 555-0302", "None", "None known", JSON.stringify(["None"]),
+        "Parkinson's disease (early stage), mild cognitive impairment"
+      );
+      results.push("Arun Patel created");
+    } else { results.push("Arun skipped (exists or no Raj)"); }
 
-    await db.prepare(`INSERT INTO care_recipients (id, family_user_id, first_name, last_name, age, location_address, location_city, location_state, location_zip, latitude, longitude, health_conditions, medications, preferences, emergency_contact_name, emergency_contact_phone, pets, pet_allergies, food_allergies, medical_conditions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      carlosId, mariaUserId, "Carlos", "Santos", 30, "321 Pine Road", "Blacksburg", "VA", "24060", 37.2270, -80.4110,
-      JSON.stringify(["Traumatic brain injury (recovery)","Short-term memory issues","Mild left-side weakness","Anxiety"]),
-      JSON.stringify(["Sertraline 50mg daily","Gabapentin 300mg twice daily","Melatonin 5mg nightly"]),
-      "Loves sports and video games. Responds well to routine and patience.",
-      "Maria Santos", "(540) 555-0201", "1 dog — Luna (golden retriever, therapy dog)", "None known",
-      JSON.stringify(["Dairy (moderate — causes stomach cramps)"]),
-      "Traumatic brain injury (recovery), short-term memory issues, mild left-side weakness, anxiety"
-    );
-    results.push("Carlos Santos created");
+    if (mariaUserId && !existingFamilyIds.has(mariaUserId)) {
+      await db.prepare(`INSERT INTO care_recipients (id, family_user_id, first_name, last_name, age, location_address, location_city, location_state, location_zip, latitude, longitude, health_conditions, medications, preferences, emergency_contact_name, emergency_contact_phone, pets, pet_allergies, food_allergies, medical_conditions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        carlosId, mariaUserId, "Carlos", "Santos", 30, "321 Pine Road", "Blacksburg", "VA", "24060", 37.2270, -80.4110,
+        JSON.stringify(["Traumatic brain injury (recovery)","Short-term memory issues","Mild left-side weakness","Anxiety"]),
+        JSON.stringify(["Sertraline 50mg daily","Gabapentin 300mg twice daily","Melatonin 5mg nightly"]),
+        "Loves sports and video games. Responds well to routine and patience.",
+        "Maria Santos", "(540) 555-0201", "1 dog — Luna (golden retriever, therapy dog)", "None known",
+        JSON.stringify(["Dairy (moderate — causes stomach cramps)"]),
+        "Traumatic brain injury (recovery), short-term memory issues, mild left-side weakness, anxiety"
+      );
+      results.push("Carlos Santos created");
+    } else { results.push("Carlos skipped (exists)"); }
 
     // ─── Caregiver Profiles ───
     const existingProfiles = await db.prepare("SELECT COUNT(*) as count FROM caregiver_profiles WHERE user_id IN (SELECT id FROM users WHERE is_demo = 1)").get();
