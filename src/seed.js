@@ -43,10 +43,13 @@ async function seed({ force = false, demoOnly = false } = {}) {
       await db.prepare(`DELETE FROM platform_invites WHERE invited_by IN (${placeholders})`).run(...demoIds);
 
       // Activity feed, notes, visit data
-      await db.prepare(`DELETE FROM activity_feed WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await db.prepare(`DELETE FROM activity_feed WHERE family_user_id IN (${placeholders})`).run(...demoIds);
       await db.prepare(`DELETE FROM recipient_notes WHERE author_id IN (${placeholders})`).run(...demoIds);
 
-      // Care sessions and their children (visit_logs → visit_photos)
+      // Background check payments
+      await db.prepare(`DELETE FROM background_check_payments WHERE user_id IN (${placeholders})`).run(...demoIds);
+
+      // Care sessions and their children (visit_logs → visit_photos, session_offers)
       const demoSessions = await db.prepare(
         `SELECT id FROM care_sessions WHERE family_user_id IN (${placeholders}) OR caregiver_id IN (${placeholders})`
       ).all(...demoIds, ...demoIds);
@@ -55,6 +58,7 @@ async function seed({ force = false, demoOnly = false } = {}) {
         const sp = sessionIds.map(() => '?').join(',');
         await db.prepare(`DELETE FROM visit_photos WHERE visit_log_id IN (SELECT id FROM visit_logs WHERE session_id IN (${sp}))`).run(...sessionIds);
         await db.prepare(`DELETE FROM visit_logs WHERE session_id IN (${sp})`).run(...sessionIds);
+        await db.prepare(`DELETE FROM session_offers WHERE session_id IN (${sp})`).run(...sessionIds);
         await db.prepare(`DELETE FROM reviews WHERE session_id IN (${sp})`).run(...sessionIds);
         await db.prepare(`DELETE FROM payments WHERE session_id IN (${sp})`).run(...sessionIds);
         await db.prepare(`DELETE FROM care_sessions WHERE id IN (${sp})`).run(...sessionIds);
@@ -71,18 +75,18 @@ async function seed({ force = false, demoOnly = false } = {}) {
       const teamIds = demoTeams.map(t => t.id);
       if (teamIds.length > 0) {
         const tp = teamIds.map(() => '?').join(',');
-        await db.prepare(`DELETE FROM care_team_invites WHERE team_id IN (${tp})`).run(...teamIds);
-        await db.prepare(`DELETE FROM care_team_members WHERE team_id IN (${tp})`).run(...teamIds);
+        await db.prepare(`DELETE FROM care_team_invites WHERE care_team_id IN (${tp})`).run(...teamIds);
+        await db.prepare(`DELETE FROM care_team_members WHERE care_team_id IN (${tp})`).run(...teamIds);
         await db.prepare(`DELETE FROM care_teams WHERE id IN (${tp})`).run(...teamIds);
       }
 
       // Caregiver assignments and shares
-      await db.prepare(`DELETE FROM caregiver_assignments WHERE family_user_id IN (${placeholders}) OR caregiver_user_id IN (${placeholders})`).run(...demoIds, ...demoIds);
-      await db.prepare(`DELETE FROM care_recipient_shares WHERE shared_by IN (${placeholders}) OR shared_with IN (${placeholders})`).run(...demoIds, ...demoIds);
+      await db.prepare(`DELETE FROM caregiver_assignments WHERE family_user_id IN (${placeholders}) OR caregiver_profile_id IN (SELECT id FROM caregiver_profiles WHERE user_id IN (${placeholders}))`).run(...demoIds, ...demoIds);
+      await db.prepare(`DELETE FROM care_recipient_shares WHERE shared_by_user_id IN (${placeholders}) OR shared_with_user_id IN (${placeholders})`).run(...demoIds, ...demoIds);
 
       // Availability and caregiver profiles
       await db.prepare(`DELETE FROM availability WHERE caregiver_id IN (SELECT id FROM caregiver_profiles WHERE user_id IN (${placeholders}))`).run(...demoIds);
-      await db.prepare(`DELETE FROM caregiver_documents WHERE caregiver_profile_id IN (SELECT id FROM caregiver_profiles WHERE user_id IN (${placeholders}))`).run(...demoIds);
+      await db.prepare(`DELETE FROM caregiver_documents WHERE user_id IN (${placeholders})`).run(...demoIds);
       await db.prepare(`DELETE FROM caregiver_profiles WHERE user_id IN (${placeholders})`).run(...demoIds);
 
       // Care recipients owned by demo family users
