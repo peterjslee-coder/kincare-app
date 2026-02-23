@@ -95,6 +95,24 @@ const FindWork = window.FindWork = () => {
     }
   }, [profileCenter]);
 
+  // Service filter options
+  const serviceTypes = [...new Set(openRequests.map(s => s.service_type || s.serviceType).filter(Boolean))];
+
+  // Apply zip + service filters (computed before map effect so it can reference filteredRequests)
+  let filteredRequests = openRequests;
+  if (filterService !== 'all') {
+    filteredRequests = filteredRequests.filter(s => (s.service_type || s.serviceType) === filterService);
+  }
+  if (zipFilter.trim()) {
+    const z = zipFilter.trim().toLowerCase();
+    filteredRequests = filteredRequests.filter(s => {
+      const city = (s.recipient_city || '').toLowerCase();
+      const state = (s.recipient_state || '').toLowerCase();
+      const zip = (s.recipient_zip || '').toLowerCase();
+      return city.includes(z) || state.includes(z) || zip.includes(z);
+    });
+  }
+
   // ─── Map markers for open requests ───
   useEffect(() => {
     if (!leafletMap.current) return;
@@ -222,27 +240,6 @@ const FindWork = window.FindWork = () => {
     if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
-
-  // Service filter
-  const serviceTypes = [...new Set(openRequests.map(s => s.service_type || s.serviceType).filter(Boolean))];
-
-  // Apply zip + service filters
-  const filteredRequests = useMemo(() => {
-    let filtered = openRequests;
-    if (filterService !== 'all') {
-      filtered = filtered.filter(s => (s.service_type || s.serviceType) === filterService);
-    }
-    if (zipFilter.trim()) {
-      const z = zipFilter.trim().toLowerCase();
-      filtered = filtered.filter(s => {
-        const city = (s.recipient_city || '').toLowerCase();
-        const state = (s.recipient_state || '').toLowerCase();
-        const zip = (s.recipient_zip || '').toLowerCase();
-        return city.includes(z) || state.includes(z) || zip.includes(z);
-      });
-    }
-    return filtered;
-  }, [openRequests, filterService, zipFilter]);
 
   // Group upcoming sessions by date
   const sessionsByDate = {};
