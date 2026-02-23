@@ -115,8 +115,12 @@ router.get("/conversations", async (req, res) => {
     });
   }
 
-  // Sort all conversations by most recent message
-  conversations.sort((a, b) => (b.lastMessageAt || '').localeCompare(a.lastMessageAt || ''));
+  // Sort all conversations by most recent message (newest first)
+  conversations.sort((a, b) => {
+    const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+    const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+    return bTime - aTime;
+  });
 
   res.json({ conversations });
 });

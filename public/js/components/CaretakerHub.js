@@ -525,9 +525,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {firstSteps.map(s => (
               <div key={s.id} onClick={() => {
                 if (s.done) return;
+                if (s.id === 'profile') { if (window.__navigateTo) window.__navigateTo('account'); }
                 if (s.id === 'availability') setActiveTab('availability');
                 if (s.id === 'stoplight') setActiveTab('preferences');
                 if (s.id === 'photo') avatarInputRef.current?.click();
+                if (s.id === 'payments') setActiveTab('financials');
+                if (s.id === 'bgcheck') setActiveTab('financials');
               }} style={{
                 display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px',
                 color: s.done ? '#999' : '#333', cursor: s.done ? 'default' : 'pointer',

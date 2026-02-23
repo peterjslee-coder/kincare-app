@@ -55,7 +55,17 @@ const AreaMap = window.AreaMap = () => {
     }).addTo(map);
 
     leafletMap.current = map;
-    setTimeout(() => map.invalidateSize(), 100);
+    const forceResize = () => { if (leafletMap.current) leafletMap.current.invalidateSize(); };
+    forceResize();
+    setTimeout(forceResize, 100);
+    setTimeout(forceResize, 300);
+    setTimeout(forceResize, 600);
+    setTimeout(forceResize, 1200);
+    if (window.ResizeObserver && mapRef.current) {
+      const ro = new ResizeObserver(() => forceResize());
+      ro.observe(mapRef.current);
+      setTimeout(() => ro.disconnect(), 3000);
+    }
 
     return () => {
       if (leafletMap.current) {

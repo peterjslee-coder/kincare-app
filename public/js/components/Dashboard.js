@@ -387,14 +387,16 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         const latestFingerprint = `${upcomingCount}-${unreadCount}-${stats.assignedCaregivers}`;
         if (isTileDismissed('latest', latestFingerprint)) return null;
 
+        const latestClickTarget = upcomingCount > 0 ? 'schedule' : (unreadCount > 0 ? 'activity' : (stats.assignedCaregivers === 0 ? 'caregivers' : 'schedule'));
         return (
-          <div className="card" style={{ marginBottom: 16, borderLeft: `4px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
+          <div className="card" style={{ marginBottom: 16, borderLeft: `4px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 12, position: 'relative', cursor: 'pointer' }}
+            onClick={() => onNavigate && onNavigate(latestClickTarget)}>
             <span style={{ fontSize: 24 }}>{statusIcon}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Latest</div>
               <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{statusText}</div>
             </div>
-            <button onClick={() => dismissTile('latest', latestFingerprint)} title="Hide until there's something new" style={{
+            <button onClick={(e) => { e.stopPropagation(); dismissTile('latest', latestFingerprint); }} title="Hide until there's something new" style={{
               background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
               color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
             }}>✕</button>
@@ -403,13 +405,17 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       })()}
 
       {/* Onboarding Checklist (real users with some progress but not complete) */}
-      {showOnboarding && (
+      {showOnboarding && !isTileDismissed('onboarding', 'v1') && (
         <div className="card" style={{ borderLeft: '4px solid #e8724a', marginBottom: 16 }}>
           <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 20 }}>🚀</span>
             <span>Getting Started</span>
-            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#888' }}>
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#888', display: 'flex', alignItems: 'center', gap: 8 }}>
               {onboardingSteps.filter(s => s.done).length} / {onboardingSteps.length} complete
+              <button onClick={() => dismissTile('onboarding', 'v1')} title="Dismiss checklist" style={{
+                background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
+                color: '#999', padding: '2px 8px', borderRadius: 6, fontWeight: 600,
+              }}>✕</button>
             </span>
           </div>
           <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>

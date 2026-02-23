@@ -44,7 +44,16 @@ router.get("/", async (req, res) => {
       // No valid auth — show all public articles
     }
 
-    const filtered = articles.map(a => {
+    // Deduplicate articles by question text (keep first occurrence per sort_order)
+    const seen = new Set();
+    const deduped = articles.filter(a => {
+      const key = (a.question || '').trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const filtered = deduped.map(a => {
       let roleVisibility = null;
       try { roleVisibility = a.role_visibility ? JSON.parse(a.role_visibility) : null; } catch { roleVisibility = null; }
       let relatedFeedbackIds = [];

@@ -60,6 +60,7 @@ async function familyDashboard(db, userId, res) {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.family_user_id = ? AND cs.scheduled_date >= ?
+        AND cs.status IN ('confirmed', 'completed', 'in_progress')
         AND COALESCE(u.is_demo, 0) = 0
     `).get(userId, monthStr);
 

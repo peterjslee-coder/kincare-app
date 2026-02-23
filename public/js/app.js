@@ -175,10 +175,11 @@ const App = () => {
   // Unread message count for nav badge
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
 
-  // Expose modal opener for child components (Schedule empty state CTA)
+  // Expose modal opener and navigation for child components
   useEffect(() => {
     window.__openRequestCareModal = () => setShowRequestCareModal(true);
-    return () => { delete window.__openRequestCareModal; };
+    window.__navigateTo = (page) => setCurrentPage(page);
+    return () => { delete window.__openRequestCareModal; delete window.__navigateTo; };
   }, []);
 
   // ─── Swipe-back navigation ───

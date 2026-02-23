@@ -87,12 +87,22 @@ const Schedule = window.Schedule = () => {
       completed: { bg: '#e0f2e9', text: '#1b6b5a' },
       confirmed: { bg: '#e3f2fd', text: '#1565c0' },
       pending: { bg: '#fff3e0', text: '#e65100' },
+      requested: { bg: '#fce4ec', text: '#c62828' },
       open: { bg: '#fff8e1', text: '#f57f17' },
       in_progress: { bg: '#f3e5f5', text: '#7b1fa2' },
       cancelled: { bg: '#fce4ec', text: '#c62828' },
     };
     const c = colors[status] || colors.pending;
-    const label = status === 'open' ? 'Pending — awaiting caregiver' : status === 'requested' ? 'Requested — awaiting response' : status === 'pending' ? 'Pending' : status;
+    const labels = {
+      open: 'Awaiting caregiver',
+      requested: 'Requested — awaiting response',
+      pending: 'Pending',
+      confirmed: 'Confirmed',
+      completed: 'Completed',
+      in_progress: 'In Progress',
+      cancelled: 'Cancelled',
+    };
+    const label = labels[status] || status;
     return { style: { background: c.bg, color: c.text, padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }, label };
   };
 

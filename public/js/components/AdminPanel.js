@@ -7,7 +7,7 @@ const AdminPanel = window.AdminPanel = () => {
   const [usersTotal, setUsersTotal] = useState(0);
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('');
-  const [userDemoFilter, setUserDemoFilter] = useState('');
+  const [userDemoFilter, setUserDemoFilter] = useState('real');
   const [waitlist, setWaitlist] = useState([]);
   const [waitlistTotal, setWaitlistTotal] = useState(0);
   const [activity, setActivity] = useState(null);

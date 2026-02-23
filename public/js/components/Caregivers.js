@@ -156,9 +156,18 @@ const Caregivers = window.Caregivers = () => {
 
       leafletMap.current = map;
       // Force multiple invalidateSize calls to handle layout timing
-      map.invalidateSize();
-      setTimeout(() => { if (leafletMap.current) leafletMap.current.invalidateSize(); }, 200);
-      setTimeout(() => { if (leafletMap.current) leafletMap.current.invalidateSize(); }, 500);
+      const forceResize = () => { if (leafletMap.current) leafletMap.current.invalidateSize(); };
+      forceResize();
+      setTimeout(forceResize, 100);
+      setTimeout(forceResize, 300);
+      setTimeout(forceResize, 600);
+      setTimeout(forceResize, 1200);
+      // Also use ResizeObserver for robust detection of container sizing
+      if (window.ResizeObserver && mapRef.current) {
+        const ro = new ResizeObserver(() => forceResize());
+        ro.observe(mapRef.current);
+        setTimeout(() => ro.disconnect(), 3000);
+      }
 
       // If no search center, try recipient coords or browser geolocation as fallback
       if (!searchCenter && navigator.geolocation) {
@@ -274,7 +283,7 @@ const Caregivers = window.Caregivers = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '15px', fontWeight: 600, color: '#333' }}>{cg.name}</span>
+              <span style={{ fontSize: '17px', fontWeight: 700, color: '#1a1a2e' }}>{cg.name}</span>
               {isAssigned && (
                 <span style={{ padding: '2px 8px', background: '#e8f5e9', color: '#2e7d32', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>Assigned</span>
               )}
