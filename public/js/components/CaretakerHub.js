@@ -170,22 +170,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setShowAddRule(true);
   };
 
-  const fetchData = async () => {
-    try {
-      const res = await apiFetch('/api/dashboard');
-      if (res?.ok) {
-        const d = await res.json();
-        setData(d);
-      } else if (res?.status === 404) {
-        setNoProfile(true);
-      }
-    } catch (err) {
-      console.error('CaretakerHub fetch error:', err);
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await apiFetch('/api/dashboard');
+        if (res?.ok) {
+          const d = await res.json();
+          setData(d);
+        } else if (res?.status === 404) {
+          setNoProfile(true);
+        }
+      } catch (err) {
+        console.error('CaretakerHub fetch error:', err);
+      }
+      setLoading(false);
+    };
     fetchData();
 
     // Detect Stripe Connect return — refresh status and switch to financials tab
@@ -294,35 +293,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     if (data?.profile?.rateNighttime && !ratesNighttime) setRatesNighttime(data.profile.rateNighttime);
     if (data?.profile?.rateOvernight && !ratesOvernight) setRatesOvernight(data.profile.rateOvernight);
   }, [data?.profile?.rateDaytime, data?.profile?.rateNighttime, data?.profile?.rateOvernight]);
-
-  // Auto-mark onboarding complete (must be before early returns — React hook order rules)
-  // Compute step completion from safe data access
-  const _p = data?.profile || {};
-  const _stepsDone = [
-    !!(_p.bio && _p.hourlyRate),
-    availRules.length > 0,
-    !!stoplightData,
-    !!_p.avatar_url,
-    stripeStatus?.status === 'active',
-    !!_p.background_check_paid || !!_p.isBackgroundChecked,
-  ].filter(Boolean).length;
-  const _totalSteps = 6;
-  const prevStepsDone = useRef(_stepsDone);
-  useEffect(() => {
-    if (!data || prevStepsDone.current === _stepsDone) return;
-    prevStepsDone.current = _stepsDone;
-    if (!_p.onboardingComplete && _stepsDone === _totalSteps) {
-      apiFetch('/api/caregivers/mark-onboarding-complete', { method: 'PUT' })
-        .then(r => r && r.ok ? r.json() : null)
-        .then(res => {
-          if (res && res.onboarding_complete) {
-            showToast('Onboarding complete! Your dashboard is now unlocked.', 'success');
-            fetchData();
-          }
-        })
-        .catch(() => {});
-    }
-  }, [_stepsDone]);
 
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []).slice(0, 5);
@@ -499,9 +469,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
   const showFirstSteps = firstStepsDone < firstSteps.length;
-  const onboardingGated = !profile.onboardingComplete && showFirstSteps;
-
-  // Note: auto-complete onboarding useEffect is above early returns (React hook order rules)
 
   // Average hourly rate from completed sessions
   const totalHours = completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0);
@@ -582,24 +549,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* Onboarding Gate Panel — non-dismissible */}
-      {onboardingGated && (
-        <div className="onboarding-gate-panel">
-          <h2 className="onboarding-gate-title">Finish Your Setup</h2>
-          <p className="onboarding-gate-subtitle">
-            You'll need your driver's license or ID, bank account information to get paid,
-            and a credit/debit card for identity check and refundable background check.
-          </p>
-          <div className="onboarding-gate-progress">
-            <div className="progress-label">{firstStepsDone} of {firstSteps.length} complete</div>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${(firstStepsDone / firstSteps.length) * 100}%` }} />
+      {/* First Steps Banner */}
+      {showFirstSteps && (
+        <div className="card" style={{ marginBottom: '20px', padding: '16px', background: '#fffbf0', border: '1px solid #ffe0a0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ margin: 0, fontSize: '15px', color: '#b45309' }}>First Steps — {firstStepsDone}/{firstSteps.length} complete</h3>
+            <div style={{ width: '100px', height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: `${(firstStepsDone / firstSteps.length) * 100}%`, height: '100%', background: '#1b6b5a', borderRadius: '3px', transition: 'width 0.3s' }} />
             </div>
           </div>
           <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
-          <div className="onboarding-steps">
-            {firstSteps.map((s, idx) => (
-              <div key={s.id} className={'onboarding-step' + (s.done ? ' done' : '')} onClick={() => {
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {firstSteps.map(s => (
+              <div key={s.id} onClick={() => {
                 if (s.done) return;
                 if (s.id === 'profile') { if (window.__navigateTo) window.__navigateTo('account'); }
                 if (s.id === 'availability') setActiveTab('availability');
@@ -607,37 +569,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 if (s.id === 'photo') avatarInputRef.current?.click();
                 if (s.id === 'payments') setActiveTab('financials');
                 if (s.id === 'bgcheck') setActiveTab('financials');
+              }} style={{
+                display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px',
+                color: s.done ? '#999' : '#333', cursor: s.done ? 'default' : 'pointer',
+                textDecoration: s.done ? 'line-through' : 'none',
               }}>
-                <div className="step-circle">
-                  {s.done ? '\u2713' : (idx + 1)}
-                </div>
-                <div className="step-text">
-                  <div className="step-name">{s.label}</div>
-                  <div className="step-desc">
-                    {s.id === 'profile' && 'Add your bio and set your hourly rate'}
-                    {s.id === 'availability' && 'Tell families when you\'re free to work'}
-                    {s.id === 'stoplight' && 'Rate your comfort level with different care tasks'}
-                    {s.id === 'photo' && 'Families want to see who they\'re welcoming into their home'}
-                    {s.id === 'payments' && 'Connect your bank account through Stripe to get paid'}
-                    {s.id === 'bgcheck' && '$30 fee, refunded after your first 10 completed sessions'}
-                  </div>
-                </div>
-                {!s.done && <div className="step-arrow">{'\u2192'}</div>}
+                <span style={{ width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', background: s.done ? '#e8f5e9' : '#f0f0f0', color: s.done ? '#2e7d32' : '#999' }}>
+                  {s.done ? '✓' : '○'}
+                </span>
+                {s.label}
               </div>
             ))}
           </div>
         </div>
       )}
-
-      {/* Dashboard content — gated when onboarding incomplete */}
-      <div className={onboardingGated ? 'onboarding-content-lock' : ''}>
-        {onboardingGated && (
-          <div className="lock-overlay">
-            <div className="lock-icon">{'🔒'}</div>
-            <div className="lock-msg">Complete your setup above to unlock your dashboard</div>
-          </div>
-        )}
-        <div className={onboardingGated ? 'lock-content' : ''}>
 
       {/* Quick Stats — clickable */}
       <div className="stats-grid">
@@ -1413,9 +1358,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {activeTab === 'reports' && (
         <HourReports profileName={profile.name} academicProgram={profile.academicProgram} />
       )}
-
-        </div>{/* end lock-content / normal wrapper */}
-      </div>{/* end onboarding-content-lock / normal wrapper */}
 
       {/* Visit Log Modal */}
       {visitLogSession && (
