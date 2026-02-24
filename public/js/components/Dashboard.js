@@ -466,7 +466,9 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       {parent && (
         <div className="betty-card" onClick={() => onNavigate && onNavigate('care-profile')}
           style={{ cursor: 'pointer', position: 'relative' }}>
-          <div style={{ fontSize: 40 }}>🌷</div>
+          {parent.photo
+            ? <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={parent.photo} alt={parent.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+            : <div style={{ fontSize: 40 }}>{parent.emoji || '🌷'}</div>}
           <div className="betty-name">{parent.name}</div>
           <div className="betty-info">
             {(() => {

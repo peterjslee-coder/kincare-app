@@ -118,6 +118,8 @@ async function familyDashboard(db, userId, res) {
           healthConditions: JSON.parse(primary.health_conditions || "[]"),
           medications: JSON.parse(primary.medications || "[]"),
           preferences: primary.preferences,
+          photo: primary.photo || null,
+          emoji: primary.emoji || null,
           emergencyContact: {
             name: primary.emergency_contact_name,
             phone: primary.emergency_contact_phone,
