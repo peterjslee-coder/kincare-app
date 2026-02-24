@@ -797,16 +797,16 @@ const App = () => {
           <button className="sidebar-close" onClick={() => setSidebarOpen(false)} aria-label="Close menu">&times;</button>
         </div>
         {currentUser && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 16px 12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 16px 14px', gap: '6px' }}>
             <div className="sidebar-avatar" style={{
-              width: 36, height: 36, borderRadius: '50%',
+              width: 44, height: 44, borderRadius: '50%',
               background: currentUser.profilePhoto ? `url(${currentUser.profilePhoto}) center/cover` : '#e8724a',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontSize: 14, fontWeight: 600, flexShrink: 0, overflow: 'hidden',
+              color: 'white', fontSize: 16, fontWeight: 600, flexShrink: 0, overflow: 'hidden',
             }}>
               {!currentUser.profilePhoto && (currentUser.firstName?.[0] || '?').toUpperCase()}
             </div>
-            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)', fontWeight: 500, lineHeight: 1.3 }}>
+            <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)', fontWeight: 600, textAlign: 'center', lineHeight: 1.3 }}>
               {currentUser.firstName || 'User'} {currentUser.lastName || ''}
             </div>
           </div>
