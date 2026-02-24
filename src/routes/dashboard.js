@@ -65,7 +65,7 @@ async function familyDashboard(db, userId, res) {
     `).get(userId, monthStr);
 
     const today = new Date().toISOString().split("T")[0];
-    const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
+    const next30 = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
 
     const upcoming = await db.prepare(`
       SELECT cs.*,
@@ -81,8 +81,8 @@ async function familyDashboard(db, userId, res) {
         AND cs.scheduled_date <= ?
         AND cs.status IN ('pending', 'confirmed', 'open', 'requested')
       ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
-      LIMIT 5
-    `).all(userId, today, nextWeek);
+      LIMIT 10
+    `).all(userId, today, next30);
 
     const recentActivity = await db.prepare(`
       SELECT * FROM activity_feed

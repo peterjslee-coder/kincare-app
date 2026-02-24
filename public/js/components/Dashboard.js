@@ -541,11 +541,18 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         <div className="card" style={{ position: 'relative' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span><span className="card-icon">📅</span>Upcoming Sessions</span>
-            <button onClick={() => dismissTile('upcoming', `${upcoming.length}-${upcoming.map(s=>s.id).join(',')}`)} title="Hide until there's something new" style={{
-              background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
-              color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 4,
-            }}>✕ Hide</button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
+                background: '#e8724a', border: 'none', cursor: 'pointer', fontSize: 12,
+                color: '#fff', padding: '5px 12px', borderRadius: 6, fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}>+ Request Care</button>
+              <button onClick={() => dismissTile('upcoming', `${upcoming.length}-${upcoming.map(s=>s.id).join(',')}`)} title="Hide until there's something new" style={{
+                background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
+                color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}>✕ Hide</button>
+            </div>
           </div>
           <ul className="sessions-list">
             {upcoming.length > 0 ? upcoming.map((s, idx) => (
@@ -555,8 +562,15 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                     <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a2e' }}>
                       {s.recipientName}{s.familyTotal ? `, $${Math.round(parseFloat(s.familyTotal))}` : s.estimatedCost ? `, $${Math.round(parseFloat(s.estimatedCost))}` : ''}
                     </div>
-                    <div className="session-time">{s.date ? (parseTimestamp(s.date + 'T12:00:00') || new Date(s.date + 'T12:00:00')).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''} at {s.time}</div>
-                    <div style={{ fontSize: 12, color: '#666' }}>{s.caregiverName} · <span style={{ textTransform: 'capitalize' }}>{(s.serviceType || '').replace(/_/g, ' ')}</span></div>
+                    <div className="session-time">{s.date ? (() => {
+                      const d = parseTimestamp(s.date + 'T12:00:00') || new Date(s.date + 'T12:00:00');
+                      const dayDiff = Math.ceil((d - new Date(new Date().toDateString())) / 86400000);
+                      const rel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : `In ${dayDiff} days`;
+                      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` (${rel})`;
+                    })() : ''}{s.time ? ` at ${s.time}` : ''}</div>
+                    <div style={{ fontSize: 12, color: s.caregiverName ? '#666' : '#e8724a' }}>
+                      {s.caregiverName || 'Seeking caregiver'} · <span style={{ textTransform: 'capitalize' }}>{(s.serviceType || '').replace(/_/g, ' ')}</span>
+                    </div>
                     {s.caregiverPayout && s.platformFee > 0 && (
                       <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
                         Caregiver receives ${parseFloat(s.caregiverPayout).toFixed(0)} · Platform fee ${parseFloat(s.platformFee).toFixed(0)}
