@@ -367,7 +367,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
        dl_number, dl_state, background_check_consent, background_check_consent_at,
        work_location_address, care_stoplight, terms_accepted_at, terms_version,
        academic_program, academic_program_year, needs_hour_reports)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
        ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,

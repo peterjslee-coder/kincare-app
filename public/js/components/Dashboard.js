@@ -363,8 +363,23 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       {/* Push notification prompt — shows if not yet enabled */}
       {typeof NotificationPrompt !== 'undefined' && React.createElement(NotificationPrompt, null)}
       <div className="page-header">
-        <h1 className="greeting">Welcome back, {firstName}!</h1>
+        <h1 className="greeting">{isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`}</h1>
       </div>
+
+      {/* New User Welcome — prominent CTA to add care recipient */}
+      {isNewUser && (
+        <div className="card" style={{ textAlign: 'center', padding: '32px 24px', marginBottom: 20, borderLeft: '4px solid #e8724a' }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🏠</div>
+          <h3 style={{ margin: '0 0 8px', color: '#1a1a2e', fontSize: 18 }}>Let's get started</h3>
+          <p style={{ color: '#666', fontSize: 14, maxWidth: 400, margin: '0 auto 20px', lineHeight: 1.5 }}>
+            Add the person you're coordinating care for. This is how you'll manage their schedule, find caregivers, and track everything in one place.
+          </p>
+          <button className="btn btn-primary" onClick={() => onNavigate && onNavigate('recipients')}
+            style={{ padding: '14px 36px', fontSize: 16, fontWeight: 700 }}>
+            + Add Your Loved One
+          </button>
+        </div>
+      )}
 
       {/* Latest Status */}
       {!isNewUser && (() => {
