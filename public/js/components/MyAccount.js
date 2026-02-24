@@ -1,18 +1,35 @@
 // ─── Delete Account Section ───
 const DeleteAccountSection = ({ onDeleted }) => {
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [step, setStep] = useState('idle'); // idle → reason → confirm → goodbye
+  const [reason, setReason] = useState('');
+  const [reasonDetail, setReasonDetail] = useState('');
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
+
+  const EXIT_REASONS = [
+    { value: 'no_longer_needed', label: 'I no longer need care services' },
+    { value: 'found_alternative', label: 'I found another service' },
+    { value: 'too_complicated', label: 'The platform was too complicated' },
+    { value: 'not_enough_caregivers', label: 'Not enough caregivers in my area' },
+    { value: 'too_expensive', label: 'Too expensive' },
+    { value: 'privacy_concerns', label: 'Privacy concerns' },
+    { value: 'other', label: 'Other reason' },
+  ];
 
   const handleDelete = async () => {
     if (confirmText !== 'DELETE') return;
     setDeleting(true);
     setError(null);
     try {
-      const res = await apiFetch('/api/auth/me', { method: 'DELETE' });
+      const res = await apiFetch('/api/auth/me', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason, reasonDetail: reason === 'other' ? reasonDetail : undefined }),
+      });
       if (res?.ok) {
-        onDeleted();
+        setStep('goodbye');
+        setTimeout(() => onDeleted(), 4000);
       } else {
         const data = await res?.json();
         setError(data?.error || 'Failed to delete account');
@@ -23,23 +40,89 @@ const DeleteAccountSection = ({ onDeleted }) => {
     setDeleting(false);
   };
 
+  const reset = () => { setStep('idle'); setReason(''); setReasonDetail(''); setConfirmText(''); setError(null); };
+
+  if (step === 'goodbye') {
+    return (
+      <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #e0e0e0' }}>
+        <div style={{ padding: '24px', background: '#f8faf9', borderRadius: '12px', border: '1px solid #d0e8e0', textAlign: 'center' }}>
+          <div style={{ fontSize: '28px', marginBottom: '12px' }}>{'We\'re sorry to see you go'}</div>
+          <p style={{ fontSize: '15px', color: '#555', margin: '0 0 8px', lineHeight: '1.6' }}>
+            Your account has been deleted. Thank you for being part of InPlace.
+          </p>
+          <p style={{ fontSize: '13px', color: '#888', margin: 0 }}>
+            You will be logged out shortly...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #fdd' }}>
-      {!showConfirm ? (
-        <button onClick={() => setShowConfirm(true)} style={{
+      {step === 'idle' && (
+        <button onClick={() => setStep('reason')} style={{
           width: '100%', padding: '12px 20px', background: '#fff', color: '#999',
           border: '1px solid #e0e0e0', borderRadius: 10, fontSize: 13, fontWeight: 500,
           cursor: 'pointer',
         }}>
           Delete My Account
         </button>
-      ) : (
+      )}
+
+      {step === 'reason' && (
+        <div style={{ padding: '16px', background: '#fff8f8', borderRadius: '10px', border: '1px solid #fdd' }}>
+          <div style={{ fontSize: '15px', fontWeight: 600, color: '#c62828', marginBottom: '4px' }}>
+            We're sorry to see you go
+          </div>
+          <p style={{ fontSize: '13px', color: '#666', margin: '0 0 14px', lineHeight: '1.5' }}>
+            Before you go, would you mind telling us why? This helps us improve InPlace for everyone.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+            {EXIT_REASONS.map(r => (
+              <label key={r.value} style={{
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px',
+                background: reason === r.value ? '#fef0ed' : '#fff', borderRadius: '6px',
+                border: reason === r.value ? '1px solid #e8724a' : '1px solid #eee',
+                cursor: 'pointer', fontSize: '13px', color: '#444', transition: 'all 0.15s',
+              }}>
+                <input type="radio" name="exit-reason" value={r.value}
+                  checked={reason === r.value} onChange={() => setReason(r.value)}
+                  style={{ accentColor: '#e8724a' }} />
+                {r.label}
+              </label>
+            ))}
+          </div>
+          {reason === 'other' && (
+            <textarea value={reasonDetail} onChange={(e) => setReasonDetail(e.target.value)}
+              placeholder="Please tell us more..." rows={3}
+              style={{
+                width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px',
+                fontSize: '13px', marginBottom: '12px', boxSizing: 'border-box', resize: 'vertical',
+                fontFamily: 'inherit',
+              }} />
+          )}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={reset} style={{
+              flex: 1, padding: '10px', background: '#f0f0f0', color: '#555', border: 'none',
+              borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+            }}>Cancel</button>
+            <button onClick={() => setStep('confirm')} disabled={!reason} style={{
+              flex: 1, padding: '10px', background: reason ? '#c62828' : '#e0e0e0',
+              color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+              cursor: reason ? 'pointer' : 'not-allowed',
+            }}>Continue</button>
+          </div>
+        </div>
+      )}
+
+      {step === 'confirm' && (
         <div style={{ padding: '16px', background: '#fff8f8', borderRadius: '10px', border: '1px solid #fdd' }}>
           <div style={{ fontSize: '15px', fontWeight: 600, color: '#c62828', marginBottom: '8px' }}>
-            Delete Account Permanently
+            Confirm Account Deletion
           </div>
           <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px', lineHeight: '1.5' }}>
-            This will permanently remove your account and all associated data. This action cannot be undone.
+            This action cannot be undone. Your profile and personal data will be removed, though some records may be retained for legal and safety purposes.
           </p>
           <p style={{ fontSize: '13px', color: '#333', margin: '0 0 8px', fontWeight: 500 }}>
             Type <strong>DELETE</strong> to confirm:
@@ -51,10 +134,10 @@ const DeleteAccountSection = ({ onDeleted }) => {
             }} />
           {error && <div style={{ fontSize: '13px', color: '#c62828', marginBottom: '10px' }}>{error}</div>}
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={() => { setShowConfirm(false); setConfirmText(''); setError(null); }} style={{
+            <button onClick={() => setStep('reason')} style={{
               flex: 1, padding: '10px', background: '#f0f0f0', color: '#555', border: 'none',
               borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-            }}>Cancel</button>
+            }}>Back</button>
             <button onClick={handleDelete} disabled={confirmText !== 'DELETE' || deleting} style={{
               flex: 1, padding: '10px', background: confirmText === 'DELETE' ? '#c62828' : '#e0e0e0',
               color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,

@@ -335,7 +335,7 @@ router.delete("/users/:id", async (req, res) => {
         WHERE id = ?
       `).run(cgId);
     }
-    await db.prepare("DELETE FROM availability WHERE user_id = ?").run(id);
+    // availability uses caregiver_id, not user_id — already cleaned up above if cgId exists
 
     // 2. Delete sensitive auth & device data
     await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(id);

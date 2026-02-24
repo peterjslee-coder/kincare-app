@@ -608,6 +608,9 @@ router.delete("/me", authenticate, async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
     if (user.is_demo) return res.status(403).json({ error: "Cannot delete demo accounts" });
 
+    // Store exit reason if provided
+    const { reason, reasonDetail } = req.body || {};
+
     const anonEmail = `deleted_${userId.slice(0, 8)}@deleted.inplace`;
 
     // Get caregiver profile ID if exists
@@ -641,7 +644,7 @@ router.delete("/me", authenticate, async (req, res) => {
         WHERE id = ?
       `).run(cgId);
     }
-    await db.prepare("DELETE FROM availability WHERE user_id = ?").run(userId);
+    // availability uses caregiver_id, not user_id — already cleaned up above if cgId exists
 
     // 2. Delete sensitive auth & device data (no audit value)
     await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(userId);
@@ -664,6 +667,15 @@ router.delete("/me", authenticate, async (req, res) => {
     // 5. RETAIN for audit: messages, activity_feed, feedback, reviews, payments,
     //    care_sessions (completed), background_check_payments, payout_preferences,
     //    recipient_notes — all stay linked to the anonymized user row
+
+    // 5b. Log the exit reason as an activity feed entry (before anonymizing)
+    if (reason) {
+      const { v4: uuidv4 } = require("uuid");
+      await db.prepare(`
+        INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
+        VALUES (?, ?, 'account_deleted', 'Account deleted', ?, ?, NOW())
+      `).run(uuidv4(), userId, reason === 'other' ? (reasonDetail || 'No reason given') : reason, JSON.stringify({ reason, reasonDetail: reasonDetail || null, role: user.role }));
+    }
 
     // 6. Anonymize the user row — strip PII, deactivate, preserve the ID
     await db.prepare(`
