@@ -40,7 +40,7 @@
 - [x] ~~**Feedback icon overlaps message send button.** Fixed in v1.25.0. FAB moves higher (bottom: 130px) on mobile when on Messages page. *(Feedback — Feb 21)*~~
 - [x] ~~**Message timestamps — add date and time.** Fixed in v1.25.0. Individual messages now show "Yesterday 2:30 PM" or "Feb 21 2:30 PM" for older messages, just time for today. *(Feedback — Carry Taker)*~~
 - [ ] **Photo upload crop + auto-resize.** Need in-app crop tool and auto-resize to 1.5MB before uploading profile photos. Current UX too manual. *(Feedback — reviewed)*
-- [ ] **Profile photo in sidebar/header.** Uploaded profile photo should display next to "iP" logo in the top-left sidebar. Clicking the thumbnail should show options to change/delete. *(Feedback — reviewed)*
+- [ ] **Profile photo in sidebar/header.** Uploaded profile photo should display next to "iP" logo in the top-left sidebar/header corner. Clicking the thumbnail should link to profile. *(Feedback — reviewed, Feb 24 new)*
 - [ ] **Admin stats include demo data.** Admin panel sessions/users counts include demo accounts and demo sessions. Should filter to real data only, while keeping demo intact for the demo picker. *(Feedback — Feb 22)*
 - [ ] **Admin 2FA/biometrics gate.** Admin panel should require 2FA or biometrics to access. Destructive actions (delete users, override background checks) should require additional verification. *(Feedback — Feb 22)*
 - [ ] **Merge waitlist + invites in admin.** Users don't understand the distinction between waitlist and invites tabs. Combine into a unified "People" tab showing all leads/invites/signups in one view. *(Feedback — Feb 22)*
@@ -72,6 +72,22 @@
 - [x] ~~**Getting Started checklist not auto-completing.** Fixed in v1.25.0. Added dismiss button to the Getting Started checklist on the new-user dashboard view. Checklist auto-detection was already in place for profile, recipients, caregivers, etc. *(Feedback — Feb 23, #39)*~~
 - [x] ~~**Caregiver name too small on profile.** Fixed in v1.25.0. Bumped caregiver name font from 17px to 20px on Caregivers.js profile cards. *(Feedback — Feb 23, #40)*~~
 - [x] ~~**Dashboard spend shows amount with no confirmed appointments.** Fixed in v1.25.0. Analytics endpoint now filters all spend/session/hour queries to only count confirmed and completed sessions. *(Feedback — Feb 23, #52)*~~
+- [x] ~~**Care recipient photo not showing on Dashboard.** Fixed in v1.25.1. Dashboard card hardcoded 🌷 emoji. Now shows photo > emoji > fallback. Also added photo/emoji fields to dashboard API parent object. *(Feb 24)*~~
+- [ ] **Active role not obvious enough.** Users can't easily tell which profile/role they're viewing. Need a persistent "Viewing as: [Family/Caregiver]" indicator or more prominent role switcher. *(Feedback — Feb 24, new)*
+- [ ] **Star rating on caregiver card unclear.** Users don't understand what the star rating represents — is it the care recipient's rating? The caregiver's? Needs a label or tooltip explaining the rating source. *(Feedback — Feb 24, new)*
+- [ ] **Betty tile and care team should be unified.** The care team card is a separate entity from Betty's card but logically they're connected. Care team should be nested inside Betty's tile, showing member avatars alongside Betty's info. *(Feedback — Feb 24, new)*
+- [ ] **Show assigned caregiver on the map (Find Nearby).** When a caregiver like Cary is assigned, show her pin/flag on the family's caregiver map view. *(Feedback — Feb 24, new)*
+- [ ] **Care team tile — overlapping avatar display.** Care team tile should show member avatars/photos lined up and slightly overlapping (like "holding hands"), not just text names. *(Feedback — Feb 24, new)*
+- [ ] **Betty's tile health condition text too dark/hard to read.** The dark grey "Early stage dementia" text on the green Betty card is hard to read. Lighten the text color or add contrast. *(Feedback — Feb 24, new)*
+- [ ] **"Request Care" button misplaced in sidebar.** "Request Care" is at the bottom of the sidebar nav and hard to find. Should be more prominent — near the top or as a floating action. *(Feedback — Feb 24, new)*
+- [ ] **Care notes — add delete option.** Users like care notes but want ability to delete individual notes. Currently no delete button. *(Feedback — Feb 24, new)*
+- [ ] **Calendar blocks should show session preview.** Calendar day cells with appointments should show a preview block (not just a dot) with "Betty, 3 hours, Companion time, $94" instead of requiring a click to see details. *(Feedback — Feb 24, new)*
+- [ ] **"Set your availability" link broken.** Clicking "Set your availability" in First Steps or checklist doesn't navigate anywhere. Wire it to the availability page/tab. *(Feedback — Feb 24, new)*
+- [ ] **"Complete my profile" checklist misleading.** The "Complete my profile" step shows as incomplete but user can't find anything missing. Checklist criteria need to be clearer about what's actually required. *(Feedback — Feb 24, new)*
+- [ ] **Admin: delete user account fails.** Attempted to delete a user account from admin panel — got the option but it failed. Debug the delete user endpoint. *(Feedback — Feb 24, new)*
+- [ ] **Admin: force password reset from admin panel.** Admin should be able to trigger a password reset email for any user directly from the admin panel. *(Feedback — reviewed)*
+- [ ] **Push notification icon is white square on Android.** PWA notification icon renders as blank white square on Pixel (Android). Need proper monochrome notification icon. *(Feedback — reviewed)*
+- [ ] **Caregiver avatar in assignment block.** When assigning a caregiver, show their profile pic/icon in the assignment card. Not too big — just enough to recognize. *(Feedback — reviewed)*
 
 
 ## Features — Up Next
