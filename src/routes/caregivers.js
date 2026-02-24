@@ -441,4 +441,44 @@ router.put("/rates", requireRole("caregiver"), async (req, res) => {
   });
 });
 
+// ─── PUT /api/caregivers/mark-onboarding-complete ───
+// Verify all 6 onboarding steps are done, then set onboarding_complete = 1
+router.put("/mark-onboarding-complete", async (req, res) => {
+  if (req.user.role !== "caregiver") {
+    return res.status(403).json({ error: "Caregiver role required" });
+  }
+
+  const db = await getDb();
+  const profile = await db.prepare(`
+    SELECT cp.*, u.avatar_url
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE cp.user_id = ?
+  `).get(req.user.id);
+
+  if (!profile) {
+    return res.status(404).json({ error: "Caregiver profile not found" });
+  }
+
+  // Check availability rules
+  const availRules = await db.prepare("SELECT id FROM availability WHERE user_id = ?").all(req.user.id);
+
+  // Verify all 6 criteria
+  const missing = [];
+  if (!profile.bio || !profile.hourly_rate) missing.push("Profile (bio & hourly rate)");
+  if (!availRules || availRules.length === 0) missing.push("Availability");
+  if (!profile.care_stoplight) missing.push("Care preferences");
+  if (!profile.avatar_url) missing.push("Profile photo");
+  if (!profile.stripe_onboard_complete) missing.push("Stripe payments");
+  if (!profile.background_check_paid && !profile.is_background_checked) missing.push("Background check");
+
+  if (missing.length > 0) {
+    return res.status(400).json({ error: "Incomplete onboarding", missing });
+  }
+
+  await db.prepare("UPDATE caregiver_profiles SET onboarding_complete = 1 WHERE user_id = ?").run(req.user.id);
+
+  res.json({ onboarding_complete: 1, message: "Onboarding complete! You're ready to accept care requests." });
+});
+
 module.exports = router;

@@ -2328,3 +2328,156 @@
       body { background: #fff !important; }
       .card { box-shadow: none !important; border: 1px solid #ddd !important; }
     }
+
+    /* ─── Onboarding Gate (v1.27.0) ─── */
+    .onboarding-gate-panel {
+      background: linear-gradient(135deg, #fff 0%, #f0faf8 100%);
+      border: 2px solid #1b6b5a;
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 20px rgba(27, 107, 90, 0.12);
+    }
+    .onboarding-gate-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1b6b5a;
+      margin: 0 0 8px 0;
+    }
+    .onboarding-gate-subtitle {
+      font-size: 14px;
+      color: #555;
+      margin: 0 0 20px 0;
+      line-height: 1.6;
+    }
+    .onboarding-gate-progress {
+      margin-bottom: 24px;
+    }
+    .onboarding-gate-progress .progress-label {
+      font-size: 13px;
+      color: #1b6b5a;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .onboarding-gate-progress .progress-bar {
+      width: 100%;
+      height: 10px;
+      background: #e0e0e0;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .onboarding-gate-progress .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #1b6b5a 0%, #2e9d7f 100%);
+      border-radius: 5px;
+      transition: width 0.5s ease;
+    }
+    .onboarding-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .onboarding-step {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: #fff;
+      border-radius: 10px;
+      border: 2px solid #e8e8e8;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .onboarding-step:hover:not(.done) {
+      border-color: #1b6b5a;
+      background: #f0faf8;
+      box-shadow: 0 2px 8px rgba(27, 107, 90, 0.1);
+    }
+    .onboarding-step.done {
+      cursor: default;
+      opacity: 0.55;
+      background: #f8f9fa;
+    }
+    .onboarding-step .step-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .onboarding-step:not(.done) .step-circle {
+      background: #e0f2e9;
+      color: #1b6b5a;
+      border: 2px solid #1b6b5a;
+    }
+    .onboarding-step.done .step-circle {
+      background: #c8e6c9;
+      color: #2e7d32;
+      border: 2px solid #4caf50;
+    }
+    .onboarding-step .step-text {
+      flex: 1;
+    }
+    .onboarding-step .step-text .step-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+    .onboarding-step .step-text .step-desc {
+      font-size: 12px;
+      color: #888;
+      margin-top: 2px;
+    }
+    .onboarding-step .step-arrow {
+      font-size: 18px;
+      color: #1b6b5a;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .onboarding-content-lock {
+      position: relative;
+      min-height: 300px;
+    }
+    .onboarding-content-lock .lock-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      z-index: 50;
+    }
+    .onboarding-content-lock .lock-overlay .lock-icon {
+      font-size: 40px;
+    }
+    .onboarding-content-lock .lock-overlay .lock-msg {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      background: rgba(255,255,255,0.9);
+      padding: 8px 20px;
+      border-radius: 8px;
+    }
+    .onboarding-content-lock .lock-content {
+      pointer-events: none;
+      filter: blur(4px);
+      opacity: 0.45;
+      user-select: none;
+    }
+
+    @media (max-width: 768px) {
+      .onboarding-gate-panel {
+        padding: 20px 16px;
+        margin-bottom: 20px;
+      }
+      .onboarding-gate-title {
+        font-size: 18px;
+      }
+    }
