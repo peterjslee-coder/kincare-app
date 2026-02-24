@@ -619,11 +619,22 @@ router.delete("/me", authenticate, async (req, res) => {
       await db.prepare("DELETE FROM reviews WHERE caregiver_id = ?").run(cgId);
       await db.prepare("DELETE FROM payments WHERE caregiver_id = ?").run(cgId);
       await db.prepare("DELETE FROM caregiver_assignments WHERE caregiver_profile_id = ?").run(cgId);
-      await db.prepare("DELETE FROM care_sessions WHERE caregiver_id = ?").run(cgId);
+      await db.prepare("DELETE FROM session_offers WHERE from_user_id = ? OR to_user_id = ?").run(userId, userId);
+      // Unassign active sessions back to 'requested' so families don't lose them
+      await db.prepare(`
+        UPDATE care_sessions
+        SET caregiver_id = NULL, status = 'requested', updated_at = NOW()
+        WHERE caregiver_id = ? AND status IN ('confirmed', 'pending', 'open')
+      `).run(cgId);
+      await db.prepare("DELETE FROM care_sessions WHERE caregiver_id = ? AND status IN ('completed', 'cancelled')").run(cgId);
       await db.prepare("DELETE FROM caregiver_profiles WHERE id = ?").run(cgId);
     }
 
     // 2. Tables referencing users(id) directly
+    await db.prepare("DELETE FROM availability WHERE user_id = ?").run(userId);
+    await db.prepare("DELETE FROM feedback WHERE user_id = ?").run(userId);
+    await db.prepare("DELETE FROM background_check_payments WHERE user_id = ?").run(userId);
+    await db.prepare("DELETE FROM payout_preferences WHERE user_id = ?").run(userId);
     await db.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(userId);
     await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(userId);
     await db.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(userId);
@@ -631,12 +642,19 @@ router.delete("/me", authenticate, async (req, res) => {
     await db.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(userId);
     await db.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(userId);
     await db.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(userId);
+    await db.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(userId, userId);
+    await db.prepare("UPDATE care_team_invites SET status = 'pending' WHERE invited_email = ? AND status = 'accepted'").run(user.email);
+    await db.prepare("DELETE FROM care_team_invites WHERE invited_by = ?").run(userId);
+    await db.prepare("DELETE FROM platform_invites WHERE invited_by = ?").run(userId);
     await db.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(userId);
     await db.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(userId);
     await db.prepare("DELETE FROM activity_feed WHERE family_user_id = ?").run(userId);
     await db.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(userId, userId);
     await db.prepare("DELETE FROM recipient_notes WHERE author_id = ?").run(userId);
     await db.prepare("DELETE FROM messages WHERE sender_id = ? OR recipient_id = ?").run(userId, userId);
+    await db.prepare("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?").run(userId);
+    await db.prepare("UPDATE conversations SET created_by = NULL WHERE created_by = ?").run(userId);
+    await db.prepare("UPDATE blocked_emails SET blocked_by = NULL WHERE blocked_by = ?").run(userId);
 
     // 3. Delete user
     await db.prepare("DELETE FROM users WHERE id = ?").run(userId);
