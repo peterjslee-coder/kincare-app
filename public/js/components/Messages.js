@@ -664,7 +664,11 @@ const Messages = window.Messages = () => {
           </div>
         ))}
 
-        {conversations.filter(c => !archivedIds.includes(c.id)).length > 0 ? conversations.filter(c => !archivedIds.includes(c.id)).map(c => {
+        {conversations.filter(c => !archivedIds.includes(c.id)).length > 0 ? conversations.filter(c => !archivedIds.includes(c.id)).sort((a, b) => {
+          const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+          const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+          return bTime - aTime;
+        }).map(c => {
           const isGroup = isGroupConv(c);
           const typeIcon = c.type === 'care_team' ? '👥' : c.type === 'group' ? '💬' : null;
           const isSwiping = swipingId === c.id;

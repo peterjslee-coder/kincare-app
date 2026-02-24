@@ -120,8 +120,8 @@ const ActivityFeed = window.ActivityFeed = () => {
                   <div className="activity-time">{formatActivityTime(activity.created_at)}</div>
                 </div>
                 {!activity.is_read && (
-                  <button onClick={(e) => markAsRead(activity.id, e)} style={{ padding: '4px 8px', background: 'transparent', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 8 }}>
-                    Mark read
+                  <button onClick={(e) => markAsRead(activity.id, e)} style={{ padding: '3px 6px', background: 'transparent', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 6, lineHeight: 1.2 }}>
+                    ✓ Read
                   </button>
                 )}
               </div>

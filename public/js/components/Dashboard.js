@@ -478,7 +478,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
             Living in {parent.location}
           </div>
           {parent.healthConditions && parent.healthConditions.length > 0 && (
-            <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+            <div style={{ marginTop: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
               {parent.healthConditions.join(' · ')}
             </div>
           )}

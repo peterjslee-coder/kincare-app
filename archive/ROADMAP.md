@@ -512,35 +512,41 @@
 
 ---
 
-## Next Up — v1.29.0: Dashboard & Navigation Polish
+## Completed — v1.29.0–v1.29.1: Dashboard & Navigation Polish (2026-02-24)
 
-Priority: **HIGH** — Fresh user feedback (78 total items, 25 reviewed). Fix visible UX issues.
+**v1.29.0 — Role Management & Tiered Rates:**
+- [x] **Active role indicator.** Multi-role users see "Viewing as" label above role switcher; single-role users see icon + role name
+- [x] **Delete individual role.** POST /api/auth/remove-role with cleanup of caregiver-specific data, two-step confirmation UI on MyAccount
+- [x] **Tiered caregiver rates.** Three-tier rate inputs (Daytime 6a-6p, Evening 6p-12a, Overnight 12a-6a) in CaretakerHub profile editor, 6-hour minimum note
 
-**Bugs:**
-- [ ] **Duplicate help/FAQ articles.** Same questions shown 3 times. *(Feedback #48)*
-- [ ] **Inbox not sorted by recency.** Most recent conversation should be at top. *(Feedback #25)*
-- [ ] **Activity feed "Mark read" text overflow.** Button text spills outside container. *(Feedback #23)*
-- [ ] **"Set your availability" link broken.** Clicking it doesn't navigate anywhere. *(Feedback — Feb 24)*
-- [ ] **"Complete my profile" checklist misleading.** Criteria unclear about what's actually required. *(Feedback — Feb 24)*
-- [ ] **Admin: delete user account fails.** Debug the delete user endpoint. *(Feedback — Feb 24)*
+**v1.29.1 — UX Fixes:**
+- [x] **Inbox sorted by recency.** Client-side sort by lastMessageAt DESC before rendering conversations
+- [x] **Activity feed "Mark read" button overflow.** Compacted button (smaller padding, shorter label "✓ Read") to prevent text spill on narrow screens
+- [x] **Calendar block previews.** Day cells now show recipient/caregiver name, service type abbreviation, and hours (e.g., "Betty · Comp · 3h") instead of just counts
+- [x] **Betty tile text contrast.** Health condition text changed from #666 to rgba(255,255,255,0.75) on dark teal card background
+
+**Already resolved (verified, no code needed):**
+- [x] **Duplicate help/FAQ articles.** Seed has 20 unique articles with DELETE-before-INSERT — no duplicates
+- [x] **Help/Account/Logout pinned to sidebar bottom.** Already implemented with marginTop: auto spacer
+- [x] **"Set your availability" link.** Fixed in prior version
+- [x] **"Complete my profile" checklist.** Updated in prior version
+- [x] **Admin: delete user account.** Fixed during Cary deletion testing
+- [x] **Care notes delete option.** Already implemented in CaredForView.js (delete button + handler)
+
+**Remaining (moved to v1.30.0):**
 - [ ] **AI insights cross-contamination.** Carlos's insights cite Betty's needs — scoping issue. *(Feedback — Feb 23)*
-
-**UX improvements:**
-- [ ] **Active role indicator.** "Viewing as: [Family/Caregiver]" persistent display. *(Feedback — Feb 24)*
-- [ ] **Help/Account/Logout pinned to sidebar bottom.** Standard app pattern. *(Feedback #47)*
-- [ ] **Calendar block previews.** Show "Betty, 3h, $94" in calendar cells instead of just dots. *(Feedback — Feb 24)*
-- [ ] **Care notes delete option.** Add delete button to individual notes. *(Feedback — Feb 24)*
 - [ ] **"Request Care" button placement.** Move from sidebar bottom to more prominent position. *(Feedback — Feb 24)*
 - [ ] **Betty tile + care team unification.** Nest care team inside Betty's card. *(Feedback — Feb 24)*
-- [ ] **Betty tile text contrast.** Lighten health condition text on green card. *(Feedback — Feb 24)*
-- [ ] **Delete individual role without deleting account.** Remove caregiver role but keep account. *(Feedback — Feb 24)*
 
 ---
 
-## v1.30.0: Caregiver Experience Polish
+## Next Up — v1.30.0: Caregiver Experience Polish
 
-Priority: **HIGH** — Real user (Cary Taker) feedback. Fix caregiver flow.
+Priority: **HIGH** — Real user (Cary Taker) feedback + remaining UX items.
 
+- [ ] **AI insights cross-contamination.** Carlos's insights cite Betty's needs — fix scoping. *(Feedback — Feb 23)*
+- [ ] **"Request Care" button placement.** Move to more prominent position. *(Feedback — Feb 24)*
+- [ ] **Betty tile + care team unification.** Nest care team inside Betty's card. *(Feedback — Feb 24)*
 - [ ] **Caregiver rates saved from onboarding.** Rates must persist to caregiver_profiles and show on financials. *(Feedback #44)*
 - [ ] **DL/cert photo upload in onboarding.** At least ask for DL front/back. *(Feedback #45)*
 - [ ] **Stripe Connect status refresh.** Return URL triggers dashboard re-fetch. *(Feedback #41)*

@@ -236,14 +236,21 @@ const Schedule = window.Schedule = () => {
                   }}></span>}
                   {day}
                 </div>
-                {hasSessions && (
-                  <div style={{ fontSize: 10, marginTop: 4, fontWeight: 600, opacity: 0.9 }}>
-                    {hours}h
-                  </div>
-                )}
-                {hasSessions && (
-                  <div style={{ fontSize: 9, marginTop: 2, opacity: 0.7 }}>
-                    {sessionsByDate[dateStr].length} session{sessionsByDate[dateStr].length > 1 ? 's' : ''}
+                {hasSessions && daySessions.length > 0 && (
+                  <div style={{ marginTop: 3, overflow: 'hidden' }}>
+                    {daySessions.slice(0, 2).map((s, si) => {
+                      const label = s.recipient_name ? s.recipient_name.split(' ')[0] : (s.caregiver_name ? s.caregiver_name.split(' ')[0] : '');
+                      const svcMap = { companionship: 'Comp', personal_care: 'Care', meal_prep: 'Meal', transportation: 'Trans', health_wellness: 'Health', full_day: 'Full' };
+                      const svc = svcMap[s.service_type] || '';
+                      return (
+                        <div key={si} style={{ fontSize: 8, lineHeight: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.85 }}>
+                          {label}{svc ? ` · ${svc}` : ''} · {s.duration_hours || 2}h
+                        </div>
+                      );
+                    })}
+                    {daySessions.length > 2 && (
+                      <div style={{ fontSize: 8, opacity: 0.6 }}>+{daySessions.length - 2} more</div>
+                    )}
                   </div>
                 )}
               </div>
