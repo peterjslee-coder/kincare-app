@@ -1,41 +1,10 @@
 const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
-  const [signupEmail, setSignupEmail] = React.useState('');
-  const [signupRole, setSignupRole] = React.useState('family');
-  const [signupStatus, setSignupStatus] = React.useState(null);
-  const [signupMsg, setSignupMsg] = React.useState('');
-  const [signupSubmitting, setSignupSubmitting] = React.useState(false);
   const [showInstallTip, setShowInstallTip] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState('families');
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   const showInstallBtn = !isStandalone;
-
-  const handleSignupSubmit = async (e) => {
-    e.preventDefault();
-    if (!signupEmail) return;
-    setSignupSubmitting(true);
-    setSignupStatus(null);
-    try {
-      const res = await fetch('/api/auth/signup-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: signupEmail, role: signupRole }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSignupStatus('success');
-        setSignupMsg(data.message);
-      } else {
-        setSignupStatus('error');
-        setSignupMsg(data.error || 'Something went wrong.');
-      }
-    } catch {
-      setSignupStatus('error');
-      setSignupMsg('Network error. Please try again.');
-    }
-    setSignupSubmitting(false);
-  };
 
   const switchTab = (tab) => setActiveTab(tab);
 
@@ -149,10 +118,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Caregivers keep 80%. Families see everything in real time.
           </p>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
-            <button onClick={() => {
-              const el = document.getElementById('splash-signup');
-              if (el) el.scrollIntoView({ behavior: 'smooth' });
-            }} style={{
+            <button onClick={() => onNavigate('register')} style={{
               padding: '14px 32px', fontSize: '16px', fontWeight: 600,
               background: '#e8724a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer',
             }}>Sign Up Free</button>
@@ -196,70 +162,22 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         ))}
       </div>
 
-      {/* ── Signup Form ── */}
+      {/* ── Get Started CTA ── */}
       <section id="splash-signup" style={{ padding: '48px 32px', background: '#fff', textAlign: 'center' }}>
         <div style={{ maxWidth: '520px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '26px', color: '#1b6b5a', marginBottom: '8px' }}>Get Started</h2>
           <p style={{ fontSize: '15px', color: '#666', marginBottom: '24px' }}>
-            Enter your email and we'll send you a link to create your account.
+            Create your free account in under a minute. No credit card required.
           </p>
-
-          {signupStatus === 'success' ? (
-            <div style={{
-              background: '#f0faf8', borderRadius: '12px', padding: '28px',
-              border: '1px solid #d0e8e3', fontSize: '16px', color: '#1b6b5a',
-            }}>
-              <div style={{ fontSize: '32px', marginBottom: '8px' }}>&#9993;</div>
-              <div style={{ fontWeight: 600, marginBottom: '4px' }}>Check your email!</div>
-              <div style={{ fontSize: '14px', color: '#555' }}>{signupMsg}</div>
-            </div>
-          ) : (
-            <form onSubmit={handleSignupSubmit}>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '16px' }}>
-                <button type="button" onClick={() => setSignupRole('family')} style={{
-                  padding: '10px 20px', borderRadius: '24px', fontSize: '14px', fontWeight: 600,
-                  border: signupRole === 'family' ? '2px solid #1b6b5a' : '2px solid #ddd',
-                  background: signupRole === 'family' ? '#f0faf8' : '#fff',
-                  color: signupRole === 'family' ? '#1b6b5a' : '#666',
-                  cursor: 'pointer', transition: 'all 0.2s',
-                }}>I need care for a loved one</button>
-                <button type="button" onClick={() => setSignupRole('caregiver')} style={{
-                  padding: '10px 20px', borderRadius: '24px', fontSize: '14px', fontWeight: 600,
-                  border: signupRole === 'caregiver' ? '2px solid #1b6b5a' : '2px solid #ddd',
-                  background: signupRole === 'caregiver' ? '#f0faf8' : '#fff',
-                  color: signupRole === 'caregiver' ? '#1b6b5a' : '#666',
-                  cursor: 'pointer', transition: 'all 0.2s',
-                }}>I want to provide care</button>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', maxWidth: '440px', margin: '0 auto' }}>
-                <input
-                  type="email" placeholder="Your email address" value={signupEmail} required
-                  onChange={(e) => setSignupEmail(e.target.value)}
-                  style={{
-                    flex: 1, padding: '14px 16px', borderRadius: '8px', border: '1.5px solid #ddd',
-                    fontSize: '15px', outline: 'none', color: '#333',
-                  }}
-                />
-                <button type="submit" disabled={signupSubmitting} style={{
-                  padding: '14px 24px', background: '#e8724a', color: 'white', border: 'none',
-                  borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
-                  opacity: signupSubmitting ? 0.7 : 1, transition: 'all 0.3s', whiteSpace: 'nowrap',
-                }}>
-                  {signupSubmitting ? 'Sending...' : 'Sign Up'}
-                </button>
-              </div>
-
-              {signupStatus === 'error' && (
-                <div style={{ color: '#c0392b', fontSize: '14px', marginTop: '8px' }}>{signupMsg}</div>
-              )}
-
-              <div style={{ marginTop: '16px', fontSize: '13px', color: '#888' }}>
-                Already have an account?{' '}
-                <a onClick={() => onNavigate('login')} style={{ color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Sign in</a>
-              </div>
-            </form>
-          )}
+          <button onClick={() => onNavigate('register')} style={{
+            padding: '16px 48px', fontSize: '17px', fontWeight: 600,
+            background: '#e8724a', color: '#fff', border: 'none', borderRadius: '10px',
+            cursor: 'pointer', transition: 'all 0.2s', marginBottom: '16px',
+          }}>Create Your Free Account</button>
+          <div style={{ fontSize: '13px', color: '#888' }}>
+            Already have an account?{' '}
+            <a onClick={() => onNavigate('login')} style={{ color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Sign in</a>
+          </div>
         </div>
       </section>
 
@@ -480,10 +398,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           Whether you need care for a loved one or want to provide care, we'd love to have you.
         </p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button onClick={() => {
-            const el = document.getElementById('splash-signup');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }} style={{
+          <button onClick={() => onNavigate('register')} style={{
             padding: '14px 36px', fontSize: '16px', fontWeight: 600,
             background: '#e8724a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer',
           }}>Sign Up Now</button>

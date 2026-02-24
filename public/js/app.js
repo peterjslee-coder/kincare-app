@@ -397,20 +397,18 @@ const App = () => {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
-    // Check for email-first signup confirmation token
+    // Check for email-first signup confirmation token (legacy flow — route to unified register)
     const signupToken = params.get('signupToken');
     if (signupToken) {
       window.history.replaceState({}, '', window.location.pathname);
-      // Validate the token and get email + role
       fetch(`/api/auth/confirm-signup?token=${signupToken}`)
         .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data })))
         .then(({ ok, status, data }) => {
           if (ok && data.email && data.role) {
             setSignupPrefill({ email: data.email, role: data.role, signupToken });
-            // Route caregivers to the full onboarding wizard, families to registration
-            setAppState(data.role === 'caregiver' ? 'signup-onboarding' : 'register');
+            // All roles now go through unified RegisterPage
+            setAppState('register');
           } else if (status === 409 && data.alreadyRegistered) {
-            // Already registered — redirect to login with helpful message
             setVerifyMessage({
               type: data.needsProfile ? 'info' : 'success',
               text: data.error || 'This email is already registered. Please sign in.',
@@ -423,6 +421,12 @@ const App = () => {
         .catch(() => {
           setVerifyMessage({ type: 'error', text: 'Failed to validate signup link.' });
         });
+    }
+
+    // Sandbox mode detection
+    if (params.get('sandbox') === 'true') {
+      window.__sandboxMode = true;
+      setAppState('register');
     }
 
     // Stripe Connect return — redirect to caretaker financials tab
@@ -649,7 +653,7 @@ const App = () => {
   if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} inviteInfo={inviteInfo} />;
   if (appState === 'demo') return <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />;
   if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />;
-  if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} />;
+  if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} />;
   if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;
   if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
 

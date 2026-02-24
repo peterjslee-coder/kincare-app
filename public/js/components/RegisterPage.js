@@ -1,111 +1,88 @@
-const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken, pendingInviteToken }) => {
-  // If prefill props are provided (from email-first signup flow), skip the role picker
-  const [track, setTrack] = useState(prefilledRole === 'caregiver' ? 'caregiver' : prefilledRole === 'family' ? 'family' : null);
-  const [step, setStep] = useState(prefilledRole ? 1 : 1);
+const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken, pendingInviteToken, sandboxMode }) => {
+  // ─── State ───
+  const [track, setTrack] = useState(prefilledRole === 'caregiver' ? 'caregiver' : prefilledRole === 'family' ? 'family' : prefilledRole === 'care_for' ? 'care_for' : null);
+  const [step, setStep] = useState(prefilledRole ? 2 : 1); // Step 1 = role picker, Step 2 = basic info, Step 3 = caregiver disclosures
   const [formData, setFormData] = useState({
-    firstName: '', lastName: '', email: prefilledEmail || '', phone: '', password: '',
-    lovedOneName: '', lovedOneAge: '', relationship: '', city: '', state: '',
-    careNeeds: {}, careNotes: '', bgCheckConsent: false,
-    certifications: [], certType: '', certNumber: '', certExpiry: '',
-    availability: {}, prefTimes: {}
+    firstName: '', lastName: '', email: prefilledEmail || '', password: '',
+    phone: '',
+    // Caregiver disclosures
+    ackNoMedical: false, ackBgCheck: false, ackPayments: false,
   });
   const [showFieldErrors, setShowFieldErrors] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [regError, setRegError] = useState('');
+  const [sandboxPreview, setSandboxPreview] = useState(false);
 
-  // When registering via care team invite, family users skip "About Your Loved One" and "Care Needs"
-  // since they're joining an existing care team (they can add their own cared-for later)
+  // For care team invites, auto-select family track and skip role picker
   const isInviteFlow = !!pendingInviteToken;
-  const familySteps = isInviteFlow ? ['Basic Info', 'Review & Submit'] : ['Basic Info', 'About Your Loved One', 'Care Needs', 'Review & Submit'];
-  const caregiverSteps = ['Basic Info', 'Background Check', 'Certifications', 'Availability', 'Review & Submit'];
-  const careForSteps = ['Basic Info', 'Review & Submit'];
-  const steps = track === 'care_for' ? careForSteps : track === 'family' ? familySteps : caregiverSteps;
-  const maxStep = track ? steps.length : 0;
+  useEffect(() => {
+    if (isInviteFlow && !track) {
+      setTrack('family');
+      setStep(2);
+    }
+  }, [isInviteFlow]);
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (showFieldErrors) setShowFieldErrors(false);
-  };
-
-  const handleCheckboxChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: { ...prev[field], [value]: !prev[field][value] }
-    }));
-  };
-
-  // Validation helpers
+  // ─── Validation ───
   const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const isValidPhone = (phone) => phone.replace(/\D/g, '').length === 10;
-  const getStepErrors = () => {
+
+  const getBasicInfoErrors = () => {
     const errs = [];
-    if (step === 1) {
-      if (!formData.firstName.trim()) errs.push('First name');
-      if (!formData.lastName.trim()) errs.push('Last name');
-      if (!formData.email.trim() || !isValidEmail(formData.email)) errs.push('Valid email');
-      if (!isValidPhone(formData.phone)) errs.push('10-digit phone number');
-      if (formData.password.length < 6) errs.push('Password (min 6 characters)');
-    }
-    if (track === 'family' && !isInviteFlow) {
-      if (step === 2) {
-        if (!formData.lovedOneName.trim()) errs.push("Loved one's name");
-        if (!formData.lovedOneAge) errs.push('Age');
-        if (!formData.relationship) errs.push('Relationship');
-      }
-      if (step === 3 && !Object.values(formData.careNeeds).some(v => v)) errs.push('At least one care need');
-    }
-    if (track === 'caregiver') {
-      if (step === 2 && !formData.bgCheckConsent) errs.push('Background check consent');
-      if (step === 3 && !formData.certType) errs.push('Certification type');
-      if (step === 4 && !Object.values(formData.availability).some(v => v)) errs.push('At least one available day');
-    }
+    if (!formData.firstName.trim()) errs.push('First name');
+    if (!formData.lastName.trim()) errs.push('Last name');
+    if (!formData.email.trim() || !isValidEmail(formData.email)) errs.push('Valid email');
+    if (formData.password.length < 6) errs.push('Password (min 6 characters)');
     return errs;
   };
 
-  const isStepValid = () => {
-    if (track === 'family') {
-      if (step === 1) return formData.firstName.trim() && formData.lastName.trim() && isValidEmail(formData.email) && isValidPhone(formData.phone) && formData.password.length >= 6;
-      if (isInviteFlow) return true; // Invite flow: step 1 = Basic Info, step 2 = Review (always valid)
-      if (step === 2) return formData.lovedOneName.trim() && formData.lovedOneAge && formData.relationship;
-      if (step === 3) return Object.values(formData.careNeeds).some(v => v);
-      return true;
-    }
-    if (track === 'caregiver') {
-      if (step === 1) return formData.firstName.trim() && formData.lastName.trim() && isValidEmail(formData.email) && isValidPhone(formData.phone) && formData.password.length >= 6;
-      if (step === 2) return formData.bgCheckConsent;
-      if (step === 3) return !!formData.certType;
-      if (step === 4) return Object.values(formData.availability).some(v => v);
-      return true;
-    }
-    if (track === 'care_for') {
-      if (step === 1) return formData.firstName.trim() && formData.lastName.trim() && isValidEmail(formData.email) && isValidPhone(formData.phone) && formData.password.length >= 6;
-      return true;
-    }
-    return true;
+  const isBasicInfoValid = () => {
+    return formData.firstName.trim() && formData.lastName.trim() &&
+           isValidEmail(formData.email) && formData.password.length >= 6;
   };
 
+  const isDisclosuresValid = () => {
+    return formData.ackNoMedical && formData.ackBgCheck && formData.ackPayments;
+  };
+
+  // ─── Navigation ───
   const handleNext = () => {
-    if (step < maxStep) {
-      if (isStepValid()) { setShowFieldErrors(false); setStep(step + 1); }
-      else { setShowFieldErrors(true); }
+    if (step === 2 && isBasicInfoValid()) {
+      setShowFieldErrors(false);
+      if (track === 'caregiver') {
+        setStep(3); // Go to disclosures
+      } else {
+        handleComplete(); // Family & care_for go straight to account creation
+      }
+    } else {
+      setShowFieldErrors(true);
     }
   };
 
   const handleBack = () => {
-    if (step === 1) {
-      if (prefilledRole) { onNavigate('splash'); return; }
-      if (isInviteFlow) { onNavigate('invite'); return; } // Go back to invite landing
-      setTrack(null); return;
+    setShowFieldErrors(false);
+    if (step === 3) { setStep(2); return; }
+    if (step === 2) {
+      if (prefilledRole || isInviteFlow) { onNavigate('splash'); return; }
+      setTrack(null); setStep(1); return;
     }
-    if (step > 1) setStep(step - 1);
+    onNavigate('splash');
   };
 
-  const [registering, setRegistering] = useState(false);
-  const [regError, setRegError] = useState('');
-
+  // ─── Account Creation ───
   const handleComplete = async () => {
+    // Sandbox mode: show preview instead of creating account
+    if (sandboxMode) {
+      setSandboxPreview(true);
+      return;
+    }
+
     setRegistering(true);
     setRegError('');
     const role = track === 'caregiver' ? 'caregiver' : track === 'care_for' ? 'care_for' : 'family';
-    trackAuthEvent('registration', 'registration_submit', { email: formData.email, role, step, isInviteFlow });
+
+    if (typeof trackAuthEvent === 'function') {
+      trackAuthEvent('registration', 'registration_submit', { email: formData.email, role });
+    }
+
     try {
       const response = await apiFetch('/api/auth/register', {
         method: 'POST',
@@ -114,78 +91,129 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
           password: formData.password,
           firstName: formData.firstName,
           lastName: formData.lastName,
-          phone: formData.phone,
+          phone: formData.phone || null,
           role,
           ...(signupToken ? { signupToken } : {})
         })
       });
+
       if (!response) throw new Error('Registration failed');
       const res = await response.json();
+
       if (!response.ok || res.error) {
-        trackAuthEvent('registration', 'error', { email: formData.email, role, error: res.error || 'Registration failed', source: 'api' });
+        if (typeof trackAuthEvent === 'function') {
+          trackAuthEvent('registration', 'error', { email: formData.email, role, error: res.error || 'Registration failed', source: 'api' });
+        }
         setRegError(res.error || 'Registration failed');
         setRegistering(false);
         return;
       }
-      trackAuthEvent('registration', 'registration_success', { email: formData.email, role });
+
+      if (typeof trackAuthEvent === 'function') {
+        trackAuthEvent('registration', 'registration_success', { email: formData.email, role });
+      }
       setAuthToken(res.token);
       onLogin(res.user);
     } catch (err) {
-      trackAuthEvent('registration', 'error', { email: formData.email, role, error: err.message, source: 'network' });
+      if (typeof trackAuthEvent === 'function') {
+        trackAuthEvent('registration', 'error', { email: formData.email, role: track, error: err.message, source: 'network' });
+      }
       setRegError(err.message || 'Registration failed. Please try again.');
       setRegistering(false);
     }
   };
 
-  // For care team invites, auto-select family track and skip role picker
-  useEffect(() => {
-    if (isInviteFlow && !track) {
-      setTrack('family');
-      setStep(1);
-    }
-  }, [isInviteFlow]);
+  // ─── Sandbox preview ───
+  if (sandboxPreview) {
+    const roleLabel = track === 'caregiver' ? 'Caregiver' : track === 'care_for' ? 'Care Recipient' : 'Family Member';
+    return (
+      <div className="register-container">
+        <div className="register-card" style={{ maxWidth: '480px' }}>
+          <div style={{ background: '#fff8e1', border: '2px solid #ff9800', borderRadius: '12px', padding: '16px', marginBottom: '20px', textAlign: 'center' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#e65100', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Sandbox Mode</div>
+            <div style={{ fontSize: '13px', color: '#bf360c' }}>No account was created. This is a preview.</div>
+          </div>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>{'✅'}</div>
+            <h2 style={{ margin: '0 0 8px', fontSize: '20px' }}>Registration Complete (Preview)</h2>
+            <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>Here's what would happen:</p>
+          </div>
+          <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px', lineHeight: 1.8 }}>
+            <p style={{ margin: '0 0 4px' }}><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
+            <p style={{ margin: '0 0 4px' }}><strong>Email:</strong> {formData.email}</p>
+            <p style={{ margin: '0 0 4px' }}><strong>Role:</strong> {roleLabel}</p>
+            <p style={{ margin: '0 0 4px' }}><strong>Phone:</strong> {formData.phone || '(not provided)'}</p>
+            {track === 'caregiver' && (
+              <div style={{ borderTop: '1px solid #e0e0e0', marginTop: '8px', paddingTop: '8px' }}>
+                <p style={{ margin: '0 0 2px', color: '#1b6b5a' }}>{'✓'} No-medical-care disclosure acknowledged</p>
+                <p style={{ margin: '0 0 2px', color: '#1b6b5a' }}>{'✓'} Background check fee acknowledged</p>
+                <p style={{ margin: '0 0 2px', color: '#1b6b5a' }}>{'✓'} Online payments acknowledged</p>
+              </div>
+            )}
+          </div>
+          <div style={{ background: '#e8f5f2', padding: '14px', borderRadius: '8px', marginBottom: '20px', fontSize: '13px', color: '#0f4238' }}>
+            <strong>Next:</strong> The user would land on their {roleLabel} dashboard with a First Steps checklist guiding them to complete their profile.
+          </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={() => { setSandboxPreview(false); setTrack(null); setStep(1); setFormData({ firstName: '', lastName: '', email: '', password: '', phone: '', ackNoMedical: false, ackBgCheck: false, ackPayments: false }); }} className="btn btn-outline" style={{ flex: 1 }}>Start Over</button>
+            <button onClick={() => onNavigate('splash')} className="btn btn-primary" style={{ flex: 1 }}>Exit Sandbox</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  if (!track) {
+  // ─── Screen 1: Role Picker ───
+  if (step === 1 && !track) {
     const roleCards = [
       {
+        id: 'care_for',
+        icon: '🏠',
+        title: 'I need help around my home',
+        subtitle: 'Find caregivers who can assist you directly',
+        color: '#5c6bc0',
+        bgColor: '#e8eaf6',
+      },
+      {
         id: 'family',
-        icon: '👨‍👩‍👧',
-        title: "I'd like to find care",
-        subtitle: 'Find and coordinate care for a loved one',
+        icon: '💛',
+        title: 'I want to help my loved one arrange care',
+        subtitle: 'Coordinate and manage care for a family member',
         color: '#1b6b5a',
         bgColor: '#e8f5f2',
       },
       {
         id: 'caregiver',
         icon: '🤝',
-        title: "I'd like to provide care",
-        subtitle: 'Join as a caregiver and find work opportunities',
+        title: 'I want to find meaningful work at fair wages',
+        subtitle: 'Join as a caregiver and connect with families who need you',
         color: '#e8724a',
         bgColor: '#FFF3E0',
-      },
-      {
-        id: 'care_for',
-        icon: '🌷',
-        title: 'I would like help',
-        subtitle: 'Sign up to manage your own care and schedule',
-        color: '#5c6bc0',
-        bgColor: '#e8eaf6',
       },
     ];
 
     return (
       <div className="register-container">
-        <div className="register-card" style={{ maxWidth: '480px' }}>
+        {sandboxMode && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: '#ff9800', color: '#fff', textAlign: 'center', padding: '6px', fontSize: '13px', fontWeight: 700, zIndex: 9999, letterSpacing: '0.5px' }}>
+            SANDBOX MODE — no accounts will be created
+          </div>
+        )}
+        <div className="register-card" style={{ maxWidth: '480px', marginTop: sandboxMode ? '40px' : undefined }}>
           <div className="register-header">
             <div style={{ marginBottom: '16px' }}>
-              <InPlaceIcon width={50} height={50} />
+              {typeof InPlaceIcon !== 'undefined' && React.createElement(InPlaceIcon, { width: 50, height: 50 })}
             </div>
-            <h1>Join InPlace</h1>
-            <p style={{ color: '#666', fontSize: '15px' }}>What best describes you?</p>
+            <h1 style={{ marginBottom: '8px' }}>Join InPlace</h1>
+            <p style={{ color: '#666', fontSize: '15px', margin: 0 }}>You can add profiles later, but most people start with what they need the most. Which is best for you?</p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '8px 0 20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '20px 0' }}>
             {roleCards.map(card => (
-              <div key={card.id} onClick={() => { trackAuthEvent('registration', 'role_selected', { role: card.id }); setTrack(card.id === 'care_for' ? 'care_for' : card.id); setStep(1); }}
+              <div key={card.id} onClick={() => {
+                if (typeof trackAuthEvent === 'function') trackAuthEvent('registration', 'role_selected', { role: card.id });
+                setTrack(card.id);
+                setStep(2);
+              }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '16px',
                   padding: '18px 20px', borderRadius: '12px',
@@ -203,303 +231,141 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 }}>
                   {card.icon}
                 </div>
-                <div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: '#333', marginBottom: '2px' }}>{card.title}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#333', marginBottom: '2px' }}>{card.title}</div>
                   <div style={{ fontSize: '13px', color: '#777', lineHeight: 1.4 }}>{card.subtitle}</div>
                 </div>
-                <div style={{ marginLeft: 'auto', color: '#ccc', fontSize: '18px', flexShrink: 0 }}>→</div>
+                <div style={{ color: '#ccc', fontSize: '18px', flexShrink: 0 }}>{'\u2192'}</div>
               </div>
             ))}
           </div>
           <div className="text-center">
-            <p style={{ fontSize: '14px', marginBottom: '8px' }}>Already have an account? <a onClick={() => onNavigate('login')}>Sign In</a></p>
-            <p style={{ fontSize: '14px' }}><a onClick={() => onNavigate('splash')} style={{ color: '#888', cursor: 'pointer' }}>← Back to home</a></p>
+            <p style={{ fontSize: '14px', marginBottom: '8px' }}>Already have an account? <a onClick={() => onNavigate('login')} style={{ cursor: 'pointer', color: '#1b6b5a', fontWeight: 600 }}>Sign In</a></p>
+            <p style={{ fontSize: '14px' }}><a onClick={() => onNavigate('splash')} style={{ color: '#888', cursor: 'pointer' }}>{'\u2190'} Back to home</a></p>
           </div>
         </div>
       </div>
     );
   }
 
+  // ─── Screen 2: Basic Info (all roles) ───
+  // ─── Screen 3: Caregiver Disclosures ───
+  const totalSteps = track === 'caregiver' ? 3 : 2;
+  const stepLabels = track === 'caregiver'
+    ? ['Choose Your Path', 'Your Information', 'Quick Disclosures']
+    : ['Choose Your Path', 'Your Information'];
+
   return (
     <div className="register-container">
-      <div className="register-card">
-        <div className="register-header">
-          <h1>{track === 'care_for' ? 'Care Recipient Registration' : track === 'family' ? 'Family Registration' : 'Caregiver Registration'}</h1>
-          <p>{steps[step - 1]}</p>
+      {sandboxMode && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: '#ff9800', color: '#fff', textAlign: 'center', padding: '6px', fontSize: '13px', fontWeight: 700, zIndex: 9999, letterSpacing: '0.5px' }}>
+          SANDBOX MODE — no accounts will be created
         </div>
-        <div className="step-indicator">
-          {steps.map((s, i) => (
+      )}
+      <div className="register-card" style={{ marginTop: sandboxMode ? '40px' : undefined }}>
+        <div className="register-header">
+          <h1 style={{ marginBottom: '4px' }}>
+            {step === 2 ? 'Create Your Account' : 'Almost There'}
+          </h1>
+          <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>{stepLabels[step - 1]}</p>
+        </div>
+
+        {/* Step indicator */}
+        <div className="step-indicator" style={{ marginBottom: '20px' }}>
+          {stepLabels.map((s, i) => (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div className={`step-dot ${step === i + 1 ? 'active' : ''} ${step > i + 1 ? 'completed' : ''}`}>
-                {step <= i + 1 ? i + 1 : '✓'}
+              <div className={'step-dot' + (step === i + 1 ? ' active' : '') + (step > i + 1 ? ' completed' : '')}>
+                {step <= i + 1 ? i + 1 : '\u2713'}
               </div>
               <div className="step-label" style={{ fontSize: '11px' }}>{s}</div>
             </div>
           ))}
         </div>
-        {showFieldErrors && getStepErrors().length > 0 && (
+
+        {/* Validation errors */}
+        {showFieldErrors && step === 2 && getBasicInfoErrors().length > 0 && (
           <div style={{ background: '#fdf0ed', border: '1px solid #e74c3c', borderRadius: '8px', padding: '12px 16px', marginBottom: '12px', fontSize: '13px', color: '#c0392b' }}>
-            <strong>Please complete:</strong> {getStepErrors().join(', ')}
+            <strong>Please complete:</strong> {getBasicInfoErrors().join(', ')}
           </div>
         )}
-        {track === 'family' && (
+
+        {/* API error */}
+        {regError && (
+          <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{regError}</div>
+        )}
+
+        {/* ─── Step 2: Basic Info ─── */}
+        {step === 2 && (
           <>
-            {step === 1 && (
-              <>
-                <div className="form-group">
-                  <label>First Name {showFieldErrors && !formData.firstName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Jane" style={showFieldErrors && !formData.firstName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-                </div>
-                <div className="form-group">
-                  <label>Last Name {showFieldErrors && !formData.lastName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Smith" style={showFieldErrors && !formData.lastName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-                </div>
-                <div className="form-group">
-                  <label>Email {showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="jane@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-                  {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
-                </div>
-                <div className="form-group">
-                  <label>Phone {showFieldErrors && !isValidPhone(formData.phone) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" style={showFieldErrors && !isValidPhone(formData.phone) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-                  {formData.phone && !isValidPhone(formData.phone) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a 10-digit phone number</div>}
-                </div>
-                <div className="form-group">
-                  <label>Password {showFieldErrors && formData.password.length < 6 && <span style={{ color: '#c0392b', fontSize: 12 }}>*min 6 chars</span>}</label>
-                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" style={showFieldErrors && formData.password.length < 6 ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-                  {formData.password && formData.password.length < 6 && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Password must be at least 6 characters</div>}
-                </div>
-              </>
-            )}
-            {!isInviteFlow && step === 2 && (
-              <>
-                <div className="form-group">
-                  <label>Loved One's Name</label>
-                  <input type="text" value={formData.lovedOneName} onChange={(e) => handleInputChange('lovedOneName', e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Age</label>
-                  <input type="number" value={formData.lovedOneAge} onChange={(e) => handleInputChange('lovedOneAge', e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Your Relationship</label>
-                  <select value={formData.relationship} onChange={(e) => handleInputChange('relationship', e.target.value)}>
-                    <option value="">Select...</option>
-                    <option value="parent">Parent</option>
-                    <option value="grandparent">Grandparent</option>
-                    <option value="spouse">Spouse</option>
-                    <option value="sibling">Sibling</option>
-                    <option value="child">Child</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>City</label>
-                    <input type="text" value={formData.city} onChange={(e) => handleInputChange('city', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label>State</label>
-                    <input type="text" value={formData.state} onChange={(e) => handleInputChange('state', e.target.value)} />
-                  </div>
-                </div>
-              </>
-            )}
-            {!isInviteFlow && step === 3 && (
-              <>
-                <div className="form-group">
-                  <label>What type of care is needed?</label>
-                  <div style={{ marginTop: '12px' }}>
-                    {['companionship', 'personal_care', 'housekeeping', 'medication_mgmt', 'transportation', 'meal_prep'].map(need => (
-                      <label key={need} className="form-checkbox">
-                        <input type="checkbox" checked={!!formData.careNeeds[need]} onChange={() => handleCheckboxChange('careNeeds', need)} />
-                        {need.replace(/_/g, ' ').charAt(0).toUpperCase() + need.replace(/_/g, ' ').slice(1)}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Additional Notes</label>
-                  <textarea value={formData.careNotes} onChange={(e) => handleInputChange('careNotes', e.target.value)} />
-                </div>
-              </>
-            )}
-            {step === steps.length && (
-              <div>
-                <h3 style={{ marginBottom: '16px' }}>Review Your Information</h3>
-                <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-                  <p><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
-                  <p><strong>Email:</strong> {formData.email}</p>
-                  {!isInviteFlow && <p><strong>Loved One:</strong> {formData.lovedOneName}, {formData.lovedOneAge}</p>}
-                  {!isInviteFlow && <p><strong>Care Needs:</strong> {Object.keys(formData.careNeeds).filter(k => formData.careNeeds[k]).join(', ') || 'None selected'}</p>}
-                  {isInviteFlow && <p style={{ color: '#1b6b5a', fontSize: '14px' }}>You're joining an existing care team. You can add your own care recipients later.</p>}
-                </div>
-                {regError && <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{regError}</div>}
-                <button type="button" className="btn btn-primary" onClick={handleComplete} disabled={registering} style={{ width: '100%', opacity: registering ? 0.6 : 1 }}>{registering ? 'Creating Account...' : 'Complete Registration'}</button>
-              </div>
-            )}
+            <div className="form-group">
+              <label>First Name {showFieldErrors && !formData.firstName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+              <input type="text" value={formData.firstName} onChange={(e) => { setFormData(p => ({ ...p, firstName: e.target.value })); setShowFieldErrors(false); }} placeholder="Your first name" autoFocus style={showFieldErrors && !formData.firstName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+            </div>
+            <div className="form-group">
+              <label>Last Name {showFieldErrors && !formData.lastName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+              <input type="text" value={formData.lastName} onChange={(e) => { setFormData(p => ({ ...p, lastName: e.target.value })); setShowFieldErrors(false); }} placeholder="Your last name" style={showFieldErrors && !formData.lastName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+            </div>
+            <div className="form-group">
+              <label>Email {showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+              <input type="email" value={formData.email} onChange={(e) => { setFormData(p => ({ ...p, email: e.target.value })); setShowFieldErrors(false); }} placeholder="you@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+              {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
+            </div>
+            <div className="form-group">
+              <label>Password {showFieldErrors && formData.password.length < 6 && <span style={{ color: '#c0392b', fontSize: 12 }}>*min 6 chars</span>}</label>
+              <input type="password" value={formData.password} onChange={(e) => { setFormData(p => ({ ...p, password: e.target.value })); setShowFieldErrors(false); }} placeholder="At least 6 characters" style={showFieldErrors && formData.password.length < 6 ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+            </div>
+            <div className="form-group">
+              <label>Phone <span style={{ color: '#999', fontSize: 12, fontWeight: 400 }}>(optional — add later)</span></label>
+              <input type="tel" value={formData.phone} onChange={(e) => setFormData(p => ({ ...p, phone: e.target.value }))} placeholder="(555) 123-4567" />
+            </div>
           </>
         )}
-        {track === 'caregiver' && (
+
+        {/* ─── Step 3: Caregiver Disclosures ─── */}
+        {step === 3 && track === 'caregiver' && (
           <>
-            {step === 1 && (
-              <>
-                <div className="form-group">
-                  <label>First Name {showFieldErrors && !formData.firstName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Maria" style={showFieldErrors && !formData.firstName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+            <div style={{ background: '#fff8e1', border: '1px solid #ffe0a0', borderRadius: '10px', padding: '16px', marginBottom: '16px', fontSize: '13px', color: '#5d4037' }}>
+              <strong>Before we create your account</strong> — please review and acknowledge the following. These protect you and the families you'll work with.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackNoMedical ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackNoMedical ? '#f0faf8' : '#fff', transition: 'all 0.2s' }}>
+                <input type="checkbox" checked={formData.ackNoMedical} onChange={(e) => setFormData(p => ({ ...p, ackNoMedical: e.target.checked }))} style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#333', marginBottom: '4px' }}>No medical care</div>
+                  <div style={{ fontSize: '13px', color: '#666', lineHeight: 1.5 }}>InPlace does not provide at-home medical care in accordance with Virginia state law. Caregivers provide companionship, personal care, and household assistance only.</div>
                 </div>
-                <div className="form-group">
-                  <label>Last Name {showFieldErrors && !formData.lastName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Garcia" style={showFieldErrors && !formData.lastName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+              </label>
+              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackBgCheck ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackBgCheck ? '#f0faf8' : '#fff', transition: 'all 0.2s' }}>
+                <input type="checkbox" checked={formData.ackBgCheck} onChange={(e) => setFormData(p => ({ ...p, ackBgCheck: e.target.checked }))} style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#333', marginBottom: '4px' }}>Background check required</div>
+                  <div style={{ fontSize: '13px', color: '#666', lineHeight: 1.5 }}>A comprehensive background check is required before you can accept jobs. The fee is $30 and is refunded after your first 10 completed sessions.</div>
                 </div>
-                <div className="form-group">
-                  <label>Email {showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="maria@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-                  {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
+              </label>
+              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackPayments ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackPayments ? '#f0faf8' : '#fff', transition: 'all 0.2s' }}>
+                <input type="checkbox" checked={formData.ackPayments} onChange={(e) => setFormData(p => ({ ...p, ackPayments: e.target.checked }))} style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#333', marginBottom: '4px' }}>Online payments</div>
+                  <div style={{ fontSize: '13px', color: '#666', lineHeight: 1.5 }}>All payments are processed online through Stripe. You are an independent contractor, not an employee of InPlace. You'll set up Stripe after creating your account.</div>
                 </div>
-                <div className="form-group">
-                  <label>Phone {showFieldErrors && !isValidPhone(formData.phone) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" style={showFieldErrors && !isValidPhone(formData.phone) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-                  {formData.phone && !isValidPhone(formData.phone) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a 10-digit phone number</div>}
-                </div>
-                <div className="form-group">
-                  <label>Password {showFieldErrors && formData.password.length < 6 && <span style={{ color: '#c0392b', fontSize: 12 }}>*min 6 chars</span>}</label>
-                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" style={showFieldErrors && formData.password.length < 6 ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-                  {formData.password && formData.password.length < 6 && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Password must be at least 6 characters</div>}
-                </div>
-              </>
-            )}
-            {step === 2 && (
-              <>
-                <div className="form-group">
-                  <label className="form-checkbox">
-                    <input type="checkbox" checked={formData.bgCheckConsent} onChange={(e) => handleInputChange('bgCheckConsent', e.target.checked)} />
-                    <strong>I agree to comprehensive background check</strong>
-                  </label>
-                  <p style={{ fontSize: '13px', color: '#6c757d', marginLeft: '28px', marginBottom: '16px' }}>
-                    This includes criminal history review, reference verification, and identity confirmation.
-                  </p>
-                </div>
-                <div style={{ background: '#e8f5f2', border: '1px solid #1b6b5a', borderRadius: '8px', padding: '16px' }}>
-                  <p style={{ fontSize: '13px', color: '#0f4238' }}>✓ Our AI verification system will automatically validate your certifications against issuing authorities.</p>
-                </div>
-              </>
-            )}
-            {step === 3 && (
-              <>
-                <div className="form-group">
-                  <label>Certification Type</label>
-                  <select value={formData.certType} onChange={(e) => handleInputChange('certType', e.target.value)}>
-                    <option value="">Select...</option>
-                    <option value="cna">CNA (Certified Nursing Assistant)</option>
-                    <option value="hha">HHA (Home Health Aide)</option>
-                    <option value="lpn">LPN (Licensed Practical Nurse)</option>
-                    <option value="rn">RN (Registered Nurse)</option>
-                    <option value="cpr">CPR/First Aid</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Certification Number</label>
-                  <input type="text" value={formData.certNumber} onChange={(e) => handleInputChange('certNumber', e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Expiration Date</label>
-                  <input type="date" value={formData.certExpiry} onChange={(e) => handleInputChange('certExpiry', e.target.value)} />
-                </div>
-                <button type="button" className="btn btn-secondary btn-small" onClick={() => alert('Certification added!')}>+ Add Certification</button>
-              </>
-            )}
-            {step === 4 && (
-              <>
-                <div className="form-group">
-                  <label>Availability</label>
-                  <div style={{ marginTop: '12px' }}>
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                      <label key={day} className="form-checkbox">
-                        <input type="checkbox" checked={!!formData.availability[day]} onChange={() => handleCheckboxChange('availability', day)} />
-                        {day}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Preferred Times</label>
-                  <div style={{ marginTop: '12px' }}>
-                    {['morning', 'afternoon', 'evening'].map(time => (
-                      <label key={time} className="form-checkbox">
-                        <input type="checkbox" checked={!!formData.prefTimes[time]} onChange={() => handleCheckboxChange('prefTimes', time)} />
-                        {time.charAt(0).toUpperCase() + time.slice(1)}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-            {step === caregiverSteps.length && (
-              <div>
-                <h3 style={{ marginBottom: '16px' }}>Review Your Application</h3>
-                <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-                  <p><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
-                  <p><strong>Email:</strong> {formData.email}</p>
-                  <p><strong>Certification:</strong> {formData.certType}</p>
-                  <p><strong>Available Days:</strong> {Object.keys(formData.availability).filter(k => formData.availability[k]).join(', ') || 'None selected'}</p>
-                </div>
-                {regError && <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{regError}</div>}
-                <button type="button" className="btn btn-primary" onClick={handleComplete} disabled={registering} style={{ width: '100%', opacity: registering ? 0.6 : 1 }}>{registering ? 'Creating Account...' : 'Submit Application'}</button>
-              </div>
-            )}
+              </label>
+            </div>
           </>
         )}
-        {track === 'care_for' && (
-          <>
-            {step === 1 && (
-              <>
-                <div className="form-group">
-                  <label>First Name</label>
-                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Betty" />
-                </div>
-                <div className="form-group">
-                  <label>Last Name</label>
-                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Smith" />
-                </div>
-                <div className="form-group">
-                  <label>Email</label>
-                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="betty@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : {}} />
-                  {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
-                </div>
-                <div className="form-group">
-                  <label>Phone</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" />
-                  {formData.phone && !isValidPhone(formData.phone) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a 10-digit phone number</div>}
-                </div>
-                <div className="form-group">
-                  <label>Password</label>
-                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" />
-                  {formData.password && formData.password.length < 6 && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Password must be at least 6 characters</div>}
-                </div>
-              </>
-            )}
-            {step === 2 && (
-              <div>
-                <h3 style={{ marginBottom: '16px' }}>Review Your Information</h3>
-                <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
-                  <p><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
-                  <p><strong>Email:</strong> {formData.email}</p>
-                  <p><strong>Account type:</strong> Care Recipient</p>
-                </div>
-                <div style={{ background: '#e8eaf6', border: '1px solid #5c6bc0', borderRadius: '8px', padding: '14px', marginBottom: '16px', fontSize: '13px', color: '#3949ab' }}>
-                  After creating your account, you'll be able to browse caregivers in your area and request care on your own schedule.
-                </div>
-                {regError && <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{regError}</div>}
-                <button type="button" className="btn btn-primary" onClick={handleComplete} disabled={registering} style={{ width: '100%', opacity: registering ? 0.6 : 1 }}>{registering ? 'Creating Account...' : 'Complete Registration'}</button>
-              </div>
-            )}
-          </>
-        )}
+
+        {/* ─── Navigation buttons ─── */}
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'space-between' }}>
-          <button onClick={handleBack} className="btn btn-outline">← Back</button>
-          {step < maxStep && <button onClick={handleNext} className="btn btn-primary" disabled={!isStepValid()} style={{ opacity: isStepValid() ? 1 : 0.5, cursor: isStepValid() ? 'pointer' : 'not-allowed' }}>Next →</button>}
+          <button onClick={handleBack} className="btn btn-outline">{'\u2190'} Back</button>
+          {step === 2 && (
+            <button onClick={handleNext} className="btn btn-primary" disabled={!isBasicInfoValid()} style={{ opacity: isBasicInfoValid() ? 1 : 0.5, cursor: isBasicInfoValid() ? 'pointer' : 'not-allowed' }}>
+              {track === 'caregiver' ? 'Next \u2192' : (registering ? 'Creating Account...' : 'Create My Account')}
+            </button>
+          )}
+          {step === 3 && (
+            <button onClick={handleComplete} className="btn btn-primary" disabled={!isDisclosuresValid() || registering} style={{ opacity: (isDisclosuresValid() && !registering) ? 1 : 0.5, cursor: (isDisclosuresValid() && !registering) ? 'pointer' : 'not-allowed' }}>
+              {registering ? 'Creating Account...' : 'Create My Account'}
+            </button>
+          )}
         </div>
       </div>
     </div>
