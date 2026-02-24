@@ -282,6 +282,9 @@ async function initializeDatabase() {
     // v1.22.1 — Add flow column to distinguish login/register/onboarding/password-reset/demo events
     `ALTER TABLE onboarding_events ADD COLUMN IF NOT EXISTS flow TEXT DEFAULT 'onboarding'`,
     `CREATE INDEX IF NOT EXISTS idx_onboarding_events_flow ON onboarding_events(flow)`,
+    // v1.27.7 — Soft-delete: anonymize users instead of hard-deleting
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_email TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
