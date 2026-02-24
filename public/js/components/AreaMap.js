@@ -23,7 +23,10 @@ const AreaMap = window.AreaMap = () => {
         if (profileRes?.ok) {
           const data = await profileRes.json();
           const p = data.profile || data.caregiver;
-          if (p?.latitude && p?.longitude) {
+          // Prefer work location (service area center) over home address
+          if (p?.work_latitude && p?.work_longitude) {
+            setProfileCenter([p.work_latitude, p.work_longitude]);
+          } else if (p?.latitude && p?.longitude) {
             setProfileCenter([p.latitude, p.longitude]);
           }
         }

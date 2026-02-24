@@ -68,6 +68,7 @@ app.set("trust proxy", 1); // Trust first proxy (Cloudflare/Railway) for X-Forwa
 app.use(cors());
 app.use(require("cookie-parser")());
 app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
+app.use("/api/care-recipients", express.json({ limit: "5mb" }));
 app.use(express.json({ limit: "100kb" }));
 app.use(limitBodySize(100000));
 

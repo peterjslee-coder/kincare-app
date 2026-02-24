@@ -355,14 +355,45 @@ const AvailabilityTab = window.AvailabilityTab = ({
             {/* Day or Date */}
             {ruleForm.isRecurring ? (
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Day of Week</label>
-                <select value={ruleForm.dayOfWeek} onChange={e => setRuleForm(f => ({ ...f, dayOfWeek: e.target.value }))} style={{
-                  width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px',
-                }}>
-                  {dayNames.map((name, idx) => (
-                    <option key={idx} value={idx}>{name}</option>
-                  ))}
-                </select>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  {editingRule ? 'Day of Week' : 'Days of Week (select multiple)'}
+                </label>
+                {editingRule ? (
+                  <select value={ruleForm.dayOfWeek} onChange={e => setRuleForm(f => ({ ...f, dayOfWeek: e.target.value }))} style={{
+                    width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px',
+                  }}>
+                    {dayNames.map((name, idx) => (
+                      <option key={idx} value={idx}>{name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {dayNames.map((name, idx) => {
+                      const sel = (ruleForm.selectedDays || []).includes(idx);
+                      return (
+                        <button key={idx} type="button" onClick={() => {
+                          setRuleForm(f => {
+                            const days = f.selectedDays || [];
+                            return { ...f, selectedDays: sel ? days.filter(d => d !== idx) : [...days, idx] };
+                          });
+                        }} style={{
+                          padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: sel ? 600 : 400,
+                          border: sel ? '2px solid #1b6b5a' : '2px solid #ddd',
+                          background: sel ? '#f0faf5' : '#fff', cursor: 'pointer',
+                          color: sel ? '#1b6b5a' : '#555',
+                        }}>{dayAbbr[idx]}</button>
+                      );
+                    })}
+                    <button type="button" onClick={() => setRuleForm(f => ({ ...f, selectedDays: [1,2,3,4,5] }))} style={{
+                      padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 500,
+                      border: '1px solid #ddd', background: '#f8f9fa', cursor: 'pointer', color: '#666',
+                    }}>Weekdays</button>
+                    <button type="button" onClick={() => setRuleForm(f => ({ ...f, selectedDays: [0,6] }))} style={{
+                      padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 500,
+                      border: '1px solid #ddd', background: '#f8f9fa', cursor: 'pointer', color: '#666',
+                    }}>Weekends</button>
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ marginBottom: '14px' }}>

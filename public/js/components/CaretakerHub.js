@@ -47,7 +47,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [editingRule, setEditingRule] = useState(null);
   const [ruleForm, setRuleForm] = useState({
     type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00',
-    isRecurring: true, specificDate: '', note: '',
+    isRecurring: true, specificDate: '', note: '', selectedDays: [],
   });
 
   // Stoplight chart state (must be before early returns — React hook order rules)
@@ -108,24 +108,48 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
   const handleSaveRule = async () => {
     try {
-      const body = {
-        dayOfWeek: parseInt(ruleForm.dayOfWeek),
-        startTime: ruleForm.startTime,
-        endTime: ruleForm.endTime,
-        isRecurring: ruleForm.isRecurring,
-        specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null,
-        type: ruleForm.type,
-        note: ruleForm.note || null,
-      };
-
       if (editingRule) {
+        // Editing: single day update
+        const body = {
+          dayOfWeek: parseInt(ruleForm.dayOfWeek),
+          startTime: ruleForm.startTime,
+          endTime: ruleForm.endTime,
+          isRecurring: ruleForm.isRecurring,
+          specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null,
+          type: ruleForm.type,
+          note: ruleForm.note || null,
+        };
         await apiFetch(`/api/availability/${editingRule.id}`, { method: 'PUT', body: JSON.stringify(body) });
+      } else if (ruleForm.isRecurring && ruleForm.selectedDays && ruleForm.selectedDays.length > 0) {
+        // New recurring rule with multiple days selected
+        for (const dow of ruleForm.selectedDays) {
+          const body = {
+            dayOfWeek: parseInt(dow),
+            startTime: ruleForm.startTime,
+            endTime: ruleForm.endTime,
+            isRecurring: true,
+            specificDate: null,
+            type: ruleForm.type,
+            note: ruleForm.note || null,
+          };
+          await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+        }
       } else {
+        // Single day (specific date or single recurring day)
+        const body = {
+          dayOfWeek: parseInt(ruleForm.dayOfWeek),
+          startTime: ruleForm.startTime,
+          endTime: ruleForm.endTime,
+          isRecurring: ruleForm.isRecurring,
+          specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null,
+          type: ruleForm.type,
+          note: ruleForm.note || null,
+        };
         await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
       }
       setShowAddRule(false);
       setEditingRule(null);
-      setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '' });
+      setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '', selectedDays: [] });
       fetchAvailability();
     } catch (err) { console.error('Save rule error:', err); }
   };
@@ -162,6 +186,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       setLoading(false);
     };
     fetchData();
+
+    // Detect Stripe Connect return — refresh status and switch to financials tab
+    const hash = window.location.hash;
+    if (hash.includes('payments-complete') || hash.includes('payments-refresh')) {
+      setActiveTab('financials');
+      (async () => {
+        try {
+          const sRes = await apiFetch('/api/payments/connect/status');
+          if (sRes?.ok) setStripeStatus(await sRes.json());
+        } catch {}
+      })();
+      // Clean up hash
+      window.location.hash = '';
+    }
   }, []);
 
   // Fetch completed sessions when earnings tab is active
@@ -841,11 +879,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </div>
               <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
                 <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>Rates</div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', lineHeight: 1.5 }}>
-                  Day ${profile.rateDaytime || profile.hourlyRate || '—'}<br/>
-                  Night ${profile.rateNighttime || profile.hourlyRate || '—'}<br/>
-                  Overnight ${profile.rateOvernight || profile.hourlyRate || '—'}
-                </div>
+                {(() => {
+                  const day = profile.rateDaytime || profile.hourlyRate;
+                  const night = profile.rateNighttime || profile.hourlyRate;
+                  const over = profile.rateOvernight || profile.hourlyRate;
+                  const allSame = day && day === night && day === over;
+                  return allSame ? (
+                    <div style={{ fontSize: '24px', fontWeight: 700, color: '#1b6b5a' }}>${day}/hr</div>
+                  ) : (
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', lineHeight: 1.5 }}>
+                      Day ${day || '—'}<br/>Night ${night || '—'}<br/>Overnight ${over || '—'}
+                    </div>
+                  );
+                })()}
               </div>
               <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
                 <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>Mileage</div>
@@ -1174,11 +1220,57 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {activeTab === 'documents' && (
         <div>
+          {/* Required Documents Checklist */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header"><span className="card-icon">📋</span>Required Documents</div>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>
+              These documents are needed for your caregiver profile. Upload any that are missing.
+            </p>
+            {(() => {
+              const required = [
+                { type: 'dl_front', label: "Driver's License (Front)", icon: '🪪' },
+                { type: 'dl_back', label: "Driver's License (Back)", icon: '🪪' },
+                { type: 'selfie', label: 'Selfie / Photo ID', icon: '🤳' },
+                { type: 'certification', label: 'Certifications (CNA, CPR, etc.)', icon: '📜' },
+              ];
+              const uploadedTypes = new Set(documents.map(d => d.document_type));
+              return (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {required.map(req => {
+                    const uploaded = uploadedTypes.has(req.type);
+                    return (
+                      <div key={req.type} style={{
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+                        background: uploaded ? '#f0faf8' : '#fffbf0', borderRadius: 8,
+                        border: uploaded ? '1px solid #c8e6c9' : '1px solid #ffe0a0',
+                      }}>
+                        <span style={{ fontSize: 20 }}>{req.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: '#333' }}>{req.label}</div>
+                          <div style={{ fontSize: 11, color: uploaded ? '#2e7d32' : '#b45309', marginTop: 2 }}>
+                            {uploaded ? 'Submitted' : 'Not yet uploaded'}
+                          </div>
+                        </div>
+                        {uploaded ? (
+                          <span style={{ padding: '4px 10px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>Done</span>
+                        ) : (
+                          <button onClick={() => {
+                            if (window.__navigateTo) window.__navigateTo('onboarding');
+                          }} style={{
+                            padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none',
+                            borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                          }}>Upload</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
           <div className="card">
             <div className="card-header"><span className="card-icon">📄</span>Uploaded Documents</div>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>
-              Documents submitted during onboarding. Contact support if you need to update your identity documents.
-            </p>
             {docsLoading ? (
               <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>Loading documents...</div>
             ) : documents.length > 0 ? (
@@ -1209,7 +1301,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </div>
             ) : (
               <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
-                No documents uploaded yet. Documents are submitted during the onboarding process.
+                No documents uploaded yet. Complete onboarding to submit your documents.
               </div>
             )}
           </div>

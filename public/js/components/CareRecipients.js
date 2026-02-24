@@ -112,6 +112,31 @@ const CareRecipients = window.CareRecipients = () => {
     }
   };
 
+  // Resize image on canvas before upload to keep payload small
+  const resizeImage = (file, maxDim, quality) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else { w = Math.round(w * maxDim / h); h = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        img.src = ev.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handlePhotoUpload = async (recipientId) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -119,33 +144,25 @@ const CareRecipients = window.CareRecipients = () => {
     input.onchange = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      if (file.size > 1.5 * 1024 * 1024) {
-        showToast('Photo too large — max 1.5MB', 'error');
-        return;
-      }
       setPhotoUploading(true);
       try {
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-          const base64 = ev.target.result;
-          const res = await apiFetch(`/api/care-recipients/${recipientId}/photo`, {
-            method: 'PUT',
-            body: JSON.stringify({ photo: base64 }),
-          });
-          if (res?.ok) {
-            showToast('Photo updated!', 'success');
-            await fetchRecipients();
-          } else {
-            showToast('Failed to upload photo', 'error');
-          }
-          setPhotoUploading(false);
-        };
-        reader.readAsDataURL(file);
+        // Resize to 800px max dimension, JPEG 80% quality
+        const base64 = await resizeImage(file, 800, 0.8);
+        const res = await apiFetch(`/api/care-recipients/${recipientId}/photo`, {
+          method: 'PUT',
+          body: JSON.stringify({ photo: base64 }),
+        });
+        if (res?.ok) {
+          showToast('Photo updated!', 'success');
+          await fetchRecipients();
+        } else {
+          showToast('Failed to upload photo', 'error');
+        }
       } catch (err) {
         console.error('Photo upload error:', err);
         showToast('Failed to upload photo', 'error');
-        setPhotoUploading(false);
       }
+      setPhotoUploading(false);
     };
     input.click();
   };

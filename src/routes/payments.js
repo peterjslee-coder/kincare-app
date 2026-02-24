@@ -222,7 +222,7 @@ router.post("/checkout", requireRole("family"), async (req, res) => {
     totalCents = Math.round(costResult.total * 100);
   }
 
-  // Platform fee: 15% of base cost + 25% of short-notice surcharge (platform gets smaller share of surcharge)
+  // Platform fee: 20% of base cost + 25% of short-notice surcharge (platform gets smaller share of surcharge)
   let platformFeeCents = Math.round(baseCostCents * PLATFORM_FEE_PERCENT / 100);
   if (surchargeCents > 0) {
     platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
