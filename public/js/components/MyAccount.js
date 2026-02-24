@@ -901,6 +901,74 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         );
       })()}
 
+      {/* Remove a Role — only for non-demo users with multiple roles */}
+      {!isDemo && user && (() => {
+        const currentRoles = user.roles || [user.role];
+        if (currentRoles.length <= 1) return null;
+        const roleLabels = { family: 'Family / Care Team', caregiver: 'Caregiver', care_for: 'Care Recipient' };
+        const roleIcons = { family: '👪', caregiver: '💼', care_for: '🏠' };
+        return React.createElement('div', { className: 'card', style: { marginTop: 20, padding: 20, border: '1px solid #fdd' } },
+          React.createElement('div', { className: 'card-header', style: { marginBottom: 12, color: '#c62828' } }, 'Remove a Role'),
+          React.createElement('p', { style: { fontSize: 13, color: '#888', margin: '0 0 16px' } },
+            'Remove a role you no longer need. Your account and other roles will remain intact.'
+          ),
+          currentRoles.map(r =>
+            React.createElement('div', {
+              key: r,
+              style: {
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 14px', marginBottom: 6, background: '#fff',
+                border: '1px solid #e0e0e0', borderRadius: 8,
+              }
+            },
+              React.createElement('span', { style: { fontSize: 14 } }, `${roleIcons[r] || ''} ${roleLabels[r] || r}`),
+              React.createElement('button', {
+                onClick: async () => {
+                  const label = roleLabels[r] || r;
+                  if (!confirm(`Remove the "${label}" role from your account?\n\nThis will delete any associated profile data for that role. Your account and other roles will not be affected.`)) return;
+                  if (!confirm(`Are you sure? This cannot be undone.`)) return;
+                  try {
+                    const res = await apiFetch('/api/auth/remove-role', {
+                      method: 'POST', body: JSON.stringify({ role: r }),
+                    });
+                    if (res?.ok) {
+                      const data = await res.json();
+                      if (data.token) { setAuthToken(data.token); }
+                      const meRes = await apiFetch('/api/auth/me');
+                      if (meRes?.ok) {
+                        const meData = await meRes.json();
+                        setUser(meData.user);
+                        if (setCurrentUser && meData.user) {
+                          const ur = meData.user.roles || [meData.user.role];
+                          setCurrentUser({
+                            id: meData.user.id, email: meData.user.email, role: meData.user.role,
+                            roles: ur,
+                            firstName: meData.user.first_name, lastName: meData.user.last_name,
+                            profilePhoto: meData.user.profile_photo || null,
+                            emailVerified: !!meData.user.email_verified, isDemo: !!meData.user.is_demo,
+                            isAdmin: !!meData.user.is_admin,
+                          });
+                        }
+                        if (window.setActiveRole) window.setActiveRole(data.primaryRole || ur[0]);
+                      }
+                      if (typeof showToast === 'function') showToast(`${label} role removed`, 'success');
+                    } else {
+                      const err = await res?.json().catch(() => ({}));
+                      if (typeof showToast === 'function') showToast(err.error || 'Failed to remove role', 'error');
+                    }
+                  } catch { if (typeof showToast === 'function') showToast('Failed to remove role', 'error'); }
+                },
+                style: {
+                  padding: '6px 14px', background: 'none', border: '1px solid #e57373',
+                  borderRadius: 6, color: '#c62828', fontSize: 12, fontWeight: 500,
+                  cursor: 'pointer',
+                },
+              }, 'Remove')
+            )
+          ),
+        );
+      })()}
+
       {/* Logout — always visible, especially important for mobile PWA */}
       <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid #e0e0e0' }}>
         <button onClick={handleLogoutFromAccount} style={{

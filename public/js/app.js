@@ -812,27 +812,34 @@ const App = () => {
           </div>
         )}
         {currentUser?.roles?.length > 1 ? (
-          <div style={{ padding: '4px 12px 12px', display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.15)', borderRadius: '8px', margin: '0 12px 8px' }}>
-            {currentUser.roles.map(r => {
-              const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Care Recipient' };
-              const icons = { family: '👪', caregiver: '💼', care_for: '🏠' };
-              const isActive = r === role;
-              return React.createElement('button', {
-                key: r,
-                onClick: () => handleSwitchRole(r),
-                style: {
-                  flex: 1, padding: '8px 6px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                  fontSize: '11px', fontWeight: isActive ? 700 : 500, textAlign: 'center',
-                  background: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
-                  color: isActive ? 'white' : 'rgba(255,255,255,0.5)',
-                  transition: 'all 0.2s',
-                },
-              }, `${icons[r] || ''} ${labels[r] || r}`);
-            })}
+          <div style={{ margin: '0 12px 8px' }}>
+            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '1px', padding: '0 4px 4px', textAlign: 'center' }}>
+              Viewing as
+            </div>
+            <div style={{ padding: '4px', display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.15)', borderRadius: '8px' }}>
+              {currentUser.roles.map(r => {
+                const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Care Recipient' };
+                const icons = { family: '👪', caregiver: '💼', care_for: '🏠' };
+                const isActive = r === role;
+                return React.createElement('button', {
+                  key: r,
+                  onClick: () => handleSwitchRole(r),
+                  style: {
+                    flex: 1, padding: '8px 6px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                    fontSize: '11px', fontWeight: isActive ? 700 : 500, textAlign: 'center',
+                    background: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                    color: isActive ? 'white' : 'rgba(255,255,255,0.5)',
+                    transition: 'all 0.2s',
+                  },
+                }, `${icons[r] || ''} ${labels[r] || r}`);
+              })}
+            </div>
           </div>
         ) : (
-          <div style={{ padding: '0 16px 12px', fontSize: '11px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            {getRoleLabel()}
+          <div style={{ padding: '0 16px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>
+              {role === 'caregiver' ? '💼' : role === 'care_for' ? '🏠' : '👪'} {getRoleLabel()}
+            </span>
           </div>
         )}
         <nav style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>

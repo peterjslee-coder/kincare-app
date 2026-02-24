@@ -17,7 +17,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [highlightTab, setHighlightTab] = useState(false);
   // Inline profile editing state (for onboarding)
-  const [profileForm, setProfileForm] = useState({ bio: '', hourlyRate: '', foodAllergies: '', medicalConditions: '' });
+  const [profileForm, setProfileForm] = useState({ bio: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', foodAllergies: '', medicalConditions: '' });
   const [profileSaving, setProfileSaving] = useState(false);
   // Earnings state
   const [completedSessions, setCompletedSessions] = useState([]);
@@ -307,7 +307,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Auto-complete onboarding — fires when all 6 steps are done (must be before early returns)
   const _autoP = data?.profile || {};
   const _autoStepCount = [
-    !!(_autoP.bio && _autoP.hourlyRate),
+    !!(_autoP.bio && (_autoP.rateDaytime || _autoP.hourlyRate)),
     availRules.length > 0,
     !!stoplightData,
     !!_autoP.avatar_url,
@@ -509,10 +509,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const saveOnboardingProfile = async () => {
     setProfileSaving(true);
     try {
+      const dayRate = parseFloat(profileForm.rateDaytime) || parseFloat(profileForm.hourlyRate) || 25;
       await apiFetch('/api/caregivers/profile', {
         method: 'POST',
-        body: JSON.stringify({ bio: profileForm.bio, hourlyRate: parseFloat(profileForm.hourlyRate) || 25 }),
+        body: JSON.stringify({ bio: profileForm.bio, hourlyRate: dayRate }),
       });
+      // Save tiered rates if any were entered
+      if (profileForm.rateDaytime || profileForm.rateNighttime || profileForm.rateOvernight) {
+        await apiFetch('/api/caregivers/rates', {
+          method: 'PUT',
+          body: JSON.stringify({
+            rateDaytime: parseFloat(profileForm.rateDaytime) || dayRate,
+            rateNighttime: parseFloat(profileForm.rateNighttime) || dayRate,
+            rateOvernight: parseFloat(profileForm.rateOvernight) || dayRate,
+          }),
+        });
+      }
       await apiFetch('/api/auth/me', {
         method: 'PUT',
         body: JSON.stringify({ foodAllergies: profileForm.foodAllergies, medicalConditions: profileForm.medicalConditions }),
@@ -527,7 +539,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
   // First Steps checklist
   const firstSteps = [
-    { id: 'profile', label: 'Complete your profile', done: !!(profile.bio && profile.hourlyRate) },
+    { id: 'profile', label: 'Complete your profile', done: !!(profile.bio && (profile.rateDaytime || profile.hourlyRate)) },
     { id: 'availability', label: 'Set your availability', done: availRules.length > 0 },
     { id: 'stoplight', label: 'Set your care preferences (stoplight)', done: !!stoplightData },
     { id: 'photo', label: 'Upload a profile photo', done: !!profile.avatar_url },
@@ -640,7 +652,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {firstSteps.map((s, idx) => (
               <div key={s.id} className={'onboarding-step' + (s.done ? ' done' : '')} onClick={() => {
                 if (s.done) return;
-                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', foodAllergies: '', medicalConditions: '' }); goToStep('profile'); }
+                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', rateDaytime: profile.rateDaytime || profile.hourlyRate || '', rateNighttime: profile.rateNighttime || '', rateOvernight: profile.rateOvernight || '', foodAllergies: '', medicalConditions: '' }); goToStep('profile'); }
                 if (s.id === 'availability') goToStep('availability');
                 if (s.id === 'stoplight') goToStep('preferences');
                 if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
@@ -682,7 +694,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {firstSteps.map(s => (
               <div key={s.id} onClick={() => {
                 if (s.done) return;
-                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', foodAllergies: '', medicalConditions: '' }); goToStep('profile'); }
+                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', rateDaytime: profile.rateDaytime || profile.hourlyRate || '', rateNighttime: profile.rateNighttime || '', rateOvernight: profile.rateOvernight || '', foodAllergies: '', medicalConditions: '' }); goToStep('profile'); }
                 if (s.id === 'availability') goToStep('availability');
                 if (s.id === 'stoplight') goToStep('preferences');
                 if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
@@ -780,10 +792,34 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 rows={4} style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>Hourly Rate ($)</label>
-              <input type="number" value={profileForm.hourlyRate} onChange={(e) => setProfileForm(p => ({ ...p, hourlyRate: e.target.value }))}
-                placeholder="25" min="15" max="100" style={{ width: '120px', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }} />
-              <span style={{ fontSize: '12px', color: '#888', marginLeft: '8px' }}>Typical range: $20–$35/hr</span>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>Your Rates ($/hr)</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>Daytime (6a–6p)</div>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '10px', top: '10px', color: '#888', fontSize: '14px' }}>$</span>
+                    <input type="number" value={profileForm.rateDaytime} onChange={(e) => setProfileForm(p => ({ ...p, rateDaytime: e.target.value }))}
+                      placeholder="25" min="15" max="200" style={{ width: '100%', padding: '10px 10px 10px 24px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>Evening (6p–12a)</div>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '10px', top: '10px', color: '#888', fontSize: '14px' }}>$</span>
+                    <input type="number" value={profileForm.rateNighttime} onChange={(e) => setProfileForm(p => ({ ...p, rateNighttime: e.target.value }))}
+                      placeholder="30" min="15" max="200" style={{ width: '100%', padding: '10px 10px 10px 24px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>Overnight (12a–6a)</div>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '10px', top: '10px', color: '#888', fontSize: '14px' }}>$</span>
+                    <input type="number" value={profileForm.rateOvernight} onChange={(e) => setProfileForm(p => ({ ...p, rateOvernight: e.target.value }))}
+                      placeholder="35" min="15" max="200" style={{ width: '100%', padding: '10px 10px 10px 24px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: '11px', color: '#888', marginTop: '6px' }}>6-hour minimum per booking. Typical range: $20–$35/hr.</div>
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>Food Allergies <span style={{ color: '#999', fontWeight: 400 }}>(optional — so families know)</span></label>
@@ -800,10 +836,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             <button onClick={() => setActiveTab('schedule')} style={{
               padding: '10px 24px', background: '#f0f0f0', color: '#555', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
             }}>Back</button>
-            <button onClick={saveOnboardingProfile} disabled={profileSaving || !profileForm.bio || !profileForm.hourlyRate} style={{
-              padding: '10px 24px', background: profileForm.bio && profileForm.hourlyRate ? '#1b6b5a' : '#ccc',
+            <button onClick={saveOnboardingProfile} disabled={profileSaving || !profileForm.bio || !profileForm.rateDaytime} style={{
+              padding: '10px 24px', background: profileForm.bio && profileForm.rateDaytime ? '#1b6b5a' : '#ccc',
               color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600,
-              cursor: profileForm.bio && profileForm.hourlyRate ? 'pointer' : 'not-allowed', opacity: profileSaving ? 0.6 : 1,
+              cursor: profileForm.bio && profileForm.rateDaytime ? 'pointer' : 'not-allowed', opacity: profileSaving ? 0.6 : 1,
             }}>{profileSaving ? 'Saving...' : 'Save Profile'}</button>
           </div>
         </div>

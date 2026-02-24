@@ -450,60 +450,123 @@
 
 ---
 
-## Next Up — v1.23.0: Quick Wins & Bug Fixes
+## Completed — v1.24.0–v1.24.1: Splash Rework & Date Fixes (2026-02-23)
 
-Priority: **HIGH** — Address fresh user feedback (58 items from Feb 23), fix visible bugs.
+- [x] **Splash page B2 redesign:** Split hero with fade, tabbed audience sections, signup form, fair-wages subheadline
+- [x] **Invalid dates on activity feed:** Added parseTimestamp guards to Dashboard.js, FamilyPayments.js, AdminPanel.js
+- [x] **Invalid dates on Betty's calendar:** Verified CaredForView.js using safe integer-based date construction
+
+---
+
+## Completed — v1.25.0–v1.25.1: Feedback Mega-Fix (2026-02-23)
+
+- [x] **Leaflet map invalidateSize fix:** Added invalidateSize(true) + ResizeObserver to Caregivers.js and AreaMap.js maps
+- [x] **Map centered on caregiver's work location:** AreaMap uses profileCenter (work_latitude/work_longitude) as default
+- [x] **Caregiver pet/health info on MyAccount:** Health & Safety card shows editable pets, allergies, medical conditions
+- [x] **Registration field validation:** Red border + "*required" labels on each invalid field for both tracks
+- [x] **Connection request persistence:** fetchPendingRequests() called after sending request to refresh sent list
+- [x] **Caregiver search centers on care recipient:** searchCenter added to map useEffect dependencies
+- [x] **Feedback icon mobile fix:** FAB moves higher (bottom: 130px) on Messages page
+- [x] **Message timestamps with date:** "Yesterday 2:30 PM" or "Feb 21 2:30 PM" for older messages
+- [x] **Session color consistency:** Distinct colors per status — confirmed=teal, completed=blue, pending=orange, open=coral
+- [x] **Getting Started checklist dismiss:** Added dismiss button, auto-detection already in place
+- [x] **Caregiver name size on profile:** Bumped from 17px to 20px
+- [x] **Dashboard spend accuracy:** Analytics endpoint filters to confirmed and completed sessions only
+- [x] **Care recipient photo on Dashboard:** Shows photo > emoji > fallback instead of hardcoded emoji
+- [x] **Caregiver profile photo upload:** Confirmed working for peter@yourinplace.com (Cary Taker)
+
+---
+
+## Completed — v1.26.0: Caregiver Registration Flow (2026-02-23)
+
+- [x] **Multi-step caregiver registration:** Streamlined wizard with progressive disclosure
+- [x] **Care stoplight preferences:** Green/yellow/red task categorization during onboarding
+- [x] **Work location + travel radius:** Zip-based geocoding for preferred work area
+
+---
+
+## Completed — v1.27.0–v1.27.7: Progressive Gating & Onboarding (2026-02-23)
+
+- [x] **Progressive caregiver onboarding gate:** Non-dismissible onboarding panel on CaretakerHub
+- [x] **6-step onboarding checklist:** Profile, availability, care preferences, photo, Stripe, background check
+- [x] **Blurred/locked content:** Calendar and jobs visible as shapes but details hidden until onboarding complete
+- [x] **Auto-unlock:** Backend verifies all 6 criteria, sets onboarding_complete=1, panel disappears
+- [x] **PUT /api/caregivers/mark-onboarding-complete:** Server-side validation of all completion criteria
+- [x] **Soft-delete with transactions:** Anonymize user data, set is_active=0, log exit reason
+- [x] **Exit survey:** Collect reason before account deletion
+- [x] **Mobile splash fix:** Responsive adjustments to splash page
+- [x] **Inline onboarding profile editor:** Edit profile fields directly from onboarding checklist
+
+---
+
+## Completed — v1.28.0–v1.28.6: Registration Hardening & Real User Fixes (2026-02-24)
+
+- [x] **Family dashboard gating:** Progressive onboarding gate for family users (care recipient, care team setup)
+- [x] **Password confirmation on registration:** Confirm password field with match validation and visual feedback
+- [x] **Phone normalization:** Strip formatting before API calls across RegisterPage, CaregiverOnboarding, MyAccount
+- [x] **Phone auto-formatting:** Display as (xxx) xxx-xxxx during input across all forms
+- [x] **Sidebar profile layout:** Centered vertical layout with 44px avatar, consistent 14px font
+- [x] **Zombie account fix (v1.28.4):** Async authenticate middleware checks is_active in DB — stale JWTs from deleted accounts now return 401
+- [x] **Demo data isolation in sessions (v1.28.6):** Added is_demo JOIN filtering to both caregiver session queries
+- [x] **Care request preview cards (v1.28.6):** Caregiver calendar shows recipient name, date/time, duration, cost for each request
+
+---
+
+## Next Up — v1.29.0: Dashboard & Navigation Polish
+
+Priority: **HIGH** — Fresh user feedback (78 total items, 25 reviewed). Fix visible UX issues.
 
 **Bugs:**
-- [ ] **Leaflet map doesn't display until tab switch.** Classic `invalidateSize()` race condition. *(Feedback #38, #50)*
 - [ ] **Duplicate help/FAQ articles.** Same questions shown 3 times. *(Feedback #48)*
 - [ ] **Inbox not sorted by recency.** Most recent conversation should be at top. *(Feedback #25)*
-- [ ] **Dashboard spend miscalculation.** Shows $256 with no confirmed sessions — counting requested ones. *(Feedback #52)*
 - [ ] **Activity feed "Mark read" text overflow.** Button text spills outside container. *(Feedback #23)*
-- [ ] **Session color mismatch.** Open sessions showing as confirmed (blue instead of orange/pink). *(Feedback #31)*
-- [ ] **Getting Started checklist not auto-completing.** Completed steps not detected. Needs dismiss option. *(Feedback #39)*
-- [ ] **Caregiver name too small on profile.** Name should be bigger, at top near photo. *(Feedback #40)*
+- [ ] **"Set your availability" link broken.** Clicking it doesn't navigate anywhere. *(Feedback — Feb 24)*
+- [ ] **"Complete my profile" checklist misleading.** Criteria unclear about what's actually required. *(Feedback — Feb 24)*
+- [ ] **Admin: delete user account fails.** Debug the delete user endpoint. *(Feedback — Feb 24)*
+- [ ] **AI insights cross-contamination.** Carlos's insights cite Betty's needs — scoping issue. *(Feedback — Feb 23)*
 
-**Quick improvements:**
-- [ ] **"Latest" tile clickable.** Navigate to relevant page on tap. *(Feedback #21)*
-- [ ] **Dismissable dashboard tiles.** Hide X on Latest and other blocks. *(Feedback #53, #55)*
+**UX improvements:**
+- [ ] **Active role indicator.** "Viewing as: [Family/Caregiver]" persistent display. *(Feedback — Feb 24)*
 - [ ] **Help/Account/Logout pinned to sidebar bottom.** Standard app pattern. *(Feedback #47)*
-- [ ] **Admin default to real users.** Filter demo users by default. *(Feedback #35)*
-- [ ] **Calendar icon consistency.** Show actual date, red/white color scheme. *(Feedback #20, #54)*
-- [ ] **Caregivers page default to map view.** *(Feedback #57)*
-- [ ] **First Steps links navigate to destination.** Clicking "finish profile" takes you there. *(Feedback #11, #12)*
-- [ ] **Alert clicks show request details.** *(Feedback #32)*
+- [ ] **Calendar block previews.** Show "Betty, 3h, $94" in calendar cells instead of just dots. *(Feedback — Feb 24)*
+- [ ] **Care notes delete option.** Add delete button to individual notes. *(Feedback — Feb 24)*
+- [ ] **"Request Care" button placement.** Move from sidebar bottom to more prominent position. *(Feedback — Feb 24)*
+- [ ] **Betty tile + care team unification.** Nest care team inside Betty's card. *(Feedback — Feb 24)*
+- [ ] **Betty tile text contrast.** Lighten health condition text on green card. *(Feedback — Feb 24)*
+- [ ] **Delete individual role without deleting account.** Remove caregiver role but keep account. *(Feedback — Feb 24)*
 
 ---
 
-## v1.23.1: Caregiver Experience Polish
+## v1.30.0: Caregiver Experience Polish
 
-Priority: **HIGH** — Real user (Cary Taker) submitted 20 feedback items. Fix caregiver flow.
+Priority: **HIGH** — Real user (Cary Taker) feedback. Fix caregiver flow.
 
-- [ ] **Caregiver rates saved from onboarding.** Rates entered during signup must persist to caregiver_profiles and show on financials page. *(Feedback #44)*
-- [ ] **DL/cert photo upload in onboarding.** At least ask for DL front/back. Skip allowed with acknowledgment but no jobs until uploaded. *(Feedback #45)*
-- [ ] **Stripe Connect status refresh.** Return URL from Stripe triggers dashboard re-fetch of First Steps. *(Feedback #41)*
-- [ ] **Profile photo upload working for all roles.** Debug upload for caregiver role specifically. *(Feedback #49)*
-- [ ] **Weekly availability rules.** Set "available 8-5 Mon-Thu" as one rule instead of 4. *(Feedback #46)*
-- [ ] **Short-notice upcharge description.** 15% upcharge for <24hr bookings, worker gets 10% more — explain on financials page. *(Feedback #42)*
-- [ ] **Caregiver document storage.** Area to upload/view nursing certs, DL, CPR cards. *(Feedback #30)*
-- [ ] **Fee percentage consistency.** 15% vs 20% confusion — make consistent everywhere. *(Existing bug)*
+- [ ] **Caregiver rates saved from onboarding.** Rates must persist to caregiver_profiles and show on financials. *(Feedback #44)*
+- [ ] **DL/cert photo upload in onboarding.** At least ask for DL front/back. *(Feedback #45)*
+- [ ] **Stripe Connect status refresh.** Return URL triggers dashboard re-fetch. *(Feedback #41)*
+- [ ] **Weekly availability rules.** Set "available 8-5 Mon-Thu" as one rule. *(Feedback #46)*
+- [ ] **Short-notice upcharge description.** Explain pricing rules on financials page. *(Feedback #42)*
+- [ ] **Fee percentage consistency.** 15% vs 20% — make consistent everywhere. *(Existing bug)*
+- [ ] **Caregiver avatar in assignment block.** Show profile pic in assignment cards. *(Feedback — reviewed)*
+- [ ] **Show assigned caregiver on map.** Pin/flag on family's caregiver map view. *(Feedback — Feb 24)*
+- [ ] **Care team overlapping avatar display.** Member avatars lined up and overlapping. *(Feedback — Feb 24)*
+- [ ] **Star rating label/tooltip.** Clarify what the rating represents. *(Feedback — Feb 24)*
 
 ---
 
-## v1.18.0: Stripe & Background Checks
+## v1.31.0: Stripe & Background Checks
 
-Priority: **HIGH** — Enable payments. *Blocked on Pete's Stripe and Checkr action items (see bottom of file).*
+Priority: **HIGH** — Enable payments. *Blocked on Pete's Stripe and Checkr action items.*
 
-- [ ] **Stripe payment for background check:** Collect credit card via Stripe Elements during CaregiverOnboarding. One-time charge for Checkr background check.
+- [ ] **Stripe payment for background check:** Collect credit card via Stripe Elements. One-time charge for Checkr background check.
 - [ ] **Checkr integration:** Submit background check via Checkr API after payment. Webhook for results.
-- [ ] **Stripe Connect marketplace:** Families pay, caregivers get paid, platform takes configurable fee (20% base). Express accounts, destination charges, 2-day rolling payouts. ACH standard free, instant payout ~2% fee (worker opts in).
+- [ ] **Stripe Connect marketplace:** Families pay, caregivers get paid, platform takes configurable fee (20% base).
 - [ ] **Caregiver earnings dashboard:** Real payment history from Stripe, pending payouts, tax summary.
 - [ ] **Family billing:** Payment methods, invoices, spending history.
 
 ---
 
-## v1.24.0: Care Profile & Medication
+## v1.32.0: Care Profile & Medication
 
 Priority: **MEDIUM** — Enriching the core care experience.
 
@@ -511,9 +574,8 @@ Priority: **MEDIUM** — Enriching the core care experience.
 - [ ] **Care location address with private instructions.** Gate codes, parking, door combos — visible only to confirmed caregivers. *(Feedback #16)*
 - [ ] **Photo upload in care notes.** Visual context for caregivers. *(Feedback #17)*
 - [ ] **Care profile enrichment.** Doctor contacts, favorite shopping areas. *(Feedback #38)*
-- [ ] **Expand care categories beyond elderly.** Babysitting, special needs, adult care. Medical selections trigger disclaimer. *(Feedback #8)*
-- [ ] **AI insights on care profile.** Suggest relevant care questions based on conditions entered. *(Feedback #15)*
-- [ ] **Multiple emergency contacts + 911 shortcut.** *(Feedback #14)*
+- [ ] **Expand care categories beyond elderly.** Babysitting, special needs, adult care. *(Feedback #8)*
+- [ ] **AI insights on care profile.** Suggest relevant care questions based on conditions. *(Feedback #15)*
 
 ---
 
@@ -521,13 +583,13 @@ Priority: **MEDIUM** — Enriching the core care experience.
 
 Priority: **MEDIUM** — Real social model + navigation fixes.
 
-- [ ] **Connection request → auto-open chat.** Accept request and immediately see the conversation. *(Feedback #27)*
+- [ ] **Connection request → auto-open chat.** Accept request and immediately see conversation. *(Feedback #27)*
 - [ ] **Connection status persistence.** "Pending" state visible in messages list. *(Existing)*
 - [ ] **Find People shows recent connections.** *(Feedback #26)*
 - [ ] **Back swipe navigation.** In-app history stack so iOS back gesture works. *(Feedback #22, existing)*
 - [ ] **Message push deep-links.** Push notification opens directly to conversation.
 - [ ] **Video chat — Meet link in messages.**
-- [ ] **Session check-in/checkout + time extension.** Check in/out protocol with mechanism to request extra time. *(Feedback #1)*
+- [ ] **Session check-in/checkout + time extension.** *(Feedback #1)*
 
 ---
 
@@ -537,10 +599,35 @@ Priority: **MEDIUM** — Revenue and trust features.
 
 - [ ] **Nursing student discount program.** 15% fee vs 20%, verified via school email. *(Feedback #3)*
 - [ ] **Nursing student badge + hour reports.** Show on profile, generate school reports. *(Feedback #4)*
-- [ ] **Off-platform liability acknowledgment.** Users acknowledge no InPlace protection for off-app arrangements. *(Feedback #5)*
+- [ ] **Off-platform liability acknowledgment.** *(Feedback #5)*
 - [ ] **Care preferences as caregiver branding.** Stoplight system as identity/brand. *(Feedback #6, #7)*
 - [ ] **"Average in your area" rate data + job alerts.** *(Existing future feature)*
 - [ ] **AI fraud detection.** Detect unusual patterns. *(Feedback #28)*
+
+---
+
+## Future — App Store Launch & Distribution
+
+Priority: **MEDIUM** — Required for real distribution.
+
+**Apple App Store (iOS):**
+- [ ] **Apple Developer Account** — $99/year. Register at developer.apple.com.
+- [ ] **TWA / Capacitor / React Native wrapper** — Wrap the PWA in a native shell. Options: Capacitor (lightest, uses WKWebView), TWA (not available for iOS), or React Native WebView. Capacitor recommended — minimal code, full PWA features preserved.
+- [ ] **Push notifications via APNs** — Replace web-push with Apple Push Notification service for native push. Capacitor plugin: `@capacitor/push-notifications`.
+- [ ] **App Store review compliance** — Privacy policy, terms of service, medical disclaimer, age rating, app screenshots (6.7" and 5.5"), app icon (1024x1024).
+- [ ] **TestFlight beta** — Upload .ipa to App Store Connect, invite beta testers before public launch.
+
+**Google Play Store (Android):**
+- [ ] **Google Play Developer Account** — $25 one-time fee. Register at play.google.com/console.
+- [ ] **TWA (Trusted Web Activity)** — Wraps the PWA with zero native code. Uses Chrome Custom Tab. Requires digital asset links file (`.well-known/assetlinks.json`) on yourinplace.com. Lightest option.
+- [ ] **Play Store listing** — Screenshots, feature graphic (1024x500), short/full description, privacy policy URL, content rating questionnaire.
+- [ ] **App signing** — Upload Android App Bundle (.aab), Google manages signing keys.
+
+**Shared requirements:**
+- [ ] **Deep linking / universal links** — Handle `yourinplace.com/invite?token=X` natively, plus push notification deep links to specific screens.
+- [ ] **Offline mode hardening** — Ensure critical screens (dashboard, schedule, messages) work offline with service worker caching.
+- [ ] **App icon variants** — Foreground/background layers for Android adaptive icons, iOS 1024px marketing icon.
+- [ ] **Version management** — Semantic versioning synced between PWA cache-bust and native app version codes.
 
 ---
 
@@ -553,9 +640,11 @@ Priority: **LOW** — When growth demands it.
 - [ ] **Build step for frontend:** Move to Vite when component count demands it
 - [ ] **Google Maps geocoding upgrade:** Swap Nominatim for better residential accuracy
 - [ ] **Apple Sign-In:** After Google OAuth is proven
-- [ ] **Admin panel UX overhaul:** Card-based navigation, collapsible sections, cleaner information hierarchy
-- [ ] **Admin incident management:** Escalated support cases with full evidence (chat logs, payments, location)
-- [ ] **Biometric sign-in (WebAuthn/passkeys):** Fingerprint/Face ID authentication. *(Feedback #36)*
+- [ ] **Admin panel UX overhaul:** Card-based navigation, collapsible sections
+- [ ] **Admin incident management:** Escalated support cases with full evidence
+- [ ] **Biometric sign-in (WebAuthn/passkeys):** *(Feedback #36)*
+- [ ] **Splash page rework v2:** Collapse detailed sections, clearer demo CTA, happy imagery. *(Pete — Feb 24)*
+- [ ] **Clearer signup role selection:** Upfront "Are you looking for help / Ready to work" question. *(Pete — Feb 24)*
 
 ---
 

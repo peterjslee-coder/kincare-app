@@ -475,6 +475,61 @@ router.post("/add-role", authenticate, async (req, res) => {
   }
 });
 
+// ─── POST /api/auth/remove-role ───
+// Remove a role from the current user's account (must keep at least one)
+router.post("/remove-role", authenticate, async (req, res) => {
+  try {
+    const { role: removeRole } = req.body;
+
+    if (!["family", "caregiver", "care_for"].includes(removeRole)) {
+      return res.status(400).json({ error: "Invalid role" });
+    }
+
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, role, roles, first_name, last_name, email FROM users WHERE id = ?").get(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Parse existing roles
+    let currentRoles;
+    try { currentRoles = user.roles ? JSON.parse(user.roles) : [user.role]; }
+    catch { currentRoles = [user.role]; }
+
+    if (!currentRoles.includes(removeRole)) {
+      return res.status(400).json({ error: "You don't have this role" });
+    }
+
+    if (currentRoles.length <= 1) {
+      return res.status(400).json({ error: "You must keep at least one role. To fully remove your account, use Delete Account instead." });
+    }
+
+    // Remove the role
+    const newRoles = currentRoles.filter(r => r !== removeRole);
+    const newPrimaryRole = newRoles[0];
+    await db.prepare("UPDATE users SET roles = ?, role = ? WHERE id = ?").run(JSON.stringify(newRoles), newPrimaryRole, user.id);
+
+    // Clean up role-specific data
+    if (removeRole === "caregiver") {
+      // Remove caregiver profile, availability, and assignments
+      await db.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(user.id);
+      await db.prepare("DELETE FROM caregiver_assignments WHERE caregiver_id = ?").run(user.id);
+      await db.prepare("DELETE FROM caregiver_profiles WHERE user_id = ?").run(user.id);
+    }
+
+    // Generate new token with updated roles
+    const token = generateToken({ ...user, role: newPrimaryRole, roles: newRoles });
+
+    // Log the removal
+    await db.prepare(
+      "INSERT INTO activity_feed (id, user_id, type, title, body, created_at) VALUES (?, ?, 'role_removed', ?, ?, NOW())"
+    ).run(uuid(), user.id, "Role Removed", `Removed ${removeRole} role from account`);
+
+    res.json({ roles: newRoles, token, primaryRole: newPrimaryRole });
+  } catch (err) {
+    console.error("Remove role error:", err);
+    res.status(500).json({ error: "Failed to remove role" });
+  }
+});
+
 // ─── Helper: send verification email ───
 async function sendVerificationEmail(db, userId, email, firstName) {
   const token = crypto.randomBytes(32).toString("hex");

@@ -68,7 +68,7 @@
 - [ ] **Find People doesn't show recent connections.** The "Find People" search in Messages should show recent connections or searches. Also should allow messaging someone already connected when using Find People. *(Feedback — Feb 23, #26)*
 - [x] ~~**Session color mismatch for open vs confirmed.** Fixed in v1.25.0. Dashboard now shows distinct colors per status: confirmed=teal, completed=blue, pending=orange, open/requested=coral. *(Feedback — Feb 23, #31)*~~
 - [ ] **Alert clicks should show request details.** When a caretaker clicks on a pending request alert/notification, it should navigate to or expand the details of that specific request. *(Feedback — Feb 23, #32)*
-- [ ] **Demo data leaking into real user views.** Demo accounts/sessions should never appear in real user views. Ensure is_demo isolation is airtight in all queries. Fixed once in v1.22.1 reseed but needs ongoing vigilance. *(Feedback — Feb 23, #33)*
+- [x] ~~**Demo data leaking into real user views.** Fixed in v1.28.6. Added demo isolation JOIN to sessions endpoint (both main caregiver query and open-requests fallback). Combined with prior v1.22.1 reseed and v1.2.1 caregiver/contacts isolation. *(Feedback — Feb 23, #33)*~~
 - [x] ~~**Getting Started checklist not auto-completing.** Fixed in v1.25.0. Added dismiss button to the Getting Started checklist on the new-user dashboard view. Checklist auto-detection was already in place for profile, recipients, caregivers, etc. *(Feedback — Feb 23, #39)*~~
 - [x] ~~**Caregiver name too small on profile.** Fixed in v1.25.0. Bumped caregiver name font from 17px to 20px on Caregivers.js profile cards. *(Feedback — Feb 23, #40)*~~
 - [x] ~~**Dashboard spend shows amount with no confirmed appointments.** Fixed in v1.25.0. Analytics endpoint now filters all spend/session/hour queries to only count confirmed and completed sessions. *(Feedback — Feb 23, #52)*~~
@@ -87,6 +87,7 @@
 - [ ] **Admin: delete user account fails.** Attempted to delete a user account from admin panel — got the option but it failed. Debug the delete user endpoint. *(Feedback — Feb 24, new)*
 - [ ] **Admin: force password reset from admin panel.** Admin should be able to trigger a password reset email for any user directly from the admin panel. *(Feedback — reviewed)*
 - [ ] **Push notification icon is white square on Android.** PWA notification icon renders as blank white square on Pixel (Android). Need proper monochrome notification icon. *(Feedback — reviewed)*
+- [ ] **Delete individual role without deleting account.** User adds caregiver role but then wants to remove it (e.g., doesn't want background check). Currently no way to remove a role without deleting the whole account. Need: "Remove Role" option on MyAccount that deletes the caregiver_profile (or family data) while keeping the account and other roles intact. *(Feedback — Feb 24, new)*
 - [ ] **Caregiver avatar in assignment block.** When assigning a caregiver, show their profile pic/icon in the assignment card. Not too big — just enough to recognize. *(Feedback — reviewed)*
 
 
