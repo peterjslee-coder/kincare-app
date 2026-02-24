@@ -242,11 +242,50 @@ When batching items into a version:
 - Add them to TASKS.md under the version heading
 - After shipping and verifying, move from `planned` → `done`
 
+### Triage Priority Tiers
+
+When triaging feedback, categorize every item by priority. The summary report should be organized by these tiers, not just by theme. At scale (hundreds of users), this ensures barriers to entry never get buried under cosmetic requests.
+
+**P0 — Barriers to Entry (fix immediately)**
+Anything that prevents a new user from signing up, logging in, completing onboarding, connecting Stripe, or booking/accepting their first session. If someone can't get in the door, nothing else matters. Also includes: payment failures, auth errors, 2FA lockouts, registration crashes, and any flow where a user gets stuck with no way forward. Bad-actor or inappropriate feedback also gets flagged here for moderation review.
+
+**P1 — Core Flow Bugs (fix in current or next batch)**
+Bugs in the critical path that don't fully block entry but degrade the experience enough that a user might abandon: messages not delivering, calendar not loading, sessions not appearing, caregiver search returning wrong results, confusing error messages during onboarding.
+
+**P2 — UX & Polish (batch into upcoming versions)**
+Usability improvements, layout issues, confusing labels, visual inconsistencies, mobile responsiveness problems. Important but not blocking anyone from using the product.
+
+**P3 — Feature Requests (backlog)**
+New capabilities, integrations, nice-to-haves. Good signal for the roadmap but no urgency.
+
+**Dismiss** — Spam, inappropriate content, duplicates, misunderstandings. Not "won't fix right now" — only genuinely bad or irrelevant items.
+
 ### Key Rules
 - **Never dismiss "can't fix yet" items.** Leave them as `reviewed`.
-- **Only dismiss genuinely bad ideas** — duplicates, misunderstandings, or things that don't make sense.
+- **Only dismiss genuinely bad ideas** — duplicates, misunderstandings, spam, inappropriate content, or things that don't make sense.
 - **Praise items** (e.g., "this looks great") can go straight to `done` — they require no action.
 - **FEEDBACK.md is gitignored** — it's a local working file, not committed.
+
+## Product Philosophy — Onboarding
+
+The guiding principle for all registration and onboarding flows: **get them in fast, motivate them to complete later.**
+
+**For all users:**
+- Signup should collect the bare minimum: name, email, password, role. That's it. Let them in.
+- Profile details (phone, address, photo, emergency contacts) come later — prompted but not required at signup.
+- First login should feel rewarding, not like homework. Show them the dashboard, show them value.
+
+**For caregivers specifically:**
+- Don't require a driver's license photo, certifications, or background check payment during signup. Those are gates to *accepting jobs*, not gates to *creating an account*.
+- Let them see demand in their area, browse available families, explore earnings potential — all before uploading a single document. Seeing "12 families need help near you" is what motivates them to pull out their DL.
+- Progressive gating: "You can't see job details until you upload your DL" > "Upload your DL to create an account."
+- The First Steps checklist is the mechanism — items are clearly listed, each unlocks something specific, and the caregiver controls the pace.
+
+**For families:**
+- Don't force care recipient details at signup. Let them create an account, see the dashboard, then walk them through adding their loved one.
+- Care recipient profiles can start sparse and fill in over time. A family member in crisis doesn't want to enter medications and emergency contacts before they can even look for help.
+
+**The funnel matters most.** Every friction point in signup/login/onboarding is a lost user. Feature polish means nothing if people can't get through the door.
 
 ## WebSocket Architecture
 
