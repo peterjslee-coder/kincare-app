@@ -22,6 +22,15 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     }
   }, [isInviteFlow]);
 
+  // ─── Phone formatting ───
+  const formatPhone = (value) => {
+    const digits = value.replace(/\D/g, '').slice(0, 10);
+    if (digits.length === 0) return '';
+    if (digits.length <= 3) return '(' + digits;
+    if (digits.length <= 6) return '(' + digits.slice(0, 3) + ') ' + digits.slice(3);
+    return '(' + digits.slice(0, 3) + ') ' + digits.slice(3, 6) + '-' + digits.slice(6);
+  };
+
   // ─── Validation ───
   const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -308,15 +317,17 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             <div className="form-group">
               <label>Email {showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
               <input type="email" value={formData.email} onChange={(e) => { setFormData(p => ({ ...p, email: e.target.value })); setShowFieldErrors(false); }} placeholder="you@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-              {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
+              {formData.email && !isValidEmail(formData.email) ? <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div> : <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Used to verify your account and for future payments</div>}
             </div>
             <div className="form-group">
               <label>Password {showFieldErrors && formData.password.length < 6 && <span style={{ color: '#c0392b', fontSize: 12 }}>*min 6 chars</span>}</label>
               <input type="password" value={formData.password} onChange={(e) => { setFormData(p => ({ ...p, password: e.target.value })); setShowFieldErrors(false); }} placeholder="At least 6 characters" style={showFieldErrors && formData.password.length < 6 ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+              <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Two-Factor Authentication and Biometric available for setup later</div>
             </div>
             <div className="form-group">
-              <label>Phone <span style={{ color: '#999', fontSize: 12, fontWeight: 400 }}>(optional — add later)</span></label>
-              <input type="tel" value={formData.phone} onChange={(e) => setFormData(p => ({ ...p, phone: e.target.value }))} placeholder="(555) 123-4567" />
+              <label>Phone <span style={{ color: '#999', fontSize: 12, fontWeight: 400 }}>(optional)</span></label>
+              <input type="tel" value={formData.phone} onChange={(e) => setFormData(p => ({ ...p, phone: formatPhone(e.target.value) }))} placeholder="(555) 123-4567" />
+              <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Required for setup, but not to begin</div>
             </div>
           </>
         )}
