@@ -314,7 +314,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     setEditData({
       firstName: user?.first_name || '',
       lastName: user?.last_name || '',
-      phone: user?.phone || '',
+      phone: (() => { const d = (user?.phone || '').replace(/\D/g, ''); if (!d) return ''; if (d.length <= 3) return '(' + d; if (d.length <= 6) return '(' + d.slice(0,3) + ') ' + d.slice(3); return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6); })(),
       pets: user?.pets || '',
       petAllergies: user?.pet_allergies || '',
       foodAllergies: user?.food_allergies || '',
@@ -333,7 +333,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         body: JSON.stringify({
           firstName: editData.firstName,
           lastName: editData.lastName,
-          phone: editData.phone,
+          phone: editData.phone ? editData.phone.replace(/\D/g, '') : null,
           pets: editData.pets,
           petAllergies: editData.petAllergies,
           foodAllergies: editData.foodAllergies,
@@ -523,7 +523,15 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
                 </div>
                 <div>
                   <div style={fieldLabel}>Phone</div>
-                  <input type="tel" style={inputStyle} value={editData.phone} onChange={(e) => ed('phone', e.target.value)} placeholder="(555) 123-4567" />
+                  <input type="tel" style={inputStyle} value={editData.phone} onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    let formatted = '';
+                    if (digits.length === 0) formatted = '';
+                    else if (digits.length <= 3) formatted = '(' + digits;
+                    else if (digits.length <= 6) formatted = '(' + digits.slice(0, 3) + ') ' + digits.slice(3);
+                    else formatted = '(' + digits.slice(0, 3) + ') ' + digits.slice(3, 6) + '-' + digits.slice(6);
+                    ed('phone', formatted);
+                  }} placeholder="(555) 123-4567" />
                 </div>
                 <div>
                   <div style={fieldLabel}>Email</div>
@@ -558,7 +566,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
                 </div>
                 <div className="info-item">
                   <div className="info-label">Phone</div>
-                  <div className="info-value">{user?.phone || 'Not set'}</div>
+                  <div className="info-value">{(() => { const d = (user?.phone || '').replace(/\D/g, ''); if (!d) return 'Not set'; if (d.length === 10) return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6); return user.phone; })()}</div>
                 </div>
                 <div className="info-item">
                   <div className="info-label">Account Type</div>
