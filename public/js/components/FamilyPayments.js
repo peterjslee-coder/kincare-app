@@ -21,7 +21,7 @@ const FamilyPayments = window.FamilyPayments = () => {
 
   const formatDate = (d) => {
     if (!d) return '—';
-    try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+    try { return (parseTimestamp(d) || new Date(d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
     catch { return d; }
   };
 

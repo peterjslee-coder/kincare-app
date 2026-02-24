@@ -1400,7 +1400,7 @@ const AdminPanel = window.AdminPanel = () => {
                               {e.step ? `Step ${e.step}: ${e.step_name}` : e.error_source || 'Error'}
                             </span>
                             <span style={{ color: '#888', fontSize: '11px' }}>
-                              {new Date(e.created_at).toLocaleString()}
+                              {(parseTimestamp(e.created_at) || new Date(0)).toLocaleString()}
                             </span>
                           </div>
                           <div style={{ color: '#b91c1c' }}>{e.error_message}</div>
@@ -1445,7 +1445,7 @@ const AdminPanel = window.AdminPanel = () => {
                         return (
                         <tr key={e.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                           <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: '#888' }}>
-                            {new Date(e.created_at).toLocaleString()}
+                            {(parseTimestamp(e.created_at) || new Date(0)).toLocaleString()}
                           </td>
                           <td style={{ padding: '6px 8px' }}>
                             <span style={{

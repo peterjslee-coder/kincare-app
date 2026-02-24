@@ -112,8 +112,8 @@ const ActivityFeed = window.ActivityFeed = () => {
               }
             }} style={{ cursor: 'pointer' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div className="activity-title">
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="activity-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {!activity.is_read && <span style={{ color: '#1b6b5a', marginRight: 6 }}>●</span>}
                     {activity.title}
                   </div>

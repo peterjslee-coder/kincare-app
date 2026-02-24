@@ -549,7 +549,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                     <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a2e' }}>
                       {s.recipientName}{s.familyTotal ? `, $${Math.round(parseFloat(s.familyTotal))}` : s.estimatedCost ? `, $${Math.round(parseFloat(s.estimatedCost))}` : ''}
                     </div>
-                    <div className="session-time">{s.date} at {s.time}</div>
+                    <div className="session-time">{s.date ? (parseTimestamp(s.date + 'T12:00:00') || new Date(s.date + 'T12:00:00')).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''} at {s.time}</div>
                     <div style={{ fontSize: 12, color: '#666' }}>{s.caregiverName} · <span style={{ textTransform: 'capitalize' }}>{(s.serviceType || '').replace(/_/g, ' ')}</span></div>
                     {s.caregiverPayout && s.platformFee > 0 && (
                       <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
@@ -720,13 +720,13 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
             {(() => {
               const s = upcoming.find(x => x.id === cancellingId);
               if (!s) return null;
-              const sessionDT = new Date(`${s.date}T${s.time || '00:00'}`);
+              const sessionDT = parseTimestamp(`${s.date}T${s.time || '00:00'}`) || new Date(`${s.date}T${s.time || '00:00'}`);
               const hoursAway = (sessionDT - new Date()) / (1000 * 60 * 60);
               const isLate = hoursAway < 24;
               return (
                 <div>
                   <div style={{ fontSize: 14, color: '#333', marginBottom: 12 }}>
-                    {s.recipientName} — {s.date} at {s.time}
+                    {s.recipientName} — {s.date ? (parseTimestamp(s.date + 'T12:00:00') || new Date(s.date + 'T12:00:00')).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''} at {s.time}
                   </div>
                   {isLate && (
                     <div style={{ padding: '10px 14px', background: '#fff3e0', borderRadius: 8, border: '1px solid #ffe082', marginBottom: 12, fontSize: 13, color: '#e65100' }}>
