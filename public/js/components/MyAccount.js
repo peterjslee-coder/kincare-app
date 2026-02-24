@@ -502,9 +502,24 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
             </div>
           </div>
 
-          {!editing && (
-            <div className="card">
-              <div className="card-header">Health & Safety</div>
+          <div className="card">
+            <div className="card-header">Health & Safety</div>
+            {editing ? (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {[
+                  { key: 'pets', label: 'Pets (type, count)', ph: 'e.g., 1 dog — golden retriever' },
+                  { key: 'petAllergies', label: 'Pet Allergies', ph: 'e.g., allergic to cats' },
+                  { key: 'foodAllergies', label: 'Food Allergies', ph: 'e.g., nuts, dairy' },
+                  { key: 'medicalConditions', label: 'Medical Conditions', ph: 'e.g., asthma, diabetes' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 3 }}>{f.label}</label>
+                    <input style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }}
+                      value={editData[f.key] || ''} onChange={(e) => setEditData(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.ph} />
+                  </div>
+                ))}
+              </div>
+            ) : (
               <div className="info-grid">
                 <div className="info-item">
                   <div className="info-label">Pets</div>
@@ -523,8 +538,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
                   <div className="info-value">{user?.medical_conditions || 'Not specified'}</div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 

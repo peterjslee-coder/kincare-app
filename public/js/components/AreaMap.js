@@ -42,8 +42,8 @@ const AreaMap = window.AreaMap = () => {
   useEffect(() => {
     if (!mapRef.current || leafletMap.current) return;
 
-    // Default to Blacksburg — will re-center when profile loads
-    const center = [37.2296, -80.4139];
+    // Use caregiver's work location if available, otherwise generic US center
+    const center = profileCenter || [37.2296, -80.4139];
 
     const map = L.map(mapRef.current, {
       center,
@@ -58,7 +58,8 @@ const AreaMap = window.AreaMap = () => {
     }).addTo(map);
 
     leafletMap.current = map;
-    const forceResize = () => { if (leafletMap.current) leafletMap.current.invalidateSize(); };
+    map.invalidateSize(true);
+    const forceResize = () => { if (leafletMap.current) leafletMap.current.invalidateSize(true); };
     forceResize();
     setTimeout(forceResize, 100);
     setTimeout(forceResize, 300);

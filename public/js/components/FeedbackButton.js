@@ -214,7 +214,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
         aria-label="Send feedback"
         style={{
           position: 'fixed',
-          bottom: isMobile ? 80 : 24,
+          bottom: isMobile ? (currentPage === 'messages' ? 130 : 80) : 24,
           left: isMobile ? 16 : 'auto',
           right: isMobile ? 'auto' : 20,
           width: 48,

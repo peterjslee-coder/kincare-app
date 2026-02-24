@@ -311,8 +311,12 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 20 }}>🚀</span>
             <span style={{ fontWeight: 700 }}>Getting Started</span>
-            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#888' }}>
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#888', display: 'flex', alignItems: 'center', gap: 8 }}>
               {onboardingSteps.filter(s => s.done).length} / {onboardingSteps.length} complete
+              <button onClick={(e) => { e.stopPropagation(); dismissTile('onboarding', 'v1'); }} title="Dismiss checklist" style={{
+                background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
+                color: '#999', padding: '2px 8px', borderRadius: 6, fontWeight: 600,
+              }}>✕</button>
             </span>
           </div>
           <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
@@ -558,7 +562,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                     )}
                   </div>
                   <div style={{ textAlign: 'right', fontSize: '12px' }}>
-                    <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : '#e8724a', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>
+                    <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : s.status === 'completed' ? '#0277bd' : s.status === 'pending' ? '#f57c00' : s.status === 'open' || s.status === 'requested' ? '#e8724a' : '#888', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                       {s.status === 'confirmed' && s.estimatedCost && (
                         <button

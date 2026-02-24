@@ -8,7 +8,42 @@ const CareProfile = window.CareProfile = () => {
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const { showToast } = useToast();
+
+  const resizeImg = (file, maxDim, quality) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) { if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; } }
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject; img.src = ev.target.result;
+    };
+    reader.onerror = reject; reader.readAsDataURL(file);
+  });
+
+  const handlePhotoUpload = async () => {
+    if (!profile?.id) return;
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      setPhotoUploading(true);
+      try {
+        const base64 = await resizeImg(file, 800, 0.8);
+        const res = await apiFetch(`/api/care-recipients/${profile.id}/photo`, { method: 'PUT', body: JSON.stringify({ photo: base64 }) });
+        if (res?.ok) { showToast('Photo updated!', 'success'); setProfile(p => ({ ...p, photo: base64 })); }
+        else { const d = await res?.json().catch(() => ({})); showToast(d.error || 'Failed to upload photo', 'error'); }
+      } catch (err) { console.error('Photo upload error:', err); showToast('Failed to upload photo', 'error'); }
+      setPhotoUploading(false);
+    };
+    input.click();
+  };
 
   const fetchNotes = async (recipientId) => {
     try {
@@ -174,7 +209,14 @@ const CareProfile = window.CareProfile = () => {
       )}
 
       <div className="care-profile-header">
-        <div className="care-profile-avatar">👵</div>
+        <div className="care-profile-avatar" onClick={handlePhotoUpload} style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden' }} title="Click to change photo">
+          {profile.photo
+            ? <img src={profile.photo} alt={`${profile.first_name}`} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+            : <span style={{ fontSize: 48 }}>{profile.first_name?.[0] || '?'}{profile.last_name?.[0] || ''}</span>}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: 10, textAlign: 'center', padding: '3px 0', fontWeight: 600 }}>
+            {photoUploading ? '...' : '📷'}
+          </div>
+        </div>
         {editing ? (
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8 }}>
             <input style={{ ...inputStyle, maxWidth: 140, textAlign: 'center' }} value={editData.first_name} onChange={(e) => ed('first_name', e.target.value)} placeholder="First name" />

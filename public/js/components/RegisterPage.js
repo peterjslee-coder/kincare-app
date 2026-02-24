@@ -247,26 +247,26 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             {step === 1 && (
               <>
                 <div className="form-group">
-                  <label>First Name</label>
-                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Jane" />
+                  <label>First Name {showFieldErrors && !formData.firstName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Jane" style={showFieldErrors && !formData.firstName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                 </div>
                 <div className="form-group">
-                  <label>Last Name</label>
-                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Smith" />
+                  <label>Last Name {showFieldErrors && !formData.lastName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Smith" style={showFieldErrors && !formData.lastName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                 </div>
                 <div className="form-group">
-                  <label>Email</label>
-                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="jane@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : {}} />
+                  <label>Email {showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="jane@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                   {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
                 </div>
                 <div className="form-group">
-                  <label>Phone</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" />
+                  <label>Phone {showFieldErrors && !isValidPhone(formData.phone) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" style={showFieldErrors && !isValidPhone(formData.phone) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                   {formData.phone && !isValidPhone(formData.phone) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a 10-digit phone number</div>}
                 </div>
                 <div className="form-group">
-                  <label>Password</label>
-                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" />
+                  <label>Password {showFieldErrors && formData.password.length < 6 && <span style={{ color: '#c0392b', fontSize: 12 }}>*min 6 chars</span>}</label>
+                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" style={showFieldErrors && formData.password.length < 6 ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                   {formData.password && formData.password.length < 6 && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Password must be at least 6 characters</div>}
                 </div>
               </>
@@ -345,26 +345,26 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             {step === 1 && (
               <>
                 <div className="form-group">
-                  <label>First Name</label>
-                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Maria" />
+                  <label>First Name {showFieldErrors && !formData.firstName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+                  <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} placeholder="Maria" style={showFieldErrors && !formData.firstName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                 </div>
                 <div className="form-group">
-                  <label>Last Name</label>
-                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Garcia" />
+                  <label>Last Name {showFieldErrors && !formData.lastName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+                  <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} placeholder="Garcia" style={showFieldErrors && !formData.lastName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                 </div>
                 <div className="form-group">
-                  <label>Email</label>
-                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="maria@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : {}} />
+                  <label>Email {showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+                  <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="maria@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                   {formData.email && !isValidEmail(formData.email) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div>}
                 </div>
                 <div className="form-group">
-                  <label>Phone</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" />
+                  <label>Phone {showFieldErrors && !isValidPhone(formData.phone) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+                  <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="(555) 123-4567" style={showFieldErrors && !isValidPhone(formData.phone) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                   {formData.phone && !isValidPhone(formData.phone) && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a 10-digit phone number</div>}
                 </div>
                 <div className="form-group">
-                  <label>Password</label>
-                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" />
+                  <label>Password {showFieldErrors && formData.password.length < 6 && <span style={{ color: '#c0392b', fontSize: 12 }}>*min 6 chars</span>}</label>
+                  <input type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value)} placeholder="At least 6 characters" style={showFieldErrors && formData.password.length < 6 ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
                   {formData.password && formData.password.length < 6 && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Password must be at least 6 characters</div>}
                 </div>
               </>

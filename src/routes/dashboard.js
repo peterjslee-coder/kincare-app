@@ -79,7 +79,7 @@ async function familyDashboard(db, userId, res) {
       WHERE cs.family_user_id = ?
         AND cs.scheduled_date >= ?
         AND cs.scheduled_date <= ?
-        AND cs.status IN ('pending', 'confirmed')
+        AND cs.status IN ('pending', 'confirmed', 'open', 'requested')
       ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
       LIMIT 5
     `).all(userId, today, nextWeek);

@@ -36,6 +36,7 @@ router.get("/", requireRole("family"), async (req, res) => {
       WHERE family_user_id = ?
         AND scheduled_date >= ?
         AND scheduled_date <= ?
+        AND status IN ('confirmed', 'completed')
     `).get(userId, m.start, m.end);
 
     const completed = await db.prepare(`
@@ -65,6 +66,7 @@ router.get("/", requireRole("family"), async (req, res) => {
       COALESCE(SUM(COALESCE(actual_cost, estimated_cost)), 0) as total_spend
     FROM care_sessions
     WHERE family_user_id = ?
+      AND status IN ('confirmed', 'completed')
     GROUP BY service_type
     ORDER BY count DESC
   `).all(userId);
@@ -81,6 +83,7 @@ router.get("/", requireRole("family"), async (req, res) => {
     JOIN users u ON cp.user_id = u.id
     WHERE cs.family_user_id = ?
       AND cs.caregiver_id IS NOT NULL
+      AND cs.status IN ('confirmed', 'completed')
     GROUP BY cp.id, u.first_name, u.last_name, cp.rating_avg
     ORDER BY sessions DESC
     LIMIT 5
@@ -94,6 +97,7 @@ router.get("/", requireRole("family"), async (req, res) => {
       COALESCE(SUM(COALESCE(actual_cost, estimated_cost)), 0) as total_spend
     FROM care_sessions
     WHERE family_user_id = ?
+      AND status IN ('confirmed', 'completed')
   `).get(userId);
 
   res.json({

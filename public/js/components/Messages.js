@@ -115,6 +115,7 @@ const Messages = window.Messages = () => {
       if (res?.ok) {
         showToast('Connection request sent!', 'success');
         searchPeople(peopleSearch); // Refresh results
+        fetchPendingRequests(); // Refresh sent requests list
       }
     } catch { showToast('Failed to send request', 'error'); }
   };
@@ -850,7 +851,18 @@ const Messages = window.Messages = () => {
                       }}>
                         {renderMessageContent(m.content)}
                         <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : '#bbb', marginTop: '4px', textAlign: 'right' }}>
-                          {(() => { const d = parseTimestamp(m.created_at); return d ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''; })()}
+                          {(() => {
+                            const d = parseTimestamp(m.created_at);
+                            if (!d) return '';
+                            const now = new Date();
+                            const isToday = d.toDateString() === now.toDateString();
+                            const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+                            const isYesterday = d.toDateString() === yesterday.toDateString();
+                            const timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                            if (isToday) return timeStr;
+                            if (isYesterday) return 'Yesterday ' + timeStr;
+                            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + timeStr;
+                          })()}
                         </div>
                       </div>
                     </div>

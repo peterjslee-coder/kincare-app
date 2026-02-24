@@ -229,8 +229,9 @@ function limitBodySize(maxBytes = 50000) {
     // Skip body size check for multipart/form-data (file uploads) — multer handles its own limits
     const contentType = req.headers["content-type"] || "";
     if (contentType.startsWith("multipart/form-data")) return next();
-    // Skip for photo upload endpoint — has its own express.json limit (5mb)
+    // Skip for photo upload endpoints — they have their own express.json limit (5mb)
     if (req.path === "/me/photo" || req.originalUrl?.includes("/api/auth/me/photo")) return next();
+    if (req.originalUrl?.includes("/photo") && req.method === "PUT") return next();
     const contentLength = parseInt(req.headers["content-length"] || "0");
     if (contentLength > maxBytes) {
       return res.status(413).json({ error: "Request body too large" });

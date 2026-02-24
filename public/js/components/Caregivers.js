@@ -155,8 +155,9 @@ const Caregivers = window.Caregivers = () => {
       }).addTo(map);
 
       leafletMap.current = map;
+      map.invalidateSize(true);
       // Force multiple invalidateSize calls to handle layout timing
-      const forceResize = () => { if (leafletMap.current) leafletMap.current.invalidateSize(); };
+      const forceResize = () => { if (leafletMap.current) leafletMap.current.invalidateSize(true); };
       forceResize();
       setTimeout(forceResize, 100);
       setTimeout(forceResize, 300);
@@ -189,7 +190,7 @@ const Caregivers = window.Caregivers = () => {
         leafletMap.current = null;
       }
     };
-  }, [activeTab]);
+  }, [activeTab, searchCenter]);
 
   // Update map markers when search results change
   useEffect(() => {
@@ -283,7 +284,7 @@ const Caregivers = window.Caregivers = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '17px', fontWeight: 700, color: '#1a1a2e' }}>{cg.name}</span>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: '#1a1a2e' }}>{cg.name}</span>
               {isAssigned && (
                 <span style={{ padding: '2px 8px', background: '#e8f5e9', color: '#2e7d32', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>Assigned</span>
               )}
