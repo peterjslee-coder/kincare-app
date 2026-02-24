@@ -170,21 +170,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setShowAddRule(true);
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await apiFetch('/api/dashboard');
-        if (res?.ok) {
-          const d = await res.json();
-          setData(d);
-        } else if (res?.status === 404) {
-          setNoProfile(true);
-        }
-      } catch (err) {
-        console.error('CaretakerHub fetch error:', err);
+  const fetchData = async () => {
+    try {
+      const res = await apiFetch('/api/dashboard');
+      if (res?.ok) {
+        const d = await res.json();
+        setData(d);
+      } else if (res?.status === 404) {
+        setNoProfile(true);
       }
-      setLoading(false);
-    };
+    } catch (err) {
+      console.error('CaretakerHub fetch error:', err);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
     fetchData();
 
     // Detect Stripe Connect return — refresh status and switch to financials tab
@@ -616,7 +617,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       <div className={onboardingGated ? 'onboarding-content-lock' : ''}>
         {onboardingGated && (
           <div className="lock-overlay">
-            <div className="lock-icon">{'\uD83D\uDD12'}</div>
+            <div className="lock-icon">{'🔒'}</div>
             <div className="lock-msg">Complete your setup above to unlock your dashboard</div>
           </div>
         )}
