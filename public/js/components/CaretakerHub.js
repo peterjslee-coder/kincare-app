@@ -295,6 +295,35 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     if (data?.profile?.rateOvernight && !ratesOvernight) setRatesOvernight(data.profile.rateOvernight);
   }, [data?.profile?.rateDaytime, data?.profile?.rateNighttime, data?.profile?.rateOvernight]);
 
+  // Auto-mark onboarding complete (must be before early returns — React hook order rules)
+  // Compute step completion from safe data access
+  const _p = data?.profile || {};
+  const _stepsDone = [
+    !!(_p.bio && _p.hourlyRate),
+    availRules.length > 0,
+    !!stoplightData,
+    !!_p.avatar_url,
+    stripeStatus?.status === 'active',
+    !!_p.background_check_paid || !!_p.isBackgroundChecked,
+  ].filter(Boolean).length;
+  const _totalSteps = 6;
+  const prevStepsDone = useRef(_stepsDone);
+  useEffect(() => {
+    if (!data || prevStepsDone.current === _stepsDone) return;
+    prevStepsDone.current = _stepsDone;
+    if (!_p.onboardingComplete && _stepsDone === _totalSteps) {
+      apiFetch('/api/caregivers/mark-onboarding-complete', { method: 'PUT' })
+        .then(r => r && r.ok ? r.json() : null)
+        .then(res => {
+          if (res && res.onboarding_complete) {
+            showToast('Onboarding complete! Your dashboard is now unlocked.', 'success');
+            fetchData();
+          }
+        })
+        .catch(() => {});
+    }
+  }, [_stepsDone]);
+
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []).slice(0, 5);
     setLogPhotos(prev => [...prev, ...files].slice(0, 5));
@@ -472,20 +501,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const showFirstSteps = firstStepsDone < firstSteps.length;
   const onboardingGated = !profile.onboardingComplete && showFirstSteps;
 
-  // Auto-mark onboarding complete when all steps are done
-  useEffect(() => {
-    if (!profile.onboardingComplete && firstStepsDone === firstSteps.length) {
-      apiFetch('/api/caregivers/mark-onboarding-complete', { method: 'PUT' })
-        .then(r => r && r.ok ? r.json() : null)
-        .then(res => {
-          if (res && res.onboarding_complete) {
-            showToast('Onboarding complete! Your dashboard is now unlocked.', 'success');
-            fetchData();
-          }
-        })
-        .catch(() => {});
-    }
-  }, [firstStepsDone]);
+  // Note: auto-complete onboarding useEffect is above early returns (React hook order rules)
 
   // Average hourly rate from completed sessions
   const totalHours = completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0);
