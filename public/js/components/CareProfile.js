@@ -1,5 +1,6 @@
 const CareProfile = window.CareProfile = () => {
   const [profile, setProfile] = useState(null);
+  const [allRecipients, setAllRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState({});
@@ -76,6 +77,7 @@ const CareProfile = window.CareProfile = () => {
         if (response?.ok) {
           const data = await response.json();
           if (data.careRecipients && data.careRecipients.length > 0) {
+            setAllRecipients(data.careRecipients);
             setProfile(data.careRecipients[0]);
             fetchNotes(data.careRecipients[0].id);
           }
@@ -201,6 +203,17 @@ const CareProfile = window.CareProfile = () => {
           </div>
         )}
       </div>
+
+      {allRecipients.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+          {allRecipients.map(r => (
+            <button key={r.id} onClick={() => { setProfile(r); fetchNotes(r.id); setEditing(false); }}
+              style={{ padding: '6px 14px', borderRadius: 20, border: r.id === profile?.id ? '2px solid #1b6b5a' : '1px solid #d0d0d0', background: r.id === profile?.id ? '#e0f2e9' : '#fff', color: r.id === profile?.id ? '#1b6b5a' : '#666', fontSize: 13, fontWeight: r.id === profile?.id ? 600 : 400, cursor: 'pointer' }}>
+              {r.first_name} {r.last_name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {saveMsg && (
         <div style={{ padding: '10px 16px', borderRadius: 8, marginBottom: 16, background: saveMsg.includes('success') ? '#e8f5e9' : '#fce4ec', color: saveMsg.includes('success') ? '#2e7d32' : '#c62828', fontWeight: 500, fontSize: 14 }}>

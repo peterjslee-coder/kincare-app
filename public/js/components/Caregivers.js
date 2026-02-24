@@ -295,7 +295,7 @@ const Caregivers = window.Caregivers = () => {
               )}
             </div>
             <div style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>
-              ⭐ {cg.rating || '—'} &bull; {cg.reviewCount || 0} reviews &bull;
+              <span title="Family rating of this caregiver">⭐ {cg.rating || '—'}</span> &bull; {cg.reviewCount || 0} reviews &bull;
               {(cg.rateDaytime && cg.rateNighttime && cg.rateDaytime !== cg.rateNighttime)
                 ? <> Day ${cg.rateDaytime} · Night ${cg.rateNighttime} · Overnight ${cg.rateOvernight}/hr</>
                 : <> ${cg.hourlyRate || '—'}/hr</>
@@ -374,7 +374,15 @@ const Caregivers = window.Caregivers = () => {
             const cg = caregivers.find(c => c.id === a.caregiver_profile_id);
             return (
               <div key={idx} className="card" style={{ marginBottom: '10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  {/* Caregiver avatar */}
+                  {cg?.profilePhoto ? (
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={cg.profilePhoto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+                  ) : (
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
+                      {(cg?.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    </div>
+                  )}
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                       <span style={{ fontSize: '15px', fontWeight: 600, color: '#333' }}>
@@ -391,7 +399,7 @@ const Caregivers = window.Caregivers = () => {
                     </div>
                     {cg && (
                       <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
-                        ⭐ {cg.rating || '—'} &bull;
+                        <span title="Family rating of this caregiver">⭐ {cg.rating || '—'}</span> &bull;
                         {(cg.rateDaytime && cg.rateNighttime && cg.rateDaytime !== cg.rateNighttime)
                           ? <> Day ${cg.rateDaytime} · Night ${cg.rateNighttime} · Overnight ${cg.rateOvernight}/hr</>
                           : <> ${cg.hourlyRate || '—'}/hr</>

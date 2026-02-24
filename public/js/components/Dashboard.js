@@ -464,44 +464,49 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       )}
 
       {parent && (
-        <div className="betty-card" onClick={() => onNavigate && onNavigate('care-profile')}
-          style={{ cursor: 'pointer', position: 'relative' }}>
-          {parent.photo
-            ? <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={parent.photo} alt={parent.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
-            : <div style={{ fontSize: 40 }}>{parent.emoji || '🌷'}</div>}
-          <div className="betty-name">{parent.name}</div>
-          <div className="betty-info">
-            {(() => {
-              const myLabel = careTeams.find(t => t.my_relationship_label)?.my_relationship_label;
-              return myLabel ? `Your ${myLabel.toLowerCase()} · ` : '';
-            })()}
-            Living in {parent.location}
-          </div>
-          {parent.healthConditions && parent.healthConditions.length > 0 && (
-            <div style={{ marginTop: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
-              {parent.healthConditions.join(' · ')}
+        <div className="betty-card" style={{ cursor: 'pointer', position: 'relative' }}>
+          <div onClick={() => onNavigate && onNavigate('care-profile')}>
+            {parent.photo
+              ? <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={parent.photo} alt={parent.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+              : <div style={{ fontSize: 40 }}>{parent.emoji || '🌷'}</div>}
+            <div className="betty-name">{parent.name}</div>
+            <div className="betty-info">
+              {(() => {
+                const myLabel = careTeams.find(t => t.my_relationship_label)?.my_relationship_label;
+                return myLabel ? `Your ${myLabel.toLowerCase()} · ` : '';
+              })()}
+              Living in {parent.location}
             </div>
-          )}
-          <div style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: '#1b6b5a', fontSize: 18 }}>→</div>
-        </div>
-      )}
-
-      {/* Care Teams Summary (non-demo) */}
-      {!isDemo && careTeams.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-header">Your Care Teams</div>
-          {careTeams.map(t => (
-            <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
-              onClick={() => onNavigate && onNavigate('care-team')}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: '#888' }}>
-                  {t.memberCount} member{t.memberCount !== 1 ? 's' : ''} · You are {t.my_role}
+            {parent.healthConditions && parent.healthConditions.length > 0 && (
+              <div style={{ marginTop: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
+                {parent.healthConditions.join(' · ')}
+              </div>
+            )}
+            <div style={{ position: 'absolute', right: 16, top: 24, color: 'rgba(255,255,255,0.5)', fontSize: 18 }}>→</div>
+          </div>
+          {/* Care team nested inside Betty card */}
+          {!isDemo && careTeams.length > 0 && (
+            <div onClick={(e) => { e.stopPropagation(); onNavigate && onNavigate('care-team'); }}
+              style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex' }}>
+                  {Array.from({ length: Math.min(careTeams[0]?.memberCount || 1, 4) }).map((_, i) => {
+                    const colors = ['#e8724a', '#4a90d9', '#7b61ff', '#2ecc71'];
+                    return (
+                      <div key={i} style={{ width: 28, height: 28, borderRadius: '50%', background: colors[i % colors.length], border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 600, zIndex: 4 - i }}>
+                        {['👪', '🤝', '👤', '👤'][i]}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{careTeams[0]?.name || 'Care Team'}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{careTeams[0]?.memberCount || 0} member{(careTeams[0]?.memberCount || 0) !== 1 ? 's' : ''}</div>
                 </div>
               </div>
-              <span style={{ color: '#1b6b5a', fontSize: 14 }}>→</span>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>→</span>
             </div>
-          ))}
+          )}
         </div>
       )}
 

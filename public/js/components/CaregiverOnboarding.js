@@ -102,7 +102,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     acceptRefundPolicy: false,
     // Step 3 — Personal Info + Work Location
     phone: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '',
-    yearsExperience: '', hourlyRate: '', bio: '',
+    yearsExperience: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', bio: '',
     workLocationAddress: '', workCity: '', workState: '', workZip: '',
     travelRadius: '15',
     // Step 4 — Legal / Checkr
@@ -247,7 +247,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!form.city.trim()) errs.city = 'Required';
       if (!form.state) errs.state = 'Required';
       if (!form.zip.trim()) errs.zip = 'Required';
-      if (!form.hourlyRate) errs.hourlyRate = 'Required';
+      if (!form.rateDaytime) errs.rateDaytime = 'Required';
     }
     if (stepNum === 4) {
       if (!form.legalFirstName.trim()) errs.legalFirstName = 'Required';
@@ -349,7 +349,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           bio: form.bio, yearsExperience: parseInt(form.yearsExperience) || 0,
-          hourlyRate: parseFloat(form.hourlyRate),
+          hourlyRate: parseFloat(form.rateDaytime) || parseFloat(form.hourlyRate),
+          rateDaytime: parseFloat(form.rateDaytime) || null,
+          rateNighttime: parseFloat(form.rateNighttime) || null,
+          rateOvernight: parseFloat(form.rateOvernight) || null,
           specialties: [], certifications: [],
           city: form.city, state: form.state,
           address: form.addressLine1,
@@ -395,7 +398,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
-          hourlyRate: parseFloat(form.hourlyRate) || 25,
+          hourlyRate: parseFloat(form.rateDaytime) || parseFloat(form.hourlyRate) || 25,
+          rateDaytime: parseFloat(form.rateDaytime) || null,
+          rateNighttime: parseFloat(form.rateNighttime) || null,
+          rateOvernight: parseFloat(form.rateOvernight) || null,
           legalFirstName: form.legalFirstName, legalLastName: form.legalLastName,
           dateOfBirth: form.dateOfBirth, ssnLast4: form.ssnLast4,
           dlNumber: form.dlNumber, dlState: form.dlState,
@@ -426,7 +432,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
-          hourlyRate: parseFloat(form.hourlyRate) || 25,
+          hourlyRate: parseFloat(form.rateDaytime) || parseFloat(form.hourlyRate) || 25,
+          rateDaytime: parseFloat(form.rateDaytime) || null,
+          rateNighttime: parseFloat(form.rateNighttime) || null,
+          rateOvernight: parseFloat(form.rateOvernight) || null,
           certifications: validCerts.map(c => `${c.certType}${c.certNumber ? ' #' + c.certNumber : ''}`),
         }),
       });
@@ -924,11 +933,36 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <input type="number" min="0" style={inputStyle} value={form.yearsExperience}
                   onChange={(e) => updateForm('yearsExperience', e.target.value)} placeholder="0" />
               </div>
-              <div style={fieldGroup}>
-                <label style={labelStyle}>Hourly Rate ($) *</label>
-                <input type="number" min="10" style={errors.hourlyRate ? inputErrorStyle : inputStyle} value={form.hourlyRate}
-                  onChange={(e) => updateForm('hourlyRate', e.target.value)} placeholder="25" />
-                {errors.hourlyRate && <div style={errorStyle}>{errors.hourlyRate}</div>}
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Hourly Rates *</label>
+              <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>6-hour minimum per booking</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>Daytime (6a–6p)</div>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
+                    <input type="number" min="15" max="200" style={errors.rateDaytime ? { ...inputErrorStyle, width: '100%' } : { ...inputStyle, width: '100%' }} value={form.rateDaytime}
+                      onChange={(e) => updateForm('rateDaytime', e.target.value)} placeholder="25" />
+                  </div>
+                  {errors.rateDaytime && <div style={errorStyle}>{errors.rateDaytime}</div>}
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>Evening (6p–12a)</div>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
+                    <input type="number" min="15" max="200" style={inputStyle} value={form.rateNighttime}
+                      onChange={(e) => updateForm('rateNighttime', e.target.value)} placeholder="30" />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>Overnight (12a–6a)</div>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
+                    <input type="number" min="15" max="200" style={inputStyle} value={form.rateOvernight}
+                      onChange={(e) => updateForm('rateOvernight', e.target.value)} placeholder="35" />
+                  </div>
+                </div>
               </div>
             </div>
             <div style={fieldGroup}>
@@ -1096,7 +1130,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                   body: JSON.stringify({
-                    hourlyRate: parseFloat(form.hourlyRate) || 25,
+                    hourlyRate: parseFloat(form.rateDaytime) || parseFloat(form.hourlyRate) || 25,
+                    rateDaytime: parseFloat(form.rateDaytime) || null,
+                    rateNighttime: parseFloat(form.rateNighttime) || null,
+                    rateOvernight: parseFloat(form.rateOvernight) || null,
                     academicProgram: programLabel,
                     academicProgramYear: form.programYear,
                     needsHourReports: true,
@@ -1414,7 +1451,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <div><span style={{ color: '#888' }}>Name:</span> {form.firstName} {form.lastName}</div>
                 <div><span style={{ color: '#888' }}>Phone:</span> {form.phone}</div>
                 <div><span style={{ color: '#888' }}>Location:</span> {form.city}, {form.state} {form.zip}</div>
-                <div><span style={{ color: '#888' }}>Rate:</span> ${form.hourlyRate}/hr</div>
+                <div><span style={{ color: '#888' }}>Rates:</span> ${form.rateDaytime || form.hourlyRate}{form.rateNighttime ? `/$${form.rateNighttime}` : ''}{form.rateOvernight ? `/$${form.rateOvernight}` : ''}/hr</div>
                 <div><span style={{ color: '#888' }}>Experience:</span> {form.yearsExperience || 0} years</div>
                 <div><span style={{ color: '#888' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
                 <div><span style={{ color: '#888' }}>Documents:</span> {form.documents.length} uploaded</div>

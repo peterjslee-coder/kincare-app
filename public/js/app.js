@@ -861,8 +861,8 @@ const App = () => {
             ))}
           </ul>
           {role === 'family' && (
-            <button className="nav-link" onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ background: currentRoleColor.main, margin: '8px 0' }}>
-              <span className="nav-icon">➕</span> Request Care
+            <button onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: 'calc(100% - 16px)', margin: '12px 8px', padding: '10px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.3px' }}>
+              <span style={{ fontSize: 16 }}>➕</span> Request Care
             </button>
           )}
           <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>

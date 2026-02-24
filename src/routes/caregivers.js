@@ -84,6 +84,7 @@ router.get("/", async (req, res) => {
       latitude: c.latitude,
       longitude: c.longitude,
       maxTravelMiles: c.max_travel_miles,
+      profilePhoto: c.avatar_url || null,
     };
 
     // Calculate distance if search center is provided
@@ -160,6 +161,7 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
       latitude: c.latitude,
       longitude: c.longitude,
       maxTravelMiles: c.max_travel_miles,
+      profilePhoto: c.avatar_url || null,
       distance: Math.round(
         haversineDistance(recipient.latitude, recipient.longitude, c.latitude, c.longitude) * 10
       ) / 10,
@@ -265,6 +267,8 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       termsAcceptedAt, termsVersion,
       // v1.13.2 — academic program tracking
       academicProgram, academicProgramYear, needsHourReports,
+      // v1.29.1 — tiered rates from onboarding
+      rateDaytime, rateNighttime, rateOvernight,
     } = req.body;
 
     if (!hourlyRate) {
@@ -371,7 +375,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
        ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
-      hourlyRate, hourlyRate, hourlyRate,
+      rateDaytime || hourlyRate, rateNighttime || hourlyRate, rateOvernight || hourlyRate,
       JSON.stringify(specialties || []),
       JSON.stringify(certifications || []),
       maxTravelMiles || 10, city || null, state || null,
