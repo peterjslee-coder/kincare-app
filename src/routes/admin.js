@@ -316,10 +316,21 @@ router.delete("/users/:id", async (req, res) => {
       await db.prepare("DELETE FROM reviews WHERE caregiver_id = ?").run(cgId);
       await db.prepare("DELETE FROM payments WHERE caregiver_id = ?").run(cgId);
       await db.prepare("DELETE FROM caregiver_assignments WHERE caregiver_profile_id = ?").run(cgId);
-      await db.prepare("DELETE FROM care_sessions WHERE caregiver_id = ?").run(cgId);
+      // Clean up session offers involving this caregiver
+      await db.prepare("DELETE FROM session_offers WHERE from_user_id = ? OR to_user_id = ?").run(id, id);
+      // Unassign pending/confirmed sessions back to 'requested' so families don't lose them
+      await db.prepare(`
+        UPDATE care_sessions
+        SET caregiver_id = NULL, status = 'requested', updated_at = NOW()
+        WHERE caregiver_id = ? AND status IN ('confirmed', 'pending', 'open')
+      `).run(cgId);
+      // Delete completed/cancelled sessions that are historical
+      await db.prepare("DELETE FROM care_sessions WHERE caregiver_id = ? AND status IN ('completed', 'cancelled')").run(cgId);
       await db.prepare("DELETE FROM caregiver_profiles WHERE id = ?").run(cgId);
     }
 
+    // Also clean availability by user_id (some records use user_id instead of caregiver_id)
+    await db.prepare("DELETE FROM availability WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(id);
