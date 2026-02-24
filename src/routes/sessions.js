@@ -59,6 +59,10 @@ router.get("/", async (req, res) => {
     const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
+    // Demo isolation: only show requests from families with matching demo status
+    const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+    const isDemo = me && me.is_demo ? 1 : 0;
+
     query = `
       SELECT cs.*,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -70,6 +74,7 @@ router.get("/", async (req, res) => {
         cr.longitude AS recipient_lng
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
       WHERE (
         cs.caregiver_id = ?
         OR (cs.status IN ('requested', 'open', 'pending') AND (
@@ -80,8 +85,9 @@ router.get("/", async (req, res) => {
           OR cs.caregiver_id IS NULL
         ))
       )
+      AND COALESCE(fu.is_demo, 0) = ?
     `;
-    params = [profile.id, profile.id];
+    params = [profile.id, profile.id, isDemo];
   }
 
   if (status) {
@@ -104,6 +110,9 @@ router.get("/", async (req, res) => {
 
   // For caregivers: also fetch ALL open care requests separately to ensure none are missed
   if (activeRole !== 'family' && activeRole !== 'care_for') {
+    // Demo isolation: match current user's demo status
+    const meCheck = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+    const isDemoCheck = meCheck && meCheck.is_demo ? 1 : 0;
     const openQuery = `
       SELECT cs.*,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -115,9 +124,11 @@ router.get("/", async (req, res) => {
         cr.longitude AS recipient_lng
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
       WHERE cs.status IN ('requested', 'open', 'pending') AND cs.caregiver_id IS NULL
+        AND COALESCE(fu.is_demo, 0) = ?
     `;
-    let openParams = [];
+    let openParams = [isDemoCheck];
     let openFilters = '';
     if (from) { openFilters += " AND cs.scheduled_date >= ?"; openParams.push(from); }
     if (to) { openFilters += " AND cs.scheduled_date <= ?"; openParams.push(to); }

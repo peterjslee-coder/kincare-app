@@ -247,29 +247,54 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
         <button onClick={() => setWeekOffset(w => w + 1)} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>Next →</button>
       </div>
 
-      {/* Care request alert banner */}
+      {/* Care request alert banner with previews */}
       {careRequests.length > 0 && (
         <div style={{
           background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: '1px solid #ffb74d',
-          borderRadius: 10, padding: '12px 16px', marginBottom: 14, display: 'flex',
-          alignItems: 'center', gap: 10, cursor: 'pointer',
-        }} onClick={() => {
-          const firstReq = careRequests[0];
-          if (firstReq) {
-            const d = new Date((firstReq.scheduled_date || firstReq.date) + 'T12:00:00');
-            setSelectedDay(d);
-          }
+          borderRadius: 10, padding: '12px 16px', marginBottom: 14,
         }}>
-          <span style={{ fontSize: 22 }}>🔔</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#e65100' }}>
-              {careRequests.length} Care Request{careRequests.length !== 1 ? 's' : ''} This Week
-            </div>
-            <div style={{ fontSize: 12, color: '#bf360c' }}>
-              Tap a day to view details and accept
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: careRequests.length > 0 ? 8 : 0 }}>
+            <span style={{ fontSize: 22 }}>🔔</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#e65100' }}>
+                {careRequests.length} Care Request{careRequests.length !== 1 ? 's' : ''} This Week
+              </div>
             </div>
           </div>
-          <span style={{ fontSize: 18, color: '#e65100' }}>→</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {careRequests.slice(0, 5).map((s, i) => {
+              const name = s.recipient_name || s.recipientName || 'Client';
+              const hrs = parseFloat(s.duration_hours || s.durationHours || 2);
+              const cost = s.estimated_cost || s.estimatedCost;
+              const sDate = s.scheduled_date || s.date;
+              const dateLabel = sDate ? new Date(sDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+              const timeStr = s.scheduled_time || s.time || '';
+              const tParts = timeStr ? timeStr.split(':').map(Number) : [];
+              const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+              return (
+                <div key={i} onClick={() => {
+                  const d = new Date((sDate) + 'T12:00:00');
+                  setSelectedDay(d);
+                }} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '6px 10px', background: 'rgba(255,255,255,0.7)', borderRadius: 6, cursor: 'pointer',
+                  borderLeft: '3px solid #fb8c00', fontSize: 13,
+                }}>
+                  <div style={{ fontWeight: 600, color: '#333' }}>
+                    {name}
+                  </div>
+                  <div style={{ color: '#666', fontSize: 12, display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                    <span>{dateLabel}{timeLabel ? ', ' + timeLabel : ''}</span>
+                    <span style={{ fontWeight: 600 }}>{hrs}h</span>
+                    {cost && <span style={{ fontWeight: 700, color: '#e65100' }}>${Math.round(parseFloat(cost))}</span>}
+                  </div>
+                </div>
+              );
+            })}
+            {careRequests.length > 5 && (
+              <div style={{ fontSize: 12, color: '#bf360c', textAlign: 'center' }}>+{careRequests.length - 5} more — tap a day to see all</div>
+            )}
+          </div>
         </div>
       )}
 
