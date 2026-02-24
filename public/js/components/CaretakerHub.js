@@ -500,6 +500,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const firstStepsDone = firstSteps.filter(s => s.done).length;
   const showFirstSteps = firstStepsDone < firstSteps.length;
   const onboardingGated = !profile.onboardingComplete && showFirstSteps;
+  // When user clicks a step, they land on a tab where they can complete it — lift the blur
+  const stepTabs = ['availability', 'preferences', 'financials'];
+  const isWorkingOnStep = onboardingGated && stepTabs.includes(activeTab);
+  const shouldBlur = onboardingGated && !isWorkingOnStep;
 
   // Average hourly rate from completed sessions
   const totalHours = completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0);
@@ -662,15 +666,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       )}
 
-      {/* Dashboard content — gated when onboarding incomplete */}
-      <div className={onboardingGated ? 'onboarding-content-lock' : ''}>
-        {onboardingGated && (
+      {/* Dashboard content — blurred when onboarding incomplete, lifts when working on a step */}
+      <div className={shouldBlur ? 'onboarding-content-lock' : ''}>
+        {shouldBlur && (
           <div className="lock-overlay">
             <div className="lock-icon">🔒</div>
             <div className="lock-msg">Complete your setup above to unlock your dashboard</div>
           </div>
         )}
-        <div className={onboardingGated ? 'lock-content' : ''}>
+        <div className={shouldBlur ? 'lock-content' : ''}>
 
       {/* Quick Stats — clickable */}
       <div className="stats-grid">
