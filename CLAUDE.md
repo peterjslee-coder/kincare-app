@@ -193,23 +193,60 @@ The production PostgreSQL database is a Railway service. The `DATABASE_URL` env 
 - `npm test` — Run Jest test suite (53 tests, no database needed)
 - `npm run collect-feedback` — Fetch all user feedback from production into FEEDBACK.md
 
-## Feedback-Driven Development Workflow
+## Feedback-Driven Development Workflow ("Run Feedback Loop")
 
-**Before planning any new version or feature work, always run:**
+When Pete says **"Run feedback loop"**, execute this full cycle:
 
-```bash
-npm run collect-feedback
-```
+### Feedback Statuses (in the production DB)
 
-This fetches all user feedback from production (yourinplace.com), authenticates as admin, and writes a structured `FEEDBACK.md` file with summaries and individual items. Review this file to understand what real users are requesting, reporting as bugs, or praising before deciding what to build next.
+| Status | Meaning |
+|--------|---------|
+| **new** | Just submitted by a user. Not yet read. |
+| **reviewed** | Read and triaged. Logged in TASKS.md if actionable. Not yet in an active dev batch. Items that are "can't fix yet" or "not now" stay here — do NOT dismiss them. |
+| **planned** | Committed to a specific version batch and actively being worked on. |
+| **done** | Shipped, verified working in production. |
+| **dismissed** | Genuinely not going to do — bad idea, duplicate, misunderstanding. NOT for "won't fix right now" items. |
 
-**Workflow:**
-1. Run `npm run collect-feedback` to pull latest feedback
-2. Read `FEEDBACK.md` — pay attention to items with status `new` or `reviewed`
-3. Factor actionable feedback into the next version's TASKS.md and ROADMAP.md
-4. After shipping, check if feedback items were addressed and update their status in the admin panel
+### The Loop
 
-**FEEDBACK.md is gitignored** — it's a local working file regenerated on demand, not committed to the repo.
+1. **Pull feedback from production.** Use the admin API to fetch all feedback:
+   ```
+   GET https://yourinplace.com/api/feedback?limit=100
+   Header: x-admin-api-key: <ADMIN_API_KEY>
+   ```
+   If `npm run collect-feedback` works from the current environment, use that instead. It writes `FEEDBACK.md` (gitignored, local working file).
+
+2. **Mark all `new` items as `reviewed`.** After reading each new item:
+   ```
+   PUT https://yourinplace.com/api/feedback/:id
+   Body: { "status": "reviewed" }
+   ```
+
+3. **Triage into TASKS.md.** For each actionable new item, add it to the Bugs or Features section in TASKS.md with a `*(Feedback — <date>)*` tag. Praise/non-actionable items can be marked `done` immediately.
+
+4. **Cross-reference already-fixed items.** Scan all `reviewed` and `planned` items against shipped versions. If an item has been fixed and verified, mark it `done`:
+   ```
+   PUT https://yourinplace.com/api/feedback/:id
+   Body: { "status": "done" }
+   ```
+   Also check off the corresponding line in TASKS.md.
+
+5. **Clean up TASKS.md.** Remove duplicates, mark stale items as done if fixed, correct any outdated descriptions.
+
+6. **Report summary.** Tell Pete: how many new items were found, what was triaged, what was marked done, and what's still open — organized by theme.
+
+### Planning a Version
+
+When batching items into a version:
+- Move feedback items from `reviewed` → `planned` in the DB
+- Add them to TASKS.md under the version heading
+- After shipping and verifying, move from `planned` → `done`
+
+### Key Rules
+- **Never dismiss "can't fix yet" items.** Leave them as `reviewed`.
+- **Only dismiss genuinely bad ideas** — duplicates, misunderstandings, or things that don't make sense.
+- **Praise items** (e.g., "this looks great") can go straight to `done` — they require no action.
+- **FEEDBACK.md is gitignored** — it's a local working file, not committed.
 
 ## WebSocket Architecture
 
