@@ -4,6 +4,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   const [step, setStep] = useState(prefilledRole ? 2 : 1); // Step 1 = role picker, Step 2 = basic info, Step 3 = caregiver disclosures
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', email: prefilledEmail || '', password: '',
+    confirmPassword: '',
     phone: '',
     // Caregiver disclosures
     ackNoMedical: false, ackBgCheck: false, ackPayments: false,
@@ -40,13 +41,19 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     if (!formData.lastName.trim()) errs.push('Last name');
     if (!formData.email.trim() || !isValidEmail(formData.email)) errs.push('Valid email');
     if (formData.password.length < 6) errs.push('Password (min 6 characters)');
+    if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) errs.push('Passwords must match');
+    if (!formData.confirmPassword) errs.push('Confirm password');
     return errs;
   };
 
   const isBasicInfoValid = () => {
     return formData.firstName.trim() && formData.lastName.trim() &&
-           isValidEmail(formData.email) && formData.password.length >= 6;
+           isValidEmail(formData.email) && formData.password.length >= 6 &&
+           formData.confirmPassword && formData.password === formData.confirmPassword;
   };
+
+  // Strip phone formatting for storage — (555) 123-4567 → 5551234567
+  const normalizePhone = (phone) => phone ? phone.replace(/\D/g, '') : null;
 
   const isDisclosuresValid = () => {
     return formData.ackNoMedical && formData.ackBgCheck && formData.ackPayments;
@@ -100,7 +107,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
           password: formData.password,
           firstName: formData.firstName,
           lastName: formData.lastName,
-          phone: formData.phone || null,
+          phone: normalizePhone(formData.phone),
           role,
           ...(signupToken ? { signupToken } : {})
         })
@@ -164,7 +171,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             <strong>Next:</strong> The user would land on their {roleLabel} dashboard with a First Steps checklist guiding them to complete their profile.
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button onClick={() => { setSandboxPreview(false); setTrack(null); setStep(1); setFormData({ firstName: '', lastName: '', email: '', password: '', phone: '', ackNoMedical: false, ackBgCheck: false, ackPayments: false }); }} className="btn btn-outline" style={{ flex: 1 }}>Start Over</button>
+            <button onClick={() => { setSandboxPreview(false); setTrack(null); setStep(1); setFormData({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phone: '', ackNoMedical: false, ackBgCheck: false, ackPayments: false }); }} className="btn btn-outline" style={{ flex: 1 }}>Start Over</button>
             <button onClick={() => onNavigate('splash')} className="btn btn-primary" style={{ flex: 1 }}>Exit Sandbox</button>
           </div>
         </div>
@@ -323,6 +330,12 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               <label>Password {showFieldErrors && formData.password.length < 6 && <span style={{ color: '#c0392b', fontSize: 12 }}>*min 6 chars</span>}</label>
               <input type="password" value={formData.password} onChange={(e) => { setFormData(p => ({ ...p, password: e.target.value })); setShowFieldErrors(false); }} placeholder="At least 6 characters" style={showFieldErrors && formData.password.length < 6 ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
               <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Two-Factor Authentication and Biometric available for setup later</div>
+            </div>
+            <div className="form-group">
+              <label>Confirm Password {showFieldErrors && !formData.confirmPassword && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}{showFieldErrors && formData.confirmPassword && formData.password !== formData.confirmPassword && <span style={{ color: '#c0392b', fontSize: 12 }}>*doesn't match</span>}</label>
+              <input type="password" value={formData.confirmPassword} onChange={(e) => { setFormData(p => ({ ...p, confirmPassword: e.target.value })); setShowFieldErrors(false); }} placeholder="Re-enter your password" style={showFieldErrors && (!formData.confirmPassword || formData.password !== formData.confirmPassword) ? { borderColor: '#c0392b', background: '#fdf0ed' } : formData.confirmPassword && formData.password === formData.confirmPassword ? { borderColor: '#1b6b5a', background: '#f0faf8' } : {}} />
+              {formData.confirmPassword && formData.password === formData.confirmPassword && <div style={{ fontSize: '12px', color: '#1b6b5a', marginTop: '4px' }}>Passwords match</div>}
+              {formData.confirmPassword && formData.password !== formData.confirmPassword && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Passwords don't match</div>}
             </div>
             <div className="form-group">
               <label>Phone <span style={{ color: '#999', fontSize: 12, fontWeight: 400 }}>(optional)</span></label>

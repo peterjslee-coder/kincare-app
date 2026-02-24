@@ -794,18 +794,23 @@ const App = () => {
         <div className="sidebar-logo">
           <InPlaceIcon width={36} height={36} />
           <div className="sidebar-logo-text"><span className="logo-in">in</span><span className="logo-place">Place</span></div>
-          {currentUser && (
+          <button className="sidebar-close" onClick={() => setSidebarOpen(false)} aria-label="Close menu">&times;</button>
+        </div>
+        {currentUser && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 16px 12px' }}>
             <div className="sidebar-avatar" style={{
-              width: 32, height: 32, borderRadius: '50%', marginLeft: 'auto',
+              width: 36, height: 36, borderRadius: '50%',
               background: currentUser.profilePhoto ? `url(${currentUser.profilePhoto}) center/cover` : '#e8724a',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontSize: 12, fontWeight: 600, flexShrink: 0, overflow: 'hidden',
+              color: 'white', fontSize: 14, fontWeight: 600, flexShrink: 0, overflow: 'hidden',
             }}>
               {!currentUser.profilePhoto && (currentUser.firstName?.[0] || '?').toUpperCase()}
             </div>
-          )}
-          <button className="sidebar-close" onClick={() => setSidebarOpen(false)} aria-label="Close menu">&times;</button>
-        </div>
+            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)', fontWeight: 500, lineHeight: 1.3 }}>
+              {currentUser.firstName || 'User'} {currentUser.lastName || ''}
+            </div>
+          </div>
+        )}
         {currentUser?.roles?.length > 1 ? (
           <div style={{ padding: '4px 12px 12px', display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.15)', borderRadius: '8px', margin: '0 12px 8px' }}>
             {currentUser.roles.map(r => {
@@ -864,9 +869,6 @@ const App = () => {
                 </li>
               ))}
             </ul>
-            <div style={{ padding: '8px 16px', fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
-              {currentUser?.firstName || 'User'} {currentUser?.lastName || ''}
-            </div>
             <button className="nav-link" onClick={isDemo ? handleExitDemo : handleLogout}>
               <span className="nav-icon">🚪</span> {isDemo ? 'Exit Demo' : 'Logout'}
             </button>
