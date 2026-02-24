@@ -13,7 +13,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [submittingLog, setSubmittingLog] = useState(false);
   const photoInputRef = useRef(null);
   const avatarInputRef = useRef(null);
+  const tabContentRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [highlightTab, setHighlightTab] = useState(false);
+  // Inline profile editing state (for onboarding)
+  const [profileForm, setProfileForm] = useState({ bio: '', hourlyRate: '', foodAllergies: '', medicalConditions: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
   // Earnings state
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
@@ -488,6 +493,38 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     } catch (err) { console.error('Stoplight save error:', err); }
   };
 
+  // Navigate to a tab and scroll the tab content into view with a highlight pulse
+  const goToStep = (tabId) => {
+    setActiveTab(tabId);
+    setHighlightTab(true);
+    setTimeout(() => {
+      if (tabContentRef.current) {
+        tabContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+    setTimeout(() => setHighlightTab(false), 2000);
+  };
+
+  // Save inline profile (bio, rate, allergies, medical) during onboarding
+  const saveOnboardingProfile = async () => {
+    setProfileSaving(true);
+    try {
+      await apiFetch('/api/caregivers/profile', {
+        method: 'POST',
+        body: JSON.stringify({ bio: profileForm.bio, hourlyRate: parseFloat(profileForm.hourlyRate) || 25 }),
+      });
+      await apiFetch('/api/auth/me', {
+        method: 'PUT',
+        body: JSON.stringify({ foodAllergies: profileForm.foodAllergies, medicalConditions: profileForm.medicalConditions }),
+      });
+      const res = await apiFetch('/api/dashboard');
+      if (res?.ok) { const d = await res.json(); setData(d); }
+      showToast('Profile saved!', 'success');
+      setActiveTab('schedule');
+    } catch (err) { console.error('Profile save error:', err); showToast('Failed to save profile', 'error'); }
+    setProfileSaving(false);
+  };
+
   // First Steps checklist
   const firstSteps = [
     { id: 'profile', label: 'Complete your profile', done: !!(profile.bio && profile.hourlyRate) },
@@ -501,7 +538,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const showFirstSteps = firstStepsDone < firstSteps.length;
   const onboardingGated = !profile.onboardingComplete && showFirstSteps;
   // When user clicks a step, they land on a tab where they can complete it — lift the blur
-  const stepTabs = ['availability', 'preferences', 'financials'];
+  const stepTabs = ['availability', 'preferences', 'financials', 'profile'];
   const isWorkingOnStep = onboardingGated && stepTabs.includes(activeTab);
   const shouldBlur = onboardingGated && !isWorkingOnStep;
 
@@ -603,12 +640,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {firstSteps.map((s, idx) => (
               <div key={s.id} className={'onboarding-step' + (s.done ? ' done' : '')} onClick={() => {
                 if (s.done) return;
-                if (s.id === 'profile') { if (window.__navigateTo) window.__navigateTo('account'); }
-                if (s.id === 'availability') setActiveTab('availability');
-                if (s.id === 'stoplight') setActiveTab('preferences');
+                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', foodAllergies: '', medicalConditions: '' }); goToStep('profile'); }
+                if (s.id === 'availability') goToStep('availability');
+                if (s.id === 'stoplight') goToStep('preferences');
                 if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
-                if (s.id === 'payments') setActiveTab('financials');
-                if (s.id === 'bgcheck') setActiveTab('financials');
+                if (s.id === 'payments') goToStep('financials');
+                if (s.id === 'bgcheck') goToStep('financials');
               }}>
                 <div className="step-circle">
                   {s.done ? '\u2713' : (idx + 1)}
@@ -645,12 +682,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {firstSteps.map(s => (
               <div key={s.id} onClick={() => {
                 if (s.done) return;
-                if (s.id === 'profile') { if (window.__navigateTo) window.__navigateTo('account'); }
-                if (s.id === 'availability') setActiveTab('availability');
-                if (s.id === 'stoplight') setActiveTab('preferences');
+                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', foodAllergies: '', medicalConditions: '' }); goToStep('profile'); }
+                if (s.id === 'availability') goToStep('availability');
+                if (s.id === 'stoplight') goToStep('preferences');
                 if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
-                if (s.id === 'payments') setActiveTab('financials');
-                if (s.id === 'bgcheck') setActiveTab('financials');
+                if (s.id === 'payments') goToStep('financials');
+                if (s.id === 'bgcheck') goToStep('financials');
               }} style={{
                 display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px',
                 color: s.done ? '#999' : '#333', cursor: s.done ? 'default' : 'pointer',
@@ -724,6 +761,54 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       ); })()}
 
       {/* Tab Content */}
+      <div ref={tabContentRef} style={{
+        borderRadius: highlightTab ? '12px' : undefined,
+        boxShadow: highlightTab ? '0 0 0 3px #e8724a, 0 0 20px rgba(232,114,74,0.3)' : undefined,
+        transition: 'box-shadow 0.3s ease',
+      }}>
+
+      {/* Inline Profile Editor (during onboarding) */}
+      {activeTab === 'profile' && (
+        <div className="card" style={{ padding: '24px' }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: '18px', color: '#1b6b5a' }}>Complete Your Profile</h3>
+          <p style={{ fontSize: '13px', color: '#666', margin: '0 0 20px' }}>This is what families see when deciding who to hire. Make a great first impression!</p>
+          <div style={{ display: 'grid', gap: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>Bio / About You</label>
+              <textarea value={profileForm.bio} onChange={(e) => setProfileForm(p => ({ ...p, bio: e.target.value }))}
+                placeholder="Tell families about yourself — your experience, personality, and why you love caregiving..."
+                rows={4} style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>Hourly Rate ($)</label>
+              <input type="number" value={profileForm.hourlyRate} onChange={(e) => setProfileForm(p => ({ ...p, hourlyRate: e.target.value }))}
+                placeholder="25" min="15" max="100" style={{ width: '120px', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }} />
+              <span style={{ fontSize: '12px', color: '#888', marginLeft: '8px' }}>Typical range: $20–$35/hr</span>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>Food Allergies <span style={{ color: '#999', fontWeight: 400 }}>(optional — so families know)</span></label>
+              <input type="text" value={profileForm.foodAllergies} onChange={(e) => setProfileForm(p => ({ ...p, foodAllergies: e.target.value }))}
+                placeholder="e.g. peanuts, shellfish, none" style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>Medical Conditions <span style={{ color: '#999', fontWeight: 400 }}>(optional — anything families should know)</span></label>
+              <input type="text" value={profileForm.medicalConditions} onChange={(e) => setProfileForm(p => ({ ...p, medicalConditions: e.target.value }))}
+                placeholder="e.g. asthma, none" style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+            <button onClick={() => setActiveTab('schedule')} style={{
+              padding: '10px 24px', background: '#f0f0f0', color: '#555', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+            }}>Back</button>
+            <button onClick={saveOnboardingProfile} disabled={profileSaving || !profileForm.bio || !profileForm.hourlyRate} style={{
+              padding: '10px 24px', background: profileForm.bio && profileForm.hourlyRate ? '#1b6b5a' : '#ccc',
+              color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600,
+              cursor: profileForm.bio && profileForm.hourlyRate ? 'pointer' : 'not-allowed', opacity: profileSaving ? 0.6 : 1,
+            }}>{profileSaving ? 'Saving...' : 'Save Profile'}</button>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'schedule' && (
         <CaregiverCalendar
           caregiverId={profile.id}
@@ -1450,6 +1535,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {activeTab === 'reports' && (
         <HourReports profileName={profile.name} academicProgram={profile.academicProgram} />
       )}
+
+      </div>{/* end tabContentRef wrapper */}
 
         </div>{/* end lock-content */}
       </div>{/* end onboarding-content-lock */}
