@@ -20,7 +20,7 @@ function generateToken(user) {
   );
 }
 
-function authenticate(req, res, next) {
+async function authenticate(req, res, next) {
   // Option 1: Admin API key (for automated scripts — bypasses JWT + 2FA)
   const apiKey = req.headers["x-admin-api-key"];
   if (apiKey && ADMIN_API_KEY && apiKey === ADMIN_API_KEY) {
@@ -38,6 +38,17 @@ function authenticate(req, res, next) {
   try {
     const token = header.split(" ")[1];
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Block soft-deleted accounts — JWT was issued before deletion so it's still valid,
+    // but the account has been deactivated in the DB. Quick check on every request.
+    if (decoded.id && decoded.id !== 'api-key-admin') {
+      const { getDb } = require("../models/database");
+      const db = await getDb();
+      const userCheck = await db.prepare("SELECT is_active FROM users WHERE id = ?").get(decoded.id);
+      if (!userCheck || !userCheck.is_active) {
+        return res.status(401).json({ error: "Account has been deleted" });
+      }
+    }
 
     // Backward compat: old tokens have role but not roles
     if (!decoded.roles && decoded.role) {
