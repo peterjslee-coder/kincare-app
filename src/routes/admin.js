@@ -331,6 +331,9 @@ router.delete("/users/:id", async (req, res) => {
 
     // Also clean availability by user_id (some records use user_id instead of caregiver_id)
     await db.prepare("DELETE FROM availability WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM feedback WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM background_check_payments WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM payout_preferences WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(id);
@@ -338,14 +341,24 @@ router.delete("/users/:id", async (req, res) => {
     await db.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(id);
+    await db.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(id, id);
+    await db.prepare("DELETE FROM session_offers WHERE from_user_id = ? OR to_user_id = ?").run(id, id);
     // Reset any accepted invites back to pending so the email can be re-invited
     await db.prepare("UPDATE care_team_invites SET status = 'pending' WHERE invited_email = ? AND status = 'accepted'").run(user.email);
+    await db.prepare("DELETE FROM care_team_invites WHERE invited_by = ?").run(id);
+    await db.prepare("DELETE FROM platform_invites WHERE invited_by = ?").run(id);
     await db.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
     await db.prepare("DELETE FROM activity_feed WHERE family_user_id = ?").run(id);
     await db.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(id, id);
     await db.prepare("DELETE FROM recipient_notes WHERE author_id = ?").run(id);
     await db.prepare("DELETE FROM messages WHERE sender_id = ? OR recipient_id = ?").run(id, id);
+    // Unlink care_recipients that reference this user
+    await db.prepare("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?").run(id);
+    // Nullify created_by in conversations (don't delete the conversation)
+    await db.prepare("UPDATE conversations SET created_by = NULL WHERE created_by = ?").run(id);
+    // Nullify blocked_by in blocked_emails
+    await db.prepare("UPDATE blocked_emails SET blocked_by = NULL WHERE blocked_by = ?").run(id);
     await db.prepare("DELETE FROM users WHERE id = ?").run(id);
 
     res.json({ success: true, message: `Deleted user ${user.email}` });
