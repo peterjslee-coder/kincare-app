@@ -613,91 +613,93 @@ router.delete("/me", authenticate, async (req, res) => {
 
     const anonEmail = `deleted_${userId.slice(0, 8)}@deleted.inplace`;
 
-    // Get caregiver profile ID if exists
-    const cgProfile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(userId);
-    const cgId = cgProfile?.id;
+    // ── Run everything in a transaction so it's all-or-nothing ──
+    await db.transaction(async (tx) => {
+      // Get caregiver profile ID if exists
+      const cgProfile = await tx.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(userId);
+      const cgId = cgProfile?.id;
 
-    // 1. Caregiver-specific cleanup
-    if (cgId) {
-      // Unassign active sessions back to 'requested' so families don't lose them
-      await db.prepare(`
-        UPDATE care_sessions
-        SET caregiver_id = NULL, status = 'requested', updated_at = NOW()
-        WHERE caregiver_id = ? AND status IN ('confirmed', 'pending', 'open')
-      `).run(cgId);
-      // Cancel pending offers
-      await db.prepare("UPDATE session_offers SET status = 'expired' WHERE (from_user_id = ? OR to_user_id = ?) AND status = 'pending'").run(userId, userId);
-      // Remove active assignments
-      await db.prepare("DELETE FROM caregiver_assignments WHERE caregiver_profile_id = ?").run(cgId);
-      // Remove availability (no longer accepting work)
-      await db.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(cgId);
-      // Anonymize caregiver profile PII but keep the record (linked to session history)
-      await db.prepare(`
-        UPDATE caregiver_profiles SET
-          bio = NULL, legal_first_name = NULL, legal_last_name = NULL,
-          date_of_birth = NULL, ssn_last4 = NULL, address_line1 = NULL,
-          address_line2 = NULL, zip = NULL, dl_number = NULL, dl_state = NULL,
-          location_city = NULL, location_state = NULL, latitude = NULL, longitude = NULL,
-          work_location_address = NULL, work_latitude = NULL, work_longitude = NULL,
-          stripe_account_id = NULL, is_available = 0,
+      // 1. Caregiver-specific cleanup
+      if (cgId) {
+        // Unassign ALL non-completed/cancelled sessions back to 'requested' so families don't lose them
+        await tx.prepare(`
+          UPDATE care_sessions
+          SET caregiver_id = NULL, status = 'requested', updated_at = NOW()
+          WHERE caregiver_id = ? AND status NOT IN ('completed', 'cancelled')
+        `).run(cgId);
+        // Cancel pending offers
+        await tx.prepare("UPDATE session_offers SET status = 'expired' WHERE (from_user_id = ? OR to_user_id = ?) AND status = 'pending'").run(userId, userId);
+        // Remove active assignments
+        await tx.prepare("DELETE FROM caregiver_assignments WHERE caregiver_profile_id = ?").run(cgId);
+        // Remove availability (no longer accepting work)
+        await tx.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(cgId);
+        // Anonymize caregiver profile PII but keep the record (linked to session history)
+        await tx.prepare(`
+          UPDATE caregiver_profiles SET
+            bio = NULL, legal_first_name = NULL, legal_last_name = NULL,
+            date_of_birth = NULL, ssn_last4 = NULL, address_line1 = NULL,
+            address_line2 = NULL, zip = NULL, dl_number = NULL, dl_state = NULL,
+            location_city = NULL, location_state = NULL, latitude = NULL, longitude = NULL,
+            work_location_address = NULL, work_latitude = NULL, work_longitude = NULL,
+            stripe_account_id = NULL, is_available = 0,
+            updated_at = NOW()
+          WHERE id = ?
+        `).run(cgId);
+      }
+
+      // 2. Delete sensitive auth & device data (no audit value)
+      await tx.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(userId);
+      await tx.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(userId);
+      await tx.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(userId);
+      await tx.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(userId);
+      await tx.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(userId);
+      await tx.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(userId);
+
+      // 3. Delete personal documents (DL photos, etc.)
+      await tx.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(userId);
+
+      // 4. Remove from active teams & connections (but keep invite history)
+      await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(userId);
+      await tx.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(userId, userId);
+      await tx.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(userId);
+      await tx.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(userId, userId);
+      await tx.prepare("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?").run(userId);
+
+      // 5. RETAIN for audit: messages, activity_feed, feedback, reviews, payments,
+      //    care_sessions (completed), background_check_payments, payout_preferences,
+      //    recipient_notes — all stay linked to the anonymized user row
+
+      // 5b. Log the exit reason as an activity feed entry (before anonymizing)
+      if (reason) {
+        const { v4: uuidv4 } = require("uuid");
+        await tx.prepare(`
+          INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
+          VALUES (?, ?, 'account_deleted', 'Account deleted', ?, ?, NOW())
+        `).run(uuidv4(), userId, reason === 'other' ? (reasonDetail || 'No reason given') : reason, JSON.stringify({ reason, reasonDetail: reasonDetail || null, role: user.role }));
+      }
+
+      // 6. Anonymize the user row — strip PII, deactivate, preserve the ID
+      await tx.prepare(`
+        UPDATE users SET
+          deleted_email = email,
+          email = ?,
+          password_hash = 'DELETED',
+          first_name = 'Deleted',
+          last_name = 'User',
+          phone = NULL,
+          avatar_url = NULL,
+          profile_photo = NULL,
+          pets = NULL,
+          pet_allergies = NULL,
+          food_allergies = NULL,
+          medical_conditions = NULL,
+          notification_prefs = NULL,
+          is_active = 0,
+          deleted_at = NOW(),
           updated_at = NOW()
         WHERE id = ?
-      `).run(cgId);
-    }
-    // availability uses caregiver_id, not user_id — already cleaned up above if cgId exists
-
-    // 2. Delete sensitive auth & device data (no audit value)
-    await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(userId);
-    await db.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(userId);
-    await db.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(userId);
-    await db.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(userId);
-    await db.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(userId);
-    await db.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(userId);
-
-    // 3. Delete personal documents (DL photos, etc.)
-    await db.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(userId);
-
-    // 4. Remove from active teams & connections (but keep invite history)
-    await db.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(userId);
-    await db.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(userId, userId);
-    await db.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(userId);
-    await db.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(userId, userId);
-    await db.prepare("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?").run(userId);
-
-    // 5. RETAIN for audit: messages, activity_feed, feedback, reviews, payments,
-    //    care_sessions (completed), background_check_payments, payout_preferences,
-    //    recipient_notes — all stay linked to the anonymized user row
-
-    // 5b. Log the exit reason as an activity feed entry (before anonymizing)
-    if (reason) {
-      const { v4: uuidv4 } = require("uuid");
-      await db.prepare(`
-        INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
-        VALUES (?, ?, 'account_deleted', 'Account deleted', ?, ?, NOW())
-      `).run(uuidv4(), userId, reason === 'other' ? (reasonDetail || 'No reason given') : reason, JSON.stringify({ reason, reasonDetail: reasonDetail || null, role: user.role }));
-    }
-
-    // 6. Anonymize the user row — strip PII, deactivate, preserve the ID
-    await db.prepare(`
-      UPDATE users SET
-        deleted_email = email,
-        email = ?,
-        password_hash = 'DELETED',
-        first_name = 'Deleted',
-        last_name = 'User',
-        phone = NULL,
-        avatar_url = NULL,
-        profile_photo = NULL,
-        pets = NULL,
-        pet_allergies = NULL,
-        food_allergies = NULL,
-        medical_conditions = NULL,
-        notification_prefs = NULL,
-        is_active = 0,
-        deleted_at = NOW(),
-        updated_at = NOW()
-      WHERE id = ?
-    `).run(anonEmail, userId);
+      `).run(anonEmail, userId);
+    }); // end transaction
 
     console.log(`Account soft-deleted: ${user.email} (${userId}) → ${anonEmail}`);
     res.json({ success: true, message: "Account deleted" });

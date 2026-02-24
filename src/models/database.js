@@ -54,6 +54,54 @@ class DatabaseWrapper {
   async exec(sql) {
     await getPool().query(sql);
   }
+
+  /**
+   * Run a callback inside a PostgreSQL transaction.
+   * The callback receives a transactional db object with the same prepare/exec API.
+   * If the callback throws, the transaction is rolled back.
+   *
+   * Usage:
+   *   await db.transaction(async (tx) => {
+   *     await tx.prepare("UPDATE ...").run(param1);
+   *     await tx.prepare("DELETE ...").run(param2);
+   *   });
+   */
+  async transaction(fn) {
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const tx = {
+        prepare(sql) {
+          const pgSql = convertParams(sql);
+          return {
+            async run(...params) {
+              const result = await client.query(pgSql, params);
+              return { changes: result.rowCount };
+            },
+            async get(...params) {
+              const result = await client.query(pgSql, params);
+              return result.rows[0] || undefined;
+            },
+            async all(...params) {
+              const result = await client.query(pgSql, params);
+              return result.rows;
+            },
+          };
+        },
+        async exec(sql) {
+          await client.query(sql);
+        },
+      };
+      const result = await fn(tx);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 let db;

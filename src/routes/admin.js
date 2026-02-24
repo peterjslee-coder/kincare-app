@@ -309,76 +309,79 @@ router.delete("/users/:id", async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const anonEmail = `deleted_${id.slice(0, 8)}@deleted.inplace`;
-    const cgProfile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(id);
-    const cgId = cgProfile?.id;
 
-    // 1. Caregiver-specific cleanup
-    if (cgId) {
-      await db.prepare(`
-        UPDATE care_sessions
-        SET caregiver_id = NULL, status = 'requested', updated_at = NOW()
-        WHERE caregiver_id = ? AND status IN ('confirmed', 'pending', 'open')
-      `).run(cgId);
-      await db.prepare("UPDATE session_offers SET status = 'expired' WHERE (from_user_id = ? OR to_user_id = ?) AND status = 'pending'").run(id, id);
-      await db.prepare("DELETE FROM caregiver_assignments WHERE caregiver_profile_id = ?").run(cgId);
-      await db.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(cgId);
-      // Anonymize caregiver profile PII but keep the record
-      await db.prepare(`
-        UPDATE caregiver_profiles SET
-          bio = NULL, legal_first_name = NULL, legal_last_name = NULL,
-          date_of_birth = NULL, ssn_last4 = NULL, address_line1 = NULL,
-          address_line2 = NULL, zip = NULL, dl_number = NULL, dl_state = NULL,
-          location_city = NULL, location_state = NULL, latitude = NULL, longitude = NULL,
-          work_location_address = NULL, work_latitude = NULL, work_longitude = NULL,
-          stripe_account_id = NULL, is_available = 0,
+    // ── Run everything in a transaction so it's all-or-nothing ──
+    await db.transaction(async (tx) => {
+      const cgProfile = await tx.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(id);
+      const cgId = cgProfile?.id;
+
+      // 1. Caregiver-specific cleanup
+      if (cgId) {
+        // Unassign ALL non-completed/cancelled sessions back to 'requested'
+        await tx.prepare(`
+          UPDATE care_sessions
+          SET caregiver_id = NULL, status = 'requested', updated_at = NOW()
+          WHERE caregiver_id = ? AND status NOT IN ('completed', 'cancelled')
+        `).run(cgId);
+        await tx.prepare("UPDATE session_offers SET status = 'expired' WHERE (from_user_id = ? OR to_user_id = ?) AND status = 'pending'").run(id, id);
+        await tx.prepare("DELETE FROM caregiver_assignments WHERE caregiver_profile_id = ?").run(cgId);
+        await tx.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(cgId);
+        await tx.prepare(`
+          UPDATE caregiver_profiles SET
+            bio = NULL, legal_first_name = NULL, legal_last_name = NULL,
+            date_of_birth = NULL, ssn_last4 = NULL, address_line1 = NULL,
+            address_line2 = NULL, zip = NULL, dl_number = NULL, dl_state = NULL,
+            location_city = NULL, location_state = NULL, latitude = NULL, longitude = NULL,
+            work_location_address = NULL, work_latitude = NULL, work_longitude = NULL,
+            stripe_account_id = NULL, is_available = 0,
+            updated_at = NOW()
+          WHERE id = ?
+        `).run(cgId);
+      }
+
+      // 2. Delete sensitive auth & device data
+      await tx.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(id);
+
+      // 3. Delete personal documents
+      await tx.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(id);
+
+      // 4. Remove from active teams & connections
+      await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(id, id);
+      await tx.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(id, id);
+      await tx.prepare("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?").run(id);
+
+      // 5. RETAIN: messages, activity_feed, feedback, reviews, payments,
+      //    care_sessions, background_check_payments, recipient_notes
+
+      // 6. Anonymize the user row
+      await tx.prepare(`
+        UPDATE users SET
+          deleted_email = email,
+          email = ?,
+          password_hash = 'DELETED',
+          first_name = 'Deleted',
+          last_name = 'User',
+          phone = NULL,
+          avatar_url = NULL,
+          profile_photo = NULL,
+          pets = NULL,
+          pet_allergies = NULL,
+          food_allergies = NULL,
+          medical_conditions = NULL,
+          notification_prefs = NULL,
+          is_active = 0,
+          deleted_at = NOW(),
           updated_at = NOW()
         WHERE id = ?
-      `).run(cgId);
-    }
-    // availability uses caregiver_id, not user_id — already cleaned up above if cgId exists
-
-    // 2. Delete sensitive auth & device data
-    await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(id);
-    await db.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(id);
-    await db.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(id);
-    await db.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(id);
-    await db.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(id);
-    await db.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(id);
-
-    // 3. Delete personal documents
-    await db.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(id);
-
-    // 4. Remove from active teams & connections
-    await db.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
-    await db.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(id, id);
-    await db.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
-    await db.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(id, id);
-    await db.prepare("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?").run(id);
-
-    // 5. RETAIN for audit: messages, activity_feed, feedback, reviews, payments,
-    //    care_sessions, background_check_payments, recipient_notes
-
-    // 6. Anonymize the user row
-    await db.prepare(`
-      UPDATE users SET
-        deleted_email = email,
-        email = ?,
-        password_hash = 'DELETED',
-        first_name = 'Deleted',
-        last_name = 'User',
-        phone = NULL,
-        avatar_url = NULL,
-        profile_photo = NULL,
-        pets = NULL,
-        pet_allergies = NULL,
-        food_allergies = NULL,
-        medical_conditions = NULL,
-        notification_prefs = NULL,
-        is_active = 0,
-        deleted_at = NOW(),
-        updated_at = NOW()
-      WHERE id = ?
-    `).run(anonEmail, id);
+      `).run(anonEmail, id);
+    }); // end transaction
 
     res.json({ success: true, message: `Soft-deleted user ${user.email} → ${anonEmail}` });
   } catch (err) {

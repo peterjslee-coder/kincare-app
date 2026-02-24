@@ -2119,23 +2119,105 @@
 
     /* ===== Splash page mobile fixes ===== */
     @media (max-width: 768px) {
-      .splash-nav-links button {
-        padding: 8px 14px;
-        font-size: 13px;
+      /* Nav: tighter padding, smaller gap */
+      .splash-nav-bar {
+        padding: 10px 16px !important;
+      }
+      .splash-nav-actions {
+        gap: 6px !important;
+      }
+      .splash-nav-actions button {
+        padding: 8px 12px !important;
+        font-size: 13px !important;
       }
 
-      .hero-title {
-        font-size: 28px !important;
-        line-height: 1.25 !important;
+      /* Hero: stack vertically — text on top, image below */
+      .splash-hero {
+        grid-template-columns: 1fr !important;
+        min-height: auto !important;
+      }
+      .splash-hero-text {
+        padding: 40px 24px 32px !important;
+        text-align: center;
+        align-items: center;
+      }
+      .splash-hero-h1 {
+        font-size: 32px !important;
+        line-height: 1.2 !important;
+      }
+      .splash-hero-subtitle {
+        font-size: 17px !important;
+      }
+      .splash-hero-body {
+        font-size: 15px !important;
+      }
+      .splash-hero-image {
+        height: 220px;
+      }
+      /* On mobile, fade from bottom instead of left */
+      .splash-hero-image > div:last-child {
+        background: linear-gradient(to bottom, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 40%) !important;
       }
 
-      .hero-subtitle {
-        font-size: 16px !important;
+      /* Value strip: 2x2 grid instead of 4 columns */
+      .splash-value-strip {
+        grid-template-columns: 1fr 1fr !important;
+      }
+      .splash-value-item {
+        padding: 18px 12px !important;
+        border-right: none !important;
+      }
+      /* Add bottom borders for first row */
+      .splash-value-item:nth-child(1),
+      .splash-value-item:nth-child(2) {
+        border-bottom: 1px solid #d0e8e3;
       }
 
-      /* B2 split hero — stack on mobile */
-      .splash-page section[style*="gridTemplateColumns: '1fr 1fr'"],
-      .splash-page section:nth-of-type(2) {
+      /* Vision pills: wrap into 2-column grid */
+      .splash-vision {
+        padding: 40px 20px !important;
+      }
+      .splash-vision h2 {
+        font-size: 24px !important;
+      }
+      .splash-vision-pills {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px !important;
+      }
+
+      /* Section headings */
+      .splash-page h2 {
+        font-size: 24px !important;
+      }
+      .splash-page h3 {
+        font-size: 20px !important;
+      }
+
+      /* How-it-works steps */
+      .step-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
+    /* Extra small screens (< 400px) */
+    @media (max-width: 400px) {
+      .splash-hero-h1 {
+        font-size: 26px !important;
+      }
+      .splash-hero-subtitle {
+        font-size: 15px !important;
+      }
+      .splash-value-strip {
+        grid-template-columns: 1fr !important;
+      }
+      .splash-value-item {
+        border-bottom: 1px solid #d0e8e3 !important;
+      }
+      .splash-value-item:last-child {
+        border-bottom: none !important;
+      }
+      .splash-vision-pills {
         grid-template-columns: 1fr !important;
       }
     }

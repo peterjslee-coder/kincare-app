@@ -39,7 +39,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       )}
 
       {/* ── Nav ── */}
-      <nav style={{
+      <nav className="splash-nav-bar" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '14px 32px', background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)',
         borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'sticky', top: inviteInfo ? undefined : 0, zIndex: 99,
@@ -48,7 +48,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           <InPlaceIcon width={32} height={32} />
           <span><span className="logo-in">in</span><span className="logo-place">Place</span></span>
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="splash-nav-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           {showInstallBtn && (
             <div style={{ position: 'relative' }}>
               <button onClick={() => {
@@ -106,15 +106,15 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       </nav>
 
       {/* ── Hero: Split layout with fade ── */}
-      <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '560px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ padding: '72px 48px 72px 64px', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#fff', position: 'relative', zIndex: 2 }}>
-          <h1 style={{ fontSize: '44px', lineHeight: 1.18, color: '#1a1a1a', marginBottom: '12px' }}>
+      <section className="splash-hero" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '560px', position: 'relative', overflow: 'hidden' }}>
+        <div className="splash-hero-text" style={{ padding: '72px 48px 72px 64px', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#fff', position: 'relative', zIndex: 2 }}>
+          <h1 className="splash-hero-h1" style={{ fontSize: '44px', lineHeight: 1.18, color: '#1a1a1a', marginBottom: '12px' }}>
             On-demand care for your loved one. <span style={{ color: '#e8724a' }}>Finally.</span>
           </h1>
-          <div style={{ fontSize: '22px', color: '#1b6b5a', fontWeight: 600, marginBottom: '20px', lineHeight: 1.4 }}>
+          <div className="splash-hero-subtitle" style={{ fontSize: '22px', color: '#1b6b5a', fontWeight: 600, marginBottom: '20px', lineHeight: 1.4 }}>
             Fair wages for caregivers. Real-time peace of mind for families.
           </div>
-          <p style={{ fontSize: '16px', color: '#555', lineHeight: 1.6, marginBottom: '28px', maxWidth: '480px' }}>
+          <p className="splash-hero-body" style={{ fontSize: '16px', color: '#555', lineHeight: 1.6, marginBottom: '28px', maxWidth: '480px' }}>
             inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Caregivers keep 80%. Families see everything in real time.
           </p>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
@@ -132,7 +132,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             <a onClick={() => onNavigate('login')} style={{ color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Sign in here</a>
           </div>
         </div>
-        <div style={{ position: 'relative' }}>
+        <div className="splash-hero-image" style={{ position: 'relative' }}>
           <div style={{
             position: 'absolute', inset: 0,
             backgroundImage: 'url(https://images.unsplash.com/photo-1556911220-bff31c812dba?w=1200&q=80)',
@@ -147,14 +147,14 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       </section>
 
       {/* ── Value Strip ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: '#f0faf8', borderTop: '1px solid #d0e8e3', borderBottom: '1px solid #d0e8e3' }}>
+      <div className="splash-value-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: '#f0faf8', borderTop: '1px solid #d0e8e3', borderBottom: '1px solid #d0e8e3' }}>
         {[
           { icon: '\u26A1', title: 'Matched in Hours', desc: 'Not weeks of agency waiting' },
           { icon: '\uD83D\uDCB0', title: 'Caregivers Keep 80%', desc: 'Fair pay, fast payouts' },
           { icon: '\uD83D\uDEE1\uFE0F', title: 'Vetted & Checked', desc: 'Background-verified caregivers' },
           { icon: '\uD83D\uDCF1', title: 'Real-Time Updates', desc: 'Know how your loved one is doing' },
         ].map((item, i) => (
-          <div key={i} style={{ padding: '28px 20px', textAlign: 'center', borderRight: i < 3 ? '1px solid #d0e8e3' : 'none' }}>
+          <div key={i} className="splash-value-item" style={{ padding: '28px 20px', textAlign: 'center', borderRight: i < 3 ? '1px solid #d0e8e3' : 'none' }}>
             <div style={{ fontSize: '28px', marginBottom: '8px' }}>{item.icon}</div>
             <div style={{ fontSize: '14px', fontWeight: 600, color: '#1b6b5a', marginBottom: '4px' }}>{item.title}</div>
             <div style={{ fontSize: '12px', color: '#666', lineHeight: 1.4 }}>{item.desc}</div>
@@ -366,12 +366,12 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       </section>
 
       {/* ── Vision ── */}
-      <section style={{ background: 'linear-gradient(135deg, #1b6b5a, #0f4238)', padding: '64px 32px', color: '#fff', textAlign: 'center' }}>
+      <section className="splash-vision" style={{ background: 'linear-gradient(135deg, #1b6b5a, #0f4238)', padding: '64px 32px', color: '#fff', textAlign: 'center' }}>
         <h2 style={{ fontSize: '30px', marginBottom: '12px', color: '#fff' }}>The Operating System for Care at Home</h2>
         <p style={{ fontSize: '16px', opacity: 0.9, maxWidth: '600px', margin: '0 auto 32px', lineHeight: 1.6 }}>
           Today: caregiver matching. Tomorrow: the complete coordination layer for everything your loved one needs.
         </p>
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div className="splash-vision-pills" style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
           {[
             { icon: '\uD83E\uDD1D', label: 'Caregiver Matching' },
             { icon: '\uD83D\uDC8A', label: 'Medication Tracking' },
