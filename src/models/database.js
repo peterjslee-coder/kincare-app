@@ -339,8 +339,10 @@ async function initializeDatabase() {
     // v1.27.7 — Soft-delete: anonymize users instead of hard-deleting
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_email TEXT`,
-    // v1.31.0 — Care recipient permission tier (full/view-only/managed)
+    // v1.31.0 — Care recipient permission tier (full/collaborative/managed)
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS permission_tier TEXT DEFAULT 'full'`,
+    // v1.31.1 — Visibility settings: which sections the care recipient can see (JSON)
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS visibility_settings TEXT`,
     // v1.31.0 — Backfill linked_user_id for care_for users whose names match a care_recipient
     `UPDATE care_recipients SET linked_user_id = (
       SELECT u.id FROM users u

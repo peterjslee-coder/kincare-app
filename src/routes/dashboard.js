@@ -371,6 +371,7 @@ async function careForDashboard(db, userId, res) {
     userName: `${user.first_name} ${user.last_name}`,
     careRecipientId: recipient.id,
     permissionTier: recipient.permission_tier || "full",
+    visibilitySettings: parseJson(recipient.visibility_settings) || null,
     careProfile: {
       healthConditions: parseJson(recipient.health_conditions),
       medications: parseJson(recipient.medications),

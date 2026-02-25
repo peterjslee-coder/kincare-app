@@ -188,6 +188,18 @@ const CaredForView = window.CaredForView = () => {
   const userName = data.userName || 'Guest';
   const careProfile = data.careProfile || null;
   const permissionTier = data.permissionTier || 'full';
+  const visSettings = data.visibilitySettings || null;
+
+  // Visibility helper: in "full" mode everything is visible; in collaborative/managed, check visSettings
+  const canSee = (section) => {
+    if (permissionTier === 'full') return true;
+    if (!visSettings) return true; // no settings = show all (backward compat)
+    return !!visSettings[section];
+  };
+
+  // Determine if the care recipient can edit (full = yes, collaborative = notes only, managed = no)
+  const canEdit = permissionTier === 'full';
+  const canAddNotes = permissionTier === 'full' || permissionTier === 'collaborative';
 
   const selectedDaySessions = selectedDay ? getDaySessions(selectedDay) : [];
   const selectedDateLabel = selectedDay
@@ -233,9 +245,9 @@ const CaredForView = window.CaredForView = () => {
         gap: '8px', marginBottom: '20px',
       }}>
         {[
-          { id: 'calendar', label: 'My Calendar', icon: '📅' },
+          ...(canSee('calendar') ? [{ id: 'calendar', label: 'My Calendar', icon: '📅' }] : []),
           { id: 'profile', label: 'My Care Info', icon: '💊' },
-          { id: 'notes', label: 'My Notes', icon: '📝' },
+          ...(canSee('notes') ? [{ id: 'notes', label: 'My Notes', icon: '📝' }] : []),
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -399,8 +411,8 @@ const CaredForView = window.CaredForView = () => {
                 <div style={{ fontSize: 13, color: '#999', marginBottom: 16 }}>No sessions on this day</div>
               )}
 
-              {/* Request Care button / form */}
-              {!showRequestForm ? (
+              {/* Request Care button / form (hidden in managed mode) */}
+              {canEdit && !showRequestForm && (
                 <button onClick={() => setShowRequestForm(true)} style={{
                   width: '100%', padding: '10px', background: '#fce4ec', color: '#c62828',
                   border: '1px dashed #f48fb1', borderRadius: 8, cursor: 'pointer',
@@ -408,7 +420,8 @@ const CaredForView = window.CaredForView = () => {
                 }}>
                   + Request Care for {new Date(viewYear, viewMonth, selectedDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </button>
-              ) : (
+              )}
+              {canEdit && showRequestForm && (
                 <div style={{ background: '#fef7f9', borderRadius: 8, padding: 16, border: '1px solid #f8bbd0' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#c62828', marginBottom: 12 }}>Request Care</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
@@ -466,7 +479,7 @@ const CaredForView = window.CaredForView = () => {
           {careProfile ? (
             <React.Fragment>
               {/* Health Conditions */}
-              {careProfile.healthConditions && careProfile.healthConditions.length > 0 && (
+              {canSee('healthConditions') && careProfile.healthConditions && careProfile.healthConditions.length > 0 && (
                 <div className="card" style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>🩺 Health Conditions</div>
                   {careProfile.healthConditions.map((c, i) => (
@@ -476,7 +489,7 @@ const CaredForView = window.CaredForView = () => {
               )}
 
               {/* Medications */}
-              {careProfile.medications && careProfile.medications.length > 0 && (
+              {canSee('medications') && careProfile.medications && careProfile.medications.length > 0 && (
                 <div className="card" style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>💊 Medications</div>
                   {careProfile.medications.map((m, i) => (
@@ -486,7 +499,7 @@ const CaredForView = window.CaredForView = () => {
               )}
 
               {/* Allergies */}
-              {careProfile.foodAllergies && careProfile.foodAllergies.length > 0 && (
+              {canSee('allergies') && careProfile.foodAllergies && careProfile.foodAllergies.length > 0 && (
                 <div className="card" style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>⚠️ Food Allergies</div>
                   {careProfile.foodAllergies.map((a, i) => (
@@ -496,7 +509,7 @@ const CaredForView = window.CaredForView = () => {
               )}
 
               {/* Preferences */}
-              {careProfile.preferences && (
+              {canSee('preferences') && careProfile.preferences && (
                 <div className="card" style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>✨ Care Preferences</div>
                   <div style={{ fontSize: 13, color: '#555', lineHeight: 1.6 }}>{careProfile.preferences}</div>
@@ -504,7 +517,7 @@ const CaredForView = window.CaredForView = () => {
               )}
 
               {/* Pets */}
-              {careProfile.pets && (
+              {canSee('pets') && careProfile.pets && (
                 <div className="card" style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>🐾 Pets at Home</div>
                   <div style={{ fontSize: 13, color: '#555', lineHeight: 1.6 }}>{careProfile.pets}</div>
@@ -512,7 +525,7 @@ const CaredForView = window.CaredForView = () => {
               )}
 
               {/* Emergency Contact */}
-              {careProfile.emergencyContactName && (
+              {canSee('emergencyContact') && careProfile.emergencyContactName && (
                 <div className="card" style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>🆘 Emergency Contact</div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{careProfile.emergencyContactName}</div>
@@ -548,20 +561,22 @@ const CaredForView = window.CaredForView = () => {
       {/* Notes Tab — preserved from original */}
       {activeTab === 'notes' && (
         <div>
-          <div className="card" style={{ marginBottom: '16px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>Write a new note</div>
-            <textarea
-              value={newNote}
-              onChange={e => setNewNote(e.target.value)}
-              placeholder="What's on your mind? Reminders, thoughts, things to tell your family or caregiver..."
-              style={{ width: '100%', minHeight: '80px', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', resize: 'vertical', marginBottom: '8px' }}
-            />
-            <button onClick={handleAddNote} disabled={!newNote.trim() || saving} style={{
-              padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none',
-              borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-              opacity: (!newNote.trim() || saving) ? 0.5 : 1,
-            }}>{saving ? 'Saving...' : 'Save Note'}</button>
-          </div>
+          {canAddNotes && (
+            <div className="card" style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>Write a new note</div>
+              <textarea
+                value={newNote}
+                onChange={e => setNewNote(e.target.value)}
+                placeholder="What's on your mind? Reminders, thoughts, things to tell your family or caregiver..."
+                style={{ width: '100%', minHeight: '80px', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', resize: 'vertical', marginBottom: '8px' }}
+              />
+              <button onClick={handleAddNote} disabled={!newNote.trim() || saving} style={{
+                padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none',
+                borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+                opacity: (!newNote.trim() || saving) ? 0.5 : 1,
+              }}>{saving ? 'Saving...' : 'Save Note'}</button>
+            </div>
+          )}
 
           {notes.length > 0 ? notes.map((n, idx) => {
             const typeStyle = noteTypeColors[n.noteType] || noteTypeColors.general;
@@ -596,7 +611,7 @@ const CaredForView = window.CaredForView = () => {
                           by {n.authorName} ({n.authorRole === 'care_for' ? 'me' : n.authorRole})
                         </span>
                       </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
+                      {canAddNotes && (<div style={{ display: 'flex', gap: '6px' }}>
                         <button onClick={() => { setEditingNote(n.id); setEditContent(n.content); }} style={{
                           padding: '3px 8px', background: 'none', border: '1px solid #ddd', borderRadius: '4px',
                           cursor: 'pointer', fontSize: '11px', color: '#666',
@@ -605,7 +620,7 @@ const CaredForView = window.CaredForView = () => {
                           padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: '4px',
                           cursor: 'pointer', fontSize: '11px', color: '#c00',
                         }}>Delete</button>
-                      </div>
+                      </div>)}
                     </div>
                     <div style={{ fontSize: '14px', color: '#333', lineHeight: 1.5 }}>{n.content}</div>
                     <div style={{ fontSize: '11px', color: '#aaa', marginTop: '6px' }}>{n.createdAt ? (parseTimestamp(n.createdAt) || new Date()).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>

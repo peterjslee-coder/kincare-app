@@ -10,6 +10,9 @@ const CareProfile = window.CareProfile = () => {
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [permTier, setPermTier] = useState('full');
+  const [visSettings, setVisSettings] = useState(null);
+  const [savingPerms, setSavingPerms] = useState(false);
   const { showToast } = useToast();
 
   const resizeImg = (file, maxDim, quality) => new Promise((resolve, reject) => {
@@ -78,8 +81,11 @@ const CareProfile = window.CareProfile = () => {
           const data = await response.json();
           if (data.careRecipients && data.careRecipients.length > 0) {
             setAllRecipients(data.careRecipients);
-            setProfile(data.careRecipients[0]);
-            fetchNotes(data.careRecipients[0].id);
+            const first = data.careRecipients[0];
+            setProfile(first);
+            setPermTier(first.permission_tier || 'full');
+            try { setVisSettings(first.visibility_settings ? JSON.parse(first.visibility_settings) : null); } catch { setVisSettings(null); }
+            fetchNotes(first.id);
           }
         }
       } catch (error) {
@@ -207,7 +213,7 @@ const CareProfile = window.CareProfile = () => {
       {allRecipients.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
           {allRecipients.map(r => (
-            <button key={r.id} onClick={() => { setProfile(r); fetchNotes(r.id); setEditing(false); }}
+            <button key={r.id} onClick={() => { setProfile(r); fetchNotes(r.id); setEditing(false); setPermTier(r.permission_tier || 'full'); try { setVisSettings(r.visibility_settings ? JSON.parse(r.visibility_settings) : null); } catch { setVisSettings(null); } }}
               style={{ padding: '6px 14px', borderRadius: 20, border: r.id === profile?.id ? '2px solid #1b6b5a' : '1px solid #d0d0d0', background: r.id === profile?.id ? '#e0f2e9' : '#fff', color: r.id === profile?.id ? '#1b6b5a' : '#666', fontSize: 13, fontWeight: r.id === profile?.id ? 600 : 400, cursor: 'pointer' }}>
               {r.first_name} {r.last_name}
             </button>
@@ -367,6 +373,98 @@ const CareProfile = window.CareProfile = () => {
           <p style={{ color: '#999', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
         )}
       </div>
+
+      {/* ─── Permission Controls (owner only) ─── */}
+      {profile?.linked_user_id && canEdit && (
+        <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>🔐</span> {profile.first_name}'s App Permissions
+          </div>
+          <p style={{ fontSize: 12, color: '#888', marginBottom: 14, lineHeight: 1.5 }}>
+            Control what {profile.first_name} sees and can do when they log into their own account.
+          </p>
+
+          {/* Tier selector */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+            {[
+              { id: 'full', label: 'Full Control', desc: 'Can view and edit everything', icon: '🟢' },
+              { id: 'collaborative', label: 'Collaborative', desc: 'Can view selected info, can add notes', icon: '🟡' },
+              { id: 'managed', label: 'Managed', desc: 'View-only for selected info', icon: '🔴' },
+            ].map(t => (
+              <button key={t.id} onClick={() => {
+                setPermTier(t.id);
+                if (t.id === 'full') setVisSettings(null);
+                else if (!visSettings) setVisSettings({ calendar: true, healthConditions: true, medications: true, allergies: true, preferences: true, pets: true, emergencyContact: true, notes: true });
+              }} style={{
+                flex: '1 1 140px', padding: '10px 12px', border: permTier === t.id ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                borderRadius: 10, background: permTier === t.id ? '#e8f5e9' : '#fff', cursor: 'pointer', textAlign: 'left',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{t.icon} {t.label}</div>
+                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{t.desc}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Section visibility toggles (only for collaborative/managed) */}
+          {permTier !== 'full' && visSettings && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                {profile.first_name} can see:
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 6 }}>
+                {[
+                  { key: 'calendar', label: 'Calendar / Schedule', icon: '📅' },
+                  { key: 'healthConditions', label: 'Health Conditions', icon: '🩺' },
+                  { key: 'medications', label: 'Medications', icon: '💊' },
+                  { key: 'allergies', label: 'Allergies', icon: '⚠️' },
+                  { key: 'preferences', label: 'Care Preferences', icon: '✨' },
+                  { key: 'pets', label: 'Pets at Home', icon: '🐾' },
+                  { key: 'emergencyContact', label: 'Emergency Contact', icon: '🆘' },
+                  { key: 'notes', label: 'Notes', icon: '📝' },
+                ].map(s => (
+                  <label key={s.key} style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
+                    background: visSettings[s.key] ? '#f0faf5' : '#fafafa', borderRadius: 8,
+                    border: `1px solid ${visSettings[s.key] ? '#1b6b5a40' : '#e0e0e0'}`, cursor: 'pointer',
+                  }}>
+                    <input type="checkbox" checked={!!visSettings[s.key]}
+                      onChange={() => setVisSettings(v => ({ ...v, [s.key]: !v[s.key] }))}
+                      style={{ accentColor: '#1b6b5a' }} />
+                    <span style={{ fontSize: 12, color: '#333' }}>{s.icon} {s.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Save button */}
+          <button onClick={async () => {
+            setSavingPerms(true);
+            try {
+              const res = await apiFetch(`/api/care-recipients/${profile.id}/permissions`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                  permissionTier: permTier,
+                  visibilitySettings: permTier === 'full' ? null : visSettings,
+                }),
+              });
+              if (res?.ok) {
+                showToast('Permissions updated', 'success');
+                setProfile(p => ({ ...p, permission_tier: permTier, visibility_settings: permTier === 'full' ? null : JSON.stringify(visSettings) }));
+              } else {
+                const d = await res?.json().catch(() => ({}));
+                showToast(d.error || 'Failed to update permissions', 'error');
+              }
+            } catch { showToast('Failed to update permissions', 'error'); }
+            setSavingPerms(false);
+          }} disabled={savingPerms} style={{
+            padding: '8px 20px', background: savingPerms ? '#999' : '#1b6b5a', color: '#fff',
+            border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingPerms ? 'wait' : 'pointer',
+          }}>
+            {savingPerms ? 'Saving...' : 'Save Permissions'}
+          </button>
+        </div>
+      )}
 
       <div className="ai-insights">
         <div className="ai-insights-header"><span className="card-icon">🧠</span>AI Care Insights</div>

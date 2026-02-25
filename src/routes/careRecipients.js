@@ -326,4 +326,54 @@ router.delete("/:id/photo", requireRole("family"), async (req, res) => {
   }
 });
 
+// ─── PUT /api/care-recipients/:id/permissions ───
+// Update permission tier and visibility settings for a care recipient
+router.put("/:id/permissions", requireRole("family"), async (req, res) => {
+  const db = await getDb();
+
+  // Verify ownership
+  const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
+  if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+  if (recipient.family_user_id !== req.user.id) {
+    return res.status(403).json({ error: "Only the care team owner can change permissions" });
+  }
+
+  const { permissionTier, visibilitySettings } = req.body;
+
+  const validTiers = ["full", "collaborative", "managed"];
+  if (permissionTier && !validTiers.includes(permissionTier)) {
+    return res.status(400).json({ error: "Permission tier must be: full, collaborative, or managed" });
+  }
+
+  // Validate visibility settings shape
+  const validSections = ["calendar", "healthConditions", "medications", "allergies", "preferences", "pets", "emergencyContact", "notes"];
+  if (visibilitySettings) {
+    const keys = Object.keys(visibilitySettings);
+    const invalid = keys.filter(k => !validSections.includes(k));
+    if (invalid.length > 0) {
+      return res.status(400).json({ error: `Invalid visibility sections: ${invalid.join(", ")}` });
+    }
+  }
+
+  try {
+    if (permissionTier) {
+      await db.prepare("UPDATE care_recipients SET permission_tier = ? WHERE id = ?").run(permissionTier, req.params.id);
+    }
+    if (visibilitySettings !== undefined) {
+      await db.prepare("UPDATE care_recipients SET visibility_settings = ? WHERE id = ?").run(
+        JSON.stringify(visibilitySettings), req.params.id
+      );
+    }
+
+    const updated = await db.prepare("SELECT permission_tier, visibility_settings FROM care_recipients WHERE id = ?").get(req.params.id);
+    res.json({
+      permissionTier: updated.permission_tier,
+      visibilitySettings: updated.visibility_settings ? JSON.parse(updated.visibility_settings) : null,
+    });
+  } catch (err) {
+    console.error("Update permissions error:", err);
+    res.status(500).json({ error: "Failed to update permissions" });
+  }
+});
+
 module.exports = router;
