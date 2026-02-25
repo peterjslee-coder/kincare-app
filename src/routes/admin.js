@@ -1,8 +1,21 @@
 const express = require("express");
+const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
 
 const router = express.Router();
+
+// ─── Audit log helper ───
+async function logAdminAction(req, action, targetType, targetId, details) {
+  try {
+    const db = await getDb();
+    await db.prepare(
+      "INSERT INTO admin_audit_log (id, admin_user_id, action, target_type, target_id, details, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(uuid(), req.user.id, action, targetType || null, targetId || null, details ? JSON.stringify(details) : null, req.ip || req.headers['x-forwarded-for'] || null);
+  } catch (err) {
+    console.error("Audit log error:", err.message);
+  }
+}
 
 // ─── Admin check middleware ───
 // Runs after authenticate, looks up is_admin from DB and sets req.isAdmin
@@ -290,6 +303,7 @@ router.post("/reset-password", async (req, res) => {
     const hash = await bcrypt.hash(newPassword, 10);
     await db.prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?").run(hash, userId);
 
+    await logAdminAction(req, "reset_password", "user", userId, { email: user.email });
     res.json({ success: true, message: `Password reset for ${user.email}` });
   } catch (err) {
     console.error("Admin reset-password error:", err);
@@ -383,6 +397,7 @@ router.delete("/users/:id", async (req, res) => {
       `).run(anonEmail, id);
     }); // end transaction
 
+    await logAdminAction(req, "delete_user", "user", id, { email: user.email, role: user.role });
     res.json({ success: true, message: `Soft-deleted user ${user.email} → ${anonEmail}` });
   } catch (err) {
     console.error("Admin delete user error:", err);
@@ -419,6 +434,7 @@ router.post("/blocked-emails", authenticate, checkAdmin, requireAdmin, async (re
       "INSERT INTO blocked_emails (id, email, reason, blocked_by) VALUES (?, LOWER(?), ?, ?)"
     ).run(uuid(), email, reason || null, req.user.id);
 
+    await logAdminAction(req, "block_email", "email", email, { reason });
     res.status(201).json({ message: `${email} has been blocked from registering` });
   } catch (err) {
     console.error("Block email error:", err);
@@ -434,6 +450,7 @@ router.delete("/blocked-emails/:id", authenticate, checkAdmin, requireAdmin, asy
     if (!row) return res.status(404).json({ error: "Blocked email not found" });
 
     await db.prepare("DELETE FROM blocked_emails WHERE id = ?").run(req.params.id);
+    await logAdminAction(req, "unblock_email", "email", row.email, {});
     res.json({ message: `${row.email} has been unblocked` });
   } catch (err) {
     console.error("Unblock email error:", err);
@@ -877,6 +894,25 @@ router.post("/reseed-demo", authenticate, checkAdmin, requireAdmin, async (req, 
   } catch (err) {
     console.error("❌ Demo reseed error:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/admin/audit-log — View admin audit trail ───
+router.get("/audit-log", async (req, res) => {
+  try {
+    const db = await getDb();
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const rows = await db.prepare(`
+      SELECT al.*, u.email AS admin_email, u.first_name AS admin_first_name
+      FROM admin_audit_log al
+      LEFT JOIN users u ON al.admin_user_id = u.id
+      ORDER BY al.created_at DESC
+      LIMIT ?
+    `).all(limit);
+    res.json({ auditLog: rows });
+  } catch (err) {
+    console.error("Audit log fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch audit log" });
   }
 });
 

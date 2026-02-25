@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
+const helmet = require("helmet");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
 const { Server } = require("socket.io");
@@ -16,7 +17,10 @@ const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
 
 // ─── Socket.io Setup ───
-const io = new Server(server, { cors: { origin: "*" } });
+const ALLOWED_ORIGINS = process.env.NODE_ENV === "production"
+  ? ["https://yourinplace.com", "https://www.yourinplace.com"]
+  : ["http://localhost:3001", "http://localhost:3000", "http://127.0.0.1:3001"];
+const io = new Server(server, { cors: { origin: ALLOWED_ORIGINS, credentials: true } });
 
 // JWT auth middleware for socket connections
 io.use((socket, next) => {
@@ -65,7 +69,21 @@ app.set("emitToUser", emitToUser);
 
 // ─── Middleware ───
 app.set("trust proxy", 1); // Trust first proxy (Cloudflare/Railway) for X-Forwarded-For
-app.use(cors());
+
+// Security headers via Helmet
+app.use(helmet({
+  contentSecurityPolicy: false,       // Disabled — frontend uses inline Babel/JSX compilation
+  crossOriginEmbedderPolicy: false,   // Disabled — loads CDN scripts (React, Leaflet, etc.)
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+}));
+
+// CORS — restrict to known origins
+app.use(cors({
+  origin: ALLOWED_ORIGINS,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Active-Role", "x-admin-api-key"],
+}));
 app.use(require("cookie-parser")());
 app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
 app.use("/api/care-recipients", express.json({ limit: "5mb" }));
@@ -84,6 +102,9 @@ const authLimiter = rateLimit({
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/password-reset", authLimiter);
+app.use("/api/auth/verify", authLimiter);
+app.use("/api/auth/resend-verification", authLimiter);
+app.use("/api/waitlist", authLimiter);
 
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,  // 1 minute

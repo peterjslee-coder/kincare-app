@@ -88,9 +88,17 @@ router.post(
 );
 
 // ─── GET /api/photos/visit/:visitLogId ───
-// Get photos for a visit log
+// Get photos for a visit log (only if user is involved in the session)
 router.get("/visit/:visitLogId", async (req, res) => {
   const db = await getDb();
+  // Verify user is involved in the session this visit log belongs to
+  const visitLog = await db.prepare(
+    "SELECT vl.id, cs.family_user_id, cs.caregiver_id FROM visit_logs vl JOIN care_sessions cs ON vl.session_id = cs.id WHERE vl.id = ?"
+  ).get(req.params.visitLogId);
+  if (!visitLog) return res.json({ photos: [] });
+  if (visitLog.family_user_id !== req.user.id && visitLog.caregiver_id !== req.user.id && !req.user.isAdmin) {
+    return res.status(403).json({ error: "Not authorized to view these photos" });
+  }
   const photos = await db
     .prepare(
       "SELECT id, visit_log_id, photo_url, caption, created_at FROM visit_photos WHERE visit_log_id = ? ORDER BY created_at ASC"
@@ -101,9 +109,18 @@ router.get("/visit/:visitLogId", async (req, res) => {
 });
 
 // ─── GET /api/photos/session/:sessionId ───
-// Get all photos for a care session (via its visit log)
+// Get all photos for a care session (only if user is involved)
 router.get("/session/:sessionId", async (req, res) => {
   const db = await getDb();
+  // Verify user is involved in this session
+  const session = await db.prepare(
+    "SELECT id, family_user_id, caregiver_id FROM care_sessions WHERE id = ?"
+  ).get(req.params.sessionId);
+  if (!session) return res.json({ photos: [] });
+  if (session.family_user_id !== req.user.id && session.caregiver_id !== req.user.id && !req.user.isAdmin) {
+    return res.status(403).json({ error: "Not authorized to view these photos" });
+  }
+
   const visitLog = await db
     .prepare("SELECT id FROM visit_logs WHERE session_id = ?")
     .get(req.params.sessionId);
