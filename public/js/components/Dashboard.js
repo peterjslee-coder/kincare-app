@@ -122,7 +122,13 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     setReviewLoading(false);
   };
 
-  useEffect(() => { fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); }, []);
+  useEffect(() => {
+    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics();
+    // Re-fetch when a new session is created (e.g. from RequestCareModal)
+    const onSessionsUpdated = () => fetchDashboard();
+    window.addEventListener('sessions-updated', onSessionsUpdated);
+    return () => window.removeEventListener('sessions-updated', onSessionsUpdated);
+  }, []);
 
   // Real-time: refresh dashboard on activity or session updates
   useEffect(() => {

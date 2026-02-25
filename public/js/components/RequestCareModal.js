@@ -12,8 +12,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [loadingCaregivers, setLoadingCaregivers] = useState(false);
   const [assignedCaregivers, setAssignedCaregivers] = useState(null); // null = not loaded yet
   const [costPreview, setCostPreview] = useState(null);
-  const [proposingRate, setProposingRate] = useState(false);
   const [proposedRate, setProposedRate] = useState('');
+  const [localAvgRate, setLocalAvgRate] = useState(null);
   const [careRecipients, setCareRecipients] = useState([]);
   const [selectedRecipientId, setSelectedRecipientId] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -45,6 +45,23 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     };
     fetchData();
   }, []);
+
+  // Pre-fill rate from local caregiver average when we have time + caregivers
+  useEffect(() => {
+    if (!assignedCaregivers || assignedCaregivers.length === 0 || !time) return;
+    const hour = parseInt(time.split(':')[0]);
+    // Pick tier-appropriate rate: daytime 6a-6p, nighttime 6p-12a, overnight 12a-6a
+    const rates = assignedCaregivers.map(cg => {
+      if (hour >= 6 && hour < 18) return cg.rate_daytime || cg.hourly_rate || 25;
+      if (hour >= 18) return cg.rate_nighttime || cg.hourly_rate || 30;
+      return cg.rate_overnight || cg.hourly_rate || 35;
+    }).filter(r => r > 0);
+    if (rates.length > 0) {
+      const avg = Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
+      setLocalAvgRate(avg);
+      if (!proposedRate) setProposedRate(String(avg));
+    }
+  }, [assignedCaregivers, time]);
 
   // Check if user has assigned caregivers
   const hasCaregiverData = assignedCaregivers !== null && assignedCaregivers.length > 0;
@@ -180,6 +197,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         } else {
           alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
         }
+        // Signal pages to re-fetch sessions (Schedule, Dashboard, etc.)
+        window.dispatchEvent(new CustomEvent('sessions-updated'));
         onClose();
       } else {
         const err = await response.json().catch(() => ({}));
@@ -463,33 +482,27 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 </div>
               )}
 
-              {/* Propose different rate — always available */}
-              <div style={{ marginTop: '10px' }}>
-                {!proposingRate ? (
-                  <button onClick={() => setProposingRate(true)} style={{
-                    background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer',
-                    fontSize: '13px', textDecoration: 'underline', padding: 0,
-                  }}>
-                    {selectedCaregiver ? 'Propose a different rate?' : 'Set your offer rate'}
-                  </button>
-                ) : (
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', color: '#666' }}>$</span>
-                    <input type="number" step="0.50" min="1" max="500"
-                      value={proposedRate}
-                      onChange={e => setProposedRate(e.target.value)}
-                      placeholder="Your rate/hr"
-                      style={{ width: '90px', padding: '5px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '13px' }}
-                    />
-                    <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
-                    {proposedRate && duration && (
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#1b6b5a' }}>
-                        = ${(parseFloat(proposedRate) * parseInt(duration)).toFixed(0)} total
-                      </span>
-                    )}
-                    <button onClick={() => { setProposingRate(false); setProposedRate(''); }} style={{
-                      background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: '12px',
-                    }}>cancel</button>
+              {/* Your offered rate — prominent, pre-filled with local avg */}
+              <div style={{ marginTop: '12px', padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>Your Offered Rate</div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '16px', color: '#666', fontWeight: 600 }}>$</span>
+                  <input type="number" step="1" min="15" max="500"
+                    value={proposedRate}
+                    onChange={e => setProposedRate(e.target.value)}
+                    placeholder={localAvgRate ? String(localAvgRate) : '25'}
+                    style={{ width: '80px', padding: '8px 10px', borderRadius: '8px', border: '2px solid #1b6b5a', fontSize: '16px', fontWeight: 600, textAlign: 'center' }}
+                  />
+                  <span style={{ fontSize: '14px', color: '#888' }}>/hr</span>
+                  {proposedRate && duration && (
+                    <span style={{ fontSize: '15px', fontWeight: 700, color: '#1b6b5a', marginLeft: 4 }}>
+                      = ${(parseFloat(proposedRate) * parseInt(duration)).toFixed(0)} total
+                    </span>
+                  )}
+                </div>
+                {localAvgRate && (
+                  <div style={{ fontSize: '11px', color: '#888', marginTop: '6px' }}>
+                    Based on local caregiver rates for this time of day (avg ${localAvgRate}/hr)
                   </div>
                 )}
               </div>

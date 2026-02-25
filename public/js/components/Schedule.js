@@ -8,20 +8,25 @@ const Schedule = window.Schedule = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [expandedSession, setExpandedSession] = useState(null);
 
-  useEffect(() => {
-    const fetchSessions = async () => {
-      try {
-        const response = await apiFetch('/api/sessions?limit=100');
-        if (response?.ok) {
-          const data = await response.json();
-          setSessions(data.sessions || []);
-        }
-      } catch (error) {
-        console.error('Error fetching sessions:', error);
+  const fetchSessions = async () => {
+    try {
+      const response = await apiFetch('/api/sessions?limit=100');
+      if (response?.ok) {
+        const data = await response.json();
+        setSessions(data.sessions || []);
       }
-      setLoading(false);
-    };
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
     fetchSessions();
+    // Re-fetch when a new session is created (e.g. from RequestCareModal)
+    const onSessionsUpdated = () => fetchSessions();
+    window.addEventListener('sessions-updated', onSessionsUpdated);
+    return () => window.removeEventListener('sessions-updated', onSessionsUpdated);
   }, []);
 
   // ─── Calendar helpers ───
