@@ -12,6 +12,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [photoPreviewUrls, setPhotoPreviewUrls] = useState([]);
   const [submittingLog, setSubmittingLog] = useState(false);
   const photoInputRef = useRef(null);
+  // Check-in/check-out state
+  const [checkInSession, setCheckInSession] = useState(null);
+  const [checkInMood, setCheckInMood] = useState('');
+  const [checkInNotes, setCheckInNotes] = useState(null);
+  const [checkOutSession, setCheckOutSession] = useState(null);
+  const [checkOutMood, setCheckOutMood] = useState('');
+  const [checkOutTags, setCheckOutTags] = useState([]);
+  const [checkOutCareFeedback, setCheckOutCareFeedback] = useState('');
+  const [checkOutServiceFeedback, setCheckOutServiceFeedback] = useState('');
+  const [checkOutSummary, setCheckOutSummary] = useState('');
+  const [checkSubmitting, setCheckSubmitting] = useState(false);
   const avatarInputRef = useRef(null);
   const tabContentRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -857,7 +868,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           sessions={sessions}
           availRules={availRules}
           fetchAvailability={fetchAvailability}
-          onLogVisit={setVisitLogSession}
+          onLogVisit={(s) => {
+            if (s.action === 'check-in') {
+              setCheckInMood('');
+              setCheckInNotes(null);
+              setCheckInSession(s);
+            } else if (s.action === 'check-out') {
+              setCheckOutMood('');
+              setCheckOutTags([]);
+              setCheckOutCareFeedback('');
+              setCheckOutServiceFeedback('');
+              setCheckOutSummary('');
+              setCheckOutSession(s);
+            } else {
+              setVisitLogSession(s);
+            }
+          }}
         />
       )}
 
@@ -1672,6 +1698,230 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
                 opacity: (!logSummary.trim() || submittingLog) ? 0.5 : 1,
               }}>{submittingLog ? 'Submitting...' : 'Submit Visit Log'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── CHECK-IN MODAL ─── */}
+      {checkInSession && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '16px', padding: '28px', width: '440px', maxWidth: '92vw',
+            maxHeight: '90vh', overflow: 'auto',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>👋</div>
+              <h3 style={{ marginTop: 0, marginBottom: 4, fontSize: 20 }}>Check In</h3>
+              <p style={{ fontSize: 13, color: '#666', margin: 0 }}>
+                {checkInSession.recipientName || 'Care Session'} &bull; {checkInSession.date} at {checkInSession.time}
+              </p>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                How is {(checkInSession.recipientName || '').split(' ')[0] || 'the care recipient'} right now?
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {[
+                  { key: 'happy', emoji: '😊', label: 'Happy' },
+                  { key: 'surprised', emoji: '😮', label: 'Surprised' },
+                  { key: 'sleepy', emoji: '😴', label: 'Sleepy' },
+                  { key: 'busy', emoji: '🤗', label: 'Busy' },
+                  { key: 'neutral', emoji: '😐', label: 'Neutral' },
+                  { key: 'sad', emoji: '😢', label: 'Sad' },
+                  { key: 'upset', emoji: '😠', label: 'Upset' },
+                ].map(m => (
+                  <button key={m.key} onClick={() => setCheckInMood(m.key)} style={{
+                    padding: '8px 14px', borderRadius: 20, border: checkInMood === m.key ? '2px solid #e8724a' : '2px solid #eee',
+                    background: checkInMood === m.key ? '#fff3ed' : '#fafafa', cursor: 'pointer', fontSize: 13,
+                    fontWeight: checkInMood === m.key ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <span style={{ fontSize: 18 }}>{m.emoji}</span> {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {checkInSession.special_instructions || checkInSession.specialInstructions ? (
+              <div style={{ marginBottom: 16, padding: 12, background: '#f0faf7', borderRadius: 8, border: '1px solid #d4edda' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a', marginBottom: 4 }}>📋 Instructions from care team</div>
+                <div style={{ fontSize: 13, color: '#333' }}>{checkInSession.special_instructions || checkInSession.specialInstructions}</div>
+              </div>
+            ) : null}
+
+            {checkInNotes && checkInNotes.length > 0 && (
+              <div style={{ marginBottom: 16, padding: 12, background: '#f8f4ff', borderRadius: 8, border: '1px solid #e8daff' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#6b21a8', marginBottom: 4 }}>📝 Recent care notes</div>
+                {checkInNotes.map((n, i) => (
+                  <div key={i} style={{ fontSize: 12, color: '#555', marginTop: i > 0 ? 6 : 2 }}>{n.content}</div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button onClick={() => setCheckInSession(null)} style={{
+                padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8,
+                cursor: 'pointer', fontSize: 13,
+              }}>Cancel</button>
+              <button onClick={async () => {
+                setCheckSubmitting(true);
+                try {
+                  const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
+                    method: 'POST',
+                    body: JSON.stringify({ arrivalMood: checkInMood || null }),
+                  });
+                  if (res?.ok) {
+                    const result = await res.json();
+                    setCheckInNotes(result.recentNotes || []);
+                    showToast('Checked in! Session started.', 'success');
+                    setCheckInSession(null);
+                    const refreshRes = await apiFetch('/api/dashboard');
+                    if (refreshRes?.ok) setData(await refreshRes.json());
+                  } else {
+                    const err = await res?.json().catch(() => null);
+                    showToast(err?.error || 'Check-in failed', 'error');
+                  }
+                } catch (e) { showToast('Check-in failed', 'error'); }
+                setCheckSubmitting(false);
+              }} disabled={checkSubmitting} style={{
+                padding: '10px 24px', background: '#e8724a', color: '#fff', border: 'none',
+                borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 700,
+                opacity: checkSubmitting ? 0.6 : 1,
+              }}>{checkSubmitting ? 'Checking in...' : "I'm Here ✓"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── CHECK-OUT MODAL ─── */}
+      {checkOutSession && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '16px', padding: '28px', width: '500px', maxWidth: '92vw',
+            maxHeight: '90vh', overflow: 'auto',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>👋</div>
+              <h3 style={{ marginTop: 0, marginBottom: 4, fontSize: 20 }}>Check Out</h3>
+              <p style={{ fontSize: 13, color: '#666', margin: 0 }}>
+                {checkOutSession.recipientName || 'Care Session'} &bull; {checkOutSession.date}
+              </p>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                How is {(checkOutSession.recipientName || '').split(' ')[0] || 'the care recipient'} now?
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {[
+                  { key: 'happy', emoji: '😊', label: 'Happy' },
+                  { key: 'calm', emoji: '😌', label: 'Calm' },
+                  { key: 'sleepy', emoji: '😴', label: 'Sleepy' },
+                  { key: 'neutral', emoji: '😐', label: 'Neutral' },
+                  { key: 'anxious', emoji: '😰', label: 'Anxious' },
+                  { key: 'sad', emoji: '😢', label: 'Sad' },
+                  { key: 'upset', emoji: '😠', label: 'Upset' },
+                ].map(m => (
+                  <button key={m.key} onClick={() => setCheckOutMood(m.key)} style={{
+                    padding: '8px 14px', borderRadius: 20, border: checkOutMood === m.key ? '2px solid #c62828' : '2px solid #eee',
+                    background: checkOutMood === m.key ? '#ffebee' : '#fafafa', cursor: 'pointer', fontSize: 13,
+                    fontWeight: checkOutMood === m.key ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <span style={{ fontSize: 18 }}>{m.emoji}</span> {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                What did you observe? (tap all that apply)
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {[
+                  'Good spirits', 'Cooperative', 'Engaged in activity', 'Good appetite', 'Good mobility',
+                  'Medication taken', 'Confused', 'Anxious', 'Withdrawn', 'Resistant to care',
+                  'No appetite', 'Toileting issues', 'Wandering', 'Pain/discomfort',
+                  'Fall risk', 'Medication refused',
+                ].map(tag => {
+                  const isSelected = checkOutTags.includes(tag);
+                  const isPositive = ['Good spirits', 'Cooperative', 'Engaged in activity', 'Good appetite', 'Good mobility', 'Medication taken'].includes(tag);
+                  return (
+                    <button key={tag} onClick={() => setCheckOutTags(prev =>
+                      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                    )} style={{
+                      padding: '5px 12px', borderRadius: 16, fontSize: 12,
+                      border: isSelected ? `2px solid ${isPositive ? '#2e7d32' : '#c62828'}` : '1px solid #ddd',
+                      background: isSelected ? (isPositive ? '#e8f5e9' : '#ffebee') : '#fff',
+                      color: isSelected ? (isPositive ? '#2e7d32' : '#c62828') : '#555',
+                      cursor: 'pointer', fontWeight: isSelected ? 600 : 400,
+                    }}>{tag}</button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                About {(checkOutSession.recipientName || '').split(' ')[0] || 'the care recipient'}
+              </label>
+              <textarea value={checkOutCareFeedback} onChange={e => setCheckOutCareFeedback(e.target.value)}
+                placeholder="How was the visit? Anything the family should know about their condition, mood, or behavior?"
+                style={{ width: '100%', minHeight: 70, padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                Service or logistics notes (optional)
+              </label>
+              <textarea value={checkOutServiceFeedback} onChange={e => setCheckOutServiceFeedback(e.target.value)}
+                placeholder="Issues with the location, supplies, instructions, or our service? e.g. 'Door code was wrong', 'Driveway icy'"
+                style={{ width: '100%', minHeight: 50, padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button onClick={() => setCheckOutSession(null)} style={{
+                padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8,
+                cursor: 'pointer', fontSize: 13,
+              }}>Cancel</button>
+              <button onClick={async () => {
+                setCheckSubmitting(true);
+                try {
+                  const res = await apiFetch('/api/sessions/' + checkOutSession.id + '/check-out', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      departureMood: checkOutMood || null,
+                      conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
+                      careFeedback: checkOutCareFeedback.trim() || null,
+                      serviceFeedback: checkOutServiceFeedback.trim() || null,
+                      summary: checkOutCareFeedback.trim() || null,
+                    }),
+                  });
+                  if (res?.ok) {
+                    showToast('Checked out! Session complete.', 'success');
+                    setCheckOutSession(null);
+                    const refreshRes = await apiFetch('/api/dashboard');
+                    if (refreshRes?.ok) setData(await refreshRes.json());
+                  } else {
+                    const err = await res?.json().catch(() => null);
+                    showToast(err?.error || 'Check-out failed', 'error');
+                  }
+                } catch (e) { showToast('Check-out failed', 'error'); }
+                setCheckSubmitting(false);
+              }} disabled={checkSubmitting} style={{
+                padding: '10px 24px', background: '#c62828', color: '#fff', border: 'none',
+                borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 700,
+                opacity: checkSubmitting ? 0.6 : 1,
+              }}>{checkSubmitting ? 'Submitting...' : 'Complete Session ✓'}</button>
             </div>
           </div>
         </div>

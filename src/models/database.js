@@ -343,6 +343,12 @@ async function initializeDatabase() {
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS permission_tier TEXT DEFAULT 'full'`,
     // v1.31.1 — Visibility settings: which sections the care recipient can see (JSON)
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS visibility_settings TEXT`,
+    // v1.32.0 — Check-in/check-out fields on visit_logs
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS arrival_mood TEXT`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS departure_mood TEXT`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS condition_tags TEXT`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS care_feedback TEXT`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS service_feedback TEXT`,
     // v1.31.0 — Backfill linked_user_id for care_for users whose names match a care_recipient
     `UPDATE care_recipients SET linked_user_id = (
       SELECT u.id FROM users u

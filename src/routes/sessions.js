@@ -687,6 +687,181 @@ router.put("/:id/status", async (req, res) => {
   res.json({ session: updated });
 });
 
+// ─── POST /api/sessions/:id/check-in ───
+// Caregiver checks in — creates visit_log, sets session to in_progress
+router.post("/:id/check-in", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { arrivalMood } = req.body;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can check in" });
+    }
+    if (session.status !== "confirmed") {
+      return res.status(400).json({ error: `Cannot check in — session status is '${session.status}'` });
+    }
+
+    // Transition to in_progress
+    await db.prepare(
+      "UPDATE care_sessions SET status = 'in_progress', updated_at = NOW() WHERE id = ?"
+    ).run(req.params.id);
+
+    // Create visit_log with check-in data
+    const visitId = require("uuid").v4();
+    await db.prepare(`
+      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, created_at)
+      VALUES (?, ?, ?, NOW(), ?, NOW())
+    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood || null);
+
+    // Get special instructions and recent notes for the caregiver
+    const notes = await db.prepare(
+      "SELECT content, created_at FROM recipient_notes WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 5"
+    ).all(session.care_recipient_id);
+
+    // Notify family that session has started
+    const emitToUser = req.app.get("emitToUser");
+    const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "Your caregiver";
+
+    // Activity feed entry
+    await db.prepare(
+      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'session_checkin', ?, ?)"
+    ).run(
+      require("uuid").v4(),
+      session.family_user_id,
+      session.care_recipient_id,
+      `${caregiverName} has checked in`,
+      `Care session with ${session.recipient_first_name} has started. ${arrivalMood ? `Mood on arrival: ${arrivalMood}` : ""}`
+    );
+
+    if (emitToUser) {
+      emitToUser(session.family_user_id, "session_update", {
+        sessionId: req.params.id,
+        status: "in_progress",
+        checkIn: true,
+        arrivalMood,
+      });
+      emitToUser(session.family_user_id, "activity_update", {});
+    }
+
+    res.json({
+      visitLog: { id: visitId, checkInTime: new Date().toISOString(), arrivalMood },
+      specialInstructions: session.special_instructions,
+      recentNotes: notes,
+    });
+  } catch (err) {
+    console.error("Check-in error:", err);
+    res.status(500).json({ error: "Failed to check in" });
+  }
+});
+
+// ─── POST /api/sessions/:id/check-out ───
+// Caregiver checks out — updates visit_log, sets session to completed
+router.post("/:id/check-out", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary } = req.body;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can check out" });
+    }
+    if (session.status !== "in_progress") {
+      return res.status(400).json({ error: `Cannot check out — session status is '${session.status}'` });
+    }
+
+    // Transition to completed
+    await db.prepare(
+      "UPDATE care_sessions SET status = 'completed', updated_at = NOW() WHERE id = ?"
+    ).run(req.params.id);
+
+    // Update visit_log with check-out data
+    const visitLog = await db.prepare(
+      "SELECT * FROM visit_logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(req.params.id);
+
+    if (visitLog) {
+      await db.prepare(`
+        UPDATE visit_logs SET
+          check_out_time = NOW(),
+          departure_mood = ?,
+          condition_tags = ?,
+          care_feedback = ?,
+          service_feedback = ?,
+          summary = ?,
+          mood_rating = ?
+        WHERE id = ?
+      `).run(
+        departureMood || null,
+        conditionTags ? JSON.stringify(conditionTags) : null,
+        careFeedback || null,
+        serviceFeedback || null,
+        summary || null,
+        departureMood || null,
+        visitLog.id
+      );
+    }
+
+    // Notify family
+    const emitToUser = req.app.get("emitToUser");
+    const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "Your caregiver";
+
+    // Build condition summary
+    const tagSummary = conditionTags && conditionTags.length > 0
+      ? ` Noted: ${conditionTags.join(", ")}.`
+      : "";
+
+    await db.prepare(
+      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'session_checkout', ?, ?)"
+    ).run(
+      require("uuid").v4(),
+      session.family_user_id,
+      session.care_recipient_id,
+      `${caregiverName} has checked out`,
+      `Care session with ${session.recipient_first_name} is complete. ${departureMood ? `Mood at departure: ${departureMood}.` : ""}${tagSummary}`
+    );
+
+    if (emitToUser) {
+      emitToUser(session.family_user_id, "session_update", {
+        sessionId: req.params.id,
+        status: "completed",
+        checkOut: true,
+        departureMood,
+        conditionTags,
+      });
+      emitToUser(session.family_user_id, "activity_update", {});
+    }
+
+    res.json({
+      session: { id: req.params.id, status: "completed" },
+      visitLog: visitLog ? { id: visitLog.id } : null,
+    });
+  } catch (err) {
+    console.error("Check-out error:", err);
+    res.status(500).json({ error: "Failed to check out" });
+  }
+});
+
 // ─── PUT /api/sessions/:id/cancel ───
 // Cancel a confirmed/pending session with late-cancel tracking
 router.put("/:id/cancel", async (req, res) => {

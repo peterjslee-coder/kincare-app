@@ -106,7 +106,29 @@
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
-- [ ] **Session check-in/checkout + time extension.** Protocol for caregivers to check in when they arrive and check out when they leave. If they're there 2:30 but it was a 2hr appt, mechanism to request an additional half hour. Caretaker coordinates with care team to approve, gets paid for extra time. *(Feedback — Feb 23, #1)*
+- [ ] **Session check-in/check-out system.** Full clock-in/clock-out protocol for care sessions with structured feedback collection.
+  - **Check-in (caregiver arrives):**
+    - Manual "I'm Here" button on confirmed sessions (v1: manual tap, future: auto-trigger via geofencing when near care location — requires persistent Geolocation API permission, battery-intensive on iOS, so this is a later add-on).
+    - Caregiver can adjust arrival time slightly (e.g., arrived 5 min early).
+    - Caregiver selects care recipient's current mood via emoji + label: 😊 Happy, 😮 Surprised, 😴 Sleepy, 🤗 Busy, 😐 Neutral, 😢 Sad, 😠 Upset.
+    - Check-in screen shows last-minute instructions or notes from the care team (pulled from care recipient notes + session special_instructions).
+    - Care team gets notified that session has begun (activity feed + push notification).
+    - Session status transitions: `confirmed → in_progress`.
+    - *Future:* Auto-trigger audio recording option on care recipient's phone (requires separate consent flow + device pairing).
+  - **Check-out (session ends):**
+    - Caregiver taps "End Session" — prompted with structured feedback:
+    - **Mood on departure:** Same emoji + label picker as check-in (track mood change over session).
+    - **Condition tags (multi-select, tap to toggle):** Descriptive tags about the care recipient during the visit — "Confused", "Anxious", "Good appetite", "No appetite", "Toileting issues", "Wandering", "Good spirits", "Cooperative", "Resistant to care", "Pain/discomfort", "Medication taken", "Medication refused", "Good mobility", "Fall risk", "Engaged in activity", "Withdrawn". These tags are the building blocks for AI insights.
+    - **Care recipient feedback (free-form text):** Focused on the person's condition, behavior, anything the care team should know about Betty (or whoever). Example: "Betty was cheerful today, ate all her lunch, asked about Pete twice."
+    - **Service/logistics feedback (separate free-form text):** About the service experience, the environment, logistics — "Couldn't get up driveway due to ice", "Door code was wrong in description", "Need more supplies in bathroom." Reported separately so it's actionable for the care team without mixing into care recipient health data.
+    - Session status transitions: `in_progress → completed`.
+    - All feedback stored in visit_logs (existing table: check_in_time, check_out_time, mood_rating, tasks_completed, notes — extend with new fields).
+    - Care team gets checkout notification with mood summary.
+  - **Deletability:** Both caregiver and care team can delete individual condition tags or feedback entries after the fact (accidental entries). Deletion is soft-delete with audit trail.
+  - **AI insights integration:** Condition tags and free-form feedback feed into the AI insights engine, scoped per care_recipient_id (not per caregiver — fixes the existing cross-contamination bug). Insights summarize trends: "Betty has been anxious 3 of last 5 visits", "Appetite declining over past 2 weeks."
+  - **Time extension (future):** If caregiver stays past scheduled duration, mechanism to request extra time. Care team approves, caregiver gets paid for actual hours. Ties into Stripe payment flow.
+  - **Schema changes:** Add to visit_logs: `arrival_mood TEXT`, `departure_mood TEXT`, `condition_tags TEXT` (JSON array), `care_feedback TEXT`, `service_feedback TEXT`, `check_in_adjusted INTEGER DEFAULT 0`. Existing columns: check_in_time, check_out_time, mood_rating, tasks_completed, notes, summary.
+  - *(Pete — Feb 25. First session: Cary visiting Betty, Feb 26.)*
 - [ ] **Short-notice upcharge description on financials page.** The <24hr booking surcharge (15% upcharge, worker gets 10% more) is not explained anywhere on the caregiver financials view. Add visible description of pricing rules. Ties into fee percentage inconsistency bug. *(Feedback — Feb 23, #2)*
 - [ ] **Nursing student discount program.** Reduced platform fee (15% vs 20%) for verified nursing students. Validated via email confirmation to partnering school. Advertise the 5% savings to make student caregivers more competitive for matching. *(Feedback — Feb 23, #3)*
 - [ ] **Nursing student program badge + hour reports.** If caregiver signed up as a nursing student with a supported program, show badge on their profile. Generate hour reports they can send to their school. *(Feedback — Feb 23, #4)*
