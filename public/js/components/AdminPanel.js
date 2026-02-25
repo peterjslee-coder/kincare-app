@@ -494,7 +494,7 @@ const AdminPanel = window.AdminPanel = () => {
             boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
           }}>
             <span style={{ fontSize: '24px', lineHeight: 1 }}>{tab.icon}</span>
-            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.3px' }}>{tab.label}</span>
+            <span style={{ fontSize: '11px', fontWeight: activeTab === tab.id ? 700 : 600, letterSpacing: '0.3px' }}>{tab.label}</span>
           </button>
         ))}
       </div>

@@ -48,6 +48,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Availability state
   const [availRules, setAvailRules] = useState([]);
   const [availLoading, setAvailLoading] = useState(false);
+  const [availVisited, setAvailVisited] = useState(false);
   const [showAddRule, setShowAddRule] = useState(false);
   const [editingRule, setEditingRule] = useState(null);
   const [ruleForm, setRuleForm] = useState({
@@ -211,6 +212,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       window.location.hash = '';
     }
   }, []);
+
+  // Mark availability as visited when the tab is opened
+  useEffect(() => {
+    if (activeTab === 'availability') setAvailVisited(true);
+  }, [activeTab]);
 
   // Fetch completed sessions when earnings tab is active
   useEffect(() => {
@@ -540,7 +546,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // First Steps checklist
   const firstSteps = [
     { id: 'profile', label: 'Complete your profile', done: !!(profile.bio && (profile.rateDaytime || profile.hourlyRate)) },
-    { id: 'availability', label: 'Set your availability', done: availRules.length > 0 },
+    { id: 'availability', label: 'Set your availability', done: availRules.length > 0 || availVisited },
     { id: 'stoplight', label: 'Set your care preferences (stoplight)', done: !!stoplightData },
     { id: 'photo', label: 'Upload a profile photo', done: !!profile.avatar_url },
     { id: 'payments', label: 'Set up payments (Stripe)', done: stripeStatus?.status === 'active' },
@@ -766,7 +772,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             boxShadow: activeTab === tab.id ? `0 2px 8px ${rc}4d` : 'none',
           }}>
             <span style={{ fontSize: '24px', lineHeight: 1 }}>{tab.icon}</span>
-            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.3px' }}>{tab.label}</span>
+            <span style={{ fontSize: '11px', fontWeight: activeTab === tab.id ? 700 : 600, letterSpacing: '0.3px' }}>{tab.label}</span>
           </button>
         ))}
       </div>

@@ -682,7 +682,7 @@ const App = () => {
     if (role === 'caregiver') {
       return [
         { id: 'dashboard', icon: '🤝', label: 'My Dashboard' },
-        { id: 'find-work', icon: '🔍', label: 'Find Work' },
+        { id: 'find-work', icon: '🔍', label: 'Find Work', isAction: true },
         { id: 'financials', icon: '💰', label: 'Financials' },
         { id: 'messages', icon: '💬', label: 'Messages' },
       ];
@@ -757,7 +757,7 @@ const App = () => {
     if (role === 'caregiver') {
       return [
         { id: 'dashboard', icon: '🤝', label: 'Home' },
-        { id: 'find-work', icon: '🔍', label: 'Find Work' },
+        { id: 'find-work', icon: '🔍', label: 'Find Work', isAccent: true },
         { id: 'financials', icon: '💰', label: 'Money' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'account', icon: '👤', label: 'Account' },
@@ -847,11 +847,14 @@ const App = () => {
         <nav style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <ul className="nav-menu">
             {getNavItems().map(item => {
-              // Request Care action button
+              // Action button (orange highlight) — Request Care for family, Find Work for caregiver
               if (item.isAction) {
+                const actionClick = item.id === '_request_care'
+                  ? () => { setShowRequestCareModal(true); setSidebarOpen(false); }
+                  : () => { handlePageChange(item.id); setSidebarOpen(false); };
                 return (
                   <li key={item.id} className="nav-item" style={{ padding: '4px 8px' }}>
-                    <button onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '10px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.3px' }}>
+                    <button onClick={actionClick} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '10px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.3px' }}>
                       <span style={{ fontSize: 16 }}>{item.icon}</span> {item.label}
                     </button>
                   </li>
@@ -955,8 +958,8 @@ const App = () => {
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav">
         {getBottomNavItems().map(item => (
-          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)} style={{ position: 'relative' }}>
-            <span className="bottom-nav-icon">{item.icon}</span>
+          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)} style={{ position: 'relative', ...(item.isAccent && currentPage !== item.id ? { color: '#e8724a' } : {}) }}>
+            <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: '#fff3ed', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
             {item.id === 'messages' && unreadMsgCount > 0 && (
               <span style={{
                 position: 'absolute', top: 2, right: '50%', marginRight: -18,

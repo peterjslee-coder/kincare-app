@@ -362,12 +362,21 @@ const CareProfile = window.CareProfile = () => {
           </button>
         </div>
         {notes.length > 0 ? notes.map((n) => (
-          <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
-            <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5 }}>{n.content}</div>
-            <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
-              {n.author_first_name} {n.author_last_name}
-              {' · '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+          <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5 }}>{n.content}</div>
+              <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
+                {n.author_first_name} {n.author_last_name}
+                {' · '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+              </div>
             </div>
+            {canEdit && (
+              <button onClick={async () => {
+                if (!confirm('Delete this note?')) return;
+                const res = await apiFetch(`/api/notes/${n.id}`, { method: 'DELETE' });
+                if (res?.ok) fetchNotes(profile.id);
+              }} style={{ padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: 4, cursor: 'pointer', fontSize: 11, color: '#c00', whiteSpace: 'nowrap', flexShrink: 0 }}>Delete</button>
+            )}
           </div>
         )) : (
           <p style={{ color: '#999', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
