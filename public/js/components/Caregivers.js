@@ -228,32 +228,78 @@ const Caregivers = window.Caregivers = () => {
       bounds.push([searchCenter.lat, searchCenter.lng]);
     }
 
+    // Build set of caregiver IDs already in location results to avoid duplicates
+    const locationCgIds = new Set(locationResults.map(cg => cg.id));
+
+    // Merge: location results + assigned caregivers not already in results
+    // If a caregiver has no lat/lng, fall back to search center or recipient location
+    const fallbackLat = searchCenter?.lat || (recipients[0] && (recipients[0].latitude || recipients[0].lat));
+    const fallbackLng = searchCenter?.lng || (recipients[0] && (recipients[0].longitude || recipients[0].lng));
+    const allMapCaregivers = [...locationResults];
+    assignments.forEach(a => {
+      const cg = caregivers.find(c => c.id === a.caregiver_profile_id);
+      if (cg && !locationCgIds.has(cg.id)) {
+        const lat = cg.latitude || fallbackLat;
+        const lng = cg.longitude || fallbackLng;
+        if (lat && lng) {
+          allMapCaregivers.push({ ...cg, latitude: lat, longitude: lng, isAssigned: true, distance: null });
+        }
+      }
+    });
+
     // Caregiver pins
-    locationResults.forEach((cg) => {
+    allMapCaregivers.forEach((cg) => {
       if (!cg.latitude || !cg.longitude) return;
+
+      const isAssigned = cg.isAssigned || assignedCaregiverIds.includes(cg.id);
+      const pinColor = isAssigned ? '#e8724a' : '#1b6b5a';
+      const distLabel = cg.distance != null ? ` &bull; ${cg.distance}mi` : '';
+      const photoHtml = cg.profilePhoto
+        ? `<img src="${cg.profilePhoto}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid ${pinColor};margin-right:8px;flex-shrink:0" />`
+        : `<div style="width:32px;height:32px;border-radius:50%;background:${pinColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;border:2px solid #fff;margin-right:8px;flex-shrink:0">${(cg.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>`;
 
       const icon = L.divIcon({
         className: '',
         html: `<div style="
-          background:#1b6b5a;color:#fff;padding:5px 10px;border-radius:8px 8px 8px 0;
+          background:${pinColor};color:#fff;padding:5px 10px;border-radius:8px 8px 8px 0;
           font-size:11px;font-weight:600;white-space:nowrap;
           box-shadow:0 2px 6px rgba(0,0,0,0.3);
           font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;
           transform:translate(-50%,-100%);
         ">
-          ${cg.name} &bull; ${cg.distance}mi
+          ${isAssigned ? '⭐ ' : ''}${cg.name}${distLabel}
         </div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 30],
       });
 
       const marker = L.marker([cg.latitude, cg.longitude], { icon }).addTo(map);
+
+      // Hover tooltip with thumbnail
+      marker.bindTooltip(`
+        <div style="display:flex;align-items:center;font-family:sans-serif;padding:2px">
+          ${photoHtml}
+          <div>
+            <div style="font-weight:700;font-size:12px">${cg.name}</div>
+            <div style="font-size:10px;color:#666">${isAssigned ? 'Assigned' : ''}${cg.distance != null ? `${isAssigned ? ' · ' : ''}${cg.distance}mi away` : ''}</div>
+          </div>
+        </div>
+      `, { direction: 'top', offset: [0, -35], className: 'caregiver-tooltip' });
+
+      // Click popup with full details + View Profile button
       marker.bindPopup(`
-        <div style="min-width:160px;font-family:sans-serif">
-          <div style="font-weight:700;font-size:13px;margin-bottom:3px">${cg.name}</div>
-          <div style="font-size:11px;color:#666">${cg.distance} miles away</div>
-          <div style="font-size:11px;color:#888;margin-top:2px">⭐ ${cg.rating || '—'} &bull; Day $${cg.rateDaytime || cg.hourlyRate}${cg.rateNighttime && cg.rateNighttime !== cg.rateDaytime ? ` · Night $${cg.rateNighttime}` : ''}/hr</div>
-          <div style="font-size:10px;color:#1b6b5a;margin-top:4px">${(cg.specialties || []).join(', ')}</div>
+        <div style="min-width:180px;font-family:sans-serif">
+          <div style="display:flex;align-items:center;margin-bottom:6px">
+            ${photoHtml}
+            <div>
+              <div style="font-weight:700;font-size:13px">${cg.name}</div>
+              ${isAssigned ? '<div style="font-size:10px;color:#e8724a;font-weight:600">⭐ Assigned</div>' : ''}
+            </div>
+          </div>
+          ${cg.distance != null ? `<div style="font-size:11px;color:#666">${cg.distance} miles away</div>` : ''}
+          <div style="font-size:11px;color:#888;margin-top:2px"><span title="Family rating">⭐ ${cg.rating || '—'}</span> &bull; Day $${cg.rateDaytime || cg.hourlyRate}${cg.rateNighttime && cg.rateNighttime !== cg.rateDaytime ? ` · Night $${cg.rateNighttime}` : ''}/hr</div>
+          <div style="font-size:10px;color:#1b6b5a;margin-top:4px">${(cg.specialties || []).join(', ') || 'General care'}</div>
+          <button data-cg-id="${cg.id}" class="map-view-profile-btn" style="margin-top:8px;width:100%;padding:6px;background:#1b6b5a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">View Profile</button>
         </div>
       `);
       markersRef.current.push(marker);
@@ -263,7 +309,19 @@ const Caregivers = window.Caregivers = () => {
     if (bounds.length > 0) {
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
     }
-  }, [locationResults, searchCenter, activeTab]);
+
+    // Event delegation for "View Profile" buttons in popups
+    const handlePopupClick = (e) => {
+      const btn = e.target.closest('.map-view-profile-btn');
+      if (btn) {
+        const cgId = btn.getAttribute('data-cg-id');
+        const cg = caregivers.find(c => c.id === cgId);
+        if (cg) setSchedulingCaregiver(cg);
+      }
+    };
+    mapContainer.addEventListener('click', handlePopupClick);
+    return () => { mapContainer.removeEventListener('click', handlePopupClick); };
+  }, [locationResults, searchCenter, activeTab, assignments, caregivers, recipients]);
 
   // Build a lookup: which caregiver profiles are assigned
   const assignedMap = {};
