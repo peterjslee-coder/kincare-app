@@ -935,9 +935,11 @@ router.put("/:id/cancel", async (req, res) => {
     }
 
     // Check if this is a late cancellation (<24 hours before session)
+    // No caregiver assigned = always free cancel (no one to compensate)
     const sessionDateTime = new Date(`${session.scheduled_date}T${session.scheduled_time || "00:00"}`);
     const hoursUntilSession = (sessionDateTime - new Date()) / (1000 * 60 * 60);
-    const isLateCancel = hoursUntilSession < 24;
+    const hasCaregiver = !!session.caregiver_id;
+    const isLateCancel = hasCaregiver && hoursUntilSession < 24;
 
     if (cancelledBy === "caregiver") {
       // Caregiver drops the job — revert to open so other caregivers can claim it
@@ -970,15 +972,16 @@ router.put("/:id/cancel", async (req, res) => {
 
     const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
 
-    // Activity feed entry
-    const cancellerName = cancelledBy === "caregiver" ? "Caregiver" : "Family";
+    // Activity feed entry — use the actual person's name
+    const canceller = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const cancellerName = canceller ? `${canceller.first_name} ${canceller.last_name}` : (cancelledBy === "caregiver" ? "Caregiver" : "Family member");
     await db.prepare(
       "INSERT INTO activity_feed (id, family_user_id, event_type, title, message) VALUES (?, ?, 'session_cancelled', ?, ?)"
     ).run(
       uuid(),
       session.family_user_id,
       `Session Cancelled by ${cancellerName}`,
-      `${session.service_type} session on ${session.scheduled_date} was cancelled${isLateCancel ? " (late cancellation)" : ""}.${reason ? " Reason: " + reason : ""}`
+      `${session.service_type} session on ${session.scheduled_date} was cancelled by ${cancellerName}${isLateCancel ? " (late cancellation)" : ""}.${reason ? " Reason: " + reason : ""}`
     );
 
     // Notify the other party via WebSocket
@@ -1000,10 +1003,11 @@ router.put("/:id/cancel", async (req, res) => {
       session: updated,
       cancelledBy,
       isLateCancel,
+      hasCaregiver,
       // Family can review caregiver if caregiver late-cancelled
       canReview: cancelledBy === "caregiver" && isLateCancel,
       cancelledCaregiverId: cancelledBy === "caregiver" ? session.caregiver_id : null,
-      // Family still owes payment if they late-cancelled
+      // Family still owes payment if they late-cancelled (only if caregiver was assigned)
       chargeApplies: cancelledBy === "family" && isLateCancel,
     });
   } catch (err) {

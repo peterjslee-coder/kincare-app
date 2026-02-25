@@ -238,9 +238,11 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 {inviting ? 'Sending...' : 'Send Invite'}
               </button>
             </div>
-            <p style={{ fontSize: 12, color: '#888', margin: '8px 0 0' }}>
-              Members can view and coordinate care. Viewers have read-only access.
-            </p>
+            <div style={{ fontSize: 12, color: '#666', margin: '10px 0 0', background: '#f8f9fa', padding: '10px 12px', borderRadius: 8, lineHeight: 1.6 }}>
+              <div style={{ marginBottom: 4 }}><strong style={{ color: '#1b6b5a' }}>Leader</strong> — Full control: manage members, edit care profile, schedule sessions, assign caregivers, manage payments.</div>
+              <div style={{ marginBottom: 4 }}><strong style={{ color: '#0066cc' }}>Member</strong> — View and coordinate: see the schedule, send messages, request care, view care notes. Cannot invite/remove members.</div>
+              <div><strong style={{ color: '#888' }}>View Only</strong> — Read-only access: see the schedule and care notes, but cannot make changes or send messages on behalf of the team.</div>
+            </div>
           </form>
         </div>
       )}

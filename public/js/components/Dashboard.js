@@ -768,12 +768,18 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
               if (!s) return null;
               const sessionDT = parseTimestamp(`${s.date}T${s.time || '00:00'}`) || new Date(`${s.date}T${s.time || '00:00'}`);
               const hoursAway = (sessionDT - new Date()) / (1000 * 60 * 60);
-              const isLate = hoursAway < 24;
+              const hasCaregiver = !!s.caregiverName;
+              const isLate = hasCaregiver && hoursAway < 24;
               return (
                 <div>
                   <div style={{ fontSize: 14, color: '#333', marginBottom: 12 }}>
                     {s.recipientName} — {s.date ? (parseTimestamp(s.date + 'T12:00:00') || new Date(s.date + 'T12:00:00')).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''} at {s.time}
                   </div>
+                  {!hasCaregiver && (
+                    <div style={{ padding: '10px 14px', background: '#e8f5e9', borderRadius: 8, border: '1px solid #c8e6c9', marginBottom: 12, fontSize: 13, color: '#2e7d32' }}>
+                      No caregiver assigned yet — free to cancel with no fee.
+                    </div>
+                  )}
                   {isLate && (
                     <div style={{ padding: '10px 14px', background: '#fff3e0', borderRadius: 8, border: '1px solid #ffe082', marginBottom: 12, fontSize: 13, color: '#e65100' }}>
                       This is a <strong>late cancellation</strong> (less than 24 hours before the session). You will still be charged for this session.

@@ -723,14 +723,23 @@ const Messages = window.Messages = () => {
                   transform: isSwiping ? `translateX(${swipeOffset}px)` : 'none',
                   transition: isSwiping ? 'none' : 'transform 0.2s',
                 }}>
+                <div style={{ position: 'relative', flexShrink: 0 }}>
                 <div style={{
                   width: '44px', height: '44px', borderRadius: isGroup ? '12px' : '50%',
                   background: isGroup ? '#e8f5e9' : getAvatarColor(c.name),
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: isGroup ? '#1b6b5a' : 'white', fontSize: isGroup ? '20px' : '15px',
-                  fontWeight: 600, flexShrink: 0,
+                  fontWeight: 600,
                 }}>
                   {isGroup ? (typeIcon || '👥') : getInitials(c.name)}
+                </div>
+                {c.unreadCount > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '-2px', right: '-2px',
+                    width: '12px', height: '12px', borderRadius: '50%',
+                    background: '#ef4444', border: '2px solid #fff',
+                  }} />
+                )}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>

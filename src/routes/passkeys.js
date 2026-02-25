@@ -232,6 +232,15 @@ router.post("/authenticate/verify", async (req, res) => {
       return res.status(401).json({ error: "Passkey not recognized. Please sign in with your password." });
     }
 
+    // Security: if user provided an email, verify the passkey belongs to that user
+    // This prevents cross-account login when a device has multiple users' passkeys
+    if (stored.userId && stored.userId !== passkey.uid) {
+      console.warn(`  [passkey] BLOCKED cross-account login: email user ${stored.userId} but passkey belongs to ${passkey.uid} (${passkey.email})`);
+      return res.status(401).json({
+        error: "This passkey belongs to a different account. Please use the correct passkey or sign in with your password.",
+      });
+    }
+
     if (!passkey.is_active) {
       return res.status(401).json({ error: "Account is deactivated" });
     }
