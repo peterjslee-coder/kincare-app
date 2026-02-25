@@ -870,6 +870,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           sessions={sessions}
           availRules={availRules}
           fetchAvailability={fetchAvailability}
+          earlyCheckInAllowed={profile.earlyCheckInAllowed}
           onLogVisit={(s) => {
             if (s.action === 'check-in') {
               setCheckInMood('');

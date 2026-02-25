@@ -272,6 +272,7 @@ async function caregiverDashboard(db, userId, res) {
       city: profile.location_city,
       state: profile.location_state,
       onboardingComplete: !!profile.onboarding_complete,
+      earlyCheckInAllowed: !!profile.early_check_in_allowed,
       background_check_paid: !!profile.background_check_paid,
       isBackgroundChecked: !!profile.is_background_checked,
       checkrStatus: profile.checkr_status || 'pending',

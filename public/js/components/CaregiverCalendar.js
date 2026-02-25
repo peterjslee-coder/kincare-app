@@ -1,6 +1,6 @@
 // ─── CaregiverCalendar — Weekly calendar with availability overlay + care requests ───
 // Green = available, Blue = booked session, Orange = care request, Red striped = blocked, Gray = off
-const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, availRules, fetchAvailability, onLogVisit }) => {
+const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, availRules, fetchAvailability, onLogVisit, earlyCheckInAllowed }) => {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(() => new Date());
   const [allSessions, setAllSessions] = useState([]);
@@ -560,7 +560,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         {s.status === 'confirmed' && onLogVisit && (() => {
                           const sTime = s.scheduled_time || s.time;
                           const sDate = s.scheduled_date || s.date;
-                          if (sDate && sTime) {
+                          if (sDate && sTime && !earlyCheckInAllowed) {
                             const sessionStart = new Date(sDate + 'T' + sTime + ':00');
                             const earliest = new Date(sessionStart.getTime() - 15 * 60000);
                             const now = new Date();
