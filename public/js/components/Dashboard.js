@@ -582,7 +582,10 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           </div>
           <ul className="sessions-list">
             {upcoming.length > 0 ? upcoming.map((s, idx) => (
-              <li key={idx} className="session-item">
+              <li key={idx} className="session-item" onClick={() => {
+                if (s.date) window.__pendingScheduleDate = s.date;
+                if (onNavigate) onNavigate('schedule');
+              }} style={{ cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a2e' }}>
