@@ -4,6 +4,7 @@ const Messages = window.Messages = () => {
   const [activeConvType, setActiveConvType] = useState('direct');
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
+  const draftsRef = useRef({});
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
@@ -166,9 +167,20 @@ const Messages = window.Messages = () => {
         body: JSON.stringify({ action }),
       });
       if (res?.ok) {
+        const data = await res.json();
         showToast(action === 'accept' ? 'Connected!' : 'Request declined', 'success');
         fetchPendingRequests();
-        fetchContacts(); // Refresh contacts list since new connection is now messageable
+        fetchContacts();
+        if (action === 'accept') {
+          // Auto-open conversation with the newly connected user
+          await fetchConversations();
+          if (data.conversationId) {
+            setActiveConvId(data.conversationId);
+            setActiveConvType('direct');
+            setInputText('');
+            fetchMessages(data.conversationId);
+          }
+        }
       }
     } catch { showToast('Failed to respond', 'error'); }
   };
@@ -212,15 +224,30 @@ const Messages = window.Messages = () => {
   }, [activeConvId]);
 
   const handleSelectConversation = (conv) => {
+    // Save current draft before switching
+    if (activeConvId && inputText.trim()) {
+      draftsRef.current[activeConvId] = inputText;
+    } else if (activeConvId) {
+      delete draftsRef.current[activeConvId];
+    }
     setActiveConvId(conv.id);
     setActiveConvType(conv.type || 'direct');
     setShowNewChat(false);
     setCreatingGroup(false);
+    // Restore draft for the new conversation
+    setInputText(draftsRef.current[conv.id] || '');
     fetchMessages(conv.id);
   };
 
   const handleBack = () => {
+    // Save draft before leaving
+    if (activeConvId && inputText.trim()) {
+      draftsRef.current[activeConvId] = inputText;
+    } else if (activeConvId) {
+      delete draftsRef.current[activeConvId];
+    }
     setActiveConvId(null);
+    setInputText('');
     setMessages([]);
     fetchConversations();
   };
@@ -299,6 +326,7 @@ const Messages = window.Messages = () => {
       if (res?.ok) {
         const data = await res.json();
         setInputText('');
+        delete draftsRef.current[activeConvId];
         // If conversation ID changed (legacy migration), update it
         if (data.conversationId && data.conversationId !== activeConvId) {
           setActiveConvId(data.conversationId);

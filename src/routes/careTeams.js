@@ -367,6 +367,21 @@ router.post("/accept-invite", authenticate, async (req, res) => {
     // Mark invite as accepted
     await db.prepare("UPDATE care_team_invites SET status = 'accepted' WHERE id = ?").run(invite.id);
 
+    // Auto-connect with all existing team members for direct messaging
+    const existingMembers = await db.prepare(
+      "SELECT user_id FROM care_team_members WHERE care_team_id = ? AND user_id != ?"
+    ).all(invite.care_team_id, req.user.id);
+    for (const member of existingMembers) {
+      const existingConn = await db.prepare(
+        "SELECT id FROM connections WHERE (requester_id = ? AND recipient_id = ?) OR (requester_id = ? AND recipient_id = ?)"
+      ).get(req.user.id, member.user_id, member.user_id, req.user.id);
+      if (!existingConn) {
+        await db.prepare(
+          "INSERT INTO connections (id, requester_id, recipient_id, status) VALUES (?, ?, ?, 'accepted')"
+        ).run(uuid(), req.user.id, member.user_id);
+      }
+    }
+
     // Auto-add to care team conversation
     const careTeamConv = await db.prepare(
       "SELECT id FROM conversations WHERE care_team_id = ? AND type = 'care_team'"

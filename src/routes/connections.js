@@ -158,7 +158,31 @@ router.put("/:id", async (req, res) => {
     await db.prepare("UPDATE connections SET status = ?, updated_at = NOW() WHERE id = ?")
       .run(newStatus, req.params.id);
 
+    let conversationId = null;
     if (action === 'accept') {
+      // Auto-create a direct conversation between the two users
+      const existingConv = await db.prepare(`
+        SELECT c.id FROM conversations c
+        JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
+        JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
+        WHERE c.type = 'direct'
+      `).get(conn.requester_id, conn.recipient_id);
+
+      if (existingConv) {
+        conversationId = existingConv.id;
+      } else {
+        conversationId = uuid();
+        await db.prepare(
+          "INSERT INTO conversations (id, type, created_by) VALUES (?, 'direct', ?)"
+        ).run(conversationId, conn.recipient_id);
+        await db.prepare(
+          "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')"
+        ).run(uuid(), conversationId, conn.requester_id);
+        await db.prepare(
+          "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')"
+        ).run(uuid(), conversationId, conn.recipient_id);
+      }
+
       // Notify requester
       await db.prepare(
         "INSERT INTO activity_feed (id, family_user_id, event_type, title, message) VALUES (?, ?, 'connection_accepted', ?, ?)"
@@ -169,7 +193,7 @@ router.put("/:id", async (req, res) => {
       if (emitToUser) emitToUser(conn.requester_id, "activity_update", { type: "connection_accepted" });
     }
 
-    res.json({ message: `Connection ${newStatus}` });
+    res.json({ message: `Connection ${newStatus}`, conversationId });
   } catch (err) {
     console.error("Update connection error:", err);
     res.status(500).json({ error: "Failed to update connection" });
