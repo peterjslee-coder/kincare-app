@@ -133,8 +133,9 @@ router.post("/register/verify", authenticate, async (req, res) => {
     const db = await getDb();
     const passkeyId = uuid();
 
-    // Encode credential.id (Uint8Array) as base64url for storage
-    const credentialIdB64 = Buffer.from(credential.id).toString("base64url");
+    // credential.id is already base64url string in SimpleWebAuthn v11
+    // credential.publicKey is Uint8Array — encode it for storage
+    const credentialIdB64 = credential.id;
     const publicKeyB64 = Buffer.from(credential.publicKey).toString("base64url");
 
     const passkeyName = req.body.passkeyName || "Passkey";
