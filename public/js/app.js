@@ -696,12 +696,14 @@ const App = () => {
     // family (default)
     const familyNav = [
       { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
-      { id: 'care-profile', icon: '🌷', label: 'Care Profile' },
+      { id: '_request_care', icon: '➕', label: 'Request Care', isAction: true },
+      { id: 'care-profile', icon: '🌷', label: 'Care Profile', children: [
+        { id: 'recipients', icon: '👥', label: 'Recipients' },
+      ]},
       { id: 'care-team', icon: '👪', label: 'Care Team' },
-      { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
       { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
+      { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
-      { id: 'recipients', icon: '👥', label: 'Recipients' },
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'payments', icon: '💳', label: 'Payments' },
     ];
@@ -844,27 +846,48 @@ const App = () => {
         )}
         <nav style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <ul className="nav-menu">
-            {getNavItems().map(item => (
-              <li key={item.id} className="nav-item">
-                <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)} style={{ position: 'relative' }}>
-                  <span className="nav-icon">{item.icon}</span>
-                  {item.label}
-                  {item.id === 'messages' && unreadMsgCount > 0 && (
-                    <span style={{
-                      marginLeft: 'auto', background: '#e8724a', color: '#fff', borderRadius: 10,
-                      padding: '1px 6px', fontSize: 10, fontWeight: 700,
-                      minWidth: 18, textAlign: 'center', lineHeight: '16px',
-                    }}>{unreadMsgCount > 99 ? '99+' : unreadMsgCount}</span>
+            {getNavItems().map(item => {
+              // Request Care action button
+              if (item.isAction) {
+                return (
+                  <li key={item.id} className="nav-item" style={{ padding: '4px 8px' }}>
+                    <button onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '10px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.3px' }}>
+                      <span style={{ fontSize: 16 }}>{item.icon}</span> {item.label}
+                    </button>
+                  </li>
+                );
+              }
+              // Nav item with children dropdown
+              const isParentActive = currentPage === item.id || (item.children && item.children.some(c => currentPage === c.id));
+              return (
+                <li key={item.id} className="nav-item">
+                  <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)} style={{ position: 'relative' }}>
+                    <span className="nav-icon">{item.icon}</span>
+                    {item.label}
+                    {item.id === 'messages' && unreadMsgCount > 0 && (
+                      <span style={{
+                        marginLeft: 'auto', background: '#e8724a', color: '#fff', borderRadius: 10,
+                        padding: '1px 6px', fontSize: 10, fontWeight: 700,
+                        minWidth: 18, textAlign: 'center', lineHeight: '16px',
+                      }}>{unreadMsgCount > 99 ? '99+' : unreadMsgCount}</span>
+                    )}
+                  </button>
+                  {item.children && isParentActive && (
+                    <ul style={{ listStyle: 'none', margin: 0, padding: '2px 0 2px 20px' }}>
+                      {item.children.map(child => (
+                        <li key={child.id}>
+                          <button className={`nav-link ${currentPage === child.id ? 'active' : ''}`} onClick={() => handlePageChange(child.id)} style={{ fontSize: 13, padding: '6px 12px' }}>
+                            <span className="nav-icon" style={{ fontSize: 14 }}>{child.icon}</span>
+                            {child.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </button>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
-          {role === 'family' && (
-            <button onClick={() => { setShowRequestCareModal(true); setSidebarOpen(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: 'calc(100% - 16px)', margin: '12px 8px', padding: '10px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.3px' }}>
-              <span style={{ fontSize: 16 }}>➕</span> Request Care
-            </button>
-          )}
           <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <ul className="nav-menu" style={{ marginBottom: 0 }}>
               {getBottomSidebarItems().map(item => (
