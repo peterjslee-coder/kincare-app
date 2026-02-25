@@ -557,12 +557,25 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                           color: s.status === 'in_progress' ? '#f57f17' : s.status === 'confirmed' ? '#2e7d32' : s.status === 'completed' ? '#666' : '#e65100',
                           textTransform: 'capitalize',
                         }}>{s.status}</span>
-                        {s.status === 'confirmed' && onLogVisit && (
-                          <button onClick={() => onLogVisit({ ...s, action: 'check-in' })} style={{
-                            padding: '4px 10px', background: '#e8724a', color: '#fff', border: 'none',
-                            borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 700,
-                          }}>Check In</button>
-                        )}
+                        {s.status === 'confirmed' && onLogVisit && (() => {
+                          const sTime = s.scheduled_time || s.time;
+                          const sDate = s.scheduled_date || s.date;
+                          if (sDate && sTime) {
+                            const sessionStart = new Date(sDate + 'T' + sTime + ':00');
+                            const earliest = new Date(sessionStart.getTime() - 15 * 60000);
+                            const now = new Date();
+                            if (now < earliest) {
+                              const minsUntil = Math.ceil((earliest.getTime() - now.getTime()) / 60000);
+                              return React.createElement('div', { style: { fontSize: 10, color: '#999', padding: '4px 0', textAlign: 'right', maxWidth: 110 } },
+                                '\u23F0 Check-in opens ' + (minsUntil > 60 ? Math.ceil(minsUntil / 60) + 'h' : minsUntil + 'min') + ' before'
+                              );
+                            }
+                          }
+                          return React.createElement('button', {
+                            onClick: () => onLogVisit({ ...s, action: 'check-in' }),
+                            style: { padding: '4px 10px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 700 }
+                          }, 'Check In');
+                        })()}
                         {s.status === 'in_progress' && onLogVisit && (
                           <button onClick={() => onLogVisit({ ...s, action: 'check-out' })} style={{
                             padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none',

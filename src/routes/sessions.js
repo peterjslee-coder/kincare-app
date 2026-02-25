@@ -4,7 +4,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { validateSession } = require("../middleware/validate");
 const availabilityRouter = require("./availability");
-const { sendPushToUser, notifyAdmins } = require("./push");
+const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
 
 const router = express.Router();
@@ -306,6 +306,19 @@ router.put("/:id/claim", async (req, res) => {
   `).get(session.care_recipient_id);
   if (careForUser) {
     if (emitToUser) emitToUser(careForUser.id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+  }
+
+  // Schedule pre-check-in reminders if session is today and within the notification window
+  if (session.scheduled_date && session.scheduled_time) {
+    const REMINDER_WINDOW = 15;
+    const sessionStart = new Date(`${session.scheduled_date}T${session.scheduled_time}:00`);
+    const reminderTime = new Date(sessionStart.getTime() - REMINDER_WINDOW * 60000);
+    const now = new Date();
+    if (now >= reminderTime && now <= sessionStart) {
+      // Session is within the notification window right now — send immediately
+      sendSessionReminders(req.params.id, "pre_check_in").catch(() => {});
+    }
+    // Otherwise the background poller will pick it up when the time comes
   }
 
   res.json({ session: updated });
@@ -689,13 +702,14 @@ router.put("/:id/status", async (req, res) => {
 
 // ─── POST /api/sessions/:id/check-in ───
 // Caregiver checks in — creates visit_log, sets session to in_progress
+// Timing gate: can only check in within 15 min of session start (or after start if late)
 router.post("/:id/check-in", async (req, res) => {
   try {
     const db = await getDb();
-    const { arrivalMood } = req.body;
+    const { arrivalMood, checkInLatitude, checkInLongitude } = req.body;
 
     const session = await db.prepare(`
-      SELECT cs.*, cp.user_id AS caregiver_user_id,
+      SELECT cs.*, cp.user_id AS caregiver_user_id, cp.early_check_in_allowed,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
@@ -711,17 +725,35 @@ router.post("/:id/check-in", async (req, res) => {
       return res.status(400).json({ error: `Cannot check in — session status is '${session.status}'` });
     }
 
+    // ─── Timing gate: 15 min before session start ───
+    // Allow check-in after start time (late is fine), but block too-early check-ins
+    const CHECK_IN_WINDOW_MINUTES = 15;
+    if (session.scheduled_date && session.scheduled_time) {
+      const sessionStart = new Date(`${session.scheduled_date}T${session.scheduled_time}:00`);
+      const earliestCheckIn = new Date(sessionStart.getTime() - CHECK_IN_WINDOW_MINUTES * 60000);
+      const now = new Date();
+
+      if (now < earliestCheckIn && !session.early_check_in_allowed) {
+        return res.status(400).json({
+          error: "Check-in window not open yet",
+          message: `You can check in starting ${CHECK_IN_WINDOW_MINUTES} minutes before your session at ${session.scheduled_time}`,
+          checkInOpensAt: earliestCheckIn.toISOString(),
+          sessionStartsAt: sessionStart.toISOString(),
+        });
+      }
+    }
+
     // Transition to in_progress
     await db.prepare(
       "UPDATE care_sessions SET status = 'in_progress', updated_at = NOW() WHERE id = ?"
     ).run(req.params.id);
 
-    // Create visit_log with check-in data
+    // Create visit_log with check-in data + location
     const visitId = require("uuid").v4();
     await db.prepare(`
-      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, created_at)
-      VALUES (?, ?, ?, NOW(), ?, NOW())
-    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood || null);
+      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, created_at)
+      VALUES (?, ?, ?, NOW(), ?, ?, ?, NOW())
+    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood || null, checkInLatitude || null, checkInLongitude || null);
 
     // Get special instructions and recent notes for the caregiver
     const notes = await db.prepare(
@@ -755,7 +787,13 @@ router.post("/:id/check-in", async (req, res) => {
     }
 
     res.json({
-      visitLog: { id: visitId, checkInTime: new Date().toISOString(), arrivalMood },
+      visitLog: {
+        id: visitId,
+        checkInTime: new Date().toISOString(),
+        arrivalMood,
+        checkInLatitude: checkInLatitude || null,
+        checkInLongitude: checkInLongitude || null,
+      },
       specialInstructions: session.special_instructions,
       recentNotes: notes,
     });

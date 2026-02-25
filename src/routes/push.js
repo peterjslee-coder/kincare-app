@@ -312,6 +312,91 @@ async function sendPushToUser(userId, payload, eventType) {
   }
 }
 
+// ─── Session reminder notifications ───
+// Sends pre-check-in or pre-check-out push notifications for a session
+// reminderType: 'pre_check_in' or 'pre_check_out'
+async function sendSessionReminders(sessionId, reminderType) {
+  try {
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        cr.linked_user_id AS care_for_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(sessionId);
+
+    if (!session) return;
+
+    const caregiver = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(session.caregiver_user_id);
+    const caregiverName = caregiver ? `${caregiver.first_name} ${caregiver.last_name}` : "Your caregiver";
+    const recipientName = `${session.recipient_first_name || ""} ${session.recipient_last_name || ""}`.trim() || "your loved one";
+
+    if (reminderType === "pre_check_in") {
+      // 1. To caregiver: "Get ready to check in"
+      if (session.caregiver_user_id) {
+        await sendPushToUser(session.caregiver_user_id, {
+          title: "Get Ready to Check In",
+          body: `Time to check in with ${recipientName} (session at ${session.scheduled_time})`,
+          data: { type: "check_in_reminder", sessionId, page: "schedule" },
+        }, "check_in_reminder");
+      }
+
+      // 2. To care team (family): "Caregiver arriving soon"
+      if (session.family_user_id) {
+        await sendPushToUser(session.family_user_id, {
+          title: "Caregiver Arriving Soon",
+          body: `${caregiverName} is about to check in with ${recipientName}`,
+          data: { type: "caregiver_arriving", sessionId, page: "dashboard" },
+        }, "caregiver_arriving");
+      }
+
+      // 3. To care recipient (if linked user exists): "Your caregiver is almost here!"
+      if (session.care_for_user_id) {
+        await sendPushToUser(session.care_for_user_id, {
+          title: "Your Caregiver is Almost Here!",
+          body: `${caregiverName} will be at your door soon!`,
+          data: { type: "caregiver_arriving_recipient", sessionId },
+        }, "caregiver_arriving_recipient");
+      }
+
+      console.log(`  Session reminders (pre_check_in) sent for session ${sessionId}`);
+    } else if (reminderType === "pre_check_out") {
+      // 1. To caregiver: "Time to wrap up"
+      if (session.caregiver_user_id) {
+        await sendPushToUser(session.caregiver_user_id, {
+          title: "Time to Wrap Up",
+          body: `Get ready to check out with ${recipientName}`,
+          data: { type: "check_out_reminder", sessionId, page: "schedule" },
+        }, "check_out_reminder");
+      }
+
+      // 2. To care team: "Session wrapping up"
+      if (session.family_user_id) {
+        await sendPushToUser(session.family_user_id, {
+          title: "Session Wrapping Up",
+          body: `${caregiverName} is nearly done at ${recipientName}'s`,
+          data: { type: "check_out_imminent", sessionId, page: "dashboard" },
+        }, "check_out_imminent");
+      }
+
+      console.log(`  Session reminders (pre_check_out) sent for session ${sessionId}`);
+    }
+
+    // Mark this reminder as sent on the session (prevents duplicates)
+    const existing = session.notifications_sent ? JSON.parse(session.notifications_sent) : [];
+    if (!existing.includes(reminderType)) {
+      existing.push(reminderType);
+      await db.prepare("UPDATE care_sessions SET notifications_sent = ? WHERE id = ?")
+        .run(JSON.stringify(existing), sessionId);
+    }
+  } catch (err) {
+    console.error(`Session reminder error (${reminderType}, session ${sessionId}):`, err.message);
+  }
+}
+
 module.exports = router;
 module.exports.sendPushToUser = sendPushToUser;
 module.exports.sendPushToAdmins = sendPushToAdmins;
@@ -319,3 +404,4 @@ module.exports.sendEmailToAdmins = sendEmailToAdmins;
 module.exports.notifyAdmins = notifyAdmins;
 module.exports.initializeVapidKeys = initializeVapidKeys;
 module.exports.setVapidKeys = setVapidKeys;
+module.exports.sendSessionReminders = sendSessionReminders;

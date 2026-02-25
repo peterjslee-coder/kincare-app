@@ -349,6 +349,13 @@ async function initializeDatabase() {
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS condition_tags TEXT`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS care_feedback TEXT`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS service_feedback TEXT`,
+    // v1.33.0 — Check-in timing gate: admin override for early check-in
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS early_check_in_allowed INTEGER DEFAULT 0`,
+    // v1.33.0 — Location tagging on check-in
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_latitude REAL`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_longitude REAL`,
+    // v1.33.0 — Track which notifications have been sent per session (prevents duplicates)
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS notifications_sent TEXT`,
     // v1.31.0 — Backfill linked_user_id for care_for users whose names match a care_recipient
     `UPDATE care_recipients SET linked_user_id = (
       SELECT u.id FROM users u

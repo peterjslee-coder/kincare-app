@@ -334,6 +334,67 @@ async function start() {
     console.error("  Demo patch failed:", patchErr.message);
   }
 
+  // ─── Session notification poller (every 60s) ───
+  // Checks for upcoming sessions that need pre-check-in or pre-check-out reminders
+  const { sendSessionReminders } = require("./routes/push");
+  const NOTIFICATION_POLL_INTERVAL = 60 * 1000; // 1 minute
+  const REMINDER_WINDOW_MINUTES = 15;
+
+  setInterval(async () => {
+    try {
+      const pollDb = await getDb();
+      const now = new Date();
+      const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+
+      // ─── Pre-check-in reminders ───
+      // Find confirmed sessions today that haven't had pre_check_in notification
+      const checkInCandidates = await pollDb.prepare(`
+        SELECT id, scheduled_date, scheduled_time, notifications_sent
+        FROM care_sessions
+        WHERE status = 'confirmed'
+          AND scheduled_date = ?
+          AND (notifications_sent IS NULL OR notifications_sent NOT LIKE '%pre_check_in%')
+      `).all(todayStr);
+
+      for (const s of checkInCandidates) {
+        if (!s.scheduled_time) continue;
+        const sessionStart = new Date(`${s.scheduled_date}T${s.scheduled_time}:00`);
+        const reminderTime = new Date(sessionStart.getTime() - REMINDER_WINDOW_MINUTES * 60000);
+        // Send if we're within the notification window (up to session start)
+        if (now >= reminderTime && now <= sessionStart) {
+          await sendSessionReminders(s.id, "pre_check_in");
+        }
+      }
+
+      // ─── Pre-check-out reminders ───
+      // Find in_progress sessions today that haven't had pre_check_out notification
+      const checkOutCandidates = await pollDb.prepare(`
+        SELECT id, scheduled_date, scheduled_time, duration_hours, notifications_sent
+        FROM care_sessions
+        WHERE status = 'in_progress'
+          AND scheduled_date = ?
+          AND (notifications_sent IS NULL OR notifications_sent NOT LIKE '%pre_check_out%')
+      `).all(todayStr);
+
+      for (const s of checkOutCandidates) {
+        if (!s.scheduled_time || !s.duration_hours) continue;
+        const sessionStart = new Date(`${s.scheduled_date}T${s.scheduled_time}:00`);
+        const sessionEnd = new Date(sessionStart.getTime() + s.duration_hours * 60 * 60000);
+        const reminderTime = new Date(sessionEnd.getTime() - REMINDER_WINDOW_MINUTES * 60000);
+        // Send if we're within the check-out notification window
+        if (now >= reminderTime && now <= sessionEnd) {
+          await sendSessionReminders(s.id, "pre_check_out");
+        }
+      }
+    } catch (err) {
+      // Silent — don't crash server for notification polling failures
+      if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
+        console.error("  Notification poller error:", err.message);
+      }
+    }
+  }, NOTIFICATION_POLL_INTERVAL);
+  console.log(`  Session notification poller started (every ${NOTIFICATION_POLL_INTERVAL / 1000}s)`);
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n  InPlace API v0.9.0 running on port ${PORT}\n`);
     console.log(`  WebSocket server ready`);

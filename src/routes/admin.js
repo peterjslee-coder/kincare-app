@@ -938,4 +938,38 @@ router.put("/sessions/:id/status", async (req, res) => {
   }
 });
 
+// ─── PUT /api/admin/caregivers/:userId/early-check-in — Toggle early check-in permission ───
+router.put("/caregivers/:userId/early-check-in", async (req, res) => {
+  try {
+    const apiKey = req.headers["x-admin-api-key"];
+    if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const db = await getDb();
+    const { allowed } = req.body;
+    if (allowed === undefined) {
+      return res.status(400).json({ error: "Missing 'allowed' field (true/false)" });
+    }
+    const profile = await db.prepare(
+      "SELECT id FROM caregiver_profiles WHERE user_id = ?"
+    ).get(req.params.userId);
+    if (!profile) {
+      return res.status(404).json({ error: "Caregiver profile not found for this user" });
+    }
+    await db.prepare(
+      "UPDATE caregiver_profiles SET early_check_in_allowed = ?, updated_at = NOW() WHERE user_id = ?"
+    ).run(allowed ? 1 : 0, req.params.userId);
+    const user = await db.prepare("SELECT first_name, last_name, email FROM users WHERE id = ?").get(req.params.userId);
+    console.log(`  Admin: early_check_in_allowed=${allowed ? 1 : 0} for ${user?.email || req.params.userId}`);
+    res.json({
+      userId: req.params.userId,
+      earlyCheckInAllowed: !!allowed,
+      name: user ? `${user.first_name} ${user.last_name}` : null,
+    });
+  } catch (err) {
+    console.error("Admin early check-in error:", err);
+    res.status(500).json({ error: "Failed to update early check-in permission" });
+  }
+});
+
 module.exports = router;

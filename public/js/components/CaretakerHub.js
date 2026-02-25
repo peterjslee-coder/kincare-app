@@ -23,6 +23,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [checkOutServiceFeedback, setCheckOutServiceFeedback] = useState('');
   const [checkOutSummary, setCheckOutSummary] = useState('');
   const [checkSubmitting, setCheckSubmitting] = useState(false);
+  const [checkInLocation, setCheckInLocation] = useState(null);
+  const [locationError, setLocationError] = useState(null);
   const avatarInputRef = useRef(null);
   const tabContentRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -872,6 +874,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             if (s.action === 'check-in') {
               setCheckInMood('');
               setCheckInNotes(null);
+              setCheckInLocation(null);
+              setLocationError(null);
+              // Request geolocation when check-in modal opens
+              if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+                  (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
+                  { timeout: 8000, enableHighAccuracy: false }
+                );
+              } else {
+                setLocationError('Geolocation not supported');
+              }
               setCheckInSession(s);
             } else if (s.action === 'check-out') {
               setCheckOutMood('');
@@ -1762,6 +1776,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </div>
             )}
 
+            {/* Location badge */}
+            {checkInLocation && (
+              <div style={{ marginBottom: 12, padding: 10, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9', fontSize: 12, color: '#1565c0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 14 }}>📍</span> Location captured ({Math.round(checkInLocation.accuracy || 0)}m accuracy)
+              </div>
+            )}
+            {locationError && !checkInLocation && (
+              <div style={{ marginBottom: 12, padding: 10, background: '#fff3e0', borderRadius: 8, border: '1px solid #ffb74d', fontSize: 12, color: '#e65100', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 14 }}>⚠️</span> Location unavailable — you can still check in
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setCheckInSession(null)} style={{
                 padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8,
@@ -1772,7 +1798,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 try {
                   const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
                     method: 'POST',
-                    body: JSON.stringify({ arrivalMood: checkInMood || null }),
+                    body: JSON.stringify({
+                      arrivalMood: checkInMood || null,
+                      checkInLatitude: checkInLocation?.lat || null,
+                      checkInLongitude: checkInLocation?.lng || null,
+                    }),
                   });
                   if (res?.ok) {
                     await res.json();
@@ -1784,7 +1814,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     } catch (e) { /* refresh is best-effort */ }
                   } else {
                     const err = await res?.json().catch(() => null);
-                    showToast(err?.error || 'Check-in failed', 'error');
+                    showToast(err?.message || err?.error || 'Check-in failed', 'error');
                   }
                 } catch (e) { showToast('Check-in failed', 'error'); }
                 setCheckSubmitting(false);
