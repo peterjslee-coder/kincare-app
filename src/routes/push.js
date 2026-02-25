@@ -334,6 +334,17 @@ async function sendSessionReminders(sessionId, reminderType) {
     const caregiverName = caregiver ? `${caregiver.first_name} ${caregiver.last_name}` : "Your caregiver";
     const recipientName = `${session.recipient_first_name || ""} ${session.recipient_last_name || ""}`.trim() || "your loved one";
 
+    // Get ALL care team members for this care recipient (not just the session creator)
+    const careTeamMembers = await db.prepare(`
+      SELECT DISTINCT ctm.user_id FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      WHERE ct.care_recipient_id = ?
+    `).all(session.care_recipient_id);
+    // Fallback to session creator if no care team exists
+    const teamUserIds = careTeamMembers.length > 0
+      ? careTeamMembers.map(m => m.user_id)
+      : (session.family_user_id ? [session.family_user_id] : []);
+
     if (reminderType === "pre_check_in") {
       // 1. To caregiver: "Get ready to check in"
       if (session.caregiver_user_id) {
@@ -344,9 +355,10 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "check_in_reminder");
       }
 
-      // 2. To care team (family): "Caregiver arriving soon"
-      if (session.family_user_id) {
-        await sendPushToUser(session.family_user_id, {
+      // 2. To entire care team: "Caregiver arriving soon"
+      for (const userId of teamUserIds) {
+        if (userId === session.caregiver_user_id) continue; // don't double-notify caregiver
+        await sendPushToUser(userId, {
           title: "Caregiver Arriving Soon",
           body: `${caregiverName} is about to check in with ${recipientName}`,
           data: { type: "caregiver_arriving", sessionId, page: "dashboard" },
@@ -354,7 +366,7 @@ async function sendSessionReminders(sessionId, reminderType) {
       }
 
       // 3. To care recipient (if linked user exists): "Your caregiver is almost here!"
-      if (session.care_for_user_id) {
+      if (session.care_for_user_id && !teamUserIds.includes(session.care_for_user_id)) {
         await sendPushToUser(session.care_for_user_id, {
           title: "Your Caregiver is Almost Here!",
           body: `${caregiverName} will be at your door soon!`,
@@ -362,7 +374,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "caregiver_arriving_recipient");
       }
 
-      console.log(`  Session reminders (pre_check_in) sent for session ${sessionId}`);
+      console.log(`  Session reminders (pre_check_in) sent for session ${sessionId} → ${teamUserIds.length} team members`);
     } else if (reminderType === "pre_check_out") {
       // 1. To caregiver: "Time to wrap up"
       if (session.caregiver_user_id) {
@@ -373,16 +385,17 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "check_out_reminder");
       }
 
-      // 2. To care team: "Session wrapping up"
-      if (session.family_user_id) {
-        await sendPushToUser(session.family_user_id, {
+      // 2. To entire care team: "Session wrapping up"
+      for (const userId of teamUserIds) {
+        if (userId === session.caregiver_user_id) continue;
+        await sendPushToUser(userId, {
           title: "Session Wrapping Up",
           body: `${caregiverName} is nearly done at ${recipientName}'s`,
           data: { type: "check_out_imminent", sessionId, page: "dashboard" },
         }, "check_out_imminent");
       }
 
-      console.log(`  Session reminders (pre_check_out) sent for session ${sessionId}`);
+      console.log(`  Session reminders (pre_check_out) sent for session ${sessionId} → ${teamUserIds.length} team members`);
     }
 
     // Mark this reminder as sent on the session (prevents duplicates)
