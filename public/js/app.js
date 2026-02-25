@@ -814,11 +814,11 @@ const App = () => {
           </div>
         )}
         {currentUser?.roles?.length > 1 ? (
-          <div style={{ margin: '0 12px 8px' }}>
+          <div style={{ margin: '0 12px 4px' }}>
             <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '1px', padding: '0 4px 4px', textAlign: 'center' }}>
               Viewing as
             </div>
-            <div style={{ padding: '4px', display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.15)', borderRadius: '8px' }}>
+            <div style={{ padding: '3px', display: 'flex', gap: '3px', background: 'rgba(0,0,0,0.15)', borderRadius: '6px' }}>
               {currentUser.roles.map(r => {
                 const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Care Recipient' };
                 const icons = { family: '👪', caregiver: '💼', care_for: '🏠' };
@@ -827,7 +827,7 @@ const App = () => {
                   key: r,
                   onClick: () => handleSwitchRole(r),
                   style: {
-                    flex: 1, padding: '8px 6px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                    flex: 1, padding: '8px 6px', borderRadius: '5px', border: 'none', cursor: 'pointer',
                     fontSize: '11px', fontWeight: isActive ? 700 : 500, textAlign: 'center',
                     background: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
                     color: isActive ? 'white' : 'rgba(255,255,255,0.5)',
@@ -853,9 +853,9 @@ const App = () => {
                   ? () => { setShowRequestCareModal(true); setSidebarOpen(false); }
                   : () => { handlePageChange(item.id); setSidebarOpen(false); };
                 return (
-                  <li key={item.id} className="nav-item" style={{ padding: '4px 8px' }}>
-                    <button onClick={actionClick} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '10px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.3px' }}>
-                      <span style={{ fontSize: 16 }}>{item.icon}</span> {item.label}
+                  <li key={item.id} className="nav-item" style={{ padding: '4px 12px' }}>
+                    <button onClick={actionClick} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '8px 6px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.3px' }}>
+                      <span style={{ fontSize: 14 }}>{item.icon}</span> {item.label}
                     </button>
                   </li>
                 );
