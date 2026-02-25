@@ -144,6 +144,7 @@ app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/push", require("./routes/push"));
 app.use("/api/photos", require("./routes/photos"));
 app.use("/api/auth/2fa", require("./routes/twoFactor"));
+app.use("/api/passkeys", require("./routes/passkeys"));
 app.use("/api/oauth", require("./routes/oauth"));
 app.use("/api/care-teams", require("./routes/careTeams"));
 app.use("/api/waitlist", require("./routes/waitlist"));

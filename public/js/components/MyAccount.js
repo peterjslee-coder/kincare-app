@@ -182,6 +182,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState(null);
 
+  // Passkey state
+  const [passkeys, setPasskeys] = useState([]);
+  const [loadingPasskeys, setLoadingPasskeys] = useState(false);
+  const [registeringPasskey, setRegisteringPasskey] = useState(false);
+  const [passkeyName, setPasskeyName] = useState('');
+  const [showPasskeyNameInput, setShowPasskeyNameInput] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
+
   const fetchUser = async () => {
     try {
       const res = await apiFetch('/api/auth/me');
@@ -302,7 +310,84 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     setLoadingDevices(false);
   };
 
-  useEffect(() => { fetchUser(); fetch2FAStatus(); }, []);
+  // ─── Passkey functions ───
+  const fetchPasskeys = async () => {
+    setLoadingPasskeys(true);
+    try {
+      const res = await apiFetch('/api/passkeys');
+      if (res?.ok) {
+        const data = await res.json();
+        setPasskeys(data.passkeys || []);
+      }
+    } catch {}
+    setLoadingPasskeys(false);
+  };
+
+  const handleRegisterPasskey = async () => {
+    setRegisteringPasskey(true);
+    setPwError(null);
+    try {
+      const SimpleWebAuthnBrowser = window.SimpleWebAuthnBrowser;
+      if (!SimpleWebAuthnBrowser) throw new Error('Passkey support not loaded');
+
+      // Get registration options
+      const optRes = await apiFetch('/api/passkeys/register/options', { method: 'POST' });
+      if (!optRes?.ok) throw new Error('Failed to start passkey registration');
+      const options = await optRes.json();
+
+      // Trigger browser passkey/biometric prompt
+      const regResp = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
+
+      // Send to server for verification
+      const verifyRes = await apiFetch('/api/passkeys/register/verify', {
+        method: 'POST',
+        body: JSON.stringify({ ...regResp, passkeyName: passkeyName || 'My Passkey' }),
+      });
+      if (!verifyRes?.ok) {
+        const errData = await verifyRes.json();
+        throw new Error(errData?.error || 'Passkey registration failed');
+      }
+
+      showToast('Passkey registered! You can now sign in with biometrics.', 'success');
+      setShowPasskeyNameInput(false);
+      setPasskeyName('');
+      fetchPasskeys();
+    } catch (err) {
+      if (err.name !== 'NotAllowedError') {
+        setPwError(err.message);
+      }
+    }
+    setRegisteringPasskey(false);
+  };
+
+  const handleDeletePasskey = async (pkId) => {
+    try {
+      const res = await apiFetch('/api/passkeys/' + pkId, { method: 'DELETE' });
+      if (res?.ok) {
+        showToast('Passkey removed', 'success');
+        fetchPasskeys();
+      }
+    } catch {}
+  };
+
+  const handleRenamePasskey = async (pkId, newName) => {
+    try {
+      await apiFetch('/api/passkeys/' + pkId, {
+        method: 'PUT',
+        body: JSON.stringify({ name: newName }),
+      });
+      fetchPasskeys();
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchUser();
+    fetch2FAStatus();
+    if (window.PublicKeyCredential) {
+      setPasskeySupported(true);
+      fetchPasskeys();
+    }
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'devices') fetchDevices();
@@ -732,6 +817,67 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
               </div>
             )}
           </div>
+
+          {/* Passkeys / Biometric Login */}
+          {passkeySupported && (
+            <div className="card">
+              <div className="card-header">Passkeys</div>
+              <p style={{ color: '#666', fontSize: 14, margin: '0 0 16px' }}>
+                Sign in with Face ID, Touch ID, Windows Hello, or a security key. Passkeys are more secure than passwords and skip 2FA.
+              </p>
+              {loadingPasskeys ? (
+                <LoadingSpinner text="Loading passkeys..." />
+              ) : (
+                <div>
+                  {passkeys.length > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      {passkeys.map((pk, i) => (
+                        <div key={pk.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderBottom: i < passkeys.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0f2e9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1b6b5a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                              </svg>
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{pk.name}</div>
+                              <div style={{ fontSize: 12, color: '#888' }}>
+                                Added {(parseTimestamp(pk.createdAt) || new Date(0)).toLocaleDateString()}
+                                {pk.lastUsed ? (' · Last used ' + (parseTimestamp(pk.lastUsed) || new Date(0)).toLocaleDateString()) : ''}
+                              </div>
+                            </div>
+                          </div>
+                          <button onClick={() => handleDeletePasskey(pk.id)}
+                            style={{ padding: '6px 14px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {pwError && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
+                  {showPasskeyNameInput ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input type="text" value={passkeyName} onChange={(e) => setPasskeyName(e.target.value)}
+                        placeholder="Name this passkey (e.g., MacBook Pro)" maxLength={50}
+                        style={{ flex: 1, padding: '8px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} autoFocus />
+                      <button onClick={handleRegisterPasskey} disabled={registeringPasskey}
+                        style={{ padding: '8px 20px', background: registeringPasskey ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        {registeringPasskey ? 'Registering...' : 'Continue'}
+                      </button>
+                      <button onClick={() => { setShowPasskeyNameInput(false); setPwError(null); }}
+                        style={{ padding: '8px 12px', background: '#f0f0f0', color: '#666', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setShowPasskeyNameInput(true)}
+                      style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                      Add a Passkey
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Linked Accounts */}
           <div className="card">

@@ -709,6 +709,7 @@ router.delete("/me", authenticate, async (req, res) => {
       await tx.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(userId);
       await tx.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(userId);
       await tx.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(userId);
+      await tx.prepare("DELETE FROM user_passkeys WHERE user_id = ?").run(userId);
 
       // 3. Delete personal documents (DL photos, etc.)
       await tx.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(userId);
