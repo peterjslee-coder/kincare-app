@@ -8,6 +8,18 @@ const Schedule = window.Schedule = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [expandedSession, setExpandedSession] = useState(null);
 
+  // Pick up pending schedule date from activity feed deep-link
+  useEffect(() => {
+    if (window.__pendingScheduleDate) {
+      const target = new Date(window.__pendingScheduleDate);
+      if (!isNaN(target.getTime())) {
+        setCurrentMonth({ year: target.getFullYear(), month: target.getMonth() });
+        setSelectedDate(target.getDate());
+      }
+      delete window.__pendingScheduleDate;
+    }
+  }, []);
+
   const fetchSessions = async () => {
     try {
       const response = await apiFetch('/api/sessions?limit=100');

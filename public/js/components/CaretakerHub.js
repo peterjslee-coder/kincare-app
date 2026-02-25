@@ -684,7 +684,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 <div className="step-text">
                   <div className="step-name">{s.label}</div>
                   <div className="step-desc">
-                    {s.id === 'profile' && 'Add your bio and set your hourly rate'}
+                    {s.id === 'profile' && (s.done ? 'Bio and rate set' : (() => {
+                      const missing = [];
+                      if (!profile.bio) missing.push('bio');
+                      if (!profile.rateDaytime && !profile.hourlyRate) missing.push('hourly rate');
+                      return missing.length > 0 ? `Still needed: ${missing.join(' and ')}` : 'Add your bio and set your hourly rate';
+                    })())}
                     {s.id === 'availability' && 'Tell families when you\'re free to work'}
                     {s.id === 'stoplight' && 'Rate your comfort level with different care tasks'}
                     {s.id === 'photo' && 'Families want to see who they\'re welcoming into their home'}

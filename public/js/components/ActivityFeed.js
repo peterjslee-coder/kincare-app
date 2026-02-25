@@ -154,7 +154,17 @@ const ActivityFeed = window.ActivityFeed = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                     <div className="activity-badge">{activity.event_type}</div>
                     {['care_request', 'session_update', 'session_booked', 'session_confirmed', 'session_cancelled', 'care_request_accepted'].includes(activity.event_type) && (
-                      <button onClick={(e) => { e.stopPropagation(); if (window.__navigateTo) window.__navigateTo('schedule'); }}
+                      <button onClick={(e) => {
+                        e.stopPropagation();
+                        // Try to extract session date from metadata to navigate to the right week
+                        try {
+                          const meta = typeof activity.metadata === 'string' ? JSON.parse(activity.metadata) : activity.metadata;
+                          if (meta?.sessionDate || meta?.date || meta?.scheduled_date) {
+                            window.__pendingScheduleDate = meta.sessionDate || meta.date || meta.scheduled_date;
+                          }
+                        } catch (e2) {}
+                        if (window.__navigateTo) window.__navigateTo('schedule');
+                      }}
                         style={{ padding: '2px 8px', background: '#e3f2fd', color: '#1565c0', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         View on Schedule
                       </button>

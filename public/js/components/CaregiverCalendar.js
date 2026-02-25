@@ -9,6 +9,23 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   const [claimingId, setClaimingId] = useState(null);
   const [offeringOnId, setOfferingOnId] = useState(null); // session id where offer UI is open
 
+  // Pick up pending schedule date from activity feed deep-link
+  useEffect(() => {
+    if (window.__pendingScheduleDate) {
+      const target = new Date(window.__pendingScheduleDate);
+      if (!isNaN(target.getTime())) {
+        const today = new Date();
+        const startOfThisWeek = new Date(today);
+        startOfThisWeek.setDate(today.getDate() - today.getDay());
+        const diffDays = Math.floor((target - startOfThisWeek) / (1000 * 60 * 60 * 24));
+        const weekOff = Math.floor(diffDays / 7);
+        setWeekOffset(weekOff);
+        setSelectedDay(target);
+      }
+      delete window.__pendingScheduleDate;
+    }
+  }, []);
+
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const hourStart = 6;
   const hourEnd = 20; // 6am–8pm
@@ -376,17 +393,19 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         }}>
                         {cell.type === 'booked' && (
                           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(30,136,229,0.35) 0%, rgba(30,136,229,0.12) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: 9, fontWeight: 800, color: '#1565c0' }}>●</span>
+                            <span style={{ fontSize: 8, fontWeight: 700, color: '#1565c0', letterSpacing: -0.5 }}>
+                              {(() => { const s = cell.session; const n = s.recipientName || s.recipient_name || ''; return n ? n.split(' ')[0].slice(0, 4) : '\u25CF'; })()}
+                            </span>
                           </div>
                         )}
                         {cell.type === 'request' && (
                           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(251,140,0,0.3) 0%, rgba(251,140,0,0.1) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: 9, fontWeight: 800, color: '#e65100' }}>!</span>
+                            <span style={{ fontSize: 8, fontWeight: 700, color: '#e65100' }}>NEW</span>
                           </div>
                         )}
                         {cell.type === 'blocked' && (
                           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: 8, fontWeight: 800, color: '#c62828', opacity: 0.6 }}>✕</span>
+                            <span style={{ fontSize: 8, fontWeight: 800, color: '#c62828', opacity: 0.6 }}>{'\u2715'}</span>
                           </div>
                         )}
                       </td>
