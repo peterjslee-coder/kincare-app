@@ -591,8 +591,54 @@ const Messages = window.Messages = () => {
         {peopleLoading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Searching...</div>
         ) : peopleSearch.length < 2 ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center', color: '#999', fontSize: 14 }}>
-            Type at least 2 characters to search for people on InPlace.
+          <div>
+            {/* Recent connections from existing conversations */}
+            {(() => {
+              const seen = new Set();
+              const recentPeople = [];
+              conversations.filter(c => !isGroupConv(c)).sort((a, b) => {
+                const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+                const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+                return bt - at;
+              }).forEach(c => {
+                const other = (c.members || []).find(m => m.id !== currentUser?.id);
+                if (other && !seen.has(other.id)) {
+                  seen.add(other.id);
+                  recentPeople.push({ ...other, convId: c.id, conv: c });
+                }
+              });
+              if (recentPeople.length === 0) return (
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#999', fontSize: 14 }}>
+                  Search for people on InPlace to start a conversation.
+                </div>
+              );
+              return (
+                <div>
+                  <div style={{ padding: '10px 16px 6px', fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Recent
+                  </div>
+                  {recentPeople.slice(0, 10).map(p => (
+                    <div key={p.id} onClick={() => { setShowFindPeople(false); handleSelectConversation(p.conv); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}>
+                      {p.profilePhoto ? (
+                        <img src={p.profilePhoto} alt={p.name} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: getAvatarColor(p.name || '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#fff' }}>
+                          {getInitials(p.name || '?')}
+                        </div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{p.name}</div>
+                        <div style={{ fontSize: 12, color: '#1b6b5a' }}>Message →</div>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12, color: '#999' }}>
+                    Search above to find more people
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ) : peopleResults.length === 0 ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 14 }}>No users found.</div>

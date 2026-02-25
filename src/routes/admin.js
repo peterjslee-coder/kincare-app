@@ -44,7 +44,7 @@ router.get("/stats", async (req, res) => {
     const [users, waitlist, sessions, caregivers, recentSignups] = await Promise.all([
       db.prepare("SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0").get(),
       db.prepare("SELECT COUNT(*) as count FROM waitlist").get(),
-      db.prepare("SELECT COUNT(*) as count FROM care_sessions").get(),
+      db.prepare("SELECT COUNT(*) as count FROM care_sessions cs WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id IN (cs.family_id, cs.caregiver_id) AND COALESCE(u.is_demo, 0) = 1)").get(),
       db.prepare("SELECT COUNT(*) as count FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE COALESCE(u.is_demo, 0) = 0").get(),
       // Signups per day for last 30 days
       db.prepare(`
@@ -65,9 +65,11 @@ router.get("/stats", async (req, res) => {
       ORDER BY date ASC
     `).all();
 
-    // Sessions by status
+    // Sessions by status (excluding demo user sessions)
     const sessionsByStatus = await db.prepare(`
-      SELECT status, COUNT(*) as count FROM care_sessions GROUP BY status
+      SELECT cs.status, COUNT(*) as count FROM care_sessions cs
+      WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id IN (cs.family_id, cs.caregiver_id) AND COALESCE(u.is_demo, 0) = 1)
+      GROUP BY cs.status
     `).all();
 
     res.json({
@@ -402,6 +404,47 @@ router.delete("/users/:id", async (req, res) => {
   } catch (err) {
     console.error("Admin delete user error:", err);
     res.status(500).json({ error: "Failed to delete user: " + (err.message || "") });
+  }
+});
+
+// ─── POST /api/admin/users/:id/reset-password — Admin triggers password reset email ───
+router.post("/users/:id/reset-password", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { id } = req.params;
+    const user = await db.prepare("SELECT id, email, first_name FROM users WHERE id = ?").get(id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const crypto = require("crypto");
+    const { sendEmail, brandedHtml } = require("../utils/email");
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(user.id);
+    await db.prepare(
+      "INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)"
+    ).run(uuid(), user.id, token, expiresAt);
+
+    const resetUrl = `${process.env.APP_URL || "https://yourinplace.com"}?reset=${token}`;
+    await sendEmail({
+      to: user.email,
+      subject: "Reset your InPlace password",
+      html: brandedHtml({
+        title: "InPlace",
+        greeting: `Hi ${user.first_name},`,
+        body: "An administrator has requested a password reset for your account. Click below to choose a new password:",
+        ctaUrl: resetUrl,
+        ctaText: "Reset Password",
+        footnote: "This link expires in 1 hour. If you didn't expect this, please contact support.",
+      }),
+    });
+
+    await logAdminAction(req, "force_password_reset", "user", id, { email: user.email });
+    res.json({ success: true, message: `Password reset email sent to ${user.email}` });
+  } catch (err) {
+    console.error("Admin force password reset error:", err);
+    res.status(500).json({ error: "Failed to send reset email" });
   }
 });
 

@@ -51,6 +51,8 @@ const AdminPanel = window.AdminPanel = () => {
   const [obEvents, setObEvents] = useState(null); // { events, stats, funnel, recentErrors }
   const [obEventsLoading, setObEventsLoading] = useState(false);
   const [obEventFilter, setObEventFilter] = useState('all'); // 'all', 'errors', 'completions'
+  const [resetPwLoading, setResetPwLoading] = useState(null); // user id being reset
+  const [resetPwMsg, setResetPwMsg] = useState(null); // { id, type, text }
 
   useEffect(() => {
     loadStats();
@@ -237,6 +239,24 @@ const AdminPanel = window.AdminPanel = () => {
       }
     } catch (err) { console.error('Delete user error:', err); }
     setDeleteLoading(false);
+  };
+
+  const handleForcePasswordReset = async (userId, email) => {
+    setResetPwLoading(userId);
+    setResetPwMsg(null);
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/reset-password`, { method: 'POST' });
+      const data = await res.json();
+      if (res?.ok) {
+        setResetPwMsg({ id: userId, type: 'success', text: `Reset email sent to ${email}` });
+      } else {
+        setResetPwMsg({ id: userId, type: 'error', text: data?.error || 'Failed' });
+      }
+    } catch (err) {
+      setResetPwMsg({ id: userId, type: 'error', text: 'Network error' });
+    }
+    setResetPwLoading(null);
+    setTimeout(() => setResetPwMsg(null), 4000);
   };
 
   // Onboarding override functions
@@ -698,6 +718,11 @@ const AdminPanel = window.AdminPanel = () => {
                             style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
                             Manage
                           </button>
+                          <button onClick={() => handleForcePasswordReset(u.id, u.email)} disabled={resetPwLoading === u.id}
+                            style={{ padding: '4px 8px', background: '#fff', color: '#d97706', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
+                            title="Send password reset email">
+                            {resetPwLoading === u.id ? '…' : resetPwMsg?.id === u.id ? (resetPwMsg.type === 'success' ? '✓' : '✕') : '🔑'}
+                          </button>
                           {deleteConfirm === u.id ? (
                             <>
                               <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={deleteLoading}
@@ -728,10 +753,17 @@ const AdminPanel = window.AdminPanel = () => {
                           </button>
                         </div>
                       ) : (
-                        <button onClick={() => handleDeleteUser(u.id, u.email)}
-                          style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
-                          Delete
-                        </button>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                          <button onClick={() => handleForcePasswordReset(u.id, u.email)} disabled={resetPwLoading === u.id}
+                            style={{ padding: '4px 8px', background: '#fff', color: '#d97706', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
+                            title="Send password reset email">
+                            {resetPwLoading === u.id ? '…' : resetPwMsg?.id === u.id ? (resetPwMsg.type === 'success' ? '✓' : '✕') : '🔑'}
+                          </button>
+                          <button onClick={() => handleDeleteUser(u.id, u.email)}
+                            style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

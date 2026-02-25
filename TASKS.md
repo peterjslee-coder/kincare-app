@@ -41,14 +41,14 @@
 - [x] ~~**Message timestamps — add date and time.** Fixed in v1.25.0. Individual messages now show "Yesterday 2:30 PM" or "Feb 21 2:30 PM" for older messages, just time for today. *(Feedback — Carry Taker)*~~
 - [ ] **Photo upload crop + auto-resize.** Need in-app crop tool and auto-resize to 1.5MB before uploading profile photos. Current UX too manual. *(Feedback — reviewed)*
 - [x] ~~**Profile photo in sidebar/header.** Fixed. app.js sidebar renders user profile photo (or initials fallback) next to iP logo. *(Verified v1.33.7 audit)*~~
-- [ ] **Admin stats include demo data.** Admin panel sessions/users counts include demo accounts and demo sessions. Should filter to real data only, while keeping demo intact for the demo picker. *(Feedback — Feb 22)*
+- [x] **Admin stats include demo data.** ~~Admin panel sessions/users counts include demo accounts and demo sessions.~~ Fixed v1.33.10 — sessions count and sessions-by-status now exclude demo user sessions. *(Feedback — Feb 22)*
 - [ ] **Admin 2FA/biometrics gate.** Admin panel should require 2FA or biometrics to access. Destructive actions (delete users, override background checks) should require additional verification. *(Feedback — Feb 22)*
 - [ ] **Merge waitlist + invites in admin.** Users don't understand the distinction between waitlist and invites tabs. Combine into a unified "People" tab showing all leads/invites/signups in one view. *(Feedback — Feb 22)*
-- [ ] **Cancel/remove stale invites.** Admin can't remove or cancel pending invites. Also need stale invite detection (invite sent to already-registered user). *(Feedback — Feb 22)*
+- [x] **Cancel/remove stale invites.** ~~Admin can't remove or cancel pending invites.~~ Already implemented — Cancel, Resend, Re-invite buttons exist on invites tab. *(Feedback — Feb 22)*
 - [ ] **Block user with legal evidence logging.** When blocking a user, collect more than just "spam or abuse" — log location data, timestamps, payment receipts, chat logs for potential legal action. Ties into admin incident management. *(Feedback — Feb 22)*
 - [x] ~~**Care recipient photo upload.** Fixed in v1.20.4. Photo upload added to CareRecipients page with RecipientAvatar component. *(Feedback — Feb 22)*~~
 - [x] ~~**Care request not visible on family calendar.** Verified working in v1.20.4. Sessions API returns requested-status sessions to family users, Schedule.js displays them. *(Feedback — Feb 22)*~~
-- [ ] **Email verification UX unclear.** Users don't know if the verification email went through. Banner should show a re-send link and indicate when the last email was sent. *(Feedback — Feb 22, #23)*
+- [x] **Email verification UX unclear.** ~~Users don't know if the verification email went through.~~ Fixed v1.33.10 — banner now shows "sent Xm ago", 60-second cooldown, and spam folder hint. *(Feedback — Feb 22, #23)*
 - [x] ~~**Fee percentage inconsistency (15% vs 20%).** Fixed. All fees are consistently 20% across rateCalculator.js, payments.js, and financials.js. *(Verified v1.33.7 audit)*~~
 - [x] ~~**Caregiver search should center on care recipient location.** Fixed in v1.25.0. Caregivers.js map now uses searchCenter (care recipient coords) with useEffect dependency. *(Feedback — Feb 22, #25)*~~
 - [ ] **Push notifications still not working on iOS.** Pete allowed notifications in settings but nothing comes through. Has been an ongoing issue for weeks. Needs end-to-end debug of SW registration + push subscription flow. *(Feedback — Feb 22, #26)*
@@ -65,7 +65,7 @@
 - [x] ~~**"Latest" tile should be clickable.** Already implemented — Latest tile has onClick handler that navigates to relevant page. *(Feedback — Feb 23, #21)*~~
 - [x] ~~**Activity feed "Mark read" button text overflow.** Fixed in v1.29.1. Compacted button to "✓ Read" with smaller padding. *(Feedback — Feb 23, #23)*~~
 - [x] ~~**Inbox not sorted by recency.** Fixed in v1.29.1. Client-side sort by lastMessageAt DESC. *(Feedback — Feb 23, #25)*~~
-- [ ] **Find People doesn't show recent connections.** The "Find People" search in Messages should show recent connections or searches. Also should allow messaging someone already connected when using Find People. *(Feedback — Feb 23, #26)*
+- [x] **Find People doesn't show recent connections.** ~~Should show recent connections or searches.~~ Fixed v1.33.10 — Find People now shows "Recent" section with up to 10 people from existing conversations. Clicking opens the conversation. *(Feedback — Feb 23, #26)*
 - [x] ~~**Session color mismatch for open vs confirmed.** Fixed in v1.25.0. Dashboard now shows distinct colors per status: confirmed=teal, completed=blue, pending=orange, open/requested=coral. *(Feedback — Feb 23, #31)*~~
 - [x] ~~**Alert clicks should show request details.** Fixed in v1.33.9. "View on Schedule" button in activity feed now passes the session date via `__pendingScheduleDate`. CaregiverCalendar jumps to the right week, Schedule.js jumps to the right month/day. *(Feedback — Feb 23, #32)*~~
 - [x] ~~**Demo data leaking into real user views.** Fixed in v1.28.6. Added demo isolation JOIN to sessions endpoint (both main caregiver query and open-requests fallback). Combined with prior v1.22.1 reseed and v1.2.1 caregiver/contacts isolation. *(Feedback — Feb 23, #33)*~~
@@ -85,7 +85,7 @@
 - [x] ~~**"Set your availability" link broken.** Was already wired to goToStep('availability'). The real issue was the completion check requiring rules — fixed in v1.31.2 (visiting tab = done). *(Feedback — Feb 24, new)*~~
 - [x] ~~**"Complete my profile" checklist misleading.** Fixed in v1.33.9. Caregiver First Steps profile step now shows "Still needed: bio and hourly rate" dynamically instead of generic description. *(Feedback — Feb 24, new)*~~
 - [x] ~~**Admin: delete user account fails.** Fixed. admin.js DELETE /api/admin/users/:id implements full soft-delete with transaction (anonymize, unassign, cleanup). *(Verified v1.33.7 audit)*~~
-- [ ] **Admin: force password reset from admin panel.** Admin should be able to trigger a password reset email for any user directly from the admin panel. *(Feedback — reviewed)*
+- [x] **Admin: force password reset from admin panel.** ~~Admin should be able to trigger a password reset email for any user.~~ Fixed v1.33.10 — 🔑 button in admin user list sends reset email with one click. *(Feedback — reviewed)*
 - [ ] **Push notification icon is white square on Android.** PWA notification icon renders as blank white square on Pixel (Android). Need proper monochrome notification icon. *(Feedback — reviewed)*
 - [x] ~~**Delete individual role without deleting account.** Fixed in v1.29.0. POST /api/auth/remove-role with two-step confirmation. *(Feedback — Feb 24, new)*~~
 - [ ] **Dual-role users can't manage caregiver profile from family view.** When a family user adds a caregiver role, they can't access admin-like caregiver profile management (mark background check done, set up payments, etc.) from within the family dashboard. Need admin options or a dedicated path for dual-role users to manage their caregiver onboarding steps. *(Feedback — Feb 25, new)*
