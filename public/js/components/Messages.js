@@ -745,19 +745,49 @@ const Messages = window.Messages = () => {
                   transition: isSwiping ? 'none' : 'transform 0.2s',
                 }}>
                 <div style={{ position: 'relative', flexShrink: 0 }}>
-                {!isGroup && c.profilePhoto ? (
+                {isGroup ? (
+                  <div style={{ width: '44px', height: '44px', position: 'relative' }}>
+                    {(() => {
+                      const avatarMembers = (c.members || []).filter(m => m.id !== currentUser?.id).slice(0, 3);
+                      const count = avatarMembers.length;
+                      if (count === 0) return <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1b6b5a', fontSize: '20px' }}>{typeIcon || '\u{1F465}'}</div>;
+                      const size = count === 1 ? 44 : count === 2 ? 28 : 24;
+                      const positions = count === 1 ? [[0, 0]] : count === 2 ? [[0, 0], [16, 16]] : [[10, 0], [0, 18], [20, 18]];
+                      return avatarMembers.map((m, i) => (
+                        m.profilePhoto ? (
+                          <img key={m.id} src={m.profilePhoto} alt={m.name} style={{
+                            width: size, height: size, borderRadius: '50%', objectFit: 'cover',
+                            position: 'absolute', left: positions[i][0], top: positions[i][1],
+                            border: '2px solid #fff', zIndex: count - i,
+                          }} />
+                        ) : (
+                          <div key={m.id} style={{
+                            width: size, height: size, borderRadius: '50%',
+                            background: getAvatarColor(m.name || '?'), color: '#fff',
+                            fontSize: count === 1 ? 15 : 10, fontWeight: 600,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            position: 'absolute', left: positions[i][0], top: positions[i][1],
+                            border: '2px solid #fff', zIndex: count - i,
+                          }}>
+                            {getInitials(m.name || '?')}
+                          </div>
+                        )
+                      ));
+                    })()}
+                  </div>
+                ) : c.profilePhoto ? (
                   <img src={c.profilePhoto} alt={c.name} style={{
                     width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover',
                   }} />
                 ) : (
                 <div style={{
-                  width: '44px', height: '44px', borderRadius: isGroup ? '12px' : '50%',
-                  background: isGroup ? '#e8f5e9' : getAvatarColor(c.name),
+                  width: '44px', height: '44px', borderRadius: '50%',
+                  background: getAvatarColor(c.name),
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: isGroup ? '#1b6b5a' : 'white', fontSize: isGroup ? '20px' : '15px',
+                  color: 'white', fontSize: '15px',
                   fontWeight: 600,
                 }}>
-                  {isGroup ? (typeIcon || '👥') : getInitials(c.name)}
+                  {getInitials(c.name)}
                 </div>
                 )}
                 {c.unreadCount > 0 && (

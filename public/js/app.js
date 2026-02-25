@@ -813,37 +813,40 @@ const App = () => {
             </div>
           </div>
         )}
-        {currentUser?.roles?.length > 1 ? (
-          <div style={{ margin: '0 12px 4px' }}>
-            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '1px', padding: '0 4px 4px', textAlign: 'center' }}>
-              Viewing as
+        {(() => {
+          const allRoles = ['family', 'caregiver', 'care_for'];
+          const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Recipient' };
+          const icons = { family: '👪', caregiver: '💼', care_for: '🏠' };
+          const userRoles = currentUser?.roles || [role];
+          return (
+            <div style={{ margin: '0 12px 4px' }}>
+              {userRoles.length > 1 && (
+                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '1px', padding: '0 4px 4px', textAlign: 'center' }}>
+                  Viewing as
+                </div>
+              )}
+              <div style={{ padding: '3px', display: 'flex', gap: '3px', background: 'rgba(0,0,0,0.15)', borderRadius: '6px' }}>
+                {allRoles.map(r => {
+                  const hasRole = userRoles.includes(r);
+                  const isActive = r === role;
+                  return React.createElement('button', {
+                    key: r,
+                    onClick: hasRole ? () => handleSwitchRole(r) : undefined,
+                    style: {
+                      flex: 1, padding: '8px 6px', borderRadius: '5px', border: 'none',
+                      cursor: hasRole ? 'pointer' : 'default',
+                      fontSize: '11px', fontWeight: isActive ? 700 : 500, textAlign: 'center',
+                      background: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
+                      color: isActive ? 'white' : hasRole ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)',
+                      transition: 'all 0.2s',
+                      opacity: hasRole ? 1 : 0.5,
+                    },
+                  }, `${icons[r] || ''} ${labels[r] || r}`);
+                })}
+              </div>
             </div>
-            <div style={{ padding: '3px', display: 'flex', gap: '3px', background: 'rgba(0,0,0,0.15)', borderRadius: '6px' }}>
-              {currentUser.roles.map(r => {
-                const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Care Recipient' };
-                const icons = { family: '👪', caregiver: '💼', care_for: '🏠' };
-                const isActive = r === role;
-                return React.createElement('button', {
-                  key: r,
-                  onClick: () => handleSwitchRole(r),
-                  style: {
-                    flex: 1, padding: '8px 6px', borderRadius: '5px', border: 'none', cursor: 'pointer',
-                    fontSize: '11px', fontWeight: isActive ? 700 : 500, textAlign: 'center',
-                    background: isActive ? 'rgba(255,255,255,0.2)' : 'transparent',
-                    color: isActive ? 'white' : 'rgba(255,255,255,0.5)',
-                    transition: 'all 0.2s',
-                  },
-                }, `${icons[r] || ''} ${labels[r] || r}`);
-              })}
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: '0 16px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>
-              {role === 'caregiver' ? '💼' : role === 'care_for' ? '🏠' : '👪'} {getRoleLabel()}
-            </span>
-          </div>
-        )}
+          );
+        })()}
         <nav style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <ul className="nav-menu">
             {getNavItems().map(item => {
@@ -920,20 +923,23 @@ const App = () => {
             display: 'flex', gap: '4px', padding: '6px 8px', marginBottom: '12px',
             background: '#f0f0f0', borderRadius: '10px', width: 'fit-content',
           }}>
-            {currentUser.roles.map(r => {
+            {['family', 'caregiver', 'care_for'].map(r => {
               const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Recipient' };
               const icons = { family: '👪', caregiver: '💼', care_for: '🏠' };
               const btnColor = (roleColors[r] || roleColors.family).main;
               const isActive = r === role;
+              const hasRole = (currentUser.roles || []).includes(r);
               return React.createElement('button', {
                 key: r,
-                onClick: () => handleSwitchRole(r),
+                onClick: hasRole ? () => handleSwitchRole(r) : undefined,
                 style: {
-                  padding: '6px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                  padding: '6px 14px', borderRadius: '8px', border: 'none',
+                  cursor: hasRole ? 'pointer' : 'default',
                   fontSize: '13px', fontWeight: isActive ? 600 : 400,
                   background: isActive ? btnColor : 'transparent',
-                  color: isActive ? 'white' : '#666',
+                  color: isActive ? 'white' : hasRole ? '#666' : '#ccc',
                   transition: 'all 0.2s',
+                  opacity: hasRole ? 1 : 0.5,
                 },
               }, `${icons[r] || ''} ${labels[r] || r}`);
             })}

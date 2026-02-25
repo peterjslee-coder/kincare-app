@@ -313,6 +313,24 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
         {/* ─── Step 2: Basic Info ─── */}
         {step === 2 && (
           <>
+            {/* Role confirmation banner */}
+            {track && (
+              <div style={{
+                padding: '12px 16px', borderRadius: '10px', marginBottom: '16px',
+                background: track === 'caregiver' ? '#FFF3E0' : track === 'care_for' ? '#e8eaf6' : '#e8f5f2',
+                border: `1px solid ${track === 'caregiver' ? '#ffe0b2' : track === 'care_for' ? '#c5cae9' : '#b2dfdb'}`,
+              }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: '#333' }}>
+                  You are joining as {track === 'caregiver' ? 'a Caregiver' : track === 'care_for' ? 'someone who needs care' : 'a Family / Care Team Member'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                  You can add other roles later from your account settings.
+                  {!prefilledRole && !isInviteFlow && (
+                    <a onClick={() => { setTrack(null); setStep(1); setShowFieldErrors(false); }} style={{ marginLeft: '6px', color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Change</a>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="form-group">
               <label>First Name {showFieldErrors && !formData.firstName.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
               <input type="text" value={formData.firstName} onChange={(e) => { setFormData(p => ({ ...p, firstName: e.target.value })); setShowFieldErrors(false); }} placeholder="Your first name" autoFocus style={showFieldErrors && !formData.firstName.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
@@ -348,6 +366,17 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
         {/* ─── Step 3: Caregiver Disclosures ─── */}
         {step === 3 && track === 'caregiver' && (
           <>
+            <div style={{
+              padding: '12px 16px', borderRadius: '10px', marginBottom: '12px',
+              background: '#FFF3E0', border: '1px solid #ffe0b2',
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#333' }}>
+                You are joining as a Caregiver
+              </div>
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                You can add other roles later from your account settings.
+              </div>
+            </div>
             <div style={{ background: '#fff8e1', border: '1px solid #ffe0a0', borderRadius: '10px', padding: '16px', marginBottom: '16px', fontSize: '13px', color: '#5d4037' }}>
               <strong>Before we create your account</strong> — please review and acknowledge the following. These protect you and the families you'll work with.
             </div>
