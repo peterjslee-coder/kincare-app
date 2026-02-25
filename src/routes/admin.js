@@ -972,4 +972,109 @@ router.put("/caregivers/:userId/early-check-in", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/feedback/triage — One-call feedback summary for fast triage ───
+// Returns: counts by status, all new items with full detail, recently reviewed items
+router.get("/feedback/triage", async (req, res) => {
+  try {
+    const db = await getDb();
+
+    // Counts by status
+    const statusCounts = await db.prepare(`
+      SELECT status, COUNT(*) as count FROM feedback GROUP BY status
+    `).all();
+    const counts = { new: 0, reviewed: 0, planned: 0, done: 0, dismissed: 0 };
+    statusCounts.forEach(r => { counts[r.status] = parseInt(r.count); });
+
+    // All 'new' items with user info (these need triage)
+    const newItems = await db.prepare(`
+      SELECT f.id, f.category, f.description, f.mood, f.status, f.admin_notes, f.tags, f.page_context,
+             f.created_at, u.first_name, u.last_name, u.email, u.role AS user_role
+      FROM feedback f
+      LEFT JOIN users u ON f.user_id = u.id
+      WHERE f.status = 'new'
+      ORDER BY f.created_at DESC
+    `).all();
+
+    // Recently reviewed items (last 7 days) for cross-reference
+    const recentReviewed = await db.prepare(`
+      SELECT f.id, f.category, f.description, f.mood, f.status, f.admin_notes, f.tags,
+             f.created_at, f.updated_at, u.first_name, u.last_name, u.email
+      FROM feedback f
+      LEFT JOIN users u ON f.user_id = u.id
+      WHERE f.status IN ('reviewed', 'planned')
+      AND f.updated_at > NOW() - INTERVAL '7 days'
+      ORDER BY f.updated_at DESC
+    `).all();
+
+    const formatItem = (f) => ({
+      id: f.id,
+      category: f.category,
+      description: f.description,
+      mood: f.mood,
+      status: f.status,
+      adminNotes: f.admin_notes,
+      tags: f.tags ? JSON.parse(f.tags) : [],
+      pageContext: f.page_context ? JSON.parse(f.page_context) : null,
+      userName: f.first_name ? `${f.first_name} ${f.last_name}` : "Anonymous",
+      userEmail: f.email || "—",
+      userRole: f.user_role || "—",
+      createdAt: f.created_at,
+      updatedAt: f.updated_at,
+    });
+
+    res.json({
+      counts,
+      newItems: newItems.map(formatItem),
+      recentReviewed: recentReviewed.map(formatItem),
+      summary: `${counts.new} new, ${counts.reviewed} reviewed, ${counts.planned} planned, ${counts.done} done, ${counts.dismissed} dismissed`,
+    });
+  } catch (err) {
+    console.error("Admin feedback triage error:", err);
+    res.status(500).json({ error: "Failed to load feedback triage" });
+  }
+});
+
+// ─── POST /api/admin/feedback/bulk-update — Update multiple feedback items at once ───
+// Body: { updates: [{ id, status, adminNotes? }] }
+router.post("/feedback/bulk-update", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { updates } = req.body;
+
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ error: "updates array is required" });
+    }
+
+    const validStatuses = ['new', 'reviewed', 'planned', 'done', 'dismissed'];
+    const results = [];
+
+    for (const item of updates) {
+      if (!item.id) { results.push({ id: item.id, error: "missing id" }); continue; }
+      if (item.status && !validStatuses.includes(item.status)) {
+        results.push({ id: item.id, error: "invalid status" }); continue;
+      }
+
+      const setClauses = [];
+      const params = [];
+      if (item.status) { setClauses.push("status = ?"); params.push(item.status); }
+      if (item.adminNotes !== undefined) { setClauses.push("admin_notes = ?"); params.push(item.adminNotes); }
+      if (item.tags !== undefined) { setClauses.push("tags = ?"); params.push(JSON.stringify(item.tags)); }
+      setClauses.push("updated_at = NOW()");
+
+      if (setClauses.length > 1) {
+        params.push(item.id);
+        await db.prepare(`UPDATE feedback SET ${setClauses.join(", ")} WHERE id = ?`).run(...params);
+        results.push({ id: item.id, status: item.status || "unchanged", ok: true });
+      }
+    }
+
+    await logAdminAction(req, "bulk_update_feedback", "feedback", null, { count: results.filter(r => r.ok).length });
+
+    res.json({ updated: results.filter(r => r.ok).length, total: updates.length, results });
+  } catch (err) {
+    console.error("Admin feedback bulk-update error:", err);
+    res.status(500).json({ error: "Failed to bulk update feedback" });
+  }
+});
+
 module.exports = router;

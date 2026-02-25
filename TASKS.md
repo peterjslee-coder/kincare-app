@@ -100,6 +100,16 @@
   - **Schema implications:** `linked_user_id` ✅, `permission_tier` ✅, `visibility_settings` ✅. Remaining: invite token table, claim endpoint.
   - This is foundational — affects onboarding, care teams, notifications, and the cared-for experience. *(Pete — Feb 25)*
 - [x] ~~**Caregiver avatar in assignment block.** Fixed in v1.30.0. Shows profile photo or initials circle on assigned caregiver cards. *(Feedback — reviewed)*~~
+- [ ] **Role selection confusing for new family/team members.** Sara Huber signed up and couldn't tell if she was a caregiver or care recipient — the role options don't include a clear "family member" or "care team member" choice. The "Add a Role" card also doesn't offer a family/team member role. Ties into clearer signup role selection feature. *(Feedback — Sara Huber, Feb 25)* **P0**
+- [ ] **Draft message leaking from individual to group chat.** A draft composed in a 1:1 conversation appeared in a group chat. Likely the draft state isn't scoped per conversation — investigate Messages.js draft handling. *(Feedback — Pete, Feb 25)* **P1**
+- [ ] **Connection disappears after accepting.** Sara's connection to Pete disappeared after she accepted the connection request. The accepted connection may not be persisting correctly or the contacts query is filtering it out. *(Feedback — Pete, Feb 25)* **P1**
+- [ ] **Desktop push notifications not working.** Sara Huber reports push notifications don't work on desktop (likely macOS Chrome). May be a service worker registration or permission issue specific to desktop browsers. *(Feedback — Sara Huber, Feb 25)* **P1**
+- [ ] **Care team members should auto-connect for messaging.** When someone joins a care team (via invite), they should automatically be connected to all other team members for messaging — no separate connection request needed. Currently team members can't message each other without manually connecting first. *(Feedback — Pete, Feb 25)* **P1**
+- [ ] **Grey out unavailable roles in role switcher.** When a user has only one role, the other role options should be greyed out (not hidden). The active role should be visually distinct — bold or highlighted. *(Feedback — Pete, Feb 25)* **P2**
+- [ ] **Push notification click should navigate to messages.** Tapping a push notification currently goes to the home screen. Should deep-link to the relevant conversation in Messages. *(Feedback — Pete, Feb 25)* **P2**
+- [ ] **Push notification should show message preview.** Push notifications show generic text instead of the actual message content. Should show sender name + message preview snippet. *(Feedback — Pete, Feb 25)* **P2**
+- [ ] **Red notification badge on message avatars.** Unread message conversations should show a red dot/badge on the avatar in the conversation list. *(Feedback — Pete, Feb 25)* **P2**
+- [ ] **Swipe to reply and long-press for emojis in messages.** Mobile UX enhancement — swipe right on a message to reply, long-press to react with emoji. Standard messaging app pattern. *(Feedback — Pete, Feb 25)* **P3**
 
 
 ## Features — Up Next

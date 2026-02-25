@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * collect-feedback.js — Fetch all user feedback from production
+ * collect-feedback.js — Fetch and triage user feedback from production
  *
  * Usage:
- *   node scripts/collect-feedback.js              # Fetch from production
- *   node scripts/collect-feedback.js --local       # Fetch from localhost:3001
+ *   node scripts/collect-feedback.js                     # Full fetch → FEEDBACK.md
+ *   node scripts/collect-feedback.js --triage             # Quick triage: show new items + counts
+ *   node scripts/collect-feedback.js --mark-reviewed      # Mark all 'new' items as 'reviewed'
+ *   node scripts/collect-feedback.js --local              # Use localhost:3001 instead of production
  *
- * Authenticates as admin, pulls all feedback, and writes FEEDBACK.md
+ * Authenticates via ADMIN_API_KEY (bypasses 2FA) or email/password login.
  * Run this before planning any new version to incorporate real user input.
  */
 
@@ -23,6 +25,8 @@ const ADMIN_PASSWORD = "inplace123";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || null;
 
 const isLocal = process.argv.includes("--local");
+const isTriage = process.argv.includes("--triage");
+const isMarkReviewed = process.argv.includes("--mark-reviewed");
 const BASE_URL = isLocal ? LOCAL_URL : PROD_URL;
 
 function request(url, options = {}) {
@@ -51,29 +55,102 @@ function request(url, options = {}) {
   });
 }
 
+async function getAuthHeaders() {
+  if (ADMIN_API_KEY) {
+    return { "X-Admin-API-Key": ADMIN_API_KEY };
+  }
+  const loginRes = await request(`${BASE_URL}/api/auth/login`, {
+    method: "POST",
+    body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+  });
+  if (loginRes.status !== 200 || !loginRes.data.token) {
+    console.error("❌ Login failed:", loginRes.data);
+    console.error("💡 Tip: Set ADMIN_API_KEY env var to bypass login/2FA");
+    process.exit(1);
+  }
+  return { Authorization: `Bearer ${loginRes.data.token}` };
+}
+
+async function triageMode() {
+  console.log(`\n⚡ Quick triage from ${BASE_URL}...\n`);
+  const authHeaders = await getAuthHeaders();
+
+  const res = await request(`${BASE_URL}/api/admin/feedback/triage`, { headers: authHeaders });
+  if (res.status !== 200) {
+    console.error("❌ Triage fetch failed:", res.data);
+    process.exit(1);
+  }
+
+  const { counts, newItems, recentReviewed, summary } = res.data;
+  console.log(`📊 ${summary}\n`);
+
+  if (newItems.length === 0) {
+    console.log("✅ No new feedback to triage!\n");
+    if (recentReviewed.length) {
+      console.log(`📋 ${recentReviewed.length} reviewed/planned item(s) from last 7 days:\n`);
+      for (const f of recentReviewed) {
+        console.log(`  [${f.status.toUpperCase()}] ${f.category} — ${f.description.substring(0, 70)} (${f.userName})`);
+      }
+    }
+    return;
+  }
+
+  console.log(`🆕 ${newItems.length} NEW item(s) to triage:\n`);
+  for (let i = 0; i < newItems.length; i++) {
+    const f = newItems[i];
+    const ctx = f.pageContext;
+    console.log(`  ${i + 1}. [${f.category.toUpperCase()}] ${f.description.substring(0, 80)}`);
+    console.log(`     From: ${f.userName} (${f.userEmail}) — ${f.userRole}`);
+    if (ctx?.page) console.log(`     Page: ${ctx.page} | ${ctx.browser || '?'} on ${ctx.os || '?'}`);
+    console.log(`     Date: ${new Date(f.createdAt).toLocaleDateString()}`);
+    console.log(`     ID: ${f.id}`);
+    console.log('');
+  }
+
+  console.log(`💡 Run with --mark-reviewed to mark all ${newItems.length} new items as reviewed.`);
+}
+
+async function markReviewedMode() {
+  console.log(`\n📝 Marking all 'new' items as 'reviewed' on ${BASE_URL}...\n`);
+  const authHeaders = await getAuthHeaders();
+
+  // First get all new items
+  const triageRes = await request(`${BASE_URL}/api/admin/feedback/triage`, { headers: authHeaders });
+  if (triageRes.status !== 200) {
+    console.error("❌ Triage fetch failed:", triageRes.data);
+    process.exit(1);
+  }
+
+  const { newItems } = triageRes.data;
+  if (newItems.length === 0) {
+    console.log("✅ No new items to mark.\n");
+    return;
+  }
+
+  const updates = newItems.map(f => ({ id: f.id, status: "reviewed" }));
+  const bulkRes = await request(`${BASE_URL}/api/admin/feedback/bulk-update`, {
+    method: "POST",
+    headers: authHeaders,
+    body: { updates },
+  });
+
+  if (bulkRes.status !== 200) {
+    console.error("❌ Bulk update failed:", bulkRes.data);
+    process.exit(1);
+  }
+
+  console.log(`✅ Marked ${bulkRes.data.updated} item(s) as reviewed.\n`);
+}
+
 async function main() {
+  if (isTriage) return triageMode();
+  if (isMarkReviewed) return markReviewedMode();
+
   console.log(`\n📋 Collecting feedback from ${BASE_URL}...\n`);
 
   // 1. Authenticate — prefer API key (bypasses 2FA), fall back to email/password login
-  let authHeaders = {};
-  if (ADMIN_API_KEY) {
-    console.log("🔑 Using ADMIN_API_KEY for authentication");
-    authHeaders = { "X-Admin-API-Key": ADMIN_API_KEY };
-  } else {
-    const loginRes = await request(`${BASE_URL}/api/auth/login`, {
-      method: "POST",
-      body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
-    });
-
-    if (loginRes.status !== 200 || !loginRes.data.token) {
-      console.error("❌ Login failed:", loginRes.data);
-      console.error("💡 Tip: Set ADMIN_API_KEY env var to bypass login/2FA");
-      process.exit(1);
-    }
-
-    authHeaders = { Authorization: `Bearer ${loginRes.data.token}` };
-    console.log("✅ Authenticated as admin");
-  }
+  const authHeaders = await getAuthHeaders();
+  console.log("✅ Authenticated");
 
   // 2. Fetch all feedback (paginated, up to 500)
   let allFeedback = [];

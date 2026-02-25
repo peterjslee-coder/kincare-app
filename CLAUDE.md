@@ -192,6 +192,8 @@ The production PostgreSQL database is a Railway service. The `DATABASE_URL` env 
 - `npm run setup` — Seed + start combined
 - `npm test` — Run Jest test suite (53 tests, no database needed)
 - `npm run collect-feedback` — Fetch all user feedback from production into FEEDBACK.md
+- `npm run collect-feedback -- --triage` — Quick triage: show new items + counts (fast, no file write)
+- `npm run collect-feedback -- --mark-reviewed` — Bulk mark all 'new' items as 'reviewed'
 
 ## Feedback-Driven Development Workflow ("Run Feedback Loop")
 
@@ -207,33 +209,37 @@ When Pete says **"Run feedback loop"**, execute this full cycle:
 | **done** | Shipped, verified working in production. |
 | **dismissed** | Genuinely not going to do — bad idea, duplicate, misunderstanding. NOT for "won't fix right now" items. |
 
-### The Loop
+### The Loop (Fast Path)
 
-1. **Pull feedback from production.** Use the admin API to fetch all feedback:
+Use these two admin API endpoints for fast feedback triage:
+
+1. **Pull new feedback in one call:**
    ```
-   GET https://yourinplace.com/api/feedback?limit=100
+   GET https://yourinplace.com/api/admin/feedback/triage
    Header: x-admin-api-key: <ADMIN_API_KEY>
    ```
-   If `npm run collect-feedback` works from the current environment, use that instead. It writes `FEEDBACK.md` (gitignored, local working file).
+   Returns: `counts` (by status), `newItems` (full detail), `recentReviewed` (last 7 days), `summary` (one-line).
 
-2. **Mark all `new` items as `reviewed`.** After reading each new item:
+2. **Read the new items, triage into TASKS.md**, then bulk-mark as reviewed:
    ```
-   PUT https://yourinplace.com/api/feedback/:id
-   Body: { "status": "reviewed" }
+   POST https://yourinplace.com/api/admin/feedback/bulk-update
+   Header: x-admin-api-key: <ADMIN_API_KEY>
+   Body: { "updates": [{ "id": "...", "status": "reviewed" }, ...] }
    ```
+   Can also set `adminNotes` and `tags` per item. Praise items can go straight to `{ "status": "done" }`.
 
-3. **Triage into TASKS.md.** For each actionable new item, add it to the Bugs or Features section in TASKS.md with a `*(Feedback — <date>)*` tag. Praise/non-actionable items can be marked `done` immediately.
+3. **Cross-reference already-fixed items.** Scan `recentReviewed` from the triage response against shipped versions. Bulk-mark as `done` using the same endpoint.
 
-4. **Cross-reference already-fixed items.** Scan all `reviewed` and `planned` items against shipped versions. If an item has been fixed and verified, mark it `done`:
-   ```
-   PUT https://yourinplace.com/api/feedback/:id
-   Body: { "status": "done" }
-   ```
-   Also check off the corresponding line in TASKS.md.
+4. **Clean up TASKS.md.** Remove duplicates, mark stale items as done if fixed.
 
-5. **Clean up TASKS.md.** Remove duplicates, mark stale items as done if fixed, correct any outdated descriptions.
+5. **Report summary.** Tell Pete: how many new items, what was triaged, what's still open — organized by priority tier.
 
-6. **Report summary.** Tell Pete: how many new items were found, what was triaged, what was marked done, and what's still open — organized by theme.
+### The Loop (Legacy — Full Fetch)
+
+If a full export to FEEDBACK.md is needed:
+1. `npm run collect-feedback` — fetches all items, writes FEEDBACK.md
+2. Triage manually from FEEDBACK.md
+3. Mark items via individual `PUT /api/feedback/:id` calls
 
 ### Planning a Version
 
