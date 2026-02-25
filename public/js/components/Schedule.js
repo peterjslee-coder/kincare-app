@@ -243,13 +243,16 @@ const Schedule = window.Schedule = () => {
                 </div>
                 {hasSessions && daySessions.length > 0 && (
                   <div style={{ marginTop: 3, overflow: 'hidden' }}>
-                    {daySessions.slice(0, 2).map((s, si) => {
+                    {daySessions.sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).slice(0, 2).map((s, si) => {
                       const label = s.recipient_name ? s.recipient_name.split(' ')[0] : (s.caregiver_name ? s.caregiver_name.split(' ')[0] : '');
                       const svcMap = { companionship: 'Comp', personal_care: 'Care', meal_prep: 'Meal', transportation: 'Trans', health_wellness: 'Health', full_day: 'Full' };
                       const svc = svcMap[s.service_type] || '';
+                      const tParts = (s.scheduled_time || '').split(':');
+                      const tH = parseInt(tParts[0]) || 0;
+                      const timeLabel = tH === 0 ? '12a' : tH < 12 ? `${tH}a` : tH === 12 ? '12p' : `${tH - 12}p`;
                       return (
                         <div key={si} style={{ fontSize: 8, lineHeight: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.85 }}>
-                          {label}{svc ? ` · ${svc}` : ''} · {s.duration_hours || 2}h
+                          <span style={{ fontWeight: 700 }}>{timeLabel}</span> {label}{svc ? ` · ${svc}` : ''} · {s.duration_hours || 2}h
                         </div>
                       );
                     })}

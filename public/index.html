@@ -20,7 +20,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=1.30.1">
+  <link rel="stylesheet" href="/css/styles.css?v=1.30.2">
 
   <!-- Leaflet CSS for maps (AreaMap, Caregivers nearby) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -47,7 +47,7 @@
     Source files live in /js/ for easy editing — one component per file.
   -->
   <script>
-    window.APP_VERSION = '1.30.1';
+    window.APP_VERSION = '1.30.2';
     (async function() {
       var scripts = [
         '/js/utils.js',
@@ -95,7 +95,7 @@
       ];
       try {
         var sources = await Promise.all(
-          scripts.map(function(url) { return fetch(url + '?v=1.30.1').then(function(r) { return r.text(); }); })
+          scripts.map(function(url) { return fetch(url + '?v=1.30.2').then(function(r) { return r.text(); }); })
         );
         var combined = sources.join('\n;\n');
         var compiled = Babel.transform(combined, { presets: ['react'] }).code;
@@ -113,7 +113,7 @@
     // Register service worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js?v=1.30.1').then(function(reg) {
+        navigator.serviceWorker.register('/sw.js?v=1.30.2').then(function(reg) {
           console.log('SW registered:', reg.scope);
         }).catch(function(err) {
           console.log('SW registration failed:', err);
