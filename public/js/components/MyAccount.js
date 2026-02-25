@@ -653,12 +653,84 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
                   <div className="info-label">Phone</div>
                   <div className="info-value">{(() => { const d = (user?.phone || '').replace(/\D/g, ''); if (!d) return 'Not set'; if (d.length === 10) return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6); return user.phone; })()}</div>
                 </div>
-                <div className="info-item">
-                  <div className="info-label">Account Type</div>
-                  <div className="info-value">
-                    {user ? (roleLabels[user.role] || user.role) : '—'}
-                    {isDemo && <span style={{ marginLeft: 8, fontSize: 11, background: '#fff3cd', color: '#856404', padding: '2px 8px', borderRadius: 12 }}>Demo</span>}
-                  </div>
+                {/* Your Profiles — unified role display */}
+                <div style={{ marginTop: 4, marginBottom: -8 }}>
+                  <div className="info-label" style={{ marginBottom: 10 }}>Your Profiles</div>
+                  {(() => {
+                    const currentRoles = user?.roles || [user?.role];
+                    const allRoles = [
+                      { id: 'family', label: 'Family / Care Team', icon: '👪', desc: 'Find and manage care for a loved one' },
+                      { id: 'caregiver', label: 'Caregiver', icon: '💼', desc: 'Provide care and find work opportunities' },
+                      { id: 'care_for', label: 'Care Recipient', icon: '🏠', desc: 'Manage your own care and schedule' },
+                    ];
+                    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+                      allRoles.map(r => {
+                        const isActive = currentRoles.includes(r.id);
+                        const isCurrentView = user?.role === r.id || (user?.activeRole === r.id);
+                        return React.createElement('div', {
+                          key: r.id,
+                          style: {
+                            display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '12px 14px', borderRadius: 10,
+                            background: isActive ? (isCurrentView ? '#e8f5f0' : '#f8faf9') : '#fafafa',
+                            border: isActive ? (isCurrentView ? '2px solid #1b6b5a' : '1px solid #d0e8e0') : '1px dashed #ddd',
+                            opacity: isActive ? 1 : 0.55,
+                            cursor: isActive ? 'default' : 'pointer',
+                            transition: 'all 0.2s',
+                          },
+                          onClick: !isActive && !isDemo ? async () => {
+                            if (!confirm('Add the "' + r.label + '" role to your account?')) return;
+                            try {
+                              const res = await apiFetch('/api/auth/add-role', {
+                                method: 'POST', body: JSON.stringify({ role: r.id }),
+                              });
+                              if (res?.ok) {
+                                const data = await res.json();
+                                if (data.token) { setAuthToken(data.token); }
+                                const meRes = await apiFetch('/api/auth/me');
+                                if (meRes?.ok) {
+                                  const meData = await meRes.json();
+                                  setUser(meData.user);
+                                  if (setCurrentUser && meData.user) {
+                                    const ur = meData.user.roles || [meData.user.role];
+                                    setCurrentUser({
+                                      id: meData.user.id, email: meData.user.email, role: meData.user.role,
+                                      roles: ur, firstName: meData.user.first_name, lastName: meData.user.last_name,
+                                      profilePhoto: meData.user.profile_photo || null,
+                                      emailVerified: !!meData.user.email_verified, isDemo: !!meData.user.is_demo,
+                                      isAdmin: !!meData.user.is_admin,
+                                    });
+                                  }
+                                }
+                                if (typeof showToast === 'function') showToast(r.label + ' role added!', 'success');
+                              } else {
+                                const err = await res?.json().catch(() => ({}));
+                                if (typeof showToast === 'function') showToast(err.error || 'Failed to add role', 'error');
+                              }
+                            } catch { if (typeof showToast === 'function') showToast('Failed to add role', 'error'); }
+                          } : undefined,
+                        },
+                          React.createElement('span', { style: { fontSize: 24, flexShrink: 0 } }, r.icon),
+                          React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+                            React.createElement('div', { style: { fontWeight: isActive ? 600 : 400, fontSize: 14, color: isActive ? '#333' : '#999', display: 'flex', alignItems: 'center', gap: 6 } },
+                              r.label,
+                              isActive && isCurrentView && React.createElement('span', {
+                                style: { fontSize: 10, background: '#1b6b5a', color: '#fff', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }
+                              }, 'ACTIVE'),
+                              isActive && !isCurrentView && React.createElement('span', {
+                                style: { fontSize: 10, background: '#e0e0e0', color: '#666', padding: '2px 7px', borderRadius: 10, fontWeight: 500 }
+                              }, 'ADDED'),
+                            ),
+                            React.createElement('div', { style: { fontSize: 12, color: isActive ? '#666' : '#bbb', marginTop: 2 } },
+                              isActive ? r.desc : 'Tap to add this profile'
+                            ),
+                          ),
+                          !isActive && React.createElement('span', { style: { fontSize: 18, color: '#bbb', fontWeight: 300 } }, '+'),
+                        );
+                      })
+                    );
+                  })()}
+                  {isDemo && <div style={{ marginTop: 6, fontSize: 11, background: '#fff3cd', color: '#856404', padding: '4px 10px', borderRadius: 8, display: 'inline-block' }}>Demo Account</div>}
                 </div>
               </div>
             )}
@@ -977,75 +1049,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         </div>
       )}
 
-      {/* Add a Role — only for non-demo users who don't have all roles yet */}
-      {!isDemo && user && (() => {
-        const currentRoles = user.roles || [user.role];
-        const availableRoles = [
-          { id: 'family', label: 'Family / Care Team', icon: '👪', desc: 'Find and manage care for a loved one' },
-          { id: 'caregiver', label: 'Caregiver', icon: '💼', desc: 'Provide care and find work opportunities' },
-          { id: 'care_for', label: 'Care Recipient', icon: '🏠', desc: 'Manage your own care and schedule' },
-        ].filter(r => !currentRoles.includes(r.id));
-
-        if (availableRoles.length === 0) return null;
-
-        return React.createElement('div', { className: 'card', style: { marginTop: 20, padding: 20 } },
-          React.createElement('div', { className: 'card-header', style: { marginBottom: 12 } }, 'Add a Role'),
-          React.createElement('p', { style: { fontSize: 13, color: '#888', margin: '0 0 16px' } },
-            'You can use InPlace in multiple ways from the same account.'
-          ),
-          availableRoles.map(r =>
-            React.createElement('button', {
-              key: r.id,
-              onClick: async () => {
-                if (!confirm(`Add the "${r.label}" role to your account?`)) return;
-                try {
-                  const res = await apiFetch('/api/auth/add-role', {
-                    method: 'POST', body: JSON.stringify({ role: r.id }),
-                  });
-                  if (res?.ok) {
-                    const data = await res.json();
-                    if (data.token) { setAuthToken(data.token); }
-                    // Refresh user data
-                    const meRes = await apiFetch('/api/auth/me');
-                    if (meRes?.ok) {
-                      const meData = await meRes.json();
-                      setUser(meData.user);
-                      if (setCurrentUser && meData.user) {
-                        const ur = meData.user.roles || [meData.user.role];
-                        setCurrentUser({
-                          id: meData.user.id, email: meData.user.email, role: meData.user.role,
-                          roles: ur,
-                          firstName: meData.user.first_name, lastName: meData.user.last_name,
-                          profilePhoto: meData.user.profile_photo || null,
-                          emailVerified: !!meData.user.email_verified, isDemo: !!meData.user.is_demo,
-                          isAdmin: !!meData.user.is_admin,
-                        });
-                      }
-                    }
-                    if (typeof showToast === 'function') showToast(`${r.label} role added!`, 'success');
-                  } else {
-                    const err = await res?.json().catch(() => ({}));
-                    if (typeof showToast === 'function') showToast(err.error || 'Failed to add role', 'error');
-                  }
-                } catch { if (typeof showToast === 'function') showToast('Failed to add role', 'error'); }
-              },
-              style: {
-                width: '100%', padding: '14px 16px', marginBottom: 8, background: '#fff',
-                border: '1px solid #e0e0e0', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
-                display: 'flex', alignItems: 'center', gap: 12, transition: 'border-color 0.2s',
-              },
-              onMouseOver: (e) => { e.currentTarget.style.borderColor = '#1b6b5a'; },
-              onMouseOut: (e) => { e.currentTarget.style.borderColor = '#e0e0e0'; },
-            },
-              React.createElement('span', { style: { fontSize: 28 } }, r.icon),
-              React.createElement('div', null,
-                React.createElement('div', { style: { fontWeight: 600, fontSize: 14, color: '#333' } }, r.label),
-                React.createElement('div', { style: { fontSize: 12, color: '#888', marginTop: 2 } }, r.desc),
-              ),
-            )
-          ),
-        );
-      })()}
+      {/* Add a Role — merged into "Your Profiles" section in Profile card above */}
 
       {/* Remove a Role — only for non-demo users with multiple roles */}
       {!isDemo && user && (() => {
