@@ -275,11 +275,11 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       return res.status(400).json({ error: "hourlyRate is required" });
     }
 
-    // Auto-geocode if city/state provided
+    // Auto-geocode if city/state/zip provided
     let lat = null;
     let lng = null;
-    if (city || address) {
-      const addrStr = buildAddressString({ address, city, state });
+    if (city || address || zip) {
+      const addrStr = buildAddressString({ address, city, state, zip });
       const geo = await geocodeAddress(addrStr);
       if (geo) {
         lat = geo.lat;

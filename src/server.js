@@ -395,6 +395,43 @@ async function start() {
   }, NOTIFICATION_POLL_INTERVAL);
   console.log(`  Session notification poller started (every ${NOTIFICATION_POLL_INTERVAL / 1000}s)`);
 
+  // ─── Backfill missing caregiver coordinates from zip/city/state ───
+  // One-time pass on startup: geocode caregivers who have zip but no lat/lng
+  (async () => {
+    try {
+      const { geocodeAddress, buildAddressString } = require("./utils/geocode");
+      const missing = await db.prepare(`
+        SELECT cp.user_id, cp.address_line1, cp.location_city, cp.location_state, cp.zip
+        FROM caregiver_profiles cp
+        WHERE cp.latitude IS NULL AND cp.longitude IS NULL
+          AND (cp.zip IS NOT NULL OR cp.location_city IS NOT NULL)
+      `).all();
+      if (missing.length > 0) {
+        console.log(`  Geocode backfill: ${missing.length} caregiver(s) missing coordinates`);
+        for (const cg of missing) {
+          const addrStr = buildAddressString({
+            address: cg.address_line1,
+            city: cg.location_city,
+            state: cg.location_state,
+            zip: cg.zip,
+          });
+          if (!addrStr) continue;
+          const geo = await geocodeAddress(addrStr);
+          if (geo) {
+            await db.prepare(
+              "UPDATE caregiver_profiles SET latitude = ?, longitude = ? WHERE user_id = ?"
+            ).run(geo.lat, geo.lng, cg.user_id);
+            console.log(`    Geocoded ${cg.location_city || cg.zip} → ${geo.lat}, ${geo.lng}`);
+          }
+          // Nominatim rate limit: 1 req/sec
+          await new Promise(r => setTimeout(r, 1100));
+        }
+      }
+    } catch (err) {
+      console.log("  Geocode backfill skipped:", err.message);
+    }
+  })();
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n  InPlace API v0.9.0 running on port ${PORT}\n`);
     console.log(`  WebSocket server ready`);
