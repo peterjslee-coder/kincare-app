@@ -77,7 +77,7 @@
 - [x] ~~**Star rating on caregiver card unclear.** Fixed in v1.30.0. Added tooltip "Family rating of this caregiver" on all star ratings. *(Feedback — Feb 24, new)*~~
 - [x] ~~**Betty tile and care team should be unified.** Fixed in v1.30.0. Care team nested inside Betty's card with overlapping member avatars. *(Feedback — Feb 24, new)*~~
 - [x] ~~**Show assigned caregiver on the map (Find Nearby).** When a caregiver like Cary is assigned, show her pin/flag on the family's caregiver map view. Fixed in v1.30.3 — assigned caregivers now shown with distinct pins on family's map. *(Feedback — Feb 24, new)*~~
-- [ ] **Care team tile — overlapping avatar display with real photos.** Care team tile should show actual member profile photos (not random emojis), lined up and slightly overlapping. Joined members = full color, invited/pending members = greyed out. Clicking should link to member profiles. *(Feedback — Feb 24 + Feb 25, new)*
+- [x] ~~**Care team tile — overlapping avatar display with real photos.** Fixed in v1.31.5. Real profile photos with initials fallback, pending invites shown as greyed "?" circles. CareTeamManage also shows photos. *(Feedback — Feb 24 + Feb 25, new)*~~
 - [x] ~~**Betty's tile health condition text too dark/hard to read.** Fixed in v1.29.1. Changed to rgba(255,255,255,0.75) on dark teal card. *(Feedback — Feb 24, new)*~~
 - [x] ~~**"Request Care" button misplaced in sidebar.** Fixed in v1.30.0. Now full-width orange accent button, visually distinct from nav. *(Feedback — Feb 24, new)*~~
 - [x] ~~**Care notes — add delete option.** Fixed in v1.31.2. Delete button added to CareProfile family view with confirmation prompt. *(Feedback — Feb 24, new)*~~
