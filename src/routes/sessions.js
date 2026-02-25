@@ -480,15 +480,17 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   };
 
   const recurrenceLabel = isRecurring ? ` (${recurrenceRule}, ${dates.length} sessions)` : "";
+  const booker = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+  const bookerName = booker ? `${booker.first_name} ${booker.last_name}` : "Someone";
   await db.prepare(`
     INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message)
     VALUES (?, ?, ?, 'session_booked', ?, ?)
   `).run(
     uuid(), req.user.id, careRecipientId,
-    `${serviceLabels[serviceType] || serviceType} requested${recurrenceLabel}`,
+    `${serviceLabels[serviceType] || serviceType} requested by ${bookerName}${recurrenceLabel}`,
     isRecurring
-      ? `Recurring ${recurrenceRule} sessions booked starting ${scheduledDate} at ${scheduledTime} (${dates.length} sessions)`
-      : `Session booked for ${scheduledDate} at ${scheduledTime}`
+      ? `${bookerName} booked recurring ${recurrenceRule} sessions starting ${scheduledDate} at ${scheduledTime} (${dates.length} sessions)`
+      : `${bookerName} booked a session for ${scheduledDate} at ${scheduledTime}`
   );
 
   // Return first session for single bookings, all for recurring

@@ -39,7 +39,7 @@ router.get("/conversations", async (req, res) => {
 
     // Get members
     const members = await db.prepare(`
-      SELECT u.id, u.first_name, u.last_name, u.role
+      SELECT u.id, u.first_name, u.last_name, u.role, u.profile_photo
       FROM conversation_members cm
       JOIN users u ON cm.user_id = u.id
       WHERE cm.conversation_id = ?
@@ -47,20 +47,24 @@ router.get("/conversations", async (req, res) => {
 
     // For direct conversations, use partner name as conversation name
     let displayName = conv.name;
+    let partnerPhoto = null;
     if (conv.type === "direct") {
       const partner = members.find(m => m.id !== userId);
       displayName = partner ? `${partner.first_name} ${partner.last_name}` : "Unknown";
+      partnerPhoto = partner?.profile_photo || null;
     }
 
     conversations.push({
       id: conv.id,
       type: conv.type,
       name: displayName,
+      profilePhoto: partnerPhoto,
       careTeamId: conv.care_team_id,
       members: members.map(m => ({
         id: m.id,
         name: `${m.first_name} ${m.last_name}`,
         role: m.role,
+        profilePhoto: m.profile_photo || null,
       })),
       lastMessage: lastMsg?.content || null,
       lastMessageAt: lastMsg?.created_at || conv.created_at,
@@ -84,7 +88,7 @@ router.get("/conversations", async (req, res) => {
     if (existingConv) continue;
 
     // Build a virtual conversation from legacy messages
-    const partner = await db.prepare("SELECT id, first_name, last_name, role FROM users WHERE id = ?").get(row.partner_id);
+    const partner = await db.prepare("SELECT id, first_name, last_name, role, profile_photo FROM users WHERE id = ?").get(row.partner_id);
     if (!partner) continue;
 
     const lastMsg = await db.prepare(`
@@ -103,10 +107,11 @@ router.get("/conversations", async (req, res) => {
       id: `legacy-${row.partner_id}`,
       type: "direct",
       name: `${partner.first_name} ${partner.last_name}`,
+      profilePhoto: partner.profile_photo || null,
       careTeamId: null,
       members: [
         { id: userId, name: "You", role: req.user.activeRole || req.user.role },
-        { id: partner.id, name: `${partner.first_name} ${partner.last_name}`, role: partner.role },
+        { id: partner.id, name: `${partner.first_name} ${partner.last_name}`, role: partner.role, profilePhoto: partner.profile_photo || null },
       ],
       lastMessage: lastMsg?.content || null,
       lastMessageAt: lastMsg?.created_at || null,
@@ -227,7 +232,7 @@ router.get("/contacts", async (req, res) => {
   let users;
   if (search) {
     users = await db.prepare(`
-      SELECT id, first_name, last_name, role, email FROM users
+      SELECT id, first_name, last_name, role, email, profile_photo FROM users
       WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ?
         AND (LOWER(first_name || ' ' || last_name) LIKE ? OR LOWER(email) LIKE ?)
       ORDER BY first_name ASC
@@ -235,7 +240,7 @@ router.get("/contacts", async (req, res) => {
     `).all(...idList, isDemo, `%${search}%`, `%${search}%`);
   } else {
     users = await db.prepare(`
-      SELECT id, first_name, last_name, role, email FROM users
+      SELECT id, first_name, last_name, role, email, profile_photo FROM users
       WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ?
       ORDER BY first_name ASC
     `).all(...idList, isDemo);
@@ -246,6 +251,7 @@ router.get("/contacts", async (req, res) => {
     name: `${u.first_name} ${u.last_name}`,
     role: u.role,
     email: u.email,
+    profilePhoto: u.profile_photo || null,
   }));
 
   res.json({ contacts });

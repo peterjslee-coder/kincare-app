@@ -196,6 +196,27 @@ const Messages = window.Messages = () => {
       }
     });
     fetchPendingRequests();
+
+    // Listen for push nav while already on Messages page
+    const handlePushNav = (event) => {
+      if (event.data?.type === 'PUSH_NAVIGATE') {
+        const d = event.data.data || {};
+        if (d.type === 'message' && d.conversationId) {
+          setActiveConvId(d.conversationId);
+          setInputText(draftsRef.current[d.conversationId] || '');
+          fetchMessages(d.conversationId);
+          fetchConversations();
+        }
+      }
+    };
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handlePushNav);
+    }
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handlePushNav);
+      }
+    };
   }, []);
 
   // Listen for real-time incoming messages
@@ -724,6 +745,11 @@ const Messages = window.Messages = () => {
                   transition: isSwiping ? 'none' : 'transform 0.2s',
                 }}>
                 <div style={{ position: 'relative', flexShrink: 0 }}>
+                {!isGroup && c.profilePhoto ? (
+                  <img src={c.profilePhoto} alt={c.name} style={{
+                    width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover',
+                  }} />
+                ) : (
                 <div style={{
                   width: '44px', height: '44px', borderRadius: isGroup ? '12px' : '50%',
                   background: isGroup ? '#e8f5e9' : getAvatarColor(c.name),
@@ -733,6 +759,7 @@ const Messages = window.Messages = () => {
                 }}>
                   {isGroup ? (typeIcon || '👥') : getInitials(c.name)}
                 </div>
+                )}
                 {c.unreadCount > 0 && (
                   <div style={{
                     position: 'absolute', top: '-2px', right: '-2px',

@@ -114,9 +114,12 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           <div className="splash-hero-subtitle" style={{ fontSize: '22px', color: '#1b6b5a', fontWeight: 600, marginBottom: '20px', lineHeight: 1.4 }}>
             Fair wages for caregivers. Real-time peace of mind for families.
           </div>
-          <p className="splash-hero-body" style={{ fontSize: '16px', color: '#555', lineHeight: 1.6, marginBottom: '28px', maxWidth: '480px' }}>
+          <p className="splash-hero-body" style={{ fontSize: '16px', color: '#555', lineHeight: 1.6, marginBottom: '16px', maxWidth: '480px' }}>
             inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Caregivers keep 80%. Families see everything in real time.
           </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#f0f9f6', border: '1px solid #d0e8e0', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', color: '#1b6b5a', fontWeight: 500, marginBottom: '20px' }}>
+            <span style={{ fontSize: '15px' }}>{'\u{1F4CD}'}</span> Launching Spring 2026 in Virginia
+          </div>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
             <button onClick={() => onNavigate('register')} style={{
               padding: '14px 32px', fontSize: '16px', fontWeight: 600,
