@@ -260,12 +260,16 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                   ...(isExpanded ? { background: '#f8faf9', margin: '0 -16px', padding: '14px 16px' } : {}) }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: '50%',
-                    background: m.role === 'leader' ? '#e0f2e9' : '#f0f4f8',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16, fontWeight: 700, color: roleColors[m.role] || '#1b6b5a' }}>
-                    {m.firstName?.[0]}{m.lastName?.[0]}
-                  </div>
+                  {m.avatarUrl ? (
+                    <img src={m.avatarUrl} alt={`${m.firstName?.[0] || ''}${m.lastName?.[0] || ''}`} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 42, height: 42, borderRadius: '50%',
+                      background: m.role === 'leader' ? '#e0f2e9' : '#f0f4f8',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16, fontWeight: 700, color: roleColors[m.role] || '#1b6b5a' }}>
+                      {m.firstName?.[0]}{m.lastName?.[0]}
+                    </div>
+                  )}
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{m.firstName} {m.lastName}</div>
                     <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>

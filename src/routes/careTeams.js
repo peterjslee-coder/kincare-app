@@ -59,12 +59,27 @@ router.get("/", requireRole("family"), async (req, res) => {
       ORDER BY ct.created_at DESC
     `).all(req.user.id);
 
-    // Add member counts
+    // Add member counts + member summaries (for avatar display)
     for (const team of teams) {
-      const countRow = await db.prepare(
-        "SELECT COUNT(*) AS count FROM care_team_members WHERE care_team_id = ?"
+      const members = await db.prepare(`
+        SELECT ctm.role, u.first_name, u.last_name, u.avatar_url
+        FROM care_team_members ctm
+        JOIN users u ON ctm.user_id = u.id
+        WHERE ctm.care_team_id = ?
+        ORDER BY ctm.role = 'leader' DESC, ctm.joined_at ASC
+      `).all(team.id);
+      team.memberCount = members.length;
+      team.members = members.map(m => ({
+        firstName: m.first_name,
+        lastName: m.last_name,
+        avatarUrl: m.avatar_url,
+        role: m.role,
+      }));
+      // Also get pending invite count
+      const inviteCount = await db.prepare(
+        "SELECT COUNT(*) AS count FROM care_team_invites WHERE care_team_id = ? AND status = 'pending'"
       ).get(team.id);
-      team.memberCount = parseInt(countRow?.count || 0);
+      team.pendingInvites = parseInt(inviteCount?.count || 0);
     }
 
     res.json({ careTeams: teams });

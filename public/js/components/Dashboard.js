@@ -491,28 +491,43 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
             <div style={{ position: 'absolute', right: 16, top: 24, color: 'rgba(255,255,255,0.5)', fontSize: 18 }}>→</div>
           </div>
           {/* Care team nested inside Betty card */}
-          {!isDemo && careTeams.length > 0 && (
+          {!isDemo && careTeams.length > 0 && (() => {
+            const team = careTeams[0];
+            const members = team.members || [];
+            const pendingCount = team.pendingInvites || 0;
+            const shown = members.slice(0, 4);
+            const overflow = (members.length + pendingCount) - shown.length - pendingCount;
+            const colors = ['#e8724a', '#4a90d9', '#7b61ff', '#2ecc71'];
+            return (
             <div onClick={(e) => { e.stopPropagation(); onNavigate && onNavigate('care-team'); }}
               style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ display: 'flex' }}>
-                  {Array.from({ length: Math.min(careTeams[0]?.memberCount || 1, 4) }).map((_, i) => {
-                    const colors = ['#e8724a', '#4a90d9', '#7b61ff', '#2ecc71'];
-                    return (
-                      <div key={i} style={{ width: 28, height: 28, borderRadius: '50%', background: colors[i % colors.length], border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 600, zIndex: 4 - i }}>
-                        {['👪', '🤝', '👤', '👤'][i]}
+                  {shown.map((m, i) => {
+                    const initials = `${(m.firstName || '')[0] || ''}${(m.lastName || '')[0] || ''}`.toUpperCase();
+                    return m.avatarUrl ? (
+                      <img key={i} src={m.avatarUrl} alt={initials} style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, objectFit: 'cover', zIndex: shown.length - i }} />
+                    ) : (
+                      <div key={i} style={{ width: 28, height: 28, borderRadius: '50%', background: colors[i % colors.length], border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600, zIndex: shown.length - i }}>
+                        {initials}
                       </div>
                     );
                   })}
+                  {pendingCount > 0 && Array.from({ length: Math.min(pendingCount, 2) }).map((_, i) => (
+                    <div key={'p' + i} style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '2px solid #0f4238', marginLeft: -8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 600, zIndex: 0 }}>
+                      ?
+                    </div>
+                  ))}
                 </div>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{careTeams[0]?.name || 'Care Team'}</div>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{careTeams[0]?.memberCount || 0} member{(careTeams[0]?.memberCount || 0) !== 1 ? 's' : ''}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{team.name || 'Care Team'}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{team.memberCount || 0} member{(team.memberCount || 0) !== 1 ? 's' : ''}{pendingCount > 0 ? ` · ${pendingCount} pending` : ''}</div>
                 </div>
               </div>
               <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>→</span>
             </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
