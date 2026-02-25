@@ -196,6 +196,7 @@ const Caregivers = window.Caregivers = () => {
   useEffect(() => {
     if (!leafletMap.current || activeTab !== 'nearby') return;
     const map = leafletMap.current;
+    const assignedCgIds = new Set(assignments.map(a => a.caregiver_profile_id));
 
     // Clear old
     markersRef.current.forEach(m => map.removeLayer(m));
@@ -251,7 +252,7 @@ const Caregivers = window.Caregivers = () => {
     allMapCaregivers.forEach((cg) => {
       if (!cg.latitude || !cg.longitude) return;
 
-      const isAssigned = cg.isAssigned || assignedCaregiverIds.includes(cg.id);
+      const isAssigned = cg.isAssigned || assignedCgIds.has(cg.id);
       const pinColor = isAssigned ? '#e8724a' : '#1b6b5a';
       const distLabel = cg.distance != null ? ` &bull; ${cg.distance}mi` : '';
       const photoHtml = cg.profilePhoto
@@ -319,8 +320,9 @@ const Caregivers = window.Caregivers = () => {
         if (cg) setSchedulingCaregiver(cg);
       }
     };
-    mapContainer.addEventListener('click', handlePopupClick);
-    return () => { mapContainer.removeEventListener('click', handlePopupClick); };
+    const container = mapRef.current;
+    if (container) container.addEventListener('click', handlePopupClick);
+    return () => { if (container) container.removeEventListener('click', handlePopupClick); };
   }, [locationResults, searchCenter, activeTab, assignments, caregivers, recipients]);
 
   // Build a lookup: which caregiver profiles are assigned
