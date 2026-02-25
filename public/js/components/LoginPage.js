@@ -13,7 +13,6 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
   const [rememberDevice, setRememberDevice] = useState(false);
 
   // Password change state
-  // Password change state
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [pendingUser, setPendingUser] = useState(null);
   const [currentPw, setCurrentPw] = useState('');
@@ -199,25 +198,28 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       const SimpleWebAuthnBrowser = window.SimpleWebAuthnBrowser;
       if (!SimpleWebAuthnBrowser) throw new Error('Passkey support not loaded');
 
-      // Get authentication options from server
-      const optRes = await apiFetch('/api/passkeys/authenticate/options', {
+      // Get authentication options from server (use raw fetch to bypass apiFetch's 401→null behavior)
+      const apiBase = window.location.origin;
+      const optRes = await fetch(apiBase + '/api/passkeys/authenticate/options', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email || null }),
       });
-      if (!optRes?.ok) throw new Error('Failed to start passkey login');
+      if (!optRes.ok) throw new Error('Failed to start passkey login');
       const options = await optRes.json();
       const challengeKey = options._challengeKey;
 
       // Trigger browser passkey/biometric prompt
       const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: options });
 
-      // Send response to server for verification
-      const verifyRes = await apiFetch('/api/passkeys/authenticate/verify', {
+      // Send response to server for verification (raw fetch — no auth needed)
+      const verifyRes = await fetch(apiBase + '/api/passkeys/authenticate/verify', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...authResp, _challengeKey: challengeKey }),
       });
-      if (!verifyRes?.ok) {
-        const errData = await verifyRes.json();
+      if (!verifyRes.ok) {
+        const errData = await verifyRes.json().catch(() => ({}));
         throw new Error(errData?.error || 'Passkey verification failed');
       }
       const data = await verifyRes.json();
