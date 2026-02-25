@@ -186,6 +186,8 @@ const CaredForView = window.CaredForView = () => {
 
   const notes = data.notes || [];
   const userName = data.userName || 'Guest';
+  const careProfile = data.careProfile || null;
+  const permissionTier = data.permissionTier || 'full';
 
   const selectedDaySessions = selectedDay ? getDaySessions(selectedDay) : [];
   const selectedDateLabel = selectedDay
@@ -232,6 +234,7 @@ const CaredForView = window.CaredForView = () => {
       }}>
         {[
           { id: 'calendar', label: 'My Calendar', icon: '📅' },
+          { id: 'profile', label: 'My Care Info', icon: '💊' },
           { id: 'notes', label: 'My Notes', icon: '📝' },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
@@ -452,6 +455,91 @@ const CaredForView = window.CaredForView = () => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Care Profile Tab — shows Betty her own health info */}
+      {activeTab === 'profile' && (
+        <div>
+          {careProfile ? (
+            <React.Fragment>
+              {/* Health Conditions */}
+              {careProfile.healthConditions && careProfile.healthConditions.length > 0 && (
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>🩺 Health Conditions</div>
+                  {careProfile.healthConditions.map((c, i) => (
+                    <div key={i} style={{ padding: '6px 10px', background: '#fce4ec', borderRadius: 6, marginBottom: 4, fontSize: 13, color: '#333' }}>{c}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Medications */}
+              {careProfile.medications && careProfile.medications.length > 0 && (
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>💊 Medications</div>
+                  {careProfile.medications.map((m, i) => (
+                    <div key={i} style={{ padding: '6px 10px', background: '#e3f2fd', borderRadius: 6, marginBottom: 4, fontSize: 13, color: '#333' }}>{m}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Allergies */}
+              {careProfile.foodAllergies && careProfile.foodAllergies.length > 0 && (
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>⚠️ Food Allergies</div>
+                  {careProfile.foodAllergies.map((a, i) => (
+                    <div key={i} style={{ padding: '6px 10px', background: '#fff3e0', borderRadius: 6, marginBottom: 4, fontSize: 13, color: '#e65100' }}>{a}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Preferences */}
+              {careProfile.preferences && (
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>✨ Care Preferences</div>
+                  <div style={{ fontSize: 13, color: '#555', lineHeight: 1.6 }}>{careProfile.preferences}</div>
+                </div>
+              )}
+
+              {/* Pets */}
+              {careProfile.pets && (
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>🐾 Pets at Home</div>
+                  <div style={{ fontSize: 13, color: '#555', lineHeight: 1.6 }}>{careProfile.pets}</div>
+                </div>
+              )}
+
+              {/* Emergency Contact */}
+              {careProfile.emergencyContactName && (
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>🆘 Emergency Contact</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{careProfile.emergencyContactName}</div>
+                  {careProfile.emergencyContactPhone && (
+                    <a href={'tel:' + careProfile.emergencyContactPhone} style={{ fontSize: 13, color: '#1b6b5a', textDecoration: 'none' }}>
+                      📞 {careProfile.emergencyContactPhone}
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Permission notice */}
+              {permissionTier === 'view-only' && (
+                <div style={{ padding: '10px 14px', background: '#fff8e1', borderRadius: 8, fontSize: 12, color: '#f57f17', textAlign: 'center', marginTop: 8 }}>
+                  Your care team manages this information. Contact them to make changes.
+                </div>
+              )}
+              {permissionTier === 'managed' && (
+                <div style={{ padding: '10px 14px', background: '#fff8e1', borderRadius: 8, fontSize: 12, color: '#f57f17', textAlign: 'center', marginTop: 8 }}>
+                  This profile is managed by your care team.
+                </div>
+              )}
+            </React.Fragment>
+          ) : (
+            <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}>💊</div>
+              <div>No care profile linked yet. Ask your care team to connect your profile.</div>
             </div>
           )}
         </div>

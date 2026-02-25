@@ -34,11 +34,10 @@ router.get("/", async (req, res) => {
     `;
     params = [req.user.id];
   } else if (activeRole === "care_for") {
-    // Care recipient view — find their care_recipient record and show their sessions
+    // Care recipient view — find their care_recipient record via linked_user_id (falls back to name match)
     const recipient = await db.prepare(`
       SELECT cr.id FROM care_recipients cr
-      JOIN users u ON LOWER(cr.first_name || ' ' || cr.last_name) = LOWER(u.first_name || ' ' || u.last_name)
-      WHERE u.id = ?
+      WHERE cr.linked_user_id = ?
       LIMIT 1
     `).get(req.user.id);
     if (!recipient) return res.status(404).json({ error: "Care recipient record not found" });
@@ -193,8 +192,7 @@ router.post("/request", async (req, res) => {
   // Find the care_recipient record linked to this user
   const recipient = await db.prepare(`
     SELECT cr.id, cr.family_user_id FROM care_recipients cr
-    JOIN users u ON LOWER(cr.first_name || ' ' || cr.last_name) = LOWER(u.first_name || ' ' || u.last_name)
-    WHERE u.id = ?
+    WHERE cr.linked_user_id = ?
     LIMIT 1
   `).get(req.user.id);
 
@@ -300,11 +298,10 @@ router.put("/:id/claim", async (req, res) => {
       data: { type: "care_request_accepted", sessionId: req.params.id },
     }, "care_request_accepted").catch(() => {});
   }
-  // Find care_for user to notify
+  // Find care_for user to notify (via linked_user_id)
   const careForUser = await db.prepare(`
-    SELECT u.id FROM users u
-    JOIN care_recipients cr ON LOWER(cr.first_name || ' ' || cr.last_name) = LOWER(u.first_name || ' ' || u.last_name)
-    WHERE cr.id = ? AND u.role = 'care_for'
+    SELECT cr.linked_user_id AS id FROM care_recipients cr
+    WHERE cr.id = ? AND cr.linked_user_id IS NOT NULL
     LIMIT 1
   `).get(session.care_recipient_id);
   if (careForUser) {

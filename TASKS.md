@@ -76,8 +76,8 @@
 - [x] ~~**Active role not obvious enough.** Fixed in v1.29.0. Multi-role users see "Viewing as" label; single-role users see icon + role name. *(Feedback — Feb 24, new)*~~
 - [x] ~~**Star rating on caregiver card unclear.** Fixed in v1.30.0. Added tooltip "Family rating of this caregiver" on all star ratings. *(Feedback — Feb 24, new)*~~
 - [x] ~~**Betty tile and care team should be unified.** Fixed in v1.30.0. Care team nested inside Betty's card with overlapping member avatars. *(Feedback — Feb 24, new)*~~
-- [ ] **Show assigned caregiver on the map (Find Nearby).** When a caregiver like Cary is assigned, show her pin/flag on the family's caregiver map view. *(Feedback — Feb 24, new)*
-- [ ] **Care team tile — overlapping avatar display.** Care team tile should show member avatars/photos lined up and slightly overlapping (like "holding hands"), not just text names. *(Feedback — Feb 24, new)*
+- [x] ~~**Show assigned caregiver on the map (Find Nearby).** When a caregiver like Cary is assigned, show her pin/flag on the family's caregiver map view. Fixed in v1.30.3 — assigned caregivers now shown with distinct pins on family's map. *(Feedback — Feb 24, new)*~~
+- [ ] **Care team tile — overlapping avatar display with real photos.** Care team tile should show actual member profile photos (not random emojis), lined up and slightly overlapping. Joined members = full color, invited/pending members = greyed out. Clicking should link to member profiles. *(Feedback — Feb 24 + Feb 25, new)*
 - [x] ~~**Betty's tile health condition text too dark/hard to read.** Fixed in v1.29.1. Changed to rgba(255,255,255,0.75) on dark teal card. *(Feedback — Feb 24, new)*~~
 - [x] ~~**"Request Care" button misplaced in sidebar.** Fixed in v1.30.0. Now full-width orange accent button, visually distinct from nav. *(Feedback — Feb 24, new)*~~
 - [ ] **Care notes — add delete option.** Users like care notes but want ability to delete individual notes. Currently no delete button. *(Feedback — Feb 24, new)*
@@ -88,6 +88,17 @@
 - [ ] **Admin: force password reset from admin panel.** Admin should be able to trigger a password reset email for any user directly from the admin panel. *(Feedback — reviewed)*
 - [ ] **Push notification icon is white square on Android.** PWA notification icon renders as blank white square on Pixel (Android). Need proper monochrome notification icon. *(Feedback — reviewed)*
 - [x] ~~**Delete individual role without deleting account.** Fixed in v1.29.0. POST /api/auth/remove-role with two-step confirmation. *(Feedback — Feb 24, new)*~~
+- [ ] **Dual-role users can't manage caregiver profile from family view.** When a family user adds a caregiver role, they can't access admin-like caregiver profile management (mark background check done, set up payments, etc.) from within the family dashboard. Need admin options or a dedicated path for dual-role users to manage their caregiver onboarding steps. *(Feedback — Feb 25, new)*
+- [ ] **Availability step shouldn't require setting a rule.** If a caregiver visits the availability page and doesn't set a rule, that should still count as "completing" the availability step in onboarding. The step is about reviewing availability, not mandating a rule. *(Feedback — Feb 25, new)*
+- [ ] **Family members need ability to add care locations in Care Profile.** Families should be able to add one or more care locations (e.g., home address, adult day center, doctor's office) to a care recipient's profile. Caregivers see these locations when accepting sessions. Ties into care location address with private instructions feature. *(Pete — Feb 25)*
+- [ ] **Link care recipient profile to a real user account (unified identity).** Right now care recipients exist as data records created by family members (`care_recipients` table), and separately as user accounts (`users` table with role=`cared-for`). Betty could sign up on her own, or her kids could create a care profile for her — resulting in two unconnected Bettys. Need a unified model:
+  - **Claim/link flow:** Care team creates a care recipient profile. Later, that person can be invited to join (or signs up independently) and their user account gets linked to the existing care_recipient record. No duplication.
+  - **Managed accounts:** If the care recipient can't manage their own account (e.g., dementia), the care team can create a "managed" account on their behalf — the care team controls push notifications, profile info, and app settings. The care recipient gets a read-only or limited view.
+  - **Permission tiers for care recipients:** (1) **Full** — can view and edit their own profile, request care, message caregivers, change settings. (2) **View-only** — can see their schedule, caregivers, and notes, but cannot modify anything without care team approval. (3) **Managed** — care team has full control; care recipient may not even have login credentials.
+  - **Care team controls:** Care team leader can set the care recipient's permission tier, manage their notification preferences, and approve/deny any changes the care recipient tries to make (if view-only).
+  - **Invite flow:** Care team sends Betty an invite to "join your care circle." If Betty already has an account, it links. If not, it creates a managed or full account based on the care team's choice.
+  - **Schema implications:** Add `linked_user_id` to `care_recipients` table (nullable FK to users). Add `permission_tier` to `care_recipients` or `care_team_members`. The cared-for dashboard (CaredForView) respects the permission tier.
+  - This is foundational — affects onboarding, care teams, notifications, and the cared-for experience. *(Pete — Feb 25)*
 - [x] ~~**Caregiver avatar in assignment block.** Fixed in v1.30.0. Shows profile photo or initials circle on assigned caregiver cards. *(Feedback — reviewed)*~~
 
 
@@ -112,7 +123,7 @@
 - [ ] **Calendar bottom nav icon color.** Change the green calendar emoji in the bottom nav to red and white to match app color scheme. *(Feedback — Feb 23, #54)*
 - [ ] **Caregivers page default to map view.** The Caregivers/Find Work page should populate with the map as the default view rather than requiring a tab switch. *(Feedback — Feb 23, #57)*
 - [ ] **Admin default to real users.** Admin user list should default to showing only real (non-demo) users. Demo users available via filter toggle. *(Feedback — Feb 23, #35)*
-- [ ] **Biometric sign-in (WebAuthn/passkeys).** Support fingerprint/Face ID authentication. *(Feedback — Feb 23, #36)*
+- [x] ~~**Biometric sign-in (WebAuthn/passkeys).** Support fingerprint/Face ID authentication. Fixed in v1.30.7–v1.30.9 — full passkey registration + authentication via SimpleWebAuthn. *(Feedback — Feb 23, #36)*~~
 - [ ] **AI fraud detection.** Explore how AI could detect possible fraud patterns through the platform — unusual booking patterns, identity mismatches, payment anomalies. *(Feedback — Feb 23, #28)*
 - [ ] **Care profile enrichment — doctor contacts, shopping areas.** Add doctor/physician contact info and favorite shopping areas to care recipient profile. Useful for caregivers who take the person out. *(Feedback — Feb 23, #38)*
 - [ ] **Connection request → auto-open chat.** When someone sends a connection request and you accept it, the chat history should stay as an initial message. Currently Cary sent a request to connect but Pete can't find how to message her back. *(Feedback — Feb 23, #27)*

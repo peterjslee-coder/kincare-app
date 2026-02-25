@@ -254,8 +254,9 @@ async function seed({ force = false, demoOnly = false } = {}) {
      latitude, longitude,
      health_conditions, medications, preferences,
      emergency_contact_name, emergency_contact_phone,
-     pets, pet_allergies, food_allergies, medical_conditions)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     pets, pet_allergies, food_allergies, medical_conditions,
+     linked_user_id, permission_tier)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     bettyId, peteId, "Barbara", "Lowe", 78,
     "123 Main Street", "Blacksburg", "VA", "24060",
@@ -267,7 +268,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
     "2 cats — Whiskers (orange tabby, indoor, friendly, 8 yrs) and Mittens (calico, indoor, shy with strangers, 5 yrs)",
     "None known",
     JSON.stringify(["Peanuts (severe — carries EpiPen)", "Shellfish (mild — causes hives)"]),
-    "Early-stage dementia, mild arthritis (both knees), high blood pressure (controlled), occasional vertigo, poor hearing left ear (hearing aid)"
+    "Early-stage dementia, mild arthritis (both knees), high blood pressure (controlled), occasional vertigo, poor hearing left ear (hearing aid)",
+    bettyUserId, "full"
   );
 
   // ─── Care Recipient (Dorothy Henderson — Linda's mother) ───

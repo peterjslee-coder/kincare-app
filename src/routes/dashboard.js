@@ -330,12 +330,12 @@ async function caregiverDashboard(db, userId, res) {
 async function careForDashboard(db, userId, res) {
   const user = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
 
-  // Find care recipient matching this user's name
+  // Find care recipient linked to this user account
   const recipient = await db.prepare(`
     SELECT cr.* FROM care_recipients cr
-    WHERE cr.first_name = ? AND cr.last_name = ?
+    WHERE cr.linked_user_id = ?
     LIMIT 1
-  `).get(user.first_name, user.last_name);
+  `).get(userId);
 
   if (!recipient) {
     return res.json({ role: "care_for", userName: `${user.first_name} ${user.last_name}`, sessions: [], notes: [] });
@@ -363,10 +363,26 @@ async function careForDashboard(db, userId, res) {
     ORDER BY rn.created_at DESC
   `).all(recipient.id);
 
+  // Parse JSON fields safely
+  const parseJson = (str) => { try { return JSON.parse(str); } catch { return []; } };
+
   res.json({
     role: "care_for",
     userName: `${user.first_name} ${user.last_name}`,
     careRecipientId: recipient.id,
+    permissionTier: recipient.permission_tier || "full",
+    careProfile: {
+      healthConditions: parseJson(recipient.health_conditions),
+      medications: parseJson(recipient.medications),
+      preferences: recipient.preferences,
+      emergencyContactName: recipient.emergency_contact_name,
+      emergencyContactPhone: recipient.emergency_contact_phone,
+      pets: recipient.pets,
+      foodAllergies: parseJson(recipient.food_allergies),
+      medicalConditions: recipient.medical_conditions,
+      photo: recipient.photo,
+      emoji: recipient.emoji,
+    },
     sessions: sessions.map(s => ({
       id: s.id,
       date: s.scheduled_date,
