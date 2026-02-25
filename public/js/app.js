@@ -853,9 +853,9 @@ const App = () => {
                   ? () => { setShowRequestCareModal(true); setSidebarOpen(false); }
                   : () => { handlePageChange(item.id); setSidebarOpen(false); };
                 return (
-                  <li key={item.id} className="nav-item" style={{ padding: '4px 12px' }}>
-                    <button onClick={actionClick} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '8px 6px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.3px' }}>
-                      <span style={{ fontSize: 14 }}>{item.icon}</span> {item.label}
+                  <li key={item.id} className="nav-item">
+                    <button onClick={actionClick} className="nav-link" style={{ background: '#e8724a', color: '#fff', fontWeight: 600 }}>
+                      <span className="nav-icon">{item.icon}</span> {item.label}
                     </button>
                   </li>
                 );
