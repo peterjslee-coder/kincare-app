@@ -1717,13 +1717,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               <div style={{ fontSize: 40, marginBottom: 8 }}>👋</div>
               <h3 style={{ marginTop: 0, marginBottom: 4, fontSize: 20 }}>Check In</h3>
               <p style={{ fontSize: 13, color: '#666', margin: 0 }}>
-                {checkInSession.recipientName || 'Care Session'} &bull; {checkInSession.date} at {checkInSession.time}
+                {checkInSession.recipientName || checkInSession.recipient_name || 'Care Session'} &bull; {checkInSession.date || checkInSession.scheduled_date} at {checkInSession.time || checkInSession.scheduled_time}
               </p>
             </div>
 
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                How is {(checkInSession.recipientName || '').split(' ')[0] || 'the care recipient'} right now?
+                How is {(checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'the care recipient'} right now?
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {[
@@ -1775,12 +1775,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     body: JSON.stringify({ arrivalMood: checkInMood || null }),
                   });
                   if (res?.ok) {
-                    const result = await res.json();
-                    setCheckInNotes(result.recentNotes || []);
+                    await res.json();
                     showToast('Checked in! Session started.', 'success');
                     setCheckInSession(null);
-                    const refreshRes = await apiFetch('/api/dashboard');
-                    if (refreshRes?.ok) setData(await refreshRes.json());
+                    try {
+                      const refreshRes = await apiFetch('/api/dashboard');
+                      if (refreshRes?.ok) setData(await refreshRes.json());
+                    } catch (e) { /* refresh is best-effort */ }
                   } else {
                     const err = await res?.json().catch(() => null);
                     showToast(err?.error || 'Check-in failed', 'error');
@@ -1811,13 +1812,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               <div style={{ fontSize: 40, marginBottom: 8 }}>👋</div>
               <h3 style={{ marginTop: 0, marginBottom: 4, fontSize: 20 }}>Check Out</h3>
               <p style={{ fontSize: 13, color: '#666', margin: 0 }}>
-                {checkOutSession.recipientName || 'Care Session'} &bull; {checkOutSession.date}
+                {checkOutSession.recipientName || checkOutSession.recipient_name || 'Care Session'} &bull; {checkOutSession.date || checkOutSession.scheduled_date}
               </p>
             </div>
 
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                How is {(checkOutSession.recipientName || '').split(' ')[0] || 'the care recipient'} now?
+                How is {(checkOutSession.recipientName || checkOutSession.recipient_name || '').split(' ')[0] || 'the care recipient'} now?
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {[
@@ -1870,7 +1871,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                About {(checkOutSession.recipientName || '').split(' ')[0] || 'the care recipient'}
+                About {(checkOutSession.recipientName || checkOutSession.recipient_name || '').split(' ')[0] || 'the care recipient'}
               </label>
               <textarea value={checkOutCareFeedback} onChange={e => setCheckOutCareFeedback(e.target.value)}
                 placeholder="How was the visit? Anything the family should know about their condition, mood, or behavior?"

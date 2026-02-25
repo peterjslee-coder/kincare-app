@@ -916,4 +916,26 @@ router.get("/audit-log", async (req, res) => {
   }
 });
 
+// ─── PUT /api/admin/sessions/:id/status — Admin force-set session status ───
+router.put("/sessions/:id/status", async (req, res) => {
+  try {
+    const apiKey = req.headers["x-admin-api-key"];
+    if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const db = await getDb();
+    const { status } = req.body;
+    const validStatuses = ["requested", "open", "pending", "confirmed", "in_progress", "completed", "cancelled", "matching", "negotiating"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `Invalid status '${status}'` });
+    }
+    await db.prepare("UPDATE care_sessions SET status = ?, updated_at = NOW() WHERE id = ?").run(status, req.params.id);
+    const session = await db.prepare("SELECT id, status, scheduled_date, scheduled_time FROM care_sessions WHERE id = ?").get(req.params.id);
+    res.json({ session });
+  } catch (err) {
+    console.error("Admin session status error:", err);
+    res.status(500).json({ error: "Failed to update session status" });
+  }
+});
+
 module.exports = router;
