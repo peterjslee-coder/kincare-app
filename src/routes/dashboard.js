@@ -118,27 +118,28 @@ async function familyDashboard(db, userId, res) {
 
     const recentActivity = await db.prepare(`
       SELECT * FROM activity_feed
-      WHERE family_user_id = ?
+      WHERE family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})
       ORDER BY created_at DESC LIMIT 5
-    `).all(userId);
+    `).all(userId, ...allRecipientIds);
 
     const unreadCount = await db.prepare(
-      "SELECT COUNT(*) as count FROM activity_feed WHERE family_user_id = ? AND is_read = 0"
-    ).get(userId);
+      `SELECT COUNT(*) as count FROM activity_feed WHERE (family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})) AND is_read = 0`
+    ).get(userId, ...allRecipientIds);
 
     const avgRating = await db.prepare(`
       SELECT AVG(cp.rating_avg) as avg
       FROM care_sessions cs
       JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-      WHERE cs.family_user_id = ? AND cs.status = 'completed'
-    `).get(userId);
+      WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders})) AND cs.status = 'completed'
+    `).get(userId, ...allRecipientIds);
 
-    // Assigned caregiver count
+    // Assigned caregiver count — include caregivers assigned by any family member for shared recipients
     const assignedCount = await db.prepare(`
-      SELECT COUNT(DISTINCT caregiver_profile_id) as count
-      FROM caregiver_assignments
-      WHERE family_user_id = ? AND is_active = 1
-    `).get(userId);
+      SELECT COUNT(DISTINCT ca.caregiver_profile_id) as count
+      FROM caregiver_assignments ca
+      LEFT JOIN care_recipients cr ON ca.care_recipient_id = cr.id
+      WHERE (ca.family_user_id = ? OR ca.care_recipient_id IN (${recipientPlaceholders})) AND ca.is_active = 1
+    `).get(userId, ...allRecipientIds);
 
     const primary = recipients[0];
     const parent = primary
