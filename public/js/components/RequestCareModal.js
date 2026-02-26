@@ -342,7 +342,23 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             </div>
             <div className="modal-section">
               <label className="modal-label">Preferred Start Time</label>
-              <input type="time" className="modal-input" value={time} onChange={(e) => setTime(e.target.value)} />
+              <select className="modal-select" value={time} onChange={(e) => setTime(e.target.value)}>
+                <option value="">Select a time...</option>
+                {(() => {
+                  const opts = [];
+                  for (let h = 6; h <= 22; h++) {
+                    for (let m = 0; m < 60; m += 30) {
+                      if (h === 22 && m > 0) break;
+                      const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                      const ampm = h >= 12 ? 'PM' : 'AM';
+                      const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+                      const label = `${dh}:${String(m).padStart(2,'0')} ${ampm}`;
+                      opts.push(<option key={val} value={val}>{label}</option>);
+                    }
+                  }
+                  return opts;
+                })()}
+              </select>
             </div>
             <div className="modal-section">
               <label className="modal-label">Repeat</label>
