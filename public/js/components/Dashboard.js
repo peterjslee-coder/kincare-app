@@ -708,12 +708,15 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
             {openReqs.map((s, idx) => {
               const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
               const timeLabel = TimezoneHelper.formatTime(s.time);
+              // Fade out after first item: 1st=full, 2nd=0.45, 3rd+=0.15
+              const fadeOpacity = idx === 0 ? 1 : idx === 1 ? 0.45 : 0.15;
               return (
                 <div key={s.id || idx} onClick={() => {
                   if (s.id) setVisitDetailSessionId(s.id);
                 }} style={{
                   marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
                   border: '2px dashed #e8724a', background: '#fff8f0',
+                  opacity: fadeOpacity, transition: 'opacity 0.3s',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div style={{ flex: 1 }}>
