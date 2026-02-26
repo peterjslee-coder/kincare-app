@@ -637,6 +637,184 @@ Priority: **MEDIUM** — Required for real distribution.
 
 ---
 
+## Future — AI-Powered Care Intelligence
+
+Priority: **HIGH** — Core differentiator. Matching is the lead feature for sales and investor pitch.
+
+### Why This Matters
+
+Most care platforms are glorified job boards — families scroll, guess, and hope. AI matching turns InPlace into something fundamentally different: a system that *understands* care needs and finds the right person. This is the pitch: "Tell us about your loved one. We'll find the right caregiver." One sentence, zero browsing.
+
+### Cost Analysis
+
+AI API costs are per-call, based on tokens (roughly 1 token ≈ 0.75 words). Current pricing (Feb 2026):
+
+| Model | Input / 1M tokens | Output / 1M tokens | Best For |
+|-------|-------------------|--------------------:|----------|
+| Claude Haiku 4.5 | $1.00 | $5.00 | Matching, classification, formatting |
+| GPT-4o mini | $0.15 | $0.60 | Cheapest option for simple tasks |
+| Claude Sonnet 4.5 | $3.00 | $15.00 | Complex reasoning, care insights |
+
+**Projected cost per feature call:**
+
+| Feature | Model | Est. Tokens (in/out) | Cost Per Call | Monthly @ 100 users |
+|---------|-------|---------------------|--------------|---------------------|
+| Caregiver match | Haiku 4.5 | ~2K in / ~500 out | ~$0.005 | $2–5 |
+| Session note summary | Haiku 4.5 | ~1K in / ~300 out | ~$0.003 | $3–8 |
+| Care trend insights (weekly) | Sonnet 4.5 | ~4K in / ~1K out | ~$0.03 | $12–15 |
+| Smart scheduling suggestion | Haiku 4.5 | ~1.5K in / ~200 out | ~$0.002 | $1–3 |
+| Proactive notification text | GPT-4o mini | ~500 in / ~100 out | ~$0.0002 | <$1 |
+
+**Bottom line:** At 100 active users, total AI cost is roughly **$20–35/month**. At 1,000 users, **$150–300/month**. At 10,000 users, **$1,000–2,500/month**. This is easily covered by the platform fee (currently 15–20% of session cost). A single 3-hour session at $25/hr generates $11–15 in platform revenue — that covers ~2,000 AI matching calls.
+
+**Cost optimization levers:**
+- **Prompt caching** (Anthropic) — 90% savings on repeated context (care profiles, caregiver data). A cached match request drops from $0.005 to ~$0.001.
+- **Batch API** — 50% discount for non-urgent tasks (weekly summaries, trend analysis). Haiku drops to $0.50/$2.50 per MTok.
+- **Model routing** — Use GPT-4o mini ($0.15/$0.60) for simple formatting/classification, Haiku for matching, Sonnet only for complex multi-session analysis.
+- **Result caching** — Cache match results for same care-recipient profile for 24h. Most families don't change care needs daily.
+
+### Phase AI-1: Intelligent Caregiver Matching (v2.5.0)
+
+**The headline feature.** Family describes what they need → AI returns ranked caregivers with explanations.
+
+**How it works:**
+1. Family creates care request (already have: service type, date/time, duration, care recipient profile)
+2. System gathers candidate caregivers (location, availability, demo isolation — reuse existing query)
+3. AI scores each candidate against the care need using structured data:
+   - Care recipient conditions (dementia, arthritis, mobility) vs. caregiver specialties + stoplight preferences
+   - Schedule fit (caregiver availability rules vs. requested time)
+   - Past performance (ratings, completed sessions with this family, reliability score)
+   - Distance and travel willingness
+   - Rate compatibility (caregiver rate vs. family budget/proposed rate)
+4. Returns top 3–5 matches with plain-English explanations: *"Maria is your best match — she specializes in dementia care, is 4 miles away, and has completed 12 sessions with Betty with a 4.9 rating."*
+
+**API endpoint:** `POST /api/ai/match`
+```
+Request:  { careRequestId } or { careRecipientId, serviceType, date, time, duration }
+Response: { matches: [{ caregiverId, score, explanation, factors: {...} }] }
+```
+
+**Integration points in frontend:**
+- RequestCareModal step 3 (after selecting date/time/duration): "Recommended caregivers" section replaces or augments manual browse
+- Dashboard: "Suggested caregiver for upcoming session" card
+- Push notification: "We found 3 caregivers for your Tuesday request — tap to review"
+
+**Data already available (no new tables needed):**
+- `care_recipients`: health_conditions, medications, mobility, special_needs
+- `caregiver_profiles`: specialties, certifications, care_stoplight (comfort levels), rating_avg, years_experience, location
+- `availability`: recurring rules, blocked dates
+- `care_sessions`: history between specific caregiver-family pairs
+- `reviews`: qualitative feedback
+- `caregiver_assignments`: existing relationships, favorites
+
+**Implementation:**
+- [ ] `src/utils/aiMatch.js` — Build structured prompt from care recipient + caregiver data, call Claude Haiku API, parse ranked results
+- [ ] `src/routes/ai.js` — `POST /api/ai/match` endpoint (authenticated, rate-limited to 10 calls/user/hour)
+- [ ] RequestCareModal integration — Show AI-ranked matches with explanations on step 3
+- [ ] Fallback — If API fails or is slow (>5s), fall back to existing distance-based sort
+- [ ] Logging — Store match requests + results for quality tuning (new `ai_match_log` table)
+- [ ] Environment variable: `AI_API_KEY` (Claude or OpenAI) on Railway
+
+**Estimated effort:** 2–3 days
+**Estimated ongoing cost:** <$5/month at current user count
+
+---
+
+### Phase AI-2: Session Note Intelligence (v2.6.0)
+
+**Turn caregiver free-text notes into structured care insights.**
+
+After each session, caregivers write notes (already stored in `visit_logs.notes`). AI processes these to:
+1. **Extract structured data** — mood, mobility observations, appetite, medication compliance, incidents
+2. **Generate weekly/monthly summaries** for families — "This week: Betty was in good spirits 4/5 visits. Mobility continues to decline — she needed help with stairs on 3 visits. She skipped lunch twice."
+3. **Flag concerns** — "Betty mentioned chest pain on Feb 24. This has not appeared in previous notes." → Push notification to family
+4. **Track trends over time** — Sentiment analysis on moods, frequency of specific conditions
+
+**API endpoints:**
+- `POST /api/ai/analyze-note` — Called automatically after visit log submission. Extracts structured data, stores in new `note_insights` table
+- `GET /api/ai/care-summary?recipientId=X&period=week` — Returns AI-generated summary for family dashboard
+
+**Integration points:**
+- Dashboard: "Care Insights This Week" card
+- Care Profile: "AI Health Trends" tab with visualizations
+- Push notifications: Concern flags sent to family in real-time
+
+**Estimated effort:** 3–4 days
+**Estimated ongoing cost:** $5–10/month at current scale
+
+---
+
+### Phase AI-3: Smart Scheduling & Demand Optimization (v2.7.0)
+
+**Reduce empty caregiver hours. Reduce family costs. Increase platform revenue.**
+
+1. **Gap filling** — Caregiver has 2-hour gap between sessions 3 miles apart. System identifies nearby families who could use that slot and sends a proactive offer at a slight discount.
+2. **Demand-based rate suggestions** — "Tuesday mornings have high demand and few caregivers. Suggest $28/hr (vs. your usual $25) for that slot." Transparent to both sides.
+3. **Rebooking prompts** — "Betty usually has a Tuesday session with Maria. Should I book next Tuesday?" One-tap confirmation.
+4. **Schedule optimization** — For caregivers with multiple families: suggest route-optimized session order to minimize drive time.
+
+**API endpoints:**
+- `GET /api/ai/schedule-suggestions?userId=X` — Returns proactive booking suggestions
+- `GET /api/ai/demand-insights?date=X&area=Y` — Returns demand/supply data for rate suggestions
+
+**Estimated effort:** 4–5 days
+**Estimated ongoing cost:** $3–8/month
+
+---
+
+### Phase AI-4: Proactive Engagement & Retention (v2.8.0)
+
+**Keep families booking. Keep caregivers active. Reduce churn.**
+
+1. **Re-engagement nudges** — Family hasn't booked in 2 weeks → "Betty's care plan calls for 3 sessions/week. Would you like me to book her regular Tuesday with Maria?" (Push + in-app)
+2. **Caregiver burnout detection** — Hours spike, ratings dip, sessions declined → "You've worked 45 hours this week. Want me to block tomorrow morning for rest?"
+3. **Review prompts** — After a great session (high mood, long duration, no incidents): "How was Maria today? A quick review helps other families."
+4. **Referral timing** — Family just left a 5-star review → "Know someone who could use InPlace? Share your referral link for $25 off their first session."
+5. **Onboarding coach** — New caregiver signs up → AI guides them through profile completion with contextual tips: "Families in Blacksburg are looking for caregivers with dementia experience. Adding this to your specialties could help you get matched faster."
+
+**API endpoint:** `POST /api/ai/engagement-check` — Cron job (daily), analyzes all users, generates personalized nudges, queues push notifications
+
+**Estimated effort:** 3–4 days
+**Estimated ongoing cost:** <$5/month (mostly GPT-4o mini for text generation)
+
+---
+
+### Phase AI-5: Family-Facing AI Assistant (v3.0.0)
+
+**The long game.** A chat interface where families can ask natural-language questions about their loved one's care:
+
+- "How has Mom been this month?"
+- "Which caregiver is best for overnight stays?"
+- "Book Maria for Saturday morning if she's free"
+- "What should I tell Mom's doctor about her recent care?"
+
+This is a RAG (Retrieval-Augmented Generation) system that pulls from session history, visit notes, care profiles, and caregiver data to answer questions and take actions. It's the most complex feature but also the most compelling for retention — it makes InPlace feel like a care *partner*, not just a booking tool.
+
+**Estimated effort:** 2–3 weeks
+**Estimated ongoing cost:** $15–30/month (Sonnet-class model for conversational quality)
+
+---
+
+### AI Implementation Notes
+
+**Environment setup:**
+- `AI_PROVIDER` env var — `anthropic` or `openai` (default: anthropic)
+- `AI_API_KEY` env var — API key for the selected provider
+- `AI_MODEL` env var — Override model (default: `claude-haiku-4-5-20251001` for matching)
+
+**Architecture:**
+- All AI calls go through `src/utils/ai.js` — single abstraction layer with provider switching, retry logic, timeout (5s default), and cost logging
+- Rate limiting: 10 AI calls per user per hour (configurable)
+- Graceful degradation: Every AI feature has a non-AI fallback (distance sort, manual browse, no summary)
+- Cost tracking: Log every API call with tokens used, model, latency → `ai_usage_log` table for billing visibility
+
+**Privacy:**
+- No PII sent to AI APIs — names replaced with IDs, addresses omitted, only relevant care data included
+- Care recipient health data is sent (needed for matching) but not stored by API providers (both Anthropic and OpenAI have zero-retention data policies for API usage)
+- Families can opt out of AI features in settings
+
+---
+
 ## Future — Infrastructure & Scale
 
 Priority: **LOW** — When growth demands it.
