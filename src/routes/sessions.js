@@ -292,18 +292,46 @@ router.put("/:id/claim", async (req, res) => {
     WHERE cs.id = ?
   `).get(req.params.id);
 
-  // Notify the family and care recipient via WebSocket + push
+  // Notify family, care team, and care recipient via WebSocket + push
   const emitToUser = req.app.get("emitToUser");
-  const caregiverName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'A caregiver';
+  const caregiverFirst = req.user.firstName || '';
+  const caregiverName = `${caregiverFirst} ${req.user.lastName || ''}`.trim() || 'A caregiver';
+  const recipientName = updated.recipient_name || 'your loved one';
 
+  // Build a friendly push body with "today" / "tomorrow" / date
+  const sessionDateLabel = (() => {
+    const today = getTodayStringInZone();
+    const tomorrow = new Date(getNowInZone());
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomStr = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getDate()).padStart(2, '0');
+    if (session.scheduled_date === today) return 'today';
+    if (session.scheduled_date === tomStr) return 'tomorrow';
+    return `on ${session.scheduled_date}`;
+  })();
+  const pushTitle = 'Care Request Accepted!';
+  const pushBody = `${caregiverName} has accepted a job for ${recipientName} ${sessionDateLabel}!`;
+  const pushData = { type: 'care_request_accepted', sessionId: req.params.id, page: 'schedule' };
+
+  // Notify the requesting family member
   if (session.family_user_id) {
     if (emitToUser) emitToUser(session.family_user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
-    sendPushToUser(session.family_user_id, {
-      title: "Care Request Accepted",
-      body: `${caregiverName} accepted the ${session.service_type} session on ${session.scheduled_date}`,
-      data: { type: "care_request_accepted", sessionId: req.params.id },
-    }, "care_request_accepted").catch(() => {});
+    sendPushToUser(session.family_user_id, { title: pushTitle, body: pushBody, data: pushData }, "care_request_accepted").catch(() => {});
   }
+
+  // Notify all care team members for this care recipient (siblings, etc.)
+  try {
+    const teamMembers = await db.prepare(`
+      SELECT DISTINCT ctm.user_id FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+      WHERE cr.id = ? AND ctm.user_id != ? AND ctm.status = 'active'
+    `).all(session.care_recipient_id, session.family_user_id || '');
+    for (const member of teamMembers) {
+      if (emitToUser) emitToUser(member.user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+      sendPushToUser(member.user_id, { title: pushTitle, body: pushBody, data: pushData }, "care_request_accepted").catch(() => {});
+    }
+  } catch (teamErr) { console.error('Error notifying care team:', teamErr); }
+
   // Find care_for user to notify (via linked_user_id)
   const careForUser = await db.prepare(`
     SELECT cr.linked_user_id AS id FROM care_recipients cr
