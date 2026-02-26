@@ -457,14 +457,21 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           }}>
             {/* Banner photo header */}
-            <div style={{ position: 'relative', width: '100%', height: '260px', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}>
+            <div style={{ position: 'relative', width: '100%', height: '300px', borderRadius: '16px 16px 0 0', overflow: 'hidden', background: '#1a1a1a' }}>
               <img src={"/images/founder-photo.jpg?v=" + (window.APP_VERSION || "1")} alt="Pete Lee" style={{
-                width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%',
+                width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%',
                 display: 'block',
               }} />
+              {/* Bottom gradient for text readability */}
               <div style={{
                 position: 'absolute', inset: 0,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0) 100%)',
+                background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 40%, rgba(0,0,0,0) 100%)',
+              }}></div>
+              {/* Soft vignette edges */}
+              <div style={{
+                position: 'absolute', inset: 0,
+                boxShadow: 'inset 0 0 60px 20px rgba(0,0,0,0.3)',
+                pointerEvents: 'none',
               }}></div>
               {/* Close button */}
               <button onClick={() => setShowStory(false)} style={{
@@ -484,7 +491,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             {/* Story content */}
             <div style={{ padding: '0 40px 48px', fontSize: '15px', color: '#444', lineHeight: 1.8 }}>
               <p style={{ marginBottom: '16px' }}>
-                I spent 25 years in the Air Force as a fighter pilot, eventually commanding at three levels including an Air Force flying wing. It was the kind of career where the mission always came first, and I was proud of that. But there was a cost I didn't fully reckon with until later.
+                I spent 25 years in the Air Force as a fighter pilot, eventually commanding at three levels including an Air Force flying wing. It was the kind of career that I loved, and the mission often came first. But there was a cost I didn't fully reckon with until later.
               </p>
               <p style={{ marginBottom: '16px' }}>
                 While I was deployed or stationed around the world, my mom was getting older. She needs help to stay at home. But what she wants is simple: to stay in her own home. Her flower beds, her kitchen, her neighborhood. That's where she feels like herself.
