@@ -34,8 +34,19 @@ const Messages = window.Messages = () => {
   const [msgSwipeOffset, setMsgSwipeOffset] = useState(0);
   const { showToast } = useToast();
   const REACTION_EMOJIS = ['\u2764\uFE0F', '\uD83D\uDC4D', '\uD83D\uDC4E', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE4F'];
+  const [currentUser, setCurrentUser] = useState(null);
 
   const isMobile = window.innerWidth <= 768;
+
+  // Fetch current user
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch('/api/auth/me');
+        if (res?.ok) { const d = await res.json(); setCurrentUser(d.user); }
+      } catch {}
+    })();
+  }, []);
 
   // Fetch conversations list
   const fetchConversations = async () => {
