@@ -456,30 +456,29 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             maxHeight: '85vh', overflow: 'auto', position: 'relative',
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           }}>
-            {/* Close button */}
-            <button onClick={() => setShowStory(false)} style={{
-              position: 'sticky', top: '12px', float: 'right', marginRight: '12px',
-              background: 'rgba(0,0,0,0.06)', border: 'none', borderRadius: '50%',
-              width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666',
-              zIndex: 2,
-            }}>{'\u2715'}</button>
-
-            {/* Header with photo */}
-            <div style={{ padding: '48px 40px 24px', textAlign: 'center' }}>
+            {/* Banner photo header */}
+            <div style={{ position: 'relative', width: '100%', height: '260px', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}>
+              <img src="/images/founder-photo.jpg" alt="Pete Lee" style={{
+                width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%',
+                display: 'block',
+              }} />
               <div style={{
-                width: '100px', height: '100px', borderRadius: '50%', margin: '0 auto 20px',
-                background: 'linear-gradient(135deg, #1b6b5a, #2a8f7a)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '36px', color: '#fff', fontWeight: 700,
-                border: '3px solid #e8724a',
-                backgroundImage: 'url(/images/founder-photo.jpg)',
-                backgroundSize: 'cover', backgroundPosition: 'center',
-              }}>
-                <span style={{ textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>PL</span>
+                position: 'absolute', inset: 0,
+                background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0) 100%)',
+              }}></div>
+              {/* Close button */}
+              <button onClick={() => setShowStory(false)} style={{
+                position: 'absolute', top: '12px', right: '12px',
+                background: 'rgba(0,0,0,0.35)', border: 'none', borderRadius: '50%',
+                width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+                zIndex: 2, backdropFilter: 'blur(4px)',
+              }}>{'\u2715'}</button>
+              {/* Name overlay at bottom of banner */}
+              <div style={{ position: 'absolute', bottom: '16px', left: '24px', right: '24px' }}>
+                <h2 style={{ fontSize: '24px', color: '#fff', marginBottom: '2px', fontWeight: 700, textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>Why I Built inPlace</h2>
+                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>Pete Lee, Founder</div>
               </div>
-              <h2 style={{ fontSize: '26px', color: '#1a1a1a', marginBottom: '4px', fontWeight: 700 }}>Why I Built inPlace</h2>
-              <div style={{ fontSize: '14px', color: '#888' }}>Pete Lee, Founder</div>
             </div>
 
             {/* Story content */}
