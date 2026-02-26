@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Story Modal Preview</title>
+<style>body{margin:0;background:#888;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}</style>
+</head><body>
+<div style="background:#fff;border-radius:16px;max-width:680px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+  <!-- Banner photo header -->
+  <div style="position:relative;width:100%;height:300px;border-radius:16px 16px 0 0;overflow:hidden;background:#1a1a1a;">
+    <img src="/images/founder-photo.jpg" alt="Pete Lee" style="width:100%;height:100%;object-fit:contain;object-position:center center;display:block;" />
+    <!-- Bottom gradient -->
+    <div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 40%, rgba(0,0,0,0) 100%);"></div>
+    <!-- Soft vignette -->
+    <div style="position:absolute;inset:0;box-shadow:inset 0 0 60px 20px rgba(0,0,0,0.3);pointer-events:none;"></div>
+    <!-- Close button -->
+    <button style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.35);border:none;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;backdrop-filter:blur(4px);">&#10005;</button>
+    <!-- Name overlay -->
+    <div style="position:absolute;bottom:16px;left:24px;right:24px;">
+      <h2 style="font-size:24px;color:#fff;margin:0 0 2px;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,0.4);">Why I Built inPlace</h2>
+      <div style="font-size:14px;color:rgba(255,255,255,0.85);text-shadow:0 1px 3px rgba(0,0,0,0.4);">Pete Lee, Founder</div>
+    </div>
+  </div>
+  <!-- Story content -->
+  <div style="padding:24px 40px 48px;font-size:15px;color:#444;line-height:1.8;">
+    <p>I spent 25 years in the Air Force as a fighter pilot, eventually commanding at three levels including an Air Force flying wing. It was the kind of career where the mission always came first, and I was proud of that. But there was a cost I didn't fully reckon with until later.</p>
+    <p>While I was deployed or stationed around the world, my mom was getting older. She needs help to stay at home. But what she wants is simple: to stay in her own home. Her flower beds, her kitchen, her neighborhood. That's where she feels like herself.</p>
+    <p style="color:#999;text-align:center;font-style:italic;">[rest of story continues below...]</p>
+  </div>
+</div>
+</body></html>
