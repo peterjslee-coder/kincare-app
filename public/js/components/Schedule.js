@@ -140,15 +140,29 @@ const Schedule = window.Schedule = () => {
         <div className="card" style={{ textAlign: 'center', padding: '48px 24px', marginBottom: 20 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
           <h3 style={{ margin: '0 0 8px', color: '#1a1a2e', fontSize: 18 }}>No care sessions scheduled yet</h3>
-          <p style={{ color: '#666', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>
-            Request care to get started. Your sessions will appear here on the calendar so you can track everything in one place.
-          </p>
-          <button className="btn btn-primary" onClick={() => {
-            // Trigger the Request Care modal via the global handler if available
-            if (window.__openRequestCareModal) window.__openRequestCareModal();
-          }} style={{ padding: '12px 32px', fontSize: 15 }}>
-            Request Care
-          </button>
+          {getActiveRole() === 'caregiver' ? (
+            <React.Fragment>
+              <p style={{ color: '#666', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>
+                Find work opportunities near you to get started. Accepted sessions will appear here on your calendar.
+              </p>
+              <button className="btn btn-primary" onClick={() => {
+                if (window.__navigateTo) window.__navigateTo('find-work');
+              }} style={{ padding: '12px 32px', fontSize: 15 }}>
+                Find Work
+              </button>
+            </React.Fragment>
+          ) : (
+            <React.Fragment>
+              <p style={{ color: '#666', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>
+                Request care to get started. Your sessions will appear here on the calendar so you can track everything in one place.
+              </p>
+              <button className="btn btn-primary" onClick={() => {
+                if (window.__openRequestCareModal) window.__openRequestCareModal();
+              }} style={{ padding: '12px 32px', fontSize: 15 }}>
+                Request Care
+              </button>
+            </React.Fragment>
+          )}
         </div>
       )}
 

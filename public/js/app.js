@@ -175,11 +175,50 @@ const App = () => {
   // Unread message count for nav badge
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
 
+  // ─── In-app navigation history (prevents PWA back-swipe from closing app) ───
+  const navHistoryRef = useRef(['dashboard']);
+  const popstateNavRef = useRef(false);
+
+  // Push history state whenever currentPage changes (unless it's from popstate)
+  useEffect(() => {
+    if (appState !== 'app') return;
+    const current = navHistoryRef.current;
+    if (popstateNavRef.current) {
+      popstateNavRef.current = false;
+      return;
+    }
+    if (current[current.length - 1] !== currentPage) {
+      current.push(currentPage);
+      window.history.pushState({ page: currentPage }, '', window.location.pathname);
+    }
+  }, [currentPage, appState]);
+
   // Expose modal opener and navigation for child components
   useEffect(() => {
     window.__openRequestCareModal = () => setShowRequestCareModal(true);
     window.__navigateTo = (page) => setCurrentPage(page);
-    return () => { delete window.__openRequestCareModal; delete window.__navigateTo; };
+
+    // Push initial history entry so there's always something to go back to
+    window.history.replaceState({ page: 'dashboard' }, '', window.location.pathname);
+
+    const handlePopState = (e) => {
+      if (navHistoryRef.current.length > 1) {
+        navHistoryRef.current.pop();
+        const prevPage = navHistoryRef.current[navHistoryRef.current.length - 1];
+        popstateNavRef.current = true;
+        setCurrentPage(prevPage);
+      } else {
+        // At root — push a dummy entry so next back doesn't close PWA
+        window.history.pushState({ page: 'dashboard' }, '', window.location.pathname);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      delete window.__openRequestCareModal;
+      delete window.__navigateTo;
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
   // ─── Swipe-back navigation ───

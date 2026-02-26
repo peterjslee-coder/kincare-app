@@ -53,6 +53,7 @@ const AdminPanel = window.AdminPanel = () => {
   const [obEventFilter, setObEventFilter] = useState('all'); // 'all', 'errors', 'completions'
   const [resetPwLoading, setResetPwLoading] = useState(null); // user id being reset
   const [resetPwMsg, setResetPwMsg] = useState(null); // { id, type, text }
+  const [peopleSubTab, setPeopleSubTab] = useState('all'); // 'all', 'waitlist', 'invites'
 
   useEffect(() => {
     loadStats();
@@ -62,9 +63,8 @@ const AdminPanel = window.AdminPanel = () => {
 
   useEffect(() => {
     if (activeTab === 'users') loadUsers();
-    if (activeTab === 'waitlist') loadWaitlist();
+    if (activeTab === 'people') { loadWaitlist(); loadInvites(); loadCareTeamInvites(); }
     if (activeTab === 'activity') loadActivity();
-    if (activeTab === 'invites') { loadInvites(); loadCareTeamInvites(); }
     if (activeTab === 'feedback') loadFeedback();
     if (activeTab === 'blocked') loadBlockedEmails();
     if (activeTab === 'help') loadHelpArticles();
@@ -76,9 +76,10 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'users') loadUsers();
   }, [userRoleFilter, userDemoFilter]);
 
-  // Auto-trigger search when switching to invites tab with pre-filled email (e.g. from waitlist Invite button)
+  // Auto-trigger search when switching to people tab with pre-filled email (e.g. from waitlist Invite button)
   useEffect(() => {
-    if (activeTab === 'invites' && inviteSearch.trim() && !searchResult && !searchLoading) {
+    if (activeTab === 'people' && inviteSearch.trim() && !searchResult && !searchLoading) {
+      setPeopleSubTab('invites');
       handleSearchEmail();
     }
   }, [activeTab, inviteSearch]);
@@ -470,8 +471,7 @@ const AdminPanel = window.AdminPanel = () => {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'users', label: 'Users', icon: '👥' },
-    { id: 'waitlist', label: 'Waitlist', icon: '📋' },
-    { id: 'invites', label: 'Invites', icon: '✉️' },
+    { id: 'people', label: 'People', icon: '📋' },
     { id: 'activity', label: 'Activity', icon: '⚡' },
     { id: 'feedback', label: 'Feedback', icon: '💬' },
     { id: 'help', label: 'Help/FAQ', icon: '❓' },
@@ -777,75 +777,89 @@ const AdminPanel = window.AdminPanel = () => {
         </div>
       )}
 
-      {/* ─── Waitlist Tab ─── */}
-      {activeTab === 'waitlist' && (
+      {/* ─── People Tab (Waitlist + Invites unified) ─── */}
+      {activeTab === 'people' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <span style={{ fontSize: '14px', color: '#666' }}>
-              <strong>{waitlistTotal}</strong> people on the waitlist
-            </span>
-            <button onClick={exportWaitlistCSV} disabled={!waitlist.length} style={{
-              padding: '8px 20px', background: '#1b6b5a', color: 'white', border: 'none',
-              borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '6px',
-              opacity: waitlist.length ? 1 : 0.5,
-            }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Export CSV
-            </button>
+          {/* Sub-tabs */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#f5f5f5', borderRadius: 8, padding: 3 }}>
+            {[
+              { id: 'all', label: `All (${waitlistTotal + invitesTotal})` },
+              { id: 'waitlist', label: `Waitlist (${waitlistTotal})` },
+              { id: 'invites', label: `Invites (${invitesTotal})` },
+            ].map(st => (
+              <button key={st.id} onClick={() => setPeopleSubTab(st.id)}
+                style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: peopleSubTab === st.id ? 700 : 500,
+                  background: peopleSubTab === st.id ? '#fff' : 'transparent', color: peopleSubTab === st.id ? '#1b6b5a' : '#888',
+                  cursor: 'pointer', boxShadow: peopleSubTab === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s' }}>
+                {st.label}
+              </button>
+            ))}
           </div>
 
-          <div className="card" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Name</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Source</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {waitlist.map((w) => (
-                  <tr key={w.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 500 }}>{w.email}</td>
-                    <td style={{ padding: '10px 12px', color: '#555' }}>{w.name || '—'}</td>
-                    <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{w.role || 'family'}</td>
-                    <td style={{ padding: '10px 12px', color: '#888' }}>{w.source || 'splash'}</td>
-                    <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(w.created_at)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button onClick={() => { setInviteSearch(w.email); setActiveTab('invites'); }} style={{
-                        padding: '4px 12px', background: '#e8724a', color: 'white', border: 'none',
-                        borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '6px',
-                      }}>Invite</button>
-                      <button onClick={async () => {
-                        if (!confirm(`Remove ${w.email} from waitlist?`)) return;
-                        const res = await apiFetch(`/api/waitlist/${w.id}`, { method: 'DELETE' });
-                        if (res?.ok) { setWaitlist(prev => prev.filter(x => x.id !== w.id)); }
-                      }} style={{
-                        padding: '4px 10px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545',
-                        borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                      }}>Remove</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {waitlist.length === 0 && (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No waitlist entries yet</div>
-            )}
-          </div>
-        </div>
-      )}
+          {/* Export CSV */}
+          {(peopleSubTab === 'all' || peopleSubTab === 'waitlist') && waitlist.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <button onClick={exportWaitlistCSV} style={{
+                padding: '6px 16px', background: '#1b6b5a', color: 'white', border: 'none',
+                borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '6px',
+              }}>
+                Export Waitlist CSV
+              </button>
+            </div>
+          )}
 
-      {/* ─── Invites Tab ─── */}
-      {activeTab === 'invites' && (
-        <div>
-          {/* Search & Send */}
+          {/* Waitlist section */}
+          {(peopleSubTab === 'all' || peopleSubTab === 'waitlist') && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div className="card-header"><span className="card-icon">📋</span>Waitlist ({waitlistTotal})</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Name</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Source</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {waitlist.map((w) => (
+                      <tr key={w.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: '10px 12px', fontWeight: 500 }}>{w.email}</td>
+                        <td style={{ padding: '10px 12px', color: '#555' }}>{w.name || '—'}</td>
+                        <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{w.role || 'family'}</td>
+                        <td style={{ padding: '10px 12px', color: '#888' }}>{w.source || 'splash'}</td>
+                        <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(w.created_at)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <button onClick={() => { setInviteSearch(w.email); setPeopleSubTab('invites'); }} style={{
+                            padding: '4px 12px', background: '#e8724a', color: 'white', border: 'none',
+                            borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '6px',
+                          }}>Invite</button>
+                          <button onClick={async () => {
+                            if (!confirm(`Remove ${w.email} from waitlist?`)) return;
+                            const res = await apiFetch(`/api/waitlist/${w.id}`, { method: 'DELETE' });
+                            if (res?.ok) { setWaitlist(prev => prev.filter(x => x.id !== w.id)); }
+                          }} style={{
+                            padding: '4px 10px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545',
+                            borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                          }}>Remove</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {waitlist.length === 0 && (
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No waitlist entries yet</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Search & Send (invites section) */}
+          {(peopleSubTab === 'all' || peopleSubTab === 'invites') && (<React.Fragment>
           <div className="card" style={{ marginBottom: '20px' }}>
             <div className="card-header"><span className="card-icon">🔍</span>Search & Invite</div>
             <div style={{ padding: '16px' }}>
@@ -1006,7 +1020,7 @@ const AdminPanel = window.AdminPanel = () => {
                           )}
                           {(inv.status === 'accepted') && <span style={{ color: '#1b6b5a', fontSize: '12px' }}>Completed</span>}
                           {(isExpired || inv.status === 'cancelled') && (
-                            <button onClick={() => { setInviteSearch(inv.invited_email); setActiveTab('invites'); }} style={{
+                            <button onClick={() => { setInviteSearch(inv.invited_email); setPeopleSubTab('invites'); }} style={{
                               padding: '4px 10px', background: '#f0f0f0', border: '1px solid #ddd',
                               borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
                             }}>Re-invite</button>
@@ -1075,6 +1089,7 @@ const AdminPanel = window.AdminPanel = () => {
               )}
             </div>
           </div>
+          </React.Fragment>)}
         </div>
       )}
 

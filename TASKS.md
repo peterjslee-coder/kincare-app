@@ -34,7 +34,7 @@
 - [x] ~~**Caregiver onboarding status "failed to load".** Fixed in v1.15.0. SQL query referenced non-existent columns (`photo_url` on `caregiver_profiles`, `doc_type`/`uploaded_at` on `caregiver_documents`).~~
 - [x] ~~**Demo accounts show wrong dashboard on switch.** Fixed in v1.15.1. `activeRole` in localStorage persisted across demo account switches, causing "Welcome back Pete" for all accounts. Cleared activeRole on all login/switch paths and added user ID to component keys for forced remount.~~
 - [x] ~~**"Connection request sent" should persist on messages screen.** Fixed in v1.25.0. After sending a connection request, fetchPendingRequests() is called to immediately refresh the sent requests list. *(Feedback — Feb 22)*~~
-- [ ] **Back swipe closes PWA instead of navigating back.** Browser back gesture on iOS closes the app entirely instead of going back to previous page. Need in-app history/navigation stack. *(Feedback — Feb 22)*
+- [x] **Back swipe closes PWA instead of navigating back.** ~~Fixed v1.33.12 — in-app navigation history using `history.pushState`. Back gesture navigates to previous page instead of closing app. At root, dummy entry prevents close.~~ *(Feedback — Feb 22)*
 - [x] ~~**Can't see connection invite status.** Fixed. Messages.js shows "Pending" / "Request sent" status on contacts with pending connections. *(Verified v1.33.7 audit)*~~
 - [x] ~~**Caregivers search should initialize at care recipient's location.** Fixed in v1.25.0. Added searchCenter to map useEffect dependencies so map re-centers when care recipient location loads. *(Feedback — Feb 22)*~~
 - [x] ~~**Feedback icon overlaps message send button.** Fixed in v1.25.0. FAB moves higher (bottom: 130px) on mobile when on Messages page. *(Feedback — Feb 21)*~~
@@ -43,7 +43,7 @@
 - [x] ~~**Profile photo in sidebar/header.** Fixed. app.js sidebar renders user profile photo (or initials fallback) next to iP logo. *(Verified v1.33.7 audit)*~~
 - [x] **Admin stats include demo data.** ~~Admin panel sessions/users counts include demo accounts and demo sessions.~~ Fixed v1.33.10 — sessions count and sessions-by-status now exclude demo user sessions. *(Feedback — Feb 22)*
 - [ ] **Admin 2FA/biometrics gate.** Admin panel should require 2FA or biometrics to access. Destructive actions (delete users, override background checks) should require additional verification. *(Feedback — Feb 22)*
-- [ ] **Merge waitlist + invites in admin.** Users don't understand the distinction between waitlist and invites tabs. Combine into a unified "People" tab showing all leads/invites/signups in one view. *(Feedback — Feb 22)*
+- [x] **Merge waitlist + invites in admin.** ~~Fixed v1.33.12 — combined into unified "People" tab with sub-tabs (All / Waitlist / Invites). Search & Invite at top, waitlist + invite tables below.~~ *(Feedback — Feb 22)*
 - [x] **Cancel/remove stale invites.** ~~Admin can't remove or cancel pending invites.~~ Already implemented — Cancel, Resend, Re-invite buttons exist on invites tab. *(Feedback — Feb 22)*
 - [ ] **Block user with legal evidence logging.** When blocking a user, collect more than just "spam or abuse" — log location data, timestamps, payment receipts, chat logs for potential legal action. Ties into admin incident management. *(Feedback — Feb 22)*
 - [x] ~~**Care recipient photo upload.** Fixed in v1.20.4. Photo upload added to CareRecipients page with RecipientAvatar component. *(Feedback — Feb 22)*~~
@@ -151,7 +151,7 @@
   - **Time extension (future):** If caregiver stays past scheduled duration, mechanism to request extra time. Care team approves, caregiver gets paid for actual hours. Ties into Stripe payment flow.
   - **Schema changes:** Add to visit_logs: `arrival_mood TEXT`, `departure_mood TEXT`, `condition_tags TEXT` (JSON array), `care_feedback TEXT`, `service_feedback TEXT`, `check_in_adjusted INTEGER DEFAULT 0`. Existing columns: check_in_time, check_out_time, mood_rating, tasks_completed, notes, summary.
   - *(Pete — Feb 25. First session: Cary visiting Betty, Feb 26.)*
-- [ ] **Short-notice upcharge description on financials page.** The <24hr booking surcharge (15% upcharge, worker gets 10% more) is not explained anywhere on the caregiver financials view. Add visible description of pricing rules. Ties into fee percentage inconsistency bug. *(Feedback — Feb 23, #2)*
+- [x] **Short-notice upcharge description on financials page.** ~~Already implemented — "How Pricing Works" card on Earnings tab explains platform fee, short-notice surcharge (20%, 75% to caregiver), and instant payout fee.~~ *(Feedback — Feb 23, #2)*
 - [ ] **Nursing student discount program.** Reduced platform fee (15% vs 20%) for verified nursing students. Validated via email confirmation to partnering school. Advertise the 5% savings to make student caregivers more competitive for matching. *(Feedback — Feb 23, #3)*
 - [ ] **Nursing student program badge + hour reports.** If caregiver signed up as a nursing student with a supported program, show badge on their profile. Generate hour reports they can send to their school. *(Feedback — Feb 23, #4)*
 - [ ] **Off-platform liability acknowledgment.** All users must acknowledge they're not covered by InPlace protections if they arrange care outside the app (no payment/matching through platform). Users are 100% liable for anything off-app. *(Feedback — Feb 23, #5)*
@@ -269,7 +269,7 @@
 - [ ] **Admin API key for automated scripts.** Added in v1.8.3 — `ADMIN_API_KEY` env var bypasses JWT/2FA for the collect-feedback script. Set on Railway. Future: extend to other admin automation.
 - [x] ~~**Demo data enrichment — realistic messages.** Seed realistic conversations between Maria/Pete/Betty including group messages and video chat references. Currently messages are empty/placeholder. (Fixed by demo reseed with full rich data) *(Feedback #6, #14, #15)*~~
 - [ ] **Maria demo profile polish.** Maria needs: profile photo, completed onboarding/background check status shown as "done", fake license photos, distinct families (not 3x Betty). *(Feedback #17, #18, #19, #20)*
-- [ ] **Caregiver schedule → "Find Work" view.** Caregiver schedule page shows "Request Care" which makes no sense for caregivers. Should show nearby care needs they can sign up for, with availability and job discovery. *(Feedback #3)*
+- [x] **Caregiver schedule → "Find Work" view.** ~~Fixed v1.33.12 — Schedule.js empty state now role-aware. Caregivers see "Find Work" button instead of "Request Care".~~ *(Feedback #3)*
 - [ ] **Calendar import (Apple/Google/Microsoft).** Caregivers want to import existing calendar events and see them alongside InPlace availability on one unified view. *(Feedback #3)*
 - [ ] **Financials/payments tab for caregivers.** Visible "Financials" or "Payments" sidebar link beyond just the Earnings sub-tab. Link bank account, view payment history, see Stripe status. *(Feedback #1)*
 - [x] **Analytics condensed into dashboard.** ~~Already implemented — collapsible inline analytics section in Dashboard.js with summary + expandable detail.~~ *(Feedback #8)*
