@@ -31,11 +31,13 @@ router.post("/signup-intent", async (req, res) => {
       return res.status(403).json({ error: "This email address is not permitted to register. Contact support if you believe this is an error." });
     }
 
-    // Check if already registered
-    const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    // Check if already registered (exclude soft-deleted accounts, case-insensitive)
+    const existing = await db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email);
     if (existing) {
       return res.status(409).json({ error: "This email is already registered. Try signing in instead." });
     }
+    // Clean up any ghost soft-deleted accounts still holding this email
+    await db.prepare("DELETE FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 0").run(email);
 
     // Check for existing pending intent — reuse token if still valid
     const pendingIntent = await db.prepare(
@@ -123,8 +125,8 @@ router.get("/confirm-signup", async (req, res) => {
       return res.status(400).json({ error: "This signup link has expired. Please sign up again." });
     }
 
-    // Check if someone already registered with this email
-    const existing = await db.prepare("SELECT id, role FROM users WHERE email = ?").get(intent.email);
+    // Check if someone already registered with this email (exclude soft-deleted, case-insensitive)
+    const existing = await db.prepare("SELECT id, role FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(intent.email);
     if (existing) {
       await db.prepare("DELETE FROM signup_intents WHERE id = ?").run(intent.id);
       // Check if caregiver has completed profile
@@ -142,6 +144,8 @@ router.get("/confirm-signup", async (req, res) => {
         email: intent.email,
       });
     }
+    // Clean up ghost soft-deleted accounts still holding this email
+    await db.prepare("DELETE FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 0").run(intent.email);
 
     res.json({ email: intent.email, role: intent.role });
   } catch (err) {
@@ -175,10 +179,12 @@ router.post("/register", validateRegister, async (req, res) => {
       }
     }
 
-    const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    const existing = await db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email);
     if (existing) {
       return res.status(409).json({ error: "Email already registered" });
     }
+    // Clean up ghost soft-deleted accounts still holding this email
+    await db.prepare("DELETE FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 0").run(email);
 
     // Check if email is blocked
     const blocked = await db.prepare("SELECT id FROM blocked_emails WHERE LOWER(email) = LOWER(?)").get(email);
@@ -229,7 +235,7 @@ router.post("/login", validateLogin, async (req, res) => {
     const { email, password, deviceFingerprint } = req.body;
 
     const db = await getDb();
-    const user = await db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(email);
+    const user = await db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email);
 
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: "Invalid credentials" });
