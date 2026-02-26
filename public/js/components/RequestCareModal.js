@@ -18,6 +18,36 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [selectedRecipientId, setSelectedRecipientId] = useState('');
   const [submitError, setSubmitError] = useState('');
 
+  // Short-notice detection (client-side, <24h from now)
+  const shortNotice = (() => {
+    if (!date || !time) return false;
+    const sessionStart = new Date(date + 'T' + time + ':00');
+    const now = new Date();
+    const hoursUntil = (sessionStart.getTime() - now.getTime()) / (1000 * 60 * 60);
+    return hoursUntil < 24 && hoursUntil > -1; // only if in future and < 24h
+  })();
+
+  // Recalculate cost breakdown when proposedRate changes
+  const getDisplayCost = () => {
+    if (!costPreview) return null;
+    const rate = proposedRate ? parseFloat(proposedRate) : 0;
+    if (!rate || rate <= 0) return costPreview;
+    // Recalculate with offered flat rate
+    const tierBreakdown = (costPreview.tierBreakdown || []).map(t => ({
+      ...t, rate: rate, amount: Math.round(t.hours * rate * 100) / 100,
+    }));
+    const subtotal = Math.round(tierBreakdown.reduce((s, t) => s + t.amount, 0) * 100) / 100;
+    const surcharge = costPreview.shortNotice ? Math.round(subtotal * 0.20 * 100) / 100 : 0;
+    const surchargeCaregiver = Math.round(surcharge * 0.75 * 100) / 100;
+    const surchargePlatform = Math.round(surcharge * 0.25 * 100) / 100;
+    const caregiverPayout = Math.round((subtotal + surchargeCaregiver) * 100) / 100;
+    const feePercent = costPreview.platformFeePercent || 20;
+    const platformFee = Math.round((subtotal * (feePercent / 100) + surchargePlatform) * 100) / 100;
+    const familyTotal = Math.round((caregiverPayout + platformFee) * 100) / 100;
+    return { ...costPreview, tierBreakdown, subtotal, surcharge, surchargeBreakdown: { caregiver: surchargeCaregiver, platform: surchargePlatform }, caregiverPayout, platformFee, familyTotal };
+  };
+  const displayCost = getDisplayCost();
+
   // Fetch care recipients and assigned caregivers on mount
   useEffect(() => {
     const fetchData = async () => {
@@ -336,6 +366,16 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 ))}
               </div>
             </div>
+            {/* Short-notice rush banner */}
+            {date && time && shortNotice && (
+              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 18 }}>⚡</span>
+                <div style={{ fontSize: 13, color: '#e65100' }}>
+                  <strong>Short notice — 20% rush surcharge applies.</strong>
+                  <div style={{ color: '#795548', marginTop: 2 }}>Sessions booked less than 24 hours out include a surcharge. Schedule further ahead to avoid this.</div>
+                </div>
+              </div>
+            )}
             {recurrence !== 'none' && (
               <div className="modal-section">
                 <label className="modal-label">For how many weeks?</label>
@@ -366,6 +406,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <option value="6">6 hours</option>
               <option value="8">Full day (8 hours)</option>
             </select>
+            {shortNotice && (
+              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 16 }}>⚡</span>
+                <span style={{ fontSize: 13, color: '#e65100', fontWeight: 600 }}>Short notice — 20% rush surcharge will apply</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -455,44 +501,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 )}
               </div>
 
-              {/* Cost Breakdown */}
-              {costPreview && (
-                <div style={{ marginTop: '12px', padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Cost Breakdown</div>
-                  {costPreview.tierBreakdown?.map((t, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', marginBottom: '3px' }}>
-                      <span>{t.hours}h {t.tier} @ ${t.rate}/hr</span>
-                      <span>${t.amount.toFixed(2)}</span>
-                    </div>
-                  ))}
-                  {costPreview.surcharge > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#e8724a', marginBottom: '3px' }}>
-                      <span>Short-notice surcharge (20%)</span>
-                      <span>+${costPreview.surcharge.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#1b6b5a', fontWeight: 600, marginBottom: '3px', borderTop: '1px solid #f0f0f0', paddingTop: '4px', marginTop: '4px' }}>
-                    <span>Caregiver receives</span>
-                    <span>${(costPreview.caregiverPayout || costPreview.total).toFixed(2)}</span>
-                  </div>
-                  {costPreview.platformFee > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#888', marginBottom: '3px' }}>
-                      <span>InPlace fee ({costPreview.platformFeePercent || 20}%)</span>
-                      <span>+${costPreview.platformFee.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #eee', paddingTop: '6px', marginTop: '4px' }}>
-                    <span>You pay</span>
-                    <span>${(costPreview.familyTotal || costPreview.total).toFixed(2)}</span>
-                  </div>
-                  {costPreview.shortNotice && (
-                    <div style={{ fontSize: '11px', color: '#e8724a', marginTop: '4px' }}>
-                      Sessions booked &lt;24 hours out include a 20% surcharge. Schedule earlier to avoid this.
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Rate nudge when caregiver isn't on schedule */}
               {selectedCaregiver && !selectedCaregiver.available && (
                 <div style={{ marginTop: '12px', padding: '12px', background: '#fff3e0', borderRadius: '8px', border: '1px solid #ffcc02', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -509,10 +517,10 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 </div>
               )}
 
-              {/* Your offered rate — prominent, pre-filled with local avg */}
+              {/* Your offered rate — ON TOP of cost breakdown, pre-filled with local avg */}
               <div style={{ marginTop: '12px', padding: '12px', background: '#fff', borderRadius: '8px', border: selectedCaregiver && !selectedCaregiver.available ? '2px solid #e8724a' : '1px solid #e0e0e0' }}>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>Your Offered Rate</div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '16px', color: '#666', fontWeight: 600 }}>$</span>
                   <input type="number" step="1" min="15" max="500"
                     value={proposedRate}
@@ -532,7 +540,50 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                     Based on local caregiver rates for this time of day (avg ${localAvgRate}/hr)
                   </div>
                 )}
+                {shortNotice && (
+                  <div style={{ fontSize: '11px', color: '#e8724a', marginTop: '4px', fontWeight: 500 }}>
+                    ⚡ Short notice — 20% surcharge will be added below
+                  </div>
+                )}
               </div>
+
+              {/* Cost Breakdown — recalculates live from offered rate */}
+              {displayCost && (
+                <div style={{ marginTop: '12px', padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Cost Breakdown</div>
+                  {displayCost.tierBreakdown?.map((t, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', marginBottom: '3px' }}>
+                      <span>{t.hours}h {t.tier} @ ${t.rate}/hr</span>
+                      <span>${t.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {displayCost.surcharge > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#e8724a', marginBottom: '3px' }}>
+                      <span>Short-notice surcharge (20%)</span>
+                      <span>+${displayCost.surcharge.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#1b6b5a', fontWeight: 600, marginBottom: '3px', borderTop: '1px solid #f0f0f0', paddingTop: '4px', marginTop: '4px' }}>
+                    <span>Caregiver receives</span>
+                    <span>${(displayCost.caregiverPayout || displayCost.total).toFixed(2)}</span>
+                  </div>
+                  {displayCost.platformFee > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#888', marginBottom: '3px' }}>
+                      <span>InPlace fee ({displayCost.platformFeePercent || 20}%)</span>
+                      <span>+${displayCost.platformFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #eee', paddingTop: '6px', marginTop: '4px' }}>
+                    <span>You pay</span>
+                    <span>${(displayCost.familyTotal || displayCost.total).toFixed(2)}</span>
+                  </div>
+                  {displayCost.shortNotice && (
+                    <div style={{ fontSize: '11px', color: '#e8724a', marginTop: '4px' }}>
+                      Sessions booked &lt;24 hours out include a 20% surcharge. Schedule earlier to avoid this.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             {!selectedCaregiver && (
               <div style={{ marginTop: 12, padding: 12, background: '#fff8e1', borderRadius: 8, fontSize: 13, color: '#795548' }}>
