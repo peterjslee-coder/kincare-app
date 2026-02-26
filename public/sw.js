@@ -1,5 +1,5 @@
-// InPlace Service Worker — v1.33.47
-const CACHE_NAME = 'inplace-v1.33.47';
+// InPlace Service Worker — v1.33.48
+const CACHE_NAME = 'inplace-v1.33.48';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -182,11 +182,13 @@ self.addEventListener('notificationclick', (event) => {
 
   // Build deep-link URL from notification data
   const data = event.notification.data || {};
-  let targetUrl = '/';
+  let targetUrl = '/?page=dashboard';
   if (data.type === 'message' && data.conversationId) {
     targetUrl = `/?conversation=${data.conversationId}`;
   } else if (data.type === 'care_request' || data.type === 'care_request_accepted') {
     targetUrl = '/?page=schedule';
+  } else if (data.type === 'check_in_reminder' || data.type === 'check_out_reminder' || data.type === 'caregiver_arriving') {
+    targetUrl = '/?page=dashboard';
   } else if (data.type === 'video_call' && data.conversationId) {
     targetUrl = `/?conversation=${data.conversationId}`;
   }

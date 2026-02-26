@@ -507,6 +507,8 @@ const App = () => {
             setCurrentPage('messages');
           } else if (d.type === 'care_request' || d.type === 'care_request_accepted') {
             setCurrentPage(role === 'caregiver' ? 'find-work' : 'schedule');
+          } else if (d.type === 'check_in_reminder' || d.type === 'check_out_reminder' || d.type === 'caregiver_arriving' || d.type === 'caregiver_arriving_recipient') {
+            setCurrentPage('dashboard');
           }
         }
       });
