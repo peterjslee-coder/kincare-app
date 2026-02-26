@@ -531,6 +531,75 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
+      {/* Next Up — upcoming visits for today and tomorrow */}
+      {(() => {
+        const now = new Date();
+        const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const cutoff = new Date(todayLocal.getTime() + 2 * 86400000); // 2 days out
+        const nextUp = upcoming.filter(s => {
+          const dp = (s.date || '').split('T')[0].split('-').map(Number);
+          if (dp.length !== 3) return false;
+          const d = new Date(dp[0], dp[1] - 1, dp[2]);
+          return d >= todayLocal && d < cutoff;
+        }).sort((a, b) => {
+          const ak = (a.date || '') + (a.time || '');
+          const bk = (b.date || '') + (b.time || '');
+          return ak.localeCompare(bk);
+        });
+
+        if (nextUp.length === 0) return null;
+
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+              Next Up
+            </div>
+            {nextUp.map((s, idx) => {
+              const dp = (s.date || '').split('T')[0].split('-').map(Number);
+              const dateObj = dp.length === 3 ? new Date(dp[0], dp[1] - 1, dp[2]) : null;
+              const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
+              const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+              const tParts = (s.time || '').split(':').map(Number);
+              const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+              const isActive = s.status === 'in_progress';
+              const borderColor = isActive ? '#f57f17' : s.status === 'confirmed' ? '#1b6b5a' : '#e8724a';
+
+              return (
+                <div key={s.id || idx} className="card" onClick={() => {
+                  if (s.date) window.__pendingScheduleDate = s.date;
+                  if (onNavigate) onNavigate('schedule');
+                }} style={{
+                  marginBottom: 8, padding: '14px 16px', cursor: 'pointer',
+                  borderLeft: `4px solid ${borderColor}`,
+                  background: isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : '#fff',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>In Progress</div>}
+                      <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
+                        {s.recipientName || 'Care Visit'}
+                        {s.caregiverName ? ` with ${s.caregiverName}` : ''}
+                      </div>
+                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
+                        {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
+                        {s.serviceType ? ` \u2022 ${s.serviceType.replace(/_/g, ' ')}` : ''}
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                      background: isActive ? '#fff8e1' : s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
+                      color: isActive ? '#f57f17' : s.status === 'confirmed' ? '#2e7d32' : '#e65100',
+                      textTransform: 'capitalize', whiteSpace: 'nowrap',
+                    }}>{isActive ? 'In Progress' : s.status}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       <div className="stats-grid">
         <div className="stat-card">
           <div style={{ fontSize: 28 }}>📅</div>

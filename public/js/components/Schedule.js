@@ -11,10 +11,12 @@ const Schedule = window.Schedule = () => {
   // Pick up pending schedule date from activity feed deep-link
   useEffect(() => {
     if (window.__pendingScheduleDate) {
-      const target = new Date(window.__pendingScheduleDate);
-      if (!isNaN(target.getTime())) {
-        setCurrentMonth({ year: target.getFullYear(), month: target.getMonth() });
-        setSelectedDate(target.getDate());
+      const raw = window.__pendingScheduleDate.split('T')[0];
+      const parts = raw.split('-').map(Number);
+      if (parts.length === 3 && !isNaN(parts[0])) {
+        setCurrentMonth({ year: parts[0], month: parts[1] - 1 });
+        // Set selectedDate to full "YYYY-MM-DD" string to match sessionsByDate keys
+        setSelectedDate(raw);
       }
       delete window.__pendingScheduleDate;
     }
@@ -299,7 +301,7 @@ const Schedule = window.Schedule = () => {
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>
               <span className="card-icon">📋</span>
-              {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              {(() => { const p = selectedDate.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }); })()}
               {isPast(selectedDate) && <span style={{ marginLeft: 8, fontSize: 11, color: '#999', fontWeight: 400 }}>(Past)</span>}
             </span>
             <span style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600 }}>{hoursMap[selectedDate] || 0} total hours</span>
