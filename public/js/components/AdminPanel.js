@@ -39,6 +39,10 @@ const AdminPanel = window.AdminPanel = () => {
   // User delete state
   const [deleteConfirm, setDeleteConfirm] = useState(null); // userId being confirmed
   const [deleteLoading, setDeleteLoading] = useState(false);
+  // Nuke state
+  const [nukeConfirm, setNukeConfirm] = useState(null); // userId awaiting first-click confirm
+  const [nukeLoading, setNukeLoading] = useState(false);
+  const [nukeError, setNukeError] = useState(null);
   // Onboarding override state
   const [onboardingModal, setOnboardingModal] = useState(null); // { userId, data }
   const [onboardingLoading, setOnboardingLoading] = useState(false);
@@ -240,6 +244,57 @@ const AdminPanel = window.AdminPanel = () => {
       }
     } catch (err) { console.error('Delete user error:', err); }
     setDeleteLoading(false);
+  };
+
+  // ─── Nuke: passkey-verified permanent deletion ───
+  const handleNukeUser = async (userId, email) => {
+    if (nukeConfirm !== userId) {
+      setNukeConfirm(userId);
+      setNukeError(null);
+      return; // First click — show confirm
+    }
+    // Second click — trigger passkey challenge
+    setNukeLoading(true);
+    setNukeError(null);
+    try {
+      const SimpleWebAuthnBrowser = window.SimpleWebAuthnBrowser;
+      if (!SimpleWebAuthnBrowser) throw new Error('Passkey library not loaded. Refresh the page.');
+
+      // 1. Get challenge from server
+      const challengeRes = await apiFetch(`/api/admin/users/${userId}/nuke/challenge`, { method: 'POST' });
+      if (!challengeRes?.ok) {
+        const err = await challengeRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to start passkey challenge');
+      }
+      const options = await challengeRes.json();
+      const challengeKey = options._challengeKey;
+
+      // 2. Trigger biometric/passkey prompt
+      const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: options });
+
+      // 3. Send verified response to nuke endpoint
+      const nukeRes = await apiFetch(`/api/admin/users/${userId}/nuke`, {
+        method: 'DELETE',
+        body: JSON.stringify({ ...authResp, _challengeKey: challengeKey }),
+      });
+      if (nukeRes?.ok) {
+        const data = await nukeRes.json();
+        loadUsers();
+        setNukeConfirm(null);
+        alert(data.message || 'User nuked successfully.');
+      } else {
+        const data = await nukeRes.json().catch(() => ({}));
+        throw new Error(data.error || 'Nuke failed');
+      }
+    } catch (err) {
+      if (err.name === 'NotAllowedError') {
+        setNukeError('Passkey prompt cancelled.');
+      } else {
+        setNukeError(err.message || 'Nuke failed');
+      }
+      console.error('Nuke error:', err);
+    }
+    setNukeLoading(false);
   };
 
   const handleForcePasswordReset = async (userId, email) => {
@@ -759,6 +814,38 @@ const AdminPanel = window.AdminPanel = () => {
                               Delete
                             </button>
                           )}
+                          {nukeConfirm === u.id ? (
+                            <>
+                              <button onClick={() => handleNukeUser(u.id, u.email)} disabled={nukeLoading}
+                                style={{ padding: '4px 10px', background: '#1a1a1a', color: '#ff6b35', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                                title="Confirm nuke — requires passkey">
+                                {nukeLoading ? '⏳' : '☢️ Confirm'}
+                              </button>
+                              <button onClick={() => { setNukeConfirm(null); setNukeError(null); }}
+                                style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                                ✕
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => handleNukeUser(u.id, u.email)}
+                              style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                              title="Permanently delete all data (requires passkey)">
+                              🍄☁️
+                            </button>
+                          )}
+                        </div>
+                      ) : nukeConfirm === u.id ? (
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button onClick={() => handleNukeUser(u.id, u.email)} disabled={nukeLoading}
+                            style={{ padding: '4px 10px', background: '#1a1a1a', color: '#ff6b35', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                            title="Confirm nuke — requires passkey">
+                            {nukeLoading ? '⏳' : '☢️ Confirm Nuke'}
+                          </button>
+                          <button onClick={() => { setNukeConfirm(null); setNukeError(null); }}
+                            style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                            ✕
+                          </button>
+                          {nukeError && <div style={{ fontSize: '10px', color: '#c62828', width: '100%', textAlign: 'center' }}>{nukeError}</div>}
                         </div>
                       ) : deleteConfirm === u.id ? (
                         <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
@@ -782,7 +869,29 @@ const AdminPanel = window.AdminPanel = () => {
                             style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
                             Delete
                           </button>
+                          {nukeConfirm === u.id ? (
+                            <>
+                              <button onClick={() => handleNukeUser(u.id, u.email)} disabled={nukeLoading}
+                                style={{ padding: '4px 10px', background: '#1a1a1a', color: '#ff6b35', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                                title="Confirm nuke — requires passkey">
+                                {nukeLoading ? '⏳' : '☢️ Confirm'}
+                              </button>
+                              <button onClick={() => { setNukeConfirm(null); setNukeError(null); }}
+                                style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                                ✕
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => handleNukeUser(u.id, u.email)}
+                              style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                              title="Permanently delete all data (requires passkey)">
+                              🍄☁️
+                            </button>
+                          )}
                         </div>
+                      )}
+                      {nukeError && nukeConfirm === u.id && (
+                        <div style={{ fontSize: '10px', color: '#c62828', marginTop: 4, textAlign: 'center' }}>{nukeError}</div>
                       )}
                     </td>
                   </tr>

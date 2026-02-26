@@ -2,6 +2,30 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
+const {
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} = require("@simplewebauthn/server");
+
+// Passkey config (matches passkeys.js)
+const RP_ID = process.env.NODE_ENV === "production" ? "yourinplace.com" : "localhost";
+const ORIGIN = process.env.NODE_ENV === "production" ? "https://yourinplace.com" : "http://localhost:3001";
+
+// In-memory challenge store for nuke confirmations (short-lived)
+const nukeChallenges = new Map();
+function setNukeChallenge(key, value) {
+  nukeChallenges.set(key, { value, expires: Date.now() + 2 * 60 * 1000 }); // 2 min TTL
+  for (const [k, v] of nukeChallenges) {
+    if (v.expires < Date.now()) nukeChallenges.delete(k);
+  }
+}
+function getNukeChallenge(key) {
+  const entry = nukeChallenges.get(key);
+  if (!entry) return null;
+  nukeChallenges.delete(key); // one-time use
+  if (entry.expires < Date.now()) return null;
+  return entry.value;
+}
 
 const router = express.Router();
 
@@ -404,6 +428,218 @@ router.delete("/users/:id", async (req, res) => {
   } catch (err) {
     console.error("Admin delete user error:", err);
     res.status(500).json({ error: "Failed to delete user: " + (err.message || "") });
+  }
+});
+
+// ─── POST /api/admin/users/:id/nuke/challenge — Generate passkey challenge for nuke confirmation ───
+router.post("/users/:id/nuke/challenge", async (req, res) => {
+  try {
+    const db = await getDb();
+    const target = await db.prepare("SELECT id, email FROM users WHERE id = ?").get(req.params.id);
+    if (!target) return res.status(404).json({ error: "User not found" });
+
+    // Get admin's passkeys
+    const passkeys = await db.prepare(
+      "SELECT credential_id, transports FROM user_passkeys WHERE user_id = ?"
+    ).all(req.user.id);
+    if (passkeys.length === 0) {
+      return res.status(400).json({ error: "You need a registered passkey to use nuke. Set one up in My Account → Security." });
+    }
+
+    const allowCredentials = passkeys.map(pk => ({
+      id: pk.credential_id,
+      transports: pk.transports ? JSON.parse(pk.transports) : [],
+    }));
+
+    const options = await generateAuthenticationOptions({
+      rpID: RP_ID,
+      allowCredentials,
+      userVerification: "required", // Must verify identity (biometric/PIN)
+    });
+
+    const challengeKey = `nuke_${req.user.id}_${req.params.id}_${Date.now()}`;
+    setNukeChallenge(challengeKey, {
+      challenge: options.challenge,
+      adminId: req.user.id,
+      targetUserId: req.params.id,
+      targetEmail: target.email,
+    });
+
+    res.json({ ...options, _challengeKey: challengeKey });
+  } catch (err) {
+    console.error("Nuke challenge error:", err);
+    res.status(500).json({ error: "Failed to generate passkey challenge" });
+  }
+});
+
+// ─── DELETE /api/admin/users/:id/nuke — HARD DELETE all user data (requires passkey) ───
+router.delete("/users/:id/nuke", async (req, res) => {
+  try {
+    const { _challengeKey, ...authResponse } = req.body;
+
+    // 1. Verify passkey challenge
+    const stored = getNukeChallenge(_challengeKey);
+    if (!stored) {
+      return res.status(401).json({ error: "Passkey challenge expired. Please try again." });
+    }
+    if (stored.adminId !== req.user.id || stored.targetUserId !== req.params.id) {
+      return res.status(401).json({ error: "Challenge mismatch." });
+    }
+
+    const db = await getDb();
+    const passkey = await db.prepare(
+      "SELECT pk.*, u.id as uid FROM user_passkeys pk JOIN users u ON pk.user_id = u.id WHERE pk.credential_id = ?"
+    ).get(authResponse.id);
+    if (!passkey || passkey.uid !== req.user.id) {
+      return res.status(401).json({ error: "Passkey not recognized or doesn't belong to you." });
+    }
+
+    const verification = await verifyAuthenticationResponse({
+      response: authResponse,
+      expectedChallenge: stored.challenge,
+      expectedOrigin: ORIGIN,
+      expectedRPID: RP_ID,
+      credential: {
+        id: passkey.credential_id,
+        publicKey: Buffer.from(passkey.public_key, "base64"),
+        counter: Number(passkey.counter),
+      },
+      requireUserVerification: true,
+    });
+
+    if (!verification.verified) {
+      return res.status(401).json({ error: "Passkey verification failed." });
+    }
+
+    // Update passkey counter
+    await db.prepare("UPDATE user_passkeys SET counter = ?, last_used = NOW() WHERE id = ?")
+      .run(verification.authenticationInfo.newCounter, passkey.id);
+
+    // 2. Get user info before nuking
+    const { id } = req.params;
+    const user = await db.prepare("SELECT id, email, role, is_admin FROM users WHERE id = ?").get(id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Safety: never nuke yourself
+    if (id === req.user.id) {
+      return res.status(400).json({ error: "You cannot nuke your own account." });
+    }
+
+    // 3. HARD DELETE everything in a transaction
+    await db.transaction(async (tx) => {
+      const cgProfile = await tx.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(id);
+      const cgId = cgProfile?.id;
+
+      // Caregiver-specific tables
+      if (cgId) {
+        // Visit photos → visit logs (need log IDs first)
+        const vlogs = await tx.prepare("SELECT id FROM visit_logs WHERE caregiver_id = ?").all(cgId);
+        for (const vl of vlogs) {
+          await tx.prepare("DELETE FROM visit_photos WHERE visit_log_id = ?").run(vl.id);
+        }
+        await tx.prepare("DELETE FROM visit_logs WHERE caregiver_id = ?").run(cgId);
+        await tx.prepare("DELETE FROM caregiver_assignments WHERE caregiver_profile_id = ?").run(cgId);
+        await tx.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(cgId);
+        await tx.prepare("DELETE FROM reviews WHERE caregiver_id = ?").run(cgId);
+        await tx.prepare("DELETE FROM payments WHERE caregiver_id = ?").run(cgId);
+        // Sessions: delete offers first, then sessions
+        const cgSessions = await tx.prepare("SELECT id FROM care_sessions WHERE caregiver_id = ?").all(cgId);
+        for (const cs of cgSessions) {
+          await tx.prepare("DELETE FROM session_offers WHERE session_id = ?").run(cs.id);
+        }
+        await tx.prepare("DELETE FROM care_sessions WHERE caregiver_id = ? AND status NOT IN ('completed')").run(cgId);
+        // Completed sessions: clear caregiver reference but keep for audit
+        await tx.prepare("UPDATE care_sessions SET caregiver_id = NULL WHERE caregiver_id = ? AND status = 'completed'").run(cgId);
+        await tx.prepare("DELETE FROM caregiver_profiles WHERE id = ?").run(cgId);
+      }
+
+      // Family-specific: care recipients + their cascading data
+      const crs = await tx.prepare("SELECT id FROM care_recipients WHERE family_user_id = ?").all(id);
+      for (const cr of crs) {
+        await tx.prepare("DELETE FROM recipient_notes WHERE care_recipient_id = ?").run(cr.id);
+        await tx.prepare("DELETE FROM caregiver_assignments WHERE care_recipient_id = ?").run(cr.id);
+        await tx.prepare("DELETE FROM care_recipient_shares WHERE care_recipient_id = ?").run(cr.id);
+        // Sessions under this care recipient
+        const crSessions = await tx.prepare("SELECT id FROM care_sessions WHERE care_recipient_id = ?").all(cr.id);
+        for (const cs of crSessions) {
+          await tx.prepare("DELETE FROM session_offers WHERE session_id = ?").run(cs.id);
+          const slogs = await tx.prepare("SELECT id FROM visit_logs WHERE session_id = ?").all(cs.id);
+          for (const vl of slogs) {
+            await tx.prepare("DELETE FROM visit_photos WHERE visit_log_id = ?").run(vl.id);
+          }
+          await tx.prepare("DELETE FROM visit_logs WHERE session_id = ?").run(cs.id);
+          await tx.prepare("DELETE FROM reviews WHERE session_id = ?").run(cs.id);
+          await tx.prepare("DELETE FROM payments WHERE session_id = ?").run(cs.id);
+        }
+        await tx.prepare("DELETE FROM care_sessions WHERE care_recipient_id = ?").run(cr.id);
+        // Care teams linked to this care recipient
+        const teams = await tx.prepare("SELECT id FROM care_teams WHERE care_recipient_id = ?").all(cr.id);
+        for (const t of teams) {
+          await tx.prepare("DELETE FROM care_team_invites WHERE care_team_id = ?").run(t.id);
+          await tx.prepare("DELETE FROM care_team_members WHERE care_team_id = ?").run(t.id);
+        }
+        await tx.prepare("DELETE FROM care_teams WHERE care_recipient_id = ?").run(cr.id);
+      }
+      await tx.prepare("DELETE FROM care_recipients WHERE family_user_id = ?").run(id);
+
+      // Auth & security
+      await tx.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM user_passkeys WHERE user_id = ?").run(id);
+
+      // Documents & payments
+      await tx.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM background_check_payments WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM payout_preferences WHERE user_id = ?").run(id);
+
+      // Social & messaging
+      await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM care_team_invites WHERE invited_by = ?").run(id);
+      await tx.prepare("DELETE FROM platform_invites WHERE invited_by = ?").run(id);
+      await tx.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(id, id);
+      await tx.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM message_reactions WHERE user_id = ?").run(id);
+      // Messages: delete where sender
+      await tx.prepare("DELETE FROM messages WHERE sender_id = ?").run(id);
+
+      // Activity & feedback
+      await tx.prepare("DELETE FROM activity_feed WHERE family_user_id = ?").run(id);
+      await tx.prepare("DELETE FROM feedback WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM onboarding_events WHERE user_id = ?").run(id);
+
+      // Sessions owned by this family user
+      await tx.prepare("DELETE FROM reviews WHERE family_user_id = ?").run(id);
+      await tx.prepare("DELETE FROM payments WHERE family_user_id = ?").run(id);
+      const familySessions = await tx.prepare("SELECT id FROM care_sessions WHERE family_user_id = ?").all(id);
+      for (const cs of familySessions) {
+        await tx.prepare("DELETE FROM session_offers WHERE session_id = ?").run(cs.id);
+        const slogs = await tx.prepare("SELECT id FROM visit_logs WHERE session_id = ?").all(cs.id);
+        for (const vl of slogs) {
+          await tx.prepare("DELETE FROM visit_photos WHERE visit_log_id = ?").run(vl.id);
+        }
+        await tx.prepare("DELETE FROM visit_logs WHERE session_id = ?").run(cs.id);
+      }
+      await tx.prepare("DELETE FROM care_sessions WHERE family_user_id = ?").run(id);
+
+      // Recipient notes authored by this user
+      await tx.prepare("DELETE FROM recipient_notes WHERE author_id = ?").run(id);
+      // Care recipient shares
+      await tx.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(id, id);
+
+      // Finally: DELETE the user row
+      await tx.prepare("DELETE FROM users WHERE id = ?").run(id);
+    }); // end transaction
+
+    await logAdminAction(req, "nuke_user", "user", id, { email: user.email, role: user.role, method: "passkey_verified" });
+    console.log(`  [NUKE] Admin ${req.user.id} permanently deleted user ${user.email} (${id})`);
+    res.json({ success: true, message: `☢️ Permanently deleted ${user.email} and all associated data.` });
+  } catch (err) {
+    console.error("Nuke user error:", err);
+    res.status(500).json({ error: "Nuke failed: " + (err.message || "") });
   }
 });
 
