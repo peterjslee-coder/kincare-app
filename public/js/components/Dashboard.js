@@ -17,6 +17,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [awaitingExpanded, setAwaitingExpanded] = useState(false);
+  const [finishedExpanded, setFinishedExpanded] = useState(false);
   // Tick counter for live countdown on in-progress sessions (re-renders every 30s)
   const [tick, setTick] = useState(0);
 
@@ -543,54 +544,78 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Just Finished — recently completed sessions */}
+      {/* Just Finished — recently completed sessions (faded, expandable) */}
       {(() => {
         const completed = data?.recentlyCompleted || [];
         if (completed.length === 0) return null;
+        const showAll = finishedExpanded || completed.length <= 2;
+        const visible = showAll ? completed.slice(0, 5) : completed.slice(0, 2);
         return (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              Just Finished
+              Just Finished ({completed.length})
             </div>
-            {completed.slice(0, 3).map((s, idx) => {
-              const svcLabel = (s.serviceType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-              return (
-                <div key={s.id || idx} onClick={() => setVisitDetailSessionId(s.id)}
-                  style={{
-                    marginBottom: 8, padding: '12px 16px', cursor: 'pointer', borderRadius: 12,
-                    border: '2px solid #c8e6c9', background: '#f1f8f3',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                  }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
-                        {s.recipientName || 'Care Visit'}
-                        {s.caregiverName ? ` with ${s.caregiverName}` : ''}
-                      </div>
-                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                        {s.date} · {svcLabel} · {s.durationHours || 2}h
-                      </div>
-                      {s.visitSummary && (
-                        <div style={{ fontSize: 13, color: '#555', marginTop: 4, fontStyle: 'italic' }}>
-                          "{s.visitSummary.length > 80 ? s.visitSummary.slice(0, 80) + '...' : s.visitSummary}"
+            <div style={{ position: 'relative' }}>
+              {visible.map((s, idx) => {
+                const svcLabel = (s.serviceType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                const fadeOpacity = idx === 0 ? 0.7 : idx === 1 ? 0.4 : 0.25;
+                return (
+                  <div key={s.id || idx} onClick={() => setVisitDetailSessionId(s.id)}
+                    style={{
+                      marginBottom: 8, padding: '12px 16px', cursor: 'pointer', borderRadius: 12,
+                      border: '2px solid #c8e6c9', background: '#f1f8f3',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                      opacity: fadeOpacity, transition: 'opacity 0.3s',
+                    }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
+                          {s.recipientName || 'Care Visit'}
+                          {s.caregiverName ? ` with ${s.caregiverName}` : ''}
                         </div>
-                      )}
-                      {s.conditionTags && s.conditionTags.length > 0 && (
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                          {s.conditionTags.map((tag, i) => (
-                            <span key={i} style={{ background: '#e8f5e9', color: '#2e7d32', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500 }}>{tag}</span>
-                          ))}
+                        <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                          {s.date} · {svcLabel} · {s.durationHours || 2}h
                         </div>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                      <span style={{ padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Completed</span>
-                      <span style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600 }}>View Details →</span>
+                        {s.visitSummary && (
+                          <div style={{ fontSize: 13, color: '#555', marginTop: 4, fontStyle: 'italic' }}>
+                            "{s.visitSummary.length > 80 ? s.visitSummary.slice(0, 80) + '...' : s.visitSummary}"
+                          </div>
+                        )}
+                        {s.conditionTags && s.conditionTags.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                            {s.conditionTags.map((tag, i) => (
+                              <span key={i} style={{ background: '#e8f5e9', color: '#2e7d32', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500 }}>{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                        <span style={{ padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Completed</span>
+                        <span style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600 }}>View Details →</span>
+                      </div>
                     </div>
                   </div>
+                );
+              })}
+              {!showAll && (
+                <div onClick={() => setFinishedExpanded(true)} style={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, cursor: 'pointer',
+                  background: 'linear-gradient(transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%)',
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4,
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>
+                    + {completed.length - 2} more &mdash; tap to expand
+                  </span>
                 </div>
-              );
-            })}
+              )}
+              {showAll && completed.length > 2 && (
+                <div onClick={() => setFinishedExpanded(false)} style={{
+                  textAlign: 'center', padding: '4px 0', cursor: 'pointer',
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Show less</span>
+                </div>
+              )}
+            </div>
           </div>
         );
       })()}
