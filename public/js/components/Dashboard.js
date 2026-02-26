@@ -16,6 +16,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [reviewComment, setReviewComment] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
+  const [awaitingExpanded, setAwaitingExpanded] = useState(false);
 
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
@@ -700,50 +701,70 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
         const openReqs = upcoming.filter(s => ['open', 'requested'].includes(s.status) && !s.caregiverName);
         if (openReqs.length === 0) return null;
+        const showAll = awaitingExpanded || openReqs.length <= 2;
+        const visibleReqs = showAll ? openReqs : openReqs.slice(0, 2);
         return (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
               Awaiting Caregiver ({openReqs.length})
             </div>
-            {openReqs.map((s, idx) => {
-              const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
-              const timeLabel = TimezoneHelper.formatTime(s.time);
-              // Fade out after first item: 1st=full, 2nd=0.45, 3rd+=0.15
-              const fadeOpacity = idx === 0 ? 1 : idx === 1 ? 0.45 : 0.15;
-              return (
-                <div key={s.id || idx} onClick={() => {
-                  if (s.id) setVisitDetailSessionId(s.id);
-                }} style={{
-                  marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
-                  border: '2px dashed #e8724a', background: '#fff8f0',
-                  opacity: fadeOpacity, transition: 'opacity 0.3s',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
-                        {s.recipientName || 'Care Visit'}
+            <div style={{ position: 'relative' }}>
+              {visibleReqs.map((s, idx) => {
+                const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
+                const timeLabel = TimezoneHelper.formatTime(s.time);
+                return (
+                  <div key={s.id || idx} onClick={() => {
+                    if (s.id) setVisitDetailSessionId(s.id);
+                  }} style={{
+                    marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
+                    border: '2px dashed #e8724a', background: '#fff8f0',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
+                          {s.recipientName || 'Care Visit'}
+                        </div>
+                        <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                          {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
+                          {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
+                          {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 }}>No caregiver yet — waiting for someone to accept</div>
                       </div>
-                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
-                        {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
-                        {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                        <span style={{
+                          padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: '#fff3e0', color: '#e65100', textTransform: 'capitalize', whiteSpace: 'nowrap',
+                        }}>Open</span>
+                        <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
+                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #e0e0e0', background: '#fff', color: '#c62828', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                          Cancel
+                        </button>
                       </div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 }}>No caregiver yet — waiting for someone to accept</div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                      <span style={{
-                        padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                        background: '#fff3e0', color: '#e65100', textTransform: 'capitalize', whiteSpace: 'nowrap',
-                      }}>Open</span>
-                      <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
-                        style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #e0e0e0', background: '#fff', color: '#c62828', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                        Cancel
-                      </button>
                     </div>
                   </div>
+                );
+              })}
+              {/* Gradient fade + "Show more" when collapsed with 3+ items */}
+              {!showAll && (
+                <div onClick={() => setAwaitingExpanded(true)} style={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, cursor: 'pointer',
+                  background: 'linear-gradient(transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%)',
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4,
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#e8724a' }}>
+                    + {openReqs.length - 2} more &mdash; tap to expand
+                  </span>
                 </div>
-              );
-            })}
+              )}
+              {showAll && openReqs.length > 2 && (
+                <div onClick={() => setAwaitingExpanded(false)} style={{
+                  textAlign: 'center', padding: '4px 0', cursor: 'pointer',
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Show less</span>
+                </div>
+              )}
+            </div>
           </div>
         );
       })()}
