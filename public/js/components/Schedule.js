@@ -320,7 +320,7 @@ const Schedule = window.Schedule = () => {
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14, color: isPast(selectedDate) ? '#888' : '#333' }}>
                     {s.scheduled_time || '—'}
-                    <span style={{ fontWeight: 400, marginLeft: 8, color: '#666' }}>{s.service_type}</span>
+                    <span style={{ fontWeight: 400, marginLeft: 8, color: '#666' }}>{formatServiceType(s.service_type)}</span>
                   </div>
                   <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                     {s.caregiver_name || (s.status === 'open' ? 'Waiting for caregiver' : 'Unmatched')} — {s.recipient_name || 'Care recipient'}
@@ -341,7 +341,7 @@ const Schedule = window.Schedule = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' }}>
                     <div><span style={{ color: '#888' }}>Duration:</span> <strong>{s.duration_hours || 2} hours</strong></div>
                     <div><span style={{ color: '#888' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong></div>
-                    <div><span style={{ color: '#888' }}>Service:</span> <strong>{s.service_type}</strong></div>
+                    <div><span style={{ color: '#888' }}>Service:</span> <strong>{formatServiceType(s.service_type)}</strong></div>
                     <div><span style={{ color: '#888' }}>Caregiver:</span> <strong>{s.caregiver_name || 'Pending match'}</strong></div>
                   </div>
                   {s.special_instructions && (

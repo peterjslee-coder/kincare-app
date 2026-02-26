@@ -77,7 +77,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, onClose }) => {
           let tasksCompleted = [];
           try { tasksCompleted = v?.tasks_completed ? JSON.parse(v.tasks_completed) : []; } catch(e) {}
 
-          const svcLabel = (s.service_type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const svcLabel = formatServiceType(s.service_type);
 
           return (
             <>

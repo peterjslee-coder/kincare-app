@@ -368,7 +368,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         <div style={{ marginTop: 24, background: '#fff', borderRadius: 12, border: '1px solid #e0e0e0', padding: '16px 20px' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#1b6b5a', marginBottom: 12 }}>Recent Visits</div>
           {recentVisits.map((s) => {
-            const svcLabel = (s.service_type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            const svcLabel = formatServiceType(s.service_type);
             return (
               <div key={s.id} onClick={() => setVisitDetailSessionId(s.id)}
                 style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}

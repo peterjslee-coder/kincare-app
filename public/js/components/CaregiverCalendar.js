@@ -502,7 +502,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                           )}
                         </div>
                         <div style={{ fontSize: 12, color: '#666' }}>
-                          {formatTimeStr(s.time || s.scheduled_time)} · {hrs}h · {s.serviceType || s.service_type}
+                          {formatTimeStr(s.time || s.scheduled_time)} · {hrs}h · {formatServiceType(s.serviceType || s.service_type)}
                         </div>
                         {budgetMax && (
                           <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
@@ -563,7 +563,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                           {name}{cost > 0 ? `, $${Math.round(cost)}` : ''}
                         </div>
                         <div style={{ fontSize: 12, color: '#666' }}>
-                          {formatTimeStr(s.time || s.scheduled_time)} · {s.durationHours || s.duration_hours}h · {s.serviceType || s.service_type}
+                          {formatTimeStr(s.time || s.scheduled_time)} · {s.durationHours || s.duration_hours}h · {formatServiceType(s.serviceType || s.service_type)}
                         </div>
                         {(s.specialInstructions || s.special_instructions) && (
                           <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>

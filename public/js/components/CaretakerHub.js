@@ -763,7 +763,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
                       ) : null}
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{(job.serviceType || '').replace(/_/g, ' ')}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{formatServiceType(job.serviceType)}</div>
                     <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                       {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
                       {effectiveTotal > 0 && <span style={{ fontWeight: 600, color: '#1b6b5a' }}> \u2022 ${effectiveTotal.toFixed(0)} total</span>}
@@ -1447,7 +1447,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           <span style={{
                             padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
                             background: '#f0faf8', color: '#1b6b5a', textTransform: 'capitalize',
-                          }}>{(s.service_type || '').replace(/_/g, ' ')}</span>
+                          }}>{formatServiceType(s.service_type)}</span>
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>{s.duration_hours || '—'}h</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#1b6b5a' }}>
@@ -1894,7 +1894,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           }}>
             <h3 style={{ marginTop: 0 }}>Log Visit — {visitLogSession.recipientName}</h3>
             <p style={{ fontSize: '13px', color: '#666' }}>
-              {visitLogSession.date} at {visitLogSession.time} &bull; {visitLogSession.serviceType}
+              {visitLogSession.date} at {visitLogSession.time} &bull; {formatServiceType(visitLogSession.serviceType)}
             </p>
 
             <div style={{ marginBottom: '16px' }}>

@@ -669,7 +669,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
                         {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
-                        {s.serviceType ? ` \u2022 ${s.serviceType.replace(/_/g, ' ')}` : ''}
+                        {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
                       </div>
                       {isSeekingCaregiver && <div style={{ fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 }}>Seeking caregiver</div>}
                     </div>
@@ -723,7 +723,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
                         {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
-                        {s.serviceType ? ` \u2022 ${s.serviceType.replace(/_/g, ' ')}` : ''}
+                        {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 }}>No caregiver yet — waiting for someone to accept</div>
                     </div>

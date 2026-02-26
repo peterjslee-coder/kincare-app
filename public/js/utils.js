@@ -18,6 +18,18 @@ const formatPhone = window.formatPhone = (value, isInternational) => {
 // ─── International phone disclaimer text ───
 const INTL_PHONE_DISCLAIMER = window.INTL_PHONE_DISCLAIMER = 'InPlace is primarily US-based. With an international number, you should not expect to receive calls from a caregiver. Plan on using the in-app chat feature primarily. Voice and video options are coming soon.';
 
+const SERVICE_TYPE_LABELS = {
+  companionship: 'Companionship', companion: 'Companionship',
+  personal_care: 'Personal Care', meal_prep: 'Meal Prep',
+  transportation: 'Transportation', rides: 'Rides', meals: 'Meals',
+  health_wellness: 'Health & Wellness', full_day: 'Full Day',
+  overnight: 'Overnight', respite: 'Respite Care',
+};
+const formatServiceType = window.formatServiceType = (type) => {
+  if (!type) return '';
+  return SERVICE_TYPE_LABELS[type] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
 let AUTH_TOKEN = null;
 const setAuthToken = window.setAuthToken = (token) => {
   AUTH_TOKEN = token;

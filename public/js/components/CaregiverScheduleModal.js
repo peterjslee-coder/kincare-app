@@ -238,7 +238,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
                 <div style={{ color: '#666' }}>Date</div><div>{selectedDay.label} {selectedDay.shortDate}</div>
                 <div style={{ color: '#666' }}>Time</div><div>{formatTime(selectedSlot.start)}</div>
                 <div style={{ color: '#666' }}>Duration</div><div>{duration} hour(s)</div>
-                <div style={{ color: '#666' }}>Service</div><div>{serviceType.replace('_', ' ')}</div>
+                <div style={{ color: '#666' }}>Service</div><div>{formatServiceType(serviceType)}</div>
                 <div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${hourlyRate * parseInt(duration)}</div>
                 {instructions && <><div style={{ color: '#666' }}>Notes</div><div>{instructions}</div></>}
               </div>
