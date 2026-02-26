@@ -1,6 +1,7 @@
 const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
   const [showInstallTip, setShowInstallTip] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState('families');
+  const [showStory, setShowStory] = React.useState(false);
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
@@ -94,6 +95,10 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               )}
             </div>
           )}
+          <button onClick={() => setShowStory(true)} style={{
+            background: 'none', color: '#1b6b5a', border: 'none', padding: '8px 16px',
+            fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+          }}>Our Story</button>
           <button onClick={() => onNavigate('login')} style={{
             background: 'none', color: '#1b6b5a', border: 'none', padding: '8px 16px',
             fontSize: '14px', fontWeight: 600, cursor: 'pointer',
@@ -394,6 +399,23 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         </div>
       </section>
 
+      {/* ── Our Story teaser ── */}
+      <section style={{ padding: '40px 32px', background: '#fff', textAlign: 'center', borderTop: '1px solid #f0f0f0' }}>
+        <button onClick={() => setShowStory(true)} style={{
+          background: 'none', border: 'none', cursor: 'pointer', padding: '12px 24px',
+          display: 'inline-flex', alignItems: 'center', gap: '10px',
+        }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#f0faf8', border: '2px solid #d0e8e3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>
+            {'\u{1F468}\u200D\u{1F469}\u200D\u{1F466}'}
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: '#1b6b5a' }}>Why I Built inPlace</div>
+            <div style={{ fontSize: '13px', color: '#888' }}>A personal story from our founder</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1b6b5a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '4px' }}><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </section>
+
       {/* ── Bottom CTA ── */}
       <section style={{ padding: '56px 32px', textAlign: 'center', background: '#fff' }}>
         <h2 style={{ fontSize: '28px', color: '#1b6b5a', marginBottom: '10px' }}>Ready to Get Started?</h2>
@@ -420,6 +442,78 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         </p>
         <p style={{ marginTop: '6px', fontSize: '11px', opacity: 0.4 }}>v{window.APP_VERSION || '?'}</p>
       </footer>
+
+      {/* ── Our Story Modal ── */}
+      {showStory && (
+        <div onClick={() => setShowStory(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px', backdropFilter: 'blur(4px)',
+          animation: 'fadeIn 0.25s ease',
+        }}>
+          <div onClick={(e) => e.stopPropagation()} className="story-modal-content" style={{
+            background: '#fff', borderRadius: '16px', maxWidth: '680px', width: '100%',
+            maxHeight: '85vh', overflow: 'auto', position: 'relative',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            {/* Close button */}
+            <button onClick={() => setShowStory(false)} style={{
+              position: 'sticky', top: '12px', float: 'right', marginRight: '12px',
+              background: 'rgba(0,0,0,0.06)', border: 'none', borderRadius: '50%',
+              width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666',
+              zIndex: 2,
+            }}>{'\u2715'}</button>
+
+            {/* Header with photo */}
+            <div style={{ padding: '48px 40px 24px', textAlign: 'center' }}>
+              <div style={{
+                width: '100px', height: '100px', borderRadius: '50%', margin: '0 auto 20px',
+                background: 'linear-gradient(135deg, #1b6b5a, #2a8f7a)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '36px', color: '#fff', fontWeight: 700,
+                border: '3px solid #e8724a',
+                backgroundImage: 'url(/images/founder-photo.jpg)',
+                backgroundSize: 'cover', backgroundPosition: 'center',
+              }}>
+                <span style={{ textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>PL</span>
+              </div>
+              <h2 style={{ fontSize: '26px', color: '#1a1a1a', marginBottom: '4px', fontWeight: 700 }}>Why I Built inPlace</h2>
+              <div style={{ fontSize: '14px', color: '#888' }}>Pete Lee, Founder</div>
+            </div>
+
+            {/* Story content */}
+            <div style={{ padding: '0 40px 48px', fontSize: '15px', color: '#444', lineHeight: 1.8 }}>
+              <p style={{ marginBottom: '16px' }}>
+                I spent 20 years in the Air Force flying fighters and eventually commanding a wing of 5,000 people. It was the kind of career where the mission always came first, and I was proud of that. But there was a cost I didn't fully reckon with until later.
+              </p>
+              <p style={{ marginBottom: '16px' }}>
+                While I was deployed or stationed across the country, my mom was getting older. She's 78 now, living with early-stage dementia and mild arthritis. She's sharp enough to know what she wants, and what she wants is simple: to stay in her own home. Her garden, her kitchen, her neighborhood. That's where she feels like herself.
+              </p>
+              <p style={{ marginBottom: '16px' }}>
+                My siblings picked up a huge share of the load while I was focused on my career, and I'm grateful for that. But they have their own lives and jobs too. We're all stretched. We're what they call the "sandwich generation" — caring for aging parents while raising our own families, often from hundreds of miles away.
+              </p>
+              <p style={{ marginBottom: '16px' }}>
+                Here's what I learned the hard way: there's a massive gap between "living on your own" and "needing a nursing home." Mom doesn't need 24-hour care. She doesn't need to move into a facility. She just needs someone checking in regularly — helping with meals, making sure she takes her medications, driving her to appointments, keeping her company. That kind of help shouldn't be this hard to find, and it shouldn't cost a fortune.
+              </p>
+              <p style={{ marginBottom: '16px' }}>
+                Most families can't afford round-the-clock care, and most don't even need it. They need reliable, flexible, on-demand help. A few visits a week from someone they trust. And they need to know it's actually happening — not wonder if the caregiver showed up or how things went.
+              </p>
+              <p style={{ marginBottom: '16px' }}>
+                This isn't just about aging parents. There are people recovering from life-changing injuries, managing chronic diseases, or living with conditions like autism or Down syndrome who need that same kind of regular, dependable support. Not institutionalized care — just a steady hand nearby.
+              </p>
+              <p style={{
+                marginTop: '28px', padding: '20px 24px', background: '#f0faf8',
+                borderRadius: '10px', borderLeft: '4px solid #1b6b5a',
+                fontSize: '16px', color: '#1b6b5a', fontWeight: 500, fontStyle: 'italic',
+                lineHeight: 1.7,
+              }}>
+                I built this app and this business because it's what I need to help keep Mom at home. I hope it helps you keep your loved ones where they want to be.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
