@@ -11,6 +11,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelText, setLabelText] = useState('');
   const [expandedMember, setExpandedMember] = useState(null);
+  const [recentVisits, setRecentVisits] = useState([]);
+  const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const { showToast } = useToast();
 
   const fetchTeam = async () => {
@@ -28,6 +30,27 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   };
 
   useEffect(() => { if (careTeamId) fetchTeam(); }, [careTeamId]);
+
+  // Fetch recent completed visits for this care team's recipient
+  useEffect(() => {
+    if (!team?.careRecipientId) return;
+    const fetchVisits = async () => {
+      try {
+        const res = await apiFetch('/api/sessions');
+        if (res?.ok) {
+          const data = await res.json();
+          const all = data.sessions || [];
+          // Filter to this recipient, completed or in_progress, most recent first
+          const relevant = all
+            .filter(s => s.care_recipient_id === team.careRecipientId && ['completed', 'in_progress'].includes(s.status))
+            .sort((a, b) => (b.scheduled_date || '').localeCompare(a.scheduled_date || ''))
+            .slice(0, 10);
+          setRecentVisits(relevant);
+        }
+      } catch (err) { console.error('Fetch visits error:', err); }
+    };
+    fetchVisits();
+  }, [team?.careRecipientId]);
 
   const handleInvite = async (e) => {
     e.preventDefault();
@@ -338,6 +361,44 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Recent Visits */}
+      {recentVisits.length > 0 && (
+        <div style={{ marginTop: 24, background: '#fff', borderRadius: 12, border: '1px solid #e0e0e0', padding: '16px 20px' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1b6b5a', marginBottom: 12 }}>Recent Visits</div>
+          {recentVisits.map((s) => {
+            const svcLabel = (s.service_type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            return (
+              <div key={s.id} onClick={() => setVisitDetailSessionId(s.id)}
+                style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f8f5'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
+                    {s.scheduled_date} — {svcLabel}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                    {s.caregiver_name || 'No caregiver'} · {s.duration_hours || 2}h
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    padding: '3px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                    background: s.status === 'completed' ? '#e8f5e9' : '#e3f2fd',
+                    color: s.status === 'completed' ? '#2e7d32' : '#1565c0',
+                  }}>{s.status === 'completed' ? 'Completed' : 'In Progress'}</span>
+                  <span style={{ color: '#1b6b5a', fontSize: 12, fontWeight: 600 }}>View →</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Visit Detail Modal */}
+      {visitDetailSessionId && (
+        <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
       )}
     </div>
   );

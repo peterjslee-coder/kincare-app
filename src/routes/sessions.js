@@ -1178,11 +1178,14 @@ router.get("/:id", async (req, res) => {
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       u.first_name || ' ' || u.last_name AS caregiver_name,
-      cp.rating_avg, cp.specialties AS caregiver_specialties
+      cp.rating_avg, cp.specialties AS caregiver_specialties,
+      cp.hourly_rate, cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
+      bu.first_name || ' ' || bu.last_name AS booked_by_name
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     LEFT JOIN users u ON cp.user_id = u.id
+    LEFT JOIN users bu ON cs.family_user_id = bu.id
     WHERE cs.id = ?
   `).get(req.params.id);
 
@@ -1197,7 +1200,35 @@ router.get("/:id", async (req, res) => {
     ? await db.prepare("SELECT * FROM visit_photos WHERE visit_log_id = ?").all(visitLog.id)
     : [];
 
-  res.json({ session, visitLog, photos });
+  // Cost breakdown
+  let costBreakdown = null;
+  if (session.scheduled_date && session.scheduled_time) {
+    const rates = {
+      daytime: session.rate_daytime || session.hourly_rate || 28,
+      nighttime: session.rate_nighttime || session.hourly_rate || 28,
+      overnight: session.rate_overnight || session.hourly_rate || 28,
+      base: session.hourly_rate || 28,
+    };
+    const shortNotice = isShortNotice(`${session.scheduled_date}T${session.scheduled_time}`);
+    costBreakdown = calculateSessionCost(session.scheduled_time, null, rates, {
+      scheduledDate: session.scheduled_date,
+      durationHours: parseFloat(session.duration_hours || 2),
+      shortNotice,
+    });
+    costBreakdown.shortNotice = shortNotice;
+
+    // Add platform fee info
+    const getPlatformFeePercent = async (db) => { const r = await db.prepare("SELECT value FROM platform_settings WHERE key = 'fee_percent'").get(); return r ? parseFloat(r.value) : 20; };
+    const feePercent = await getPlatformFeePercent(db);
+    const surchargeToCaregiver = costBreakdown.surchargeBreakdown?.caregiver || 0;
+    const surchargeToPlatform = costBreakdown.surchargeBreakdown?.platform || 0;
+    costBreakdown.caregiverPayout = Math.round((costBreakdown.subtotal + surchargeToCaregiver) * 100) / 100;
+    costBreakdown.platformFeePercent = feePercent;
+    costBreakdown.platformFee = Math.round((costBreakdown.subtotal * (feePercent / 100) + surchargeToPlatform) * 100) / 100;
+    costBreakdown.familyTotal = Math.round((costBreakdown.caregiverPayout + costBreakdown.platformFee) * 100) / 100;
+  }
+
+  res.json({ session, visitLog, photos, costBreakdown });
 });
 
 module.exports = router;

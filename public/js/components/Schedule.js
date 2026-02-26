@@ -7,6 +7,7 @@ const Schedule = window.Schedule = () => {
   });
   const [selectedDate, setSelectedDate] = useState(null);
   const [expandedSession, setExpandedSession] = useState(null);
+  const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
 
   // Pick up pending schedule date from activity feed deep-link
   useEffect(() => {
@@ -351,6 +352,10 @@ const Schedule = window.Schedule = () => {
                       Caregiver rating: ⭐ {s.caregiver_rating}
                     </div>
                   )}
+                  <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
+                    style={{ marginTop: 10, padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    View Full Details
+                  </button>
                 </div>
               )}
             </div>
@@ -381,6 +386,9 @@ const Schedule = window.Schedule = () => {
           );
         })()}
       </div>
+      {visitDetailSessionId && (
+        <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
+      )}
     </>
   );
 };

@@ -177,14 +177,19 @@ async function familyDashboard(db, userId, res) {
           bookedBy: s.family_user_id !== userId ? s.booked_by_name : null,
         };
       }),
-      recentActivity: recentActivity.map((a) => ({
-        id: a.id,
-        eventType: a.event_type,
-        title: a.title,
-        message: a.message,
-        isRead: a.is_read,
-        timestamp: a.created_at,
-      })),
+      recentActivity: recentActivity.map((a) => {
+        let meta = {};
+        try { meta = a.metadata ? JSON.parse(a.metadata) : {}; } catch(e) {}
+        return {
+          id: a.id,
+          eventType: a.event_type,
+          title: a.title,
+          message: a.message,
+          isRead: a.is_read,
+          timestamp: a.created_at,
+          sessionId: meta.sessionId || null,
+        };
+      }),
     });
   } catch (err) {
     console.error("Family dashboard error:", err);

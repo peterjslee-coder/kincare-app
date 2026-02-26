@@ -15,6 +15,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
 
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
@@ -597,8 +598,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
 
               return (
                 <div key={s.id || idx} onClick={() => {
-                  if (s.date) window.__pendingScheduleDate = s.date;
-                  if (onNavigate) onNavigate('schedule');
+                  if (s.id) setVisitDetailSessionId(s.id);
                 }} style={{
                   marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
                   border: `${borderWidth}px solid ${borderColor}`,
@@ -658,8 +658,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
               const timeLabel = TimezoneHelper.formatTime(s.time);
               return (
                 <div key={s.id || idx} onClick={() => {
-                  if (s.date) window.__pendingScheduleDate = s.date;
-                  if (onNavigate) onNavigate('schedule');
+                  if (s.id) setVisitDetailSessionId(s.id);
                 }} style={{
                   marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
                   border: '2px dashed #e8724a', background: '#fff8f0',
@@ -711,8 +710,15 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           </div>
           <div>
             {activity.slice(0, 5).map((a, idx) => (
-              <div key={idx} className="activity-item">
-                <div className="activity-title">{a.title}</div>
+              <div key={idx} className="activity-item"
+                onClick={() => a.sessionId && setVisitDetailSessionId(a.sessionId)}
+                style={a.sessionId ? { cursor: 'pointer', borderRadius: 6, padding: '6px 8px', margin: '-6px -8px', transition: 'background 0.15s' } : {}}
+                onMouseEnter={(e) => { if (a.sessionId) e.currentTarget.style.background = '#f0f8f5'; }}
+                onMouseLeave={(e) => { if (a.sessionId) e.currentTarget.style.background = ''; }}>
+                <div className="activity-title">
+                  {a.title}
+                  {a.sessionId && <span style={{ fontSize: 11, color: '#1b6b5a', marginLeft: 6 }}>View →</span>}
+                </div>
                 {a.message && <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>{a.message}</div>}
                 <div className="activity-time">{formatActivityTime(a.timestamp)}</div>
               </div>
@@ -855,6 +861,11 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
             })()}
           </div>
         </div>
+      )}
+
+      {/* Visit Detail Modal */}
+      {visitDetailSessionId && (
+        <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
       )}
 
       {/* Review Modal (when caregiver late-cancelled) */}
