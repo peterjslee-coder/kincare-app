@@ -736,7 +736,7 @@ const App = () => {
     const familyNav = [
       { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { id: '_request_care', icon: '➕', label: 'Request Care', isAction: true },
-      { id: 'care-profile', icon: '🌷', label: 'Care Profile', children: [
+      { id: 'care-profile', icon: '🌷', label: 'My Loved One', children: [
         { id: 'recipients', icon: '👥', label: 'Recipients' },
       ]},
       { id: 'care-team', icon: '👪', label: 'Care Team' },

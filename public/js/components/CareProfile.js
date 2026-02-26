@@ -195,7 +195,7 @@ const CareProfile = window.CareProfile = () => {
   return (
     <>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 className="page-title">Care Profile</h1>
+        <h1 className="page-title">My Loved One</h1>
         {!editing ? (
           canEdit && <button onClick={startEditing} style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             Edit Profile
