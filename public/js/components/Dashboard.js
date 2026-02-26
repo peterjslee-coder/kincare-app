@@ -531,46 +531,84 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Next Up — upcoming visits for today and tomorrow */}
+      {/* Next Up — sessions within 48 hours, or the next 1 session if nothing soon */}
       {(() => {
-        const todayStr = TimezoneHelper.getToday();
+        const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
+        const now = TimezoneHelper.getNow(tz);
+        const todayStr = TimezoneHelper.getToday(tz);
         const todayLocal = TimezoneHelper.parseDate(todayStr);
-        const cutoff = new Date(todayLocal.getTime() + 2 * 86400000); // 2 days out
-        const nextUp = upcoming.filter(s => {
-          const d = TimezoneHelper.parseDate(s.date);
-          if (isNaN(d.getTime())) return false;
-          return d >= todayLocal && d < cutoff;
-        }).sort((a, b) => {
-          const ak = (a.date || '') + (a.time || '');
-          const bk = (b.date || '') + (b.time || '');
+        const cutoff48h = new Date(now.getTime() + 48 * 3600000);
+
+        // Sort all upcoming by date+time
+        const sorted = [...upcoming].sort((a, b) => {
+          const ak = ((a.date || '').split('T')[0]) + (a.time || '');
+          const bk = ((b.date || '').split('T')[0]) + (b.time || '');
           return ak.localeCompare(bk);
         });
 
-        if (nextUp.length === 0) return null;
+        // Sessions within 48 hours
+        const within48 = sorted.filter(s => {
+          const sDate = (s.date || '').split('T')[0];
+          const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz);
+          return sessionDT <= cutoff48h;
+        });
+
+        // If nothing within 48h, show the next 1 session
+        const nextUp = within48.length > 0 ? within48 : sorted.slice(0, 1);
+
+        if (nextUp.length === 0) return (
+          <div style={{ marginBottom: 16, border: '2px solid #e0e0e0', borderRadius: 14, padding: '20px 18px', textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Next Up</div>
+            <div style={{ fontSize: 14, color: '#888' }}>No sessions scheduled</div>
+            <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
+              marginTop: 10, padding: '8px 20px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}>+ Request Care</button>
+          </div>
+        );
 
         return (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              Next Up
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Next Up
+              </div>
+              <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
+                padding: '4px 12px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              }}>+ Request Care</button>
             </div>
             {nextUp.map((s, idx) => {
-              const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], s.timezone);
+              const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
               const timeLabel = TimezoneHelper.formatTime(s.time);
               const isActive = s.status === 'in_progress';
-              const borderColor = isActive ? '#f57f17' : s.status === 'confirmed' ? '#1b6b5a' : '#e8724a';
+
+              // Urgency: how soon is this session?
+              const sDate = (s.date || '').split('T')[0];
+              const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz);
+              const minsUntil = (sessionDT - now) / 60000;
+              const isImminent = !isActive && s.status === 'confirmed' && minsUntil <= 60 && minsUntil > -120; // within 1 hour or started <2hr ago
+              const isSoon = !isActive && !isImminent && s.status === 'confirmed' && minsUntil <= 180; // within 3 hours
+              const isSeekingCaregiver = !s.caregiverName;
+
+              // Border & background based on urgency
+              const borderColor = isActive ? '#f57f17' : isImminent ? '#e8724a' : isSoon ? '#e8724a' : isSeekingCaregiver ? '#e8724a' : '#1b6b5a';
+              const bgColor = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isImminent ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
+              const borderWidth = isActive || isImminent ? 3 : 2;
 
               return (
-                <div key={s.id || idx} className="card" onClick={() => {
+                <div key={s.id || idx} onClick={() => {
                   if (s.date) window.__pendingScheduleDate = s.date;
                   if (onNavigate) onNavigate('schedule');
                 }} style={{
-                  marginBottom: 8, padding: '14px 16px', cursor: 'pointer',
-                  borderLeft: `4px solid ${borderColor}`,
-                  background: isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : '#fff',
+                  marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
+                  border: `${borderWidth}px solid ${borderColor}`,
+                  background: bgColor,
+                  boxShadow: isImminent ? '0 2px 12px rgba(232, 114, 74, 0.15)' : isActive ? '0 2px 12px rgba(245, 127, 23, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div style={{ flex: 1 }}>
-                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>In Progress</div>}
+                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>In Progress Now</div>}
+                      {isImminent && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>{minsUntil <= 0 ? 'Started — awaiting check-in' : minsUntil <= 15 ? 'Check-in window open' : `Starting in ${Math.ceil(minsUntil)} min`}</div>}
+                      {isSoon && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 2 }}>Coming up in {minsUntil <= 120 ? `${Math.ceil(minsUntil)} min` : `${Math.round(minsUntil / 60)}h`}</div>}
                       <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
                         {s.recipientName || 'Care Visit'}
                         {s.caregiverName ? ` with ${s.caregiverName}` : ''}
@@ -580,13 +618,22 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                         {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
                         {s.serviceType ? ` \u2022 ${s.serviceType.replace(/_/g, ' ')}` : ''}
                       </div>
+                      {isSeekingCaregiver && <div style={{ fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 }}>Seeking caregiver</div>}
                     </div>
-                    <span style={{
-                      padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                      background: isActive ? '#fff8e1' : s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
-                      color: isActive ? '#f57f17' : s.status === 'confirmed' ? '#2e7d32' : '#e65100',
-                      textTransform: 'capitalize', whiteSpace: 'nowrap',
-                    }}>{isActive ? 'In Progress' : s.status}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      <span style={{
+                        padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        background: isActive ? '#fff8e1' : isImminent ? '#fff3e0' : s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
+                        color: isActive ? '#f57f17' : isImminent ? '#e8724a' : s.status === 'confirmed' ? '#2e7d32' : '#e65100',
+                        textTransform: 'capitalize', whiteSpace: 'nowrap',
+                      }}>{isActive ? 'In Progress' : s.status}</span>
+                      {['confirmed', 'pending', 'open', 'requested'].includes(s.status) && (
+                        <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
+                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #e0e0e0', background: '#fff', color: '#c62828', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                          Cancel
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -594,30 +641,6 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           </div>
         );
       })()}
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div style={{ fontSize: 28 }}>📅</div>
-          <div className="stat-number">{stats.sessionsThisMonth || 0}</div>
-          <div className="stat-label">Sessions This Month</div>
-        </div>
-        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => onNavigate && onNavigate('caregivers')}>
-          <div style={{ fontSize: 28 }}>👨‍💼</div>
-          <div className="stat-number">{stats.assignedCaregivers || 0}</div>
-          <div className="stat-label">Assigned Caregivers</div>
-          <div style={{ fontSize: '10px', color: '#1b6b5a', marginTop: '4px' }}>View &rarr;</div>
-        </div>
-        <div className="stat-card">
-          <div style={{ fontSize: 28 }}>⭐</div>
-          <div className="stat-number">{stats.avgCaregiverRating || '—'}</div>
-          <div className="stat-label">Avg Rating</div>
-        </div>
-        <div className="stat-card">
-          <div style={{ fontSize: 28 }}>💰</div>
-          <div className="stat-number">${stats.monthlySpend || 0}</div>
-          <div className="stat-label">Monthly Spend</div>
-        </div>
-      </div>
 
       {stats.unreadNotifications > 0 && (
         <div style={{ background: '#fff3e0', border: '1px solid #ffe0b2', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
@@ -627,117 +650,21 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
-      {!isTileDismissed('upcoming', `${upcoming.length}-${upcoming.map(s=>s.id).join(',')}`) && (
-        <div className="card" style={{ position: 'relative' }}>
-          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span><span className="card-icon">📅</span>Upcoming Sessions</span>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
-                background: '#e8724a', border: 'none', cursor: 'pointer', fontSize: 12,
-                color: '#fff', padding: '5px 12px', borderRadius: 6, fontWeight: 600,
-                display: 'flex', alignItems: 'center', gap: 4,
-              }}>+ Request Care</button>
-              <button onClick={() => dismissTile('upcoming', `${upcoming.length}-${upcoming.map(s=>s.id).join(',')}`)} title="Hide until there's something new" style={{
-                background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
-                color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
-                display: 'flex', alignItems: 'center', gap: 4,
-              }}>✕ Hide</button>
-            </div>
-          </div>
-          <ul className="sessions-list">
-            {upcoming.length > 0 ? upcoming.map((s, idx) => (
-              <li key={idx} className="session-item" onClick={() => {
-                if (s.date) window.__pendingScheduleDate = s.date;
-                if (onNavigate) onNavigate('schedule');
-              }} style={{ cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: '#1a1a2e' }}>
-                      {s.recipientName}{s.familyTotal ? `, $${Math.round(parseFloat(s.familyTotal))}` : s.estimatedCost ? `, $${Math.round(parseFloat(s.estimatedCost))}` : ''}
-                    </div>
-                    <div className="session-time">{s.date ? (() => {
-                      const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-                      const dateClean = (s.date || '').split('T')[0];
-                      const d = TimezoneHelper.parseDate(dateClean);
-                      const todayLocal = TimezoneHelper.parseDate(TimezoneHelper.getToday(tz));
-                      const dayDiff = Math.round((d - todayLocal) / 86400000);
-                      const rel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dayDiff < 0 ? `${-dayDiff}d ago` : `In ${dayDiff} days`;
-                      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` (${rel})`;
-                    })() : ''}{s.time ? ` at ${TimezoneHelper.formatTime(s.time)}` : ''}</div>
-                    <div style={{ fontSize: 12, color: s.caregiverName ? '#666' : '#e8724a' }}>
-                      {s.caregiverName || 'Seeking caregiver'} · <span style={{ textTransform: 'capitalize' }}>{(s.serviceType || '').replace(/_/g, ' ')}</span>
-                    </div>
-                    {s.caregiverPayout && s.platformFee > 0 && (
-                      <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                        Caregiver receives ${parseFloat(s.caregiverPayout).toFixed(0)} · Platform fee ${parseFloat(s.platformFee).toFixed(0)}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ textAlign: 'right', fontSize: '12px' }}>
-                    <div style={{ color: s.status === 'confirmed' ? '#1b6b5a' : s.status === 'completed' ? '#0277bd' : s.status === 'pending' ? '#f57c00' : s.status === 'open' || s.status === 'requested' ? '#e8724a' : '#888', fontWeight: 600, textTransform: 'capitalize' }}>{s.status}</div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
-                      {s.status === 'confirmed' && s.estimatedCost && (
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              const res = await apiFetch('/api/payments/checkout', {
-                                method: 'POST',
-                                body: JSON.stringify({ sessionId: s.id }),
-                              });
-                              if (res?.ok) {
-                                const d = await res.json();
-                                if (d.checkoutUrl) window.location.href = d.checkoutUrl;
-                              } else {
-                                const err = await res?.json();
-                                alert(err?.error || 'Payment not available yet');
-                              }
-                            } catch (err) { alert('Payment service unavailable'); }
-                          }}
-                          style={{
-                            padding: '4px 12px', borderRadius: '6px',
-                            border: 'none', background: '#1b6b5a', color: '#fff',
-                            fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                          }}
-                        >Pay Now</button>
-                      )}
-                      {['confirmed', 'pending', 'open', 'requested'].includes(s.status) && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
-                          style={{
-                            padding: '4px 10px', borderRadius: '6px',
-                            border: '1px solid #e0e0e0', background: '#fff', color: '#c62828',
-                            fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                          }}
-                        >Cancel</button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </li>
-            )) : <li style={{ color: '#999', padding: '16px' }}>No upcoming sessions</li>}
-          </ul>
-        </div>
-      )}
-
-      {!isTileDismissed('activity', `${activity.length}-${activity.map(a=>a.id).join(',')}`) && (
+      {/* Recent Activity — last 5 items */}
+      {activity.length > 0 && (
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span><span className="card-icon">📢</span>Recent Activity</span>
-            <button onClick={() => dismissTile('activity', `${activity.length}-${activity.map(a=>a.id).join(',')}`)} title="Hide until there's something new" style={{
-              background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
-              color: '#999', padding: '4px 10px', borderRadius: 6, fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 4,
-            }}>✕ Hide</button>
+            <span onClick={() => onNavigate && onNavigate('activity')} style={{ fontSize: 12, color: '#1b6b5a', cursor: 'pointer', fontWeight: 600 }}>View All →</span>
           </div>
           <div>
-            {activity.length > 0 ? activity.map((a, idx) => (
+            {activity.slice(0, 5).map((a, idx) => (
               <div key={idx} className="activity-item">
                 <div className="activity-title">{a.title}</div>
                 {a.message && <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>{a.message}</div>}
                 <div className="activity-time">{formatActivityTime(a.timestamp)}</div>
               </div>
-            )) : <div style={{ color: '#999', padding: '16px' }}>No recent activity</div>}
+            ))}
           </div>
         </div>
       )}
