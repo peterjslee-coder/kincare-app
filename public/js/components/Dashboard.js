@@ -539,8 +539,9 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         const todayLocal = TimezoneHelper.parseDate(todayStr);
         const cutoff48h = new Date(now.getTime() + 48 * 3600000);
 
-        // Sort all upcoming by date+time
-        const sorted = [...upcoming].sort((a, b) => {
+        // Sort all upcoming by date+time — exclude unclaimed open requests (shown separately below)
+        const confirmed = upcoming.filter(s => !((['open', 'requested'].includes(s.status)) && !s.caregiverName));
+        const sorted = [...confirmed].sort((a, b) => {
           const ak = ((a.date || '').split('T')[0]) + (a.time || '');
           const bk = ((b.date || '').split('T')[0]) + (b.time || '');
           return ak.localeCompare(bk);
@@ -633,6 +634,57 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                           Cancel
                         </button>
                       )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* Open Requests — unclaimed jobs the family posted */}
+      {(() => {
+        const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
+        const openReqs = upcoming.filter(s => ['open', 'requested'].includes(s.status) && !s.caregiverName);
+        if (openReqs.length === 0) return null;
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+              Awaiting Caregiver ({openReqs.length})
+            </div>
+            {openReqs.map((s, idx) => {
+              const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
+              const timeLabel = TimezoneHelper.formatTime(s.time);
+              return (
+                <div key={s.id || idx} onClick={() => {
+                  if (s.date) window.__pendingScheduleDate = s.date;
+                  if (onNavigate) onNavigate('schedule');
+                }} style={{
+                  marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
+                  border: '2px dashed #e8724a', background: '#fff8f0',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
+                        {s.recipientName || 'Care Visit'}
+                      </div>
+                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
+                        {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
+                        {s.serviceType ? ` \u2022 ${s.serviceType.replace(/_/g, ' ')}` : ''}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 }}>No caregiver yet — waiting for someone to accept</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      <span style={{
+                        padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        background: '#fff3e0', color: '#e65100', textTransform: 'capitalize', whiteSpace: 'nowrap',
+                      }}>Open</span>
+                      <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
+                        style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #e0e0e0', background: '#fff', color: '#c62828', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 </div>

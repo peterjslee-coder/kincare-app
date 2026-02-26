@@ -27,7 +27,7 @@ const Schedule = window.Schedule = () => {
       const response = await apiFetch('/api/sessions?limit=100');
       if (response?.ok) {
         const data = await response.json();
-        setSessions(data.sessions || []);
+        setSessions((data.sessions || []).filter(s => s.status !== 'cancelled'));
       }
     } catch (error) {
       console.error('Error fetching sessions:', error);
