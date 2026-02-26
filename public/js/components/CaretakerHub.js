@@ -29,6 +29,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const tabContentRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [highlightTab, setHighlightTab] = useState(false);
+  const [jobSort, setJobSort] = useState('soonest');
+  const [claimingJobId, setClaimingJobId] = useState(null);
   // Inline profile editing state (for onboarding)
   const [profileForm, setProfileForm] = useState({ bio: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', foodAllergies: '', medicalConditions: '' });
   const [profileSaving, setProfileSaving] = useState(false);
@@ -441,9 +443,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       )}
     </div>
   );
-
-  const [jobSort, setJobSort] = useState('soonest');
-  const [claimingJobId, setClaimingJobId] = useState(null);
 
   const handleClaimJob = async (jobId) => {
     setClaimingJobId(jobId);
