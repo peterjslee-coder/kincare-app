@@ -861,13 +861,14 @@ router.post("/:id/check-in", async (req, res) => {
 
     // Activity feed entry
     await db.prepare(
-      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'session_checkin', ?, ?)"
+      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_checkin', ?, ?, ?)"
     ).run(
       require("uuid").v4(),
       session.family_user_id,
       session.care_recipient_id,
       `${caregiverName} has checked in`,
-      `Care session with ${session.recipient_first_name} has started. ${arrivalMood ? `Mood on arrival: ${arrivalMood}` : ""}`
+      `Care session with ${session.recipient_first_name} has started. ${arrivalMood ? `Mood on arrival: ${arrivalMood}` : ""}`,
+      JSON.stringify({ sessionId: req.params.id })
     );
 
     if (emitToUser) {
@@ -964,13 +965,14 @@ router.post("/:id/check-out", async (req, res) => {
       : "";
 
     await db.prepare(
-      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'session_checkout', ?, ?)"
+      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_checkout', ?, ?, ?)"
     ).run(
       require("uuid").v4(),
       session.family_user_id,
       session.care_recipient_id,
       `${caregiverName} has checked out`,
-      `Care session with ${session.recipient_first_name} is complete. ${departureMood ? `Mood at departure: ${departureMood}.` : ""}${tagSummary}`
+      `Care session with ${session.recipient_first_name} is complete. ${departureMood ? `Mood at departure: ${departureMood}.` : ""}${tagSummary}`,
+      JSON.stringify({ sessionId: req.params.id })
     );
 
     if (emitToUser) {

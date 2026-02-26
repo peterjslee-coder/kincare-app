@@ -5,7 +5,11 @@ const Schedule = window.Schedule = () => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    // Default to today's date so the detail panel auto-populates
+    const now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  });
   const [expandedSession, setExpandedSession] = useState(null);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
 
@@ -16,7 +20,6 @@ const Schedule = window.Schedule = () => {
       const parts = raw.split('-').map(Number);
       if (parts.length === 3 && !isNaN(parts[0])) {
         setCurrentMonth({ year: parts[0], month: parts[1] - 1 });
-        // Set selectedDate to full "YYYY-MM-DD" string to match sessionsByDate keys
         setSelectedDate(raw);
       }
       delete window.__pendingScheduleDate;
@@ -347,7 +350,7 @@ const Schedule = window.Schedule = () => {
                       <div>{s.special_instructions}</div>
                     </div>
                   )}
-                  {s.caregiver_rating && (
+                  {s.caregiver_rating > 0 && (
                     <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
                       Caregiver rating: ⭐ {s.caregiver_rating}
                     </div>

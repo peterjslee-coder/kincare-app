@@ -532,6 +532,58 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
+      {/* Just Finished — recently completed sessions */}
+      {(() => {
+        const completed = data?.recentlyCompleted || [];
+        if (completed.length === 0) return null;
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+              Just Finished
+            </div>
+            {completed.slice(0, 3).map((s, idx) => {
+              const svcLabel = (s.serviceType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+              return (
+                <div key={s.id || idx} onClick={() => setVisitDetailSessionId(s.id)}
+                  style={{
+                    marginBottom: 8, padding: '12px 16px', cursor: 'pointer', borderRadius: 12,
+                    border: '2px solid #c8e6c9', background: '#f1f8f3',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                  }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
+                        {s.recipientName || 'Care Visit'}
+                        {s.caregiverName ? ` with ${s.caregiverName}` : ''}
+                      </div>
+                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                        {s.date} · {svcLabel} · {s.durationHours || 2}h
+                      </div>
+                      {s.visitSummary && (
+                        <div style={{ fontSize: 13, color: '#555', marginTop: 4, fontStyle: 'italic' }}>
+                          "{s.visitSummary.length > 80 ? s.visitSummary.slice(0, 80) + '...' : s.visitSummary}"
+                        </div>
+                      )}
+                      {s.conditionTags && s.conditionTags.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                          {s.conditionTags.map((tag, i) => (
+                            <span key={i} style={{ background: '#e8f5e9', color: '#2e7d32', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500 }}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                      <span style={{ padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Completed</span>
+                      <span style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600 }}>View Details →</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {/* Next Up — sessions within 48 hours, or the next 1 session if nothing soon */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;

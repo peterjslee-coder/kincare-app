@@ -94,6 +94,28 @@ async function familyDashboard(db, userId, res) {
       LIMIT 15
     `).all(userId, ...allRecipientIds, today, next30);
 
+    // Recently completed sessions (last 7 days)
+    const sevenDaysAgo = new Date(etNow); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
+    const recentCompleted = await db.prepare(`
+      SELECT cs.*,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        vl.summary AS visit_summary,
+        vl.departure_mood,
+        vl.condition_tags
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+      WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+        AND cs.status = 'completed'
+        AND cs.scheduled_date >= ?
+      ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
+      LIMIT 5
+    `).all(userId, ...allRecipientIds, sevenDaysAgoStr);
+
     const recentActivity = await db.prepare(`
       SELECT * FROM activity_feed
       WHERE family_user_id = ?
@@ -188,6 +210,22 @@ async function familyDashboard(db, userId, res) {
           isRead: a.is_read,
           timestamp: a.created_at,
           sessionId: meta.sessionId || null,
+        };
+      }),
+      recentlyCompleted: recentCompleted.map((s) => {
+        let condTags = [];
+        try { condTags = s.condition_tags ? JSON.parse(s.condition_tags) : []; } catch(e) {}
+        return {
+          id: s.id,
+          date: s.scheduled_date,
+          time: s.scheduled_time,
+          serviceType: s.service_type,
+          durationHours: s.duration_hours,
+          caregiverName: s.caregiver_name,
+          recipientName: s.recipient_name,
+          visitSummary: s.visit_summary,
+          departureMood: s.departure_mood,
+          conditionTags: condTags,
         };
       }),
     });
