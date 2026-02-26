@@ -105,6 +105,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     yearsExperience: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', bio: '',
     workLocationAddress: '', workCity: '', workState: '', workZip: '',
     travelRadius: '15',
+    // Step 3 — Pets, Allergies & Medical
+    comfortableWithPets: null, petAllergies: '', foodAllergies: '', medicalConditions: '',
     // Step 4 — Legal / Checkr
     legalFirstName: '', legalLastName: '', dateOfBirth: '', ssnLast4: '',
     dlNumber: '', dlState: '', backgroundCheckConsent: false,
@@ -370,13 +372,17 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       }
       setProfileId(data.profile?.id);
 
-      // Also update user phone (non-blocking — don't fail the step if this errors)
-      // Normalize phone: strip formatting chars before saving
+      // Also update user phone + pets/allergies/medical (non-blocking)
       const normalizedPhone = form.phone ? form.phone.replace(/\D/g, '') : null;
+      const userUpdate = { phone: normalizedPhone };
+      if (form.petAllergies) userUpdate.petAllergies = form.petAllergies;
+      if (form.foodAllergies) userUpdate.foodAllergies = form.foodAllergies;
+      if (form.medicalConditions) userUpdate.medicalConditions = form.medicalConditions;
+      if (form.comfortableWithPets !== null) userUpdate.pets = form.comfortableWithPets ? 'comfortable' : 'prefer-none';
       resilientFetch('/api/auth/me', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ phone: normalizedPhone }),
+        body: JSON.stringify(userUpdate),
       }).catch(() => {});
 
       trackEvent('step_complete', 3);
@@ -971,6 +977,47 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 onChange={(e) => updateForm('bio', e.target.value)}
                 placeholder="Tell families about your experience and approach to care..." />
             </div>
+
+            {/* Pets, Allergies & Medical */}
+            <div style={{ padding: '16px', background: '#faf8f5', borderRadius: '8px', marginBottom: '16px', border: '1px solid #e8e0d8' }}>
+              <h3 style={{ fontSize: '15px', color: '#8B6914', margin: '0 0 4px' }}>Pets, Allergies & Medical</h3>
+              <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px' }}>
+                This helps families match with the right caregiver. All fields are optional.
+              </p>
+              <div style={fieldGroup}>
+                <label style={labelStyle}>Are you comfortable working around pets?</label>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  {[{ val: true, label: 'Yes, I love pets' }, { val: false, label: 'No, prefer pet-free' }].map(opt => (
+                    <button key={String(opt.val)} onClick={() => updateForm('comfortableWithPets', opt.val)} style={{
+                      flex: 1, padding: '10px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                      border: form.comfortableWithPets === opt.val ? '2px solid #8B6914' : '2px solid #ddd',
+                      background: form.comfortableWithPets === opt.val ? '#fef9ef' : '#fff',
+                      color: form.comfortableWithPets === opt.val ? '#8B6914' : '#555',
+                      cursor: 'pointer',
+                    }}>{opt.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={fieldGroup}>
+                <label style={labelStyle}>Pet allergies</label>
+                <input style={inputStyle} value={form.petAllergies}
+                  onChange={(e) => updateForm('petAllergies', e.target.value)}
+                  placeholder="e.g. cats, dogs (leave blank if none)" />
+              </div>
+              <div style={fieldGroup}>
+                <label style={labelStyle}>Food allergies or dietary restrictions</label>
+                <input style={inputStyle} value={form.foodAllergies}
+                  onChange={(e) => updateForm('foodAllergies', e.target.value)}
+                  placeholder="e.g. peanuts, gluten (leave blank if none)" />
+              </div>
+              <div style={fieldGroup}>
+                <label style={labelStyle}>Medical conditions families should know about</label>
+                <input style={inputStyle} value={form.medicalConditions}
+                  onChange={(e) => updateForm('medicalConditions', e.target.value)}
+                  placeholder="e.g. asthma, mobility limitations (leave blank if none)" />
+              </div>
+            </div>
+
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
               {backBtn(2)}
@@ -1456,6 +1503,12 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <div><span style={{ color: '#888' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
                 <div><span style={{ color: '#888' }}>Documents:</span> {form.documents.length} uploaded</div>
                 <div><span style={{ color: '#888' }}>Travel radius:</span> {form.travelRadius} miles</div>
+                {form.comfortableWithPets !== null && (
+                  <div><span style={{ color: '#888' }}>Pets:</span> {form.comfortableWithPets ? 'Comfortable' : 'Prefer pet-free'}</div>
+                )}
+                {form.petAllergies && <div><span style={{ color: '#888' }}>Pet allergies:</span> {form.petAllergies}</div>}
+                {form.foodAllergies && <div><span style={{ color: '#888' }}>Food allergies:</span> {form.foodAllergies}</div>}
+                {form.medicalConditions && <div><span style={{ color: '#888' }}>Medical:</span> {form.medicalConditions}</div>}
                 {form.needsProgramReports && (
                   <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#888' }}>Program:</span> {form.programName === 'radford_nursing' ? 'Radford University Nursing' : form.programName === 'nrcc_nurse_aide' ? 'NRCC Nurse Aide' : form.programNameOther || '—'} ({form.programYear})</div>
                 )}
