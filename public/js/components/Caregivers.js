@@ -25,7 +25,7 @@ const Caregivers = window.Caregivers = () => {
   const fetchData = async () => {
     try {
       const [cgRes, assignRes, dashRes] = await Promise.all([
-        apiFetch('/api/caregivers'),
+        apiFetch('/api/caregivers?radius=100'),
         apiFetch('/api/assignments'),
         apiFetch('/api/dashboard'),
       ]);

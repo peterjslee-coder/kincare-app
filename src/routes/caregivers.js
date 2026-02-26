@@ -49,7 +49,7 @@ router.get("/", async (req, res) => {
     });
   }
 
-  // Resolve search center: explicit lat/lng or geocode address
+  // Resolve search center: explicit lat/lng, geocode address, or auto from care recipient/user location
   let searchLat = lat ? parseFloat(lat) : null;
   let searchLng = lng ? parseFloat(lng) : null;
 
@@ -61,7 +61,34 @@ router.get("/", async (req, res) => {
     }
   }
 
-  const maxRadius = parseFloat(radius);
+  // Auto-resolve from care recipient location if no explicit search center
+  if (!searchLat) {
+    const recipient = await db.prepare(`
+      SELECT latitude, longitude FROM care_recipients
+      WHERE family_user_id = ? AND latitude IS NOT NULL AND longitude IS NOT NULL
+      ORDER BY created_at ASC LIMIT 1
+    `).get(req.user.id);
+    if (recipient) {
+      searchLat = parseFloat(recipient.latitude);
+      searchLng = parseFloat(recipient.longitude);
+    }
+    // Fallback: check shared care recipients
+    if (!searchLat) {
+      const shared = await db.prepare(`
+        SELECT cr.latitude, cr.longitude FROM care_recipient_shares crs
+        JOIN care_recipients cr ON crs.care_recipient_id = cr.id
+        WHERE crs.shared_with_user_id = ? AND cr.latitude IS NOT NULL AND cr.longitude IS NOT NULL
+        LIMIT 1
+      `).get(req.user.id);
+      if (shared) {
+        searchLat = parseFloat(shared.latitude);
+        searchLng = parseFloat(shared.longitude);
+      }
+    }
+  }
+
+  // Hard cap: 100 miles max regardless of what's requested
+  const maxRadius = Math.min(parseFloat(radius), 100);
 
   const result = caregivers.map((c) => {
     const entry = {
@@ -95,18 +122,22 @@ router.get("/", async (req, res) => {
     return entry;
   });
 
-  // Filter by radius if location search is active
+  // Always filter by radius — if no search center could be resolved, return empty
   let filtered = result;
   if (searchLat && searchLng) {
     filtered = result
       .filter((c) => c.distance !== undefined && c.distance <= maxRadius)
       .sort((a, b) => a.distance - b.distance);
+  } else {
+    // No location available — don't show everyone, return empty with hint
+    filtered = [];
   }
 
   res.json({
     caregivers: filtered,
     searchCenter: searchLat ? { lat: searchLat, lng: searchLng } : null,
     radiusMiles: searchLat ? maxRadius : null,
+    noLocation: !searchLat,
   });
 });
 
