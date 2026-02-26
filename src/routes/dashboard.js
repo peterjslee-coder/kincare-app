@@ -261,6 +261,10 @@ async function caregiverDashboard(db, userId, res) {
   fiveDaysOut.setDate(fiveDaysOut.getDate() + 5);
   const fiveDayStr = fiveDaysOut.getFullYear() + '-' + String(fiveDaysOut.getMonth() + 1).padStart(2, '0') + '-' + String(fiveDaysOut.getDate()).padStart(2, '0');
 
+  // Demo isolation: only show jobs from families with matching demo status
+  const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(userId);
+  const isDemo = me && me.is_demo ? 1 : 0;
+
   const openJobs = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -274,9 +278,10 @@ async function caregiverDashboard(db, userId, res) {
       AND cs.scheduled_date >= ?
       AND cs.scheduled_date <= ?
       AND (cs.caregiver_id IS NULL OR cs.caregiver_id = ?)
+      AND COALESCE(fu.is_demo, 0) = ?
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 10
-  `).all(today, fiveDayStr, profile.id);
+  `).all(today, fiveDayStr, profile.id, isDemo);
 
   // Recent reviews
   const reviews = await db.prepare(`
