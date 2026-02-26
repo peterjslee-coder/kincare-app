@@ -4,14 +4,27 @@ const ActivityFeed = window.ActivityFeed = () => {
   const [expandedActivity, setExpandedActivity] = useState(null);
   const [visitPhotos, setVisitPhotos] = useState({}); // visitLogId -> photos[]
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
+  const [recipientName, setRecipientName] = useState('');
   const { showToast } = useToast();
 
   const fetchActivities = async () => {
     try {
-      const response = await apiFetch('/api/activity');
-      if (response?.ok) {
-        const data = await response.json();
+      const [actRes, dashRes] = await Promise.all([
+        apiFetch('/api/activity'),
+        apiFetch('/api/dashboard'),
+      ]);
+      if (actRes?.ok) {
+        const data = await actRes.json();
         setActivities(data.activities || []);
+      }
+      if (dashRes?.ok) {
+        const data = await dashRes.json();
+        const recipients = data.careRecipients || [];
+        if (recipients.length === 1) {
+          setRecipientName(recipients[0].first_name || '');
+        } else if (recipients.length > 1) {
+          setRecipientName(recipients.map(r => r.first_name).join(' & '));
+        }
       }
     } catch (error) {
       console.error('Error fetching activities:', error);
@@ -86,7 +99,7 @@ const ActivityFeed = window.ActivityFeed = () => {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 className="page-title">Activity Feed</h1>
-          <p className="page-subtitle">Recent updates about Betty's care</p>
+          <p className="page-subtitle">Recent updates{recipientName ? ` about ${recipientName}'s care` : ''}</p>
         </div>
         {unreadCount > 0 && (
           <button onClick={markAllAsRead} style={{ padding: '8px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
