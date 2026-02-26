@@ -477,10 +477,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
     const etNow = TimezoneHelper.getNow(tz);
     const etDate = TimezoneHelper.getToday(tz);
-    const sessionDate = (s.scheduled_date || '').split('T')[0];
+    const sessionDate = (s.date || s.scheduled_date || '').split('T')[0];
     if (sessionDate !== etDate) return false;
-    if (!s.scheduled_time) return false;
-    const sessionStartET = TimezoneHelper.buildDateTime(sessionDate, s.scheduled_time, tz);
+    const sTime = s.time || s.scheduled_time;
+    if (!sTime) return false;
+    const sessionStartET = TimezoneHelper.buildDateTime(sessionDate, sTime, tz);
     const minsUntil = (sessionStartET - etNow) / 60000;
     return minsUntil <= 15 || profile.earlyCheckInAllowed;
   });
@@ -698,8 +699,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         const sorted = [...sessions].sort((a, b) => {
           if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
           if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
-          const aKey = (a.scheduled_date || '') + (a.scheduled_time || '');
-          const bKey = (b.scheduled_date || '') + (b.scheduled_time || '');
+          const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
+          const bKey = (b.date || b.scheduled_date || '') + (b.time || b.scheduled_time || '');
           return aKey.localeCompare(bKey);
         });
         const readySet = new Set(readyToCheckIn.map(s => s.id));
@@ -721,19 +722,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {sorted.slice(0, 5).map(s => {
               const isReady = readySet.has(s.id);
               const isActive = s.status === 'in_progress';
-              const sDate = (s.scheduled_date || '').split('T')[0];
-              const dateParts = sDate ? sDate.split('-').map(Number) : [];
-              const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
-              const now = new Date();
-              const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
-              const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
-              const tParts = (s.scheduled_time || '').split(':').map(Number);
-              const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+              // API returns camelCase mapped fields
+              const sDate = (s.date || s.scheduled_date || '').split('T')[0];
+              const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+              const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
+              const timeLabel = TimezoneHelper.formatTime(s.time || s.scheduled_time);
+              const duration = s.durationHours || s.duration_hours;
+              const svcType = s.serviceType || s.service_type;
+              const recipName = s.recipientName || s.recipient_name || 'Session';
+              const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
 
               return (
-                <div key={s.id} className="card" style={{
-                  marginBottom: 10, padding: '16px 18px',
+                <div key={s.id} className="card" onClick={() => setActiveTab('schedule')} style={{
+                  marginBottom: 10, padding: '16px 18px', cursor: 'pointer',
                   borderLeft: isActive ? '4px solid #f57f17' : isReady ? '4px solid #e8724a' : '4px solid #1b6b5a',
                   background: isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff8f5 0%, #fff 100%)' : '#fff',
                   animation: (isReady || isActive) ? 'fadeIn 0.3s ease' : undefined,
@@ -742,14 +743,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     <div style={{ flex: 1, minWidth: '180px' }}>
                       {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress</div>}
                       {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
-                      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{s.recipient_name || 'Session'}</div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{s.duration_hours ? ` \u2022 ${s.duration_hours}hr` : ''}
-                        {s.service_type ? ` \u2022 ${s.service_type.replace(/_/g, ' ')}` : ''}
+                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
+                        {svcType ? ` \u2022 ${svcType.replace(/_/g, ' ')}` : ''}
                       </div>
-                      {(s.location_address || s.location_city) && (
-                        <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {s.location_address || ''}{s.location_city ? `, ${s.location_city}` : ''}</div>
+                      {loc && (
+                        <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
                       )}
+                      {s.specialInstructions && <div style={{ fontSize: 12, color: '#555', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       {isActive && (
