@@ -309,12 +309,17 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   // Schedule pre-check-in reminders if session is today and within the notification window
+  // Session times are Eastern (America/New_York) — compare in Eastern
   if (session.scheduled_date && session.scheduled_time) {
     const REMINDER_WINDOW = 15;
-    const sessionStart = new Date(`${session.scheduled_date}T${session.scheduled_time}:00`);
-    const reminderTime = new Date(sessionStart.getTime() - REMINDER_WINDOW * 60000);
-    const now = new Date();
-    if (now >= reminderTime && now <= sessionStart) {
+    const etNowStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const etNow = new Date(etNowStr);
+    const [sh, sm] = session.scheduled_time.split(':').map(Number);
+    const [sy, smo, sd] = session.scheduled_date.split('-').map(Number);
+    const sessionStartET = new Date(etNow.getFullYear(), etNow.getMonth(), etNow.getDate(), sh, sm, 0);
+    sessionStartET.setFullYear(sy, smo - 1, sd);
+    const reminderTime = new Date(sessionStartET.getTime() - REMINDER_WINDOW * 60000);
+    if (etNow >= reminderTime && etNow <= sessionStartET) {
       // Session is within the notification window right now — send immediately
       sendSessionReminders(req.params.id, "pre_check_in").catch(() => {});
     }

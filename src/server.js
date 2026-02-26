@@ -343,8 +343,17 @@ async function start() {
   setInterval(async () => {
     try {
       const pollDb = await getDb();
-      const now = new Date();
-      const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+      // All session times are Eastern (America/New_York) — use Eastern "now" for all comparisons
+      const etNowStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+      const etNow = new Date(etNowStr);
+      const todayStr = etNow.getFullYear() + '-' + String(etNow.getMonth() + 1).padStart(2, '0') + '-' + String(etNow.getDate()).padStart(2, '0');
+
+      // Helper: build a Date object for a session's date+time in Eastern
+      const buildET = (dateStr, timeStr) => {
+        const [y, mo, d] = dateStr.split('-').map(Number);
+        const [h, m] = timeStr.split(':').map(Number);
+        return new Date(etNow.getFullYear(), etNow.getMonth(), etNow.getDate(), h, m, 0);
+      };
 
       // ─── Pre-check-in reminders ───
       // Find confirmed sessions today that haven't had pre_check_in notification
@@ -358,10 +367,10 @@ async function start() {
 
       for (const s of checkInCandidates) {
         if (!s.scheduled_time) continue;
-        const sessionStart = new Date(`${s.scheduled_date}T${s.scheduled_time}:00`);
+        const sessionStart = buildET(s.scheduled_date, s.scheduled_time);
         const reminderTime = new Date(sessionStart.getTime() - REMINDER_WINDOW_MINUTES * 60000);
         // Send if we're within the notification window (up to session start)
-        if (now >= reminderTime && now <= sessionStart) {
+        if (etNow >= reminderTime && etNow <= sessionStart) {
           await sendSessionReminders(s.id, "pre_check_in");
         }
       }
@@ -378,11 +387,11 @@ async function start() {
 
       for (const s of checkOutCandidates) {
         if (!s.scheduled_time || !s.duration_hours) continue;
-        const sessionStart = new Date(`${s.scheduled_date}T${s.scheduled_time}:00`);
+        const sessionStart = buildET(s.scheduled_date, s.scheduled_time);
         const sessionEnd = new Date(sessionStart.getTime() + s.duration_hours * 60 * 60000);
         const reminderTime = new Date(sessionEnd.getTime() - REMINDER_WINDOW_MINUTES * 60000);
         // Send if we're within the check-out notification window
-        if (now >= reminderTime && now <= sessionEnd) {
+        if (etNow >= reminderTime && etNow <= sessionEnd) {
           await sendSessionReminders(s.id, "pre_check_out");
         }
       }

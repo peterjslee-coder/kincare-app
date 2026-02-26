@@ -303,6 +303,21 @@ The server uses Socket.io for real-time updates. Express is wrapped in `http.cre
 
 **Events:** `new_message` (Messages.js), `session_update` (Dashboard.js), `activity_update` (Dashboard.js, ActivityFeed.js), `visit_photos` (Dashboard.js).
 
+## Timezone Design Principle
+
+**All times are care-location times, period.** When a session is booked for 8am, that means 8am where the care is happening (currently always Eastern / America/New_York). It does not matter where the person booking, viewing, or receiving notifications is physically located. If Pete is in China and schedules care for Mom in Virginia, the calendar shows Virginia time. Push notifications fire based on Virginia time. Check-in gates open based on Virginia time.
+
+**Current implementation (interim):** Session dates and times are stored as naive TEXT strings (`scheduled_date` = "2026-02-26", `scheduled_time` = "08:00") with no timezone metadata. All backend comparisons use `toLocaleString('en-US', { timeZone: 'America/New_York' })` to get Eastern "now". All frontend check-in gates do the same. This works for Virginia-only care but is hardcoded.
+
+**Long-term fix (P0 in TASKS.md):** Store a `timezone` column on `care_recipients` (default `'America/New_York'`). All date/time logic reads the care recipient's timezone instead of hardcoding Eastern. This enables multi-state expansion.
+
+**Rules for any new date/time code:**
+- Never use `new Date().toISOString().split('T')[0]` for "today" — that returns UTC date
+- Never use `new Date(dateStr + 'T' + timeStr + ':00')` — that parses as UTC
+- Backend: always compute "now" as `new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))`
+- Frontend: same pattern for check-in gates and session comparisons
+- Push notification timing: compare against Eastern time, not server time (Railway runs in UTC)
+
 ## Known Limitations
 
 1. Payments table exists but no payment processing (Stripe Connect planned for v1.3.0)
