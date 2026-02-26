@@ -485,30 +485,25 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             {/* Story content */}
             <div style={{ padding: '0 40px 48px', fontSize: '15px', color: '#444', lineHeight: 1.8 }}>
               <p style={{ marginBottom: '16px' }}>
-                I spent 20 years in the Air Force flying fighters and eventually commanding a wing of 5,000 people. It was the kind of career where the mission always came first, and I was proud of that. But there was a cost I didn't fully reckon with until later.
+                I spent 25 years in the Air Force as a fighter pilot, eventually commanding at three levels including an Air Force flying wing. It was the kind of career where the mission always came first, and I was proud of that. But there was a cost I didn't fully reckon with until later.
               </p>
               <p style={{ marginBottom: '16px' }}>
-                While I was deployed or stationed across the country, my mom was getting older. She's 78 now, living with early-stage dementia and mild arthritis. She's sharp enough to know what she wants, and what she wants is simple: to stay in her own home. Her garden, her kitchen, her neighborhood. That's where she feels like herself.
+                While I was deployed or stationed around the world, my mom was getting older. She needs help to stay at home. But what she wants is simple: to stay in her own home. Her flower beds, her kitchen, her neighborhood. That's where she feels like herself.
               </p>
               <p style={{ marginBottom: '16px' }}>
                 My siblings picked up a huge share of the load while I was focused on my career, and I'm grateful for that. But they have their own lives and jobs too. We're all stretched. We're what they call the "sandwich generation" — caring for aging parents while raising our own families, often from hundreds of miles away.
               </p>
               <p style={{ marginBottom: '16px' }}>
-                Here's what I learned the hard way: there's a massive gap between "living on your own" and "needing a nursing home." Mom doesn't need 24-hour care. She doesn't need to move into a facility. She just needs someone checking in regularly — helping with meals, making sure she takes her medications, driving her to appointments, keeping her company. That kind of help shouldn't be this hard to find, and it shouldn't cost a fortune.
+                Here's what so many of us are learning the hard way: there's a massive gap between "living on your own" and "needing a nursing home." Mom doesn't need 24-hour care. She doesn't need to move into a facility. She just needs someone checking in regularly — helping with meals, making sure she takes her medications, driving her to appointments, keeping her company. That kind of help shouldn't be this hard to find, and it shouldn't cost a fortune.
               </p>
               <p style={{ marginBottom: '16px' }}>
-                Most families can't afford round-the-clock care, and most don't even need it. They need reliable, flexible, on-demand help. A few visits a week from someone they trust. And they need to know it's actually happening — not wonder if the caregiver showed up or how things went.
+                Most families can't afford round-the-clock care, and most don't even need it. We need reliable, flexible, on-demand help. A few visits a week from someone we trust. And we need to know it's actually happening — not wonder if the caregiver showed up or how things went.
               </p>
               <p style={{ marginBottom: '16px' }}>
                 This isn't just about aging parents. There are people recovering from life-changing injuries, managing chronic diseases, or living with conditions like autism or Down syndrome who need that same kind of regular, dependable support. Not institutionalized care — just a steady hand nearby.
               </p>
-              <p style={{
-                marginTop: '28px', padding: '20px 24px', background: '#f0faf8',
-                borderRadius: '10px', borderLeft: '4px solid #1b6b5a',
-                fontSize: '16px', color: '#1b6b5a', fontWeight: 500, fontStyle: 'italic',
-                lineHeight: 1.7,
-              }}>
-                I built this app and this business because it's what I need to help keep Mom at home. I hope it helps you keep your loved ones where they want to be.
+              <p style={{ marginTop: '24px', fontSize: '16px', color: '#1a1a1a', fontWeight: 500, lineHeight: 1.7 }}>
+                I built this app and this business because it's what my siblings and our families need to keep Mom at home. I hope it helps you keep your loved ones where they want to be.
               </p>
             </div>
           </div>
