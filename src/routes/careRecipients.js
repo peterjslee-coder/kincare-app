@@ -376,4 +376,151 @@ router.put("/:id/permissions", requireRole("family"), async (req, res) => {
   }
 });
 
+// ─── PUT /api/care-recipients/:id/preferences ───
+// Save care preference ratings and follow-up details
+router.put("/:id/preferences", async (req, res) => {
+  try {
+    const db = await getDb();
+    const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+    if (recipient.family_user_id !== req.user.id) return res.status(403).json({ error: "Not authorized" });
+
+    const { preferences, details } = req.body;
+    if (!preferences || typeof preferences !== 'object') return res.status(400).json({ error: "preferences object required" });
+
+    await db.prepare(
+      "UPDATE care_recipients SET care_preferences = ?, care_preference_details = ? WHERE id = ?"
+    ).run(JSON.stringify(preferences), JSON.stringify(details || {}), req.params.id);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Save care preferences error:", err);
+    res.status(500).json({ error: "Failed to save care preferences" });
+  }
+});
+
+// ─── POST /api/care-recipients/:id/generate-summary ───
+// Generate AI care summary using Anthropic Claude
+router.post("/:id/generate-summary", async (req, res) => {
+  try {
+    const db = await getDb();
+    const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+    if (recipient.family_user_id !== req.user.id) return res.status(403).json({ error: "Not authorized" });
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "AI service not configured" });
+
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+
+    // Gather all context about the care recipient
+    const name = `${recipient.first_name} ${recipient.last_name}`.trim();
+    const firstName = recipient.first_name || 'the care recipient';
+    const age = recipient.age || 'unknown age';
+    const location = [recipient.location_city, recipient.location_state].filter(Boolean).join(', ') || 'location not specified';
+
+    let healthConditions = [];
+    try { healthConditions = JSON.parse(recipient.health_conditions || '[]'); } catch { healthConditions = []; }
+
+    let medications = [];
+    try { medications = JSON.parse(recipient.medications || '[]'); } catch { medications = []; }
+
+    let preferences = {};
+    try { preferences = JSON.parse(recipient.care_preferences || '{}'); } catch { preferences = {}; }
+
+    let details = {};
+    try { details = JSON.parse(recipient.care_preference_details || '{}'); } catch { details = {}; }
+
+    const prefLabels = {
+      meal_prep: 'Meal preparation & cooking',
+      housekeeping: 'Light housekeeping',
+      errands: 'Grocery shopping & errands',
+      med_reminders: 'Medication reminders (reminders only)',
+      bathing: 'Help with bathing, grooming & dressing',
+      fall_prevention: 'Fall prevention & mobility assistance',
+      transportation: 'Transportation to appointments',
+      overnight: 'Overnight or evening supervision',
+      wandering: 'Wandering prevention',
+      vitals: 'Vital signs monitoring',
+      exercise: 'Exercise & physical therapy support',
+      companionship: 'Companionship & conversation',
+      hobbies: 'Engaging in hobbies & activities together',
+      social_outings: 'Social outing accompaniment',
+      patience: 'Patience with repetition & confusion',
+      daily_updates: 'Daily updates & photos sent to family',
+      consistent_caregiver: 'Consistent same-caregiver scheduling',
+      condition_experience: 'Experience with specific conditions',
+      pets: 'Comfortable with pets in the home',
+      gardening: 'Gardening or light yard work',
+      outdoor_walks: 'Outdoor walks & fresh air time',
+      socializing_out: 'Socializing away from home',
+      tech_help: 'Technology help',
+      spiritual: 'Spiritual or religious practice support',
+    };
+
+    const ratingLabels = { 0: 'Not needed', 1: 'Nice to have', 2: 'Important', 3: 'Must have' };
+
+    // Build preference summary for the prompt
+    const prefLines = Object.entries(preferences)
+      .filter(([, v]) => v > 0)
+      .sort(([, a], [, b]) => b - a)
+      .map(([key, val]) => {
+        const label = prefLabels[key] || key;
+        const rating = ratingLabels[val] || val;
+        const detail = details[key] ? ` — Family notes: "${details[key]}"` : '';
+        return `- ${label}: ${rating}${detail}`;
+      }).join('\n');
+
+    const profileContext = `
+CARE RECIPIENT: ${name}
+AGE: ${age}
+LOCATION: ${location}
+HEALTH CONDITIONS: ${healthConditions.length > 0 ? healthConditions.join(', ') : 'None listed'}
+MEDICATIONS: ${medications.length > 0 ? medications.join(', ') : 'None listed'}
+PETS: ${recipient.pets || 'Not specified'}
+FOOD ALLERGIES: ${recipient.food_allergies || 'None listed'}
+FREE-TEXT PREFERENCES: ${recipient.preferences || 'None'}
+
+CARE PREFERENCE RATINGS (from family):
+${prefLines || 'No preferences rated yet'}
+`.trim();
+
+    const message = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 800,
+      system: `You are inPlace's AI tool — a care coordination assistant that helps families communicate care needs to professional caregivers.
+
+Write a clear, warm, professional care needs summary for a caregiver who will be visiting this care recipient for the first time. Use the care recipient's first name.
+
+FORMAT:
+- Start with a 2-3 sentence overview paragraph (the "bottom line up front")
+- Then list PRIMARY NEEDS (must-have items) as bullet points
+- Then IMPORTANT PRIORITIES if any
+- Then a brief CAREGIVER NOTES section with practical tips based on the conditions and details provided
+- Keep it under 300 words total
+- Be warm but professional — this will be read by caregivers
+- Do NOT include headers like "NICE TO HAVE" — focus on what matters
+- IMPORTANT: InPlace is NOT a medical service. Never suggest caregivers perform medical procedures. Medication reminders are reminders only.
+- Reference specific conditions, medications, and family-provided details naturally — they make the summary useful
+- End with one sentence noting the family can update preferences anytime`,
+      messages: [
+        { role: "user", content: `Generate a care needs summary for this care recipient:\n\n${profileContext}` }
+      ],
+    });
+
+    const summary = message.content[0]?.text || 'Unable to generate summary';
+
+    // Save to database
+    await db.prepare(
+      "UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() WHERE id = ?"
+    ).run(summary, req.params.id);
+
+    res.json({ summary, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error("Generate AI summary error:", err);
+    res.status(500).json({ error: "Failed to generate care summary" });
+  }
+});
+
 module.exports = router;

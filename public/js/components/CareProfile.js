@@ -13,7 +13,62 @@ const CareProfile = window.CareProfile = () => {
   const [permTier, setPermTier] = useState('full');
   const [visSettings, setVisSettings] = useState(null);
   const [savingPerms, setSavingPerms] = useState(false);
+  const [carePrefs, setCarePrefs] = useState({});
+  const [careDetails, setCareDetails] = useState({});
+  const [aiSummary, setAiSummary] = useState('');
+  const [aiSummaryDate, setAiSummaryDate] = useState(null);
+  const [generatingAI, setGeneratingAI] = useState(false);
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [prefsExpanded, setPrefsExpanded] = useState(false);
+  const [showAllPrefs, setShowAllPrefs] = useState(false);
   const { showToast } = useToast();
+
+  const CARE_PREFS_LIST = [
+    { id: 'meal_prep', label: 'Meal preparation & cooking', icon: '\uD83C\uDF73' },
+    { id: 'housekeeping', label: 'Light housekeeping (tidying, dishes, laundry)', icon: '\uD83E\uDDF9' },
+    { id: 'errands', label: 'Grocery shopping & errands', icon: '\uD83D\uDED2' },
+    { id: 'med_reminders', label: 'Medication reminders (reminders only)', icon: '\uD83D\uDC8A' },
+    { id: 'bathing', label: 'Help with bathing, grooming & dressing', icon: '\uD83D\uDEBF' },
+    { id: 'fall_prevention', label: 'Fall prevention & mobility assistance', icon: '\uD83E\uDDAF' },
+    { id: 'transportation', label: 'Transportation to appointments', icon: '\uD83D\uDE97' },
+    { id: 'overnight', label: 'Overnight or evening supervision', icon: '\uD83C\uDF19' },
+    { id: 'wandering', label: 'Wandering prevention', icon: '\uD83D\uDEAA' },
+    { id: 'vitals', label: 'Vital signs monitoring (BP, temperature)', icon: '\uD83E\uDE7A' },
+    { id: 'exercise', label: 'Exercise & physical therapy support', icon: '\uD83C\uDFCB\uFE0F' },
+    { id: 'companionship', label: 'Companionship & conversation', icon: '\uD83D\uDCAC' },
+    { id: 'hobbies', label: 'Engaging in hobbies & activities together', icon: '\uD83C\uDFA8' },
+    { id: 'social_outings', label: 'Social outing accompaniment', icon: '\u26EA' },
+    { id: 'patience', label: 'Patience with repetition & confusion', icon: '\uD83D\uDC9B' },
+    { id: 'daily_updates', label: 'Daily updates & photos to family', icon: '\uD83D\uDCF8' },
+    { id: 'consistent_caregiver', label: 'Consistent same-caregiver scheduling', icon: '\uD83E\uDD1D' },
+    { id: 'condition_experience', label: 'Experience with specific conditions', icon: '\uD83D\uDCCB' },
+    { id: 'pets', label: 'Comfortable with pets in the home', icon: '\uD83D\uDC3E' },
+    { id: 'gardening', label: 'Gardening or light yard work', icon: '\uD83C\uDF31' },
+    { id: 'outdoor_walks', label: 'Outdoor walks & fresh air time', icon: '\uD83D\uDEB6' },
+    { id: 'socializing_out', label: 'Socializing away from home', icon: '\u2615' },
+    { id: 'tech_help', label: 'Technology help (phone, tablet, video calls)', icon: '\uD83D\uDCF1' },
+    { id: 'spiritual', label: 'Spiritual or religious practice support', icon: '\uD83D\uDD4A\uFE0F' },
+  ];
+
+  const PREF_FOLLOW_UPS = {
+    med_reminders: 'How many medications? Any special timing?',
+    wandering: 'How frequent? Any known triggers?',
+    vitals: 'Which vitals? How often?',
+    exercise: 'Any prescribed exercises or PT routines?',
+    patience: 'Any specific behaviors we should know about?',
+    condition_experience: 'What conditions does your loved one have?',
+    pets: 'What kind of pets? Caregiver help needed?',
+    spiritual: 'What faith or practice?',
+    overnight: 'What does overnight supervision look like?',
+    transportation: 'How often? Any regular appointments?',
+  };
+
+  const RATING_OPTIONS = [
+    { value: 0, label: 'Not needed', color: '#e0e0e0', textColor: '#999' },
+    { value: 1, label: 'Nice to have', color: '#fff3e0', textColor: '#e65100' },
+    { value: 2, label: 'Important', color: '#e8f5e9', textColor: '#2e7d32' },
+    { value: 3, label: 'Must have', color: '#1b6b5a', textColor: '#fff' },
+  ];
 
   const resizeImg = (file, maxDim, quality) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -85,6 +140,9 @@ const CareProfile = window.CareProfile = () => {
             setProfile(first);
             setPermTier(first.permission_tier || 'full');
             try { setVisSettings(first.visibility_settings ? JSON.parse(first.visibility_settings) : null); } catch { setVisSettings(null); }
+            try { setCarePrefs(first.care_preferences ? JSON.parse(first.care_preferences) : {}); } catch { setCarePrefs({}); }
+            try { setCareDetails(first.care_preference_details ? JSON.parse(first.care_preference_details) : {}); } catch { setCareDetails({}); }
+            if (first.ai_care_summary) { setAiSummary(first.ai_care_summary); setAiSummaryDate(first.ai_care_summary_updated_at); }
             fetchNotes(first.id);
           }
         }
@@ -180,6 +238,57 @@ const CareProfile = window.CareProfile = () => {
   };
 
   const ed = (field, val) => setEditData({ ...editData, [field]: val });
+
+  const handlePrefRate = (id, value) => {
+    const next = { ...carePrefs, [id]: value };
+    setCarePrefs(next);
+    if (value < 2 && careDetails[id]) {
+      const nd = { ...careDetails }; delete nd[id]; setCareDetails(nd);
+    }
+  };
+
+  const handlePrefDetail = (id, value) => setCareDetails({ ...careDetails, [id]: value });
+
+  const savePreferences = async () => {
+    if (!profile?.id) return;
+    setSavingPrefs(true);
+    try {
+      const res = await apiFetch(`/api/care-recipients/${profile.id}/preferences`, {
+        method: 'PUT', body: JSON.stringify({ preferences: carePrefs, details: careDetails }),
+      });
+      if (res?.ok) showToast('Care preferences saved', 'success');
+      else showToast('Failed to save preferences', 'error');
+    } catch { showToast('Failed to save preferences', 'error'); }
+    setSavingPrefs(false);
+  };
+
+  const generateAISummary = async () => {
+    if (!profile?.id) return;
+    // Auto-save preferences first
+    setSavingPrefs(true);
+    try {
+      await apiFetch(`/api/care-recipients/${profile.id}/preferences`, {
+        method: 'PUT', body: JSON.stringify({ preferences: carePrefs, details: careDetails }),
+      });
+    } catch {}
+    setSavingPrefs(false);
+
+    setGeneratingAI(true);
+    setAiSummary('');
+    try {
+      const res = await apiFetch(`/api/care-recipients/${profile.id}/generate-summary`, { method: 'POST' });
+      if (res?.ok) {
+        const data = await res.json();
+        setAiSummary(data.summary);
+        setAiSummaryDate(data.generatedAt);
+        showToast('Care summary generated', 'success');
+      } else {
+        const d = await res?.json().catch(() => ({}));
+        showToast(d.error || 'Failed to generate summary', 'error');
+      }
+    } catch { showToast('Failed to generate summary', 'error'); }
+    setGeneratingAI(false);
+  };
 
   if (loading) return <LoadingSpinner text="Loading care profile..." />;
   if (!profile) return <EmptyState icon="👵" title="No care recipient found" text="Add a care recipient to get started." />;
@@ -312,12 +421,104 @@ const CareProfile = window.CareProfile = () => {
         ) : <p style={{ color: '#999' }}>No medications listed</p>}
       </div>
 
-      <div className="card">
-        <div className="card-header"><span className="card-icon">💛</span>Preferences</div>
-        {editing ? (
-          <textarea style={textareaStyle} value={editData.preferences} onChange={(e) => ed('preferences', e.target.value)} placeholder="Likes gardening, enjoys photo albums..." />
-        ) : (
-          <p>{profile.preferences || 'No preferences listed'}</p>
+      {/* ─── Care Preferences ─── */}
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+          onClick={() => setPrefsExpanded(!prefsExpanded)}>
+          <div className="card-header" style={{ margin: 0 }}>
+            <span className="card-icon">✨</span>Care Preferences
+            {Object.values(carePrefs).filter(v => v > 0).length > 0 && (
+              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1b6b5a', background: '#e8f5e9', padding: '2px 8px', borderRadius: 10 }}>
+                {Object.values(carePrefs).filter(v => v > 0).length}/{CARE_PREFS_LIST.length} rated
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: 18, color: '#999', transition: 'transform 0.2s', transform: prefsExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
+        </div>
+
+        {/* Medical disclaimer — always visible when expanded */}
+        {prefsExpanded && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ background: '#fff3e0', border: '2px solid #e8724a', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{'\u2695\uFE0F'}</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#bf360c', marginBottom: 2 }}>InPlace is not a medical service</div>
+                <div style={{ fontSize: 12, color: '#5d4037', lineHeight: 1.5 }}>Our caregivers provide companion care and daily living assistance. They do not diagnose, treat, administer medication, or perform medical procedures.</div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px' }}>
+              Rate what matters for {profile.first_name}'s care. For important items, add details to help match the right caregiver. You can update these anytime.
+            </p>
+
+            {/* Rating legend */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+              {RATING_OPTIONS.map(r => (
+                <div key={r.value} style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600, background: r.color, color: r.textColor, border: '1px solid #ddd' }}>{r.label}</div>
+              ))}
+            </div>
+
+            {/* Preference items */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(showAllPrefs ? CARE_PREFS_LIST : CARE_PREFS_LIST.slice(0, 10)).map(pref => {
+                const val = carePrefs[pref.id] || 0;
+                const hasFollowUp = PREF_FOLLOW_UPS[pref.id];
+                const showDetail = hasFollowUp && val >= 2;
+                return (
+                  <div key={pref.id} style={{ borderRadius: 8, background: val > 0 ? RATING_OPTIONS[val].color + '40' : '#fafafa', border: '1px solid ' + (val > 0 ? RATING_OPTIONS[val].color : '#eee'), transition: 'all 0.2s', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
+                      <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{pref.icon}</span>
+                      <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: '#333', lineHeight: 1.3 }}>{pref.label}</div>
+                      <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                        {RATING_OPTIONS.map(r => (
+                          <button key={r.value} onClick={() => handlePrefRate(pref.id, r.value)} style={{
+                            padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
+                            border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
+                            background: val === r.value ? r.color : '#fff',
+                            color: val === r.value ? r.textColor : '#999',
+                            cursor: 'pointer', transition: 'all 0.15s',
+                          }}>{r.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {showDetail && (
+                      <div style={{ padding: '0 12px 10px 46px' }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#1b6b5a', marginBottom: 3 }}>
+                          {hasFollowUp} <span style={{ fontWeight: 400, color: '#999' }}>(optional)</span>
+                        </div>
+                        <input type="text" value={careDetails[pref.id] || ''} onChange={(e) => handlePrefDetail(pref.id, e.target.value)}
+                          placeholder="Add details..."
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 12, color: '#333', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {!showAllPrefs && (
+              <button onClick={() => setShowAllPrefs(true)} style={{
+                width: '100%', padding: '10px', marginTop: 8, borderRadius: 8,
+                border: '1px dashed #ccc', background: '#fafafa', color: '#666',
+                fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              }}>Show {CARE_PREFS_LIST.length - 10} more preferences</button>
+            )}
+
+            {/* Save + Generate buttons */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+              <button onClick={savePreferences} disabled={savingPrefs} style={{
+                padding: '10px 20px', borderRadius: 8, border: '1px solid #1b6b5a',
+                background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 13,
+                cursor: savingPrefs ? 'wait' : 'pointer',
+              }}>{savingPrefs ? 'Saving...' : 'Save Preferences'}</button>
+              <button onClick={generateAISummary} disabled={generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3} style={{
+                padding: '10px 20px', borderRadius: 8, border: 'none',
+                background: Object.values(carePrefs).filter(v => v > 0).length >= 3 ? '#1b6b5a' : '#ccc',
+                color: '#fff', fontWeight: 600, fontSize: 13,
+                cursor: (generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3) ? 'default' : 'pointer',
+              }}>{generatingAI ? 'Generating...' : '\u2728 Generate Care Summary with inPlace\'s AI tool'}</button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -475,39 +676,49 @@ const CareProfile = window.CareProfile = () => {
         </div>
       )}
 
-      <div className="ai-insights">
-        <div className="ai-insights-header"><span className="card-icon">🧠</span>AI Care Insights</div>
-        <ul className="ai-insights-list">
-          {(() => {
-            const name = profile?.first_name || 'Your loved one';
-            const hc = parseJsonField(profile?.health_conditions);
-            const prefs = profile?.preferences || '';
-            const insights = [];
-            // Generate insights based on actual care recipient data
-            if (hc.some(c => /dementia|alzheimer|memory|cognitive/i.test(c))) {
-              insights.push(`${name} responds best to visual cues and gentle reminders for meals`);
-              insights.push('Consistent daily routines help maintain cognitive function');
-            }
-            if (hc.some(c => /anxiety|stress/i.test(c))) {
-              insights.push('Calming activities and familiar routines help reduce anxiety episodes');
-            }
-            if (hc.some(c => /tbi|brain injury|traumatic/i.test(c))) {
-              insights.push(`Structured schedules with visual aids (whiteboards, checklists) support ${name}'s daily routine`);
-              insights.push('Short, focused activity sessions work better than extended ones');
-            }
-            if (hc.some(c => /arthritis|mobility|weakness|walker|wheelchair/i.test(c))) {
-              insights.push('Gentle movement and stretching during alert periods supports physical wellbeing');
-            }
-            if (prefs) {
-              insights.push(`Care preferences: ${prefs.substring(0, 100)}${prefs.length > 100 ? '...' : ''}`);
-            }
-            insights.push('Morning hours (9-11 AM) typically show highest engagement and alertness');
-            // Return up to 4 insights
-            return insights.slice(0, 4).map((text, i) =>
-              React.createElement('li', { key: i, className: 'ai-insights-item' }, text)
-            );
-          })()}
-        </ul>
+      {/* ─── AI Care Summary ─── */}
+      <div className="card" style={{ border: aiSummary ? '2px solid #1b6b5a' : '1px solid #e0e0e0', background: aiSummary ? '#f8fffe' : '#fff' }}>
+        <div className="card-header" style={{ margin: 0 }}>
+          <span className="card-icon">{'\u2728'}</span>
+          {aiSummary ? `${profile.first_name}'s Care Summary` : 'AI Care Summary'}
+          {aiSummary && (
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#888' }}>
+              by inPlace's AI tool
+            </span>
+          )}
+        </div>
+        {generatingAI ? (
+          <div style={{ padding: '16px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1b6b5a', fontSize: 14, fontWeight: 600 }}>
+              <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: 18 }}>{'\u2B50'}</span>
+              inPlace's AI tool is generating {profile.first_name}'s care summary...
+            </div>
+            <style>{'{@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }}'}</style>
+          </div>
+        ) : aiSummary ? (
+          <div>
+            <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.7, color: '#333', padding: '12px 0', fontFamily: 'inherit' }}>{aiSummary}</div>
+            {aiSummaryDate && (
+              <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>
+                Generated {new Date(aiSummaryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+              </div>
+            )}
+            <button onClick={generateAISummary} style={{
+              padding: '8px 16px', borderRadius: 8, border: '1px solid #1b6b5a',
+              background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 12, cursor: 'pointer',
+            }}>{'\u2728'} Regenerate Summary</button>
+          </div>
+        ) : (
+          <div style={{ padding: '12px 0' }}>
+            <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>
+              Rate care preferences above, then generate a summary that caregivers can review before visiting {profile.first_name}. Powered by inPlace's AI tool.
+            </p>
+            <button onClick={() => { setPrefsExpanded(true); }} style={{
+              padding: '8px 16px', borderRadius: 8, border: 'none',
+              background: '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+            }}>Set Up Care Preferences</button>
+          </div>
+        )}
       </div>
     </>
   );

@@ -375,6 +375,11 @@ async function initializeDatabase() {
       UNIQUE(message_id, user_id)
     )`,
     `CREATE INDEX IF NOT EXISTS idx_message_reactions_message ON message_reactions(message_id)`,
+    // v1.33.17 — Care preferences (rated importance) and AI-generated care summary
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS care_preferences TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS care_preference_details TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_summary TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_summary_updated_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
