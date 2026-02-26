@@ -5,6 +5,14 @@ const EmailVerificationBanner = window.EmailVerificationBanner = ({ userId }) =>
   const [message, setMessage] = useState(null);
   const [lastSentAt, setLastSentAt] = useState(null);
   const [cooldown, setCooldown] = useState(0);
+  const [verified, setVerified] = useState(false);
+
+  // On mount, double-check if already verified (catches stale state)
+  useEffect(() => {
+    apiFetch('/api/auth/me').then(r => r?.json()).then(data => {
+      if (data?.user?.email_verified) setVerified(true);
+    }).catch(() => {});
+  }, []);
 
   // Cooldown timer
   useEffect(() => {
@@ -12,6 +20,8 @@ const EmailVerificationBanner = window.EmailVerificationBanner = ({ userId }) =>
     const t = setTimeout(() => setCooldown(c => c - 1), 1000);
     return () => clearTimeout(t);
   }, [cooldown]);
+
+  if (verified) return null;
 
   const handleResend = async () => {
     if (cooldown > 0) return;

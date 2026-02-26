@@ -391,8 +391,17 @@ const App = () => {
       apiFetch(`/api/auth/verify?token=${vt}`)
         .then(r => r?.json())
         .then(data => {
-          if (data?.message) setVerifyMessage({ type: 'success', text: data.message });
-          else setVerifyMessage({ type: 'error', text: data?.error || 'Verification failed' });
+          if (data?.message) {
+            setVerifyMessage({ type: 'success', text: data.message });
+            // Refresh user data so emailVerified updates and banner disappears
+            apiFetch('/api/auth/me').then(r2 => r2?.json()).then(meData => {
+              if (meData?.user) {
+                setCurrentUser(prev => prev ? { ...prev, emailVerified: !!meData.user.email_verified } : prev);
+              }
+            }).catch(() => {});
+          } else {
+            setVerifyMessage({ type: 'error', text: data?.error || 'Verification failed' });
+          }
         })
         .catch(() => setVerifyMessage({ type: 'error', text: 'Verification failed' }));
     }
