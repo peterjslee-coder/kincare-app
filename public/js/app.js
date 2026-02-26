@@ -344,7 +344,7 @@ const App = () => {
               firstName: data.user.first_name, lastName: data.user.last_name,
               profilePhoto: data.user.profile_photo || null,
               emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
-              isAdmin: !!data.user.is_admin,
+              isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
             });
             // Sync active role: use saved preference if valid, else default to first role
             const saved = getActiveRole();
@@ -522,7 +522,7 @@ const App = () => {
             firstName: data.user.first_name, lastName: data.user.last_name,
             profilePhoto: data.user.profile_photo || null,
             emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
-            isAdmin: !!data.user.is_admin,
+            isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
           });
           // Sync activeRole to new user's primary role
           if (userRoles.length === 1) {
@@ -624,7 +624,7 @@ const App = () => {
                 firstName: data.user.first_name, lastName: data.user.last_name,
                 profilePhoto: data.user.profile_photo || null,
                 emailVerified: !!data.user.email_verified, isDemo: false,
-                isAdmin: !!data.user.is_admin,
+                isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
               });
               // Check if disclaimer needs to be accepted
               if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
@@ -672,7 +672,7 @@ const App = () => {
                 firstName: data.user.first_name, lastName: data.user.last_name,
                 profilePhoto: data.user.profile_photo || null,
                 emailVerified: !!data.user.email_verified, isDemo: false,
-                isAdmin: !!data.user.is_admin,
+                isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
               });
               // Check if disclaimer needs to be accepted
               if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {

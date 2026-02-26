@@ -442,6 +442,28 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     </div>
   );
 
+  const [jobSort, setJobSort] = useState('soonest');
+  const [claimingJobId, setClaimingJobId] = useState(null);
+
+  const handleClaimJob = async (jobId) => {
+    setClaimingJobId(jobId);
+    try {
+      const res = await apiFetch(`/api/sessions/${jobId}/claim`, { method: 'PUT' });
+      if (res?.ok) {
+        showToast && showToast('Job accepted!', 'success');
+        // Refresh dashboard
+        const dashRes = await apiFetch('/api/dashboard');
+        if (dashRes?.ok) setData(await dashRes.json());
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast ? showToast(err.error || 'Failed to accept', 'error') : alert(err.error || 'Failed to accept');
+      }
+    } catch (err) {
+      console.error('Claim job error:', err);
+    }
+    setClaimingJobId(null);
+  };
+
   const profile = data.profile || {};
   const assignments = data.assignments || [];
   const sessions = data.upcomingSessions || [];
@@ -671,59 +693,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         return null;
       })()}
 
-      {/* Available Jobs — open care requests seeking caregivers */}
-      {openJobs.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#e8724a', animation: 'pulse 1.5s infinite' }}></span>
-            Available Jobs
-          </div>
-          {openJobs.map(job => {
-            const sDate = (job.date || '').split('T')[0];
-            const dateParts = sDate ? sDate.split('-').map(Number) : [];
-            const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
-            const now = new Date();
-            const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
-            const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
-            const tParts = (job.time || '').split(':').map(Number);
-            const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
-            const rateDisplay = job.proposedRate ? `$${job.proposedRate}/hr` : null;
-            const hasBonus = job.shortNoticeSurcharge && parseFloat(job.shortNoticeSurcharge) > 0;
-
-            return (
-              <div key={job.id} className="card" style={{
-                marginBottom: 10, padding: '16px 18px',
-                border: '2px solid #e8724a',
-                borderLeft: '5px solid #e8724a',
-                background: 'linear-gradient(135deg, #fff8f0 0%, #fff 100%)',
-                boxShadow: '0 2px 8px rgba(232, 114, 74, 0.15)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: '180px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      {hasBonus && <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>}
-                      {rateDisplay && <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>{rateDisplay}</span>}
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{(job.serviceType || '').replace(/_/g, ' ')}</div>
-                    <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                      {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
-                    </div>
-                    {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
-                    {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
-                  </div>
-                  <button onClick={() => setActiveTab('schedule')} style={{
-                    padding: '10px 20px', background: '#e8724a', color: '#fff', border: 'none',
-                    borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                    boxShadow: '0 2px 6px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
-                  }}>View Details</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* Upcoming Events — top priority for caregivers */}
       {(() => {
         // Sort sessions: in_progress first, then by date/time
@@ -840,6 +809,103 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 </span>
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {/* Available Jobs — open care requests seeking caregivers */}
+      {openJobs.length > 0 && (() => {
+        // Sort jobs based on selected sort
+        const sortedJobs = [...openJobs].sort((a, b) => {
+          if (jobSort === 'highest_pay') {
+            const aRate = parseFloat(a.proposedRate) || 0;
+            const bRate = parseFloat(b.proposedRate) || 0;
+            return bRate - aRate;
+          }
+          // Default: soonest
+          const aKey = (a.date || '') + (a.time || '');
+          const bKey = (b.date || '') + (b.time || '');
+          return aKey.localeCompare(bKey);
+        });
+
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#e8724a', animation: 'pulse 1.5s infinite' }}></span>
+                Available Jobs ({openJobs.length})
+              </div>
+              <select value={jobSort} onChange={e => setJobSort(e.target.value)}
+                style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #ddd', color: '#666', background: '#fff' }}>
+                <option value="soonest">Soonest first</option>
+                <option value="highest_pay">Highest pay</option>
+              </select>
+            </div>
+            {sortedJobs.map(job => {
+              const sDate = (job.date || '').split('T')[0];
+              const dateParts = sDate ? sDate.split('-').map(Number) : [];
+              const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
+              const now = new Date();
+              const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
+              const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+              const tParts = (job.time || '').split(':').map(Number);
+              const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+
+              // Rate display with crossed-out base rate when surcharge applies
+              const surcharge = parseFloat(job.shortNoticeSurcharge) || 0;
+              const hasBonus = surcharge > 0;
+              const proposedRate = parseFloat(job.proposedRate) || 0;
+              const hours = parseFloat(job.durationHours) || 1;
+              const baseCost = parseFloat(job.estimatedCost) || 0;
+              // If there's a proposed rate, the total is proposedRate * hours
+              // The surcharge is extra on top — show effective per-hour earnings
+              const basePerHour = proposedRate > 0 ? proposedRate : (hours > 0 ? Math.round(baseCost / hours) : 0);
+              const effectiveTotal = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
+              const effectivePerHour = hours > 0 ? Math.round(effectiveTotal / hours * 100) / 100 : 0;
+
+              return (
+                <div key={job.id} className="card" style={{
+                  marginBottom: 10, padding: '16px 18px',
+                  border: hasBonus ? '2px solid #e8724a' : '1px solid #e0e0e0',
+                  borderLeft: hasBonus ? '5px solid #e8724a' : '4px solid #1b6b5a',
+                  background: hasBonus ? 'linear-gradient(135deg, #fff8f0 0%, #fff 100%)' : '#fff',
+                  boxShadow: hasBonus ? '0 2px 8px rgba(232, 114, 74, 0.15)' : 'none',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '180px' }}>
+                      {/* Rate badges */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                        {hasBonus && (
+                          <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
+                        )}
+                        {hasBonus && basePerHour > 0 ? (
+                          <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ textDecoration: 'line-through', color: '#999', fontSize: 12 }}>${basePerHour}/hr</span>
+                            <span style={{ color: '#1b6b5a', fontWeight: 700, fontSize: 14 }}>${effectivePerHour}/hr</span>
+                          </span>
+                        ) : basePerHour > 0 ? (
+                          <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
+                        ) : null}
+                      </div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{(job.serviceType || '').replace(/_/g, ' ')}</div>
+                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
+                        {effectiveTotal > 0 && <span style={{ fontWeight: 600, color: '#1b6b5a' }}> \u2022 ${effectiveTotal.toFixed(0)} total</span>}
+                      </div>
+                      {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
+                      {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
+                    </div>
+                    <button onClick={() => handleClaimJob(job.id)} disabled={claimingJobId === job.id}
+                      style={{
+                        padding: '10px 20px', background: claimingJobId === job.id ? '#ccc' : '#1b6b5a', color: '#fff', border: 'none',
+                        borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
+                        boxShadow: '0 2px 6px rgba(27,107,90,0.3)', whiteSpace: 'nowrap',
+                      }}>{claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
       })()}

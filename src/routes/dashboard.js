@@ -250,8 +250,11 @@ async function caregiverDashboard(db, userId, res) {
     WHERE caregiver_id = ? AND status IN ('confirmed', 'pending') AND scheduled_date >= ?
   `).get(profile.id, today);
 
-  // Open care requests — jobs available to claim
-  // Include: sessions with status 'open' that aren't assigned to another caregiver
+  // Open care requests — jobs available to claim (next 5 days only to avoid noise)
+  const fiveDaysOut = new Date(cgEtNow);
+  fiveDaysOut.setDate(fiveDaysOut.getDate() + 5);
+  const fiveDayStr = fiveDaysOut.getFullYear() + '-' + String(fiveDaysOut.getMonth() + 1).padStart(2, '0') + '-' + String(fiveDaysOut.getDate()).padStart(2, '0');
+
   const openJobs = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -263,10 +266,11 @@ async function caregiverDashboard(db, userId, res) {
     LEFT JOIN users fu ON cs.family_user_id = fu.id
     WHERE cs.status IN ('open', 'requested')
       AND cs.scheduled_date >= ?
+      AND cs.scheduled_date <= ?
       AND (cs.caregiver_id IS NULL OR cs.caregiver_id = ?)
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 10
-  `).all(today, profile.id);
+  `).all(today, fiveDayStr, profile.id);
 
   // Recent reviews
   const reviews = await db.prepare(`
