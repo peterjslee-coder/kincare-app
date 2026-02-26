@@ -21,6 +21,9 @@ const CareProfile = window.CareProfile = () => {
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [prefsExpanded, setPrefsExpanded] = useState(false);
   const [showAllPrefs, setShowAllPrefs] = useState(false);
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [editedSummary, setEditedSummary] = useState('');
+  const [savingSummary, setSavingSummary] = useState(false);
   const { showToast } = useToast();
 
   const CARE_PREFS_LIST = [
@@ -167,8 +170,10 @@ const CareProfile = window.CareProfile = () => {
       first_name: profile.first_name || '',
       last_name: profile.last_name || '',
       age: profile.age || '',
+      address: profile.location_address || '',
       city: profile.location_city || '',
       state: profile.location_state || '',
+      zip: profile.location_zip || '',
       health_conditions: Array.isArray(hc) ? hc.join('\n') : '',
       medications: Array.isArray(meds) ? meds.join('\n') : '',
       preferences: profile.preferences || '',
@@ -192,10 +197,10 @@ const CareProfile = window.CareProfile = () => {
         firstName: editData.first_name,
         lastName: editData.last_name,
         age: parseInt(editData.age) || profile.age,
-        address: profile.location_address || null,
+        address: editData.address || null,
         city: editData.city,
         state: editData.state,
-        zip: profile.location_zip || null,
+        zip: editData.zip || null,
         healthConditions: editData.health_conditions.split('\n').map(s => s.trim()).filter(Boolean),
         medications: editData.medications.split('\n').map(s => s.trim()).filter(Boolean),
         preferences: editData.preferences,
@@ -213,8 +218,10 @@ const CareProfile = window.CareProfile = () => {
           first_name: editData.first_name,
           last_name: editData.last_name,
           age: parseInt(editData.age) || profile.age,
+          location_address: editData.address,
           location_city: editData.city,
           location_state: editData.state,
+          location_zip: editData.zip,
           health_conditions: JSON.stringify(editData.health_conditions.split('\n').map(s => s.trim()).filter(Boolean)),
           medications: JSON.stringify(editData.medications.split('\n').map(s => s.trim()).filter(Boolean)),
           preferences: editData.preferences,
@@ -264,7 +271,6 @@ const CareProfile = window.CareProfile = () => {
 
   const generateAISummary = async () => {
     if (!profile?.id) return;
-    // Auto-save preferences first
     setSavingPrefs(true);
     try {
       await apiFetch(`/api/care-recipients/${profile.id}/preferences`, {
@@ -290,8 +296,25 @@ const CareProfile = window.CareProfile = () => {
     setGeneratingAI(false);
   };
 
+  const saveSummaryEdit = async () => {
+    if (!profile?.id) return;
+    setSavingSummary(true);
+    try {
+      const res = await apiFetch(`/api/care-recipients/${profile.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ aiCareSummary: editedSummary }),
+      });
+      if (res?.ok) {
+        setAiSummary(editedSummary);
+        setEditingSummary(false);
+        showToast('Care summary updated', 'success');
+      } else { showToast('Failed to save summary', 'error'); }
+    } catch { showToast('Failed to save summary', 'error'); }
+    setSavingSummary(false);
+  };
+
   if (loading) return <LoadingSpinner text="Loading care profile..." />;
-  if (!profile) return <EmptyState icon="👵" title="No care recipient found" text="Add a care recipient to get started." />;
+  if (!profile) return <EmptyState icon="\uD83D\uDC75" title="No care recipient found" text="Add a care recipient to get started." />;
 
   const canEdit = profile.access_level !== 'view';
   const healthConditions = parseJsonField(profile.health_conditions);
@@ -300,6 +323,14 @@ const CareProfile = window.CareProfile = () => {
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' };
   const textareaStyle = { ...inputStyle, minHeight: 80, resize: 'vertical' };
   const fieldLabel = { fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' };
+
+  // Build address string
+  const addressParts = [profile.location_address, profile.location_city, profile.location_state].filter(Boolean);
+  const fullAddress = addressParts.length > 0
+    ? (profile.location_address ? profile.location_address + ', ' : '') +
+      [profile.location_city, profile.location_state].filter(Boolean).join(', ') +
+      (profile.location_zip ? ' ' + profile.location_zip : '')
+    : 'No address on file';
 
   return (
     <>
@@ -336,97 +367,200 @@ const CareProfile = window.CareProfile = () => {
         </div>
       )}
 
-      <div className="care-profile-header">
-        <div className="care-profile-avatar" onClick={handlePhotoUpload} style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden' }} title="Click to change photo">
-          {profile.photo
-            ? <img src={profile.photo} alt={`${profile.first_name}`} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-            : <span style={{ fontSize: 48 }}>{profile.first_name?.[0] || '?'}{profile.last_name?.[0] || ''}</span>}
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: 10, textAlign: 'center', padding: '3px 0', fontWeight: 600 }}>
-            {photoUploading ? '...' : '📷'}
+      {/* ─── 1. Compact Hero Card — Photo, Name, Age, Address, Emergency Contact ─── */}
+      {!editing ? (
+        <div className="card" style={{ padding: '16px 20px' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <div onClick={handlePhotoUpload} style={{ cursor: 'pointer', position: 'relative', width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#e8f5e9' }} title="Click to change photo">
+              {profile.photo
+                ? <img src={profile.photo} alt={profile.first_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <span style={{ fontSize: 28, fontWeight: 700, color: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>{profile.first_name?.[0]}{profile.last_name?.[0]}</span>}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: 9, textAlign: 'center', padding: '2px 0', fontWeight: 600 }}>
+                {photoUploading ? '...' : '\uD83D\uDCF7'}
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#1a1a2e', lineHeight: 1.2 }}>
+                {profile.first_name} {profile.last_name}
+                <span style={{ fontSize: 14, fontWeight: 400, color: '#888', marginLeft: 8 }}>{profile.age} years old</span>
+              </div>
+              <div style={{ fontSize: 13, color: '#555', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ flexShrink: 0 }}>{'\uD83D\uDCCD'}</span>
+                <span>{fullAddress}</span>
+              </div>
+              {profile.emergency_contact_name && (
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ flexShrink: 0 }}>{'\uD83D\uDEA8'}</span>
+                  <span>Emergency: {profile.emergency_contact_name}{profile.emergency_contact_phone ? ' \u00B7 ' + profile.emergency_contact_phone : ''}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-        {editing ? (
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8 }}>
-            <input style={{ ...inputStyle, maxWidth: 140, textAlign: 'center' }} value={editData.first_name} onChange={(e) => ed('first_name', e.target.value)} placeholder="First name" />
-            <input style={{ ...inputStyle, maxWidth: 140, textAlign: 'center' }} value={editData.last_name} onChange={(e) => ed('last_name', e.target.value)} placeholder="Last name" />
-          </div>
-        ) : (
-          <>
-            <div className="care-profile-name">{profile.first_name} {profile.last_name}</div>
-            <div className="care-profile-subtitle">Primary Care Recipient</div>
-          </>
-        )}
-      </div>
-
-      <div className="card">
-        <div className="card-header"><span className="card-icon">ℹ️</span>Basic Information</div>
-        {editing ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+      ) : (
+        <div className="card">
+          <div className="card-header" style={{ marginBottom: 12 }}><span className="card-icon">{'\uD83D\uDC64'}</span>Profile Details</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={fieldLabel}>First Name</div>
+              <input style={inputStyle} value={editData.first_name} onChange={(e) => ed('first_name', e.target.value)} placeholder="First name" />
+            </div>
+            <div>
+              <div style={fieldLabel}>Last Name</div>
+              <input style={inputStyle} value={editData.last_name} onChange={(e) => ed('last_name', e.target.value)} placeholder="Last name" />
+            </div>
             <div>
               <div style={fieldLabel}>Age</div>
               <input type="number" style={inputStyle} value={editData.age} onChange={(e) => ed('age', e.target.value)} />
             </div>
             <div>
+              <div style={fieldLabel}>Street Address</div>
+              <input style={inputStyle} value={editData.address} onChange={(e) => ed('address', e.target.value)} placeholder="123 Main Street" />
+            </div>
+            <div>
               <div style={fieldLabel}>City</div>
               <input style={inputStyle} value={editData.city} onChange={(e) => ed('city', e.target.value)} />
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <div style={fieldLabel}>State</div>
+                <input style={inputStyle} value={editData.state} onChange={(e) => ed('state', e.target.value)} />
+              </div>
+              <div>
+                <div style={fieldLabel}>ZIP</div>
+                <input style={inputStyle} value={editData.zip} onChange={(e) => ed('zip', e.target.value)} placeholder="24060" />
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
             <div>
-              <div style={fieldLabel}>State</div>
-              <input style={inputStyle} value={editData.state} onChange={(e) => ed('state', e.target.value)} />
+              <div style={fieldLabel}>Emergency Contact Name</div>
+              <input style={inputStyle} value={editData.emergency_contact_name} onChange={(e) => ed('emergency_contact_name', e.target.value)} />
+            </div>
+            <div>
+              <div style={fieldLabel}>Emergency Contact Phone</div>
+              <input type="tel" style={inputStyle} value={editData.emergency_contact_phone} onChange={(e) => ed('emergency_contact_phone', e.target.value)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 2. AI Care Summary (most useful info first) ─── */}
+      <div className="card" style={{ border: aiSummary ? '2px solid #1b6b5a' : '1px solid #e0e0e0', background: aiSummary ? '#f8fffe' : '#fff' }}>
+        <div className="card-header" style={{ margin: 0 }}>
+          <span className="card-icon">{'\u2728'}</span>
+          {aiSummary ? `${profile.first_name}'s Care Summary` : 'AI Care Summary'}
+          {aiSummary && (
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#888' }}>
+              by inPlace's AI tool
+            </span>
+          )}
+        </div>
+        {generatingAI ? (
+          <div style={{ padding: '16px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1b6b5a', fontSize: 14, fontWeight: 600 }}>
+              <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: 18 }}>{'\u2B50'}</span>
+              inPlace's AI tool is generating {profile.first_name}'s care summary...
+            </div>
+            <style>{'{@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }}'}</style>
+          </div>
+        ) : aiSummary ? (
+          <div>
+            {editingSummary ? (
+              <div>
+                <textarea value={editedSummary} onChange={(e) => setEditedSummary(e.target.value)}
+                  style={{ width: '100%', minHeight: 200, padding: '12px', border: '1px solid #ccc', borderRadius: 8, fontSize: 13, lineHeight: 1.7, color: '#333', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginTop: 12 }} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button onClick={saveSummaryEdit} disabled={savingSummary} style={{
+                    padding: '8px 16px', borderRadius: 8, border: 'none',
+                    background: savingSummary ? '#999' : '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 12, cursor: savingSummary ? 'wait' : 'pointer',
+                  }}>{savingSummary ? 'Saving...' : 'Save Changes'}</button>
+                  <button onClick={() => setEditingSummary(false)} style={{
+                    padding: '8px 16px', borderRadius: 8, border: '1px solid #d0d0d0',
+                    background: '#fff', color: '#666', fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                  }}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.7, color: '#333', padding: '12px 0', fontFamily: 'inherit' }}>{aiSummary}</div>
+                {aiSummaryDate && (
+                  <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>
+                    Generated {new Date(aiSummaryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { setEditedSummary(aiSummary); setEditingSummary(true); }} style={{
+                    padding: '8px 16px', borderRadius: 8, border: '1px solid #1b6b5a',
+                    background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                  }}>{'\u270F\uFE0F'} Edit Summary</button>
+                  <button onClick={generateAISummary} style={{
+                    padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc',
+                    background: '#fff', color: '#666', fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                  }}>{'\u2728'} Regenerate</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ padding: '12px 0' }}>
+            <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>
+              Rate care preferences below, then generate a summary that caregivers can review before visiting {profile.first_name}. Powered by inPlace's AI tool.
+            </p>
+            <button onClick={() => { setPrefsExpanded(true); }} style={{
+              padding: '8px 16px', borderRadius: 8, border: 'none',
+              background: '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+            }}>Set Up Care Preferences</button>
+          </div>
+        )}
+      </div>
+
+      {/* ─── 3. Health Conditions & Medications (combined, compact) ─── */}
+      <div className="card">
+        <div className="card-header"><span className="card-icon">{'\u2695\uFE0F'}</span>Health & Medications</div>
+        {editing ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <div style={{ ...fieldLabel, marginBottom: 8 }}>Health Conditions (one per line)</div>
+              <textarea style={textareaStyle} value={editData.health_conditions} onChange={(e) => ed('health_conditions', e.target.value)} placeholder="Early-stage dementia&#10;Mild arthritis&#10;..." />
+            </div>
+            <div>
+              <div style={{ ...fieldLabel, marginBottom: 8 }}>Medications (one per line)</div>
+              <textarea style={textareaStyle} value={editData.medications} onChange={(e) => ed('medications', e.target.value)} placeholder="Donepezil 10mg daily&#10;Vitamin D 1000IU&#10;..." />
             </div>
           </div>
         ) : (
-          <div className="info-grid">
-            <div className="info-item">
-              <div className="info-label">🎂 Age</div>
-              <div className="info-value">{profile.age} years old</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Conditions</div>
+              {healthConditions.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {healthConditions.map((c, i) => (
+                    <div key={i} style={{ fontSize: 13, color: '#333', paddingLeft: 10, borderLeft: '2px solid #1b6b5a' }}>{c}</div>
+                  ))}
+                </div>
+              ) : <span style={{ fontSize: 13, color: '#999' }}>None listed</span>}
             </div>
-            <div className="info-item">
-              <div className="info-label">📍 Location</div>
-              <div className="info-value">{profile.location_city}, {profile.location_state}</div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Medications</div>
+              {medications.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {medications.map((m, i) => (
+                    <div key={i} style={{ fontSize: 13, color: '#333', paddingLeft: 10, borderLeft: '2px solid #e8724a' }}>{m}</div>
+                  ))}
+                </div>
+              ) : <span style={{ fontSize: 13, color: '#999' }}>None listed</span>}
             </div>
           </div>
         )}
       </div>
 
-      <div className="card">
-        <div className="card-header"><span className="card-icon">⚕️</span>Health Conditions</div>
-        {editing ? (
-          <div>
-            <div style={{ ...fieldLabel, marginBottom: 8 }}>One condition per line</div>
-            <textarea style={textareaStyle} value={editData.health_conditions} onChange={(e) => ed('health_conditions', e.target.value)} placeholder="Early-stage dementia&#10;Mild arthritis&#10;..." />
-          </div>
-        ) : healthConditions.length > 0 ? (
-          <ul className="health-list">
-            {healthConditions.map((condition, idx) => (
-              <li key={idx} className="health-item">{condition}</li>
-            ))}
-          </ul>
-        ) : <p style={{ color: '#999' }}>No health conditions listed</p>}
-      </div>
-
-      <div className="card">
-        <div className="card-header"><span className="card-icon">💊</span>Medications</div>
-        {editing ? (
-          <div>
-            <div style={{ ...fieldLabel, marginBottom: 8 }}>One medication per line</div>
-            <textarea style={textareaStyle} value={editData.medications} onChange={(e) => ed('medications', e.target.value)} placeholder="Donepezil 10mg daily&#10;Vitamin D 1000IU&#10;..." />
-          </div>
-        ) : medications.length > 0 ? (
-          <ul className="health-list">
-            {medications.map((med, idx) => (
-              <li key={idx} className="med-item">{med}</li>
-            ))}
-          </ul>
-        ) : <p style={{ color: '#999' }}>No medications listed</p>}
-      </div>
-
-      {/* ─── Care Preferences ─── */}
+      {/* ─── 4. Care Preferences (collapsible) ─── */}
       <div className="card" style={{ overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
           onClick={() => setPrefsExpanded(!prefsExpanded)}>
           <div className="card-header" style={{ margin: 0 }}>
-            <span className="card-icon">✨</span>Care Preferences
+            <span className="card-icon">{'\u2728'}</span>Care Preferences
             {Object.values(carePrefs).filter(v => v > 0).length > 0 && (
               <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1b6b5a', background: '#e8f5e9', padding: '2px 8px', borderRadius: 10 }}>
                 {Object.values(carePrefs).filter(v => v > 0).length}/{CARE_PREFS_LIST.length} rated
@@ -436,7 +570,6 @@ const CareProfile = window.CareProfile = () => {
           <span style={{ fontSize: 18, color: '#999', transition: 'transform 0.2s', transform: prefsExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
         </div>
 
-        {/* Medical disclaimer — always visible when expanded */}
         {prefsExpanded && (
           <div style={{ marginTop: 16 }}>
             <div style={{ background: '#fff3e0', border: '2px solid #e8724a', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -451,14 +584,12 @@ const CareProfile = window.CareProfile = () => {
               Rate what matters for {profile.first_name}'s care. For important items, add details to help match the right caregiver. You can update these anytime.
             </p>
 
-            {/* Rating legend */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
               {RATING_OPTIONS.map(r => (
                 <div key={r.value} style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600, background: r.color, color: r.textColor, border: '1px solid #ddd' }}>{r.label}</div>
               ))}
             </div>
 
-            {/* Preference items */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {(showAllPrefs ? CARE_PREFS_LIST : CARE_PREFS_LIST.slice(0, 10)).map(pref => {
                 const val = carePrefs[pref.id] || 0;
@@ -504,7 +635,6 @@ const CareProfile = window.CareProfile = () => {
               }}>Show {CARE_PREFS_LIST.length - 10} more preferences</button>
             )}
 
-            {/* Save + Generate buttons */}
             <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
               <button onClick={savePreferences} disabled={savingPrefs} style={{
                 padding: '10px 20px', borderRadius: 8, border: '1px solid #1b6b5a',
@@ -522,36 +652,9 @@ const CareProfile = window.CareProfile = () => {
         )}
       </div>
 
+      {/* ─── 5. Care Notes ─── */}
       <div className="card">
-        <div className="card-header"><span className="card-icon">🚨</span>Emergency Contact</div>
-        {editing ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <div style={fieldLabel}>Name</div>
-              <input style={inputStyle} value={editData.emergency_contact_name} onChange={(e) => ed('emergency_contact_name', e.target.value)} />
-            </div>
-            <div>
-              <div style={fieldLabel}>Phone</div>
-              <input type="tel" style={inputStyle} value={editData.emergency_contact_phone} onChange={(e) => ed('emergency_contact_phone', e.target.value)} />
-            </div>
-          </div>
-        ) : (
-          <div className="info-grid">
-            <div className="info-item">
-              <div className="info-label">Name</div>
-              <div className="info-value">{profile.emergency_contact_name}</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">Phone</div>
-              <div className="info-value">{profile.emergency_contact_phone}</div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Care Notes */}
-      <div className="card">
-        <div className="card-header"><span className="card-icon">📝</span>Care Notes</div>
+        <div className="card-header"><span className="card-icon">{'\uD83D\uDCDD'}</span>Care Notes</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: notes.length > 0 ? 12 : 0 }}>
           <input value={newNote} onChange={(e) => setNewNote(e.target.value)}
             placeholder="Add a note about care, observations, updates..."
@@ -568,7 +671,7 @@ const CareProfile = window.CareProfile = () => {
               <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5 }}>{n.content}</div>
               <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
                 {n.author_first_name} {n.author_last_name}
-                {' · '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                {' \u00B7 '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
               </div>
             </div>
             {canEdit && (
@@ -584,22 +687,21 @@ const CareProfile = window.CareProfile = () => {
         )}
       </div>
 
-      {/* ─── Permission Controls (owner only) ─── */}
+      {/* ─── 6. Permission Controls (owner only, bottom) ─── */}
       {profile?.linked_user_id && canEdit && (
         <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>🔐</span> {profile.first_name}'s App Permissions
+            <span>{'\uD83D\uDD10'}</span> {profile.first_name}'s App Permissions
           </div>
           <p style={{ fontSize: 12, color: '#888', marginBottom: 14, lineHeight: 1.5 }}>
             Control what {profile.first_name} sees and can do when they log into their own account.
           </p>
 
-          {/* Tier selector */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
             {[
-              { id: 'full', label: 'Full Control', desc: 'Can view and edit everything', icon: '🟢' },
-              { id: 'collaborative', label: 'Collaborative', desc: 'Can view selected info, can add notes', icon: '🟡' },
-              { id: 'managed', label: 'Managed', desc: 'View-only for selected info', icon: '🔴' },
+              { id: 'full', label: 'Full Control', desc: 'Can view and edit everything', icon: '\uD83D\uDFE2' },
+              { id: 'collaborative', label: 'Collaborative', desc: 'Can view selected info, can add notes', icon: '\uD83D\uDFE1' },
+              { id: 'managed', label: 'Managed', desc: 'View-only for selected info', icon: '\uD83D\uDD34' },
             ].map(t => (
               <button key={t.id} onClick={() => {
                 setPermTier(t.id);
@@ -615,7 +717,6 @@ const CareProfile = window.CareProfile = () => {
             ))}
           </div>
 
-          {/* Section visibility toggles (only for collaborative/managed) */}
           {permTier !== 'full' && visSettings && (
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -623,14 +724,14 @@ const CareProfile = window.CareProfile = () => {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 6 }}>
                 {[
-                  { key: 'calendar', label: 'Calendar / Schedule', icon: '📅' },
-                  { key: 'healthConditions', label: 'Health Conditions', icon: '🩺' },
-                  { key: 'medications', label: 'Medications', icon: '💊' },
-                  { key: 'allergies', label: 'Allergies', icon: '⚠️' },
-                  { key: 'preferences', label: 'Care Preferences', icon: '✨' },
-                  { key: 'pets', label: 'Pets at Home', icon: '🐾' },
-                  { key: 'emergencyContact', label: 'Emergency Contact', icon: '🆘' },
-                  { key: 'notes', label: 'Notes', icon: '📝' },
+                  { key: 'calendar', label: 'Calendar / Schedule', icon: '\uD83D\uDCC5' },
+                  { key: 'healthConditions', label: 'Health Conditions', icon: '\uD83E\uDE7A' },
+                  { key: 'medications', label: 'Medications', icon: '\uD83D\uDC8A' },
+                  { key: 'allergies', label: 'Allergies', icon: '\u26A0\uFE0F' },
+                  { key: 'preferences', label: 'Care Preferences', icon: '\u2728' },
+                  { key: 'pets', label: 'Pets at Home', icon: '\uD83D\uDC3E' },
+                  { key: 'emergencyContact', label: 'Emergency Contact', icon: '\uD83C\uDD98' },
+                  { key: 'notes', label: 'Notes', icon: '\uD83D\uDCDD' },
                 ].map(s => (
                   <label key={s.key} style={{
                     display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
@@ -647,7 +748,6 @@ const CareProfile = window.CareProfile = () => {
             </div>
           )}
 
-          {/* Save button */}
           <button onClick={async () => {
             setSavingPerms(true);
             try {
@@ -675,51 +775,6 @@ const CareProfile = window.CareProfile = () => {
           </button>
         </div>
       )}
-
-      {/* ─── AI Care Summary ─── */}
-      <div className="card" style={{ border: aiSummary ? '2px solid #1b6b5a' : '1px solid #e0e0e0', background: aiSummary ? '#f8fffe' : '#fff' }}>
-        <div className="card-header" style={{ margin: 0 }}>
-          <span className="card-icon">{'\u2728'}</span>
-          {aiSummary ? `${profile.first_name}'s Care Summary` : 'AI Care Summary'}
-          {aiSummary && (
-            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#888' }}>
-              by inPlace's AI tool
-            </span>
-          )}
-        </div>
-        {generatingAI ? (
-          <div style={{ padding: '16px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1b6b5a', fontSize: 14, fontWeight: 600 }}>
-              <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: 18 }}>{'\u2B50'}</span>
-              inPlace's AI tool is generating {profile.first_name}'s care summary...
-            </div>
-            <style>{'{@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }}'}</style>
-          </div>
-        ) : aiSummary ? (
-          <div>
-            <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.7, color: '#333', padding: '12px 0', fontFamily: 'inherit' }}>{aiSummary}</div>
-            {aiSummaryDate && (
-              <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>
-                Generated {new Date(aiSummaryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-              </div>
-            )}
-            <button onClick={generateAISummary} style={{
-              padding: '8px 16px', borderRadius: 8, border: '1px solid #1b6b5a',
-              background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 12, cursor: 'pointer',
-            }}>{'\u2728'} Regenerate Summary</button>
-          </div>
-        ) : (
-          <div style={{ padding: '12px 0' }}>
-            <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>
-              Rate care preferences above, then generate a summary that caregivers can review before visiting {profile.first_name}. Powered by inPlace's AI tool.
-            </p>
-            <button onClick={() => { setPrefsExpanded(true); }} style={{
-              padding: '8px 16px', borderRadius: 8, border: 'none',
-              background: '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer',
-            }}>Set Up Care Preferences</button>
-          </div>
-        )}
-      </div>
     </>
   );
 };

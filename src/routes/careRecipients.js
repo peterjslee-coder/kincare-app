@@ -176,6 +176,7 @@ router.put("/:id", requireRole("family"), async (req, res) => {
     firstName, lastName, age, address, city, state, zip,
     healthConditions, medications, preferences,
     emergencyContactName, emergencyContactPhone, emoji,
+    aiCareSummary,
   } = req.body;
 
   // Re-geocode if address changed
@@ -208,6 +209,8 @@ router.put("/:id", requireRole("family"), async (req, res) => {
       emergency_contact_name = COALESCE(?, emergency_contact_name),
       emergency_contact_phone = COALESCE(?, emergency_contact_phone),
       emoji = ${('emoji' in req.body) ? '?' : 'emoji'},
+      ai_care_summary = ${('aiCareSummary' in req.body) ? '?' : 'ai_care_summary'},
+      ai_care_summary_updated_at = ${('aiCareSummary' in req.body) ? 'NOW()' : 'ai_care_summary_updated_at'},
       updated_at = NOW()
     WHERE id = ?
   `).run(
@@ -219,6 +222,7 @@ router.put("/:id", requireRole("family"), async (req, res) => {
     preferences,
     emergencyContactName, emergencyContactPhone,
     ...('emoji' in req.body ? [emoji || null] : []),
+    ...('aiCareSummary' in req.body ? [aiCareSummary] : []),
     req.params.id
   );
 
