@@ -140,16 +140,20 @@ const CAREGIVER_AVAILABILITY = window.CAREGIVER_AVAILABILITY = {
   },
 };
 
-// Helper: get next 7 days starting from today
+// Helper: get next 7 days starting from today (care-location timezone)
 const getNextSevenDays = window.getNextSevenDays = () => {
   const days = [];
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const today = new Date();
+  // Use care-location timezone if TimezoneHelper is loaded, else local
+  const todayStr = (typeof TimezoneHelper !== 'undefined') ? TimezoneHelper.getToday() : (() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); })();
+  const [ty, tm, td] = todayStr.split('-').map(Number);
+  const today = new Date(ty, tm - 1, td);
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
+    const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     days.push({
-      date: d.toISOString().split('T')[0],
+      date: dateStr,
       dayName: dayNames[d.getDay()],
       label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : dayNames[d.getDay()],
       shortDate: `${d.getMonth() + 1}/${d.getDate()}`,

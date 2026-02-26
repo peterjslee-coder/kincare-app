@@ -9,11 +9,11 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
   const [recipientName, setRecipientName] = useState('');
 
   // Date range — default: start of current semester or last 4 months
-  const defaultTo = new Date().toISOString().split('T')[0];
+  const defaultTo = TimezoneHelper.getToday();
   const defaultFrom = (() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 4);
-    return d.toISOString().split('T')[0];
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   })();
   const [fromDate, setFromDate] = useState(defaultFrom);
   const [toDate, setToDate] = useState(defaultTo);
@@ -73,7 +73,7 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
 
   const formatDate = (d) => {
     if (!d) return '';
-    const dt = new Date(d + 'T12:00:00');
+    const dt = TimezoneHelper.parseDate(d);
     return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
@@ -120,8 +120,8 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[
             { label: 'This Month', fn: () => { const n = new Date(); setFromDate(`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-01`); setToDate(defaultTo); } },
-            { label: 'Last 3 Months', fn: () => { const d = new Date(); d.setMonth(d.getMonth()-3); setFromDate(d.toISOString().split('T')[0]); setToDate(defaultTo); } },
-            { label: 'Last 6 Months', fn: () => { const d = new Date(); d.setMonth(d.getMonth()-6); setFromDate(d.toISOString().split('T')[0]); setToDate(defaultTo); } },
+            { label: 'Last 3 Months', fn: () => { const d = new Date(); d.setMonth(d.getMonth()-3); setFromDate(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')); setToDate(defaultTo); } },
+            { label: 'Last 6 Months', fn: () => { const d = new Date(); d.setMonth(d.getMonth()-6); setFromDate(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')); setToDate(defaultTo); } },
             { label: 'This Year', fn: () => { setFromDate(`${new Date().getFullYear()}-01-01`); setToDate(defaultTo); } },
           ].map(p => (
             <button key={p.label} onClick={p.fn} style={{

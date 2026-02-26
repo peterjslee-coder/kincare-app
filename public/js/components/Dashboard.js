@@ -533,13 +533,12 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
 
       {/* Next Up — upcoming visits for today and tomorrow */}
       {(() => {
-        const now = new Date();
-        const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayStr = TimezoneHelper.getToday();
+        const todayLocal = TimezoneHelper.parseDate(todayStr);
         const cutoff = new Date(todayLocal.getTime() + 2 * 86400000); // 2 days out
         const nextUp = upcoming.filter(s => {
-          const dp = (s.date || '').split('T')[0].split('-').map(Number);
-          if (dp.length !== 3) return false;
-          const d = new Date(dp[0], dp[1] - 1, dp[2]);
+          const d = TimezoneHelper.parseDate(s.date);
+          if (isNaN(d.getTime())) return false;
           return d >= todayLocal && d < cutoff;
         }).sort((a, b) => {
           const ak = (a.date || '') + (a.time || '');
@@ -555,12 +554,8 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
               Next Up
             </div>
             {nextUp.map((s, idx) => {
-              const dp = (s.date || '').split('T')[0].split('-').map(Number);
-              const dateObj = dp.length === 3 ? new Date(dp[0], dp[1] - 1, dp[2]) : null;
-              const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
-              const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
-              const tParts = (s.time || '').split(':').map(Number);
-              const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+              const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], s.timezone);
+              const timeLabel = TimezoneHelper.formatTime(s.time);
               const isActive = s.status === 'in_progress';
               const borderColor = isActive ? '#f57f17' : s.status === 'confirmed' ? '#1b6b5a' : '#e8724a';
 
@@ -661,14 +656,14 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                       {s.recipientName}{s.familyTotal ? `, $${Math.round(parseFloat(s.familyTotal))}` : s.estimatedCost ? `, $${Math.round(parseFloat(s.estimatedCost))}` : ''}
                     </div>
                     <div className="session-time">{s.date ? (() => {
-                      const parts = (s.date.split('T')[0]).split('-');
-                      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                      const now = new Date();
-                      const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                      const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+                      const dateClean = (s.date || '').split('T')[0];
+                      const d = TimezoneHelper.parseDate(dateClean);
+                      const todayLocal = TimezoneHelper.parseDate(TimezoneHelper.getToday(tz));
                       const dayDiff = Math.round((d - todayLocal) / 86400000);
                       const rel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dayDiff < 0 ? `${-dayDiff}d ago` : `In ${dayDiff} days`;
                       return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` (${rel})`;
-                    })() : ''}{s.time ? ` at ${s.time}` : ''}</div>
+                    })() : ''}{s.time ? ` at ${TimezoneHelper.formatTime(s.time)}` : ''}</div>
                     <div style={{ fontSize: 12, color: s.caregiverName ? '#666' : '#e8724a' }}>
                       {s.caregiverName || 'Seeking caregiver'} · <span style={{ textTransform: 'capitalize' }}>{(s.serviceType || '').replace(/_/g, ' ')}</span>
                     </div>

@@ -582,13 +582,10 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                           const sTime = s.scheduled_time || s.time;
                           const sDate = s.scheduled_date || s.date;
                           if (sDate && sTime && !earlyCheckInAllowed) {
-                            // Session times are Eastern — compare against Eastern "now"
-                            const etStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-                            const etNow = new Date(etStr);
-                            const [csy, csmo, csd] = sDate.split('T')[0].split('-').map(Number);
-                            const [csh, csm] = sTime.split(':').map(Number);
-                            const sessionStartET = new Date(etNow.getFullYear(), etNow.getMonth(), etNow.getDate(), csh, csm, 0);
-                            sessionStartET.setFullYear(csy, csmo - 1, csd);
+                            // All times are care-location times — use TimezoneHelper
+                            const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+                            const etNow = TimezoneHelper.getNow(tz);
+                            const sessionStartET = TimezoneHelper.buildDateTime(sDate.split('T')[0], sTime, tz);
                             const earliest = new Date(sessionStartET.getTime() - 15 * 60000);
                             if (etNow < earliest) {
                               const minsUntil = Math.ceil((earliest.getTime() - etNow.getTime()) / 60000);

@@ -6,6 +6,7 @@ const { validateSession } = require("../middleware/validate");
 const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
+const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("../utils/timezone");
 
 const router = express.Router();
 router.use(authenticate);
@@ -164,13 +165,16 @@ router.get("/", async (req, res) => {
 // ─── Helper: generate recurring dates ───
 function generateRecurringDates(startDate, rule, weeks) {
   const dates = [];
-  const start = new Date(startDate + "T12:00:00");
+  // Parse date safely without UTC offset issues
+  const [y, mo, d] = startDate.split("-").map(Number);
+  const start = new Date(y, mo - 1, d, 12, 0, 0);
   const interval = rule === "biweekly" ? 14 : 7; // weekly or biweekly
 
   for (let i = 0; i < weeks; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i * interval);
-    dates.push(d.toISOString().split("T")[0]);
+    const dt = new Date(start);
+    dt.setDate(dt.getDate() + i * interval);
+    const dateStr = dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0");
+    dates.push(dateStr);
   }
   return dates;
 }
@@ -309,15 +313,11 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   // Schedule pre-check-in reminders if session is today and within the notification window
-  // Session times are Eastern (America/New_York) — compare in Eastern
+  // All times are care-location times — compare in care timezone
   if (session.scheduled_date && session.scheduled_time) {
     const REMINDER_WINDOW = 15;
-    const etNowStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-    const etNow = new Date(etNowStr);
-    const [sh, sm] = session.scheduled_time.split(':').map(Number);
-    const [sy, smo, sd] = session.scheduled_date.split('-').map(Number);
-    const sessionStartET = new Date(etNow.getFullYear(), etNow.getMonth(), etNow.getDate(), sh, sm, 0);
-    sessionStartET.setFullYear(sy, smo - 1, sd);
+    const etNow = getNowInZone();
+    const sessionStartET = buildDateTimeInZone(session.scheduled_date, session.scheduled_time);
     const reminderTime = new Date(sessionStartET.getTime() - REMINDER_WINDOW * 60000);
     if (etNow >= reminderTime && etNow <= sessionStartET) {
       // Session is within the notification window right now — send immediately
@@ -361,7 +361,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   const { caregiverId: bookCaregiverId } = req.body;
   if (bookCaregiverId) {
     try {
-      const schedDate = new Date(scheduledDate + "T12:00:00");
+      const [sy, smo, sd] = scheduledDate.split("-").map(Number);
+      const schedDate = new Date(sy, smo - 1, sd, 12, 0, 0);
       const dayOfWeek = schedDate.getDay();
       const slots = await availabilityRouter.computeAvailableSlots(db, bookCaregiverId, scheduledDate, dayOfWeek);
 
@@ -516,7 +517,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
 // Cancel all future sessions in a recurring group
 router.delete("/recurring/:groupId", requireRole("family"), async (req, res) => {
   const db = await getDb();
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayStringInZone();
 
   // Only cancel future pending/confirmed sessions in this group belonging to this user
   const result = await db.prepare(`
@@ -734,23 +735,12 @@ router.post("/:id/check-in", async (req, res) => {
 
     // ─── Timing gate: 15 min before session start ───
     // Allow check-in after start time (late is fine), but block too-early check-ins
-    // Sessions are stored as naive date/time strings — interpret as Eastern time (Virginia)
+    // All times are care-location times — use centralized timezone utility
     const CHECK_IN_WINDOW_MINUTES = 15;
     if (session.scheduled_date && session.scheduled_time) {
-      // Build session start in Eastern time
       const dateStr = session.scheduled_date.split('T')[0];
-      const timeStr = session.scheduled_time;
-      // Create a Date object for the session in Eastern time
-      const sessionStartET = new Date(`${dateStr}T${timeStr}:00-05:00`);
-      // During EDT (March-November), adjust — but for simplicity, use America/New_York
-      // Parse as Eastern: create the date string with explicit ET offset
-      const etNowStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-      const nowET = new Date(etNowStr);
-      const [sh, sm] = timeStr.split(':').map(Number);
-      const sessionStartLocal = new Date(nowET);
-      const [sy, smo, sd] = dateStr.split('-').map(Number);
-      sessionStartLocal.setFullYear(sy, smo - 1, sd);
-      sessionStartLocal.setHours(sh, sm, 0, 0);
+      const nowET = getNowInZone();
+      const sessionStartLocal = buildDateTimeInZone(dateStr, session.scheduled_time);
       const earliestCheckIn = new Date(sessionStartLocal.getTime() - CHECK_IN_WINDOW_MINUTES * 60000);
 
       if (nowET < earliestCheckIn && !session.early_check_in_allowed) {
@@ -956,8 +946,8 @@ router.put("/:id/cancel", async (req, res) => {
 
     // Check if this is a late cancellation (<24 hours before session)
     // No caregiver assigned = always free cancel (no one to compensate)
-    const sessionDateTime = new Date(`${session.scheduled_date}T${session.scheduled_time || "00:00"}`);
-    const hoursUntilSession = (sessionDateTime - new Date()) / (1000 * 60 * 60);
+    const sessionDateTime = buildDateTimeInZone(session.scheduled_date.split("T")[0], session.scheduled_time || "00:00");
+    const hoursUntilSession = (sessionDateTime - getNowInZone()) / (1000 * 60 * 60);
     const hasCaregiver = !!session.caregiver_id;
     const isLateCancel = hasCaregiver && hoursUntilSession < 24;
 

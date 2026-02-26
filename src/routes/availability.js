@@ -201,9 +201,9 @@ router.get("/:caregiverId/slots", async (req, res) => {
     const result = {};
 
     for (let d = 0; d < numDays; d++) {
-      const currentDate = new Date(date + "T12:00:00");
-      currentDate.setDate(currentDate.getDate() + d);
-      const dateStr = currentDate.toISOString().split("T")[0];
+      const [py, pmo, pd] = date.split("-").map(Number);
+      const currentDate = new Date(py, pmo - 1, pd + d, 12, 0, 0);
+      const dateStr = currentDate.getFullYear() + "-" + String(currentDate.getMonth() + 1).padStart(2, "0") + "-" + String(currentDate.getDate()).padStart(2, "0");
       const dayOfWeek = currentDate.getDay(); // 0=Sun, 6=Sat
 
       const slots = await computeAvailableSlots(db, caregiverId, dateStr, dayOfWeek);

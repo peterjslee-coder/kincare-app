@@ -2,6 +2,7 @@ const express = require("express");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { sendEmail } = require("../utils/email");
+const { getTodayStringInZone } = require("../utils/timezone");
 
 const router = express.Router();
 router.use(authenticate);
@@ -31,11 +32,11 @@ router.get("/hours", async (req, res) => {
 
     // Date range — defaults to current semester (last 4 months)
     const { from, to } = req.query;
-    const toDate = to || new Date().toISOString().split("T")[0];
+    const toDate = to || getTodayStringInZone();
     const fromDate = from || (() => {
       const d = new Date();
       d.setMonth(d.getMonth() - 4);
-      return d.toISOString().split("T")[0];
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
     })();
 
     // Fetch completed sessions in range
@@ -124,11 +125,11 @@ router.post("/hours/email", async (req, res) => {
     const user = await db.prepare("SELECT first_name, last_name, email FROM users WHERE id = ?").get(userId);
 
     // Date range
-    const toDate = to || new Date().toISOString().split("T")[0];
+    const toDate = to || getTodayStringInZone();
     const fromDate = from || (() => {
       const d = new Date();
       d.setMonth(d.getMonth() - 4);
-      return d.toISOString().split("T")[0];
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
     })();
 
     // Fetch completed sessions
@@ -148,7 +149,8 @@ router.post("/hours/email", async (req, res) => {
 
     // Build email HTML
     const formatDate = (d) => {
-      const dt = new Date(d + "T12:00:00");
+      const [y, mo, day] = (d || "").split("-").map(Number);
+      const dt = new Date(y, mo - 1, day);
       return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     };
 

@@ -438,19 +438,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const stats = data.stats || {};
 
   // Find sessions ready for check-in (confirmed, today, within 15 min of start or past start)
-  // Session times are Eastern (America/New_York) — convert "now" to Eastern for comparison
+  // All times are care-location times — use TimezoneHelper
   const readyToCheckIn = sessions.filter(s => {
     if (s.status !== 'confirmed') return false;
-    // Get current time in Eastern timezone
-    const etNowStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-    const etNow = new Date(etNowStr);
-    const etDate = etNow.getFullYear() + '-' + String(etNow.getMonth() + 1).padStart(2, '0') + '-' + String(etNow.getDate()).padStart(2, '0');
+    const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+    const etNow = TimezoneHelper.getNow(tz);
+    const etDate = TimezoneHelper.getToday(tz);
     const sessionDate = (s.scheduled_date || '').split('T')[0];
     if (sessionDate !== etDate) return false;
     if (!s.scheduled_time) return false;
-    const [hh, mm] = s.scheduled_time.split(':').map(Number);
-    // Build session start as Eastern time — compare against Eastern "now"
-    const sessionStartET = new Date(etNow.getFullYear(), etNow.getMonth(), etNow.getDate(), hh, mm, 0);
+    const sessionStartET = TimezoneHelper.buildDateTime(sessionDate, s.scheduled_time, tz);
     const minsUntil = (sessionStartET - etNow) / 60000;
     return minsUntil <= 15 || profile.earlyCheckInAllowed;
   });

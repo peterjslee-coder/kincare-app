@@ -1,6 +1,7 @@
 const express = require("express");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { getNowInZone, getTodayStringInZone } = require("../utils/timezone");
 
 const router = express.Router();
 router.use(authenticate);
@@ -48,7 +49,7 @@ async function familyDashboard(db, userId, res) {
     const ownedIds = new Set(ownedRecipients.map(r => r.id));
     const recipients = [...ownedRecipients, ...sharedRecipients.filter(r => !ownedIds.has(r.id))];
 
-    const famEtNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const famEtNow = getNowInZone();
     const monthStart = new Date(famEtNow); monthStart.setDate(1);
     const monthStr = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-01';
 
@@ -64,15 +65,16 @@ async function familyDashboard(db, userId, res) {
         AND COALESCE(u.is_demo, 0) = 0
     `).get(userId, monthStr);
 
-    // Use Eastern time for "today" since all care happens in Virginia
-    const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const today = etNow.getFullYear() + '-' + String(etNow.getMonth() + 1).padStart(2, '0') + '-' + String(etNow.getDate()).padStart(2, '0');
+    // Use care-location timezone for "today" — all times are care-location times
+    const today = getTodayStringInZone();
+    const etNow = getNowInZone();
     const next30Date = new Date(etNow); next30Date.setDate(next30Date.getDate() + 30);
     const next30 = next30Date.getFullYear() + '-' + String(next30Date.getMonth() + 1).padStart(2, '0') + '-' + String(next30Date.getDate()).padStart(2, '0');
 
     const upcoming = await db.prepare(`
       SELECT cs.*,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
+        cr.timezone AS care_timezone,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         cp.rating_avg AS caregiver_rating
       FROM care_sessions cs
@@ -166,6 +168,7 @@ async function familyDashboard(db, userId, res) {
           caregiverPayout: Math.round((familyPrice - fee) * 100) / 100,
           platformFee: fee,
           familyTotal: familyPrice,
+          timezone: s.care_timezone || "America/New_York",
         };
       }),
       recentActivity: recentActivity.map((a) => ({
@@ -213,14 +216,15 @@ async function caregiverDashboard(db, userId, res) {
     ORDER BY ca.care_recipient_id, ca.is_favorite DESC, ca.created_at ASC
   `).all(profile.id);
 
-  // Upcoming sessions — use Eastern time since care happens in Virginia
-  const cgEtNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const today = cgEtNow.getFullYear() + '-' + String(cgEtNow.getMonth() + 1).padStart(2, '0') + '-' + String(cgEtNow.getDate()).padStart(2, '0');
+  // Upcoming sessions — use care-location timezone
+  const cgEtNow = getNowInZone();
+  const today = getTodayStringInZone();
   const upcoming = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       cr.location_address, cr.location_city,
-      cr.preferences AS recipient_preferences
+      cr.preferences AS recipient_preferences,
+      cr.timezone AS care_timezone
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     WHERE cs.caregiver_id = ? AND cs.scheduled_date >= ? AND cs.status IN ('pending', 'confirmed', 'in_progress')
@@ -311,6 +315,7 @@ async function caregiverDashboard(db, userId, res) {
         recipientPreferences: s.recipient_preferences,
         estimatedCost: s.estimated_cost,
         caregiverPayout: Math.round((sessionCost - cgFee) * 100) / 100,
+        timezone: s.care_timezone || "America/New_York",
       };
     }),
     reviews: reviews.map(r => ({
@@ -345,9 +350,8 @@ async function careForDashboard(db, userId, res) {
     return res.json({ role: "care_for", userName: `${user.first_name} ${user.last_name}`, sessions: [], notes: [] });
   }
 
-  // All future sessions (calendar data) — Eastern time
-  const cfEtNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const today = cfEtNow.getFullYear() + '-' + String(cfEtNow.getMonth() + 1).padStart(2, '0') + '-' + String(cfEtNow.getDate()).padStart(2, '0');
+  // All future sessions (calendar data) — use care-location timezone
+  const today = getTodayStringInZone();
   const sessions = await db.prepare(`
     SELECT cs.*,
       u.first_name || ' ' || u.last_name AS caregiver_name
@@ -389,6 +393,7 @@ async function careForDashboard(db, userId, res) {
       photo: recipient.photo,
       emoji: recipient.emoji,
     },
+    timezone: recipient.timezone || "America/New_York",
     sessions: sessions.map(s => ({
       id: s.id,
       date: s.scheduled_date,
