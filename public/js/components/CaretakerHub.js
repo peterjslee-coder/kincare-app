@@ -634,82 +634,150 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       </div>
 
-      {/* Latest Status */}
+      {/* Status Banner — only shows when there's an actionable status */}
       {(() => {
         const onboardingDone = profile.onboardingComplete;
         const checkrStatus = profile.checkrStatus;
-        const upcomingCount = sessions.length;
-        let statusIcon = '📋';
-        let statusText = "You're all set! No upcoming sessions right now.";
-        let borderColor = '#1b6b5a';
-
-        if (!onboardingDone) {
-          statusIcon = '⏳';
-          statusText = 'Pending background check and onboarding completion. Complete your profile to start receiving care requests.';
-          borderColor = '#e8724a';
-        } else if (checkrStatus === 'pending') {
-          statusIcon = '🔄';
-          statusText = 'Your background check is in progress. You\'ll be notified once it clears.';
-          borderColor = '#f59e0b';
-        } else if (upcomingCount > 0) {
-          statusIcon = '📅';
-          statusText = `You have ${upcomingCount} upcoming session${upcomingCount > 1 ? 's' : ''}.`;
-        }
-
-        return (
-          <div className="card" style={{ marginBottom: 16, borderLeft: `4px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 24 }}>{statusIcon}</span>
+        if (!onboardingDone) return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #e8724a', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>⏳</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Latest</div>
-              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{statusText}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Getting Started</div>
+              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>Complete your profile to start receiving care requests.</div>
             </div>
           </div>
         );
+        if (checkrStatus === 'pending') return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>🔄</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Background Check</div>
+              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>Your background check is in progress. You'll be notified once it clears.</div>
+            </div>
+          </div>
+        );
+        return null;
       })()}
 
-      {/* Ready to Check In — prominent card for sessions in the check-in window */}
-      {readyToCheckIn.length > 0 && readyToCheckIn.map(s => (
-        <div key={s.id} className="card" style={{
-          marginBottom: 16, padding: '20px', borderLeft: '4px solid #e8724a',
-          background: 'linear-gradient(135deg, #fff8f5 0%, #fff 100%)',
-          animation: 'fadeIn 0.3s ease',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: '200px' }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Ready to Check In</div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{s.recipient_name || 'Session'}</div>
-              <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                {s.scheduled_time ? s.scheduled_time.substring(0, 5) : ''}{s.duration_hours ? ` \u2022 ${s.duration_hours}hr` : ''}
-                {s.service_type ? ` \u2022 ${s.service_type.replace(/_/g, ' ')}` : ''}
-              </div>
-              {(s.location_address || s.location_city) && (
-                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {s.location_address || ''}{s.location_city ? `, ${s.location_city}` : ''}</div>
-              )}
-            </div>
-            <button onClick={() => {
-              setCheckInMood('');
-              setCheckInNotes(null);
-              setCheckInLocation(null);
-              setLocationError(null);
-              if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                  (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-                  (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
-                  { timeout: 8000, enableHighAccuracy: false }
-                );
-              } else {
-                setLocationError('Geolocation not supported');
-              }
-              setCheckInSession(s);
-            }} style={{
-              padding: '12px 28px', background: '#e8724a', color: '#fff', border: 'none',
-              borderRadius: '10px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(232,114,74,0.3)',
-              whiteSpace: 'nowrap',
-            }}>Check In Now</button>
+      {/* Upcoming Events — top priority for caregivers */}
+      {(() => {
+        // Sort sessions: in_progress first, then by date/time
+        const sorted = [...sessions].sort((a, b) => {
+          if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
+          if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
+          const aKey = (a.scheduled_date || '') + (a.scheduled_time || '');
+          const bKey = (b.scheduled_date || '') + (b.scheduled_time || '');
+          return aKey.localeCompare(bKey);
+        });
+        const readySet = new Set(readyToCheckIn.map(s => s.id));
+        const inProgressSessions = sorted.filter(s => s.status === 'in_progress');
+
+        if (sorted.length === 0 && inProgressSessions.length === 0) return (
+          <div className="card" style={{ marginBottom: 16, padding: '24px', textAlign: 'center', borderLeft: '4px solid #1b6b5a' }}>
+            <div style={{ fontSize: 20, marginBottom: 8 }}>📋</div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 4 }}>No upcoming sessions</div>
+            <div style={{ fontSize: 13, color: '#888' }}>Check the <span style={{ color: '#1b6b5a', fontWeight: 600, cursor: 'pointer' }} onClick={() => setActiveTab('schedule')}>Calendar</span> for available care requests in your area.</div>
           </div>
-        </div>
-      ))}
+        );
+
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+              Upcoming Events
+            </div>
+            {sorted.slice(0, 5).map(s => {
+              const isReady = readySet.has(s.id);
+              const isActive = s.status === 'in_progress';
+              const sDate = (s.scheduled_date || '').split('T')[0];
+              const dateParts = sDate ? sDate.split('-').map(Number) : [];
+              const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
+              const now = new Date();
+              const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
+              const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+              const tParts = (s.scheduled_time || '').split(':').map(Number);
+              const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+
+              return (
+                <div key={s.id} className="card" style={{
+                  marginBottom: 10, padding: '16px 18px',
+                  borderLeft: isActive ? '4px solid #f57f17' : isReady ? '4px solid #e8724a' : '4px solid #1b6b5a',
+                  background: isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff8f5 0%, #fff 100%)' : '#fff',
+                  animation: (isReady || isActive) ? 'fadeIn 0.3s ease' : undefined,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '180px' }}>
+                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress</div>}
+                      {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
+                      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{s.recipient_name || 'Session'}</div>
+                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{s.duration_hours ? ` \u2022 ${s.duration_hours}hr` : ''}
+                        {s.service_type ? ` \u2022 ${s.service_type.replace(/_/g, ' ')}` : ''}
+                      </div>
+                      {(s.location_address || s.location_city) && (
+                        <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {s.location_address || ''}{s.location_city ? `, ${s.location_city}` : ''}</div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      {isActive && (
+                        <button onClick={() => {
+                          setCheckOutMood('');
+                          setCheckOutTags([]);
+                          setCheckOutCareFeedback('');
+                          setCheckOutServiceFeedback('');
+                          setCheckOutSummary('');
+                          setCheckOutSession(s);
+                        }} style={{
+                          padding: '10px 22px', background: '#c62828', color: '#fff', border: 'none',
+                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
+                        }}>Check Out</button>
+                      )}
+                      {isReady && !isActive && (
+                        <button onClick={() => {
+                          setCheckInMood('');
+                          setCheckInNotes(null);
+                          setCheckInLocation(null);
+                          setLocationError(null);
+                          if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition(
+                              (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+                              (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
+                              { timeout: 8000, enableHighAccuracy: false }
+                            );
+                          } else {
+                            setLocationError('Geolocation not supported');
+                          }
+                          setCheckInSession(s);
+                        }} style={{
+                          padding: '10px 22px', background: '#e8724a', color: '#fff', border: 'none',
+                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
+                        }}>Check In Now</button>
+                      )}
+                      {!isReady && !isActive && (
+                        <span style={{
+                          padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
+                          color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
+                          textTransform: 'capitalize',
+                        }}>{s.status}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {sorted.length > 5 && (
+              <div style={{ textAlign: 'center', padding: '8px' }}>
+                <span onClick={() => setActiveTab('schedule')} style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600, cursor: 'pointer' }}>
+                  View all {sorted.length} sessions \u2192
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Onboarding Gate Panel — non-dismissible */}
       {onboardingGated && (
@@ -808,30 +876,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         )}
         <div className={shouldBlur ? 'lock-content' : ''}>
 
-      {/* Quick Stats — clickable */}
-      <div className="stats-grid">
-        <div className="stat-card" onClick={() => setActiveTab('families')} style={{ cursor: 'pointer' }}>
-          <div style={{ fontSize: 24 }}>👪</div>
-          <div className="stat-number">{stats.assignedFamilies || 0}</div>
-          <div className="stat-label">Assigned Families</div>
-        </div>
-        <div className="stat-card" onClick={() => setActiveTab('earnings')} style={{ cursor: 'pointer' }}>
-          <div style={{ fontSize: 24 }}>✅</div>
-          <div className="stat-number">{stats.completedThisMonth || 0}</div>
-          <div className="stat-label">Completed This Month</div>
-        </div>
-        <div className="stat-card" onClick={() => setActiveTab('earnings')} style={{ cursor: 'pointer' }}>
-          <div style={{ fontSize: 24 }}>⏱️</div>
-          <div className="stat-number">{stats.hoursThisMonth || 0}h</div>
-          <div className="stat-label">Hours This Month</div>
-        </div>
-        <div className="stat-card" onClick={() => setActiveTab('earnings')} style={{ cursor: 'pointer' }}>
-          <div style={{ fontSize: 24 }}>💰</div>
-          <div className="stat-number">${stats.monthlyEarnings || 0}</div>
-          <div className="stat-label">Earned This Month</div>
-          <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>~${avgHourlyRate}/hr avg</div>
-        </div>
-      </div>
 
       {/* Tabs — card grid (matches admin panel layout) */}
       {(() => { const rc = window.ROLE_COLOR || '#1b6b5a'; return (
