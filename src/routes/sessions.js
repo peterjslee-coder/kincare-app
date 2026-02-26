@@ -1179,6 +1179,7 @@ router.get("/:id", async (req, res) => {
   const session = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
+      cr.location_address, cr.location_city, cr.location_state,
       u.first_name || ' ' || u.last_name AS caregiver_name,
       cp.rating_avg, cp.specialties AS caregiver_specialties,
       cp.hourly_rate, cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,

@@ -59,6 +59,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Documents state
   const [documents, setDocuments] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
+  const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
 
   // Availability state
   const [availRules, setAvailRules] = useState([]);
@@ -483,7 +484,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     if (!sTime) return false;
     const sessionStartET = TimezoneHelper.buildDateTime(sessionDate, sTime, tz);
     const minsUntil = (sessionStartET - etNow) / 60000;
-    return minsUntil <= 15 || profile.earlyCheckInAllowed;
+    return minsUntil <= 60 || profile.earlyCheckInAllowed;
   });
 
   const CARE_TASKS = [
@@ -784,10 +785,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* Upcoming Events — confirmed sessions */}
+      {/* Next Up — upcoming sessions (no completed) */}
       {(() => {
         // Sort sessions: in_progress first, then by date/time
-        const sorted = [...sessions].sort((a, b) => {
+        const sorted = [...sessions].filter(s => s.status !== 'completed').sort((a, b) => {
           if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
           if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
           const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
@@ -795,11 +796,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           return aKey.localeCompare(bKey);
         });
         const readySet = new Set(readyToCheckIn.map(s => s.id));
-        const inProgressSessions = sorted.filter(s => s.status === 'in_progress');
 
-        if (sorted.length === 0 && inProgressSessions.length === 0) return (
+        if (sorted.length === 0) return (
           <div className="card" style={{ marginBottom: 16, padding: '24px', textAlign: 'center', borderLeft: '4px solid #1b6b5a' }}>
-            <div style={{ fontSize: 20, marginBottom: 8 }}>📋</div>
+            <div style={{ fontSize: 20, marginBottom: 8 }}>{'\uD83D\uDCCB'}</div>
             <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 4 }}>No upcoming sessions</div>
             <div style={{ fontSize: 13, color: '#888' }}>Check the <span style={{ color: '#1b6b5a', fontWeight: 600, cursor: 'pointer' }} onClick={() => setActiveTab('schedule')}>Calendar</span> for available care requests in your area.</div>
           </div>
@@ -808,12 +808,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         return (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              Upcoming Events
+              Next Up
             </div>
             {sorted.slice(0, 5).map(s => {
               const isReady = readySet.has(s.id);
               const isActive = s.status === 'in_progress';
-              // API returns camelCase mapped fields
               const sDate = (s.date || s.scheduled_date || '').split('T')[0];
               const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
               const now = TimezoneHelper.getNow(tz);
@@ -831,19 +830,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const isSoon = !isActive && !isReady && !isImminent && s.status === 'confirmed' && minsUntil <= 180 && minsUntil > 0;
 
               // Styling based on urgency
-              const borderColor = isActive ? '#f57f17' : isReady ? '#e8724a' : isImminent ? '#e8724a' : isSoon ? '#e8724a' : '#1b6b5a';
+              const borderColor = isActive ? '#f57f17' : (isReady || isImminent) ? '#e8724a' : isSoon ? '#e8724a' : '#1b6b5a';
               const borderWidth = isActive || isReady || isImminent ? 3 : 2;
               const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)'
-                : isReady ? 'linear-gradient(135deg, #fff8f5 0%, #fff 100%)'
-                : isImminent ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
+                : (isReady || isImminent) ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
               const shadow = isActive ? '0 2px 12px rgba(245, 127, 23, 0.15)'
                 : (isReady || isImminent) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
 
               return (
                 <div key={s.id} className="card" onClick={(e) => {
-                  // Don't navigate if clicking a button
                   if (e.target.tagName === 'BUTTON') return;
-                  setActiveTab('schedule');
+                  if (s.id) setVisitDetailSessionId(s.id);
                 }} style={{
                   marginBottom: 10, padding: '16px 18px', cursor: 'pointer',
                   border: `${borderWidth}px solid ${borderColor}`,
@@ -856,12 +853,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     <div style={{ flex: 1, minWidth: '180px' }}>
                       {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress Now</div>}
                       {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
-                      {isImminent && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{minsUntil <= 0 ? 'Started — awaiting check-in' : minsUntil <= 15 ? 'Check-in window open' : `Starting in ${Math.ceil(minsUntil)} min`}</div>}
+                      {isImminent && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{minsUntil <= 0 ? 'Started \u2014 awaiting check-in' : `Starting in ${Math.ceil(minsUntil)} min \u2014 Check In`}</div>}
                       {isSoon && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>Coming up in {minsUntil <= 120 ? `${Math.ceil(minsUntil)} min` : `${Math.round(minsUntil / 60)}h`}</div>}
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
-                        {svcType ? ` \u2022 ${svcType.replace(/_/g, ' ')}` : ''}
+                        {svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
                       </div>
                       {loc && (
                         <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
@@ -908,10 +905,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       {!isReady && !isActive && (
                         <span style={{
                           padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                          background: s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
-                          color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
+                          background: (isImminent) ? '#fff3e0' : s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
+                          color: (isImminent) ? '#e8724a' : s.status === 'confirmed' ? '#2e7d32' : '#e65100',
                           textTransform: 'capitalize',
-                        }}>{s.status}</span>
+                        }}>{isImminent ? 'Check In' : s.status}</span>
                       )}
                     </div>
                   </div>
@@ -921,10 +918,54 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {sorted.length > 5 && (
               <div style={{ textAlign: 'center', padding: '8px' }}>
                 <span onClick={() => setActiveTab('schedule')} style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600, cursor: 'pointer' }}>
-                  View all {sorted.length} sessions \u2192
+                  View all {sorted.length} sessions {'\u2192'}
                 </span>
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {/* Recently Completed */}
+      {(() => {
+        const completed = data.recentlyCompleted || [];
+        if (completed.length === 0) return null;
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+              Completed
+            </div>
+            {completed.slice(0, 3).map(s => {
+              const sDate = (s.date || '').split('T')[0];
+              const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+              const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
+              const timeLabel = TimezoneHelper.formatTime(s.time);
+              const recipName = s.recipientName || 'Session';
+              return (
+                <div key={s.id} className="card" onClick={() => {
+                  if (s.id) setVisitDetailSessionId(s.id);
+                }} style={{
+                  marginBottom: 8, padding: '12px 16px', cursor: 'pointer',
+                  border: '1px solid #e0e0e0', borderRadius: 10,
+                  background: '#fafafa',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{recipName}</div>
+                      <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
+                        {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
+                      </div>
+                      {s.visitSummary && <div style={{ fontSize: 12, color: '#666', marginTop: 3, fontStyle: 'italic' }}>{s.visitSummary.length > 80 ? s.visitSummary.substring(0, 80) + '...' : s.visitSummary}</div>}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                      <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>{'\u2713'} Done</span>
+                      {s.caregiverPayout > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a' }}>${s.caregiverPayout.toFixed(2)}</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
       })()}
@@ -2215,6 +2256,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             </div>
           </div>
         </div>
+      )}
+
+      {/* Visit Detail Modal */}
+      {visitDetailSessionId && (
+        <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
       )}
     </div>
   );

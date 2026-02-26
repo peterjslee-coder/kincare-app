@@ -32,6 +32,15 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, onClose }) => {
     return `${dh}:${String(m).padStart(2, '0')} ${ampm}`;
   };
 
+  const formatDateNice = (dateStr) => {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
+  };
+
   const formatDateTime = (dt) => {
     if (!dt) return '';
     const d = new Date(dt);
@@ -98,19 +107,33 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, onClose }) => {
               <div style={{ background: '#f8f9fa', padding: 14, borderRadius: 10, marginBottom: 14 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '6px 12px', fontSize: 14 }}>
                   <span style={{ color: '#888' }}>Date</span>
-                  <span style={{ fontWeight: 500 }}>{s.scheduled_date}</span>
+                  <span style={{ fontWeight: 500 }}>{formatDateNice(s.scheduled_date)}</span>
                   <span style={{ color: '#888' }}>Time</span>
                   <span style={{ fontWeight: 500 }}>{formatTime12(s.scheduled_time)} ({s.duration_hours || 2}h)</span>
+                  <span style={{ color: '#888' }}>Service</span>
+                  <span style={{ fontWeight: 500 }}>{svcLabel}</span>
                   {s.caregiver_name && (
                     <>
                       <span style={{ color: '#888' }}>Caregiver</span>
                       <span style={{ fontWeight: 500 }}>{s.caregiver_name}</span>
                     </>
                   )}
+                  {!s.caregiver_name && ['open', 'requested'].includes(s.status) && (
+                    <>
+                      <span style={{ color: '#888' }}>Caregiver</span>
+                      <span style={{ fontWeight: 500, color: '#e8724a' }}>Awaiting assignment</span>
+                    </>
+                  )}
                   {s.booked_by_name && (
                     <>
                       <span style={{ color: '#888' }}>Booked by</span>
                       <span>{s.booked_by_name}</span>
+                    </>
+                  )}
+                  {(s.location_address || s.location_city) && (
+                    <>
+                      <span style={{ color: '#888' }}>Location</span>
+                      <span style={{ fontSize: 13 }}>{[s.location_address, s.location_city, s.location_state].filter(Boolean).join(', ')}</span>
                     </>
                   )}
                   {s.special_instructions && (

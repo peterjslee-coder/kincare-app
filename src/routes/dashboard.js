@@ -335,6 +335,26 @@ async function caregiverDashboard(db, userId, res) {
     ORDER BY r.created_at DESC LIMIT 5
   `).all(profile.id);
 
+  // Recently completed sessions (last 7 days) for the dashboard
+  const sevenDaysAgoCg = new Date(cgEtNow); sevenDaysAgoCg.setDate(sevenDaysAgoCg.getDate() - 7);
+  const sevenDaysAgoCgStr = sevenDaysAgoCg.getFullYear() + '-' + String(sevenDaysAgoCg.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgoCg.getDate()).padStart(2, '0');
+  const recentCompletedCg = await db.prepare(`
+    SELECT cs.*,
+      cr.first_name || ' ' || cr.last_name AS recipient_name,
+      cr.location_city,
+      cr.timezone AS care_timezone,
+      vl.summary AS visit_summary,
+      vl.departure_mood
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+    WHERE cs.caregiver_id = ?
+      AND cs.status = 'completed'
+      AND cs.scheduled_date >= ?
+    ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
+    LIMIT 5
+  `).all(profile.id, sevenDaysAgoCgStr);
+
   const feePercentCg = await getPlatformFeePercent(db);
 
   res.json({
@@ -416,6 +436,20 @@ async function caregiverDashboard(db, userId, res) {
       estimatedCost: s.estimated_cost,
       proposedRate: s.proposed_rate,
       shortNoticeSurcharge: s.short_notice_surcharge,
+      timezone: s.care_timezone || "America/New_York",
+    })),
+    recentlyCompleted: recentCompletedCg.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      durationHours: s.duration_hours,
+      recipientName: s.recipient_name,
+      locationCity: s.location_city,
+      visitSummary: s.visit_summary,
+      departureMood: s.departure_mood,
+      estimatedCost: s.estimated_cost,
+      caregiverPayout: Math.round((parseFloat(s.estimated_cost || 0) * (1 - feePercentCg / 100)) * 100) / 100,
       timezone: s.care_timezone || "America/New_York",
     })),
     stats: {
