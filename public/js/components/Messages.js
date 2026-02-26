@@ -811,39 +811,6 @@ const Messages = window.Messages = () => {
           </div>
         )}
 
-        {/* Sent connection requests — shown as pseudo-conversations */}
-        {sentRequests.filter(r => !archivedIds.includes('req-' + r.id)).map(req => (
-          <div key={'req-' + req.id}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
-              borderBottom: '1px solid #f0f0f0', cursor: 'default', opacity: 0.7,
-              position: 'relative', overflow: 'hidden',
-              transform: swipingId === 'req-' + req.id ? `translateX(${swipeOffset}px)` : 'none',
-              transition: swipingId === 'req-' + req.id ? 'none' : 'transform 0.2s',
-            }}
-            onTouchStart={(e) => onConvTouchStart(e, 'req-' + req.id)}
-            onTouchMove={(e) => onConvTouchMove(e, 'req-' + req.id)}
-            onTouchEnd={() => onConvTouchEnd('req-' + req.id)}>
-            <div style={{
-              width: 44, height: 44, borderRadius: '50%',
-              background: getAvatarColor((req.otherFirstName || '') + ' ' + (req.otherLastName || '')),
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontSize: 15, fontWeight: 600, flexShrink: 0,
-            }}>
-              {(req.otherFirstName?.[0] || '')}{(req.otherLastName?.[0] || '')}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
-                {req.otherFirstName} {req.otherLastName}
-              </div>
-              <div style={{ fontSize: 13, color: '#e8724a', fontStyle: 'italic' }}>
-                Request sent — waiting for response
-              </div>
-            </div>
-            <span style={{ fontSize: 16, color: '#e8724a', flexShrink: 0 }}>⏳</span>
-          </div>
-        ))}
-
         {conversations.filter(c => !archivedIds.includes(c.id)).length > 0 ? conversations.filter(c => !archivedIds.includes(c.id)).sort((a, b) => {
           const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
           const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
@@ -963,6 +930,39 @@ const Messages = window.Messages = () => {
             </button>
           </div>
         ) : null}
+
+        {/* Sent connection requests — shown below conversations */}
+        {sentRequests.filter(r => !archivedIds.includes('req-' + r.id)).map(req => (
+          <div key={'req-' + req.id}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
+              borderBottom: '1px solid #f0f0f0', cursor: 'default', opacity: 0.55,
+              position: 'relative', overflow: 'hidden',
+              transform: swipingId === 'req-' + req.id ? `translateX(${swipeOffset}px)` : 'none',
+              transition: swipingId === 'req-' + req.id ? 'none' : 'transform 0.2s',
+            }}
+            onTouchStart={(e) => onConvTouchStart(e, 'req-' + req.id)}
+            onTouchMove={(e) => onConvTouchMove(e, 'req-' + req.id)}
+            onTouchEnd={() => onConvTouchEnd('req-' + req.id)}>
+            <div style={{
+              width: 44, height: 44, borderRadius: '50%',
+              background: getAvatarColor((req.otherFirstName || '') + ' ' + (req.otherLastName || '')),
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontSize: 15, fontWeight: 600, flexShrink: 0,
+            }}>
+              {(req.otherFirstName?.[0] || '')}{(req.otherLastName?.[0] || '')}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
+                {req.otherFirstName} {req.otherLastName}
+              </div>
+              <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>
+                Request sent — waiting for response
+              </div>
+            </div>
+            <span style={{ fontSize: 14, color: '#ccc', flexShrink: 0 }}>⏳</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -981,6 +981,9 @@ const Messages = window.Messages = () => {
           )}
           {activeConv && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+              {!isGroup && activeConv.profilePhoto ? (
+                <img src={activeConv.profilePhoto} alt={activeConv.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+              ) : (
               <div style={{
                 width: '36px', height: '36px', borderRadius: isGroup ? '10px' : '50%',
                 background: isGroup ? '#e8f5e9' : getAvatarColor(activeConv.name),
@@ -989,6 +992,7 @@ const Messages = window.Messages = () => {
               }}>
                 {isGroup ? (activeConv.type === 'care_team' ? '👥' : '💬') : getInitials(activeConv.name)}
               </div>
+              )}
               <div>
                 <div style={{ fontWeight: 600, fontSize: '15px', color: '#333', lineHeight: 1.2 }}>{activeConv.name}</div>
                 <div style={{ fontSize: '11px', color: '#999' }}>
@@ -1072,11 +1076,17 @@ const Messages = window.Messages = () => {
                       transform: isMsgSwiping ? 'translateX(' + msgSwipeOffset + 'px)' : 'none',
                       transition: isMsgSwiping ? 'none' : 'transform 0.2s',
                     }}>
-                      {showSenderName && !isSent && (
-                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: getAvatarColor(m.senderName || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 10, fontWeight: 600, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>
-                          {getInitials(m.senderName || '')}
-                        </div>
-                      )}
+                      {showSenderName && !isSent && (() => {
+                        const senderMember = activeConv?.members?.find(mb => mb.id === m.sender_id);
+                        const senderPhoto = senderMember?.profilePhoto || null;
+                        return senderPhoto ? (
+                          <img src={senderPhoto} alt={m.senderName} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }} />
+                        ) : (
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: getAvatarColor(m.senderName || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 10, fontWeight: 600, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>
+                            {getInitials(m.senderName || '')}
+                          </div>
+                        );
+                      })()}
                       <div style={{ maxWidth: '75%', position: 'relative' }}
                         className="msg-bubble-wrap"
                         onMouseEnter={(e) => {
