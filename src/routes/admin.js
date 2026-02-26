@@ -95,7 +95,7 @@ router.get("/users", async (req, res) => {
 
     // Build query dynamically
     let sql = `
-      SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, is_admin, created_at, updated_at
+      SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, is_admin, is_tester, created_at, updated_at
       FROM users WHERE 1=1
     `;
     const params = [];
@@ -589,6 +589,23 @@ router.put("/users/:id/onboarding", async (req, res) => {
   } catch (err) {
     console.error("Admin onboarding override error:", err);
     res.status(500).json({ error: "Failed to update onboarding flags" });
+  }
+});
+
+// ─── PUT /api/admin/users/:id/tester — Toggle is_tester flag ───
+router.put("/users/:id/tester", async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, email, is_tester FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const newValue = user.is_tester ? 0 : 1;
+    await db.prepare("UPDATE users SET is_tester = ? WHERE id = ?").run(newValue, req.params.id);
+
+    res.json({ success: true, is_tester: !!newValue, email: user.email });
+  } catch (err) {
+    console.error("Admin tester toggle error:", err);
+    res.status(500).json({ error: "Failed to toggle tester status" });
   }
 });
 

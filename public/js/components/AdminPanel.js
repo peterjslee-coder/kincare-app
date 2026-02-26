@@ -680,6 +680,7 @@ const AdminPanel = window.AdminPanel = () => {
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Verified</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Demo</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Tester</th>
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Joined</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
                 </tr>
@@ -705,6 +706,24 @@ const AdminPanel = window.AdminPanel = () => {
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       {u.is_demo ? '🎭' : '—'}
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      <button onClick={async () => {
+                        try {
+                          const res = await apiFetch(`/api/admin/users/${u.id}/tester`, { method: 'PUT' });
+                          if (res?.ok) {
+                            const data = await res.json();
+                            setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, is_tester: data.is_tester ? 1 : 0 } : usr));
+                          }
+                        } catch (err) { console.error('Toggle tester error:', err); }
+                      }} style={{
+                        padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                        border: 'none',
+                        background: u.is_tester ? '#e8f5e9' : '#f5f5f5',
+                        color: u.is_tester ? '#1b6b5a' : '#999',
+                      }} title={u.is_tester ? 'Click to remove tester access' : 'Click to grant tester access'}>
+                        {u.is_tester ? '✓ Yes' : 'No'}
+                      </button>
                     </td>
                     <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>
                       {formatDate(u.created_at)}

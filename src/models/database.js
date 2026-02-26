@@ -223,6 +223,7 @@ async function initializeDatabase() {
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS linked_user_id TEXT REFERENCES users(id)`,
     `ALTER TABLE messages ADD COLUMN IF NOT EXISTS conversation_id TEXT REFERENCES conversations(id)`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin INTEGER DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_tester INTEGER DEFAULT 0`,
     // Availability table: add type and note columns
     `ALTER TABLE availability ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'available'`,
     `ALTER TABLE availability ADD COLUMN IF NOT EXISTS note TEXT`,
