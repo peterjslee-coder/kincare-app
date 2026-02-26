@@ -582,13 +582,16 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                           const sTime = s.scheduled_time || s.time;
                           const sDate = s.scheduled_date || s.date;
                           if (sDate && sTime && !earlyCheckInAllowed) {
+                            // Session times are Eastern — compare against Eastern "now"
+                            const etStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+                            const etNow = new Date(etStr);
                             const [csy, csmo, csd] = sDate.split('T')[0].split('-').map(Number);
                             const [csh, csm] = sTime.split(':').map(Number);
-                            const sessionStart = new Date(csy, csmo - 1, csd, csh, csm, 0);
-                            const earliest = new Date(sessionStart.getTime() - 15 * 60000);
-                            const now = new Date();
-                            if (now < earliest) {
-                              const minsUntil = Math.ceil((earliest.getTime() - now.getTime()) / 60000);
+                            const sessionStartET = new Date(etNow.getFullYear(), etNow.getMonth(), etNow.getDate(), csh, csm, 0);
+                            sessionStartET.setFullYear(csy, csmo - 1, csd);
+                            const earliest = new Date(sessionStartET.getTime() - 15 * 60000);
+                            if (etNow < earliest) {
+                              const minsUntil = Math.ceil((earliest.getTime() - etNow.getTime()) / 60000);
                               return React.createElement('div', { style: { fontSize: 10, color: '#999', padding: '4px 0', textAlign: 'right', maxWidth: 110 } },
                                 '\u23F0 Check-in opens ' + (minsUntil > 60 ? Math.ceil(minsUntil / 60) + 'h' : minsUntil + 'min') + ' before'
                               );
