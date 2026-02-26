@@ -389,9 +389,15 @@ const CareProfile = window.CareProfile = () => {
                 <span>{fullAddress}</span>
               </div>
               {profile.emergency_contact_name && (
-                <div style={{ fontSize: 12, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ flexShrink: 0 }}>{'\uD83D\uDEA8'}</span>
-                  <span>Emergency: {profile.emergency_contact_name}{profile.emergency_contact_phone ? ' \u00B7 ' + profile.emergency_contact_phone : ''}</span>
+                  <span>Emergency: {profile.emergency_contact_name}{profile.emergency_contact_phone ? ' \u00B7 ' + formatPhone(profile.emergency_contact_phone) : ''}</span>
+                  {profile.emergency_contact_phone && (
+                    <a href={'tel:' + profile.emergency_contact_phone.replace(/\D/g, '')}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, background: '#e8f5e9', color: '#1b6b5a', fontSize: 11, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                      {'\uD83D\uDCDE'} Call
+                    </a>
+                  )}
                 </div>
               )}
             </div>
@@ -439,7 +445,7 @@ const CareProfile = window.CareProfile = () => {
             </div>
             <div>
               <div style={fieldLabel}>Emergency Contact Phone</div>
-              <input type="tel" style={inputStyle} value={editData.emergency_contact_phone} onChange={(e) => ed('emergency_contact_phone', e.target.value)} />
+              <input type="tel" style={inputStyle} value={editData.emergency_contact_phone} onChange={(e) => ed('emergency_contact_phone', formatPhone(e.target.value))} placeholder="(555) 123-4567" />
             </div>
           </div>
         </div>

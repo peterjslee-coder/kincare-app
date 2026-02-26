@@ -292,7 +292,7 @@ const CareRecipients = window.CareRecipients = () => {
           {(selected.emergency_contact_name || selected.emergencyContactName) && (
             <div style={{ marginTop: '16px' }}>
               <strong>Emergency Contact:</strong>
-              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.emergency_contact_name || selected.emergencyContactName} — {selected.emergency_contact_phone || selected.emergencyContactPhone}</p>
+              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.emergency_contact_name || selected.emergencyContactName} — {formatPhone(selected.emergency_contact_phone || selected.emergencyContactPhone)}</p>
             </div>
           )}
         </div>
@@ -398,7 +398,7 @@ const CareRecipients = window.CareRecipients = () => {
             </div>
             <div className="form-group">
               <label>Emergency Contact Phone</label>
-              <input type="tel" value={formData.emergencyContactPhone} onChange={(e) => fd('emergencyContactPhone', e.target.value)} />
+              <input type="tel" value={formData.emergencyContactPhone} onChange={(e) => fd('emergencyContactPhone', formatPhone(e.target.value))} placeholder="(555) 123-4567" />
             </div>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>

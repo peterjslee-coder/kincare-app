@@ -859,15 +859,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <div style={fieldGroup}>
               <label style={labelStyle}>Phone *</label>
               <input style={errors.phone ? inputErrorStyle : inputStyle} value={form.phone}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-                  let formatted = '';
-                  if (digits.length === 0) formatted = '';
-                  else if (digits.length <= 3) formatted = '(' + digits;
-                  else if (digits.length <= 6) formatted = '(' + digits.slice(0, 3) + ') ' + digits.slice(3);
-                  else formatted = '(' + digits.slice(0, 3) + ') ' + digits.slice(3, 6) + '-' + digits.slice(6);
-                  updateForm('phone', formatted);
-                }} placeholder="(540) 555-1234" />
+                onChange={(e) => updateForm('phone', formatPhone(e.target.value))} placeholder="(540) 555-1234" />
               {errors.phone && <div style={errorStyle}>{errors.phone}</div>}
             </div>
             <div style={fieldGroup}>

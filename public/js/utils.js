@@ -1,6 +1,16 @@
 const { useState, useEffect, useRef, useCallback, createContext, useContext } = React;
 const API_BASE = window.location.origin;
 
+// ─── Phone formatting: (555) 123-4567 ───
+const formatPhone = window.formatPhone = (value) => {
+  if (!value) return '';
+  const d = String(value).replace(/\D/g, '');
+  if (!d) return '';
+  if (d.length <= 3) return '(' + d;
+  if (d.length <= 6) return '(' + d.slice(0, 3) + ') ' + d.slice(3);
+  return '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6, 10);
+};
+
 let AUTH_TOKEN = null;
 const setAuthToken = window.setAuthToken = (token) => {
   AUTH_TOKEN = token;
