@@ -372,7 +372,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         {/* Caregiver selection step */}
         {step === caregiverStep && hasCaregiverData && (
           <div className="modal-section">
-            <label className="modal-label">Available caregivers for {formatTime12(time)} on {date}</label>
+            <label className="modal-label">Caregivers for {formatTime12(time)} on {date}</label>
             {loadingCaregivers ? (
               <div style={{ padding: 30, textAlign: 'center', color: '#999' }}>
                 <div style={{ marginBottom: 8 }}>Checking caregiver availability...</div>
@@ -380,12 +380,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
                 {matchedCaregivers.length > 0 ? matchedCaregivers.map((cg, idx) => (
-                  <button key={idx} disabled={!cg.available}
-                    onClick={() => cg.available && setSelectedCaregiver(cg)}
+                  <button key={idx}
+                    onClick={() => setSelectedCaregiver(cg)}
                     style={{
                       padding: 14, border: selectedCaregiver?.name === cg.name ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                      borderRadius: 10, background: !cg.available ? '#f9f9f9' : selectedCaregiver?.name === cg.name ? '#e8f5e9' : '#fff',
-                      cursor: cg.available ? 'pointer' : 'not-allowed', textAlign: 'left', opacity: cg.available ? 1 : 0.6,
+                      borderRadius: 10, background: selectedCaregiver?.name === cg.name ? '#e8f5e9' : '#fff',
+                      cursor: 'pointer', textAlign: 'left',
                     }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
@@ -401,20 +401,31 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                           <span style={{ background: '#fff8e1', color: '#f57f17', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Available</span>
                         )}
                         {!cg.available && (
-                          <span style={{ background: '#fce4ec', color: '#c62828', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Unavailable</span>
+                          <span style={{ background: '#fff8e1', color: '#e65100', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Not Scheduled</span>
                         )}
                       </div>
                     </div>
-                    {!cg.available && cg.reason && (
-                      <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{cg.reason}</div>
+                    {!cg.available && (
+                      <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>{cg.reason || 'Not on schedule — can still accept if available'}</div>
                     )}
                   </button>
                 )) : (
                   <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
-                    <p>No caregivers found for this time slot.</p>
-                    <p style={{ fontSize: 13 }}>Try adjusting the date or time.</p>
+                    <p>No assigned caregivers found.</p>
+                    <p style={{ fontSize: 13 }}>You can still post this as an open request below.</p>
                   </div>
                 )}
+
+                {/* Skip / post as open option */}
+                <button
+                  onClick={() => { setSelectedCaregiver(null); setStep(reviewStep); }}
+                  style={{
+                    padding: 12, border: '1px dashed #e8724a', borderRadius: 10, background: '#fff8f0',
+                    cursor: 'pointer', textAlign: 'center', fontSize: 14, color: '#e8724a', fontWeight: 600,
+                  }}>
+                  Skip — post as open request
+                  <div style={{ fontSize: 12, fontWeight: 400, color: '#999', marginTop: 2 }}>Any caregiver on InPlace can respond</div>
+                </button>
               </div>
             )}
           </div>
@@ -437,8 +448,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 {recurrence !== 'none' && (
                   <><div style={{ color: '#666' }}>Repeat</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>{recurrence === 'weekly' ? 'Weekly' : 'Every 2 weeks'} for {recurrenceWeeks} sessions</div></>
                 )}
-                {hasCaregiverData ? (
-                  <><div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{selectedCaregiver ? selectedCaregiver.name : 'Best available'}</div></>
+                {selectedCaregiver ? (
+                  <><div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{selectedCaregiver.name}{!selectedCaregiver.available ? ' (not on schedule — will be offered)' : ''}</div></>
                 ) : (
                   <><div style={{ color: '#666' }}>Status</div><div style={{ fontWeight: 600, color: '#e8724a' }}>Open — waiting for caregiver</div></>
                 )}
@@ -482,8 +493,24 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 </div>
               )}
 
+              {/* Rate nudge when caregiver isn't on schedule */}
+              {selectedCaregiver && !selectedCaregiver.available && (
+                <div style={{ marginTop: '12px', padding: '12px', background: '#fff3e0', borderRadius: '8px', border: '1px solid #ffcc02', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 18 }}>💡</span>
+                  <div style={{ fontSize: 13, color: '#795548' }}>
+                    <strong>{selectedCaregiver.name}</strong> isn't on schedule for this time. A higher rate makes it more likely they'll accept.
+                    {localAvgRate && (
+                      <button type="button" onClick={() => setProposedRate(String(Math.round(localAvgRate * 1.25)))}
+                        style={{ display: 'inline', marginLeft: 6, background: 'none', border: 'none', color: '#e8724a', fontWeight: 700, cursor: 'pointer', fontSize: 13, textDecoration: 'underline', padding: 0 }}>
+                        Bump to ${Math.round(localAvgRate * 1.25)}/hr (+25%)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Your offered rate — prominent, pre-filled with local avg */}
-              <div style={{ marginTop: '12px', padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+              <div style={{ marginTop: '12px', padding: '12px', background: '#fff', borderRadius: '8px', border: selectedCaregiver && !selectedCaregiver.available ? '2px solid #e8724a' : '1px solid #e0e0e0' }}>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>Your Offered Rate</div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <span style={{ fontSize: '16px', color: '#666', fontWeight: 600 }}>$</span>
@@ -491,7 +518,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                     value={proposedRate}
                     onChange={e => setProposedRate(e.target.value)}
                     placeholder={localAvgRate ? String(localAvgRate) : '25'}
-                    style={{ width: '80px', padding: '8px 10px', borderRadius: '8px', border: '2px solid #1b6b5a', fontSize: '16px', fontWeight: 600, textAlign: 'center' }}
+                    style={{ width: '80px', padding: '8px 10px', borderRadius: '8px', border: selectedCaregiver && !selectedCaregiver.available ? '2px solid #e8724a' : '2px solid #1b6b5a', fontSize: '16px', fontWeight: 600, textAlign: 'center' }}
                   />
                   <span style={{ fontSize: '14px', color: '#888' }}>/hr</span>
                   {proposedRate && duration && (
@@ -507,9 +534,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 )}
               </div>
             </div>
-            {!hasCaregiverData && (
+            {!selectedCaregiver && (
               <div style={{ marginTop: 12, padding: 12, background: '#fff8e1', borderRadius: 8, fontSize: 13, color: '#795548' }}>
-                Your care request will be posted as "open." When caregivers join InPlace in your area, they'll be able to respond to your request.
+                {hasCaregiverData
+                  ? 'This will be posted as an open request. Any caregiver on InPlace — including your assigned caregivers — can respond.'
+                  : 'Your care request will be posted as "open." When caregivers join InPlace in your area, they\'ll be able to respond to your request.'
+                }
               </div>
             )}
           </>
@@ -533,11 +563,11 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             }}>Next</button>
           )}
           {step === caregiverStep && hasCaregiverData && (
-            <button className="btn btn-primary" disabled={!selectedCaregiver || loadingCaregivers}
-              onClick={() => setStep(reviewStep)}>Continue</button>
+            <button className="btn btn-primary" disabled={loadingCaregivers}
+              onClick={() => setStep(reviewStep)}>{selectedCaregiver ? 'Continue' : 'Continue as Open'}</button>
           )}
           {step === reviewStep && <button className="btn btn-primary" onClick={handleSubmit}>
-            {hasCaregiverData ? 'Confirm Booking' : 'Post Care Request'}
+            {selectedCaregiver ? (selectedCaregiver.available ? 'Confirm Booking' : 'Send Offer') : 'Post Care Request'}
           </button>}
         </div>
       </div>
