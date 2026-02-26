@@ -284,13 +284,15 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
               const hrs = parseFloat(s.duration_hours || s.durationHours || 2);
               const cost = s.estimated_cost || s.estimatedCost;
               const sDate = s.scheduled_date || s.date;
-              const dateLabel = sDate ? new Date(sDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+              const dateParts = sDate ? sDate.split('T')[0].split('-').map(Number) : [];
+              const dateLabel = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
               const timeStr = s.scheduled_time || s.time || '';
               const tParts = timeStr ? timeStr.split(':').map(Number) : [];
               const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
               return (
                 <div key={i} onClick={() => {
-                  const d = new Date((sDate) + 'T12:00:00');
+                  const dp = sDate.split('T')[0].split('-').map(Number);
+                  const d = new Date(dp[0], dp[1] - 1, dp[2]);
                   setSelectedDay(d);
                 }} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -580,7 +582,9 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                           const sTime = s.scheduled_time || s.time;
                           const sDate = s.scheduled_date || s.date;
                           if (sDate && sTime && !earlyCheckInAllowed) {
-                            const sessionStart = new Date(sDate + 'T' + sTime + ':00');
+                            const [csy, csmo, csd] = sDate.split('T')[0].split('-').map(Number);
+                            const [csh, csm] = sTime.split(':').map(Number);
+                            const sessionStart = new Date(csy, csmo - 1, csd, csh, csm, 0);
                             const earliest = new Date(sessionStart.getTime() - 15 * 60000);
                             const now = new Date();
                             if (now < earliest) {

@@ -592,9 +592,12 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                       {s.recipientName}{s.familyTotal ? `, $${Math.round(parseFloat(s.familyTotal))}` : s.estimatedCost ? `, $${Math.round(parseFloat(s.estimatedCost))}` : ''}
                     </div>
                     <div className="session-time">{s.date ? (() => {
-                      const d = parseTimestamp(s.date + 'T12:00:00') || new Date(s.date + 'T12:00:00');
-                      const dayDiff = Math.ceil((d - new Date(new Date().toDateString())) / 86400000);
-                      const rel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : `In ${dayDiff} days`;
+                      const parts = (s.date.split('T')[0]).split('-');
+                      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                      const now = new Date();
+                      const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                      const dayDiff = Math.round((d - todayLocal) / 86400000);
+                      const rel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dayDiff < 0 ? `${-dayDiff}d ago` : `In ${dayDiff} days`;
                       return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` (${rel})`;
                     })() : ''}{s.time ? ` at ${s.time}` : ''}</div>
                     <div style={{ fontSize: 12, color: s.caregiverName ? '#666' : '#e8724a' }}>

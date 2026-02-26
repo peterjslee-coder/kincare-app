@@ -729,18 +729,31 @@ router.post("/:id/check-in", async (req, res) => {
 
     // ─── Timing gate: 15 min before session start ───
     // Allow check-in after start time (late is fine), but block too-early check-ins
+    // Sessions are stored as naive date/time strings — interpret as Eastern time (Virginia)
     const CHECK_IN_WINDOW_MINUTES = 15;
     if (session.scheduled_date && session.scheduled_time) {
-      const sessionStart = new Date(`${session.scheduled_date}T${session.scheduled_time}:00`);
-      const earliestCheckIn = new Date(sessionStart.getTime() - CHECK_IN_WINDOW_MINUTES * 60000);
-      const now = new Date();
+      // Build session start in Eastern time
+      const dateStr = session.scheduled_date.split('T')[0];
+      const timeStr = session.scheduled_time;
+      // Create a Date object for the session in Eastern time
+      const sessionStartET = new Date(`${dateStr}T${timeStr}:00-05:00`);
+      // During EDT (March-November), adjust — but for simplicity, use America/New_York
+      // Parse as Eastern: create the date string with explicit ET offset
+      const etNowStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+      const nowET = new Date(etNowStr);
+      const [sh, sm] = timeStr.split(':').map(Number);
+      const sessionStartLocal = new Date(nowET);
+      const [sy, smo, sd] = dateStr.split('-').map(Number);
+      sessionStartLocal.setFullYear(sy, smo - 1, sd);
+      sessionStartLocal.setHours(sh, sm, 0, 0);
+      const earliestCheckIn = new Date(sessionStartLocal.getTime() - CHECK_IN_WINDOW_MINUTES * 60000);
 
-      if (now < earliestCheckIn && !session.early_check_in_allowed) {
+      if (nowET < earliestCheckIn && !session.early_check_in_allowed) {
         return res.status(400).json({
           error: "Check-in window not open yet",
           message: `You can check in starting ${CHECK_IN_WINDOW_MINUTES} minutes before your session at ${session.scheduled_time}`,
           checkInOpensAt: earliestCheckIn.toISOString(),
-          sessionStartsAt: sessionStart.toISOString(),
+          sessionStartsAt: sessionStartLocal.toISOString(),
         });
       }
     }

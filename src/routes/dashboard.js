@@ -48,9 +48,9 @@ async function familyDashboard(db, userId, res) {
     const ownedIds = new Set(ownedRecipients.map(r => r.id));
     const recipients = [...ownedRecipients, ...sharedRecipients.filter(r => !ownedIds.has(r.id))];
 
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    const monthStr = monthStart.toISOString().split("T")[0];
+    const famEtNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const monthStart = new Date(famEtNow); monthStart.setDate(1);
+    const monthStr = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-01';
 
     const monthlyStats = await db.prepare(`
       SELECT
@@ -64,8 +64,11 @@ async function familyDashboard(db, userId, res) {
         AND COALESCE(u.is_demo, 0) = 0
     `).get(userId, monthStr);
 
-    const today = new Date().toISOString().split("T")[0];
-    const next30 = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+    // Use Eastern time for "today" since all care happens in Virginia
+    const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const today = etNow.getFullYear() + '-' + String(etNow.getMonth() + 1).padStart(2, '0') + '-' + String(etNow.getDate()).padStart(2, '0');
+    const next30Date = new Date(etNow); next30Date.setDate(next30Date.getDate() + 30);
+    const next30 = next30Date.getFullYear() + '-' + String(next30Date.getMonth() + 1).padStart(2, '0') + '-' + String(next30Date.getDate()).padStart(2, '0');
 
     const upcoming = await db.prepare(`
       SELECT cs.*,
@@ -210,8 +213,9 @@ async function caregiverDashboard(db, userId, res) {
     ORDER BY ca.care_recipient_id, ca.is_favorite DESC, ca.created_at ASC
   `).all(profile.id);
 
-  // Upcoming sessions
-  const today = new Date().toISOString().split("T")[0];
+  // Upcoming sessions — use Eastern time since care happens in Virginia
+  const cgEtNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const today = cgEtNow.getFullYear() + '-' + String(cgEtNow.getMonth() + 1).padStart(2, '0') + '-' + String(cgEtNow.getDate()).padStart(2, '0');
   const upcoming = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -225,9 +229,8 @@ async function caregiverDashboard(db, userId, res) {
   `).all(profile.id, today);
 
   // Monthly stats
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  const monthStr = monthStart.toISOString().split("T")[0];
+  const cgMonthStart = new Date(cgEtNow); cgMonthStart.setDate(1);
+  const monthStr = cgMonthStart.getFullYear() + '-' + String(cgMonthStart.getMonth() + 1).padStart(2, '0') + '-01';
 
   const monthlyStats = await db.prepare(`
     SELECT COUNT(*) as completed_sessions,
@@ -342,8 +345,9 @@ async function careForDashboard(db, userId, res) {
     return res.json({ role: "care_for", userName: `${user.first_name} ${user.last_name}`, sessions: [], notes: [] });
   }
 
-  // All future sessions (calendar data)
-  const today = new Date().toISOString().split("T")[0];
+  // All future sessions (calendar data) — Eastern time
+  const cfEtNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const today = cfEtNow.getFullYear() + '-' + String(cfEtNow.getMonth() + 1).padStart(2, '0') + '-' + String(cfEtNow.getDate()).padStart(2, '0');
   const sessions = await db.prepare(`
     SELECT cs.*,
       u.first_name || ' ' || u.last_name AS caregiver_name

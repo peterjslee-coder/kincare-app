@@ -438,15 +438,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const stats = data.stats || {};
 
   // Find sessions ready for check-in (confirmed, today, within 15 min of start or past start)
+  // Dates are stored as naive strings (no timezone) — compare using local date consistently
   const readyToCheckIn = sessions.filter(s => {
     if (s.status !== 'confirmed') return false;
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    if (s.scheduled_date?.split('T')[0] !== today) return false;
+    const nowLocalDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    const sessionDate = (s.scheduled_date || '').split('T')[0];
+    if (sessionDate !== nowLocalDate) return false;
     if (!s.scheduled_time) return false;
     const [hh, mm] = s.scheduled_time.split(':').map(Number);
-    const sessionStart = new Date(now);
-    sessionStart.setHours(hh, mm, 0, 0);
+    const sessionStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0);
     const minsUntil = (sessionStart - now) / 60000;
     return minsUntil <= 15 || profile.earlyCheckInAllowed;
   });
