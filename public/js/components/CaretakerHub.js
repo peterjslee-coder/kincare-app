@@ -725,6 +725,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               // API returns camelCase mapped fields
               const sDate = (s.date || s.scheduled_date || '').split('T')[0];
               const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+              const now = TimezoneHelper.getNow(tz);
               const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
               const timeLabel = TimezoneHelper.formatTime(s.time || s.scheduled_time);
               const duration = s.durationHours || s.duration_hours;
@@ -732,17 +733,40 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const recipName = s.recipientName || s.recipient_name || 'Session';
               const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
 
+              // Urgency tiers
+              const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
+              const minsUntil = (sessionDT - now) / 60000;
+              const isImminent = !isActive && !isReady && s.status === 'confirmed' && minsUntil <= 60 && minsUntil > -120;
+              const isSoon = !isActive && !isReady && !isImminent && s.status === 'confirmed' && minsUntil <= 180 && minsUntil > 0;
+
+              // Styling based on urgency
+              const borderColor = isActive ? '#f57f17' : isReady ? '#e8724a' : isImminent ? '#e8724a' : isSoon ? '#e8724a' : '#1b6b5a';
+              const borderWidth = isActive || isReady || isImminent ? 3 : 2;
+              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)'
+                : isReady ? 'linear-gradient(135deg, #fff8f5 0%, #fff 100%)'
+                : isImminent ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
+              const shadow = isActive ? '0 2px 12px rgba(245, 127, 23, 0.15)'
+                : (isReady || isImminent) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
+
               return (
-                <div key={s.id} className="card" onClick={() => setActiveTab('schedule')} style={{
+                <div key={s.id} className="card" onClick={(e) => {
+                  // Don't navigate if clicking a button
+                  if (e.target.tagName === 'BUTTON') return;
+                  setActiveTab('schedule');
+                }} style={{
                   marginBottom: 10, padding: '16px 18px', cursor: 'pointer',
-                  borderLeft: isActive ? '4px solid #f57f17' : isReady ? '4px solid #e8724a' : '4px solid #1b6b5a',
-                  background: isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff8f5 0%, #fff 100%)' : '#fff',
-                  animation: (isReady || isActive) ? 'fadeIn 0.3s ease' : undefined,
+                  border: `${borderWidth}px solid ${borderColor}`,
+                  borderRadius: 12,
+                  background: bgStyle,
+                  boxShadow: shadow,
+                  animation: (isReady || isActive || isImminent) ? 'fadeIn 0.3s ease' : undefined,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '180px' }}>
-                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress</div>}
+                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress Now</div>}
                       {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
+                      {isImminent && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{minsUntil <= 0 ? 'Started — awaiting check-in' : minsUntil <= 15 ? 'Check-in window open' : `Starting in ${Math.ceil(minsUntil)} min`}</div>}
+                      {isSoon && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>Coming up in {minsUntil <= 120 ? `${Math.ceil(minsUntil)} min` : `${Math.round(minsUntil / 60)}h`}</div>}
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
