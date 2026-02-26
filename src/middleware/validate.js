@@ -6,8 +6,8 @@
 // Email format (basic but effective)
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Phone format (accepts various US formats)
-const PHONE_REGEX = /^[\d\s\-\(\)\+\.]{7,20}$/;
+// Phone format (accepts US and international formats)
+const PHONE_REGEX = /^[\d\s\-\(\)\+\.]{7,30}$/;
 
 // Max lengths to prevent abuse
 const MAX_LENGTHS = {
@@ -15,7 +15,7 @@ const MAX_LENGTHS = {
   password: 128,
   firstName: 50,
   lastName: 50,
-  phone: 20,
+  phone: 30,
   text: 2000,      // general text fields (notes, instructions, etc.)
   shortText: 255,  // short text fields (addresses, names, etc.)
 };

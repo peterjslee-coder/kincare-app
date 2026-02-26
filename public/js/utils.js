@@ -5,8 +5,8 @@ const API_BASE = window.location.origin;
 const formatPhone = window.formatPhone = (value, isInternational) => {
   if (!value) return '';
   if (isInternational) {
-    // Allow +, digits, spaces, dashes, dots — strip everything else
-    return String(value).replace(/[^\d\s\-\+\(\)\.]/g, '').slice(0, 20);
+    // Free-form: allow +, digits, spaces, dashes — no forced formatting
+    return String(value).replace(/[^\d\s\-\+]/g, '').slice(0, 30);
   }
   const d = String(value).replace(/\D/g, '');
   if (!d) return '';
