@@ -436,7 +436,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
 
       {/* ── Footer ── */}
       <footer className="splash-footer">
-        <p>&copy; 2026 inPlace. All rights reserved. | Privacy Policy | Terms of Service</p>
+        <p>&copy; 2026 inPlace. All rights reserved. | <a href="/legal/privacy.html" style={{ color: '#1b6b5a', textDecoration: 'none' }}>Privacy Policy</a> | <a href="/legal/terms.html" style={{ color: '#1b6b5a', textDecoration: 'none' }}>Terms of Service</a></p>
         <p style={{ marginTop: '8px', fontSize: '14px', opacity: 0.8 }}>
           <a href="mailto:peter@yourinplace.com" style={{ color: '#1b6b5a', textDecoration: 'none' }}>peter@yourinplace.com</a>
         </p>
