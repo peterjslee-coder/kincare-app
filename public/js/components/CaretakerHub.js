@@ -437,6 +437,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const reviews = data.reviews || [];
   const stats = data.stats || {};
 
+  // Find sessions ready for check-in (confirmed, today, within 15 min of start or past start)
+  const readyToCheckIn = sessions.filter(s => {
+    if (s.status !== 'confirmed') return false;
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    if (s.scheduled_date?.split('T')[0] !== today) return false;
+    if (!s.scheduled_time) return false;
+    const [hh, mm] = s.scheduled_time.split(':').map(Number);
+    const sessionStart = new Date(now);
+    sessionStart.setHours(hh, mm, 0, 0);
+    const minsUntil = (sessionStart - now) / 60000;
+    return minsUntil <= 15 || profile.earlyCheckInAllowed;
+  });
+
   const CARE_TASKS = [
     'Bathing / Showering', 'Toileting', 'Dressing', 'Feeding / Meal Assistance',
     'Medication Reminders', 'Mobility / Transfer', 'Light Housekeeping', 'Laundry',
@@ -651,6 +665,50 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         );
       })()}
+
+      {/* Ready to Check In — prominent card for sessions in the check-in window */}
+      {readyToCheckIn.length > 0 && readyToCheckIn.map(s => (
+        <div key={s.id} className="card" style={{
+          marginBottom: 16, padding: '20px', borderLeft: '4px solid #e8724a',
+          background: 'linear-gradient(135deg, #fff8f5 0%, #fff 100%)',
+          animation: 'fadeIn 0.3s ease',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Ready to Check In</div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{s.recipient_name || 'Session'}</div>
+              <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                {s.scheduled_time ? s.scheduled_time.substring(0, 5) : ''}{s.duration_hours ? ` \u2022 ${s.duration_hours}hr` : ''}
+                {s.service_type ? ` \u2022 ${s.service_type.replace(/_/g, ' ')}` : ''}
+              </div>
+              {(s.location_address || s.location_city) && (
+                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {s.location_address || ''}{s.location_city ? `, ${s.location_city}` : ''}</div>
+              )}
+            </div>
+            <button onClick={() => {
+              setCheckInMood('');
+              setCheckInNotes(null);
+              setCheckInLocation(null);
+              setLocationError(null);
+              if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+                  (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
+                  { timeout: 8000, enableHighAccuracy: false }
+                );
+              } else {
+                setLocationError('Geolocation not supported');
+              }
+              setCheckInSession(s);
+            }} style={{
+              padding: '12px 28px', background: '#e8724a', color: '#fff', border: 'none',
+              borderRadius: '10px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(232,114,74,0.3)',
+              whiteSpace: 'nowrap',
+            }}>Check In Now</button>
+          </div>
+        </div>
+      ))}
 
       {/* Onboarding Gate Panel — non-dismissible */}
       {onboardingGated && (
