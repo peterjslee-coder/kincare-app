@@ -53,17 +53,20 @@ async function familyDashboard(db, userId, res) {
     const monthStart = new Date(famEtNow); monthStart.setDate(1);
     const monthStr = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-01';
 
+    // All recipient IDs this user can see (owned + shared)
+    const allRecipientIds = recipients.map(r => r.id);
+    const recipientPlaceholders = allRecipientIds.length > 0 ? allRecipientIds.map(() => '?').join(',') : "'__none__'";
+
     const monthlyStats = await db.prepare(`
       SELECT
         COUNT(*) as total_sessions,
         SUM(duration_hours) as total_hours,
         SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
       FROM care_sessions cs
-      JOIN users u ON cs.family_user_id = u.id
-      WHERE cs.family_user_id = ? AND cs.scheduled_date >= ?
+      WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+        AND cs.scheduled_date >= ?
         AND cs.status IN ('confirmed', 'completed', 'in_progress')
-        AND COALESCE(u.is_demo, 0) = 0
-    `).get(userId, monthStr);
+    `).get(userId, ...allRecipientIds, monthStr);
 
     // Use care-location timezone for "today" — all times are care-location times
     const today = getTodayStringInZone();
@@ -76,18 +79,20 @@ async function familyDashboard(db, userId, res) {
         cr.first_name || ' ' || cr.last_name AS recipient_name,
         cr.timezone AS care_timezone,
         u.first_name || ' ' || u.last_name AS caregiver_name,
-        cp.rating_avg AS caregiver_rating
+        cp.rating_avg AS caregiver_rating,
+        fu.first_name || ' ' || fu.last_name AS booked_by_name
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users u ON cp.user_id = u.id
-      WHERE cs.family_user_id = ?
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
         AND cs.scheduled_date >= ?
         AND cs.scheduled_date <= ?
         AND cs.status IN ('pending', 'confirmed', 'open', 'requested', 'in_progress')
       ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
-      LIMIT 10
-    `).all(userId, today, next30);
+      LIMIT 15
+    `).all(userId, ...allRecipientIds, today, next30);
 
     const recentActivity = await db.prepare(`
       SELECT * FROM activity_feed
@@ -169,6 +174,7 @@ async function familyDashboard(db, userId, res) {
           platformFee: fee,
           familyTotal: familyPrice,
           timezone: s.care_timezone || "America/New_York",
+          bookedBy: s.family_user_id !== userId ? s.booked_by_name : null,
         };
       }),
       recentActivity: recentActivity.map((a) => ({

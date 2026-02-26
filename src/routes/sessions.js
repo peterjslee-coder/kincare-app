@@ -22,6 +22,14 @@ router.get("/", async (req, res) => {
 
   const activeRole = req.user.activeRole || req.user.role;
   if (activeRole === "family") {
+    // Include sessions for shared care recipients (care team access)
+    const sharedRecipients = await db.prepare(`
+      SELECT cr.id FROM care_recipient_shares crs
+      JOIN care_recipients cr ON crs.care_recipient_id = cr.id
+      WHERE crs.shared_with_user_id = ?
+    `).all(req.user.id);
+    const sharedIds = sharedRecipients.map(r => r.id);
+    const allIds = sharedIds.length > 0 ? sharedIds.map(() => '?').join(',') : "'__none__'";
     query = `
       SELECT cs.*,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -31,9 +39,9 @@ router.get("/", async (req, res) => {
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users u ON cp.user_id = u.id
-      WHERE cs.family_user_id = ?
+      WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${allIds}))
     `;
-    params = [req.user.id];
+    params = [req.user.id, ...sharedIds];
   } else if (activeRole === "care_for") {
     // Care recipient view — find their care_recipient record via linked_user_id (falls back to name match)
     const recipient = await db.prepare(`
