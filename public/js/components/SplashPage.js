@@ -458,7 +458,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           }}>
             {/* Banner photo header */}
             <div style={{ position: 'relative', width: '100%', height: '260px', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}>
-              <img src="/images/founder-photo.jpg" alt="Pete Lee" style={{
+              <img src={"/images/founder-photo.jpg?v=" + (window.APP_VERSION || "1")} alt="Pete Lee" style={{
                 width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%',
                 display: 'block',
               }} />
