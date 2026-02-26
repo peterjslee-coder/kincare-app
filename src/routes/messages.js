@@ -301,15 +301,41 @@ router.get("/conversations/:id", async (req, res) => {
   // Get conversation info
   const conv = await db.prepare("SELECT type, name, care_team_id FROM conversations WHERE id = ?").get(convId);
 
-  // Get messages
+  // Get messages with reply-to info
   const messages = await db.prepare(`
     SELECT m.*,
-      su.first_name AS sender_first_name, su.last_name AS sender_last_name
+      su.first_name AS sender_first_name, su.last_name AS sender_last_name,
+      rm.content AS reply_content, rm.sender_id AS reply_sender_id,
+      ru.first_name AS reply_sender_first, ru.last_name AS reply_sender_last
     FROM messages m
     JOIN users su ON m.sender_id = su.id
+    LEFT JOIN messages rm ON m.reply_to_id = rm.id
+    LEFT JOIN users ru ON rm.sender_id = ru.id
     WHERE m.conversation_id = ?
     ORDER BY m.created_at ASC
   `).all(convId);
+
+  // Get reactions for all messages in this conversation
+  const msgIds = messages.map(m => m.id);
+  let reactionsMap = {};
+  if (msgIds.length > 0) {
+    const placeholders = msgIds.map(() => '?').join(',');
+    const reactions = await db.prepare(`
+      SELECT mr.message_id, mr.emoji, mr.user_id,
+        u.first_name, u.last_name
+      FROM message_reactions mr
+      JOIN users u ON mr.user_id = u.id
+      WHERE mr.message_id IN (${placeholders})
+    `).all(...msgIds);
+    for (const r of reactions) {
+      if (!reactionsMap[r.message_id]) reactionsMap[r.message_id] = [];
+      reactionsMap[r.message_id].push({
+        emoji: r.emoji,
+        userId: r.user_id,
+        userName: `${r.first_name} ${r.last_name}`,
+      });
+    }
+  }
 
   // Update last_read_at
   await db.prepare(
@@ -320,6 +346,12 @@ router.get("/conversations/:id", async (req, res) => {
     ...m,
     type: m.sender_id === userId ? 'sent' : 'received',
     senderName: `${m.sender_first_name} ${m.sender_last_name}`,
+    replyTo: m.reply_to_id ? {
+      id: m.reply_to_id,
+      content: m.reply_content,
+      senderName: m.reply_sender_first ? `${m.reply_sender_first} ${m.reply_sender_last}` : null,
+    } : null,
+    reactions: reactionsMap[m.id] || [],
   }));
 
   res.json({ messages: enriched, conversationType: conv?.type || "direct" });
@@ -330,7 +362,7 @@ router.post("/conversations/:id", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
   const convId = req.params.id;
-  const { content } = req.body;
+  const { content, replyToId } = req.body;
 
   if (!content || !content.trim()) return res.status(400).json({ error: "Message content is required" });
 
@@ -404,8 +436,8 @@ router.post("/conversations/:id", async (req, res) => {
 
   const msgId = uuid();
   await db.prepare(
-    "INSERT INTO messages (id, sender_id, recipient_id, content, conversation_id) VALUES (?, ?, ?, ?, ?)"
-  ).run(msgId, userId, recipientId || userId, content.trim(), convId);
+    "INSERT INTO messages (id, sender_id, recipient_id, content, conversation_id, reply_to_id) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(msgId, userId, recipientId || userId, content.trim(), convId, replyToId || null);
 
   // Update conversation timestamp
   await db.prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?").run(convId);
@@ -549,6 +581,83 @@ router.get("/:partnerId", async (req, res) => {
   }));
 
   res.json({ messages: enriched });
+});
+
+// ─── POST /api/messages/:messageId/reactions ─── Add or toggle a reaction
+router.post("/:messageId/reactions", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+  const { messageId } = req.params;
+  const { emoji } = req.body;
+
+  const ALLOWED_EMOJIS = ['❤️', '👍', '👎', '😂', '😮', '🙏'];
+  if (!emoji || !ALLOWED_EMOJIS.includes(emoji)) {
+    return res.status(400).json({ error: "Invalid emoji" });
+  }
+
+  // Verify message exists and user has access
+  const msg = await db.prepare("SELECT id, conversation_id, sender_id FROM messages WHERE id = ?").get(messageId);
+  if (!msg) return res.status(404).json({ error: "Message not found" });
+
+  if (msg.conversation_id) {
+    const membership = await db.prepare(
+      "SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+    ).get(msg.conversation_id, userId);
+    if (!membership) return res.status(403).json({ error: "Not a member" });
+  }
+
+  // Check if user already reacted to this message
+  const existing = await db.prepare(
+    "SELECT id, emoji FROM message_reactions WHERE message_id = ? AND user_id = ?"
+  ).get(messageId, userId);
+
+  let action;
+  if (existing && existing.emoji === emoji) {
+    // Same emoji — remove (toggle off)
+    await db.prepare("DELETE FROM message_reactions WHERE id = ?").run(existing.id);
+    action = 'removed';
+  } else if (existing) {
+    // Different emoji — replace
+    await db.prepare("UPDATE message_reactions SET emoji = ? WHERE id = ?").run(emoji, existing.id);
+    action = 'replaced';
+  } else {
+    // New reaction
+    await db.prepare(
+      "INSERT INTO message_reactions (id, message_id, user_id, emoji) VALUES (?, ?, ?, ?)"
+    ).run(uuid(), messageId, userId, emoji);
+    action = 'added';
+  }
+
+  // Get updated reactions for this message
+  const reactions = await db.prepare(`
+    SELECT mr.emoji, mr.user_id, u.first_name, u.last_name
+    FROM message_reactions mr JOIN users u ON mr.user_id = u.id
+    WHERE mr.message_id = ?
+  `).all(messageId);
+
+  const reactionData = reactions.map(r => ({
+    emoji: r.emoji, userId: r.user_id, userName: `${r.first_name} ${r.last_name}`,
+  }));
+
+  // Emit to conversation members via WebSocket
+  if (msg.conversation_id) {
+    const members = await db.prepare(
+      "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?"
+    ).all(msg.conversation_id, userId);
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      const sender = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+      for (const m of members) {
+        emitToUser(m.user_id, "message_reaction", {
+          messageId, conversationId: msg.conversation_id,
+          reactions: reactionData, action, emoji,
+          reactorName: sender ? `${sender.first_name} ${sender.last_name}` : 'Someone',
+        });
+      }
+    }
+  }
+
+  res.json({ reactions: reactionData, action });
 });
 
 module.exports = router;

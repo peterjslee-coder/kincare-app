@@ -27,7 +27,13 @@ const Messages = window.Messages = () => {
   const swipeRef = useRef({ startX: 0, startY: 0, id: null });
   const [swipingId, setSwipingId] = useState(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
+  const [replyTo, setReplyTo] = useState(null);
+  const [showEmojiFor, setShowEmojiFor] = useState(null);
+  const msgSwipeRef = useRef({ startX: 0, startY: 0, id: null, locked: false });
+  const [msgSwipingId, setMsgSwipingId] = useState(null);
+  const [msgSwipeOffset, setMsgSwipeOffset] = useState(0);
   const { showToast } = useToast();
+  const REACTION_EMOJIS = ['\u2764\uFE0F', '\uD83D\uDC4D', '\uD83D\uDC4E', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE4F'];
 
   const isMobile = window.innerWidth <= 768;
 
@@ -160,6 +166,58 @@ const Messages = window.Messages = () => {
     swipeRef.current = { startX: 0, startY: 0, id: null };
   };
 
+  // ─── Message swipe-to-reply handlers (mobile) ───
+  const onMsgTouchStart = (e, msg) => {
+    const touch = e.touches[0];
+    msgSwipeRef.current = { startX: touch.clientX, startY: touch.clientY, id: msg.id, locked: false };
+    setMsgSwipingId(null);
+    setMsgSwipeOffset(0);
+  };
+
+  const onMsgTouchMove = (e, msg) => {
+    if (msgSwipeRef.current.id !== msg.id) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - msgSwipeRef.current.startX;
+    const dy = Math.abs(touch.clientY - msgSwipeRef.current.startY);
+    // Only horizontal swipe right
+    if (dx > 10 && dy < dx * 0.5) {
+      if (!msgSwipeRef.current.locked) msgSwipeRef.current.locked = true;
+      setMsgSwipingId(msg.id);
+      setMsgSwipeOffset(Math.min(dx, 80));
+    }
+  };
+
+  const onMsgTouchEnd = (msg) => {
+    if (msgSwipeRef.current.id !== msg.id) return;
+    if (msgSwipeOffset > 50) {
+      setReplyTo(msg);
+      if (inputRef.current) inputRef.current.focus();
+    }
+    setMsgSwipingId(null);
+    setMsgSwipeOffset(0);
+    msgSwipeRef.current = { startX: 0, startY: 0, id: null, locked: false };
+  };
+
+  // ─── Emoji reaction handler ───
+  const handleReaction = async (messageId, emoji) => {
+    setShowEmojiFor(null);
+    try {
+      const res = await apiFetch(`/api/messages/${messageId}/reactions`, {
+        method: 'POST',
+        body: JSON.stringify({ emoji }),
+      });
+      if (res?.ok) {
+        const data = await res.json();
+        // Update reactions in local state
+        setMessages(prev => prev.map(m =>
+          m.id === messageId ? { ...m, reactions: data.reactions } : m
+        ));
+      }
+    } catch (err) {
+      console.error('Reaction error:', err);
+    }
+  };
+
   const handleRespondConnection = async (connectionId, action) => {
     try {
       const res = await apiFetch(`/api/connections/${connectionId}`, {
@@ -232,6 +290,19 @@ const Messages = window.Messages = () => {
     return cleanup;
   }, [activeConvId]);
 
+  // Listen for real-time reactions
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const cleanup = onSocketEvent('message_reaction', (data) => {
+      if (data.conversationId === activeConvId) {
+        setMessages(prev => prev.map(m =>
+          m.id === data.messageId ? { ...m, reactions: data.reactions } : m
+        ));
+      }
+    });
+    return cleanup;
+  }, [activeConvId]);
+
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -255,6 +326,8 @@ const Messages = window.Messages = () => {
     setActiveConvType(conv.type || 'direct');
     setShowNewChat(false);
     setCreatingGroup(false);
+    setReplyTo(null);
+    setShowEmojiFor(null);
     // Restore draft for the new conversation
     setInputText(draftsRef.current[conv.id] || '');
     fetchMessages(conv.id);
@@ -342,11 +415,12 @@ const Messages = window.Messages = () => {
     try {
       const res = await apiFetch(`/api/messages/conversations/${activeConvId}`, {
         method: 'POST',
-        body: JSON.stringify({ content: inputText }),
+        body: JSON.stringify({ content: inputText, replyToId: replyTo?.id || null }),
       });
       if (res?.ok) {
         const data = await res.json();
         setInputText('');
+        setReplyTo(null);
         delete draftsRef.current[activeConvId];
         // If conversation ID changed (legacy migration), update it
         if (data.conversationId && data.conversationId !== activeConvId) {
@@ -955,11 +1029,11 @@ const Messages = window.Messages = () => {
             messages.map((m, i) => {
               const isSent = m.type === 'sent';
               const showSenderName = isGroup && !isSent;
-              // Show sender name if different from previous message sender
               const prevMsg = i > 0 ? messages[i - 1] : null;
               const showName = showSenderName && (!prevMsg || prevMsg.sender_id !== m.sender_id || prevMsg.type !== m.type);
-
               const parseTs = (t) => parseTimestamp(t) || new Date(0);
+              const isMsgSwiping = msgSwipingId === m.id;
+              const reactions = m.reactions || [];
 
               return (
                 <React.Fragment key={m.id || i}>
@@ -972,42 +1046,139 @@ const Messages = window.Messages = () => {
                       </div>
                     ) : null;
                   })()}
-                  <div style={{ display: 'flex', justifyContent: isSent ? 'flex-end' : 'flex-start', marginBottom: '4px' }}>
-                    {showSenderName && !isSent && (
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: getAvatarColor(m.senderName || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 10, fontWeight: 600, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>
-                        {getInitials(m.senderName || '')}
+                  <div style={{ position: 'relative' }}
+                    onTouchStart={(e) => onMsgTouchStart(e, m)}
+                    onTouchMove={(e) => onMsgTouchMove(e, m)}
+                    onTouchEnd={() => onMsgTouchEnd(m)}>
+                    {/* Reply arrow indicator on swipe */}
+                    {isMsgSwiping && (
+                      <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', opacity: msgSwipeOffset > 20 ? Math.min((msgSwipeOffset - 20) / 30, 1) : 0, fontSize: 18, color: '#1b6b5a', transition: 'opacity 0.1s' }}>
+                        ↩
                       </div>
                     )}
-                    <div style={{ maxWidth: '75%' }}>
-                      {showName && (
-                        <div style={{ fontSize: 11, color: getAvatarColor(m.senderName || ''), fontWeight: 600, marginBottom: 2, marginLeft: 4 }}>
-                          {m.senderName}
+                    <div style={{
+                      display: 'flex', justifyContent: isSent ? 'flex-end' : 'flex-start', marginBottom: reactions.length > 0 ? '16px' : '4px',
+                      transform: isMsgSwiping ? 'translateX(' + msgSwipeOffset + 'px)' : 'none',
+                      transition: isMsgSwiping ? 'none' : 'transform 0.2s',
+                    }}>
+                      {showSenderName && !isSent && (
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: getAvatarColor(m.senderName || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 10, fontWeight: 600, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>
+                          {getInitials(m.senderName || '')}
                         </div>
                       )}
-                      <div style={{
-                        padding: '10px 14px',
-                        borderRadius: isSent ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                        background: isSent ? '#1b6b5a' : '#f0f0f0',
-                        color: isSent ? 'white' : '#333',
-                        fontSize: '14px',
-                        lineHeight: 1.45,
-                        wordWrap: 'break-word',
-                      }}>
-                        {renderMessageContent(m.content)}
-                        <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : '#bbb', marginTop: '4px', textAlign: 'right' }}>
-                          {(() => {
-                            const d = parseTimestamp(m.created_at);
-                            if (!d) return '';
-                            const now = new Date();
-                            const isToday = d.toDateString() === now.toDateString();
-                            const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
-                            const isYesterday = d.toDateString() === yesterday.toDateString();
-                            const timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-                            if (isToday) return timeStr;
-                            if (isYesterday) return 'Yesterday ' + timeStr;
-                            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + timeStr;
-                          })()}
+                      <div style={{ maxWidth: '75%', position: 'relative' }}
+                        className="msg-bubble-wrap"
+                        onMouseEnter={(e) => {
+                          const actions = e.currentTarget.querySelector('.msg-hover-actions');
+                          if (actions) actions.style.opacity = '1';
+                        }}
+                        onMouseLeave={(e) => {
+                          const actions = e.currentTarget.querySelector('.msg-hover-actions');
+                          if (actions) actions.style.opacity = '0';
+                          if (showEmojiFor === m.id) setShowEmojiFor(null);
+                        }}>
+                        {showName && (
+                          <div style={{ fontSize: 11, color: getAvatarColor(m.senderName || ''), fontWeight: 600, marginBottom: 2, marginLeft: 4 }}>
+                            {m.senderName}
+                          </div>
+                        )}
+                        {/* Reply quote */}
+                        {m.replyTo && (
+                          <div style={{
+                            padding: '6px 10px', marginBottom: -6, borderRadius: isSent ? '12px 12px 0 0' : '12px 12px 0 0',
+                            background: isSent ? '#15594b' : '#e4e4e4', fontSize: 12, lineHeight: 1.3,
+                            borderLeft: isSent ? '3px solid rgba(255,255,255,0.4)' : '3px solid #1b6b5a',
+                          }}>
+                            <div style={{ fontWeight: 600, fontSize: 11, color: isSent ? 'rgba(255,255,255,0.7)' : '#1b6b5a', marginBottom: 1 }}>
+                              {m.replyTo.senderName || 'Unknown'}
+                            </div>
+                            <div style={{ color: isSent ? 'rgba(255,255,255,0.6)' : '#777', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
+                              {m.replyTo.content}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{
+                          padding: '10px 14px',
+                          borderRadius: m.replyTo ? (isSent ? '0 0 4px 18px' : '0 0 18px 4px') : (isSent ? '18px 18px 4px 18px' : '18px 18px 18px 4px'),
+                          background: isSent ? '#1b6b5a' : '#f0f0f0',
+                          color: isSent ? 'white' : '#333',
+                          fontSize: '14px', lineHeight: 1.45, wordWrap: 'break-word',
+                        }}>
+                          {renderMessageContent(m.content)}
+                          <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : '#bbb', marginTop: '4px', textAlign: 'right' }}>
+                            {(() => {
+                              const d = parseTimestamp(m.created_at);
+                              if (!d) return '';
+                              const now = new Date();
+                              const isToday = d.toDateString() === now.toDateString();
+                              const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+                              const isYesterday = d.toDateString() === yesterday.toDateString();
+                              const timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                              if (isToday) return timeStr;
+                              if (isYesterday) return 'Yesterday ' + timeStr;
+                              return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + timeStr;
+                            })()}
+                          </div>
                         </div>
+                        {/* Reaction pills below bubble */}
+                        {reactions.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4, justifyContent: isSent ? 'flex-end' : 'flex-start' }}>
+                            {Object.entries(reactions.reduce((acc, r) => {
+                              acc[r.emoji] = acc[r.emoji] || [];
+                              acc[r.emoji].push(r);
+                              return acc;
+                            }, {})).map(([emoji, rList]) => (
+                              <button key={emoji} onClick={() => handleReaction(m.id, emoji)}
+                                title={rList.map(r => r.userName).join(', ')}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 3, padding: '2px 6px',
+                                  background: rList.some(r => r.userId === currentUser?.id) ? '#e8f5e9' : '#f5f5f5',
+                                  border: rList.some(r => r.userId === currentUser?.id) ? '1px solid #1b6b5a' : '1px solid #e0e0e0',
+                                  borderRadius: 12, fontSize: 13, cursor: 'pointer', lineHeight: 1,
+                                }}>
+                                <span>{emoji}</span>
+                                {rList.length > 1 && <span style={{ fontSize: 10, color: '#666' }}>{rList.length}</span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {/* Desktop hover actions: reply + emoji */}
+                        <div className="msg-hover-actions" style={{
+                          position: 'absolute', top: m.replyTo ? 0 : -8,
+                          [isSent ? 'left' : 'right']: -8,
+                          transform: isSent ? 'translateX(-100%)' : 'translateX(100%)',
+                          display: 'flex', gap: 2, opacity: 0, transition: 'opacity 0.15s',
+                          background: '#fff', borderRadius: 8, boxShadow: '0 1px 6px rgba(0,0,0,0.1)', padding: '2px',
+                        }}>
+                          <button onClick={() => { setReplyTo(m); if (inputRef.current) inputRef.current.focus(); }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', fontSize: 14, borderRadius: 6 }}
+                            title="Reply">
+                            ↩
+                          </button>
+                          <button onClick={() => setShowEmojiFor(showEmojiFor === m.id ? null : m.id)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', fontSize: 14, borderRadius: 6 }}
+                            title="React">
+                            😀
+                          </button>
+                        </div>
+                        {/* Emoji picker popover */}
+                        {showEmojiFor === m.id && (
+                          <div style={{
+                            position: 'absolute', bottom: '100%', marginBottom: 4,
+                            [isSent ? 'right' : 'left']: 0,
+                            background: '#fff', borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+                            padding: '6px 8px', display: 'flex', gap: 2, zIndex: 10,
+                          }}>
+                            {REACTION_EMOJIS.map(emoji => (
+                              <button key={emoji} onClick={() => handleReaction(m.id, emoji)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: '4px', borderRadius: 8, transition: 'background 0.15s' }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#f0f0f0'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'none'}>
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1018,12 +1189,32 @@ const Messages = window.Messages = () => {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Reply preview bar */}
+        {replyTo && (
+          <div style={{
+            display: 'flex', alignItems: 'center', padding: '8px 16px', background: '#f0faf7',
+            borderTop: '1px solid #e0e0e0', borderLeft: '3px solid #1b6b5a', gap: 10,
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a' }}>
+                Replying to {replyTo.senderName || 'message'}
+              </div>
+              <div style={{ fontSize: 12, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {replyTo.content}
+              </div>
+            </div>
+            <button onClick={() => setReplyTo(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#999', fontSize: 18, padding: '0 4px', flexShrink: 0 }}>
+              ×
+            </button>
+          </div>
+        )}
         <div className="msg-input-area">
           <input
             ref={inputRef}
             type="text"
             className="msg-input"
-            placeholder="Type a message..."
+            placeholder={replyTo ? "Type your reply..." : "Type a message..."}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}

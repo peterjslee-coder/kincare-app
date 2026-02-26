@@ -363,6 +363,18 @@ async function initializeDatabase() {
         AND (u.role = 'care_for' OR u.roles LIKE '%care_for%')
       LIMIT 1
     ) WHERE linked_user_id IS NULL`,
+    // v1.33.12 — Reply-to support for messages
+    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT`,
+    // v1.33.12 — Emoji reactions on messages
+    `CREATE TABLE IF NOT EXISTS message_reactions (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      emoji TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(message_id, user_id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_message_reactions_message ON message_reactions(message_id)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
