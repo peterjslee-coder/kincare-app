@@ -80,12 +80,14 @@ async function familyDashboard(db, userId, res) {
         cr.timezone AS care_timezone,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         cp.rating_avg AS caregiver_rating,
-        fu.first_name || ' ' || fu.last_name AS booked_by_name
+        fu.first_name || ' ' || fu.last_name AS booked_by_name,
+        vl.check_in_time
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users u ON cp.user_id = u.id
       LEFT JOIN users fu ON cs.family_user_id = fu.id
+      LEFT JOIN visit_logs vl ON vl.session_id = cs.id
       WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
         AND cs.scheduled_date >= ?
         AND cs.scheduled_date <= ?
@@ -198,6 +200,7 @@ async function familyDashboard(db, userId, res) {
           familyTotal: familyPrice,
           timezone: s.care_timezone || "America/New_York",
           bookedBy: s.family_user_id !== userId ? s.booked_by_name : null,
+          checkInTime: s.check_in_time || null,
         };
       }),
       recentActivity: recentActivity.map((a) => {

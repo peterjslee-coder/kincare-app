@@ -17,6 +17,8 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [awaitingExpanded, setAwaitingExpanded] = useState(false);
+  // Tick counter for live countdown on in-progress sessions (re-renders every 30s)
+  const [tick, setTick] = useState(0);
 
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
@@ -140,6 +142,14 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     const c3 = onSocketEvent('visit_photos', () => fetchDashboard());
     return () => { c1(); c2(); c3(); };
   }, []);
+
+  // Tick every 30s so in-progress countdowns stay live
+  useEffect(() => {
+    const hasActive = data?.upcomingSessions?.some(s => s.status === 'in_progress');
+    if (!hasActive) return;
+    const iv = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(iv);
+  }, [data?.upcomingSessions]);
 
   const formatActivityTime = (createdAt) => {
     if (!createdAt) return '';
@@ -636,6 +646,30 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
               const timeLabel = TimezoneHelper.formatTime(s.time);
               const isActive = s.status === 'in_progress';
 
+              // Remaining time for in-progress sessions
+              let remainingLabel = null;
+              if (isActive && s.durationHours) {
+                const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+                // Use check-in time if available, otherwise scheduled start
+                let startMs;
+                if (s.checkInTime) {
+                  startMs = new Date(s.checkInTime).getTime();
+                } else {
+                  const sDate = (s.date || '').split('T')[0];
+                  startMs = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz).getTime();
+                }
+                const endMs = startMs + (s.durationHours * 3600000);
+                const leftMs = endMs - Date.now();
+                if (leftMs > 0) {
+                  const leftMins = Math.ceil(leftMs / 60000);
+                  const hrs = Math.floor(leftMins / 60);
+                  const mins = leftMins % 60;
+                  remainingLabel = hrs > 0 ? `${hrs}:${String(mins).padStart(2, '0')} remaining` : `${mins} min remaining`;
+                } else {
+                  remainingLabel = 'Expected end time passed';
+                }
+              }
+
               // Urgency: how soon is this session?
               const sDate = (s.date || '').split('T')[0];
               const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz);
@@ -660,7 +694,19 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div style={{ flex: 1 }}>
-                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>In Progress Now</div>}
+                      {isActive && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px' }}>In Progress Now</span>
+                          {remainingLabel && (
+                            <span style={{
+                              fontSize: 11, fontWeight: 600,
+                              color: remainingLabel.includes('passed') ? '#c62828' : '#1b6b5a',
+                              background: remainingLabel.includes('passed') ? '#ffebee' : '#e8f5e9',
+                              padding: '2px 8px', borderRadius: 10,
+                            }}>{remainingLabel}</span>
+                          )}
+                        </div>
+                      )}
                       {isImminent && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>{minsUntil <= 0 ? 'Started — awaiting check-in' : minsUntil <= 15 ? 'Check-in window open' : `Starting in ${Math.ceil(minsUntil)} min`}</div>}
                       {isSoon && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 2 }}>Coming up in {minsUntil <= 120 ? `${Math.ceil(minsUntil)} min` : `${Math.round(minsUntil / 60)}h`}</div>}
                       <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
