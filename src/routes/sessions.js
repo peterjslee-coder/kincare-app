@@ -141,17 +141,19 @@ router.get("/", async (req, res) => {
     }
   }
 
-  // Add platform fee info: estimated_cost = family price, caregiver gets (100 - fee)%
+  // Add platform fee info: caregiver gets full rate, platform fee added on top for family
   const feePercent = await getPlatformFeePercent(db);
   sessions = sessions.map(s => {
-    const familyPrice = parseFloat(s.estimated_cost) || 0;
-    const fee = Math.round(familyPrice * (feePercent / 100) * 100) / 100;
+    const estimatedCost = parseFloat(s.estimated_cost) || 0;
+    // estimated_cost = subtotal + surcharge (total from rateCalculator)
+    // Platform fee is on the base subtotal, charged on top to family
+    const fee = Math.round(estimatedCost * (feePercent / 100) * 100) / 100;
     return {
       ...s,
       platform_fee_percent: feePercent,
       platform_fee: fee,
-      caregiver_payout: Math.round((familyPrice - fee) * 100) / 100,
-      family_total: familyPrice,
+      caregiver_payout: estimatedCost, // caregiver gets the full amount
+      family_total: Math.round((estimatedCost + fee) * 100) / 100,
     };
   });
 
@@ -646,11 +648,15 @@ router.get("/cost-preview", async (req, res) => {
     shortNotice,
   });
 
-  // Platform fee: estimated_cost = family price, caregiver gets (100 - fee)%
+  // Caregiver gets their FULL rate + 75% of surcharge (incentive for short notice).
+  // Platform fee is charged ON TOP to the family, not deducted from the caregiver.
+  // Family pays: caregiver payout + platform fee.
   const feePercent = await getPlatformFeePercent(db);
-  const familyTotal = costResult.total; // this IS what the family pays
-  const platformFee = Math.round(familyTotal * (feePercent / 100) * 100) / 100;
-  const caregiverPayout = Math.round((familyTotal - platformFee) * 100) / 100;
+  const surchargeToCaregiver = costResult.surchargeBreakdown?.caregiver || 0;
+  const surchargeToPlatform = costResult.surchargeBreakdown?.platform || 0;
+  const caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
+  const platformFee = Math.round((costResult.subtotal * (feePercent / 100) + surchargeToPlatform) * 100) / 100;
+  const familyTotal = Math.round((caregiverPayout + platformFee) * 100) / 100;
 
   res.json({
     ...costResult,

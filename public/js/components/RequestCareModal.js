@@ -471,14 +471,14 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                       <span>+${costPreview.surcharge.toFixed(2)}</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', marginBottom: '3px', borderTop: '1px solid #f0f0f0', paddingTop: '4px', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#1b6b5a', fontWeight: 600, marginBottom: '3px', borderTop: '1px solid #f0f0f0', paddingTop: '4px', marginTop: '4px' }}>
                     <span>Caregiver receives</span>
                     <span>${(costPreview.caregiverPayout || costPreview.total).toFixed(2)}</span>
                   </div>
                   {costPreview.platformFee > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#888', marginBottom: '3px' }}>
-                      <span>Platform fee ({costPreview.platformFeePercent || 20}%)</span>
-                      <span>${costPreview.platformFee.toFixed(2)}</span>
+                      <span>InPlace fee ({costPreview.platformFeePercent || 20}%)</span>
+                      <span>+${costPreview.platformFee.toFixed(2)}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #eee', paddingTop: '6px', marginTop: '4px' }}>
