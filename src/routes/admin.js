@@ -564,6 +564,8 @@ router.put("/users/:id/onboarding", async (req, res) => {
     if (backgroundCheckCleared !== undefined) {
       updates.push("is_background_checked = ?");
       params.push(backgroundCheckCleared ? 1 : 0);
+      // Also update checkr_status so the banner clears
+      updates.push(backgroundCheckCleared ? "checkr_status = 'clear'" : "checkr_status = 'pending'");
     }
     if (backgroundCheckPaid !== undefined) {
       updates.push("background_check_paid = ?");
@@ -572,10 +574,18 @@ router.put("/users/:id/onboarding", async (req, res) => {
     if (onboardingComplete !== undefined) {
       updates.push("onboarding_complete = ?");
       params.push(onboardingComplete ? 1 : 0);
+      // When marking onboarding complete, also clear background check gates
+      if (onboardingComplete) {
+        updates.push("is_background_checked = 1", "background_check_paid = 1", "checkr_status = 'clear'");
+      }
     }
     if (isAvailable !== undefined) {
       updates.push("is_available = ?");
       params.push(isAvailable ? 1 : 0);
+      // When marking available for jobs, cascade all onboarding gates
+      if (isAvailable) {
+        updates.push("onboarding_complete = 1", "is_background_checked = 1", "background_check_paid = 1", "checkr_status = 'clear'");
+      }
     }
 
     if (updates.length === 0) return res.status(400).json({ error: "No flags to update" });

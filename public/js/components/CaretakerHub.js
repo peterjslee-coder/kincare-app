@@ -616,8 +616,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     { id: 'bgcheck', label: 'Pay for background check ($30)', done: !!profile.background_check_paid || !!profile.isBackgroundChecked },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
-  const showFirstSteps = firstStepsDone < firstSteps.length;
-  const onboardingGated = !profile.onboardingComplete && showFirstSteps;
+  // If admin marked available for jobs, skip all onboarding gates entirely
+  const showFirstSteps = !profile.isAvailable && firstStepsDone < firstSteps.length;
+  const onboardingGated = !profile.isAvailable && !profile.onboardingComplete && showFirstSteps;
   // When user clicks a step, they land on a tab where they can complete it — lift the blur
   const stepTabs = ['availability', 'preferences', 'financials', 'profile'];
   const isWorkingOnStep = onboardingGated && stepTabs.includes(activeTab);
@@ -669,8 +670,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       </div>
 
-      {/* Status Banner — only shows when there's an actionable status */}
-      {(() => {
+      {/* Status Banner — only shows when there's an actionable status (skip if admin overrode to available) */}
+      {!profile.isAvailable && (() => {
         const onboardingDone = profile.onboardingComplete;
         const checkrStatus = profile.checkrStatus;
         if (!onboardingDone) return (

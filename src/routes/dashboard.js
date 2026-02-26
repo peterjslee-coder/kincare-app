@@ -379,7 +379,7 @@ async function caregiverDashboard(db, userId, res) {
       earlyCheckInAllowed: !!profile.early_check_in_allowed,
       background_check_paid: !!profile.background_check_paid,
       isBackgroundChecked: !!profile.is_background_checked,
-      checkrStatus: profile.checkr_status || 'pending',
+      checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
       legalFirstName: profile.legal_first_name,
       legalLastName: profile.legal_last_name,
       dateOfBirth: profile.date_of_birth,
