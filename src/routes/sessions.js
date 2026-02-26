@@ -501,6 +501,48 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       : `${bookerName} booked a session for ${scheduledDate} at ${scheduledTime}`
   );
 
+  // Notify caregivers about new open/available jobs via WebSocket
+  // Notify: all assigned caregivers for this care recipient + any nearby caregivers
+  const emitToUser = req.app.get("emitToUser");
+  if (emitToUser) {
+    try {
+      // Get all caregivers assigned to this family
+      const assignedCgs = await db.prepare(`
+        SELECT cp.user_id FROM caregiver_assignments ca
+        JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+        WHERE ca.family_user_id = ? AND ca.is_active = 1
+      `).all(req.user.id);
+
+      const rateLabel = proposedRate ? `$${proposedRate}/hr` : '';
+      const surchargeLabel = costResult.surcharge > 0 ? ' (includes short-notice bonus)' : '';
+      const jobInfo = {
+        sessionId: createdSessions[0],
+        serviceType,
+        scheduledDate,
+        scheduledTime,
+        durationHours,
+        proposedRate: proposedRate ? parseFloat(proposedRate) : null,
+        hasBonus: costResult.surcharge > 0,
+      };
+
+      for (const cg of assignedCgs) {
+        emitToUser(cg.user_id, "new_job", jobInfo);
+      }
+
+      // Push notification to assigned caregivers
+      const timeLabel = scheduledTime ? (() => { const [h, m] = scheduledTime.split(':').map(Number); return `${h > 12 ? h - 12 : h || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; })() : '';
+      for (const cg of assignedCgs) {
+        sendPushToUser(cg.user_id, {
+          title: `New care request${rateLabel ? ' — ' + rateLabel + surchargeLabel : ''}`,
+          body: `${serviceType.replace(/_/g, ' ')} on ${scheduledDate} at ${timeLabel} (${durationHours}hr)`,
+          data: { url: '/#caretaker', type: 'new_job' },
+        }, 'new_job').catch(err => console.error('Push to caregiver error:', err));
+      }
+    } catch (err) {
+      console.error("Job notification error (non-blocking):", err);
+    }
+  }
+
   // Return first session for single bookings, all for recurring
   if (isRecurring) {
     const sessions = [];

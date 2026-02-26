@@ -226,6 +226,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     }
   }, []);
 
+  // Listen for new_job WebSocket events — refresh dashboard
+  useEffect(() => {
+    if (typeof onSocketEvent === 'function') {
+      const cleanup = onSocketEvent('new_job', () => {
+        // Re-fetch dashboard data to show new available jobs
+        apiFetch('/api/dashboard').then(res => res?.ok && res.json().then(d => setData(d))).catch(() => {});
+      });
+      return cleanup;
+    }
+  }, []);
+
   // Mark availability as visited when the tab is opened
   useEffect(() => {
     if (activeTab === 'availability') setAvailVisited(true);
@@ -434,6 +445,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const profile = data.profile || {};
   const assignments = data.assignments || [];
   const sessions = data.upcomingSessions || [];
+  const openJobs = data.openJobs || [];
   const reviews = data.reviews || [];
   const stats = data.stats || {};
 
@@ -658,6 +670,59 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
         return null;
       })()}
+
+      {/* Available Jobs — open care requests seeking caregivers */}
+      {openJobs.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#e8724a', animation: 'pulse 1.5s infinite' }}></span>
+            Available Jobs
+          </div>
+          {openJobs.map(job => {
+            const sDate = (job.date || '').split('T')[0];
+            const dateParts = sDate ? sDate.split('-').map(Number) : [];
+            const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
+            const now = new Date();
+            const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
+            const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+            const tParts = (job.time || '').split(':').map(Number);
+            const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+            const rateDisplay = job.proposedRate ? `$${job.proposedRate}/hr` : null;
+            const hasBonus = job.shortNoticeSurcharge && parseFloat(job.shortNoticeSurcharge) > 0;
+
+            return (
+              <div key={job.id} className="card" style={{
+                marginBottom: 10, padding: '16px 18px',
+                border: '2px solid #e8724a',
+                borderLeft: '5px solid #e8724a',
+                background: 'linear-gradient(135deg, #fff8f0 0%, #fff 100%)',
+                boxShadow: '0 2px 8px rgba(232, 114, 74, 0.15)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '180px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      {hasBonus && <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>}
+                      {rateDisplay && <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>{rateDisplay}</span>}
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{(job.serviceType || '').replace(/_/g, ' ')}</div>
+                    <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                      {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
+                    </div>
+                    {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
+                    {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
+                  </div>
+                  <button onClick={() => setActiveTab('schedule')} style={{
+                    padding: '10px 20px', background: '#e8724a', color: '#fff', border: 'none',
+                    borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
+                  }}>View Details</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Upcoming Events — top priority for caregivers */}
       {(() => {

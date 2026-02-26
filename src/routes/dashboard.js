@@ -250,6 +250,24 @@ async function caregiverDashboard(db, userId, res) {
     WHERE caregiver_id = ? AND status IN ('confirmed', 'pending') AND scheduled_date >= ?
   `).get(profile.id, today);
 
+  // Open care requests — jobs available to claim
+  // Include: sessions with status 'open' that aren't assigned to another caregiver
+  const openJobs = await db.prepare(`
+    SELECT cs.*,
+      cr.first_name || ' ' || cr.last_name AS recipient_name,
+      cr.location_city AS recipient_city,
+      cr.timezone AS care_timezone,
+      fu.first_name || ' ' || fu.last_name AS family_name
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    LEFT JOIN users fu ON cs.family_user_id = fu.id
+    WHERE cs.status IN ('open', 'requested')
+      AND cs.scheduled_date >= ?
+      AND (cs.caregiver_id IS NULL OR cs.caregiver_id = ?)
+    ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+    LIMIT 10
+  `).all(today, profile.id);
+
   // Recent reviews
   const reviews = await db.prepare(`
     SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
@@ -324,6 +342,22 @@ async function caregiverDashboard(db, userId, res) {
       comment: r.comment,
       reviewerName: r.reviewer_name,
       createdAt: r.created_at,
+    })),
+    openJobs: openJobs.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      status: s.status,
+      durationHours: s.duration_hours,
+      recipientName: s.recipient_name,
+      recipientCity: s.recipient_city,
+      familyName: s.family_name,
+      specialInstructions: s.special_instructions,
+      estimatedCost: s.estimated_cost,
+      proposedRate: s.proposed_rate,
+      shortNoticeSurcharge: s.short_notice_surcharge,
+      timezone: s.care_timezone || "America/New_York",
     })),
     stats: {
       completedThisMonth: monthlyStats.completed_sessions || 0,
