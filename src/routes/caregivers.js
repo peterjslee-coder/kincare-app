@@ -122,15 +122,16 @@ router.get("/", async (req, res) => {
     return entry;
   });
 
-  // Always filter by radius — if no search center could be resolved, return empty
+  // Filter by radius if search center is available; otherwise show all caregivers
   let filtered = result;
   if (searchLat && searchLng) {
-    filtered = result
-      .filter((c) => c.distance !== undefined && c.distance <= maxRadius)
-      .sort((a, b) => a.distance - b.distance);
+    // Caregivers WITH location: filter by radius; WITHOUT location: include at end
+    const withDist = result.filter((c) => c.distance !== undefined && c.distance <= maxRadius);
+    const noDist = result.filter((c) => c.distance === undefined);
+    filtered = [...withDist.sort((a, b) => a.distance - b.distance), ...noDist];
   } else {
-    // No location available — don't show everyone, return empty with hint
-    filtered = [];
+    // No location available — still show all caregivers (sorted by rating)
+    filtered = result.sort((a, b) => (b.rating || 0) - (a.rating || 0));
   }
 
   res.json({

@@ -12,6 +12,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const [authToken, setAuthTokenState] = useState(resumeMode ? (window.AUTH_TOKEN || localStorage.getItem('auth_token')) : null);
   const [profileId, setProfileId] = useState(null);
   const [errors, setErrors] = useState({});
+  const [intlPhone, setIntlPhone] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   // ─── Online/offline detection ───
@@ -373,7 +374,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       setProfileId(data.profile?.id);
 
       // Also update user phone + pets/allergies/medical (non-blocking)
-      const normalizedPhone = form.phone ? form.phone.replace(/\D/g, '') : null;
+      const normalizedPhone = form.phone ? (intlPhone ? form.phone.replace(/[^\d\+]/g, '') : form.phone.replace(/\D/g, '')) : null;
       const userUpdate = { phone: normalizedPhone };
       if (form.petAllergies) userUpdate.petAllergies = form.petAllergies;
       if (form.foodAllergies) userUpdate.foodAllergies = form.foodAllergies;
@@ -857,9 +858,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '16px' }}>Personal Information</h2>
             {errorSummary()}
             <div style={fieldGroup}>
-              <label style={labelStyle}>Phone *</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={labelStyle}>Phone *</label>
+                <button type="button" onClick={() => { setIntlPhone(!intlPhone); updateForm('phone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                  {intlPhone ? 'US number' : 'International number'}
+                </button>
+              </div>
               <input style={errors.phone ? inputErrorStyle : inputStyle} value={form.phone}
-                onChange={(e) => updateForm('phone', formatPhone(e.target.value))} placeholder="(540) 555-1234" />
+                onChange={(e) => updateForm('phone', formatPhone(e.target.value, intlPhone))} placeholder={intlPhone ? '+44 20 7946 0958' : '(540) 555-1234'} />
+              {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
               {errors.phone && <div style={errorStyle}>{errors.phone}</div>}
             </div>
             <div style={fieldGroup}>

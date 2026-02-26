@@ -115,7 +115,6 @@ const Caregivers = window.Caregivers = () => {
       const params = new URLSearchParams({
         address: searchAddress,
         radius: searchRadius.toString(),
-        available: 'true',
       });
       const res = await apiFetch(`/api/caregivers?${params}`);
       if (res?.ok) {
@@ -538,6 +537,7 @@ const Caregivers = window.Caregivers = () => {
                 <option value={15}>15 miles</option>
                 <option value={25}>25 miles</option>
                 <option value={50}>50 miles</option>
+                <option value={100}>100 miles</option>
               </select>
             </div>
             <button onClick={handleLocationSearch} disabled={locationLoading} style={{

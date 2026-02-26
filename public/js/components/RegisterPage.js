@@ -13,6 +13,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   const [registering, setRegistering] = useState(false);
   const [regError, setRegError] = useState('');
   const [sandboxPreview, setSandboxPreview] = useState(false);
+  const [intlPhone, setIntlPhone] = useState(false);
 
   // For care team invites, auto-select family track and skip role picker
   const isInviteFlow = !!pendingInviteToken;
@@ -43,8 +44,12 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
            formData.confirmPassword && formData.password === formData.confirmPassword;
   };
 
-  // Strip phone formatting for storage — (555) 123-4567 → 5551234567
-  const normalizePhone = (phone) => phone ? phone.replace(/\D/g, '') : null;
+  // Strip phone formatting for storage — (555) 123-4567 → 5551234567, but keep + for international
+  const normalizePhone = (phone) => {
+    if (!phone) return null;
+    if (intlPhone) return phone.replace(/[^\d\+]/g, ''); // keep + and digits
+    return phone.replace(/\D/g, '');
+  };
 
   const isDisclosuresValid = () => {
     return formData.ackNoMedical && formData.ackBgCheck && formData.ackPayments;
@@ -348,8 +353,21 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             </div>
             <div className="form-group">
               <label>Phone <span style={{ color: '#999', fontSize: 12, fontWeight: 400 }}>(optional)</span></label>
-              <input type="tel" value={formData.phone} onChange={(e) => setFormData(p => ({ ...p, phone: formatPhone(e.target.value) }))} placeholder="(555) 123-4567" />
-              <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Required for setup, but not to begin</div>
+              <input type="tel" value={formData.phone}
+                onChange={(e) => setFormData(p => ({ ...p, phone: formatPhone(e.target.value, intlPhone) }))}
+                placeholder={intlPhone ? '+44 7911 123456' : '(555) 123-4567'} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                <div style={{ fontSize: '12px', color: '#888' }}>Required for setup, but not to begin</div>
+                <button type="button" onClick={() => { setIntlPhone(!intlPhone); setFormData(p => ({ ...p, phone: '' })); }}
+                  style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                  {intlPhone ? 'US number' : 'International number'}
+                </button>
+              </div>
+              {intlPhone && (
+                <div style={{ fontSize: 12, color: '#e65100', background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 6, padding: '8px 10px', marginTop: 6 }}>
+                  {INTL_PHONE_DISCLAIMER}
+                </div>
+              )}
             </div>
           </>
         )}

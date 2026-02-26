@@ -181,6 +181,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   const [pwData, setPwData] = useState({ current: '', new: '', confirm: '' });
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState(null);
+  const [intlPhone, setIntlPhone] = useState(false);
 
   // Passkey state
   const [passkeys, setPasskeys] = useState([]);
@@ -396,10 +397,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   const roleLabels = { family: 'Family Member', caregiver: 'Caregiver', care_for: 'Care Recipient' };
 
   const startEditing = () => {
+    const isIntl = user?.phone && /^\+/.test(user.phone);
+    setIntlPhone(isIntl);
     setEditData({
       firstName: user?.first_name || '',
       lastName: user?.last_name || '',
-      phone: formatPhone(user?.phone),
+      phone: isIntl ? user.phone : formatPhone(user?.phone),
       pets: user?.pets || '',
       petAllergies: user?.pet_allergies || '',
       foodAllergies: user?.food_allergies || '',
@@ -418,7 +421,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         body: JSON.stringify({
           firstName: editData.firstName,
           lastName: editData.lastName,
-          phone: editData.phone ? editData.phone.replace(/\D/g, '') : null,
+          phone: editData.phone ? (intlPhone ? editData.phone.replace(/[^\d\+]/g, '') : editData.phone.replace(/\D/g, '')) : null,
           pets: editData.pets,
           petAllergies: editData.petAllergies,
           foodAllergies: editData.foodAllergies,
@@ -607,8 +610,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
                   <input style={inputStyle} value={editData.lastName} onChange={(e) => ed('lastName', e.target.value)} />
                 </div>
                 <div>
-                  <div style={fieldLabel}>Phone</div>
-                  <input type="tel" style={inputStyle} value={editData.phone} onChange={(e) => ed('phone', formatPhone(e.target.value))} placeholder="(555) 123-4567" />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={fieldLabel}>Phone</div>
+                    <button type="button" onClick={() => { setIntlPhone(!intlPhone); ed('phone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                      {intlPhone ? 'US number' : 'International number'}
+                    </button>
+                  </div>
+                  <input type="tel" style={inputStyle} value={editData.phone} onChange={(e) => ed('phone', formatPhone(e.target.value, intlPhone))} placeholder={intlPhone ? '+44 20 7946 0958' : '(555) 123-4567'} />
+                  {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
                 </div>
                 <div>
                   <div style={fieldLabel}>Email</div>

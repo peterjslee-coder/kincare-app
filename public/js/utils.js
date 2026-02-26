@@ -1,15 +1,22 @@
 const { useState, useEffect, useRef, useCallback, createContext, useContext } = React;
 const API_BASE = window.location.origin;
 
-// ─── Phone formatting: (555) 123-4567 ───
-const formatPhone = window.formatPhone = (value) => {
+// ─── Phone formatting: (555) 123-4567 or international passthrough ───
+const formatPhone = window.formatPhone = (value, isInternational) => {
   if (!value) return '';
+  if (isInternational) {
+    // Allow +, digits, spaces, dashes, dots — strip everything else
+    return String(value).replace(/[^\d\s\-\+\(\)\.]/g, '').slice(0, 20);
+  }
   const d = String(value).replace(/\D/g, '');
   if (!d) return '';
   if (d.length <= 3) return '(' + d;
   if (d.length <= 6) return '(' + d.slice(0, 3) + ') ' + d.slice(3);
   return '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6, 10);
 };
+
+// ─── International phone disclaimer text ───
+const INTL_PHONE_DISCLAIMER = window.INTL_PHONE_DISCLAIMER = 'InPlace is primarily US-based. With an international number, you should not expect to receive calls from a caregiver. Plan on using the in-app chat feature primarily. Voice and video options are coming soon.';
 
 let AUTH_TOKEN = null;
 const setAuthToken = window.setAuthToken = (token) => {
