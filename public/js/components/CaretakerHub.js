@@ -923,6 +923,28 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
+      {/* Earnings Summary Tile */}
+      {profile && (
+        <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>This Month</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#1b6b5a', marginTop: 2 }}>
+                ${earningsThisMonth || data.stats?.monthlyEarnings || '0'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Sessions</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#333' }}>{sessionsThisMonth || data.stats?.completedThisMonth || 0}</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Rating</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#f59e0b' }}>{'\u2B50'} {profile.rating || '\u2014'}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Find Work + Available Jobs — merged tile */}
       {(() => {
         const sortedJobs = [...openJobs].sort((a, b) => {
@@ -1120,6 +1142,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       {s.specialInstructions && <div style={{ fontSize: 12, color: '#555', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#1b6b5a' }}>
+                          ${Math.round(s.caregiverPayout || parseFloat(s.estimatedCost) || 0)}
+                        </div>
+                      )}
                       {isActive && (
                         <button onClick={() => {
                           setCheckOutMood('');
@@ -1316,27 +1343,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         <div className={shouldBlur ? 'lock-content' : ''}>
 
 
-      {/* Earnings Summary */}
-      {profile && (
-        <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>This Month</div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#1b6b5a', marginTop: 2 }}>
-                ${earningsThisMonth || '0'}
-              </div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Sessions</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#333' }}>{sessionsThisMonth || 0}</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Rating</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#f59e0b' }}>⭐ {profile.rating || '—'}</div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Earnings Summary — moved to main dashboard flow above */}
 
       {/* Tab Content */}
       <div ref={tabContentRef} style={{

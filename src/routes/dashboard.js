@@ -303,10 +303,10 @@ async function caregiverDashboard(db, userId, res) {
     WHERE caregiver_id = ? AND status IN ('confirmed', 'pending') AND scheduled_date >= ?
   `).get(profile.id, today);
 
-  // Open care requests — jobs available to claim (next 5 days only to avoid noise)
-  const fiveDaysOut = new Date(cgEtNow);
-  fiveDaysOut.setDate(fiveDaysOut.getDate() + 5);
-  const fiveDayStr = fiveDaysOut.getFullYear() + '-' + String(fiveDaysOut.getMonth() + 1).padStart(2, '0') + '-' + String(fiveDaysOut.getDate()).padStart(2, '0');
+  // Open care requests — jobs available to claim (next 30 days)
+  const thirtyDaysOut = new Date(cgEtNow);
+  thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30);
+  const fiveDayStr = thirtyDaysOut.getFullYear() + '-' + String(thirtyDaysOut.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysOut.getDate()).padStart(2, '0');
 
   // Demo isolation: only show jobs from families with matching demo status
   const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(userId);
