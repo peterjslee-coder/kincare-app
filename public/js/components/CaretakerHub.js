@@ -1019,7 +1019,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{formatServiceType(job.serviceType)}</div>
                         <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                           {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
-                          {effectiveTotal > 0 && <span style={{ fontWeight: 800, color: '#1b6b5a', fontSize: 20 }}> \u2022 ${effectiveTotal.toFixed(0)}</span>}
+                          {effectiveTotal > 0 && <React.Fragment><span> {'\u2022'} </span><span style={{ fontWeight: 800, color: '#1b6b5a', fontSize: 20 }}>${effectiveTotal.toFixed(0)}</span></React.Fragment>}
                         </div>
                         {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
                         {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
@@ -1235,7 +1235,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                       <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>{'\u2713'} Done</span>
-                      {s.caregiverPayout > 0 && <span style={{ fontSize: 20, fontWeight: 800, color: '#1b6b5a' }}>${s.caregiverPayout.toFixed(2)}</span>}
+                      {s.caregiverPayout > 0 && <span style={{ fontSize: 22, fontWeight: 800, color: '#1b6b5a', background: '#e8f5e9', padding: '4px 10px', borderRadius: 8 }}>${s.caregiverPayout.toFixed(2)}</span>}
                     </div>
                   </div>
                 </div>

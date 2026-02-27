@@ -262,7 +262,12 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, onClose }) => {
               {/* Cost Breakdown */}
               {cost && (
                 <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#1b6b5a', marginBottom: 8 }}>Cost Breakdown</div>
+                  {/* Your Earnings — big and prominent */}
+                  <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>You Earn</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: '#1b6b5a', marginTop: 2 }}>${(cost.caregiverPayout || cost.total).toFixed(2)}</div>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 6 }}>Breakdown</div>
                   {cost.tierBreakdown?.map((t, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 3 }}>
                       <span>{t.hours}h {t.tier} @ ${t.rate}/hr</span>
@@ -270,25 +275,21 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, onClose }) => {
                     </div>
                   ))}
                   {cost.surcharge > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#e8724a', marginBottom: 3 }}>
-                      <span>Short-notice surcharge (20%)</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#e8724a', fontWeight: 600, marginBottom: 3 }}>
+                      <span>Short-notice bonus</span>
                       <span>+${cost.surcharge.toFixed(2)}</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#1b6b5a', fontWeight: 600, borderTop: '1px solid #f0f0f0', paddingTop: 4, marginTop: 4, marginBottom: 3 }}>
-                    <span>Caregiver receives</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#1b6b5a', fontWeight: 700, borderTop: '1px solid #f0f0f0', paddingTop: 4, marginTop: 4 }}>
+                    <span>Your total</span>
                     <span>${(cost.caregiverPayout || cost.total).toFixed(2)}</span>
                   </div>
                   {cost.platformFee > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#888', marginBottom: 3 }}>
-                      <span>InPlace fee ({cost.platformFeePercent || 20}%)</span>
-                      <span>+${cost.platformFee.toFixed(2)}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#aaa', marginTop: 8 }}>
+                      <span>Family pays (incl. {cost.platformFeePercent || 20}% InPlace fee)</span>
+                      <span>${(cost.familyTotal || cost.total).toFixed(2)}</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #eee', paddingTop: 6, marginTop: 4 }}>
-                    <span>Total</span>
-                    <span>${(cost.familyTotal || cost.total).toFixed(2)}</span>
-                  </div>
                 </div>
               )}
             </>

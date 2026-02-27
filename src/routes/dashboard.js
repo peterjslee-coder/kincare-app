@@ -402,8 +402,8 @@ async function caregiverDashboard(db, userId, res) {
       health_conditions: a.health_conditions ? JSON.parse(a.health_conditions) : [],
     })),
     upcomingSessions: upcoming.map(s => {
+      // Caregiver gets full estimated_cost (platform fee is added on top for family, not deducted)
       const sessionCost = parseFloat(s.estimated_cost) || 0;
-      const cgFee = Math.round(sessionCost * (feePercentCg / 100) * 100) / 100;
       return {
         id: s.id,
         date: s.scheduled_date,
@@ -419,7 +419,7 @@ async function caregiverDashboard(db, userId, res) {
         specialInstructions: s.special_instructions,
         recipientPreferences: s.recipient_preferences,
         estimatedCost: s.estimated_cost,
-        caregiverPayout: Math.round((sessionCost - cgFee) * 100) / 100,
+        caregiverPayout: sessionCost,
         timezone: s.care_timezone || "America/New_York",
       };
     }),
@@ -457,14 +457,14 @@ async function caregiverDashboard(db, userId, res) {
       visitSummary: s.visit_summary,
       departureMood: s.departure_mood,
       estimatedCost: s.estimated_cost,
-      caregiverPayout: Math.round((parseFloat(s.estimated_cost || 0) * (1 - feePercentCg / 100)) * 100) / 100,
+      caregiverPayout: parseFloat(s.estimated_cost) || 0,
       timezone: s.care_timezone || "America/New_York",
     })),
     stats: {
       completedThisMonth: monthlyStats.completed_sessions || 0,
-      monthlyEarnings: Math.round((monthlyStats.total_earnings || 0) * (1 - feePercentCg / 100) * 100) / 100,
+      monthlyEarnings: Math.round((monthlyStats.total_earnings || 0) * 100) / 100,
       hoursThisMonth: Math.round((monthlyStats.total_hours || 0) * 10) / 10,
-      pendingEarnings: Math.round((pending.pending_earnings || 0) * (1 - feePercentCg / 100) * 100) / 100,
+      pendingEarnings: Math.round((pending.pending_earnings || 0) * 100) / 100,
       assignedFamilies: assignments.length,
     },
   });

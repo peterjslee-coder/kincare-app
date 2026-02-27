@@ -964,15 +964,40 @@ router.post("/:id/check-out", async (req, res) => {
       return res.status(400).json({ error: `Cannot check out — session status is '${session.status}'` });
     }
 
-    // Transition to completed
-    await db.prepare(
-      "UPDATE care_sessions SET status = 'completed', updated_at = NOW() WHERE id = ?"
-    ).run(req.params.id);
-
-    // Update visit_log with check-out data
+    // Calculate actual duration and adjust pay if checked out early
     const visitLog = await db.prepare(
       "SELECT * FROM visit_logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1"
     ).get(req.params.id);
+
+    let actualDurationHours = parseFloat(session.duration_hours) || 2;
+    let adjustedCost = parseFloat(session.estimated_cost) || 0;
+    const scheduledDuration = parseFloat(session.duration_hours) || 2;
+
+    if (visitLog && visitLog.check_in_time) {
+      const checkInTime = new Date(visitLog.check_in_time);
+      const checkOutTime = new Date(); // now
+      const actualMinutes = Math.max(0, (checkOutTime - checkInTime) / 60000);
+      const scheduledMinutes = scheduledDuration * 60;
+
+      // If within 15 min of scheduled end → full pay
+      if (actualMinutes >= (scheduledMinutes - 15)) {
+        actualDurationHours = scheduledDuration;
+        adjustedCost = parseFloat(session.estimated_cost) || 0;
+      } else {
+        // Round UP to nearest 15-min increment
+        const roundedMinutes = Math.ceil(actualMinutes / 15) * 15;
+        actualDurationHours = Math.round(roundedMinutes / 60 * 100) / 100;
+        // Pro-rate the pay: (actual hours / scheduled hours) × estimated_cost
+        if (scheduledDuration > 0) {
+          adjustedCost = Math.round((actualDurationHours / scheduledDuration) * parseFloat(session.estimated_cost || 0) * 100) / 100;
+        }
+      }
+    }
+
+    // Transition to completed with adjusted cost and actual duration
+    await db.prepare(
+      "UPDATE care_sessions SET status = 'completed', estimated_cost = ?, duration_hours = ?, updated_at = NOW() WHERE id = ?"
+    ).run(adjustedCost, actualDurationHours, req.params.id);
 
     if (visitLog) {
       await db.prepare(`
@@ -1029,7 +1054,7 @@ router.post("/:id/check-out", async (req, res) => {
     }
 
     res.json({
-      session: { id: req.params.id, status: "completed" },
+      session: { id: req.params.id, status: "completed", actualDurationHours: actualDurationHours, adjustedCost: adjustedCost },
       visitLog: visitLog ? { id: visitLog.id } : null,
     });
   } catch (err) {
@@ -1245,7 +1270,7 @@ router.get("/:id", async (req, res) => {
     ? await db.prepare("SELECT * FROM visit_photos WHERE visit_log_id = ?").all(visitLog.id)
     : [];
 
-  // Cost breakdown
+  // Cost breakdown — use stored surcharge (not re-calculated from current time)
   let costBreakdown = null;
   if (session.scheduled_date && session.scheduled_time) {
     const rates = {
@@ -1254,7 +1279,9 @@ router.get("/:id", async (req, res) => {
       overnight: session.rate_overnight || session.hourly_rate || 28,
       base: session.hourly_rate || 28,
     };
-    const shortNotice = isShortNotice(`${session.scheduled_date}T${session.scheduled_time}`);
+    // Use the stored surcharge to determine if session was short-notice at booking time
+    const storedSurcharge = parseFloat(session.short_notice_surcharge) || 0;
+    const shortNotice = storedSurcharge > 0;
     costBreakdown = calculateSessionCost(session.scheduled_time, null, rates, {
       scheduledDate: session.scheduled_date,
       durationHours: parseFloat(session.duration_hours || 2),
@@ -1262,15 +1289,13 @@ router.get("/:id", async (req, res) => {
     });
     costBreakdown.shortNotice = shortNotice;
 
-    // Add platform fee info
-    const getPlatformFeePercent = async (db) => { const r = await db.prepare("SELECT value FROM platform_settings WHERE key = 'fee_percent'").get(); return r ? parseFloat(r.value) : 20; };
+    // Caregiver gets full estimated_cost; platform fee added on top for family
     const feePercent = await getPlatformFeePercent(db);
-    const surchargeToCaregiver = costBreakdown.surchargeBreakdown?.caregiver || 0;
-    const surchargeToPlatform = costBreakdown.surchargeBreakdown?.platform || 0;
-    costBreakdown.caregiverPayout = Math.round((costBreakdown.subtotal + surchargeToCaregiver) * 100) / 100;
+    // caregiverPayout = subtotal + surcharge (full amount goes to caregiver)
+    costBreakdown.caregiverPayout = costBreakdown.total;
     costBreakdown.platformFeePercent = feePercent;
-    costBreakdown.platformFee = Math.round((costBreakdown.subtotal * (feePercent / 100) + surchargeToPlatform) * 100) / 100;
-    costBreakdown.familyTotal = Math.round((costBreakdown.caregiverPayout + costBreakdown.platformFee) * 100) / 100;
+    costBreakdown.platformFee = Math.round(costBreakdown.subtotal * (feePercent / 100) * 100) / 100;
+    costBreakdown.familyTotal = Math.round((costBreakdown.total + costBreakdown.platformFee) * 100) / 100;
   }
 
   res.json({ session, visitLog, photos, costBreakdown });
