@@ -479,7 +479,7 @@ router.post("/add-role", authenticate, async (req, res) => {
       const existingProfile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(user.id);
       if (!existingProfile) {
         await db.prepare(
-          "INSERT INTO caregiver_profiles (id, user_id, hourly_rate, is_available) VALUES (?, ?, 25, 1)"
+          "INSERT INTO caregiver_profiles (id, user_id, hourly_rate, is_available) VALUES (?, ?, 25, 0)"
         ).run(uuid(), user.id);
       }
     }
