@@ -228,14 +228,20 @@ const Caregivers = window.Caregivers = () => {
       bounds.push([searchCenter.lat, searchCenter.lng]);
     }
 
-    // Build set of caregiver IDs already in location results to avoid duplicates
-    const locationCgIds = new Set(locationResults.map(cg => cg.id));
-
-    // Merge: location results + assigned caregivers not already in results
-    // If a caregiver has no lat/lng, fall back to search center or recipient location
+    // Merge location results + assigned caregivers, applying fallback coords for those without location
     const fallbackLat = searchCenter?.lat || (recipients[0] && (recipients[0].latitude || recipients[0].lat));
     const fallbackLng = searchCenter?.lng || (recipients[0] && (recipients[0].longitude || recipients[0].lng));
-    const allMapCaregivers = [...locationResults];
+    const locationCgIds = new Set(locationResults.map(cg => cg.id));
+
+    // Start with location results, applying fallback coords to assigned ones without lat/lng
+    const allMapCaregivers = locationResults.map(cg => {
+      if (!cg.latitude && !cg.longitude && assignedCgIds.has(cg.id) && fallbackLat) {
+        return { ...cg, latitude: fallbackLat, longitude: fallbackLng, isAssigned: true, distance: null };
+      }
+      return cg;
+    });
+
+    // Add assigned caregivers not already in location results
     assignments.forEach(a => {
       const cg = caregivers.find(c => c.id === a.caregiver_profile_id);
       if (cg && !locationCgIds.has(cg.id)) {
