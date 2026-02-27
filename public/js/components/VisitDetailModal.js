@@ -273,10 +273,10 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose }
                       <span>${t.amount.toFixed(2)}</span>
                     </div>
                   ))}
-                  {cost.surcharge > 0 && (
+                  {cost.caregiverSurchargeShare > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#e8724a', fontWeight: 600, marginBottom: 3 }}>
-                      <span>Short-notice bonus</span>
-                      <span>+${cost.surcharge.toFixed(2)}</span>
+                      <span>Short-notice bonus (75%)</span>
+                      <span>+${cost.caregiverSurchargeShare.toFixed(2)}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#1b6b5a', fontWeight: 700, borderTop: '1px solid #f0f0f0', paddingTop: 4, marginTop: 4 }}>

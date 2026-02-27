@@ -299,13 +299,15 @@ async function caregiverDashboard(db, userId, res) {
   const monthlyStats = await db.prepare(`
     SELECT COUNT(*) as completed_sessions,
       SUM(COALESCE(actual_cost, estimated_cost)) as total_earnings,
+      SUM(COALESCE(short_notice_surcharge, 0)) as total_surcharges,
       SUM(duration_hours) as total_hours
     FROM care_sessions
     WHERE caregiver_id = ? AND scheduled_date >= ? AND status = 'completed'
   `).get(profile.id, monthStr);
 
   const pending = await db.prepare(`
-    SELECT SUM(estimated_cost) as pending_earnings
+    SELECT SUM(estimated_cost) as pending_earnings,
+      SUM(COALESCE(short_notice_surcharge, 0)) as pending_surcharges
     FROM care_sessions
     WHERE caregiver_id = ? AND status IN ('confirmed', 'pending') AND scheduled_date >= ?
   `).get(profile.id, today);
@@ -409,8 +411,11 @@ async function caregiverDashboard(db, userId, res) {
       health_conditions: a.health_conditions ? JSON.parse(a.health_conditions) : [],
     })),
     upcomingSessions: upcoming.map(s => {
-      // Caregiver gets full estimated_cost (platform fee is added on top for family, not deducted)
+      // 75/25 split: caregiver gets subtotal + 75% of surcharge
       const sessionCost = parseFloat(s.estimated_cost) || 0;
+      const surcharge = parseFloat(s.short_notice_surcharge) || 0;
+      const subtotal = sessionCost - surcharge;
+      const caregiverPayout = Math.round((subtotal + surcharge * 0.75) * 100) / 100;
       return {
         id: s.id,
         date: s.scheduled_date,
@@ -426,7 +431,7 @@ async function caregiverDashboard(db, userId, res) {
         specialInstructions: s.special_instructions,
         recipientPreferences: s.recipient_preferences,
         estimatedCost: s.estimated_cost,
-        caregiverPayout: sessionCost,
+        caregiverPayout: caregiverPayout,
         timezone: s.care_timezone || "America/New_York",
       };
     }),
@@ -453,25 +458,33 @@ async function caregiverDashboard(db, userId, res) {
       shortNoticeSurcharge: s.short_notice_surcharge,
       timezone: s.care_timezone || "America/New_York",
     })),
-    recentlyCompleted: recentCompletedCg.map(s => ({
-      id: s.id,
-      date: s.scheduled_date,
-      time: s.scheduled_time,
-      serviceType: s.service_type,
-      durationHours: s.duration_hours,
-      recipientName: s.recipient_name,
-      locationCity: s.location_city,
-      visitSummary: s.visit_summary,
-      departureMood: s.departure_mood,
-      estimatedCost: s.estimated_cost,
-      caregiverPayout: parseFloat(s.estimated_cost) || 0,
-      timezone: s.care_timezone || "America/New_York",
-    })),
+    recentlyCompleted: recentCompletedCg.map(s => {
+      // 75/25 split: caregiver gets subtotal + 75% of surcharge
+      const estCost = parseFloat(s.estimated_cost) || 0;
+      const surcharge = parseFloat(s.short_notice_surcharge) || 0;
+      const subtotal = estCost - surcharge;
+      const caregiverPayout = Math.round((subtotal + surcharge * 0.75) * 100) / 100;
+      return {
+        id: s.id,
+        date: s.scheduled_date,
+        time: s.scheduled_time,
+        serviceType: s.service_type,
+        durationHours: s.duration_hours,
+        recipientName: s.recipient_name,
+        locationCity: s.location_city,
+        visitSummary: s.visit_summary,
+        departureMood: s.departure_mood,
+        estimatedCost: s.estimated_cost,
+        caregiverPayout: caregiverPayout,
+        timezone: s.care_timezone || "America/New_York",
+      };
+    }),
     stats: {
       completedThisMonth: monthlyStats.completed_sessions || 0,
-      monthlyEarnings: Math.round((monthlyStats.total_earnings || 0) * 100) / 100,
+      // 75/25 split: caregiver earns total minus 25% of surcharges
+      monthlyEarnings: Math.round(((monthlyStats.total_earnings || 0) - (monthlyStats.total_surcharges || 0) * 0.25) * 100) / 100,
       hoursThisMonth: Math.round((monthlyStats.total_hours || 0) * 10) / 10,
-      pendingEarnings: Math.round((pending.pending_earnings || 0) * 100) / 100,
+      pendingEarnings: Math.round(((pending.pending_earnings || 0) - (pending.pending_surcharges || 0) * 0.25) * 100) / 100,
       assignedFamilies: assignments.length,
     },
   });

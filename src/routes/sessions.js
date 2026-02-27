@@ -1289,11 +1289,13 @@ router.get("/:id", async (req, res) => {
     });
     costBreakdown.shortNotice = shortNotice;
 
-    // Caregiver gets full estimated_cost; platform fee added on top for family
+    // 75/25 split: caregiver gets subtotal + 75% of surcharge
     const feePercent = await getPlatformFeePercent(db);
-    // caregiverPayout = subtotal + surcharge (full amount goes to caregiver)
-    costBreakdown.caregiverPayout = costBreakdown.total;
+    const surchargeToCaregiver = Math.round((costBreakdown.surcharge || 0) * 0.75 * 100) / 100;
+    costBreakdown.caregiverPayout = Math.round((costBreakdown.subtotal + surchargeToCaregiver) * 100) / 100;
+    costBreakdown.caregiverSurchargeShare = surchargeToCaregiver;
     costBreakdown.platformFeePercent = feePercent;
+    // Family sees: InPlace fee = 20% of subtotal (surcharge split is internal)
     costBreakdown.platformFee = Math.round(costBreakdown.subtotal * (feePercent / 100) * 100) / 100;
     costBreakdown.familyTotal = Math.round((costBreakdown.total + costBreakdown.platformFee) * 100) / 100;
   }
