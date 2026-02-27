@@ -273,18 +273,16 @@ const Caregivers = window.Caregivers = () => {
         : `<div style="width:32px;height:32px;border-radius:50%;background:${pinColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;border:2px solid #fff;margin-right:8px;flex-shrink:0">${(cg.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>`;
 
       const icon = L.divIcon({
-        className: '',
+        className: 'cg-map-pin',
         html: `<div style="
           background:${pinColor};color:#fff;padding:5px 10px;border-radius:8px 8px 8px 0;
           font-size:11px;font-weight:600;white-space:nowrap;
           box-shadow:0 2px 6px rgba(0,0,0,0.3);
           font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;
-          transform:translate(-50%,-100%);
-        ">
-          ${isAssigned ? '⭐ ' : ''}${cg.name}${distLabel}
-        </div>`,
-        iconSize: [0, 0],
-        iconAnchor: [0, 30],
+          display:inline-flex;align-items:center;gap:3px;
+        ">${isAssigned ? '<span style="font-size:10px;line-height:1">⭐</span>' : ''}${cg.name}${distLabel}</div>`,
+        iconSize: [120, 28],
+        iconAnchor: [0, 28],
       });
 
       const marker = L.marker([cg.latitude, cg.longitude], { icon }).addTo(map);

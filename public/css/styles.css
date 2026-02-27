@@ -2563,3 +2563,6 @@
         font-size: 18px;
       }
     }
+
+/* Leaflet map pin overrides */
+.cg-map-pin { overflow: visible !important; background: none !important; border: none !important; }
