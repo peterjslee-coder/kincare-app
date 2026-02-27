@@ -191,6 +191,22 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   const [showPasskeyNameInput, setShowPasskeyNameInput] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
 
+  // Caregiver - Payments state
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [payoutPref, setPayoutPref] = useState('standard');
+  const [savingPayout, setSavingPayout] = useState(false);
+  const [bgCheckPaid, setBgCheckPaid] = useState(false);
+
+  // Caregiver - Documents state
+  const [documents, setDocuments] = useState([]);
+  const [docUploading, setDocUploading] = useState(null);
+  const acctDocInputRef = useRef(null);
+  const [pendingAcctDocType, setPendingAcctDocType] = useState(null);
+
+  // Caregiver - Care Preferences state
+  const [preferences, setPreferences] = useState(null);
+  const [savingPrefs, setSavingPrefs] = useState(false);
+
   const fetchUser = async () => {
     try {
       const res = await apiFetch('/api/auth/me');
@@ -391,7 +407,40 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'devices') fetchDevices();
+    if (activeTab === 'security' || activeTab === 'devices') fetchDevices();
+  }, [activeTab]);
+
+  // Fetch caregiver financial data
+  useEffect(() => {
+    if (activeTab === 'payments') {
+      apiFetch('/api/payments/connect-status').then(async r => {
+        if (r?.ok) { const d = await r.json(); setStripeStatus(d); }
+      }).catch(() => {});
+      apiFetch('/api/payments/payout-preference').then(async r => {
+        if (r?.ok) { const d = await r.json(); setPayoutPref(d.preference || 'standard'); }
+      }).catch(() => {});
+      apiFetch('/api/dashboard').then(async r => {
+        if (r?.ok) { const d = await r.json(); setBgCheckPaid(!!d.backgroundCheckPaid); }
+      }).catch(() => {});
+    }
+  }, [activeTab]);
+
+  // Fetch caregiver documents
+  useEffect(() => {
+    if (activeTab === 'documents') {
+      apiFetch('/api/caregiver-onboarding/documents').then(async r => {
+        if (r?.ok) { const d = await r.json(); setDocuments(d.documents || []); }
+      }).catch(() => {});
+    }
+  }, [activeTab]);
+
+  // Fetch caregiver care preferences
+  useEffect(() => {
+    if (activeTab === 'preferences') {
+      apiFetch('/api/caregivers/me').then(async r => {
+        if (r?.ok) { const d = await r.json(); setPreferences(d.profile?.care_preferences ? JSON.parse(d.profile.care_preferences) : {}); }
+      }).catch(() => {});
+    }
   }, [activeTab]);
 
   const roleLabels = { family: 'Family Member', caregiver: 'Caregiver', care_for: 'Care Recipient' };
@@ -514,6 +563,86 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     setPwSaving(false);
   };
 
+  // Caregiver - Payments handlers
+  const handleConnectStripe = async () => {
+    try {
+      const res = await apiFetch('/api/payments/connect-account', { method: 'POST' });
+      if (res?.ok) {
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+        }
+      }
+    } catch (err) {
+      showToast('Failed to start Stripe setup', 'error');
+    }
+  };
+
+  const handleSavePayoutPref = async () => {
+    setSavingPayout(true);
+    try {
+      const res = await apiFetch('/api/payments/payout-preference', {
+        method: 'POST',
+        body: JSON.stringify({ preference: payoutPref })
+      });
+      if (res?.ok) {
+        showToast('Payout preference saved', 'success');
+      }
+    } catch (err) {
+      showToast('Failed to save payout preference', 'error');
+    }
+    setSavingPayout(false);
+  };
+
+  // Caregiver - Documents handlers
+  const handleDocumentUpload = async (docType) => {
+    const file = acctDocInputRef.current?.files?.[0];
+    if (!file) return;
+
+    setDocUploading(docType);
+    try {
+      const formData = new FormData();
+      formData.append('documents', file);
+      formData.append('types', JSON.stringify([docType]));
+      formData.append('metadata', JSON.stringify([{}]));
+      const token = window.AUTH_TOKEN || localStorage.getItem('auth_token');
+      const res = await fetch('/api/caregiver-onboarding/documents', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      if (res.ok) {
+        showToast('Document uploaded successfully', 'success');
+        const updated = await apiFetch('/api/caregiver-onboarding/documents');
+        if (updated?.ok) {
+          const d = await updated.json();
+          setDocuments(d.documents || []);
+        }
+      }
+    } catch (err) {
+      showToast('Failed to upload document', 'error');
+    }
+    setDocUploading(null);
+    if (acctDocInputRef.current) acctDocInputRef.current.value = '';
+  };
+
+  // Caregiver - Care Preferences handler
+  const handleSavePreferences = async () => {
+    setSavingPrefs(true);
+    try {
+      const res = await apiFetch('/api/caregivers/me', {
+        method: 'PUT',
+        body: JSON.stringify({ care_preferences: JSON.stringify(preferences) })
+      });
+      if (res?.ok) {
+        showToast('Care preferences saved', 'success');
+      }
+    } catch (err) {
+      showToast('Failed to save care preferences', 'error');
+    }
+    setSavingPrefs(false);
+  };
+
   const ed = (field, val) => setEditData({ ...editData, [field]: val });
 
   if (loading) return <LoadingSpinner text="Loading account..." />;
@@ -527,9 +656,25 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   });
 
   const isDemo = user?.is_demo || user?.isDemo;
+
+  const isCaregiver = (() => {
+    if (!user) return false;
+    const roles = user.roles ? (typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles) : [user.role];
+    return roles.includes('caregiver');
+  })();
+
   const tabs = isDemo
     ? [{ id: 'profile', label: 'Profile' }, { id: 'notifications', label: 'Notifications' }]
-    : [{ id: 'profile', label: 'Profile' }, { id: 'security', label: 'Security' }, { id: 'devices', label: 'Devices' }, { id: 'notifications', label: 'Notifications' }];
+    : [
+        { id: 'profile', label: 'Profile' },
+        { id: 'security', label: 'Security' },
+        { id: 'notifications', label: 'Notifications' },
+        ...(isCaregiver ? [
+          { id: 'payments', label: 'Payments & Earnings' },
+          { id: 'documents', label: 'Documents' },
+          { id: 'preferences', label: 'Care Preferences' },
+        ] : []),
+      ];
 
   const handleLogoutFromAccount = () => {
     localStorage.removeItem('auth_token');
@@ -975,12 +1120,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
               <p style={{ color: '#666', fontSize: 14, margin: 0 }}>No linked accounts. You can link your Google account by signing in with Google.</p>
             )}
           </div>
-        </div>
-      )}
 
-      {/* ─── Devices Tab ─── */}
-      {activeTab === 'devices' && !isDemo && (
-        <div>
+          {/* Trusted Devices */}
           <div className="card">
             <div className="card-header">Trusted Devices</div>
             {!twoFAStatus.enabled ? (
@@ -1015,6 +1156,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         </div>
       )}
 
+
       {/* ─── Notifications Tab ─── */}
       {activeTab === 'notifications' && (
         <div>
@@ -1047,6 +1189,190 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
               </label>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ─── Payments Tab (Caregiver Only) ─── */}
+      {activeTab === 'payments' && isCaregiver && (
+        <div>
+          {/* Stripe Connect Card */}
+          <div className="card">
+            <div className="card-header">Stripe Connect</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <div style={{
+                width: 12, height: 12, borderRadius: '50%',
+                background: stripeStatus?.connected ? '#1b6b5a' : '#e8724a'
+              }}></div>
+              <span style={{ fontSize: 14, fontWeight: 500 }}>
+                {stripeStatus?.connected ? 'Connected' : 'Not connected'}
+              </span>
+            </div>
+            {stripeStatus?.connected ? (
+              <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer"
+                style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'inline-block', textDecoration: 'none' }}>
+                View Stripe Dashboard
+              </a>
+            ) : (
+              <button onClick={handleConnectStripe}
+                style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Connect with Stripe
+              </button>
+            )}
+          </div>
+
+          {/* Payout Speed Card */}
+          <div className="card">
+            <div className="card-header">Payout Speed</div>
+            <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                <input type="radio" name="payout" value="standard" checked={payoutPref === 'standard'}
+                  onChange={(e) => setPayoutPref(e.target.value)} style={{ margin: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Standard (Free)</div>
+                  <div style={{ fontSize: 12, color: '#888' }}>1-2 business days</div>
+                </div>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                <input type="radio" name="payout" value="instant" checked={payoutPref === 'instant'}
+                  onChange={(e) => setPayoutPref(e.target.value)} style={{ margin: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Instant (+2% fee)</div>
+                  <div style={{ fontSize: 12, color: '#888' }}>Same day</div>
+                </div>
+              </label>
+            </div>
+            <button onClick={handleSavePayoutPref} disabled={savingPayout}
+              style={{ padding: '8px 20px', background: savingPayout ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              {savingPayout ? 'Saving...' : 'Save Preference'}
+            </button>
+          </div>
+
+          {/* Background Check Card */}
+          <div className="card">
+            <div className="card-header">Background Check</div>
+            {bgCheckPaid ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 18 }}>✓</span>
+                <span style={{ fontSize: 14, color: '#1b6b5a', fontWeight: 600 }}>Background check complete</span>
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontSize: 14, color: '#666', margin: '0 0 12px' }}>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>$30</span> one-time fee. Refunded after 10 completed sessions.
+                </p>
+                <button style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  Pay Now
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Fee Breakdown Card */}
+          <div className="card">
+            <div className="card-header">Fee Breakdown</div>
+            <div style={{ fontSize: 14, color: '#666', lineHeight: 1.6 }}>
+              <p>
+                <strong>Platform Fee:</strong> InPlace adds a <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>20%</span> platform fee to the family's cost. This does not reduce your earnings.
+              </p>
+              <p>
+                <strong>Rush Surcharge:</strong> Short-notice bookings (less than 24 hours) include a <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>20%</span> rush surcharge. <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>75%</span> of the surcharge goes to you as an incentive.
+              </p>
+            </div>
+          </div>
+
+          {/* Hour Reports — moved from Dashboard */}
+          <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: 20, marginTop: 20 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>📊 Hour Reports</h3>
+            {typeof HourReports !== 'undefined' && React.createElement(HourReports, {
+              profileName: user?.first_name ? user.first_name + ' ' + (user.last_name || '') : '',
+              academicProgram: null,
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Documents Tab (Caregiver Only) ─── */}
+      {activeTab === 'documents' && isCaregiver && (
+        <div>
+          <input type="file" ref={acctDocInputRef} style={{ display: 'none' }}
+            onChange={(e) => {
+              if (pendingAcctDocType) {
+                handleDocumentUpload(pendingAcctDocType);
+                setPendingAcctDocType(null);
+              }
+            }} />
+
+          {['drivers_license', 'certifications', 'background_check'].map(docType => {
+            const docLabel = { drivers_license: 'Driver\'s License', certifications: 'Certifications', background_check: 'Background Check' }[docType] || docType;
+            const isUploaded = documents.some(d => d.type === docType);
+
+            return (
+              <div key={docType} className="card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{docLabel}</span>
+                  <span style={{ fontSize: 18 }}>{isUploaded ? '✅' : '⬜'}</span>
+                </div>
+                <button onClick={() => {
+                  setPendingAcctDocType(docType);
+                  acctDocInputRef.current?.click();
+                }}
+                  disabled={docUploading === docType}
+                  style={{ padding: '8px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: docUploading === docType ? 0.7 : 1 }}>
+                  {docUploading === docType ? 'Uploading...' : (isUploaded ? 'Replace' : 'Upload')}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ─── Care Preferences Tab (Caregiver Only) ─── */}
+      {activeTab === 'preferences' && isCaregiver && (
+        <div>
+          {preferences && (
+            <div>
+              {[
+                { key: 'personal_hygiene', label: 'Personal hygiene' },
+                { key: 'meal_preparation', label: 'Meal preparation' },
+                { key: 'medication_reminders', label: 'Medication reminders' },
+                { key: 'light_housekeeping', label: 'Light housekeeping' },
+                { key: 'transportation', label: 'Transportation' },
+                { key: 'companionship', label: 'Companionship' },
+                { key: 'memory_care', label: 'Memory care' },
+                { key: 'mobility_assistance', label: 'Mobility assistance' },
+                { key: 'overnight_care', label: 'Overnight care' },
+                { key: 'pet_friendly_homes', label: 'Pet-friendly homes' },
+              ].map(({ key, label }) => (
+                <div key={key} className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{label}</div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input type="radio" name={key} value="green" checked={preferences[key] === 'green'}
+                        onChange={() => setPreferences({ ...preferences, [key]: 'green' })} />
+                      <span style={{ fontSize: 18 }}>🟢</span>
+                      <span style={{ fontSize: 13 }}>Comfortable</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input type="radio" name={key} value="yellow" checked={preferences[key] === 'yellow'}
+                        onChange={() => setPreferences({ ...preferences, [key]: 'yellow' })} />
+                      <span style={{ fontSize: 18 }}>🟡</span>
+                      <span style={{ fontSize: 13 }}>Willing w/ Support</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input type="radio" name={key} value="red" checked={preferences[key] === 'red'}
+                        onChange={() => setPreferences({ ...preferences, [key]: 'red' })} />
+                      <span style={{ fontSize: 18 }}>🔴</span>
+                      <span style={{ fontSize: 13 }}>Not Comfortable</span>
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <button onClick={handleSavePreferences} disabled={savingPrefs}
+                style={{ padding: '12px 24px', background: savingPrefs ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
+                {savingPrefs ? 'Saving...' : 'Save Preferences'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

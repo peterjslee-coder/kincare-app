@@ -1,6 +1,7 @@
-// ─── FindWork — Caregiver-focused page to discover and accept care requests ───
-// List + Map views, zip code search, date/service filters, accept flow
+// ─── FindWork — Caregiver work hub: open jobs, availability, rates, families ───
+// Sub-tabs: Open Jobs (list/map), Availability, My Rates, My Families
 const FindWork = window.FindWork = () => {
+  const [subTab, setSubTab] = useState('jobs'); // 'jobs' | 'availability' | 'rates' | 'families'
   const [openRequests, setOpenRequests] = useState([]);
   const [upcomingSessions, setUpcomingSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +23,66 @@ const FindWork = window.FindWork = () => {
   const markersRef = useRef([]);
   const circleRef = useRef(null);
   const { showToast } = useToast();
+
+  // ── My Rates state ──
+  const [rates, setRates] = useState({ daytime: '', nighttime: '', overnight: '' });
+  const [minOvernightHours, setMinOvernightHours] = useState(6);
+  const [savingRates, setSavingRates] = useState(false);
+  const [ratesLoaded, setRatesLoaded] = useState(false);
+
+  // ── My Families state ──
+  const [assignments, setAssignments] = useState([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+
+  // Fetch rates when switching to rates tab
+  useEffect(() => {
+    if (subTab === 'rates' && !ratesLoaded) {
+      apiFetch('/api/caregivers/me').then(async r => {
+        if (r?.ok) {
+          const d = await r.json();
+          const p = d.profile || d.caregiver || {};
+          setRates({
+            daytime: p.hourly_rate || p.hourlyRate || '',
+            nighttime: p.nighttime_rate || p.nighttimeRate || '',
+            overnight: p.overnight_rate || p.overnightRate || '',
+          });
+          setMinOvernightHours(p.min_overnight_hours || 6);
+          setRatesLoaded(true);
+        }
+      }).catch(() => {});
+    }
+  }, [subTab, ratesLoaded]);
+
+  // Fetch families when switching to families tab
+  useEffect(() => {
+    if (subTab === 'families') {
+      setLoadingAssignments(true);
+      apiFetch('/api/assignments').then(async r => {
+        if (r?.ok) {
+          const d = await r.json();
+          setAssignments(d.assignments || d || []);
+        }
+      }).catch(() => {}).finally(() => setLoadingAssignments(false));
+    }
+  }, [subTab]);
+
+  const handleSaveRates = async () => {
+    setSavingRates(true);
+    try {
+      const res = await apiFetch('/api/caregivers/me', {
+        method: 'PUT',
+        body: JSON.stringify({
+          hourly_rate: parseFloat(rates.daytime) || 0,
+          nighttime_rate: parseFloat(rates.nighttime) || 0,
+          overnight_rate: parseFloat(rates.overnight) || 0,
+          min_overnight_hours: parseFloat(minOvernightHours) || 6,
+        }),
+      });
+      if (res?.ok) showToast('Rates saved!', 'success');
+      else showToast('Failed to save rates', 'error');
+    } catch { showToast('Failed to save rates', 'error'); }
+    setSavingRates(false);
+  };
 
   const toLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -274,14 +335,146 @@ const FindWork = window.FindWork = () => {
 
   if (loading || bgCheckPaid === null) return React.createElement(LoadingSpinner, { text: 'Finding available work...' });
 
+  // ── Sub-tab bar style ──
+  const subTabStyle = (id) => ({
+    padding: '8px 18px', background: 'none', border: 'none',
+    borderBottom: subTab === id ? '3px solid #1b6b5a' : '3px solid transparent',
+    fontWeight: subTab === id ? 700 : 500, fontSize: 13, cursor: 'pointer',
+    color: subTab === id ? '#1b6b5a' : '#888', fontFamily: 'inherit', transition: 'all 0.15s',
+  });
+
   return (
     <div>
       <div className="page-header">
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>🔍</span> Find Work
         </h1>
-        <p className="page-subtitle">Open care requests from families in your area</p>
+        <p className="page-subtitle">Your work hub — find jobs, set rates, manage availability</p>
       </div>
+
+      {/* ── Sub-tab navigation ── */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', marginBottom: 16, overflowX: 'auto' }}>
+        <button onClick={() => setSubTab('jobs')} style={subTabStyle('jobs')}>🔔 Open Jobs</button>
+        <button onClick={() => setSubTab('availability')} style={subTabStyle('availability')}>🕐 Availability</button>
+        <button onClick={() => setSubTab('rates')} style={subTabStyle('rates')}>💰 My Rates</button>
+        <button onClick={() => setSubTab('families')} style={subTabStyle('families')}>👪 My Families</button>
+      </div>
+
+      {/* ═══ AVAILABILITY SUB-TAB ═══ */}
+      {subTab === 'availability' && (
+        typeof AvailabilityTab !== 'undefined'
+          ? React.createElement(AvailabilityTab)
+          : <div className="card" style={{ padding: 24, textAlign: 'center', color: '#888' }}>Availability calendar loading...</div>
+      )}
+
+      {/* ═══ MY RATES SUB-TAB ═══ */}
+      {subTab === 'rates' && (
+        <div>
+          <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 16, color: '#1b6b5a' }}>💰 Your Hourly Rates</h3>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px', lineHeight: 1.6 }}>
+              Set your rates for each time tier. Families see these rates when booking, and your earnings are calculated based on when the session falls.
+            </p>
+            <div style={{ display: 'grid', gap: 14 }}>
+              {[
+                { key: 'daytime', label: 'Daytime (7am – 6pm)', icon: '☀️' },
+                { key: 'nighttime', label: 'Evening (6pm – 12am)', icon: '🌆' },
+                { key: 'overnight', label: 'Overnight (12am – 7am)', icon: '🌙' },
+              ].map(tier => (
+                <div key={tier.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 18, width: 28, textAlign: 'center' }}>{tier.icon}</span>
+                  <label style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#333' }}>{tier.label}</label>
+                  <div style={{ position: 'relative', width: 100 }}>
+                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#888' }}>$</span>
+                    <input type="number" value={rates[tier.key]} onChange={e => setRates(r => ({ ...r, [tier.key]: e.target.value }))}
+                      placeholder="0" min="0" step="0.50"
+                      style={{ width: '100%', padding: '8px 10px 8px 24px', borderRadius: 8, border: '1px solid #d0d0d0', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+                  <span style={{ fontSize: 12, color: '#888' }}>/hr</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 16, padding: '12px 14px', background: '#f0faf8', borderRadius: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#333', flex: 1 }}>Overnight minimum hours</label>
+                <input type="number" value={minOvernightHours} onChange={e => setMinOvernightHours(e.target.value)}
+                  min="1" max="12" step="1"
+                  style={{ width: 70, padding: '6px 10px', borderRadius: 8, border: '1px solid #d0d0d0', fontSize: 14, textAlign: 'center' }} />
+                <span style={{ fontSize: 12, color: '#888' }}>hrs</span>
+              </div>
+              <p style={{ fontSize: 11, color: '#666', margin: '6px 0 0', lineHeight: 1.5 }}>
+                If a session includes overnight hours, the family is charged for at least this many hours at your overnight rate.
+              </p>
+            </div>
+
+            <button onClick={handleSaveRates} disabled={savingRates}
+              style={{ marginTop: 16, width: '100%', padding: 12, background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: savingRates ? 'wait' : 'pointer', opacity: savingRates ? 0.7 : 1 }}>
+              {savingRates ? 'Saving...' : 'Save Rates'}
+            </button>
+          </div>
+
+          <div className="card" style={{ padding: 20 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>How Pricing Works</h3>
+            <div style={{ fontSize: 13, color: '#555', lineHeight: 1.7 }}>
+              <p style={{ margin: '0 0 10px' }}><strong>Platform fee (20%)</strong> — added to the family's cost, not deducted from your earnings. If your rate is $30/hr, you receive $30/hr.</p>
+              <p style={{ margin: '0 0 10px' }}><strong>Short-notice bookings (&lt;24 hours)</strong> — a 20% rush surcharge is added. 75% of the surcharge goes to you as an incentive for taking last-minute work.</p>
+              <p style={{ margin: 0 }}><strong>Instant payouts</strong> — choose instant payouts in Account → Payments for same-day deposits (+2% processing fee), or keep standard free payouts (1–2 business days).</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MY FAMILIES SUB-TAB ═══ */}
+      {subTab === 'families' && (
+        <div>
+          {loadingAssignments ? (
+            <div className="card" style={{ padding: 24, textAlign: 'center', color: '#888' }}>Loading assigned families...</div>
+          ) : assignments.length > 0 ? (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {assignments.map(a => {
+                const name = `${a.first_name || a.firstName || ''} ${a.last_name || a.lastName || ''}`.trim() || 'Client';
+                const city = a.location_city || a.city || '';
+                const conditions = a.health_conditions || a.healthConditions;
+                const condList = conditions ? (typeof conditions === 'string' ? JSON.parse(conditions) : conditions) : [];
+                const isFav = a.is_favorite || a.isFavorite;
+                return (
+                  <div key={a.id || a.care_recipient_id} className="card" style={{ padding: 16, borderLeft: isFav ? '4px solid #f59e0b' : '4px solid #42a5f5' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: '#1a1a2e', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {isFav && <span title="Favorite">⭐</span>}
+                          {name}
+                        </div>
+                        {city && <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>📍 {city}{a.location_state ? `, ${a.location_state}` : ''}</div>}
+                        {a.location_address && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{a.location_address}</div>}
+                      </div>
+                    </div>
+                    {condList.length > 0 && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                        {condList.map((c, i) => (
+                          <span key={i} style={{ padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: '#fff3e0', color: '#e65100' }}>{c}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>👪</div>
+              <h3 style={{ margin: '0 0 8px', color: '#333', fontSize: 16 }}>No assigned families yet</h3>
+              <p style={{ color: '#888', fontSize: 13, margin: 0 }}>
+                When you accept care requests, families will appear here as your assigned clients.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ OPEN JOBS SUB-TAB ═══ */}
+      {subTab === 'jobs' && <>
 
       {/* Background check gate */}
       {!bgCheckPaid && (
@@ -604,6 +797,7 @@ const FindWork = window.FindWork = () => {
         </div>
         </>
       )}
+      </>}
       </>}
 
       {/* Cancel Confirmation Modal */}

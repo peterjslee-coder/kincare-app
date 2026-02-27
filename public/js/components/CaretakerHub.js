@@ -115,6 +115,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [editingStoplight, setEditingStoplight] = useState(false);
   const [stoplightForm, setStoplightForm] = useState({});
 
+  // Reviews modal state
+  const [showReviews, setShowReviews] = useState(false);
+  const [reviews, setReviews] = useState([]);
+
+  // Earnings summary state
+  const [earningsThisMonth, setEarningsThisMonth] = useState(0);
+  const [sessionsThisMonth, setSessionsThisMonth] = useState(0);
+
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -164,6 +172,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       if (res?.ok) setPayoutSpeed(speed);
     } catch (err) { console.error('Payout pref save error:', err); }
     setPayoutSaving(false);
+  };
+
+  const fetchReviews = async () => {
+    try {
+      const res = await apiFetch('/api/caregivers/me/reviews');
+      if (res?.ok) {
+        const d = await res.json();
+        setReviews(d.reviews || []);
+      }
+    } catch (err) { console.error('Reviews fetch error:', err); }
   };
 
   const handleSaveRule = async () => {
@@ -400,6 +418,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       .catch(() => {});
   }, [_autoStepCount]);
 
+  // Compute earnings and sessions this month
+  useEffect(() => {
+    if (!completedSessions || completedSessions.length === 0) {
+      setEarningsThisMonth(0);
+      setSessionsThisMonth(0);
+      return;
+    }
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthSessions = completedSessions.filter(s => {
+      const sessionDate = s.session_date ? new Date(s.session_date) : null;
+      return sessionDate && sessionDate >= thisMonthStart;
+    });
+    const earnings = monthSessions.reduce((sum, s) => sum + (s.actual_cost || s.estimated_cost || 0), 0);
+    setEarningsThisMonth(earnings);
+    setSessionsThisMonth(monthSessions.length);
+  }, [completedSessions]);
+
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []).slice(0, 5);
     setLogPhotos(prev => [...prev, ...files].slice(0, 5));
@@ -506,7 +542,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const assignments = data.assignments || [];
   const sessions = data.upcomingSessions || [];
   const openJobs = data.openJobs || [];
-  const reviews = data.reviews || [];
+  const dataReviews = data.reviews || [];
   const stats = data.stats || {};
 
   // Find sessions ready for check-in (confirmed, today, within 15 min of start or past start)
@@ -523,6 +559,23 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     const sessionStartET = TimezoneHelper.buildDateTime(sessionDate, sTime, tz);
     const minsUntil = (sessionStartET - etNow) / 60000;
     return minsUntil <= 60 || profile.earlyCheckInAllowed;
+  });
+
+  // Split sessions into today vs future (excluding completed)
+  const todaySessions = sessions.filter(s => {
+    if (s.status === 'completed') return false;
+    const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+    const etDate = TimezoneHelper.getToday(tz);
+    const sessionDate = (s.date || s.scheduled_date || '').split('T')[0];
+    return sessionDate === etDate;
+  });
+
+  const futureSessions = sessions.filter(s => {
+    if (s.status === 'completed') return false;
+    const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+    const etDate = TimezoneHelper.getToday(tz);
+    const sessionDate = (s.date || s.scheduled_date || '').split('T')[0];
+    return sessionDate !== etDate;
   });
 
   const CARE_TASKS = [
@@ -686,19 +739,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const totalEarned = completedSessions.reduce((sum, s) => sum + (s.actual_cost || s.estimated_cost || 0), 0);
   const avgHourlyRate = totalHours > 0 ? (totalEarned / totalHours).toFixed(0) : (profile.hourlyRate || '--');
 
-  const tabs = [
-    { id: 'schedule', label: 'Calendar', icon: '📅' },
-    { id: 'availability', label: 'Availability', icon: '🕐' },
-    { id: 'families', label: 'My Families', icon: '👪' },
-    { id: 'map', label: 'Area Map', icon: '🗺️' },
-    { id: 'earnings', label: 'Earnings', icon: '💰' },
-    { id: 'financials', label: 'Financials', icon: '🏦' },
-    { id: 'reviews', label: 'Reviews', icon: '⭐' },
-    { id: 'documents', label: 'Documents', icon: '📄' },
-    { id: 'preferences', label: 'Care Preferences', icon: '🚦' },
-    { id: 'reports', label: 'Hour Reports', icon: '📊' },
-  ];
-
   return (
     <div>
       {/* Push notification prompt — shows if not yet enabled */}
@@ -746,7 +786,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {profile.isAvailable ? 'Available' : 'Unavailable'}
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#1b6b5a' }}>⭐ {profile.rating || '—'}</div>
+            <div onClick={() => { setShowReviews(true); fetchReviews(); }} style={{ fontSize: '20px', fontWeight: 700, color: '#1b6b5a', cursor: 'pointer' }} title="View reviews">⭐ {profile.rating || '—'}</div>
             <div style={{ fontSize: '11px', color: '#999' }}>{profile.reviewCount || 0} reviews</div>
           </div>
         </div>
@@ -777,90 +817,105 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         return null;
       })()}
 
-      {/* Available Jobs — open care requests seeking caregivers (FRONT AND CENTER) */}
-      {openJobs.length > 0 && (() => {
-        // Sort jobs based on selected sort
-        const sortedJobs = [...openJobs].sort((a, b) => {
-          if (jobSort === 'highest_pay') {
-            const aRate = parseFloat(a.proposedRate) || 0;
-            const bRate = parseFloat(b.proposedRate) || 0;
-            return bRate - aRate;
-          }
-          // Default: soonest
-          const aKey = (a.date || '') + (a.time || '');
-          const bKey = (b.date || '') + (b.time || '');
-          return aKey.localeCompare(bKey);
-        });
+      {/* TODAY — today's sessions at the very top */}
+      {todaySessions.length > 0 && (() => {
+        const readySet = new Set(readyToCheckIn.map(s => s.id));
 
         return (
-          <div style={{ marginBottom: 16, padding: '16px', background: 'linear-gradient(135deg, #fff5f0 0%, #fff 100%)', border: '2px solid #e8724a', borderRadius: 12, boxShadow: '0 2px 12px rgba(232, 114, 74, 0.15)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#e8724a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#e8724a', animation: 'pulse 1.5s infinite' }}></span>
-                {openJobs.length === 1 ? 'New Care Request' : `${openJobs.length} Care Requests`} — Needs You!
-              </div>
-              {openJobs.length > 1 && (
-                <select value={jobSort} onChange={e => setJobSort(e.target.value)}
-                  style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #ddd', color: '#666', background: '#fff' }}>
-                  <option value="soonest">Soonest first</option>
-                  <option value="highest_pay">Highest pay</option>
-                </select>
-              )}
-            </div>
-            {sortedJobs.map(job => {
-              const sDate = (job.date || '').split('T')[0];
-              const dateParts = sDate ? sDate.split('-').map(Number) : [];
-              const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
-              const now = new Date();
-              const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
-              const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
-              const tParts = (job.time || '').split(':').map(Number);
-              const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Today</div>
+            {todaySessions.map(s => {
+              const isReady = readySet.has(s.id);
+              const isActive = s.status === 'in_progress';
+              const sDate = (s.date || s.scheduled_date || '').split('T')[0];
+              const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+              const etNow = TimezoneHelper.getNow(tz);
+              const sessionStartET = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
+              const minsUntil = (sessionStartET - etNow) / 60000;
+              const timeLabel = TimezoneHelper.formatTime(s.time || s.scheduled_time);
+              const duration = s.durationHours || s.duration_hours;
+              const svcType = s.serviceType || s.service_type;
+              const recipName = s.recipientName || s.recipient_name || 'Session';
+              const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
 
-              const surcharge = parseFloat(job.shortNoticeSurcharge) || 0;
-              const hasBonus = surcharge > 0;
-              const proposedRate = parseFloat(job.proposedRate) || 0;
-              const hours = parseFloat(job.durationHours) || 1;
-              const baseCost = parseFloat(job.estimatedCost) || 0;
-              const basePerHour = proposedRate > 0 ? proposedRate : (hours > 0 ? Math.round(baseCost / hours) : 0);
-              const effectiveTotal = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
-              const effectivePerHour = hours > 0 ? Math.round(effectiveTotal / hours * 100) / 100 : 0;
+              // Check-in countdown
+              const checkInCountdown = (() => {
+                if (!isReady && !isActive && minsUntil > 0 && minsUntil <= 60) {
+                  const hours = Math.floor(minsUntil / 60);
+                  const mins = Math.round(minsUntil % 60);
+                  if (hours > 0) return `Check in in ${hours}h ${mins}m`;
+                  return `Check in in ${Math.ceil(minsUntil)} min`;
+                }
+                return null;
+              })();
+
+              // Border color based on status
+              const borderColor = isActive ? '#f57f17' : (isReady) ? '#e8724a' : '#1b6b5a';
+              const borderWidth = isActive || isReady ? 3 : 2;
+              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : (isReady) ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
 
               return (
-                <div key={job.id} style={{
-                  marginBottom: 8, padding: '14px 16px', background: '#fff', borderRadius: 10,
-                  border: hasBonus ? '1px solid #e8724a' : '1px solid #e0e0e0',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+                <div key={s.id} className="card" onClick={(e) => {
+                  if (e.target.tagName === 'BUTTON') return;
+                  if (s.id) setVisitDetailSessionId(s.id);
+                }} style={{
+                  marginBottom: 10, padding: '16px 18px', cursor: 'pointer',
+                  border: `${borderWidth}px solid ${borderColor}`,
+                  borderRadius: 12,
+                  background: bgStyle,
+                  boxShadow: (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)',
                 }}>
-                  <div style={{ flex: 1, minWidth: '180px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                      {hasBonus && (
-                        <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '180px' }}>
+                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress Now</div>}
+                      {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
+                      {checkInCountdown && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>{checkInCountdown}</div>}
+                      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
+                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                        {timeLabel}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
+                      </div>
+                      {loc && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>}
+                      {s.specialInstructions && <div style={{ fontSize: 12, color: '#555', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      {isActive && (
+                        <button onClick={() => {
+                          setCheckOutMood('');
+                          setCheckOutTags([]);
+                          setCheckOutCareFeedback('');
+                          setCheckOutServiceFeedback('');
+                          setCheckOutSummary('');
+                          setCheckOutSession(s);
+                        }} style={{
+                          padding: '10px 22px', background: '#c62828', color: '#fff', border: 'none',
+                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
+                        }}>Check Out</button>
                       )}
-                      {hasBonus && basePerHour > 0 ? (
-                        <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ textDecoration: 'line-through', color: '#999', fontSize: 12 }}>${basePerHour}/hr</span>
-                          <span style={{ color: '#1b6b5a', fontWeight: 700, fontSize: 14 }}>${effectivePerHour}/hr</span>
-                        </span>
-                      ) : basePerHour > 0 ? (
-                        <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
-                      ) : null}
+                      {isReady && !isActive && (
+                        <button onClick={() => {
+                          setCheckInMood('');
+                          setCheckInNotes(null);
+                          setCheckInLocation(null);
+                          setLocationError(null);
+                          if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition(
+                              (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+                              (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
+                              { timeout: 8000, enableHighAccuracy: false }
+                            );
+                          } else {
+                            setLocationError('Geolocation not supported');
+                          }
+                          setCheckInSession(s);
+                        }} style={{
+                          padding: '10px 22px', background: '#e8724a', color: '#fff', border: 'none',
+                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
+                        }}>Check In Now</button>
+                      )}
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{formatServiceType(job.serviceType)}</div>
-                    <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                      {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
-                      {effectiveTotal > 0 && <span style={{ fontWeight: 600, color: '#1b6b5a' }}> \u2022 ${effectiveTotal.toFixed(0)} total</span>}
-                    </div>
-                    {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
-                    {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
                   </div>
-                  <button onClick={() => handleClaimJob(job.id)} disabled={claimingJobId === job.id}
-                    style={{
-                      padding: '10px 20px', background: claimingJobId === job.id ? '#ccc' : '#e8724a', color: '#fff', border: 'none',
-                      borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
-                      boxShadow: '0 2px 6px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
-                    }}>{claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
                 </div>
               );
             })}
@@ -868,10 +923,110 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* Next Up — upcoming sessions (no completed) */}
+      {/* Find Work + Available Jobs — merged tile */}
       {(() => {
-        // Sort sessions: in_progress first, then by date/time
-        const sorted = [...sessions].filter(s => s.status !== 'completed').sort((a, b) => {
+        const sortedJobs = [...openJobs].sort((a, b) => {
+          if (jobSort === 'highest_pay') {
+            const aRate = parseFloat(a.proposedRate) || 0;
+            const bRate = parseFloat(b.proposedRate) || 0;
+            return bRate - aRate;
+          }
+          const aKey = (a.date || '') + (a.time || '');
+          const bKey = (b.date || '') + (b.time || '');
+          return aKey.localeCompare(bKey);
+        });
+
+        return (
+          <div style={{ borderRadius: 14, overflow: 'hidden', marginBottom: 20, border: '1px solid #d4edda', background: '#fff' }}>
+            {/* Green header */}
+            <div style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)', color: '#fff', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              onClick={() => window.__navigateTo && window.__navigateTo('find-work')}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 17 }}>🔍 Find Work</div>
+                <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>{openJobs.length} open job{openJobs.length !== 1 ? 's' : ''} near you</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, opacity: 0.8 }}>Map · Availability · Rates</span>
+                <span style={{ fontSize: 22, opacity: 0.7 }}>→</span>
+              </div>
+            </div>
+            {/* Job list */}
+            {sortedJobs.length > 0 && (
+              <div style={{ padding: '4px 0' }}>
+                {sortedJobs.map(job => {
+                  const sDate = (job.date || '').split('T')[0];
+                  const dateParts = sDate ? sDate.split('-').map(Number) : [];
+                  const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
+                  const now = new Date();
+                  const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
+                  const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+                  const tParts = (job.time || '').split(':').map(Number);
+                  const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+
+                  const surcharge = parseFloat(job.shortNoticeSurcharge) || 0;
+                  const hasBonus = surcharge > 0;
+                  const proposedRate = parseFloat(job.proposedRate) || 0;
+                  const hours = parseFloat(job.durationHours) || 1;
+                  const baseCost = parseFloat(job.estimatedCost) || 0;
+                  const basePerHour = proposedRate > 0 ? proposedRate : (hours > 0 ? Math.round(baseCost / hours) : 0);
+                  const effectiveTotal = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
+                  const effectivePerHour = hours > 0 ? Math.round(effectiveTotal / hours * 100) / 100 : 0;
+
+                  return (
+                    <div key={job.id} style={{
+                      marginBottom: 8, padding: '14px 16px', background: '#fff', borderRadius: 0,
+                      border: hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
+                      borderTop: '1px solid #f0f0f0',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+                    }}>
+                      <div style={{ flex: 1, minWidth: '180px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                          {hasBonus && (
+                            <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
+                          )}
+                          {hasBonus && basePerHour > 0 ? (
+                            <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ textDecoration: 'line-through', color: '#999', fontSize: 12 }}>${basePerHour}/hr</span>
+                              <span style={{ color: '#1b6b5a', fontWeight: 700, fontSize: 14 }}>${effectivePerHour}/hr</span>
+                            </span>
+                          ) : basePerHour > 0 ? (
+                            <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
+                          ) : null}
+                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{formatServiceType(job.serviceType)}</div>
+                        <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                          {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
+                          {effectiveTotal > 0 && <span style={{ fontWeight: 800, color: '#1b6b5a', fontSize: 20 }}> \u2022 ${effectiveTotal.toFixed(0)}</span>}
+                        </div>
+                        {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
+                        {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
+                      </div>
+                      <button onClick={() => handleClaimJob(job.id)} disabled={claimingJobId === job.id}
+                        style={{
+                          padding: '10px 20px', background: claimingJobId === job.id ? '#ccc' : '#e8724a', color: '#fff', border: 'none',
+                          borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
+                          boxShadow: '0 2px 6px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
+                        }}>{claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* Footer */}
+            <div style={{ textAlign: 'center', padding: '10px', borderTop: '1px solid #f0f0f0' }}>
+              <span onClick={() => window.__navigateTo && window.__navigateTo('find-work')} style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600, cursor: 'pointer' }}>
+                View all jobs, map & availability →
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Next Up — future sessions only (not today, not completed) */}
+      {(() => {
+        // Sort future sessions: in_progress first, then by date/time
+        const sorted = [...futureSessions].sort((a, b) => {
           if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
           if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
           const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
@@ -1025,30 +1180,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* Recently Completed */}
+      {/* Completed — last 2 only, with fade rule */}
       {(() => {
         const completed = data.recentlyCompleted || [];
         if (completed.length === 0) return null;
         return (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              Completed
-            </div>
-            {completed.slice(0, 3).map(s => {
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Completed</div>
+            {completed.slice(0, 2).map((s, i) => {
               const sDate = (s.date || '').split('T')[0];
               const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
               const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
               const timeLabel = TimezoneHelper.formatTime(s.time);
               const recipName = s.recipientName || 'Session';
               return (
-                <div key={s.id} className="card" onClick={() => {
-                  if (s.id) setVisitDetailSessionId(s.id);
-                }} style={{
-                  marginBottom: 8, padding: '12px 16px', cursor: 'pointer',
-                  border: '1px solid #e0e0e0', borderRadius: 10,
-                  background: '#fafafa',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div key={s.id} style={{ padding: '14px 18px', borderRadius: 12, marginBottom: 8, background: '#fafafa', border: '1px solid #e5e7eb', opacity: i === 0 ? 1 : 0.7 }}>
+                  <div onClick={() => {
+                    if (s.id) setVisitDetailSessionId(s.id);
+                  }} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{recipName}</div>
                       <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
@@ -1059,7 +1208,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                       <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>{'\u2713'} Done</span>
-                      {s.caregiverPayout > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a' }}>${s.caregiverPayout.toFixed(2)}</span>}
+                      {s.caregiverPayout > 0 && <span style={{ fontSize: 20, fontWeight: 800, color: '#1b6b5a' }}>${s.caregiverPayout.toFixed(2)}</span>}
                     </div>
                   </div>
                 </div>
@@ -1088,12 +1237,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {firstSteps.map((s, idx) => (
               <div key={s.id} className={'onboarding-step' + (s.done ? ' done' : '')} onClick={() => {
                 if (s.done) return;
-                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', rateDaytime: profile.rateDaytime || profile.hourlyRate || '', rateNighttime: profile.rateNighttime || '', rateOvernight: profile.rateOvernight || '', foodAllergies: '', medicalConditions: '' }); goToStep('profile'); }
-                if (s.id === 'availability') goToStep('availability');
-                if (s.id === 'stoplight') goToStep('preferences');
+                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', rateDaytime: profile.rateDaytime || profile.hourlyRate || '', rateNighttime: profile.rateNighttime || '', rateOvernight: profile.rateOvernight || '', foodAllergies: '', medicalConditions: '' }); window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'availability') window.__navigateTo && window.__navigateTo('find-work');
+                if (s.id === 'stoplight') window.__navigateTo && window.__navigateTo('account');
                 if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
-                if (s.id === 'payments') goToStep('financials');
-                if (s.id === 'bgcheck') goToStep('financials');
+                if (s.id === 'payments') window.__navigateTo && window.__navigateTo('account');
+                if (s.id === 'bgcheck') window.__navigateTo && window.__navigateTo('account');
               }}>
                 <div className="step-circle">
                   {s.done ? '\u2713' : (idx + 1)}
@@ -1135,12 +1284,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {firstSteps.map(s => (
               <div key={s.id} onClick={() => {
                 if (s.done) return;
-                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', rateDaytime: profile.rateDaytime || profile.hourlyRate || '', rateNighttime: profile.rateNighttime || '', rateOvernight: profile.rateOvernight || '', foodAllergies: '', medicalConditions: '' }); goToStep('profile'); }
-                if (s.id === 'availability') goToStep('availability');
-                if (s.id === 'stoplight') goToStep('preferences');
+                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', rateDaytime: profile.rateDaytime || profile.hourlyRate || '', rateNighttime: profile.rateNighttime || '', rateOvernight: profile.rateOvernight || '', foodAllergies: '', medicalConditions: '' }); window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'availability') window.__navigateTo && window.__navigateTo('find-work');
+                if (s.id === 'stoplight') window.__navigateTo && window.__navigateTo('account');
                 if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
-                if (s.id === 'payments') goToStep('financials');
-                if (s.id === 'bgcheck') goToStep('financials');
+                if (s.id === 'payments') window.__navigateTo && window.__navigateTo('account');
+                if (s.id === 'bgcheck') window.__navigateTo && window.__navigateTo('account');
               }} style={{
                 display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px',
                 color: s.done ? '#999' : '#333', cursor: s.done ? 'default' : 'pointer',
@@ -1167,27 +1316,27 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         <div className={shouldBlur ? 'lock-content' : ''}>
 
 
-      {/* Tabs — card grid (matches admin panel layout) */}
-      {(() => { const rc = window.ROLE_COLOR || '#1b6b5a'; return (
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-        gap: '8px', marginBottom: '20px',
-      }}>
-        {tabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: '4px', padding: '14px 8px', border: 'none', borderRadius: '12px', cursor: 'pointer',
-            background: activeTab === tab.id ? rc : '#f5f5f5',
-            color: activeTab === tab.id ? '#fff' : '#555',
-            transition: 'all 0.15s', minHeight: '72px',
-            boxShadow: activeTab === tab.id ? `0 2px 8px ${rc}4d` : 'none',
-          }}>
-            <span style={{ fontSize: '24px', lineHeight: 1 }}>{tab.icon}</span>
-            <span style={{ fontSize: '11px', fontWeight: activeTab === tab.id ? 700 : 600, letterSpacing: '0.3px' }}>{tab.label}</span>
-          </button>
-        ))}
-      </div>
-      ); })()}
+      {/* Earnings Summary */}
+      {profile && (
+        <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>This Month</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#1b6b5a', marginTop: 2 }}>
+                ${earningsThisMonth || '0'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Sessions</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#333' }}>{sessionsThisMonth || 0}</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Rating</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#f59e0b' }}>⭐ {profile.rating || '—'}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab Content */}
       <div ref={tabContentRef} style={{
@@ -1262,7 +1411,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       )}
 
-      {activeTab === 'schedule' && (
+      {/* Calendar — always rendered */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>📅 Calendar</div>
         <CaregiverCalendar
           caregiverId={profile.id}
           sessions={sessions}
@@ -1298,740 +1449,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             }
           }}
         />
-      )}
-
-      {activeTab === 'availability' && (
-        <AvailabilityTab
-          rules={availRules}
-          loading={availLoading}
-          fetchAvailability={fetchAvailability}
-          showAddRule={showAddRule}
-          setShowAddRule={setShowAddRule}
-          editingRule={editingRule}
-          setEditingRule={setEditingRule}
-          ruleForm={ruleForm}
-          setRuleForm={setRuleForm}
-          handleSaveRule={handleSaveRule}
-          handleDeleteRule={handleDeleteRule}
-          startEditRule={startEditRule}
-          dayNames={dayNames}
-          dayAbbr={dayAbbr}
-        />
-      )}
-
-      {activeTab === 'families' && (
-        <div>
-          {assignments.length > 0 ? assignments.map((a, idx) => (
-            <div key={idx} className="card" style={{ marginBottom: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 4px', color: '#333' }}>
-                    {a.recipient_first_name} {a.recipient_last_name}
-                  </h3>
-                  <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
-                    Family: {a.family_first_name} {a.family_last_name}
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#888' }}>
-                    📍 {a.location_address ? `${a.location_address}, ` : ''}{a.location_city}, {a.location_state}
-                  </div>
-                  {a.health_conditions && a.health_conditions.length > 0 && (
-                    <div style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {a.health_conditions.map((hc, i) => (
-                        <span key={i} style={{
-                          padding: '3px 8px', background: '#fff3e0', color: '#e65100',
-                          borderRadius: '12px', fontSize: '11px',
-                        }}>{hc}</span>
-                      ))}
-                    </div>
-                  )}
-                  {a.preferences && (
-                    <div style={{ fontSize: '12px', color: '#666', marginTop: '6px', fontStyle: 'italic' }}>
-                      Preferences: {a.preferences}
-                    </div>
-                  )}
-                </div>
-                {a.is_favorite === 1 && (
-                  <span style={{ fontSize: '20px' }} title="Favorite assignment">⭐</span>
-                )}
-              </div>
-            </div>
-          )) : <div style={{ padding: '20px', color: '#999', textAlign: 'center' }}>No assigned families</div>}
-        </div>
-      )}
-
-      {activeTab === 'map' && (
-        <AreaMap />
-      )}
-
-      {activeTab === 'earnings' && (
-        <div>
-          {/* My Rates Card */}
-          <div className="card" style={{ marginBottom: '16px' }}>
-            <div className="card-header"><span className="card-icon">💲</span>My Rates</div>
-            <div style={{ fontSize: '13px', color: '#666', marginBottom: '10px' }}>
-              Set different rates for daytime, nighttime, and overnight shifts.
-              Overnight sessions have a 6-hour minimum.
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '10px' }}>
-              <div>
-                <label style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
-                  Daytime (7am–6pm)
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ color: '#666' }}>$</span>
-                  <input type="number" step="0.50" min="1" max="500"
-                    value={ratesDaytime}
-                    onChange={e => setRatesDaytime(e.target.value)}
-                    style={{ width: '80px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
-                  />
-                  <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
-                  Nighttime (6pm–12am)
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ color: '#666' }}>$</span>
-                  <input type="number" step="0.50" min="1" max="500"
-                    value={ratesNighttime}
-                    onChange={e => setRatesNighttime(e.target.value)}
-                    style={{ width: '80px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
-                  />
-                  <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
-                  Overnight (12am–7am)
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ color: '#666' }}>$</span>
-                  <input type="number" step="0.50" min="1" max="500"
-                    value={ratesOvernight}
-                    onChange={e => setRatesOvernight(e.target.value)}
-                    style={{ width: '80px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
-                  />
-                  <span style={{ fontSize: '12px', color: '#888' }}>/hr</span>
-                  <span style={{ fontSize: '10px', color: '#e8724a', fontWeight: 600 }}>6hr min</span>
-                </div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <button
-                disabled={ratesSaving}
-                onClick={async () => {
-                  setRatesSaving(true); setRatesMsg('');
-                  try {
-                    const res = await apiFetch('/api/caregivers/rates', {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        rateDaytime: parseFloat(ratesDaytime) || null,
-                        rateNighttime: parseFloat(ratesNighttime) || null,
-                        rateOvernight: parseFloat(ratesOvernight) || null,
-                      }),
-                    });
-                    if (res?.ok) {
-                      setRatesMsg('Rates saved!');
-                      setTimeout(() => setRatesMsg(''), 3000);
-                    } else {
-                      const err = await res.json();
-                      setRatesMsg(err.error || 'Failed to save');
-                    }
-                  } catch { setRatesMsg('Network error'); }
-                  setRatesSaving(false);
-                }}
-                className="btn btn-primary"
-                style={{ fontSize: '13px', padding: '7px 18px' }}>
-                {ratesSaving ? 'Saving...' : 'Save Rates'}
-              </button>
-              {ratesMsg && (
-                <span style={{ fontSize: '13px', color: ratesMsg === 'Rates saved!' ? '#2e7d32' : '#c62828' }}>
-                  {ratesMsg}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Pricing Rules Card */}
-          <div className="card" style={{ marginBottom: '16px', background: '#f8f9fa', border: '1px solid #e0e0e0' }}>
-            <div style={{ fontWeight: 700, fontSize: '15px', color: '#333', marginBottom: '10px' }}>📋 How Pricing Works</div>
-            <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.7 }}>
-              <div style={{ marginBottom: '8px' }}>
-                <strong>Platform fee:</strong> Families pay a {data?.platformFeePercent || 20}% platform fee on top of your rate. You keep 100% of your listed rate — the fee is added to the family's total, not deducted from yours.
-              </div>
-              <div style={{ marginBottom: '8px' }}>
-                <strong>Short-notice bookings (&lt;24 hours):</strong> A 20% surcharge is added to sessions booked less than 24 hours in advance. Of that surcharge, <strong>75% goes to you</strong> (the caregiver) and 25% goes to the platform. This means you earn more for last-minute work.
-              </div>
-              <div>
-                <strong>Instant payouts:</strong> If you opt for same-day payouts, a 2% surcharge applies per session. Standard payouts (2-3 business days) are always free.
-              </div>
-            </div>
-          </div>
-
-          {/* Stripe Connect Banner */}
-          <div className="card" style={{ marginBottom: '16px', border: stripeStatus?.status === 'active' ? '1px solid #4caf50' : stripeStatus?.status === 'not_configured' ? '1px solid #e0e0e0' : '1px solid #ff9800' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '15px', color: '#333', marginBottom: '4px' }}>
-                  {stripeStatus?.status === 'active' ? '✅ Stripe Connected'
-                    : stripeStatus?.status === 'not_configured' ? '🔧 Payment Setup Coming Soon'
-                    : '💳 Payment Setup'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#666' }}>
-                  {stripeStatus?.status === 'active'
-                    ? 'Your Stripe account is active. Payouts are enabled.'
-                    : stripeStatus?.status === 'not_configured'
-                    ? 'Stripe payments are being set up for InPlace. You\'ll be able to connect your account here soon.'
-                    : stripeStatus?.status === 'pending'
-                    ? 'Your Stripe account is pending verification. Click below to complete setup.'
-                    : 'Connect your Stripe account to receive payouts for care sessions.'}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {stripeStatus?.status === 'active' ? (
-                  <button onClick={handleStripeDashboard} className="btn btn-secondary" style={{ fontSize: '13px', padding: '8px 16px' }}>
-                    View Stripe Dashboard
-                  </button>
-                ) : stripeStatus?.status === 'not_configured' ? null : (
-                  <button onClick={handleStripeOnboard} disabled={stripeLoading} className="btn btn-primary" style={{ fontSize: '13px', padding: '8px 16px' }}>
-                    {stripeLoading ? 'Loading...' : stripeStatus?.status === 'pending' ? 'Complete Setup' : 'Connect with Stripe'}
-                  </button>
-                )}
-              </div>
-            </div>
-            {stripeError && (
-              <div style={{
-                marginTop: '10px', padding: '10px 14px', background: '#fce4ec', color: '#c62828',
-                borderRadius: '8px', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              }}>
-                <span>{stripeError}</span>
-                <button onClick={() => setStripeError(null)} style={{
-                  background: 'none', border: 'none', color: '#c62828', fontSize: '16px', cursor: 'pointer', padding: '0 4px',
-                }}>&times;</button>
-              </div>
-            )}
-          </div>
-
-          <div className="earnings-grid">
-            <div className="earning-card">
-              <div className="earning-amount">${stats.monthlyEarnings || 0}</div>
-              <div className="earning-label">Earned This Month</div>
-            </div>
-            <div className="earning-card">
-              <div className="earning-amount">${stats.pendingEarnings || 0}</div>
-              <div className="earning-label">Pending Payment</div>
-            </div>
-          </div>
-          <div className="card">
-            <div className="card-header"><span className="card-icon">📊</span>Monthly Summary</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>Sessions Completed</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>{stats.completedThisMonth || 0}</div>
-              </div>
-              <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>Hours Worked</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>{stats.hoursThisMonth || 0}</div>
-              </div>
-              <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>Rates</div>
-                {(() => {
-                  const day = profile.rateDaytime || profile.hourlyRate;
-                  const night = profile.rateNighttime || profile.hourlyRate;
-                  const over = profile.rateOvernight || profile.hourlyRate;
-                  const allSame = day && day === night && day === over;
-                  return allSame ? (
-                    <div style={{ fontSize: '24px', fontWeight: 700, color: '#1b6b5a' }}>${day}/hr</div>
-                  ) : (
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', lineHeight: 1.5 }}>
-                      Day ${day || '—'}<br/>Night ${night || '—'}<br/>Overnight ${over || '—'}
-                    </div>
-                  );
-                })()}
-              </div>
-              <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>Mileage</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: '#999' }}>—</div>
-                <div style={{ fontSize: '10px', color: '#aaa' }}>Coming soon</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Completed Sessions Breakdown */}
-          <div className="card" style={{ marginTop: '16px' }}>
-            <div className="card-header"><span className="card-icon">📋</span>Completed Sessions This Month</div>
-            {earningsLoading ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Loading sessions...</div>
-            ) : completedSessions.length > 0 ? (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Client</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Service</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Hours</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'right', color: '#666', fontWeight: 600 }}>Your Earnings</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {completedSessions.map((s) => (
-                      <tr key={s.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                        <td style={{ padding: '10px 12px' }}>
-                          {(parseTimestamp(s.scheduled_date) || new Date(0)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </td>
-                        <td style={{ padding: '10px 12px', fontWeight: 500 }}>{s.recipient_name || '—'}</td>
-                        <td style={{ padding: '10px 12px' }}>
-                          <span style={{
-                            padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
-                            background: '#f0faf8', color: '#1b6b5a', textTransform: 'capitalize',
-                          }}>{formatServiceType(s.service_type)}</span>
-                        </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>{s.duration_hours || '—'}h</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#1b6b5a' }}>
-                          ${(s.caregiver_payout || s.actual_cost || s.estimated_cost || 0).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ borderTop: '2px solid #e0e0e0' }}>
-                      <td colSpan="3" style={{ padding: '10px 12px', fontWeight: 700 }}>Total</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
-                        {completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0).toFixed(1)}h
-                      </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: '#1b6b5a' }}>
-                        ${completedSessions.reduce((sum, s) => sum + (s.caregiver_payout || s.actual_cost || s.estimated_cost || 0), 0).toFixed(2)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            ) : (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>No completed sessions this month</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'financials' && (
-        <div>
-          {/* Card 1: Stripe Connect Status */}
-          <div className="card" style={{ marginBottom: '16px', border: stripeStatus?.status === 'active' ? '1px solid #4caf50' : '1px solid #e0e0e0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '16px', marginBottom: '4px' }}>
-                  {stripeStatus?.status === 'active' ? '✅ Stripe Connected' : '🏦 Set Up Stripe to Get Paid'}
-                </div>
-                <div style={{ fontSize: '13px', color: '#666' }}>
-                  {stripeStatus?.status === 'active'
-                    ? 'Your bank account is connected. Earnings are deposited automatically.'
-                    : 'Connect your bank account through Stripe to receive payments for care sessions.'}
-                </div>
-              </div>
-              {stripeStatus?.status === 'active' ? (
-                <a href={stripeStatus.dashboardUrl || '#'} target="_blank" rel="noopener noreferrer"
-                  style={{ padding: '8px 16px', background: '#635bff', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: '13px', fontWeight: 600 }}>
-                  Stripe Dashboard →
-                </a>
-              ) : (
-                <button onClick={async () => {
-                  setStripeLoading(true);
-                  try {
-                    const res = await apiFetch('/api/payments/connect/onboard', { method: 'POST' });
-                    if (res?.ok) {
-                      const d = await res.json();
-                      if (d.url) window.location.href = d.url;
-                    }
-                  } catch (err) { setStripeError(err.message); }
-                  setStripeLoading(false);
-                }} disabled={stripeLoading}
-                  style={{ padding: '10px 20px', background: stripeLoading ? '#999' : '#635bff', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: stripeLoading ? 'wait' : 'pointer' }}>
-                  {stripeLoading ? '⏳ Loading...' : 'Connect with Stripe'}
-                </button>
-              )}
-            </div>
-            {stripeError && <div style={{ color: '#c62828', fontSize: '13px', marginTop: '8px' }}>{stripeError}</div>}
-          </div>
-
-          {/* Card 2: Payout Speed */}
-          <div className="card" style={{ marginBottom: '16px' }}>
-            <div className="card-header"><span className="card-icon">⚡</span>Payout Speed</div>
-            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 16px' }}>
-              Choose how fast you receive your earnings after each completed session.
-            </p>
-            {payoutLoading ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Loading...</div>
-            ) : (
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {[
-                  { id: 'standard', label: 'Standard (1–2 business days)', desc: 'Free — no additional fees', icon: '🏦' },
-                  { id: 'instant', label: 'Instant (same day)', desc: '+2% surcharge per session', icon: '⚡' },
-                ].map(opt => (
-                  <div key={opt.id} onClick={() => !payoutSaving && setPayoutSpeed(opt.id)}
-                    style={{
-                      padding: '16px', borderRadius: '10px', cursor: payoutSaving ? 'wait' : 'pointer',
-                      border: payoutSpeed === opt.id ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                      background: payoutSpeed === opt.id ? '#f0faf8' : '#fff',
-                      transition: 'all 0.2s',
-                    }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '24px' }}>{opt.icon}</span>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '14px', color: payoutSpeed === opt.id ? '#1b6b5a' : '#333' }}>{opt.label}</div>
-                        <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{opt.desc}</div>
-                      </div>
-                      {payoutSpeed === opt.id && (
-                        <div style={{ marginLeft: 'auto', color: '#1b6b5a', fontSize: '18px' }}>✓</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <button onClick={() => savePayoutPreference(payoutSpeed)} disabled={payoutSaving}
-                  style={{
-                    padding: '10px 20px', borderRadius: '8px', border: 'none',
-                    background: payoutSaving ? '#999' : '#1b6b5a', color: '#fff',
-                    fontSize: '14px', fontWeight: 600, cursor: payoutSaving ? 'wait' : 'pointer',
-                    marginTop: '4px',
-                  }}>
-                  {payoutSaving ? '⏳ Saving...' : 'Save Preference'}
-                </button>
-                {payoutSpeed === 'instant' && (
-                  <div style={{ fontSize: '13px', color: '#e65100', background: '#fff3e0', padding: '10px 14px', borderRadius: '8px' }}>
-                    💡 <strong>Example:</strong> On a $100 session, instant payout costs you $2.00 (2% surcharge). Standard payout is always free.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Card 3: Background Check Payment */}
-          <div className="card" style={{ marginBottom: '16px' }}>
-            <div className="card-header"><span className="card-icon">🔍</span>Background Check</div>
-            {bgCheckPaid || profile?.background_check_paid || profile?.isBackgroundChecked ? (
-              <div style={{ padding: '16px', background: '#e8f5e9', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '28px' }}>✅</span>
-                <div>
-                  <div style={{ fontWeight: 600, color: '#2e7d32' }}>Background check payment received</div>
-                  <div style={{ fontSize: '13px', color: '#558b2f', marginTop: '2px' }}>Your Checkr screening is being processed.</div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <p style={{ fontSize: '13px', color: '#666', margin: '0 0 16px' }}>
-                  A $30 background check fee is required before you can accept care requests. This covers your Checkr background screening.
-                </p>
-                <StripePaymentForm
-                  amount={30}
-                  description="One-time background check fee for Checkr screening"
-                  buttonText="Pay $30.00 — Background Check"
-                  onSuccess={() => {
-                    setBgCheckPaid(true);
-                    // Refresh profile data
-                    apiFetch('/api/caretaker/dashboard').then(r => r?.ok && r.json().then(d => setData(d))).catch(() => {});
-                  }}
-                  onError={(msg) => console.error('BG check payment error:', msg)}
-                />
-                <p style={{ fontSize: '12px', color: '#999', marginTop: '12px', textAlign: 'center' }}>
-                  🔄 $30 refunded to your InPlace account after 10 completed sessions.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Fee Breakdown Info */}
-          <div style={{ padding: '14px 16px', background: '#f8f9fa', borderRadius: '8px', fontSize: '13px', color: '#666' }}>
-            💡 <strong>How fees work:</strong> InPlace charges a {data?.platformFeePercent || 20}% platform fee on each session. You keep {100 - (data?.platformFeePercent || 20)}% of the session cost.
-            For example, on a $100 session you earn ${100 - (data?.platformFeePercent || 20)}.
-            Families pay via card or ACH at checkout. Your earnings are deposited to your Stripe account based on your payout speed preference above.
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'reviews' && (
-        <div>
-          <div className="card">
-            <div className="card-header"><span className="card-icon">⭐</span>Reviews ({profile.rating || '—'} avg, {profile.reviewCount || 0} total)</div>
-            {reviews.length > 0 ? reviews.map((r, idx) => (
-              <div key={idx} className="review-item">
-                <div className="review-header">
-                  <div className="review-name">{r.reviewerName}</div>
-                  <div className="review-rating">{'⭐'.repeat(r.rating)}</div>
-                </div>
-                {r.comment && <div className="review-text">{r.comment}</div>}
-                <div style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>{r.createdAt}</div>
-              </div>
-            )) : <div style={{ padding: '20px', color: '#999', textAlign: 'center' }}>No reviews yet</div>}
-          </div>
-
-          {/* Certifications */}
-          <div className="card">
-            <div className="card-header"><span className="card-icon">📜</span>Certifications</div>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              {(profile.certifications || []).map((cert, idx) => (
-                <div key={idx} style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
-                  <strong>{cert}</strong>
-                </div>
-              ))}
-              {(!profile.certifications || profile.certifications.length === 0) && (
-                <div style={{ color: '#999', padding: '12px' }}>No certifications listed</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'preferences' && (
-        <div>
-          <div className="card" style={{ marginBottom: '16px' }}>
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span><span className="card-icon">🚦</span>Care Task Preferences (Stoplight Chart)</span>
-              {!editingStoplight && (
-                <button onClick={() => { setEditingStoplight(true); setStoplightForm(stoplightData || {}); }} style={{
-                  background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '6px',
-                  padding: '6px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                }}>{stoplightData ? 'Edit' : 'Set Preferences'}</button>
-              )}
-            </div>
-            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 16px' }}>
-              Rate each care task to let families know what you're comfortable with.
-              <span style={{ display: 'inline-block', margin: '0 6px', padding: '2px 8px', background: '#e8f5e9', color: '#2e7d32', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Green = Comfortable</span>
-              <span style={{ display: 'inline-block', margin: '0 6px', padding: '2px 8px', background: '#fff8e1', color: '#f57f17', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Yellow = With Supervision</span>
-              <span style={{ display: 'inline-block', margin: '0 6px', padding: '2px 8px', background: '#fce4ec', color: '#c62828', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Red = Not Comfortable</span>
-            </p>
-
-            {editingStoplight ? (
-              <div>
-                {CARE_TASKS.map(task => {
-                  const val = stoplightForm[task] || '';
-                  return (
-                    <div key={task} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
-                      <span style={{ fontSize: '13px', color: '#333', flex: 1 }}>{task}</span>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        {[{ v: 'green', bg: '#e8f5e9', border: '#2e7d32', label: '✓' },
-                          { v: 'yellow', bg: '#fff8e1', border: '#f57f17', label: '~' },
-                          { v: 'red', bg: '#fce4ec', border: '#c62828', label: '✕' }].map(opt => (
-                          <button key={opt.v} onClick={() => setStoplightForm(f => ({ ...f, [task]: opt.v }))} style={{
-                            width: '32px', height: '32px', borderRadius: '50%', border: val === opt.v ? `3px solid ${opt.border}` : '2px solid #ddd',
-                            background: val === opt.v ? opt.bg : '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 700,
-                            color: opt.border, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>{opt.label}</button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-                  <button onClick={() => setEditingStoplight(false)} style={{
-                    padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: '8px', cursor: 'pointer', fontSize: '13px',
-                  }}>Cancel</button>
-                  <button onClick={saveStoplight} style={{
-                    flex: 1, padding: '10px', background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                  }}>Save Preferences</button>
-                </div>
-              </div>
-            ) : stoplightData ? (
-              <div style={{ display: 'grid', gap: '16px' }}>
-                {[
-                  { color: 'green', label: 'Comfortable With', bg: '#e8f5e9', text: '#2e7d32', icon: '✓' },
-                  { color: 'yellow', label: 'With Supervision', bg: '#fff8e1', text: '#f57f17', icon: '~' },
-                  { color: 'red', label: 'Not Comfortable', bg: '#fce4ec', text: '#c62828', icon: '✕' },
-                ].map(group => {
-                  const tasks = CARE_TASKS.filter(t => stoplightData[t] === group.color);
-                  if (tasks.length === 0) return null;
-                  return (
-                    <div key={group.color}>
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px',
-                        padding: '6px 12px', background: group.bg, borderRadius: '8px',
-                      }}>
-                        <span style={{
-                          width: '22px', height: '22px', borderRadius: '50%', background: group.text,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0,
-                        }}>{group.icon}</span>
-                        <span style={{ fontSize: '14px', fontWeight: 700, color: group.text }}>{group.label}</span>
-                        <span style={{ fontSize: '12px', color: group.text, opacity: 0.7, marginLeft: 'auto' }}>{tasks.length} task{tasks.length > 1 ? 's' : ''}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingLeft: '4px' }}>
-                        {tasks.map(task => (
-                          <span key={task} style={{
-                            padding: '4px 10px', background: group.bg, borderRadius: '14px',
-                            fontSize: '12px', color: group.text, fontWeight: 500,
-                          }}>{task}</span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                No preferences set yet. Click "Set Preferences" to get started.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'documents' && (
-        <div>
-          {/* Required Documents Checklist */}
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-header"><span className="card-icon">📋</span>Required Documents</div>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>
-              These documents are needed for your caregiver profile. Upload any that are missing.
-            </p>
-            {(() => {
-              const required = [
-                { type: 'dl_front', label: "Driver's License (Front)", icon: '🪪' },
-                { type: 'dl_back', label: "Driver's License (Back)", icon: '🪪' },
-                { type: 'selfie', label: 'Selfie / Photo ID', icon: '🤳' },
-                { type: 'certification', label: 'Certifications (CNA, CPR, etc.)', icon: '📜' },
-              ];
-              const uploadedTypes = new Set(documents.map(d => d.document_type));
-              return (
-                <div style={{ display: 'grid', gap: 10 }}>
-                  {required.map(req => {
-                    const uploaded = uploadedTypes.has(req.type);
-                    return (
-                      <div key={req.type} style={{
-                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-                        background: uploaded ? '#f0faf8' : '#fffbf0', borderRadius: 8,
-                        border: uploaded ? '1px solid #c8e6c9' : '1px solid #ffe0a0',
-                      }}>
-                        <span style={{ fontSize: 20 }}>{req.icon}</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: '#333' }}>{req.label}</div>
-                          <div style={{ fontSize: 11, color: uploaded ? '#2e7d32' : '#b45309', marginTop: 2 }}>
-                            {uploaded ? 'Submitted' : 'Not yet uploaded'}
-                          </div>
-                        </div>
-                        {uploaded ? (
-                          <span style={{ padding: '4px 10px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>Done</span>
-                        ) : (
-                          <button onClick={() => {
-                            setPendingDocType(req.type);
-                            if (docInputRef.current) {
-                              docInputRef.current.value = '';
-                              docInputRef.current.click();
-                            }
-                          }} disabled={docUploading === req.type} style={{
-                            padding: '6px 14px', background: docUploading === req.type ? '#999' : '#1b6b5a', color: '#fff', border: 'none',
-                            borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: docUploading === req.type ? 'not-allowed' : 'pointer',
-                          }}>{docUploading === req.type ? 'Uploading...' : 'Upload'}</button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* Hidden file input for document uploads */}
-          <input
-            ref={docInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file && pendingDocType) handleDocUpload(file, pendingDocType);
-            }}
-          />
-
-          <div className="card">
-            <div className="card-header"><span className="card-icon">📄</span>Uploaded Documents</div>
-            {docsLoading ? (
-              <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>Loading documents...</div>
-            ) : documents.length > 0 ? (
-              <div style={{ display: 'grid', gap: 12 }}>
-                {documents.map(doc => {
-                  const typeLabels = { dl_front: "Driver's License (Front)", dl_back: "Driver's License (Back)", selfie: 'Selfie / Photo ID', certification: 'Certification' };
-                  return (
-                    <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: '#f8f9fa', borderRadius: 8 }}>
-                      <div style={{ width: 60, height: 60, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: '#e0e0e0' }}>
-                        <img src={`/api/caregiver-onboarding/documents/${doc.id}/image`} alt={doc.document_type}
-                          style={{ width: 60, height: 60, objectFit: 'cover' }}
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{typeLabels[doc.document_type] || doc.document_type}</div>
-                        {doc.file_name && <div style={{ fontSize: 12, color: '#888' }}>{doc.file_name}</div>}
-                        <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>
-                          Uploaded {(parseTimestamp(doc.created_at) || new Date(0)).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <div style={{ padding: '4px 10px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
-                        Submitted
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
-                No documents uploaded yet. Use the Upload buttons above to submit your documents.
-              </div>
-            )}
-          </div>
-
-          {/* Profile Summary */}
-          <div className="card" style={{ marginTop: 16 }}>
-            <div className="card-header"><span className="card-icon">👤</span>Onboarding Information</div>
-            <div className="info-grid">
-              <div className="info-item">
-                <div className="info-label">Legal Name</div>
-                <div className="info-value">{profile.legalFirstName && profile.legalLastName ? `${profile.legalFirstName} ${profile.legalLastName}` : 'Not provided'}</div>
-              </div>
-              <div className="info-item">
-                <div className="info-label">Date of Birth</div>
-                <div className="info-value">{profile.dateOfBirth || 'Not provided'}</div>
-              </div>
-              <div className="info-item">
-                <div className="info-label">SSN (last 4)</div>
-                <div className="info-value">{profile.ssnLast4 ? `***-**-${profile.ssnLast4}` : 'Not provided'}</div>
-              </div>
-              <div className="info-item">
-                <div className="info-label">Driver's License</div>
-                <div className="info-value">{profile.dlNumber ? `${profile.dlNumber} (${profile.dlState})` : 'Not provided'}</div>
-              </div>
-              <div className="info-item">
-                <div className="info-label">Background Check</div>
-                <div className="info-value">
-                  <span style={{
-                    padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
-                    background: profile.checkrStatus === 'clear' ? '#e8f5e9' : profile.checkrStatus === 'pending' ? '#fff8e1' : '#fce4ec',
-                    color: profile.checkrStatus === 'clear' ? '#2e7d32' : profile.checkrStatus === 'pending' ? '#f57f17' : '#c62828',
-                  }}>
-                    {(profile.checkrStatus || 'pending').charAt(0).toUpperCase() + (profile.checkrStatus || 'pending').slice(1)}
-                  </span>
-                </div>
-              </div>
-              <div className="info-item">
-                <div className="info-label">Onboarding Status</div>
-                <div className="info-value">
-                  <span style={{
-                    padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
-                    background: profile.onboardingComplete ? '#e8f5e9' : '#fff8e1',
-                    color: profile.onboardingComplete ? '#2e7d32' : '#f57f17',
-                  }}>
-                    {profile.onboardingComplete ? 'Complete' : 'Incomplete'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'reports' && (
-        <HourReports profileName={profile.name} academicProgram={profile.academicProgram} />
-      )}
+      </div>
 
       </div>{/* end tabContentRef wrapper */}
 
@@ -2376,6 +1794,32 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (
         <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
+      )}
+
+      {/* Reviews Modal */}
+      {showReviews && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+          onClick={() => setShowReviews(false)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: 420, maxWidth: '90vw', maxHeight: '70vh', overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 18 }}>⭐ Your Reviews</h3>
+              <button onClick={() => setShowReviews(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>×</button>
+            </div>
+            {reviews.length > 0 ? reviews.map((r, i) => (
+              <div key={i} style={{ padding: '12px 0', borderBottom: i < reviews.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{r.reviewer_name || r.reviewerName || 'Family'}</span>
+                  <span style={{ color: '#f59e0b', fontSize: 13 }}>{'⭐'.repeat(r.rating || 0)}</span>
+                </div>
+                {r.comment && <p style={{ fontSize: 13, color: '#555', margin: '4px 0 0', lineHeight: 1.5 }}>{r.comment}</p>}
+                {r.created_at && <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>{new Date(r.created_at).toLocaleDateString()}</div>}
+              </div>
+            )) : (
+              <p style={{ color: '#888', fontSize: 14, textAlign: 'center', margin: '20px 0' }}>No reviews yet</p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

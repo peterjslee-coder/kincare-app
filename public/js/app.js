@@ -744,9 +744,8 @@ const App = () => {
   const getNavItems = () => {
     if (role === 'caregiver') {
       return [
-        { id: 'dashboard', icon: '🤝', label: 'My Dashboard' },
+        { id: 'dashboard', icon: '🏠', label: 'Home' },
         { id: 'find-work', icon: '🔍', label: 'Find Work', isAction: true },
-        { id: 'financials', icon: '💰', label: 'Financials' },
         { id: 'messages', icon: '💬', label: 'Messages' },
       ];
     }
@@ -809,7 +808,7 @@ const App = () => {
     if (currentPage === 'messages') return <Messages key={pageKey} />;
     if (currentPage === 'account') return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} />;
     if (currentPage === 'help') return <HelpPage key={pageKey} currentUser={currentUser} onNavigate={setCurrentPage} />;
-    if (currentPage === 'financials') return <CaretakerHub key={pageKey} onNeedsOnboarding={() => setAppState('resume-onboarding')} initialTab="financials" />;
+    if (currentPage === 'financials') return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} />; {/* Financials moved to Account */}
     if (currentPage === 'payments') return <FamilyPayments key={pageKey} />;
     if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={pageKey} />;
     return <Dashboard key={pageKey} onNavigate={setCurrentPage} />;
@@ -819,9 +818,8 @@ const App = () => {
   const getBottomNavItems = () => {
     if (role === 'caregiver') {
       return [
-        { id: 'dashboard', icon: '🤝', label: 'Home' },
+        { id: 'dashboard', icon: '🏠', label: 'Home' },
         { id: 'find-work', icon: '🔍', label: 'Find Work', isAccent: true },
-        { id: 'financials', icon: '💰', label: 'Money' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'account', icon: '👤', label: 'Account' },
       ];
