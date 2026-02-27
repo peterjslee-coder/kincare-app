@@ -33,7 +33,8 @@ router.post("/request", async (req, res) => {
     ).run(crypto.randomUUID(), user.id, token, expiresAt);
 
     // Send reset email via Resend
-    const resetUrl = `${process.env.APP_URL || "https://yourinplace.com"}?reset=${token}`;
+    const baseUrl = (process.env.APP_URL || "https://yourinplace.com").replace(/\/$/, "");
+    const resetUrl = `${baseUrl}/?reset=${token}`;
 
     await sendEmail({
       to: user.email,
