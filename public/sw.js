@@ -1,5 +1,6 @@
-// InPlace Service Worker — v1.33.87
-const CACHE_NAME = 'inplace-v1.33.87';
+// InPlace Service Worker — v1.33.90
+const CACHE_NAME = 'inplace-v1.33.90';
+const SW_VERSION = '1.33.90';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -191,6 +192,8 @@ self.addEventListener('notificationclick', (event) => {
     targetUrl = '/?page=dashboard';
   } else if (data.type === 'video_call' && data.conversationId) {
     targetUrl = `/?conversation=${data.conversationId}`;
+  } else if (data.type === 'new_job') {
+    targetUrl = '/?page=find-work';
   }
 
   event.waitUntil(
@@ -206,4 +209,30 @@ self.addEventListener('notificationclick', (event) => {
       return clients.openWindow(targetUrl);
     })
   );
+});
+
+// ─── Message handler: version reporting + push health check ───
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'GET_VERSION') {
+    event.ports?.[0]?.postMessage({ version: SW_VERSION });
+  }
+
+  // Push keepalive: page can ask SW to verify push subscription is active
+  if (event.data?.type === 'CHECK_PUSH_SUBSCRIPTION') {
+    event.waitUntil(
+      self.registration.pushManager.getSubscription().then((sub) => {
+        const active = !!(sub && sub.endpoint);
+        // Notify all clients of push status
+        self.clients.matchAll().then((clients) => {
+          for (const client of clients) {
+            client.postMessage({
+              type: 'PUSH_SUBSCRIPTION_STATUS',
+              active,
+              endpoint: sub ? sub.endpoint.slice(-20) : null,
+            });
+          }
+        });
+      })
+    );
+  }
 });

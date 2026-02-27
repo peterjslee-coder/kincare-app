@@ -512,6 +512,8 @@ const App = () => {
             setCurrentPage('messages');
           } else if (d.type === 'care_request' || d.type === 'care_request_accepted') {
             setCurrentPage(role === 'caregiver' ? 'find-work' : 'schedule');
+          } else if (d.type === 'new_job') {
+            setCurrentPage('find-work');
           } else if (d.type === 'check_in_reminder' || d.type === 'check_out_reminder' || d.type === 'caregiver_arriving' || d.type === 'caregiver_arriving_recipient') {
             setCurrentPage('dashboard');
           }
@@ -557,6 +559,12 @@ const App = () => {
     // Re-sync push subscription if already granted (doesn't prompt — needs user gesture for new)
     if (typeof subscribeToPush === 'function' && 'Notification' in window && Notification.permission === 'granted') {
       subscribeToPush().catch(() => {});
+    }
+    // Start periodic push health check (every 30 min) to keep subscriptions fresh
+    if (typeof checkPushHealth === 'function') {
+      // Clear any existing timer (handles re-login without refresh)
+      if (window._pushHealthTimer) clearInterval(window._pushHealthTimer);
+      window._pushHealthTimer = setInterval(() => checkPushHealth().catch(() => {}), 30 * 60 * 1000);
     }
     // Connect WebSocket for real-time updates
     const token = localStorage.getItem('auth_token');

@@ -419,3 +419,41 @@ const subscribeToPush = window.subscribeToPush = async () => {
     return null;
   }
 };
+
+// Check push subscription health and re-sync if needed
+// Call periodically (e.g., every 30 min) to keep subscriptions fresh
+const checkPushHealth = window.checkPushHealth = async () => {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+
+    if (!sub) {
+      // Subscription lost (e.g., browser cleared it, or SW was updated) — re-subscribe
+      console.log('Push health: no active subscription — re-subscribing...');
+      await subscribeToPush();
+      return;
+    }
+
+    // Verify server knows about this subscription
+    const token = window.AUTH_TOKEN || localStorage.getItem('auth_token');
+    if (!token) return; // not logged in
+
+    const statusRes = await apiFetch('/api/push/status');
+    if (statusRes && statusRes.ok) {
+      const status = await statusRes.json();
+      if (status.userSubscriptions === 0) {
+        // Server has no subscriptions for this user — re-sync
+        console.log('Push health: server has no subscriptions — syncing...');
+        await apiFetch('/api/push/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({ subscription: sub }),
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Push health check error:', err.message);
+  }
+};
