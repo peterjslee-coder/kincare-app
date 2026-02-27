@@ -390,7 +390,7 @@ const Schedule = window.Schedule = () => {
         })()}
       </div>
       {visitDetailSessionId && (
-        <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
+        <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} />
       )}
     </>
   );

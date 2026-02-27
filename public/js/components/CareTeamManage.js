@@ -398,7 +398,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
 
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (
-        <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
+        <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} />
       )}
     </div>
   );

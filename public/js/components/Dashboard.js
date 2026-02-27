@@ -1030,7 +1030,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
 
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (
-        <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
+        <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} />
       )}
 
       {/* Review Modal — works for both post-session and late-cancel reviews */}

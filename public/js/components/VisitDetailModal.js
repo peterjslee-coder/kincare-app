@@ -1,4 +1,4 @@
-const VisitDetailModal = window.VisitDetailModal = ({ sessionId, onClose }) => {
+const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -259,10 +259,9 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, onClose }) => {
                 </div>
               )}
 
-              {/* Cost Breakdown */}
-              {cost && (
+              {/* Cost Breakdown — role-aware */}
+              {cost && role === 'caregiver' && (
                 <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
-                  {/* Your Earnings — big and prominent */}
                   <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>You Earn</div>
                     <div style={{ fontSize: 28, fontWeight: 800, color: '#1b6b5a', marginTop: 2 }}>${(cost.caregiverPayout || cost.total).toFixed(2)}</div>
@@ -284,12 +283,37 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, onClose }) => {
                     <span>Your total</span>
                     <span>${(cost.caregiverPayout || cost.total).toFixed(2)}</span>
                   </div>
-                  {cost.platformFee > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#aaa', marginTop: 8 }}>
-                      <span>Family pays (incl. {cost.platformFeePercent || 20}% InPlace fee)</span>
-                      <span>${(cost.familyTotal || cost.total).toFixed(2)}</span>
+                </div>
+              )}
+              {cost && role !== 'caregiver' && (
+                <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Your Cost</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: '#1b6b5a', marginTop: 2 }}>${(cost.familyTotal || cost.total).toFixed(2)}</div>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 6 }}>Breakdown</div>
+                  {cost.tierBreakdown?.map((t, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 3 }}>
+                      <span>{t.hours}h {t.tier} @ ${t.rate}/hr</span>
+                      <span>${t.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {cost.surcharge > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#e8724a', fontWeight: 600, marginBottom: 3 }}>
+                      <span>Short-notice fee</span>
+                      <span>+${cost.surcharge.toFixed(2)}</span>
                     </div>
                   )}
+                  {cost.platformFee > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 3 }}>
+                      <span>InPlace fee ({cost.platformFeePercent || 20}%)</span>
+                      <span>+${cost.platformFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, color: '#1b6b5a', borderTop: '1px solid #f0f0f0', paddingTop: 6, marginTop: 4 }}>
+                    <span>Total</span>
+                    <span>${(cost.familyTotal || cost.total).toFixed(2)}</span>
+                  </div>
                 </div>
               )}
             </>

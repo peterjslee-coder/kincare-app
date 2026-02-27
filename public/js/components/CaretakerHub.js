@@ -1800,7 +1800,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (
-        <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
+        <VisitDetailModal sessionId={visitDetailSessionId} role="caregiver" onClose={() => setVisitDetailSessionId(null)} />
       )}
 
       {/* Reviews Modal */}
