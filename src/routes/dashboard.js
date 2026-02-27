@@ -216,9 +216,13 @@ async function familyDashboard(db, userId, res) {
           sessionId: meta.sessionId || null,
         };
       }),
-      recentlyCompleted: recentCompleted.map((s) => {
+      recentlyCompleted: await Promise.all(recentCompleted.map(async (s) => {
         let condTags = [];
         try { condTags = s.condition_tags ? JSON.parse(s.condition_tags) : []; } catch(e) {}
+        // Check if family already reviewed this session
+        const existingReview = await db.prepare(
+          "SELECT id, rating FROM reviews WHERE session_id = ? AND family_user_id = ?"
+        ).get(s.id, userId);
         return {
           id: s.id,
           date: s.scheduled_date,
@@ -226,12 +230,15 @@ async function familyDashboard(db, userId, res) {
           serviceType: s.service_type,
           durationHours: s.duration_hours,
           caregiverName: s.caregiver_name,
+          caregiverId: s.caregiver_id,
           recipientName: s.recipient_name,
           visitSummary: s.visit_summary,
           departureMood: s.departure_mood,
           conditionTags: condTags,
+          hasReview: !!existingReview,
+          reviewRating: existingReview ? existingReview.rating : null,
         };
-      }),
+      })),
     });
   } catch (err) {
     console.error("Family dashboard error:", err);

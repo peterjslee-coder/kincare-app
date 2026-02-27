@@ -118,6 +118,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         setReviewSession(null);
         setReviewRating(0);
         setReviewComment('');
+        if (typeof showToast === 'function') showToast('Review submitted! Thank you.', 'success');
         fetchDashboard();
       } else {
         const err = await res?.json().catch(() => ({}));
@@ -590,8 +591,21 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                         )}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                        <span style={{ padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Completed</span>
-                        <span style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600 }}>View Details →</span>
+                        {s.hasReview ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            {[1,2,3,4,5].map(star => (
+                              <span key={star} style={{ fontSize: 14, color: star <= (s.reviewRating || 0) ? '#f59e0b' : '#d0d0d0' }}>{'\u2605'}</span>
+                            ))}
+                          </div>
+                        ) : s.caregiverId ? (
+                          <button onClick={(e) => { e.stopPropagation(); setReviewSession(s); setReviewRating(0); setReviewComment(''); }}
+                            style={{ padding: '6px 14px', borderRadius: 10, border: 'none', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            {'\u2605'} Leave Review
+                          </button>
+                        ) : (
+                          <span style={{ padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Completed</span>
+                        )}
+                        <span style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600 }}>View Details {'\u2192'}</span>
                       </div>
                     </div>
                   </div>
@@ -1019,32 +1033,43 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         <VisitDetailModal sessionId={visitDetailSessionId} onClose={() => setVisitDetailSessionId(null)} />
       )}
 
-      {/* Review Modal (when caregiver late-cancelled) */}
+      {/* Review Modal — works for both post-session and late-cancel reviews */}
       {reviewSession && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw' }}>
-            <h3 style={{ margin: '0 0 8px', fontSize: 18 }}>Rate This Caregiver</h3>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>
-              This caregiver cancelled less than 24 hours before the session. Your review helps other families.
-            </p>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12, justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: 420, maxWidth: '90vw' }}>
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>{'\u2B50'}</div>
+              <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700, color: '#333' }}>
+                How was {reviewSession.caregiverName || 'your caregiver'}?
+              </h3>
+              <p style={{ fontSize: 13, color: '#888', margin: 0 }}>
+                {reviewSession.recipientName ? `Care visit with ${reviewSession.recipientName}` : 'Your recent care visit'}
+                {reviewSession.date ? ` on ${reviewSession.date}` : ''}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, justifyContent: 'center' }}>
               {[1, 2, 3, 4, 5].map(star => (
                 <button key={star} onClick={() => setReviewRating(star)}
-                  style={{ fontSize: 28, background: 'none', border: 'none', cursor: 'pointer', color: star <= reviewRating ? '#f59e0b' : '#d0d0d0' }}>
-                  ★
+                  style={{ fontSize: 36, background: 'none', border: 'none', cursor: 'pointer', color: star <= reviewRating ? '#f59e0b' : '#d0d0d0', transition: 'transform 0.15s', transform: star <= reviewRating ? 'scale(1.15)' : 'scale(1)' }}>
+                  {'\u2605'}
                 </button>
               ))}
             </div>
+            {reviewRating > 0 && (
+              <div style={{ textAlign: 'center', fontSize: 13, color: '#1b6b5a', fontWeight: 600, marginBottom: 12 }}>
+                {reviewRating === 5 ? 'Excellent!' : reviewRating === 4 ? 'Great!' : reviewRating === 3 ? 'Good' : reviewRating === 2 ? 'Fair' : 'Poor'}
+              </div>
+            )}
             <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
-              placeholder="Optional comment..."
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, minHeight: 60, resize: 'vertical', marginBottom: 12 }} />
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              placeholder="Tell us more about your experience (optional)..."
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e0e0e0', fontSize: 14, minHeight: 80, resize: 'vertical', marginBottom: 16, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => { setReviewSession(null); setReviewRating(0); setReviewComment(''); }}
-                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                Skip
+                style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid #ddd', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#666' }}>
+                Not Now
               </button>
               <button onClick={handleReview} disabled={!reviewRating || reviewLoading}
-                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: (!reviewRating || reviewLoading) ? '#999' : '#1b6b5a', color: '#fff', fontSize: 13, fontWeight: 600, cursor: (!reviewRating || reviewLoading) ? 'default' : 'pointer' }}>
+                style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none', background: (!reviewRating || reviewLoading) ? '#ccc' : '#1b6b5a', color: '#fff', fontSize: 14, fontWeight: 700, cursor: (!reviewRating || reviewLoading) ? 'default' : 'pointer' }}>
                 {reviewLoading ? 'Submitting...' : 'Submit Review'}
               </button>
             </div>
