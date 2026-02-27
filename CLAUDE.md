@@ -109,6 +109,14 @@ The frontend uses **Babel standalone** for in-browser JSX transpilation (no buil
 
 **Service worker gotcha:** The `?v=` query param on `sw.js` does NOT force the browser to treat it as a new service worker — browsers ignore query params for SW identity. If users report being stuck on an old version despite cache purges and hard refreshes, the old service worker is likely serving cached files. The current fix (v1.33.67+): index.html unregisters ALL existing service workers and clears ALL caches on every page load before re-registering. This is aggressive but guarantees updates get through. Check this FIRST when debugging "stuck on old version" issues.
 
+**URL query params in emails:** When building URLs with query params (e.g., `?reset=TOKEN`), always include a trailing slash before the `?` — use `domain.com/?param=value`, NOT `domain.com?param=value`. Cloudflare and Express can redirect bare-domain URLs and drop query params in the process. The `passwordReset.js` and `admin.js` reset email URLs use `baseUrl + '/?reset=' + token` for this reason.
+
+**useState initializers for URL routing:** When the app needs to detect URL params (like `?reset=`, `?invite=`, `?verify=`), check them in `useState` initializers, NOT in `useEffect`. UseEffect runs after the first render, which means auto-login or other async effects can race and stomp the state. Example: `const [appState, setAppState] = useState(() => { const p = new URLSearchParams(window.location.search); if (p.get('reset')) return 'reset-password'; return 'splash'; })`. This guarantees the correct initial state before any effects fire.
+
+**WebAuthn RP_ID/ORIGIN config:** Never gate passkey config on `NODE_ENV`. Railway and other hosts may not set `NODE_ENV=production`. Both `passkeys.js` and `admin.js` derive RP_ID from `APP_URL` hostname with fallback to `yourinplace.com`, and use `APP_URL` directly as ORIGIN. If passkeys break with "failed to verify", check RP_ID and ORIGIN values first — origin mismatch is the most common cause.
+
+**Admin password reset flow (v1.33.71+):** When admin force-resets a user's password: (1) old password is immediately invalidated (random hash), (2) `must_change_password=1` is set, (3) reset email sent with 24hr token. The reset link lands on `ResetPasswordPage` which has new + confirm fields with password rules (8+ chars, uppercase, number, symbol). The backend `password-reset/confirm` endpoint clears `must_change_password` on success, so the user goes straight to dashboard after login — no second change-password screen.
+
 **Pattern for component files:**
 ```javascript
 // Each component declares itself AND assigns to window (for individual-file testing)
