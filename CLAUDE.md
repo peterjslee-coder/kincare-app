@@ -107,6 +107,8 @@ The frontend uses **Babel standalone** for in-browser JSX transpilation (no buil
 
 **Cache busting:** All script and CSS fetches include a `?v=X.Y.Z` query parameter. Bump this version in `index.html` whenever you push frontend changes to bust Cloudflare's cache. Without this, users may get stale JS files.
 
+**Service worker gotcha:** The `?v=` query param on `sw.js` does NOT force the browser to treat it as a new service worker — browsers ignore query params for SW identity. If users report being stuck on an old version despite cache purges and hard refreshes, the old service worker is likely serving cached files. The current fix (v1.33.67+): index.html unregisters ALL existing service workers and clears ALL caches on every page load before re-registering. This is aggressive but guarantees updates get through. Check this FIRST when debugging "stuck on old version" issues.
+
 **Pattern for component files:**
 ```javascript
 // Each component declares itself AND assigns to window (for individual-file testing)
