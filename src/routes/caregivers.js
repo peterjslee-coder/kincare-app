@@ -303,19 +303,19 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       rateDaytime, rateNighttime, rateOvernight,
     } = req.body;
 
-    if (!hourlyRate) {
-      return res.status(400).json({ error: "hourlyRate is required" });
-    }
-
     // Auto-geocode if city/state/zip provided
     let lat = null;
     let lng = null;
     if (city || address || zip) {
       const addrStr = buildAddressString({ address, city, state, zip });
+      console.log(`  [caregiver-profile] Geocoding: "${addrStr}"`);
       const geo = await geocodeAddress(addrStr);
       if (geo) {
         lat = geo.lat;
         lng = geo.lng;
+        console.log(`  [caregiver-profile] Geocoded to: ${lat}, ${lng}`);
+      } else {
+        console.log(`  [caregiver-profile] Geocoding failed for: "${addrStr}"`);
       }
     }
 
@@ -392,7 +392,10 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       return res.json({ profile: updated });
     }
 
-    // Create
+    // Create — hourlyRate required for new profiles
+    if (!hourlyRate) {
+      return res.status(400).json({ error: "hourlyRate is required" });
+    }
     const id = uuid();
     await db.prepare(`
       INSERT INTO caregiver_profiles
