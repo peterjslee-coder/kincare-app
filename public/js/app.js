@@ -163,7 +163,12 @@ const _DayIcon = () => {
 
 // Main App Component — role-aware routing & sidebar
 const App = () => {
-  const [appState, setAppState] = useState('splash');
+  // Detect URL params at init — BEFORE any useEffect or auto-login can race
+  const [appState, setAppState] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('reset')) return 'reset-password';
+    return 'splash';
+  });
   const [currentUser, setCurrentUser] = useState(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [pageNavCount, setPageNavCount] = useState(0);
@@ -310,7 +315,12 @@ const App = () => {
     window.ROLE_COLOR_LIGHT = rc.light;
   }, [activeRole]);
 
-  const [resetToken, setResetToken] = useState(null);
+  const [resetToken, setResetToken] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    const rt = p.get('reset');
+    if (rt) window.history.replaceState({}, '', window.location.pathname);
+    return rt || null;
+  });
   const [verifyMessage, setVerifyMessage] = useState(null);
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
   const pendingInviteRef = useRef(null); // Ref mirror — survives closures
@@ -321,15 +331,8 @@ const App = () => {
   const [signupPrefill, setSignupPrefill] = useState(null); // { email, role, signupToken }
 
   useEffect(() => {
-    // Check for password reset token FIRST — before auto-login can override it
-    const initParams = new URLSearchParams(window.location.search);
-    const resetParam = initParams.get('reset');
-    if (resetParam) {
-      setResetToken(resetParam);
-      setAppState('reset-password');
-      window.history.replaceState({}, '', window.location.pathname);
-      return; // Skip auto-login entirely — user is resetting their password
-    }
+    // If we're in reset-password mode (set at init from URL), skip auto-login
+    if (appState === 'reset-password') return;
 
     const savedToken = localStorage.getItem('auth_token');
     if (savedToken) {

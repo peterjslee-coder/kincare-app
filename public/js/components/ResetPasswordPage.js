@@ -1,18 +1,14 @@
 const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => {
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
       return;
     }
     setResetting(true);
@@ -46,14 +42,38 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
             <div style={{ marginBottom: '16px' }}>
               <InPlaceIcon width={50} height={50} />
             </div>
-            <h1>Password Reset!</h1>
+            <h1 style={{ color: '#1b6b5a' }}>You're all set!</h1>
             <p style={{ color: '#555', lineHeight: '1.6', marginTop: '12px' }}>
-              Your password has been updated. You can now sign in with your new password.
+              Your new password is saved. Sign in to continue.
             </p>
           </div>
           <button className="btn btn-primary" onClick={() => onNavigate('login')} style={{ width: '100%', marginTop: '16px' }}>
             Sign In
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!token) {
+    return (
+      <div className="login-container">
+        <div className="login-card">
+          <div className="login-header">
+            <div style={{ marginBottom: '16px' }}>
+              <InPlaceIcon width={50} height={50} />
+            </div>
+            <h1>Invalid Reset Link</h1>
+            <p style={{ color: '#555', lineHeight: '1.6', marginTop: '12px' }}>
+              This password reset link is invalid or has expired. Please request a new one.
+            </p>
+          </div>
+          <button className="btn btn-primary" onClick={() => onNavigate('forgot-password')} style={{ width: '100%', marginTop: '16px' }}>
+            Request New Reset Link
+          </button>
+          <div style={{ textAlign: 'center', marginTop: '12px' }}>
+            <a onClick={() => onNavigate('login')} style={{ color: '#1b6b5a', cursor: 'pointer', fontSize: '14px' }}>Back to Sign In</a>
+          </div>
         </div>
       </div>
     );
@@ -66,34 +86,44 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
           <div style={{ marginBottom: '16px' }}>
             <InPlaceIcon width={50} height={50} />
           </div>
-          <h1>Choose New Password</h1>
-          <p style={{ color: '#888' }}>Enter your new password below</p>
+          <h1>Create New Password</h1>
+          <p style={{ color: '#888' }}>Choose a password you'll remember</p>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>New Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
-              autoFocus
-            />
-            {password && password.length < 6 && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Password must be at least 6 characters</div>}
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
+                autoFocus
+                style={{ paddingRight: '60px' }}
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer',
+                  fontSize: '13px', fontWeight: 600, padding: '4px 8px',
+                }}>
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {password && password.length > 0 && password.length < 6 && (
+              <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>
+                Password must be at least 6 characters
+              </div>
+            )}
           </div>
-          <div className="form-group">
-            <label>Confirm Password</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Re-enter password"
-            />
-            {confirmPassword && password !== confirmPassword && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Passwords do not match</div>}
-          </div>
-          {error && <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>{error}</div>}
-          <button type="submit" className="btn btn-primary" disabled={resetting} style={{ width: '100%', opacity: resetting ? 0.6 : 1 }}>
-            {resetting ? 'Resetting...' : 'Reset Password'}
+          {error && (
+            <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>
+              {error}
+            </div>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={resetting || password.length < 6}
+            style={{ width: '100%', opacity: (resetting || password.length < 6) ? 0.6 : 1 }}>
+            {resetting ? 'Saving...' : 'Save New Password'}
           </button>
         </form>
       </div>
