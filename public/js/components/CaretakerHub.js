@@ -706,7 +706,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
-          <h1 className="greeting" style={{ marginBottom: '4px' }}>Welcome, {profile.name || 'Caregiver'}!</h1>
+          <h1 className="greeting" style={{ marginBottom: '4px' }}>Welcome, {(profile.name || 'Caregiver').split(' ')[0]}!</h1>
           <div style={{ color: '#666', fontSize: '14px' }}>
             {editingLocation ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
