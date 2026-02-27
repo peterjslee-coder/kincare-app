@@ -29,7 +29,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const tabContentRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [highlightTab, setHighlightTab] = useState(false);
-  const [jobSort, setJobSort] = useState('soonest');
+  const [jobSort, setJobSort] = useState('best_match');
+  const calendarRef = useRef(null);
   const [claimingJobId, setClaimingJobId] = useState(null);
   // Inline profile editing state (for onboarding)
   const [profileForm, setProfileForm] = useState({ bio: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', foodAllergies: '', medicalConditions: '' });
@@ -953,6 +954,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             const bRate = parseFloat(b.proposedRate) || 0;
             return bRate - aRate;
           }
+          if (jobSort === 'best_match') {
+            const aScore = a.matchScore || 0;
+            const bScore = b.matchScore || 0;
+            if (aScore !== bScore) return bScore - aScore;
+          }
           const aKey = (a.date || '') + (a.time || '');
           const bKey = (b.date || '') + (b.time || '');
           return aKey.localeCompare(bKey);
@@ -968,7 +974,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>{openJobs.length} open job{openJobs.length !== 1 ? 's' : ''} near you</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, opacity: 0.8 }}>Map · Availability · Rates</span>
+                <select value={jobSort} onChange={(e) => { e.stopPropagation(); setJobSort(e.target.value); }}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ fontSize: 11, padding: '3px 6px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer' }}>
+                  <option value="best_match" style={{ color: '#333' }}>Best Match</option>
+                  <option value="soonest" style={{ color: '#333' }}>Soonest</option>
+                  <option value="highest_pay" style={{ color: '#333' }}>Highest Pay</option>
+                </select>
                 <span style={{ fontSize: 22, opacity: 0.7 }}>→</span>
               </div>
             </div>
@@ -997,15 +1009,29 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
                   return (
                     <div key={job.id} style={{
-                      marginBottom: 8, padding: '14px 16px', background: '#fff', borderRadius: 0,
-                      border: hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
-                      borderTop: '1px solid #f0f0f0',
+                      marginBottom: 8, padding: '14px 16px',
+                      background: job.hasConflict ? '#fffbf0' : '#fff',
+                      borderRadius: 0,
+                      border: job.hasConflict ? '1px solid #ffd89b' : (!job.hasConflict && job.matchQuality === 'great') ? '2px solid #1b6b5a' : hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
+                      borderTop: job.hasConflict ? '1px solid #ffd89b' : '1px solid #f0f0f0',
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
                     }}>
                       <div style={{ flex: 1, minWidth: '180px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
                           {hasBonus && (
                             <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
+                          )}
+                          {job.matchQuality === 'great' && !job.hasConflict && (
+                            <span style={{ background: '#1b6b5a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>GREAT MATCH</span>
+                          )}
+                          {job.hasConflict ? (
+                            <span style={{ background: '#ffd89b', color: '#c86b1f', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\u26A0'} Overlaps {job.conflictWith}</span>
+                          ) : (
+                            <span onClick={(e) => { e.stopPropagation(); if (calendarRef.current) calendarRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                              style={{ background: '#c8e6c9', color: '#2e7d32', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{'\u2713'} No Conflicts</span>
+                          )}
+                          {job.distanceMiles !== null && job.distanceMiles !== undefined && (
+                            <span style={{ fontSize: 11, color: '#888' }}>{job.distanceMiles} mi</span>
                           )}
                           {hasBonus && basePerHour > 0 ? (
                             <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1419,7 +1445,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       )}
 
       {/* Calendar — always rendered */}
-      <div style={{ marginBottom: 16 }}>
+      <div ref={calendarRef} style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>📅 Calendar</div>
         <CaregiverCalendar
           caregiverId={profile.id}

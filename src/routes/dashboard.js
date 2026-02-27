@@ -2,6 +2,8 @@ const express = require("express");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { getNowInZone, getTodayStringInZone } = require("../utils/timezone");
+const { haversineDistance } = require("../utils/geocode");
+const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching");
 
 const router = express.Router();
 router.use(authenticate);
@@ -325,6 +327,8 @@ async function caregiverDashboard(db, userId, res) {
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       cr.location_city AS recipient_city,
+      cr.latitude AS recipient_lat,
+      cr.longitude AS recipient_lng,
       cr.timezone AS care_timezone,
       fu.first_name || ' ' || fu.last_name AS family_name
     FROM care_sessions cs
@@ -442,22 +446,39 @@ async function caregiverDashboard(db, userId, res) {
       reviewerName: r.reviewer_name,
       createdAt: r.created_at,
     })),
-    openJobs: openJobs.map(s => ({
-      id: s.id,
-      date: s.scheduled_date,
-      time: s.scheduled_time,
-      serviceType: s.service_type,
-      status: s.status,
-      durationHours: s.duration_hours,
-      recipientName: s.recipient_name,
-      recipientCity: s.recipient_city,
-      familyName: s.family_name,
-      specialInstructions: s.special_instructions,
-      estimatedCost: s.estimated_cost,
-      proposedRate: s.proposed_rate,
-      shortNoticeSurcharge: s.short_notice_surcharge,
-      timezone: s.care_timezone || "America/New_York",
-    })),
+    openJobs: openJobs.map(s => {
+      // Conflict detection: check against caregiver's upcoming sessions
+      const conflict = computeJobConflicts(s, upcoming);
+      // Distance from caregiver's location
+      const cgLat = profile.latitude || profile.work_latitude;
+      const cgLng = profile.longitude || profile.work_longitude;
+      const dist = (cgLat && cgLng && s.recipient_lat && s.recipient_lng)
+        ? Math.round(haversineDistance(cgLat, cgLng, s.recipient_lat, s.recipient_lng) * 10) / 10
+        : null;
+      // Match score
+      const match = computeMatchScore(s, profile, conflict.hasConflict, dist);
+      return {
+        id: s.id,
+        date: s.scheduled_date,
+        time: s.scheduled_time,
+        serviceType: s.service_type,
+        status: s.status,
+        durationHours: s.duration_hours,
+        recipientName: s.recipient_name,
+        recipientCity: s.recipient_city,
+        familyName: s.family_name,
+        specialInstructions: s.special_instructions,
+        estimatedCost: s.estimated_cost,
+        proposedRate: s.proposed_rate,
+        shortNoticeSurcharge: s.short_notice_surcharge,
+        timezone: s.care_timezone || "America/New_York",
+        hasConflict: conflict.hasConflict,
+        conflictWith: conflict.conflictWith,
+        distanceMiles: dist,
+        matchScore: match.score,
+        matchQuality: match.quality,
+      };
+    }),
     recentlyCompleted: recentCompletedCg.map(s => {
       // 75/25 split: caregiver gets subtotal + 75% of surcharge
       const estCost = parseFloat(s.estimated_cost) || 0;
