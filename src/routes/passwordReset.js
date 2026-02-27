@@ -61,7 +61,10 @@ router.post("/confirm", async (req, res) => {
   try {
     const { token, password } = req.body;
     if (!token || !password) return res.status(400).json({ error: "Token and new password are required" });
-    if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+    if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
+    if (!/[A-Z]/.test(password)) return res.status(400).json({ error: "Password must include an uppercase letter" });
+    if (!/[0-9]/.test(password)) return res.status(400).json({ error: "Password must include a number" });
+    if (!/[^A-Za-z0-9]/.test(password)) return res.status(400).json({ error: "Password must include a special character" });
 
     const db = await getDb();
     const resetToken = await db.prepare(
@@ -78,9 +81,9 @@ router.post("/confirm", async (req, res) => {
       return res.status(400).json({ error: "This reset link has expired. Please request a new one." });
     }
 
-    // Update the password
+    // Update the password and clear force-change flag
     const passwordHash = await bcrypt.hash(password, 10);
-    await db.prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?").run(passwordHash, resetToken.user_id);
+    await db.prepare("UPDATE users SET password_hash = ?, must_change_password = 0, password_changed_at = NOW(), updated_at = NOW() WHERE id = ?").run(passwordHash, resetToken.user_id);
 
     // Delete the used token
     await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(resetToken.user_id);
