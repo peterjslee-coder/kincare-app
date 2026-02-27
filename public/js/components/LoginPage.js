@@ -3,6 +3,8 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [errorCode, setErrorCode] = useState(null);
+  const [failCount, setFailCount] = useState(0);
   const [showDemo, setShowDemo] = useState(false);
   const [googleAvailable, setGoogleAvailable] = useState(false);
 
@@ -78,6 +80,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setErrorCode(null);
     trackAuthEvent('login', 'login_attempt', { email });
     try {
       const response = await apiFetch('/api/auth/login', {
@@ -86,7 +89,14 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       });
       if (!response) throw new Error('Login failed');
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'Login failed');
+      if (!response.ok) {
+        const err = new Error(data?.error || 'Login failed');
+        err.code = data?.code || null;
+        throw err;
+      }
+
+      // Success — reset fail count
+      setFailCount(0);
 
       if (data.requires2FA) {
         trackAuthEvent('login', '2fa_prompted', { email });
@@ -112,7 +122,10 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         onLogin(data.user);
       }
     } catch (err) {
-      trackAuthEvent('login', 'error', { email, error: err.message, source: 'login_submit' });
+      const newCount = failCount + 1;
+      setFailCount(newCount);
+      setErrorCode(err.code || null);
+      trackAuthEvent('login', 'error', { email, error: err.message, code: err.code, failCount: newCount, source: 'login_submit' });
       setError(err.message);
     }
     setLoading(false);
@@ -347,7 +360,26 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
           </div>
         )}
 
-        {error && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{error}</div>}
+        {error && (
+          <div style={{ background: '#f8d7da', color: '#721c24', padding: '12px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13, lineHeight: 1.5 }}>
+            <div>{error}</div>
+            {(errorCode === 'WRONG_PASSWORD' || errorCode === 'PASSWORD_RESET_PENDING') && (
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(114,28,36,0.15)' }}>
+                <a onClick={() => onNavigate('forgot-password')} style={{ color: '#721c24', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Reset your password</a>
+              </div>
+            )}
+            {errorCode === 'EMAIL_NOT_FOUND' && (
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(114,28,36,0.15)' }}>
+                <a onClick={() => onNavigate('register')} style={{ color: '#721c24', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Create a new account</a>
+              </div>
+            )}
+            {failCount >= 3 && !errorCode && (
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(114,28,36,0.15)', fontSize: 12, color: '#944' }}>
+                Having trouble? Try <a onClick={() => onNavigate('forgot-password')} style={{ color: '#721c24', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>resetting your password</a> or contact support.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Google Sign-In */}
         {googleAvailable && (

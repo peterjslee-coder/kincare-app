@@ -69,7 +69,8 @@ async function authenticate(req, res, next) {
     req.user = decoded;
     next();
   } catch (err) {
-    return res.status(401).json({ error: "Invalid or expired token" });
+    const isExpired = err.name === 'TokenExpiredError';
+    return res.status(401).json({ error: isExpired ? "Your session has expired. Please sign in again." : "Authentication failed. Please sign in again.", code: isExpired ? "TOKEN_EXPIRED" : "TOKEN_INVALID" });
   }
 }
 

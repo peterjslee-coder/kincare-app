@@ -133,7 +133,7 @@ router.post("/verify", async (req, res) => {
     try {
       decoded = jwt.verify(tempToken, JWT_SECRET + "-2fa-temp");
     } catch {
-      return res.status(401).json({ error: "Invalid or expired temporary token" });
+      return res.status(401).json({ error: "Your login session timed out. Go back and sign in again.", code: "TEMP_TOKEN_EXPIRED" });
     }
 
     // Rate limit
@@ -167,7 +167,7 @@ router.post("/verify", async (req, res) => {
     }
 
     if (!isValid) {
-      return res.status(400).json({ error: "Invalid verification code" });
+      return res.status(400).json({ error: "That code didn't work. Check your authenticator app for a fresh code, or try a backup code.", code: "INVALID_2FA_CODE" });
     }
 
     // 2FA passed — reset rate limit

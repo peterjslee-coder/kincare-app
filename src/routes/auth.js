@@ -235,10 +235,30 @@ router.post("/login", validateLogin, async (req, res) => {
     const { email, password, deviceFingerprint } = req.body;
 
     const db = await getDb();
+
+    // Check for deactivated account first (separate from "not found")
+    const anyUser = await db.prepare("SELECT id, is_active FROM users WHERE LOWER(email) = LOWER(?)").get(email);
+    if (anyUser && !anyUser.is_active) {
+      return res.status(401).json({ error: "This account has been deactivated. Contact support if you need help.", code: "ACCOUNT_DEACTIVATED" });
+    }
+
     const user = await db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email);
 
-    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-      return res.status(401).json({ error: "Invalid credentials" });
+    if (!user) {
+      return res.status(401).json({ error: "We don't have an account with that email. Check for typos, or sign up if you're new.", code: "EMAIL_NOT_FOUND" });
+    }
+
+    // Check if password was force-reset (must_change_password + recent password_changed_at = admin reset)
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      // Check if there's a pending password reset token (admin-initiated or user-initiated)
+      const pendingReset = await db.prepare(
+        "SELECT id FROM password_reset_tokens WHERE user_id = ? AND expires_at > NOW()"
+      ).get(user.id);
+      if (pendingReset || user.must_change_password) {
+        return res.status(401).json({ error: "Your password was recently reset. Check your email for a reset link, or use \"Forgot password\" below.", code: "PASSWORD_RESET_PENDING" });
+      }
+      return res.status(401).json({ error: "Incorrect password. Try again, or use \"Forgot password\" if you can't remember it.", code: "WRONG_PASSWORD" });
     }
 
     // Check if 2FA is enabled
