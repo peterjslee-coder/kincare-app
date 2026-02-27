@@ -271,7 +271,7 @@ async function caregiverDashboard(db, userId, res) {
       SET offered_to_caregiver_id = NULL, offer_expires_at = NULL,
           caregiver_id = NULL, status = 'open'
       WHERE offered_to_caregiver_id IS NOT NULL
-        AND offer_expires_at < datetime('now')
+        AND offer_expires_at < NOW()
         AND status = 'pending'
     `);
   } catch (e) { /* ignore if columns don't exist yet */ }
@@ -370,7 +370,7 @@ async function caregiverDashboard(db, userId, res) {
     LEFT JOIN users fu ON cs.family_user_id = fu.id
     WHERE cs.offered_to_caregiver_id = ?
       AND cs.status = 'pending'
-      AND cs.offer_expires_at >= datetime('now')
+      AND cs.offer_expires_at >= NOW()
       AND COALESCE(fu.is_demo, 0) = ?
     ORDER BY cs.offer_expires_at ASC
   `).all(profile.id, isDemo);
