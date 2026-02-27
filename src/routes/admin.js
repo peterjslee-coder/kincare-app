@@ -643,7 +643,8 @@ router.delete("/users/:id/nuke", async (req, res) => {
   }
 });
 
-// ─── POST /api/admin/users/:id/reset-password — Admin triggers password reset email ───
+// ─── POST /api/admin/users/:id/reset-password — Admin force-resets a user's password ───
+// Invalidates old password immediately (user cannot log in with it) and sends reset email.
 router.post("/users/:id/reset-password", async (req, res) => {
   try {
     const db = await getDb();
@@ -652,35 +653,44 @@ router.post("/users/:id/reset-password", async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const crypto = require("crypto");
+    const bcrypt = require("bcryptjs");
     const { sendEmail, brandedHtml } = require("../utils/email");
 
+    // 1. Invalidate old password — set to random hash so old password stops working immediately
+    const randomPw = crypto.randomBytes(32).toString("hex");
+    const invalidHash = await bcrypt.hash(randomPw, 10);
+    await db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = NOW() WHERE id = ?").run(invalidHash, user.id);
+
+    // 2. Create reset token
     const token = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours for admin resets
 
     await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(user.id);
     await db.prepare(
       "INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)"
     ).run(uuid(), user.id, token, expiresAt);
 
-    const resetUrl = `${process.env.APP_URL || "https://yourinplace.com"}?reset=${token}`;
+    // 3. Send reset email
+    const baseUrl = (process.env.APP_URL || "https://yourinplace.com").replace(/\/$/, "");
+    const resetUrl = `${baseUrl}/?reset=${token}`;
     await sendEmail({
       to: user.email,
       subject: "Reset your InPlace password",
       html: brandedHtml({
         title: "InPlace",
         greeting: `Hi ${user.first_name},`,
-        body: "An administrator has requested a password reset for your account. Click below to choose a new password:",
+        body: "Your password has been reset by an administrator. Click below to create a new password:",
         ctaUrl: resetUrl,
-        ctaText: "Reset Password",
-        footnote: "This link expires in 1 hour. If you didn't expect this, please contact support.",
+        ctaText: "Create New Password",
+        footnote: "This link expires in 24 hours. You'll need to set a new password before you can sign in.",
       }),
     });
 
     await logAdminAction(req, "force_password_reset", "user", id, { email: user.email });
-    res.json({ success: true, message: `Password reset email sent to ${user.email}` });
+    res.json({ success: true, message: `Password invalidated & reset email sent to ${user.email}` });
   } catch (err) {
     console.error("Admin force password reset error:", err);
-    res.status(500).json({ error: "Failed to send reset email" });
+    res.status(500).json({ error: "Failed to reset password" });
   }
 });
 
