@@ -264,6 +264,18 @@ async function caregiverDashboard(db, userId, res) {
 
   const user = await db.prepare("SELECT first_name, last_name, avatar_url FROM users WHERE id = ?").get(userId);
 
+  // Auto-expire exclusive offers that have passed their deadline
+  try {
+    await db.exec(`
+      UPDATE care_sessions
+      SET offered_to_caregiver_id = NULL, offer_expires_at = NULL,
+          caregiver_id = NULL, status = 'open'
+      WHERE offered_to_caregiver_id IS NOT NULL
+        AND offer_expires_at < datetime('now')
+        AND status = 'pending'
+    `);
+  } catch (e) { /* ignore if columns don't exist yet */ }
+
   // Assigned families (deduplicate by care_recipient — siblings may each have an assignment for same recipient)
   const assignments = await db.prepare(`
     SELECT DISTINCT ON (ca.care_recipient_id)
@@ -338,10 +350,30 @@ async function caregiverDashboard(db, userId, res) {
       AND cs.scheduled_date >= ?
       AND cs.scheduled_date <= ?
       AND (cs.caregiver_id IS NULL OR cs.caregiver_id = ?)
+      AND cs.offered_to_caregiver_id IS NULL
       AND COALESCE(fu.is_demo, 0) = ?
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 10
   `).all(today, fiveDayStr, profile.id, isDemo);
+
+  // Exclusive offers — jobs offered directly to this caregiver with a countdown
+  const exclusiveOffers = await db.prepare(`
+    SELECT cs.*,
+      cr.first_name || ' ' || cr.last_name AS recipient_name,
+      cr.location_city AS recipient_city,
+      cr.latitude AS recipient_lat,
+      cr.longitude AS recipient_lng,
+      cr.timezone AS care_timezone,
+      fu.first_name || ' ' || fu.last_name AS family_name
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    LEFT JOIN users fu ON cs.family_user_id = fu.id
+    WHERE cs.offered_to_caregiver_id = ?
+      AND cs.status = 'pending'
+      AND cs.offer_expires_at >= datetime('now')
+      AND COALESCE(fu.is_demo, 0) = ?
+    ORDER BY cs.offer_expires_at ASC
+  `).all(profile.id, isDemo);
 
   // Recent reviews
   const reviews = await db.prepare(`
@@ -479,6 +511,22 @@ async function caregiverDashboard(db, userId, res) {
         matchQuality: match.quality,
       };
     }),
+    exclusiveOffers: exclusiveOffers.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      durationHours: s.duration_hours,
+      recipientName: s.recipient_name,
+      recipientCity: s.recipient_city,
+      familyName: s.family_name,
+      specialInstructions: s.special_instructions,
+      estimatedCost: s.estimated_cost,
+      proposedRate: s.proposed_rate,
+      shortNoticeSurcharge: s.short_notice_surcharge,
+      timezone: s.care_timezone || "America/New_York",
+      expiresAt: s.offer_expires_at,
+    })),
     recentlyCompleted: recentCompletedCg.map(s => {
       // 75/25 split: caregiver gets subtotal + 75% of surcharge
       const estCost = parseFloat(s.estimated_cost) || 0;

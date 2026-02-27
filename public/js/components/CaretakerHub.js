@@ -32,6 +32,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [jobSort, setJobSort] = useState('best_match');
   const calendarRef = useRef(null);
   const [claimingJobId, setClaimingJobId] = useState(null);
+  const [offerCountdowns, setOfferCountdowns] = useState({});
   // Inline profile editing state (for onboarding)
   const [profileForm, setProfileForm] = useState({ bio: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', foodAllergies: '', medicalConditions: '' });
   const [profileSaving, setProfileSaving] = useState(false);
@@ -543,8 +544,26 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const assignments = data.assignments || [];
   const sessions = data.upcomingSessions || [];
   const openJobs = data.openJobs || [];
+  const exclusiveOffers = data.exclusiveOffers || [];
   const dataReviews = data.reviews || [];
   const stats = data.stats || {};
+
+  // Countdown timer for exclusive offers
+  useEffect(() => {
+    if (exclusiveOffers.length === 0) return;
+    const tick = () => {
+      const now = Date.now();
+      const countdowns = {};
+      exclusiveOffers.forEach(o => {
+        const remaining = Math.max(0, Math.floor((new Date(o.expiresAt).getTime() - now) / 1000));
+        countdowns[o.id] = remaining;
+      });
+      setOfferCountdowns(countdowns);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [exclusiveOffers.length]);
 
   // Find sessions ready for check-in (confirmed, today, within 15 min of start or past start)
   // All times are care-location times — use TimezoneHelper
@@ -945,6 +964,111 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         </div>
       )}
+
+      {/* Exclusive Offers — "Just For You" */}
+      {exclusiveOffers.length > 0 && exclusiveOffers.map(offer => {
+        const remaining = offerCountdowns[offer.id] || 0;
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        const expired = remaining <= 0;
+        const serviceLabels = { companionship: 'Companionship', personal_care: 'Personal Care', housekeeping: 'Housekeeping', meal_prep: 'Meal Prep', transportation: 'Transportation', health_wellness: 'Health & Wellness', full_day: 'Full Day Care' };
+        const formatT12 = (t) => { if (!t) return ''; const [h, m] = t.split(':').map(Number); return `${h > 12 ? h - 12 : h || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; };
+        return (
+          <div key={offer.id} className="card" style={{
+            padding: '20px', marginBottom: 16,
+            border: expired ? '2px solid #e0e0e0' : '2px solid #f59e0b',
+            background: expired ? '#fafafa' : 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+            opacity: expired ? 0.6 : 1,
+            transition: 'opacity 0.5s ease',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 20 }}>{'\u2B50'}</span>
+                <span style={{ fontWeight: 700, fontSize: 16, color: '#92400e' }}>Just For You</span>
+              </div>
+              {!expired ? (
+                <div style={{ background: '#92400e', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                  {mins}:{String(secs).padStart(2, '0')} left
+                </div>
+              ) : (
+                <div style={{ color: '#999', fontSize: 13, fontWeight: 600 }}>Expired</div>
+              )}
+            </div>
+            <div style={{ fontSize: 13, color: '#78350f', marginBottom: 8 }}>
+              <strong>{offer.familyName}</strong> is offering this to you first
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              <span style={{ background: '#fff', padding: '4px 10px', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#333' }}>
+                {serviceLabels[offer.serviceType] || offer.serviceType}
+              </span>
+              <span style={{ background: '#fff', padding: '4px 10px', borderRadius: 6, fontSize: 13, color: '#555' }}>
+                {offer.date} at {formatT12(offer.time)}
+              </span>
+              <span style={{ background: '#fff', padding: '4px 10px', borderRadius: 6, fontSize: 13, color: '#555' }}>
+                {offer.durationHours}hr
+              </span>
+              {offer.recipientCity && (
+                <span style={{ background: '#fff', padding: '4px 10px', borderRadius: 6, fontSize: 13, color: '#555' }}>
+                  {offer.recipientCity}
+                </span>
+              )}
+            </div>
+            {offer.proposedRate && (
+              <div style={{ background: '#065f46', color: '#fff', padding: '8px 14px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 12, fontWeight: 700, fontSize: 16 }}>
+                ${offer.proposedRate}/hr offered
+                {offer.shortNoticeSurcharge > 0 && (
+                  <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.9 }}> + rush bonus</span>
+                )}
+              </div>
+            )}
+            {!expired && (
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button
+                  disabled={claimingJobId === offer.id}
+                  onClick={async () => {
+                    setClaimingJobId(offer.id);
+                    try {
+                      const res = await apiFetch(`/api/sessions/${offer.id}/claim`, { method: 'PUT' });
+                      if (res?.ok) {
+                        alert('Offer accepted! This session is now confirmed.');
+                        window.dispatchEvent(new CustomEvent('sessions-updated'));
+                        if (typeof fetchData === 'function') fetchData();
+                      } else {
+                        const err = await res.json().catch(() => ({}));
+                        alert(err.error || 'Failed to accept offer');
+                      }
+                    } catch (e) { alert('Network error'); }
+                    setClaimingJobId(null);
+                  }}
+                  style={{
+                    flex: 1, padding: '12px', borderRadius: 10, border: 'none',
+                    background: '#065f46', color: '#fff', fontSize: 15, fontWeight: 700,
+                    cursor: 'pointer', opacity: claimingJobId === offer.id ? 0.6 : 1,
+                  }}>
+                  {claimingJobId === offer.id ? 'Accepting...' : 'Accept This Offer'}
+                </button>
+                <button
+                  onClick={() => {
+                    // Dismiss locally — let it expire naturally
+                    const el = document.getElementById('exclusive-' + offer.id);
+                    if (el) el.style.display = 'none';
+                  }}
+                  style={{
+                    padding: '12px 16px', borderRadius: 10, border: '1px solid #d1d5db',
+                    background: '#fff', color: '#666', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                  }}>
+                  Decline
+                </button>
+              </div>
+            )}
+            {expired && (
+              <div style={{ fontSize: 13, color: '#999', fontStyle: 'italic', marginTop: 4 }}>
+                This offer has expired and is now open to all caregivers.
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       {/* Find Work + Available Jobs — merged tile */}
       {(() => {
