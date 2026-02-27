@@ -124,6 +124,15 @@
 - [ ] **Home/mailing/billing address for caregivers and payers.** Address entry with option to flag if billing address differs from home. Needed for payment processing. *(Feedback — Pete, Feb 25)* **P2**
 - [x] ~~**Group chat icon: overlapping avatars with care recipient on top.** Fixed in v1.33.8. Group conversations now show overlapping circular avatars (up to 3 members, excluding current user) with profile photos or colored initials. *(Feedback — Pete, Feb 25)* **P2**~~
 - [x] ~~**Role explanation tooltips in care team management.** Fixed in v1.33.5. Added detailed role legend in the invite form area explaining Leader, Member, and View Only permissions. *(Feedback — Pete, Feb 25)* **P2**~~
+- [ ] **"I don't know how to add a My Loved One" + undefined text on new-user screen.** Angela S (new family user) can't figure out how to add a care recipient after signup. Also sees "undefined" text on the initial screen. Need: (1) fix undefined text bug, (2) make the "Add My Loved One" flow obvious and guided for new family users — prominent CTA button, not buried in a sidebar link. *(Feedback — Angela S, Feb 27)* **P0**
+- [x] ~~**Can't see Cary on caregiver page — not in assigned, browse, or map.** Fixed in v1.33.75. Backend COALESCE(is_active,1) handles NULL values. Frontend assigned tab uses assignment data for caregiver name fallback. *(Feedback — Pete, Feb 27)* **P1**~~
+- [x] ~~**Cary's calendar "Bett" tiles need better labels.** Fixed in v1.33.75. Calendar cells now show full first name ("Betty" not "Bett"). Tooltip shows name, service type, and cost. *(Feedback — Cary Taker, Feb 27)* **P2**~~
+- [x] ~~**Green outline on selectable profile role toggles.** Fixed in v1.33.75. Available roles show teal border, active role shows role-color border, unavailable roles have no border. *(Feedback — Pete, Feb 27)* **P2**~~
+- [x] ~~**Hide demo column in admin panel.** Fixed in v1.33.75. Demo column and demo filter removed from admin user table. Default still filters to real users. *(Feedback — Pete, Feb 27)* **P2**~~
+- [x] ~~**Manage own account from admin panel.** Fixed in v1.33.75. "My Account" button in admin header navigates to account settings page. *(Feedback — Pete, Feb 27)* **P2**~~
+- [x] ~~**Admin should default to real accounts (not demo).** Already fixed — `userDemoFilter` defaults to `'real'` in AdminPanel.js.~~ *(Feedback — Pete, Feb 27)* **P1**
+- [x] ~~**AI health summary regenerate button with rate limiting.** Fixed in v1.33.75. Regenerate button already exists; added backend rate-limiting — requires at least 1 completed visit since last generation. 429 error shown via toast. *(Feedback — Pete, Feb 27)* **P3**~~
+- [ ] **Checkout feedback flows into care record with care team comments.** After session checkout, caregiver feedback should go into the care record. Care team members can comment on it (e.g., "oh yeah, we can unlock the door for you"). AI reads all comments for care profile insights. Ties into check-in/check-out feature spec. *(Feedback — Pete, Feb 27)* **P3**
 
 
 ## Features — Up Next

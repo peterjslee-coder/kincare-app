@@ -445,7 +445,7 @@ const Caregivers = window.Caregivers = () => {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                       <span style={{ fontSize: '15px', fontWeight: 600, color: '#333' }}>
-                        {cg?.name || 'Caregiver'}
+                        {cg?.name || (a.first_name ? `${a.first_name} ${a.last_name || ''}`.trim() : 'Caregiver')}
                       </span>
                       <button onClick={() => handleToggleFavorite(a.id)} style={{
                         background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: 0,

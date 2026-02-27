@@ -405,12 +405,26 @@ router.put("/:id/preferences", async (req, res) => {
 
 // ─── POST /api/care-recipients/:id/generate-summary ───
 // Generate AI care summary using Anthropic Claude
+// Rate-limited: after first generation, requires at least 1 completed visit since last generation
 router.post("/:id/generate-summary", async (req, res) => {
   try {
     const db = await getDb();
     const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
     if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
     if (recipient.family_user_id !== req.user.id) return res.status(403).json({ error: "Not authorized" });
+
+    // Rate limit: if summary already exists, require at least 1 completed visit since last generation
+    if (recipient.ai_care_summary && recipient.ai_care_summary_updated_at) {
+      const completedSince = await db.prepare(`
+        SELECT COUNT(*) as cnt FROM care_sessions cs
+        JOIN visit_logs vl ON vl.session_id = cs.id
+        WHERE cs.care_recipient_id = ? AND cs.status = 'completed'
+          AND vl.check_out_time > ?
+      `).get(req.params.id, recipient.ai_care_summary_updated_at);
+      if (!completedSince || completedSince.cnt === 0) {
+        return res.status(429).json({ error: "No new completed visits since last summary. Complete a visit first to regenerate." });
+      }
+    }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "AI service not configured" });

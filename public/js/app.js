@@ -988,7 +988,8 @@ const App = () => {
                 key: r,
                 onClick: hasRole ? () => handleSwitchRole(r) : undefined,
                 style: {
-                  padding: '6px 14px', borderRadius: '8px', border: 'none',
+                  padding: '5px 13px', borderRadius: '8px',
+                  border: isActive ? '2px solid ' + btnColor : hasRole ? '2px solid #1b6b5a' : '2px solid transparent',
                   cursor: hasRole ? 'pointer' : 'default',
                   fontSize: '13px', fontWeight: isActive ? 600 : 400,
                   background: isActive ? btnColor : 'transparent',

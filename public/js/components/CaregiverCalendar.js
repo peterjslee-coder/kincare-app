@@ -380,7 +380,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                     return (
                       <td key={di}
                         onClick={() => setSelectedDay(d)}
-                        title={cell.type === 'booked' ? `${cell.session.recipientName || cell.session.recipient_name || ''} — ${cell.session.serviceType || cell.session.service_type || ''}` : cell.type === 'request' ? `Care request: ${cell.session.service_type || cell.session.serviceType || ''}` : cell.type === 'blocked' ? `Blocked${cell.note ? ': ' + cell.note : ''}` : cell.type}
+                        title={cell.type === 'booked' ? `${cell.session.recipientName || cell.session.recipient_name || ''} · ${cell.session.serviceType || cell.session.service_type || ''}${cell.session.total_cost ? ' · $' + cell.session.total_cost : ''}` : cell.type === 'request' ? `Care request: ${cell.session.service_type || cell.session.serviceType || ''}` : cell.type === 'blocked' ? `Blocked${cell.note ? ': ' + cell.note : ''}` : cell.type}
                         style={{
                           background: cell.type === 'blocked'
                             ? 'repeating-linear-gradient(-45deg, #fce4ec, #fce4ec 3px, #f8bbd0 3px, #f8bbd0 6px)'
@@ -396,7 +396,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         {cell.type === 'booked' && (
                           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(30,136,229,0.35) 0%, rgba(30,136,229,0.12) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <span style={{ fontSize: 8, fontWeight: 700, color: '#1565c0', letterSpacing: -0.5 }}>
-                              {(() => { const s = cell.session; const n = s.recipientName || s.recipient_name || ''; return n ? n.split(' ')[0].slice(0, 4) : '\u25CF'; })()}
+                              {(() => { const s = cell.session; const n = s.recipientName || s.recipient_name || ''; return n ? n.split(' ')[0] : '\u25CF'; })()}
                             </span>
                           </div>
                         )}

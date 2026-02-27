@@ -28,7 +28,7 @@ router.get("/", async (req, res) => {
     SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
-    WHERE u.is_active = 1 AND COALESCE(u.is_demo, 0) = ?
+    WHERE COALESCE(u.is_active, 1) = 1 AND COALESCE(u.is_demo, 0) = ?
   `;
   const params = [isDemo];
 
@@ -166,7 +166,7 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
     SELECT cp.*, u.first_name, u.last_name, u.avatar_url
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
-    WHERE u.is_active = 1 AND cp.is_available = 1
+    WHERE COALESCE(u.is_active, 1) = 1 AND cp.is_available = 1
       AND cp.latitude IS NOT NULL AND cp.longitude IS NOT NULL
       AND COALESCE(u.is_demo, 0) = ?
   `).all(isDemo);

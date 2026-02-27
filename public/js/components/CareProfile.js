@@ -500,9 +500,9 @@ const CareProfile = window.CareProfile = () => {
                     padding: '8px 16px', borderRadius: 8, border: '1px solid #1b6b5a',
                     background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 12, cursor: 'pointer',
                   }}>{'\u270F\uFE0F'} Edit Summary</button>
-                  <button onClick={generateAISummary} style={{
+                  <button onClick={generateAISummary} disabled={generatingAI} style={{
                     padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc',
-                    background: '#fff', color: '#666', fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                    background: '#fff', color: generatingAI ? '#999' : '#666', fontWeight: 600, fontSize: 12, cursor: generatingAI ? 'wait' : 'pointer',
                   }}>{'\u2728'} Regenerate</button>
                 </div>
               </div>

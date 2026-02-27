@@ -552,6 +552,11 @@ const AdminPanel = window.AdminPanel = () => {
             Manage users, waitlist, and platform metrics
           </div>
         </div>
+        <button onClick={() => { if (window.__navigateTo) window.__navigateTo('account'); }} style={{
+          padding: '8px 16px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a',
+          borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
+        }}>⚙️ My Account</button>
       </div>
 
       {/* Tab Navigation — Card Grid */}
@@ -712,12 +717,7 @@ const AdminPanel = window.AdminPanel = () => {
               <option value="caregiver">Caregiver</option>
               <option value="care_for">Care Recipient</option>
             </select>
-            <select value={userDemoFilter} onChange={(e) => { setUserDemoFilter(e.target.value); }}
-              style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}>
-              <option value="">Demo & Real</option>
-              <option value="false">Real Only</option>
-              <option value="true">Demo Only</option>
-            </select>
+            {/* Demo filter hidden — defaults to 'real' */}
             <button onClick={loadUsers} style={{
               padding: '10px 20px', background: '#1b6b5a', color: 'white', border: 'none',
               borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
@@ -734,7 +734,6 @@ const AdminPanel = window.AdminPanel = () => {
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Verified</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Demo</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Tester</th>
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Joined</th>
                   <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
@@ -758,9 +757,6 @@ const AdminPanel = window.AdminPanel = () => {
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       {u.email_verified ? '✅' : '—'}
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      {u.is_demo ? '🎭' : '—'}
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       <button onClick={async () => {
