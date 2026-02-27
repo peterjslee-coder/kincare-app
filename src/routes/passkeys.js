@@ -13,10 +13,8 @@ const router = express.Router();
 
 // ─── Config ───
 const RP_NAME = "InPlace";
-const RP_ID = process.env.NODE_ENV === "production" ? "yourinplace.com" : "localhost";
-const ORIGIN = process.env.NODE_ENV === "production"
-  ? "https://yourinplace.com"
-  : "http://localhost:3001";
+const RP_ID = process.env.RP_ID || (process.env.APP_URL ? new URL(process.env.APP_URL).hostname : "yourinplace.com");
+const ORIGIN = process.env.APP_URL || "https://yourinplace.com";
 
 // In-memory challenge store (short-lived, ~5 min TTL)
 // In production at scale, use Redis. Fine for current user base.

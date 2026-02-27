@@ -8,8 +8,8 @@ const {
 } = require("@simplewebauthn/server");
 
 // Passkey config (matches passkeys.js)
-const RP_ID = process.env.NODE_ENV === "production" ? "yourinplace.com" : "localhost";
-const ORIGIN = process.env.NODE_ENV === "production" ? "https://yourinplace.com" : "http://localhost:3001";
+const RP_ID = process.env.RP_ID || (process.env.APP_URL ? new URL(process.env.APP_URL).hostname : "yourinplace.com");
+const ORIGIN = process.env.APP_URL || "https://yourinplace.com";
 
 // In-memory challenge store for nuke confirmations (short-lived)
 const nukeChallenges = new Map();
