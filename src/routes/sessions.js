@@ -340,6 +340,31 @@ router.put("/:id/claim", async (req, res) => {
     }
   } catch (teamErr) { console.error('Error notifying care team:', teamErr); }
 
+  // Check if care recipient has a care address — if not, nudge the family to add one
+  try {
+    const careRecipient = await db.prepare(
+      "SELECT id, first_name, location_address, location_city FROM care_recipients WHERE id = ?"
+    ).get(session.care_recipient_id);
+    if (careRecipient && !careRecipient.location_address && !careRecipient.location_city) {
+      const addrMsg = `Please add a care address for ${careRecipient.first_name} so ${caregiverName} knows where to go for the visit ${sessionDateLabel}.`;
+      const addrPush = {
+        title: 'Care address needed',
+        body: addrMsg,
+        data: { type: 'missing_address', sessionId: req.params.id, page: 'recipients' },
+      };
+      // Notify requesting family member
+      if (session.family_user_id) {
+        sendPushToUser(session.family_user_id, addrPush, "missing_address").catch(() => {});
+        if (emitToUser) emitToUser(session.family_user_id, "activity_update", { title: 'Care address needed', message: addrMsg });
+      }
+      // Also write to activity feed so it persists
+      await db.prepare(`
+        INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata)
+        VALUES (?, ?, ?, 'missing_address', 'Care address needed', ?, ?)
+      `).run(uuid(), session.family_user_id, session.care_recipient_id, addrMsg, JSON.stringify({ sessionId: req.params.id }));
+    }
+  } catch (addrErr) { console.error('Error checking care address:', addrErr); }
+
   // Find care_for user to notify (via linked_user_id)
   const careForUser = await db.prepare(`
     SELECT cr.linked_user_id AS id FROM care_recipients cr

@@ -911,10 +911,23 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const minsUntil = (sessionDT - now) / 60000;
               const isImminent = !isActive && !isReady && s.status === 'confirmed' && minsUntil <= 60 && minsUntil > -120;
               const isSoon = !isActive && !isReady && !isImminent && s.status === 'confirmed' && minsUntil <= 180 && minsUntil > 0;
+              const noAddress = !s.hasAddress && s.status === 'confirmed';
+
+              // Countdown label for sessions further out
+              const countdownLabel = (() => {
+                if (isActive || isReady || isImminent || isSoon) return null;
+                if (minsUntil <= 0) return null;
+                const hoursUntil = minsUntil / 60;
+                const daysUntil = Math.floor(hoursUntil / 24);
+                if (daysUntil >= 2) return `in ${daysUntil} days`;
+                if (daysUntil === 1) return 'tomorrow';
+                if (hoursUntil >= 1) return `in ${Math.round(hoursUntil)}h`;
+                return `in ${Math.ceil(minsUntil)} min`;
+              })();
 
               // Styling based on urgency
-              const borderColor = isActive ? '#f57f17' : (isReady || isImminent) ? '#e8724a' : isSoon ? '#e8724a' : '#1b6b5a';
-              const borderWidth = isActive || isReady || isImminent ? 3 : 2;
+              const borderColor = isActive ? '#f57f17' : (isReady || isImminent) ? '#e8724a' : isSoon ? '#e8724a' : noAddress ? '#dc2626' : '#1b6b5a';
+              const borderWidth = isActive || isReady || isImminent ? 3 : noAddress ? 2 : 2;
               const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)'
                 : (isReady || isImminent) ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
               const shadow = isActive ? '0 2px 12px rgba(245, 127, 23, 0.15)'
@@ -938,14 +951,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
                       {isImminent && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{minsUntil <= 0 ? 'Started \u2014 awaiting check-in' : `Starting in ${Math.ceil(minsUntil)} min \u2014 Check In`}</div>}
                       {isSoon && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>Coming up in {minsUntil <= 120 ? `${Math.ceil(minsUntil)} min` : `${Math.round(minsUntil / 60)}h`}</div>}
+                      {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 3 }}>{countdownLabel}</div>}
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
                         {svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
                       </div>
-                      {loc && (
+                      {loc ? (
                         <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
-                      )}
+                      ) : noAddress ? (
+                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file — contact the family to confirm location</div>
+                      ) : null}
                       {s.specialInstructions && <div style={{ fontSize: 12, color: '#555', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
