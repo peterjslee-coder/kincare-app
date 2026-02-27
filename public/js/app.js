@@ -321,6 +321,16 @@ const App = () => {
   const [signupPrefill, setSignupPrefill] = useState(null); // { email, role, signupToken }
 
   useEffect(() => {
+    // Check for password reset token FIRST — before auto-login can override it
+    const initParams = new URLSearchParams(window.location.search);
+    const resetParam = initParams.get('reset');
+    if (resetParam) {
+      setResetToken(resetParam);
+      setAppState('reset-password');
+      window.history.replaceState({}, '', window.location.pathname);
+      return; // Skip auto-login entirely — user is resetting their password
+    }
+
     const savedToken = localStorage.getItem('auth_token');
     if (savedToken) {
       AUTH_TOKEN = savedToken;
@@ -404,14 +414,6 @@ const App = () => {
           }
         })
         .catch(() => setVerifyMessage({ type: 'error', text: 'Verification failed' }));
-    }
-
-    // Check for password reset token in URL
-    const rt = params.get('reset');
-    if (rt) {
-      setResetToken(rt);
-      setAppState('reset-password');
-      window.history.replaceState({}, '', window.location.pathname);
     }
 
     // Check for care team invite token in URL
