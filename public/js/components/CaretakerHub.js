@@ -65,6 +65,38 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Documents state
   const [documents, setDocuments] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
+  const [docUploading, setDocUploading] = useState(null); // which doc type is uploading
+  const docInputRef = useRef(null);
+  const [pendingDocType, setPendingDocType] = useState(null);
+
+  const handleDocUpload = async (file, docType) => {
+    if (!file) return;
+    setDocUploading(docType);
+    try {
+      const formData = new FormData();
+      formData.append('documents', file);
+      formData.append('types', JSON.stringify([docType]));
+      formData.append('metadata', JSON.stringify([{}]));
+      const token = window.AUTH_TOKEN || localStorage.getItem('auth_token');
+      const res = await fetch('/api/caregiver-onboarding/documents', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      if (res.ok) {
+        showToast('Document uploaded!', 'success');
+        fetchDocuments();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        showToast(d.error || 'Upload failed', 'error');
+      }
+    } catch (err) {
+      console.error('Doc upload error:', err);
+      showToast('Upload failed', 'error');
+    }
+    setDocUploading(null);
+    setPendingDocType(null);
+  };
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
 
   // Availability state
@@ -1865,11 +1897,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           <span style={{ padding: '4px 10px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>Done</span>
                         ) : (
                           <button onClick={() => {
-                            if (window.__navigateTo) window.__navigateTo('onboarding');
-                          }} style={{
-                            padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none',
-                            borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                          }}>Upload</button>
+                            setPendingDocType(req.type);
+                            if (docInputRef.current) {
+                              docInputRef.current.value = '';
+                              docInputRef.current.click();
+                            }
+                          }} disabled={docUploading === req.type} style={{
+                            padding: '6px 14px', background: docUploading === req.type ? '#999' : '#1b6b5a', color: '#fff', border: 'none',
+                            borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: docUploading === req.type ? 'not-allowed' : 'pointer',
+                          }}>{docUploading === req.type ? 'Uploading...' : 'Upload'}</button>
                         )}
                       </div>
                     );
@@ -1878,6 +1914,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               );
             })()}
           </div>
+
+          {/* Hidden file input for document uploads */}
+          <input
+            ref={docInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && pendingDocType) handleDocUpload(file, pendingDocType);
+            }}
+          />
 
           <div className="card">
             <div className="card-header"><span className="card-icon">📄</span>Uploaded Documents</div>
@@ -1911,7 +1959,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </div>
             ) : (
               <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
-                No documents uploaded yet. Complete onboarding to submit your documents.
+                No documents uploaded yet. Use the Upload buttons above to submit your documents.
               </div>
             )}
           </div>
