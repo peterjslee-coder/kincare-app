@@ -266,7 +266,7 @@ const Caregivers = window.Caregivers = () => {
       if (!cg.latitude || !cg.longitude) return;
 
       const isAssigned = cg.isAssigned || assignedCgIds.has(cg.id);
-      const pinColor = isAssigned ? '#e8724a' : '#1b6b5a';
+      const pinColor = isAssigned ? '#e8724a' : '#2563eb';
       const distLabel = cg.distance != null ? ` &bull; ${cg.distance}mi` : '';
       const photoHtml = cg.profilePhoto
         ? `<img src="${cg.profilePhoto}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid ${pinColor};margin-right:8px;flex-shrink:0" />`
