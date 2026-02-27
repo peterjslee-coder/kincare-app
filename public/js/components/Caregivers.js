@@ -193,8 +193,16 @@ const Caregivers = window.Caregivers = () => {
 
   // Update map markers when search results change
   useEffect(() => {
-    if (!leafletMap.current || activeTab !== 'nearby') return;
+    if (activeTab !== 'nearby') return;
+    // Map is created with a 100ms delay, so wait for it
+    const waitForMap = () => {
+      if (!leafletMap.current) return setTimeout(waitForMap, 50);
+      renderMarkers();
+    };
+    const markerCleanup = { fn: null };
+    const renderMarkers = () => {
     const map = leafletMap.current;
+    if (!map) return;
     const assignedCgIds = new Set(assignments.map(a => a.caregiver_profile_id));
 
     // Clear old
@@ -327,7 +335,10 @@ const Caregivers = window.Caregivers = () => {
     };
     const container = mapRef.current;
     if (container) container.addEventListener('click', handlePopupClick);
-    return () => { if (container) container.removeEventListener('click', handlePopupClick); };
+    markerCleanup.fn = () => { if (container) container.removeEventListener('click', handlePopupClick); };
+    };
+    waitForMap();
+    return () => { if (markerCleanup.fn) markerCleanup.fn(); };
   }, [locationResults, searchCenter, activeTab, assignments, caregivers, recipients]);
 
   // Build a lookup: which caregiver profiles are assigned
