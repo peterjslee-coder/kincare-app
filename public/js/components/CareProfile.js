@@ -694,7 +694,8 @@ const CareProfile = window.CareProfile = () => {
       </div>
 
       {/* ─── 6. Permission Controls (owner only, bottom) ─── */}
-      {profile?.linked_user_id && canEdit && (
+      {canEdit && (
+        profile?.linked_user_id ? (
         <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{'\uD83D\uDD10'}</span> {profile.first_name}'s App Permissions
@@ -780,6 +781,30 @@ const CareProfile = window.CareProfile = () => {
             {savingPerms ? 'Saving...' : 'Save Permissions'}
           </button>
         </div>
+        ) : (
+        <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0', opacity: 0.55 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{'\uD83D\uDD10'}</span> {profile.first_name}'s App Permissions
+          </div>
+          <p style={{ fontSize: 13, color: '#888', margin: 0, lineHeight: 1.5 }}>
+            Control {profile.first_name}'s access on the app if {profile.first_name} joins. Once {profile.first_name} has their own account linked here, you'll be able to choose what they can see and do.
+          </p>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap', pointerEvents: 'none' }}>
+            {[
+              { label: 'Full Control', icon: '\uD83D\uDFE2' },
+              { label: 'Collaborative', icon: '\uD83D\uDFE1' },
+              { label: 'Managed', icon: '\uD83D\uDD34' },
+            ].map(t => (
+              <div key={t.label} style={{
+                flex: '1 1 120px', padding: '8px 10px', border: '1px solid #e0e0e0',
+                borderRadius: 10, background: '#fafafa', textAlign: 'left',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#aaa' }}>{t.icon} {t.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )
       )}
     </>
   );
