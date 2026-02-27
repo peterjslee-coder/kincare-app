@@ -857,17 +857,21 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           </div>
           <div>
             {activity.slice(0, 5).map((a, idx) => (
-              <div key={idx} className="activity-item"
+              <div key={idx}
                 onClick={() => a.sessionId && setVisitDetailSessionId(a.sessionId)}
-                style={a.sessionId ? { cursor: 'pointer', borderRadius: 6, padding: '6px 8px', margin: '-6px -8px', transition: 'background 0.15s' } : {}}
+                style={{
+                  padding: '10px 0', borderBottom: idx < Math.min(activity.length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+                  cursor: a.sessionId ? 'pointer' : 'default', transition: 'background 0.15s',
+                  borderRadius: 4, margin: '0 -4px', paddingLeft: 4, paddingRight: 4,
+                }}
                 onMouseEnter={(e) => { if (a.sessionId) e.currentTarget.style.background = '#f0f8f5'; }}
                 onMouseLeave={(e) => { if (a.sessionId) e.currentTarget.style.background = ''; }}>
-                <div className="activity-title">
+                <div style={{ fontWeight: 600, color: '#333', fontSize: 13, marginBottom: 2 }}>
                   {a.title}
-                  {a.sessionId && <span style={{ fontSize: 11, color: '#1b6b5a', marginLeft: 6 }}>View →</span>}
+                  {a.sessionId && <span style={{ fontSize: 11, color: '#1b6b5a', marginLeft: 6, fontWeight: 500 }}>View →</span>}
                 </div>
-                {a.message && <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>{a.message}</div>}
-                <div className="activity-time">{formatActivityTime(a.timestamp)}</div>
+                {a.message && <div style={{ fontSize: 12, color: '#666', marginTop: 2, lineHeight: 1.4 }}>{a.message}</div>}
+                <div style={{ fontSize: 11, color: '#999', marginTop: 3 }}>{formatActivityTime(a.timestamp)}</div>
               </div>
             ))}
           </div>
