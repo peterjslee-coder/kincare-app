@@ -378,6 +378,8 @@ async function caregiverDashboard(db, userId, res) {
       isAvailable: !!profile.is_available,
       city: profile.location_city,
       state: profile.location_state,
+      zip: profile.zip,
+      workLocationAddress: profile.work_location_address,
       onboardingComplete: !!profile.onboarding_complete,
       earlyCheckInAllowed: !!profile.early_check_in_allowed,
       background_check_paid: !!profile.background_check_paid,

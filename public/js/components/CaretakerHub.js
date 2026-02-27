@@ -34,6 +34,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Inline profile editing state (for onboarding)
   const [profileForm, setProfileForm] = useState({ bio: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', foodAllergies: '', medicalConditions: '' });
   const [profileSaving, setProfileSaving] = useState(false);
+  // Work location editing state
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [locCity, setLocCity] = useState('');
+  const [locState, setLocState] = useState('');
+  const [locZip, setLocZip] = useState('');
+  const [locSaving, setLocSaving] = useState(false);
   // Earnings state
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
@@ -606,6 +612,25 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setProfileSaving(false);
   };
 
+  // Save work location (city/state/zip)
+  const saveWorkLocation = async () => {
+    if (!locCity.trim() || !locState.trim() || !locZip.trim()) {
+      showToast('Please fill in city, state, and zip', 'error'); return;
+    }
+    setLocSaving(true);
+    try {
+      await apiFetch('/api/caregivers/profile', {
+        method: 'POST',
+        body: JSON.stringify({ city: locCity.trim(), state: locState.trim(), zip: locZip.trim() }),
+      });
+      const res = await apiFetch('/api/dashboard');
+      if (res?.ok) { const d = await res.json(); setData(d); }
+      showToast('Work location updated!', 'success');
+      setEditingLocation(false);
+    } catch (err) { console.error('Location save error:', err); showToast('Failed to update location', 'error'); }
+    setLocSaving(false);
+  };
+
   // First Steps checklist
   const firstSteps = [
     { id: 'profile', label: 'Complete your profile', done: !!(profile.bio && (profile.rateDaytime || profile.hourlyRate)) },
@@ -651,7 +676,32 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         <div>
           <h1 className="greeting" style={{ marginBottom: '4px' }}>Welcome, {profile.name || 'Caregiver'}!</h1>
           <div style={{ color: '#666', fontSize: '14px' }}>
-            {profile.city}, {profile.state} &bull; {profile.specialties?.join(', ')}
+            {editingLocation ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                <input type="text" value={locCity} onChange={(e) => setLocCity(e.target.value)} placeholder="City" style={{ width: '120px', padding: '4px 8px', border: '1px solid #ccc', borderRadius: '6px', fontSize: '13px' }} />
+                <select value={locState} onChange={(e) => setLocState(e.target.value)} style={{ padding: '4px 6px', border: '1px solid #ccc', borderRadius: '6px', fontSize: '13px' }}>
+                  <option value="">State</option>
+                  {['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <input type="text" value={locZip} onChange={(e) => setLocZip(e.target.value)} placeholder="Zip" maxLength={10} style={{ width: '80px', padding: '4px 8px', border: '1px solid #ccc', borderRadius: '6px', fontSize: '13px' }} />
+                <button onClick={saveWorkLocation} disabled={locSaving} style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: locSaving ? 0.6 : 1 }}>{locSaving ? '...' : 'Save'}</button>
+                <button onClick={() => setEditingLocation(false)} style={{ padding: '4px 8px', background: 'none', border: '1px solid #ccc', borderRadius: '6px', fontSize: '12px', color: '#666', cursor: 'pointer' }}>Cancel</button>
+              </div>
+            ) : (profile.city && profile.state) ? (
+              <span>
+                <span onClick={() => { setLocCity(profile.city || ''); setLocState(profile.state || ''); setLocZip(profile.zip || ''); setEditingLocation(true); }} style={{ cursor: 'pointer', borderBottom: '1px dashed #999' }} title="Click to edit work location">
+                  {profile.city}, {profile.state}{profile.zip ? ` ${profile.zip}` : ''}
+                </span>
+                {profile.specialties?.length > 0 && <span> &bull; {profile.specialties.join(', ')}</span>}
+              </span>
+            ) : (
+              <span>
+                <span onClick={() => { setLocCity(''); setLocState(''); setLocZip(''); setEditingLocation(true); }} style={{ cursor: 'pointer', color: '#e8724a', fontWeight: 600, borderBottom: '1px dashed #e8724a' }}>
+                  + Set your work location
+                </span>
+                {profile.specialties?.length > 0 && <span> &bull; {profile.specialties.join(', ')}</span>}
+              </span>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
