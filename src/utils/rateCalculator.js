@@ -8,9 +8,10 @@ const TIER_BOUNDARIES = [
   { tier: 'nighttime', start: 18, end: 24 },   // 6pm – 12am
 ];
 
-const OVERNIGHT_MIN_HOURS = 6;
+const OVERNIGHT_MIN_HOURS = 6;          // default; overridable per caregiver
 const SHORT_NOTICE_HOURS = 24;
-const SHORT_NOTICE_SURCHARGE_PCT = 0.20;
+const SHORT_NOTICE_SURCHARGE_PCT = 0.20; // 20% rush surcharge
+// Rush surcharge split: caregiver gets 75% (incentive), platform gets 25%.
 const SURCHARGE_CAREGIVER_SHARE = 0.75;
 const SURCHARGE_PLATFORM_SHARE = 0.25;
 

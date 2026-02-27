@@ -409,6 +409,16 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     });
   }
 
+  // Reject sessions scheduled less than 1 hour from now
+  const sessionStartDt = new Date(`${scheduledDate}T${scheduledTime}:00`);
+  const minsUntilSession = (sessionStartDt.getTime() - Date.now()) / (1000 * 60);
+  if (minsUntilSession < 60) {
+    return res.status(400).json({
+      error: "Sessions must be scheduled at least 1 hour from now.",
+      code: "TOO_SOON",
+    });
+  }
+
   const db = await getDb();
 
   // Verify the care recipient belongs to this family
@@ -469,9 +479,10 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
 
   // Estimate cost using caregiver's tiered rates (or service-type defaults)
   let costRates = { base: 28 };
+  let overnightMinHours = 6;
   if (bookCaregiverId) {
     const cgProfile = await db.prepare(
-      "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight FROM caregiver_profiles WHERE id = ?"
+      "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight, min_overnight_hours FROM caregiver_profiles WHERE id = ?"
     ).get(bookCaregiverId);
     if (cgProfile) {
       costRates = {
@@ -480,6 +491,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
         overnight: cgProfile.rate_overnight || cgProfile.hourly_rate || 28,
         base: cgProfile.hourly_rate || 28,
       };
+      overnightMinHours = cgProfile.min_overnight_hours || 6;
     }
   } else {
     const defaultRates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
@@ -490,6 +502,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     scheduledDate,
     durationHours,
     shortNotice,
+    overnightMinHours,
   });
   const estimatedCost = costResult.total;
 
@@ -729,10 +742,11 @@ router.get("/cost-preview", async (req, res) => {
 
   const db = await getDb();
   let costRates = { base: 28 };
+  let overnightMinHours = 6;
 
   if (caregiverId) {
     const cgProfile = await db.prepare(
-      "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight FROM caregiver_profiles WHERE id = ?"
+      "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight, min_overnight_hours FROM caregiver_profiles WHERE id = ?"
     ).get(caregiverId);
     if (cgProfile) {
       costRates = {
@@ -741,6 +755,7 @@ router.get("/cost-preview", async (req, res) => {
         overnight: cgProfile.rate_overnight || cgProfile.hourly_rate || 28,
         base: cgProfile.hourly_rate || 28,
       };
+      overnightMinHours = cgProfile.min_overnight_hours || 6;
     }
   }
 
@@ -749,10 +764,11 @@ router.get("/cost-preview", async (req, res) => {
     scheduledDate,
     durationHours: parseFloat(durationHours),
     shortNotice,
+    overnightMinHours,
   });
 
-  // Caregiver gets their FULL rate + 75% of surcharge (incentive for short notice).
-  // Platform fee is charged ON TOP to the family, not deducted from the caregiver.
+  // Rush surcharge split: 75% to caregiver (incentive for short-notice), 25% to platform.
+  // Platform fee = base percentage + platform's share of rush surcharge.
   // Family pays: caregiver payout + platform fee.
   const feePercent = await getPlatformFeePercent(db);
   const surchargeToCaregiver = costResult.surchargeBreakdown?.caregiver || 0;
@@ -765,6 +781,7 @@ router.get("/cost-preview", async (req, res) => {
     ...costResult,
     shortNotice,
     rates: costRates,
+    overnightMinHours,
     // Platform fee breakdown
     platformFeePercent: feePercent,
     platformFee,

@@ -38,6 +38,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     }));
     const subtotal = Math.round(tierBreakdown.reduce((s, t) => s + t.amount, 0) * 100) / 100;
     const surcharge = costPreview.shortNotice ? Math.round(subtotal * 0.20 * 100) / 100 : 0;
+    // Rush surcharge split: 75% to caregiver (incentive), 25% to platform
     const surchargeCaregiver = Math.round(surcharge * 0.75 * 100) / 100;
     const surchargePlatform = Math.round(surcharge * 0.25 * 100) / 100;
     const caregiverPayout = Math.round((subtotal + surchargeCaregiver) * 100) / 100;
@@ -338,7 +339,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           <>
             <div className="modal-section">
               <label className="modal-label">Date</label>
-              <input type="date" className="modal-input" value={date} onChange={(e) => setDate(e.target.value)} />
+              <input type="date" className="modal-input" value={date} min={typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(TimezoneHelper.DEFAULT_TZ) : new Date().toISOString().split('T')[0]} onChange={(e) => { setDate(e.target.value); setTime(''); }} />
             </div>
             <div className="modal-section">
               <label className="modal-label">Preferred Start Time</label>
@@ -346,9 +347,18 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 <option value="">Select a time...</option>
                 {(() => {
                   const opts = [];
+                  // If date is today, only show times at least 1 hour from now
+                  const tz = typeof TimezoneHelper !== 'undefined' ? (TimezoneHelper.DEFAULT_TZ || 'America/New_York') : 'America/New_York';
+                  const nowET = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getNow(tz) : new Date();
+                  const todayStr = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(tz) : nowET.toISOString().split('T')[0];
+                  const isToday = date === todayStr;
+                  const nowMins = isToday ? (nowET.getHours() * 60 + nowET.getMinutes()) : 0;
+                  const minStartMins = nowMins + 60; // at least 1 hour from now
                   for (let h = 6; h <= 22; h++) {
                     for (let m = 0; m < 60; m += 30) {
                       if (h === 22 && m > 0) break;
+                      const slotMins = h * 60 + m;
+                      if (isToday && slotMins < minStartMins) continue;
                       const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
                       const ampm = h >= 12 ? 'PM' : 'AM';
                       const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
@@ -566,36 +576,55 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               {/* Cost Breakdown — recalculates live from offered rate */}
               {displayCost && (
                 <div style={{ marginTop: '12px', padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Cost Breakdown</div>
-                  {displayCost.tierBreakdown?.map((t, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', marginBottom: '3px' }}>
-                      <span>{t.hours}h {t.tier} @ ${t.rate}/hr</span>
-                      <span>${t.amount.toFixed(2)}</span>
-                    </div>
-                  ))}
-                  {displayCost.surcharge > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#e8724a', marginBottom: '3px' }}>
-                      <span>Short-notice surcharge (20%)</span>
-                      <span>+${displayCost.surcharge.toFixed(2)}</span>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>Cost Breakdown</div>
+
+                  {/* Caregiver rates section */}
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Caregiver rates</div>
+                  {displayCost.tierBreakdown?.map((t, i) => {
+                    const tierLabel = t.tier === 'daytime' ? 'Daytime (7a\u20136p)' : t.tier === 'nighttime' ? 'Evening (6p\u201312a)' : 'Overnight (12a\u20137a)';
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', marginBottom: '3px' }}>
+                        <span>{t.hours}h {tierLabel} @ ${t.rate}/hr</span>
+                        <span>${t.amount.toFixed(2)}</span>
+                      </div>
+                    );
+                  })}
+                  {displayCost.tierBreakdown?.some(t => t.tier === 'overnight') && (
+                    <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px', fontStyle: 'italic' }}>
+                      Overnight minimum: {displayCost.overnightMinHours || 6}h (set by caregiver)
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#1b6b5a', fontWeight: 600, marginBottom: '3px', borderTop: '1px solid #f0f0f0', paddingTop: '4px', marginTop: '4px' }}>
                     <span>Caregiver receives</span>
-                    <span>${(displayCost.caregiverPayout || displayCost.total).toFixed(2)}</span>
+                    <span>${(displayCost.caregiverPayout || displayCost.subtotal).toFixed(2)}</span>
                   </div>
+
+                  {/* Platform fees section */}
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '10px', marginBottom: '4px' }}>Platform fees</div>
                   {displayCost.platformFee > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#888', marginBottom: '3px' }}>
-                      <span>InPlace fee ({displayCost.platformFeePercent || 20}%)</span>
-                      <span>+${displayCost.platformFee.toFixed(2)}</span>
+                      <span>InPlace service fee ({displayCost.platformFeePercent || 20}%)</span>
+                      <span>${((displayCost.platformFee || 0) - (displayCost.surchargeBreakdown?.platform || 0)).toFixed(2)}</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #eee', paddingTop: '6px', marginTop: '4px' }}>
+                  {displayCost.surcharge > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#e8724a', fontWeight: 500, marginBottom: '3px' }}>
+                      <span>{'\u26A1'} Rush fee (&lt;24hr notice, 20%)</span>
+                      <span>+${displayCost.surcharge.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {!displayCost.platformFee && !displayCost.surcharge && (
+                    <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '3px' }}>No additional fees</div>
+                  )}
+
+                  {/* Total */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #eee', paddingTop: '6px', marginTop: '6px' }}>
                     <span>You pay</span>
                     <span>${(displayCost.familyTotal || displayCost.total).toFixed(2)}</span>
                   </div>
                   {displayCost.shortNotice && (
                     <div style={{ fontSize: '11px', color: '#e8724a', marginTop: '4px' }}>
-                      Sessions booked &lt;24 hours out include a 20% surcharge. Schedule earlier to avoid this.
+                      {'\u26A1'} Rush fee applies to sessions booked less than 24 hours out. Schedule earlier to avoid this.
                     </div>
                   )}
                 </div>
