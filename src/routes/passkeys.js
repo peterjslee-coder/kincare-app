@@ -165,7 +165,8 @@ router.post("/register/verify", authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error("Passkey register verify error:", err);
-    res.status(500).json({ error: "Failed to verify passkey registration" });
+    console.error("  [passkey] RP_ID:", RP_ID, "ORIGIN:", ORIGIN, "APP_URL:", process.env.APP_URL, "NODE_ENV:", process.env.NODE_ENV);
+    res.status(500).json({ error: `Passkey verification failed: ${err.message}` });
   }
 });
 
@@ -295,7 +296,8 @@ router.post("/authenticate/verify", async (req, res) => {
     });
   } catch (err) {
     console.error("Passkey auth verify error:", err);
-    res.status(500).json({ error: "Passkey authentication failed" });
+    console.error("  [passkey] RP_ID:", RP_ID, "ORIGIN:", ORIGIN, "APP_URL:", process.env.APP_URL);
+    res.status(500).json({ error: `Passkey authentication failed: ${err.message}` });
   }
 });
 
