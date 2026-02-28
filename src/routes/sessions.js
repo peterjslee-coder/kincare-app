@@ -289,14 +289,6 @@ router.put("/:id/claim", async (req, res) => {
     return res.status(400).json({ error: "This session is not available for claiming (status: " + session.status + ")" });
   }
 
-  // Guard exclusive offers: only the targeted caregiver can claim during the exclusivity window
-  if (session.offered_to_caregiver_id && session.offer_expires_at) {
-    const expiresAt = new Date(session.offer_expires_at);
-    if (expiresAt > new Date() && session.offered_to_caregiver_id !== profile.id) {
-      return res.status(403).json({ error: "This job is exclusively offered to another caregiver" });
-    }
-  }
-
   await db.prepare(`
     UPDATE care_sessions SET caregiver_id = ?, status = 'confirmed', updated_at = NOW() WHERE id = ?
   `).run(profile.id, req.params.id);
@@ -439,9 +431,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   }
 
   // Validate caregiver availability if a caregiver is specified (via matching or direct booking)
-  const { caregiverId: bookCaregiverId, directOffer } = req.body;
-  if (bookCaregiverId && !directOffer) {
-    // Skip availability validation for direct offers (family knowingly sending to off-schedule caregiver)
+  const { caregiverId: bookCaregiverId } = req.body;
+  if (bookCaregiverId) {
     try {
       const [sy, smo, sd] = scheduledDate.split("-").map(Number);
       const schedDate = new Date(sy, smo - 1, sd, 12, 0, 0);
@@ -526,12 +517,6 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   // Allow 'open' status for care requests without caregiver
   const sessionStatus = requestedStatus === "open" ? "open" : "pending";
 
-  // Direct offer: assign caregiver + set 1-hour exclusivity window
-  const isDirectOffer = directOffer && bookCaregiverId;
-  const offerExpiresAt = isDirectOffer
-    ? new Date(Date.now() + 60 * 60 * 1000).toISOString()
-    : null;
-
   const recurrenceGroupId = isRecurring ? uuid() : null;
   const createdSessions = [];
 
@@ -547,9 +532,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       (id, care_recipient_id, family_user_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours,
        special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
-       short_notice_surcharge, rate_tier, proposed_rate,
-       caregiver_id, offered_to_caregiver_id, offer_expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       short_notice_surcharge, rate_tier, proposed_rate)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, careRecipientId, req.user.id, serviceType, sessionStatus,
       sessionDate, scheduledTime, durationHours,
@@ -558,10 +542,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       recurrenceGroupId,
       costResult.surcharge || 0,
       JSON.stringify(costResult.tierBreakdown),
-      proposedRate ? parseFloat(proposedRate) : null,
-      isDirectOffer ? bookCaregiverId : null,
-      isDirectOffer ? bookCaregiverId : null,
-      offerExpiresAt
+      proposedRate ? parseFloat(proposedRate) : null
     );
     createdSessions.push(id);
   }
@@ -608,7 +589,6 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
 
       const rateLabel = proposedRate ? `$${proposedRate}/hr` : '';
       const surchargeLabel = costResult.surcharge > 0 ? ' (includes short-notice bonus)' : '';
-      const timeLabel = scheduledTime ? (() => { const [h, m] = scheduledTime.split(':').map(Number); return `${h > 12 ? h - 12 : h || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; })() : '';
       const jobInfo = {
         sessionId: createdSessions[0],
         serviceType,
@@ -619,36 +599,18 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
         hasBonus: costResult.surcharge > 0,
       };
 
-      if (isDirectOffer) {
-        // Direct offer: notify only the targeted caregiver with exclusive_offer event
-        const targetCg = await db.prepare(
-          "SELECT user_id FROM caregiver_profiles WHERE id = ?"
-        ).get(bookCaregiverId);
-        if (targetCg) {
-          emitToUser(targetCg.user_id, "exclusive_offer", {
-            ...jobInfo,
-            expiresAt: offerExpiresAt,
-            familyName: bookerName,
-          });
-          sendPushToUser(targetCg.user_id, {
-            title: `⭐ Exclusive offer for you — ${rateLabel || 'new job'}${surchargeLabel}`,
-            body: `${bookerName} is offering you ${serviceType.replace(/_/g, ' ')} on ${scheduledDate} at ${timeLabel}. You have 1 hour to respond!`,
-            data: { url: '/#caretaker', type: 'exclusive_offer' },
-          }, 'new_job').catch(err => console.error('Push to caregiver error:', err));
-        }
-      } else {
-        for (const cg of assignedCgs) {
-          emitToUser(cg.user_id, "new_job", jobInfo);
-        }
+      for (const cg of assignedCgs) {
+        emitToUser(cg.user_id, "new_job", jobInfo);
+      }
 
-        // Push notification to assigned caregivers
-        for (const cg of assignedCgs) {
-          sendPushToUser(cg.user_id, {
-            title: `New care request${rateLabel ? ' — ' + rateLabel + surchargeLabel : ''}`,
-            body: `${serviceType.replace(/_/g, ' ')} on ${scheduledDate} at ${timeLabel} (${durationHours}hr)`,
-            data: { url: '/#caretaker', type: 'new_job' },
-          }, 'new_job').catch(err => console.error('Push to caregiver error:', err));
-        }
+      // Push notification to assigned caregivers
+      const timeLabel = scheduledTime ? (() => { const [h, m] = scheduledTime.split(':').map(Number); return `${h > 12 ? h - 12 : h || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; })() : '';
+      for (const cg of assignedCgs) {
+        sendPushToUser(cg.user_id, {
+          title: `New care request${rateLabel ? ' — ' + rateLabel + surchargeLabel : ''}`,
+          body: `${serviceType.replace(/_/g, ' ')} on ${scheduledDate} at ${timeLabel} (${durationHours}hr)`,
+          data: { url: '/#caretaker', type: 'new_job' },
+        }, 'new_job').catch(err => console.error('Push to caregiver error:', err));
       }
     } catch (err) {
       console.error("Job notification error (non-blocking):", err);

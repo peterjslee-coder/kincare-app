@@ -94,14 +94,14 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     }
   }, [assignedCaregivers, time]);
 
-  // 3-step flow: Details (1) → Caregiver (2, if applicable) → Review (3)
+  // Check if user has assigned caregivers
   const hasCaregiverData = assignedCaregivers !== null && assignedCaregivers.length > 0;
-  const totalSteps = hasCaregiverData ? 3 : 2;
+  const totalSteps = hasCaregiverData ? 5 : 4;
   const stepLabels = hasCaregiverData
-    ? ['Details', 'Caregiver', 'Review']
-    : ['Details', 'Review'];
-  const caregiverStep = hasCaregiverData ? 2 : -1;
-  const reviewStep = hasCaregiverData ? 3 : 2;
+    ? ['Service', 'When', 'Duration', 'Caregiver', 'Review']
+    : ['Service', 'When', 'Duration', 'Review'];
+  const reviewStep = hasCaregiverData ? 5 : 4;
+  const caregiverStep = hasCaregiverData ? 4 : -1; // -1 = skip
 
   // When moving to caregiver step, find matches from API
   const findMatchingCaregivers = async () => {
@@ -149,13 +149,13 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             if (isAvailable) {
               matches.push({
                 name: cgName, caregiverId: cg.caregiver_profile_id,
-                skills: cg.specialties || [], rate: hasTieredRates ? `Day $${rateDaytime} \u00B7 Night $${rateNighttime}` : `$${rate}/hr`,
+                skills: cg.specialties || [], rate: hasTieredRates ? `Day $${rateDaytime} · Night $${rateNighttime}` : `$${rate}/hr`,
                 skillMatch: hasSkill, available: true,
               });
             } else {
               matches.push({
                 name: cgName, caregiverId: cg.caregiver_profile_id,
-                skills: cg.specialties || [], rate: hasTieredRates ? `Day $${rateDaytime} \u00B7 Night $${rateNighttime}` : `$${rate}/hr`,
+                skills: cg.specialties || [], rate: hasTieredRates ? `Day $${rateDaytime} · Night $${rateNighttime}` : `$${rate}/hr`,
                 skillMatch: hasSkill, available: false,
                 reason: daySlots.length === 0 ? 'Not scheduled this day' : 'Not available at this time',
               });
@@ -190,7 +190,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const handleSubmit = async () => {
     setSubmitError('');
     const isOpenRequest = !hasCaregiverData || !selectedCaregiver;
-    const isDirectOffer = selectedCaregiver && !selectedCaregiver.available;
     const recurrenceLabel = recurrence !== 'none' ? ` (${recurrence}, ${recurrenceWeeks} sessions)` : '';
 
     // Use selected recipient or first available
@@ -211,7 +210,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
       recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
       caregiverId: selectedCaregiver?.caregiverId || undefined,
-      directOffer: isDirectOffer || undefined,
     };
     // Include proposed rate if set
     if (proposedRate && parseFloat(proposedRate) > 0) {
@@ -225,10 +223,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       });
       if (response?.ok) {
         const data = await response.json();
-        if (isDirectOffer) {
-          alert(`Direct offer sent to ${selectedCaregiver.name}!${recurrenceLabel}\n\nThey have 1 hour to respond before it opens to other caregivers.\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
-        } else if (isOpenRequest) {
-          alert(`Care request posted!${recurrenceLabel}\n\nStatus: Open \u2014 waiting for caregiver match\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
+        if (isOpenRequest) {
+          alert(`Care request posted!${recurrenceLabel}\n\nStatus: Open — waiting for caregiver match\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
         } else {
           alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
         }
@@ -287,13 +283,10 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     );
   }
 
-  // Step 1 validation: all details filled
-  const step1Valid = serviceType && date && time && duration && (careRecipients.length <= 1 || selectedRecipientId);
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, maxHeight: '90vh', overflow: 'auto' }}>
-        <button className="modal-close" onClick={onClose}>{'\u2715'}</button>
+        <button className="modal-close" onClick={onClose}>✕</button>
         <div className="modal-header">Request Care</div>
 
         {/* Step indicator */}
@@ -306,7 +299,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 background: step > i + 1 ? '#1b6b5a' : step === i + 1 ? '#1b6b5a' : '#e0e0e0',
                 color: step >= i + 1 ? '#fff' : '#999',
               }}>
-                {step > i + 1 ? '\u2713' : i + 1}
+                {step > i + 1 ? '✓' : i + 1}
               </div>
               <span style={{ fontSize: 11, color: step === i + 1 ? '#1b6b5a' : '#999', fontWeight: step === i + 1 ? 600 : 400 }}>{label}</span>
               {i < stepLabels.length - 1 && <div style={{ width: 16, height: 1, background: '#e0e0e0', margin: '0 2px' }}></div>}
@@ -314,7 +307,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           ))}
         </div>
 
-        {/* Step 1: Details — combined service, when, duration */}
         {step === 1 && (
           <>
             {careRecipients.length > 1 && (
@@ -329,7 +321,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               </div>
             )}
             <div className="modal-section">
-              <label className="modal-label">What type of care?</label>
+              <label className="modal-label">What type of care do you need?</label>
               <select className="modal-select" value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
                 <option value="">Select a service...</option>
                 <option value="companionship">Companionship</option>
@@ -340,50 +332,42 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 <option value="health_wellness">Health & Wellness</option>
               </select>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <div className="modal-section" style={{ flex: 1 }}>
-                <label className="modal-label">Date</label>
-                <input type="date" className="modal-input" value={date} min={typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(TimezoneHelper.DEFAULT_TZ) : new Date().toISOString().split('T')[0]} onChange={(e) => { setDate(e.target.value); setTime(''); }} />
-              </div>
-              <div className="modal-section" style={{ flex: 1 }}>
-                <label className="modal-label">Time</label>
-                <select className="modal-select" value={time} onChange={(e) => setTime(e.target.value)}>
-                  <option value="">Select...</option>
-                  {(() => {
-                    const opts = [];
-                    const tz = typeof TimezoneHelper !== 'undefined' ? (TimezoneHelper.DEFAULT_TZ || 'America/New_York') : 'America/New_York';
-                    const nowET = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getNow(tz) : new Date();
-                    const todayStr = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(tz) : nowET.toISOString().split('T')[0];
-                    const isToday = date === todayStr;
-                    const nowMins = isToday ? (nowET.getHours() * 60 + nowET.getMinutes()) : 0;
-                    const minStartMins = nowMins + 60;
-                    for (let h = 6; h <= 22; h++) {
-                      for (let m = 0; m < 60; m += 30) {
-                        if (h === 22 && m > 0) break;
-                        const slotMins = h * 60 + m;
-                        if (isToday && slotMins < minStartMins) continue;
-                        const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-                        const ampm = h >= 12 ? 'PM' : 'AM';
-                        const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
-                        const label = `${dh}:${String(m).padStart(2,'0')} ${ampm}`;
-                        opts.push(<option key={val} value={val}>{label}</option>);
-                      }
-                    }
-                    return opts;
-                  })()}
-                </select>
-              </div>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <div className="modal-section">
+              <label className="modal-label">Date</label>
+              <input type="date" className="modal-input" value={date} min={typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(TimezoneHelper.DEFAULT_TZ) : new Date().toISOString().split('T')[0]} onChange={(e) => { setDate(e.target.value); setTime(''); }} />
             </div>
             <div className="modal-section">
-              <label className="modal-label">Duration</label>
-              <select className="modal-select" value={duration} onChange={(e) => setDuration(e.target.value)}>
-                <option value="">Select...</option>
-                <option value="1">1 hour</option>
-                <option value="2">2 hours</option>
-                <option value="3">3 hours</option>
-                <option value="4">4 hours</option>
-                <option value="6">6 hours</option>
-                <option value="8">Full day (8 hours)</option>
+              <label className="modal-label">Preferred Start Time</label>
+              <select className="modal-select" value={time} onChange={(e) => setTime(e.target.value)}>
+                <option value="">Select a time...</option>
+                {(() => {
+                  const opts = [];
+                  // If date is today, only show times at least 1 hour from now
+                  const tz = typeof TimezoneHelper !== 'undefined' ? (TimezoneHelper.DEFAULT_TZ || 'America/New_York') : 'America/New_York';
+                  const nowET = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getNow(tz) : new Date();
+                  const todayStr = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(tz) : nowET.toISOString().split('T')[0];
+                  const isToday = date === todayStr;
+                  const nowMins = isToday ? (nowET.getHours() * 60 + nowET.getMinutes()) : 0;
+                  const minStartMins = nowMins + 60; // at least 1 hour from now
+                  for (let h = 6; h <= 22; h++) {
+                    for (let m = 0; m < 60; m += 30) {
+                      if (h === 22 && m > 0) break;
+                      const slotMins = h * 60 + m;
+                      if (isToday && slotMins < minStartMins) continue;
+                      const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                      const ampm = h >= 12 ? 'PM' : 'AM';
+                      const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+                      const label = `${dh}:${String(m).padStart(2,'0')} ${ampm}`;
+                      opts.push(<option key={val} value={val}>{label}</option>);
+                    }
+                  }
+                  return opts;
+                })()}
               </select>
             </div>
             <div className="modal-section">
@@ -392,12 +376,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 {[
                   { value: 'none', label: 'One-time' },
                   { value: 'weekly', label: 'Weekly' },
-                  { value: 'biweekly', label: 'Every 2 wks' },
+                  { value: 'biweekly', label: 'Every 2 weeks' },
                 ].map(opt => (
                   <button key={opt.value} type="button"
                     onClick={() => setRecurrence(opt.value)}
                     style={{
-                      flex: 1, padding: '8px 6px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                      flex: 1, padding: '10px 8px', borderRadius: 8, fontSize: 13, fontWeight: 600,
                       border: recurrence === opt.value ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
                       background: recurrence === opt.value ? '#e8f5e9' : '#fff',
                       color: recurrence === opt.value ? '#1b6b5a' : '#666',
@@ -408,6 +392,16 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 ))}
               </div>
             </div>
+            {/* Short-notice rush banner */}
+            {date && time && shortNotice && (
+              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 18 }}>⚡</span>
+                <div style={{ fontSize: 13, color: '#e65100' }}>
+                  <strong>Short notice — 20% rush surcharge applies.</strong>
+                  <div style={{ color: '#795548', marginTop: 2 }}>Sessions booked less than 24 hours out include a surcharge. Schedule further ahead to avoid this.</div>
+                </div>
+              </div>
+            )}
             {recurrence !== 'none' && (
               <div className="modal-section">
                 <label className="modal-label">For how many weeks?</label>
@@ -418,22 +412,36 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                   <option value="8">8 weeks</option>
                   <option value="12">12 weeks</option>
                 </select>
-              </div>
-            )}
-            {/* Short-notice rush banner */}
-            {date && time && shortNotice && (
-              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 18 }}>{'\u26A1'}</span>
-                <div style={{ fontSize: 13, color: '#e65100' }}>
-                  <strong>Short notice — 20% rush surcharge applies.</strong>
-                  <div style={{ color: '#795548', marginTop: 2 }}>Sessions booked less than 24 hours out include a surcharge.</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                  This will create {recurrenceWeeks} {recurrence === 'weekly' ? 'weekly' : 'biweekly'} sessions starting {date || 'on the selected date'}.
                 </div>
               </div>
             )}
           </>
         )}
 
-        {/* Step 2 (if caregivers): Caregiver selection */}
+        {step === 3 && (
+          <div className="modal-section">
+            <label className="modal-label">How long do you need care?</label>
+            <select className="modal-select" value={duration} onChange={(e) => setDuration(e.target.value)}>
+              <option value="">Select...</option>
+              <option value="1">1 hour</option>
+              <option value="2">2 hours</option>
+              <option value="3">3 hours</option>
+              <option value="4">4 hours</option>
+              <option value="6">6 hours</option>
+              <option value="8">Full day (8 hours)</option>
+            </select>
+            {shortNotice && (
+              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 16 }}>⚡</span>
+                <span style={{ fontSize: 13, color: '#e65100', fontWeight: 600 }}>Short notice — 20% rush surcharge will apply</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Caregiver selection step */}
         {step === caregiverStep && hasCaregiverData && (
           <div className="modal-section">
             <label className="modal-label">Caregivers for {formatTime12(time)} on {date}</label>
@@ -470,7 +478,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                       </div>
                     </div>
                     {!cg.available && (
-                      <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>{cg.reason || 'Not on schedule \u2014 can still accept if available'}</div>
+                      <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>{cg.reason || 'Not on schedule — can still accept if available'}</div>
                     )}
                   </button>
                 )) : (
@@ -513,18 +521,18 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                   <><div style={{ color: '#666' }}>Repeat</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>{recurrence === 'weekly' ? 'Weekly' : 'Every 2 weeks'} for {recurrenceWeeks} sessions</div></>
                 )}
                 {selectedCaregiver ? (
-                  <><div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{selectedCaregiver.name}{!selectedCaregiver.available ? ' (direct offer)' : ''}</div></>
+                  <><div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{selectedCaregiver.name}{!selectedCaregiver.available ? ' (not on schedule — will be offered)' : ''}</div></>
                 ) : (
                   <><div style={{ color: '#666' }}>Status</div><div style={{ fontWeight: 600, color: '#e8724a' }}>Open — waiting for caregiver</div></>
                 )}
               </div>
 
-              {/* Direct offer info banner */}
+              {/* Rate nudge when caregiver isn't on schedule */}
               {selectedCaregiver && !selectedCaregiver.available && (
                 <div style={{ marginTop: '12px', padding: '12px', background: '#fff3e0', borderRadius: '8px', border: '1px solid #ffcc02', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 18 }}>{'\u2B50'}</span>
+                  <span style={{ fontSize: 18 }}>💡</span>
                   <div style={{ fontSize: 13, color: '#795548' }}>
-                    <strong>Direct offer to {selectedCaregiver.name}</strong> — they'll get a 1-hour head start before this opens to other caregivers. A higher rate makes it more likely they'll accept.
+                    <strong>{selectedCaregiver.name}</strong> isn't on schedule for this time. A higher rate makes it more likely they'll accept.
                     {localAvgRate && (
                       <button type="button" onClick={() => setProposedRate(String(Math.round(localAvgRate * 1.25)))}
                         style={{ display: 'inline', marginLeft: 6, background: 'none', border: 'none', color: '#e8724a', fontWeight: 700, cursor: 'pointer', fontSize: 13, textDecoration: 'underline', padding: 0 }}>
@@ -560,7 +568,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 )}
                 {shortNotice && (
                   <div style={{ fontSize: '11px', color: '#e8724a', marginTop: '4px', fontWeight: 500 }}>
-                    {'\u26A1'} Short notice — 20% surcharge will be added below
+                    ⚡ Short notice — 20% surcharge will be added below
                   </div>
                 )}
               </div>
@@ -625,7 +633,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             {!selectedCaregiver && (
               <div style={{ marginTop: 12, padding: 12, background: '#fff8e1', borderRadius: 8, fontSize: 13, color: '#795548' }}>
                 {hasCaregiverData
-                  ? 'This will be posted as an open request. Any caregiver on InPlace \u2014 including your assigned caregivers \u2014 can respond.'
+                  ? 'This will be posted as an open request. Any caregiver on InPlace — including your assigned caregivers — can respond.'
                   : 'Your care request will be posted as "open." When caregivers join InPlace in your area, they\'ll be able to respond to your request.'
                 }
               </div>
@@ -642,9 +650,13 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           <button className="btn btn-outline" onClick={() => step > 1 ? setStep(step - 1) : onClose()} >
             {step === 1 ? 'Cancel' : 'Back'}
           </button>
-          {step === 1 && (
-            <button className="btn btn-primary" disabled={!step1Valid}
-              onClick={() => setStep(hasCaregiverData ? caregiverStep : reviewStep)}>Next</button>
+          {step < reviewStep && step !== caregiverStep && (
+            <button className="btn btn-primary" disabled={
+              (step === 1 && (!serviceType || (careRecipients.length > 1 && !selectedRecipientId))) || (step === 2 && (!date || !time)) || (step === 3 && !duration)
+            } onClick={() => {
+              const nextStep = step + 1;
+              setStep(nextStep);
+            }}>Next</button>
           )}
           {step === caregiverStep && hasCaregiverData && (
             <button className="btn btn-primary" disabled={loadingCaregivers}
