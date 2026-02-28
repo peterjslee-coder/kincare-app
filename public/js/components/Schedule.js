@@ -171,8 +171,15 @@ const Schedule = window.Schedule = () => {
         </div>
       )}
 
-      {/* Month navigation */}
+      {/* Month navigation + Request Care shortcut */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        {getActiveRole() !== 'caregiver' && (
+          <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
+            padding: '6px 14px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8,
+            fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>+ Request Care</button>
+        )}
+        <div style={{ flex: 1 }} />
         <button onClick={prevMonth} style={{
           padding: '8px 16px', background: '#fff', border: '1px solid #d0d0d0',
           borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
