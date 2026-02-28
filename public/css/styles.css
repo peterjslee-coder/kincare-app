@@ -2585,3 +2585,23 @@
   pointer-events: none;
   border-radius: inherit;
 }
+
+/* ===== Imminent session hero shimmer — prominent card under profile ===== */
+.next-up-hero-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 100%;
+  left: -100%;
+  background: linear-gradient(
+    105deg,
+    transparent 15%,
+    rgba(232, 114, 74, 0.08) 30%,
+    rgba(232, 114, 74, 0.18) 50%,
+    rgba(232, 114, 74, 0.08) 70%,
+    transparent 85%
+  );
+  animation: nextUpShimmer 1.8s ease-in-out 0.3s 3 forwards;
+  pointer-events: none;
+  border-radius: inherit;
+}

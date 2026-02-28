@@ -19,8 +19,9 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [awaitingExpanded, setAwaitingExpanded] = useState(false);
   const [nextUpExpanded, setNextUpExpanded] = useState(false);
   const [finishedExpanded, setFinishedExpanded] = useState(false);
-  // Tick counter for live countdown on in-progress sessions (re-renders every 30s)
+  // Tick counter for live countdown on in-progress and imminent sessions (re-renders every 30-60s)
   const [tick, setTick] = useState(0);
+  const [imminentId, setImminentId] = useState(null); // track which session is the hero card
 
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
@@ -149,10 +150,13 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   // Tick every 30s so in-progress countdowns stay live
   useEffect(() => {
     const hasActive = data?.upcomingSessions?.some(s => s.status === 'in_progress');
-    if (!hasActive) return;
-    const iv = setInterval(() => setTick(t => t + 1), 30000);
+    // Also tick for imminent sessions (within 24h) so countdown updates
+    const hasImminent = !!imminentId;
+    if (!hasActive && !hasImminent) return;
+    const interval = hasActive ? 30000 : 60000; // 30s for active, 60s for countdown
+    const iv = setInterval(() => setTick(t => t + 1), interval);
     return () => clearInterval(iv);
-  }, [data?.upcomingSessions]);
+  }, [data?.upcomingSessions, imminentId]);
 
   const formatActivityTime = (createdAt) => {
     if (!createdAt) return '';
@@ -546,6 +550,111 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
+      {/* Imminent Session Hero — within 24h, countdown + shimmer, right under profile card */}
+      {(() => {
+        const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
+        const now = TimezoneHelper.getNow(tz);
+        // Find soonest confirmed/in_progress session with a caregiver
+        const confirmed = upcoming.filter(s => s.caregiverName && ['confirmed', 'in_progress'].includes(s.status));
+        const sorted = [...confirmed].sort((a, b) => {
+          const ak = ((a.date || '').split('T')[0]) + (a.time || '');
+          const bk = ((b.date || '').split('T')[0]) + (b.time || '');
+          return ak.localeCompare(bk);
+        });
+        const hero = sorted[0];
+        if (!hero) { if (imminentId) setImminentId(null); return null; }
+        const sDate = (hero.date || '').split('T')[0];
+        const sessionDT = TimezoneHelper.buildDateTime(sDate, hero.time || '00:00', tz);
+        const msUntil = sessionDT - now;
+        const isActive = hero.status === 'in_progress';
+        // Show hero if within 24h OR currently in progress
+        if (!isActive && msUntil > 24 * 3600000) { if (imminentId) setImminentId(null); return null; }
+        if (imminentId !== hero.id) setTimeout(() => setImminentId(hero.id), 0);
+
+        // Build countdown string
+        let countdownStr = '';
+        let countdownColor = '#1b6b5a';
+        if (isActive) {
+          // Show remaining time for in-progress
+          let startMs;
+          if (hero.checkInTime) {
+            startMs = new Date(hero.checkInTime).getTime();
+          } else {
+            startMs = sessionDT.getTime();
+          }
+          const endMs = startMs + ((hero.durationHours || 2) * 3600000);
+          const leftMs = endMs - Date.now();
+          if (leftMs > 0) {
+            const totalSec = Math.floor(leftMs / 1000);
+            const hrs = Math.floor(totalSec / 3600);
+            const mins = Math.floor((totalSec % 3600) / 60);
+            countdownStr = hrs > 0 ? `${hrs}h ${mins}m remaining` : `${mins}m remaining`;
+          } else {
+            countdownStr = 'Expected end time passed';
+            countdownColor = '#c62828';
+          }
+        } else if (msUntil <= 0) {
+          countdownStr = 'Starting now — awaiting check-in';
+          countdownColor = '#e8724a';
+        } else {
+          const totalSec = Math.floor(msUntil / 1000);
+          const hrs = Math.floor(totalSec / 3600);
+          const mins = Math.floor((totalSec % 3600) / 60);
+          if (hrs > 0) {
+            countdownStr = `${hrs}h ${mins}m`;
+          } else {
+            countdownStr = `${mins}m`;
+          }
+          countdownColor = hrs < 1 ? '#e8724a' : hrs < 3 ? '#e8724a' : '#1b6b5a';
+        }
+
+        const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
+        const timeLabel = TimezoneHelper.formatTime(hero.time);
+        const bgGradient = isActive
+          ? 'linear-gradient(135deg, #fff8e1 0%, #fffde7 100%)'
+          : msUntil <= 3600000
+            ? 'linear-gradient(135deg, #fff3e0 0%, #fff8f0 100%)'
+            : 'linear-gradient(135deg, #f0faf7 0%, #fff 100%)';
+        const borderColor = isActive ? '#f57f17' : msUntil <= 3600000 ? '#e8724a' : '#1b6b5a';
+        const shouldShimmer = !isActive && msUntil <= 24 * 3600000;
+
+        return (
+          <div className={shouldShimmer ? 'next-up-hero-shimmer' : ''} onClick={() => hero.id && setVisitDetailSessionId(hero.id)} style={{
+            marginBottom: 16, padding: '18px 20px', cursor: 'pointer', borderRadius: 14,
+            border: `3px solid ${borderColor}`,
+            background: bgGradient,
+            boxShadow: `0 4px 16px ${isActive ? 'rgba(245, 127, 23, 0.15)' : msUntil <= 3600000 ? 'rgba(232, 114, 74, 0.18)' : 'rgba(27, 107, 90, 0.1)'}`,
+            position: 'relative', overflow: 'hidden',
+          }}>
+            {/* Top row: label + countdown */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: isActive ? '#f57f17' : '#e8724a' }}>
+                {isActive ? 'In Progress Now' : 'Coming Up'}
+              </div>
+              <div style={{
+                fontSize: 14, fontWeight: 700, color: countdownColor,
+                background: isActive ? '#fff8e1' : countdownColor === '#e8724a' ? '#fff3e0' : '#e8f5e9',
+                padding: '4px 12px', borderRadius: 20,
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {isActive ? countdownStr : msUntil <= 0 ? countdownStr : `in ${countdownStr}`}
+              </div>
+            </div>
+            {/* Session info */}
+            <div style={{ fontWeight: 700, fontSize: 17, color: '#1a1a2e', marginBottom: 4 }}>
+              {hero.recipientName || 'Care Visit'} with {hero.caregiverName}
+            </div>
+            <div style={{ fontSize: 14, color: '#555' }}>
+              {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
+              {hero.durationHours ? ` \u2022 ${hero.durationHours}hr` : ''}
+              {hero.serviceType ? ` \u2022 ${formatServiceType(hero.serviceType)}` : ''}
+            </div>
+            {/* Tap hint */}
+            <div style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: borderColor, opacity: 0.3, fontSize: 20 }}>→</div>
+          </div>
+        );
+      })()}
+
       {/* Just Finished — recently completed sessions (faded, expandable) */}
       {(() => {
         const completed = data?.recentlyCompleted || [];
@@ -644,7 +753,8 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 3600000);
 
         // Sort all upcoming by date+time — exclude unclaimed open requests (shown separately below)
-        const confirmed = upcoming.filter(s => !((['open', 'requested'].includes(s.status)) && !s.caregiverName));
+        // Also exclude the imminent hero session (already shown above Betty card)
+        const confirmed = upcoming.filter(s => !((['open', 'requested'].includes(s.status)) && !s.caregiverName) && s.id !== imminentId);
         const sorted = [...confirmed].sort((a, b) => {
           const ak = ((a.date || '').split('T')[0]) + (a.time || '');
           const bk = ((b.date || '').split('T')[0]) + (b.time || '');
