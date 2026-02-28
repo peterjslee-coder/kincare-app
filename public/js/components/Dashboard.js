@@ -576,7 +576,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                           {s.caregiverName ? ` with ${s.caregiverName}` : ''}
                         </div>
                         <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                          {s.date} · {svcLabel} · {s.durationHours || 2}h
+                          {TimezoneHelper.getDateLabel((s.date || '').split('T')[0], upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ)} · {svcLabel} · {s.durationHours || 2}h
                         </div>
                         {s.visitSummary && (
                           <div style={{ fontSize: 13, color: '#555', marginTop: 4, fontStyle: 'italic' }}>

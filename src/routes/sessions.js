@@ -1145,7 +1145,13 @@ router.put("/:id/cancel", async (req, res) => {
       uuid(),
       session.family_user_id,
       `Session Cancelled by ${cancellerName}`,
-      `${session.service_type} session on ${session.scheduled_date} was cancelled by ${cancellerName}${isLateCancel ? " (late cancellation)" : ""}.${reason ? " Reason: " + reason : ""}`
+      (() => {
+        const d = new Date(session.scheduled_date + 'T12:00:00');
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const friendlyDate = `${months[d.getMonth()]} ${d.getDate()}`;
+        const svcLabel = (session.service_type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        return `${svcLabel} session on ${friendlyDate} was cancelled by ${cancellerName}${isLateCancel ? " (late cancellation)" : ""}`;
+      })()
     );
 
     // Notify the other party via WebSocket

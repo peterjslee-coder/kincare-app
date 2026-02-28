@@ -1023,7 +1023,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>This Month</div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#1b6b5a', marginTop: 2 }}>
-                ${earningsThisMonth || data.stats?.monthlyEarnings || '0'}
+                ${parseFloat(earningsThisMonth || data.stats?.monthlyEarnings || 0).toFixed(2)}
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
