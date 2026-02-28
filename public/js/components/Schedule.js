@@ -193,81 +193,48 @@ const Schedule = window.Schedule = () => {
         }}>Next →</button>
       </div>
 
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '12px', color: '#666', flexWrap: 'wrap' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: '#fce4ec', display: 'inline-block', border: '1px solid #f8bbd0' }}></span> Pending request
+      {/* Legend — dot indicators */}
+      <div style={{ display: 'flex', gap: '14px', marginBottom: '12px', fontSize: '11px', color: '#999', flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#1b6b5a', display: 'inline-block' }}></span> Confirmed
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 75%)', display: 'inline-block' }}></span> Confirmed (1-2hrs)
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'transparent', border: '2px solid #e8724a', display: 'inline-block' }}></span> Awaiting caregiver
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 50%)', display: 'inline-block' }}></span> Confirmed (3-5hrs)
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'hsl(160, 60%, 30%)', display: 'inline-block' }}></span> Confirmed (6+ hrs)
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: '#f0f0f0', display: 'inline-block', border: '1px solid #ddd' }}></span> Past
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f57f17', display: 'inline-block' }}></span> In progress
         </span>
       </div>
 
-      {/* Calendar grid */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Calendar grid — clean cells with dot indicators */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: 12 }}>
         {/* Day headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#f8f8f8', borderBottom: '1px solid #e0e0e0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#fafafa', borderBottom: '1px solid #eee' }}>
           {dayNames.map(d => (
-            <div key={d} style={{ padding: '10px 4px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#888', textTransform: 'uppercase' }}>{d}</div>
+            <div key={d} style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#999', textTransform: 'uppercase' }}>{d}</div>
           ))}
         </div>
         {/* Day cells */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
           {cells.map((day, idx) => {
             if (day === null) {
-              return <div key={`empty-${idx}`} style={{ minHeight: 70, background: '#fafafa', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }}></div>;
+              return <div key={`empty-${idx}`} style={{ minHeight: 64, background: '#fafafa', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }}></div>;
             }
             const dateStr = getDateStr(day);
-            const hours = hoursMap[dateStr] || 0;
-            const saturation = getSaturation(hours);
             const past = isPast(dateStr);
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === selectedDate;
-            const hasSessions = hours > 0;
-
-            // Check if any session on this day is open/requested (unconfirmed)
             const daySessions = sessionsByDate[dateStr] || [];
-            const hasOpenRequest = daySessions.some(s => s.status === 'open' || s.status === 'requested' || s.status === 'pending');
-            const allConfirmed = hasSessions && !hasOpenRequest;
-
-            // Color: teal for confirmed, pink/red for open requests
-            let bgColor = '#fff';
-            let textColor = '#333';
-            if (hasSessions && !past && hasOpenRequest) {
-              // Pink for days with unconfirmed requests
-              bgColor = '#fce4ec';
-              textColor = '#c62828';
-            } else if (hasSessions && !past && allConfirmed) {
-              // HSL: 160 is teal. Lightness goes from 85% (light) down to 25% (dark)
-              const lightness = 85 - (saturation * 0.8);
-              bgColor = `hsl(160, 60%, ${lightness}%)`;
-              textColor = lightness < 50 ? '#fff' : '#1b6b5a';
-            } else if (hasSessions && past) {
-              // Past with sessions: muted grey-green
-              bgColor = '#e8ede8';
-              textColor = '#999';
-            } else if (past) {
-              bgColor = '#f5f5f5';
-              textColor = '#bbb';
-            }
+            const hasSessions = daySessions.length > 0;
 
             return (
               <div key={dateStr} onClick={() => setSelectedDate(isSelected ? null : dateStr)} style={{
-                minHeight: 70, padding: '6px', cursor: hasSessions ? 'pointer' : 'default',
-                background: isSelected ? '#1b6b5a' : bgColor,
-                color: isSelected ? '#fff' : textColor,
+                minHeight: 64, padding: '6px', cursor: 'pointer',
+                background: isSelected ? '#1b6b5a' : '#fff',
+                color: isSelected ? '#fff' : past ? '#bbb' : '#333',
                 borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0',
                 position: 'relative', transition: 'background 0.15s',
-                opacity: past && !hasSessions ? 0.5 : 1,
+                opacity: past && !hasSessions ? 0.45 : 1,
               }}>
                 <div style={{
                   fontSize: 14, fontWeight: isToday ? 800 : 500,
@@ -279,23 +246,25 @@ const Schedule = window.Schedule = () => {
                   }}></span>}
                   {day}
                 </div>
-                {hasSessions && daySessions.length > 0 && (
-                  <div style={{ marginTop: 3, overflow: 'hidden' }}>
-                    {daySessions.sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).slice(0, 2).map((s, si) => {
-                      const label = s.recipient_name ? s.recipient_name.split(' ')[0] : (s.caregiver_name ? s.caregiver_name.split(' ')[0] : '');
-                      const svcMap = { companionship: 'Comp', personal_care: 'Care', meal_prep: 'Meal', transportation: 'Trans', health_wellness: 'Health', full_day: 'Full' };
-                      const svc = svcMap[s.service_type] || '';
-                      const tParts = (s.scheduled_time || '').split(':');
-                      const tH = parseInt(tParts[0]) || 0;
-                      const timeLabel = tH === 0 ? '12a' : tH < 12 ? `${tH}a` : tH === 12 ? '12p' : `${tH - 12}p`;
+                {/* Session dots — one per session, max 5 visible */}
+                {hasSessions && (
+                  <div style={{ display: 'flex', gap: 3, marginTop: 5, flexWrap: 'wrap', paddingLeft: 1 }}>
+                    {daySessions.sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).slice(0, 5).map((s, si) => {
+                      const isPending = ['open', 'requested', 'pending'].includes(s.status);
+                      const isInProgress = s.status === 'in_progress';
+                      const dotColor = isInProgress ? '#f57f17' : isPending ? 'transparent' : past ? '#ccc' : '#1b6b5a';
+                      const dotBorder = isPending ? '2px solid ' + (isSelected ? '#fff' : '#e8724a') : 'none';
                       return (
-                        <div key={si} style={{ fontSize: 8, lineHeight: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.85 }}>
-                          <span style={{ fontWeight: 700 }}>{timeLabel}</span> {label}{svc ? ` · ${svc}` : ''} · {s.duration_hours || 2}h
-                        </div>
+                        <span key={si} style={{
+                          width: 7, height: 7, borderRadius: '50%',
+                          background: isSelected ? (isPending ? 'transparent' : 'rgba(255,255,255,0.8)') : dotColor,
+                          border: isSelected && isPending ? '2px solid rgba(255,255,255,0.8)' : dotBorder,
+                          display: 'inline-block', flexShrink: 0,
+                        }}></span>
                       );
                     })}
-                    {daySessions.length > 2 && (
-                      <div style={{ fontSize: 8, opacity: 0.6 }}>+{daySessions.length - 2} more</div>
+                    {daySessions.length > 5 && (
+                      <span style={{ fontSize: 8, color: isSelected ? 'rgba(255,255,255,0.7)' : '#999', lineHeight: '7px' }}>+{daySessions.length - 5}</span>
                     )}
                   </div>
                 )}
