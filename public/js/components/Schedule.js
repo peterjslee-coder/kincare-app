@@ -196,13 +196,13 @@ const Schedule = window.Schedule = () => {
       {/* Legend — dot indicators */}
       <div style={{ display: 'flex', gap: '14px', marginBottom: '12px', fontSize: '11px', color: '#999', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#1b6b5a', display: 'inline-block' }}></span> Confirmed
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#1b6b5a', display: 'inline-block' }}></span> Confirmed
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'transparent', border: '2px solid #e8724a', display: 'inline-block' }}></span> Awaiting caregiver
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'transparent', border: '2px solid #e8724a', display: 'inline-block' }}></span> Awaiting caregiver
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f57f17', display: 'inline-block' }}></span> In progress
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f57f17', display: 'inline-block' }}></span> In progress
         </span>
       </div>
 
@@ -248,23 +248,23 @@ const Schedule = window.Schedule = () => {
                 </div>
                 {/* Session dots — one per session, max 5 visible */}
                 {hasSessions && (
-                  <div style={{ display: 'flex', gap: 3, marginTop: 5, flexWrap: 'wrap', paddingLeft: 1 }}>
-                    {daySessions.sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).slice(0, 5).map((s, si) => {
+                  <div style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap', paddingLeft: 1 }}>
+                    {daySessions.sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).slice(0, 4).map((s, si) => {
                       const isPending = ['open', 'requested', 'pending'].includes(s.status);
                       const isInProgress = s.status === 'in_progress';
                       const dotColor = isInProgress ? '#f57f17' : isPending ? 'transparent' : past ? '#ccc' : '#1b6b5a';
                       const dotBorder = isPending ? '2px solid ' + (isSelected ? '#fff' : '#e8724a') : 'none';
                       return (
                         <span key={si} style={{
-                          width: 7, height: 7, borderRadius: '50%',
-                          background: isSelected ? (isPending ? 'transparent' : 'rgba(255,255,255,0.8)') : dotColor,
-                          border: isSelected && isPending ? '2px solid rgba(255,255,255,0.8)' : dotBorder,
+                          width: 9, height: 9, borderRadius: '50%',
+                          background: isSelected ? (isPending ? 'transparent' : 'rgba(255,255,255,0.85)') : dotColor,
+                          border: isSelected && isPending ? '2px solid rgba(255,255,255,0.85)' : dotBorder,
                           display: 'inline-block', flexShrink: 0,
                         }}></span>
                       );
                     })}
-                    {daySessions.length > 5 && (
-                      <span style={{ fontSize: 8, color: isSelected ? 'rgba(255,255,255,0.7)' : '#999', lineHeight: '7px' }}>+{daySessions.length - 5}</span>
+                    {daySessions.length > 4 && (
+                      <span style={{ fontSize: 9, color: isSelected ? 'rgba(255,255,255,0.7)' : '#999', lineHeight: '9px', fontWeight: 600 }}>+{daySessions.length - 4}</span>
                     )}
                   </div>
                 )}
@@ -399,6 +399,22 @@ const Schedule = window.Schedule = () => {
       </div>
       {visitDetailSessionId && (
         <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} />
+      )}
+
+      {/* Floating action button — quick book */}
+      {getActiveRole() !== 'caregiver' && (
+        <button onClick={() => window.__openRequestCareModal && window.__openRequestCareModal()}
+          style={{
+            position: 'fixed', bottom: 80, right: 24, width: 56, height: 56,
+            borderRadius: '50%', background: '#e8724a', color: '#fff', border: 'none',
+            fontSize: 28, fontWeight: 300, cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 14px rgba(232, 114, 74, 0.4)',
+            zIndex: 90, lineHeight: 1,
+          }}
+          title="Request Care">
+          +
+        </button>
       )}
     </>
   );
