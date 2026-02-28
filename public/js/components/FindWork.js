@@ -123,7 +123,10 @@ const FindWork = window.FindWork = () => {
       if (res?.ok) {
         const d = await res.json();
         const all = d.sessions || [];
-        setOpenRequests(all.filter(s => ['requested', 'open', 'pending'].includes(s.status) && !s.caregiver_id));
+        const open = all.filter(s => ['requested', 'open', 'pending'].includes(s.status) && !s.caregiver_id);
+        // Sort direct offers (Just For You) to the top
+        open.sort((a, b) => (b.offered_to_caregiver_id ? 1 : 0) - (a.offered_to_caregiver_id ? 1 : 0));
+        setOpenRequests(open);
         setUpcomingSessions(all.filter(s => !['requested', 'open', 'pending'].includes(s.status) || s.caregiver_id));
       }
       setLastFetched(new Date());
@@ -234,16 +237,19 @@ const FindWork = window.FindWork = () => {
       const cost = s.estimated_cost || s.estimatedCost;
       const dateStr = s.scheduled_date || s.date;
       const time = s.scheduled_time || s.time;
+      const isOffer = !!s.offered_to_caregiver_id;
+      const pinColor = isOffer ? '#7c3aed' : '#fb8c00';
 
       const icon = L.divIcon({
         className: '',
         html: `<div style="
-          background:#fb8c00;color:#fff;padding:5px 10px;border-radius:10px 10px 10px 0;
+          background:${pinColor};color:#fff;padding:5px 10px;border-radius:10px 10px 10px 0;
           font-size:11px;font-weight:600;white-space:nowrap;
           box-shadow:0 2px 8px rgba(0,0,0,0.3);
           font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;
           transform:translate(-50%,-100%);
         ">
+          ${isOffer ? '<div style="font-size:9px;letter-spacing:0.5px">✨ JUST FOR YOU</div>' : ''}
           <div>${recipient}</div>
           <div style="font-size:10px;font-weight:400;opacity:0.9">${service}${cost ? ' · $' + Math.round(parseFloat(s.caregiver_payout || cost)) : ''}</div>
         </div>`,
@@ -636,12 +642,25 @@ const FindWork = window.FindWork = () => {
                 const instructions = s.special_instructions || s.specialInstructions;
                 const dateStr = s.scheduled_date || s.date;
                 const city = s.recipient_city || '';
+                const isDirectOffer = !!s.offered_to_caregiver_id;
 
                 return (
                   <div key={s.id} className="card" style={{
-                    borderLeft: '4px solid #fb8c00', padding: 16, cursor: 'pointer',
+                    borderLeft: isDirectOffer ? '4px solid #7c3aed' : '4px solid #fb8c00', padding: 16, cursor: 'pointer',
                     transition: 'box-shadow 0.15s',
+                    background: isDirectOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : undefined,
+                    boxShadow: isDirectOffer ? '0 2px 12px rgba(124,58,237,0.15)' : undefined,
                   }} onClick={() => setExpandedId(isExpanded ? null : s.id)}>
+                    {isDirectOffer && (
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        background: '#7c3aed', color: '#fff', padding: '3px 12px',
+                        borderRadius: 20, fontSize: 12, fontWeight: 700, marginBottom: 10,
+                        letterSpacing: '0.3px',
+                      }}>
+                        <span>{'\u2728'}</span> Just For You
+                      </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>

@@ -532,8 +532,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       (id, care_recipient_id, family_user_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours,
        special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
-       short_notice_surcharge, rate_tier, proposed_rate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       short_notice_surcharge, rate_tier, proposed_rate, offered_to_caregiver_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, careRecipientId, req.user.id, serviceType, sessionStatus,
       sessionDate, scheduledTime, durationHours,
@@ -542,7 +542,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       recurrenceGroupId,
       costResult.surcharge || 0,
       JSON.stringify(costResult.tierBreakdown),
-      proposedRate ? parseFloat(proposedRate) : null
+      proposedRate ? parseFloat(proposedRate) : null,
+      directOffer && bookCaregiverId ? bookCaregiverId : null
     );
     createdSessions.push(id);
   }

@@ -385,6 +385,8 @@ async function initializeDatabase() {
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'America/New_York'`,
     // v1.33.86 — Caregiver-configurable overnight minimum hours (default 6)
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS min_overnight_hours REAL DEFAULT 6`,
+    // v1.34.5 — Direct offers: track which caregiver an offer was sent to
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS offered_to_caregiver_id TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
