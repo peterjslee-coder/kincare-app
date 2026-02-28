@@ -322,15 +322,16 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
         })()}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-          {role === 'caregiver' && data && ['confirmed', 'pending'].includes(data.status) && (
+          {data && ['confirmed', 'pending', 'open', 'requested'].includes(data.status) && (
             <button disabled={cancelling} onClick={async () => {
-              const recipName = data.recipient_name || 'this client';
-              if (!confirm(`Cancel your session with ${recipName}? The job will go back to the open pool.`)) return;
+              const otherParty = role === 'caregiver' ? (data.recipient_name || 'this client') : (data.caregiver_name || 'the caregiver');
+              const confirmMsg = role === 'caregiver' ? `Cancel your session with ${otherParty}? The job will go back to the open pool.` : `Cancel this session with ${otherParty}?`;
+              if (!confirm(confirmMsg)) return;
               setCancelling(true);
               try {
                 const res = await apiFetch(`/api/sessions/${sessionId}/cancel`, {
                   method: 'PUT',
-                  body: JSON.stringify({ reason: 'Caregiver cancelled from session detail' }),
+                  body: JSON.stringify({ reason: `${role === 'caregiver' ? 'Caregiver' : 'Family'} cancelled from session detail` }),
                 });
                 if (res?.ok) {
                   if (onRefresh) onRefresh();
@@ -348,7 +349,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
               borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: cancelling ? 'not-allowed' : 'pointer',
             }}>{cancelling ? 'Cancelling...' : 'Cancel Session'}</button>
           )}
-          {!(role === 'caregiver' && data && ['confirmed', 'pending'].includes(data.status)) && <div />}
+          {!(data && ['confirmed', 'pending', 'open', 'requested'].includes(data.status)) && <div />}
           <button className="btn btn-outline" onClick={onClose}>Close</button>
         </div>
       </div>

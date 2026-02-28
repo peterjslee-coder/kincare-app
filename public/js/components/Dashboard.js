@@ -17,6 +17,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [awaitingExpanded, setAwaitingExpanded] = useState(false);
+  const [nextUpExpanded, setNextUpExpanded] = useState(false);
   const [finishedExpanded, setFinishedExpanded] = useState(false);
   // Tick counter for live countdown on in-progress sessions (re-renders every 30s)
   const [tick, setTick] = useState(0);
@@ -634,13 +635,13 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         );
       })()}
 
-      {/* Next Up — sessions within 48 hours, or the next 1 session if nothing soon */}
+      {/* Next Up — up to 10 sessions within 2 weeks, collapsed to 2 cards with fade */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
         const now = TimezoneHelper.getNow(tz);
         const todayStr = TimezoneHelper.getToday(tz);
         const todayLocal = TimezoneHelper.parseDate(todayStr);
-        const cutoff48h = new Date(now.getTime() + 48 * 3600000);
+        const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 3600000);
 
         // Sort all upcoming by date+time — exclude unclaimed open requests (shown separately below)
         const confirmed = upcoming.filter(s => !((['open', 'requested'].includes(s.status)) && !s.caregiverName));
@@ -650,15 +651,17 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           return ak.localeCompare(bk);
         });
 
-        // Sessions within 48 hours
-        const within48 = sorted.filter(s => {
+        // Cap at 10 sessions within 2 weeks
+        const allNextUp = sorted.filter(s => {
           const sDate = (s.date || '').split('T')[0];
           const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz);
-          return sessionDT <= cutoff48h;
-        });
+          return sessionDT <= twoWeeksOut || s.status === 'in_progress';
+        }).slice(0, 10);
 
-        // If nothing within 48h, show the next 1 session
-        const nextUp = within48.length > 0 ? within48 : sorted.slice(0, 1);
+        // If nothing in 2 weeks, show next 1 session regardless
+        const nextUp = allNextUp.length > 0 ? allNextUp : sorted.slice(0, 1);
+        const showAll = nextUpExpanded || nextUp.length <= 2;
+        const visible = showAll ? nextUp : nextUp.slice(0, 2);
 
         if (nextUp.length === 0) return (
           <div style={{ marginBottom: 16, border: '2px solid #e0e0e0', borderRadius: 14, padding: '20px 18px', textAlign: 'center' }}>
@@ -674,13 +677,14 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Next Up
+                Next Up {nextUp.length > 2 && !showAll ? `(${nextUp.length})` : ''}
               </div>
               <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
                 padding: '4px 12px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
               }}>+ Request Care</button>
             </div>
-            {nextUp.map((s, idx) => {
+            <div style={{ position: 'relative' }}>
+            {visible.map((s, idx) => {
               const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
               const timeLabel = TimezoneHelper.formatTime(s.time);
               const isActive = s.status === 'in_progress';
@@ -777,6 +781,26 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                 </div>
               );
             })}
+              {/* Gradient fade + "Show more" when collapsed with 3+ items */}
+              {!showAll && nextUp.length > 2 && (
+                <div onClick={() => setNextUpExpanded(true)} style={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, cursor: 'pointer',
+                  background: 'linear-gradient(transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%)',
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4,
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a' }}>
+                    + {nextUp.length - 2} more &mdash; tap to expand
+                  </span>
+                </div>
+              )}
+              {showAll && nextUp.length > 2 && (
+                <div onClick={() => setNextUpExpanded(false)} style={{
+                  textAlign: 'center', padding: '4px 0', cursor: 'pointer',
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#999' }}>Collapse</span>
+                </div>
+              )}
+            </div>
           </div>
         );
       })()}
@@ -1030,7 +1054,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
 
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (
-        <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} />
+        <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} onRefresh={() => fetchDashboard()} />
       )}
 
       {/* Review Modal — works for both post-session and late-cancel reviews */}
