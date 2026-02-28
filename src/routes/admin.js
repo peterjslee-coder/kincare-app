@@ -1240,13 +1240,22 @@ router.put("/sessions/:id/status", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
     const db = await getDb();
-    const { status } = req.body;
-    const validStatuses = ["requested", "open", "pending", "confirmed", "in_progress", "completed", "cancelled", "matching", "negotiating"];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: `Invalid status '${status}'` });
+    const { status, offered_to_caregiver_id } = req.body;
+
+    // Allow patching offered_to_caregiver_id without changing status
+    if (offered_to_caregiver_id !== undefined) {
+      await db.prepare("UPDATE care_sessions SET offered_to_caregiver_id = ?, updated_at = NOW() WHERE id = ?").run(offered_to_caregiver_id || null, req.params.id);
     }
-    await db.prepare("UPDATE care_sessions SET status = ?, updated_at = NOW() WHERE id = ?").run(status, req.params.id);
-    const session = await db.prepare("SELECT id, status, scheduled_date, scheduled_time FROM care_sessions WHERE id = ?").get(req.params.id);
+
+    if (status) {
+      const validStatuses = ["requested", "open", "pending", "confirmed", "in_progress", "completed", "cancelled", "matching", "negotiating"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status '${status}'` });
+      }
+      await db.prepare("UPDATE care_sessions SET status = ?, updated_at = NOW() WHERE id = ?").run(status, req.params.id);
+    }
+
+    const session = await db.prepare("SELECT id, status, scheduled_date, scheduled_time, offered_to_caregiver_id FROM care_sessions WHERE id = ?").get(req.params.id);
     res.json({ session });
   } catch (err) {
     console.error("Admin session status error:", err);
@@ -1285,6 +1294,28 @@ router.put("/caregivers/:userId/early-check-in", async (req, res) => {
   } catch (err) {
     console.error("Admin early check-in error:", err);
     res.status(500).json({ error: "Failed to update early check-in permission" });
+  }
+});
+
+// ─── GET /api/admin/sessions/open — List open sessions for admin ───
+router.get("/sessions/open", async (req, res) => {
+  try {
+    const apiKey = req.headers["x-admin-api-key"];
+    if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const db = await getDb();
+    const rows = await db.prepare(`
+      SELECT cs.id, cs.status, cs.scheduled_date, cs.scheduled_time, cs.offered_to_caregiver_id,
+        cr.first_name || ' ' || cr.last_name AS recipient_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.status IN ('requested','open','pending')
+      ORDER BY cs.created_at DESC LIMIT 20
+    `).all();
+    res.json({ sessions: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
