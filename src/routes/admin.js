@@ -873,7 +873,7 @@ router.put("/users/:id/verify-email", async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const newValue = user.email_verified ? 0 : 1;
-    await db.prepare("UPDATE users SET email_verified = ?, email_verified_at = datetime('now'), updated_at = datetime('now') WHERE id = ?").run(newValue, req.params.id);
+    await db.prepare("UPDATE users SET email_verified = ?, email_verified_at = NOW(), updated_at = NOW() WHERE id = ?").run(newValue, req.params.id);
 
     // Clean up any lingering verification tokens
     if (newValue === 1) {
