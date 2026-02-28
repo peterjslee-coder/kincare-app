@@ -210,6 +210,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
       recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
       caregiverId: selectedCaregiver?.caregiverId || undefined,
+      directOffer: (selectedCaregiver && !selectedCaregiver.available) ? true : undefined,
     };
     // Include proposed rate if set
     if (proposedRate && parseFloat(proposedRate) > 0) {
