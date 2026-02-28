@@ -289,6 +289,14 @@ router.put("/:id/claim", async (req, res) => {
     return res.status(400).json({ error: "This session is not available for claiming (status: " + session.status + ")" });
   }
 
+  // Exclusive offer guard: during the exclusivity window, only the targeted caregiver can claim
+  if (session.offered_to_caregiver_id && session.offer_expires_at) {
+    const expiresAt = new Date(session.offer_expires_at);
+    if (expiresAt > new Date() && session.offered_to_caregiver_id !== profile.id) {
+      return res.status(403).json({ error: "This job is exclusively offered to another caregiver" });
+    }
+  }
+
   await db.prepare(`
     UPDATE care_sessions SET caregiver_id = ?, status = 'confirmed', updated_at = NOW() WHERE id = ?
   `).run(profile.id, req.params.id);
@@ -431,8 +439,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   }
 
   // Validate caregiver availability if a caregiver is specified (via matching or direct booking)
-  const { caregiverId: bookCaregiverId } = req.body;
-  if (bookCaregiverId) {
+  const { caregiverId: bookCaregiverId, directOffer } = req.body;
+  if (bookCaregiverId && !directOffer) {
     try {
       const [sy, smo, sd] = scheduledDate.split("-").map(Number);
       const schedDate = new Date(sy, smo - 1, sd, 12, 0, 0);
@@ -520,6 +528,12 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   const recurrenceGroupId = isRecurring ? uuid() : null;
   const createdSessions = [];
 
+  // Direct offer setup: assign caregiver + set exclusivity window
+  const isDirectOffer = directOffer && bookCaregiverId;
+  const offerExpiresAt = isDirectOffer
+    ? new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    : null;
+
   for (const sessionDate of dates) {
     const id = uuid();
     // If family proposed a rate, use it for estimated cost instead of caregiver's rate
@@ -532,8 +546,9 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       (id, care_recipient_id, family_user_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours,
        special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
-       short_notice_surcharge, rate_tier, proposed_rate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       short_notice_surcharge, rate_tier, proposed_rate,
+       caregiver_id, offered_to_caregiver_id, offer_expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, careRecipientId, req.user.id, serviceType, sessionStatus,
       sessionDate, scheduledTime, durationHours,
@@ -542,7 +557,10 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       recurrenceGroupId,
       costResult.surcharge || 0,
       JSON.stringify(costResult.tierBreakdown),
-      proposedRate ? parseFloat(proposedRate) : null
+      proposedRate ? parseFloat(proposedRate) : null,
+      isDirectOffer ? bookCaregiverId : null,
+      isDirectOffer ? bookCaregiverId : null,
+      offerExpiresAt
     );
     createdSessions.push(id);
   }
@@ -575,9 +593,27 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       : `${bookerName} booked a session for ${scheduledDate} at ${scheduledTime}`
   );
 
+  // Notify targeted caregiver for direct offers
+  const emitToUser = req.app.get("emitToUser");
+  if (isDirectOffer && emitToUser) {
+    try {
+      const familyName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'A family';
+      emitToUser(bookCaregiverId, "exclusive_offer", {
+        sessionId: createdSessions[0], familyName, expiresAt: offerExpiresAt,
+        serviceType, scheduledDate, scheduledTime, durationHours,
+      });
+      // Also send push notification
+      const timeLabel = scheduledTime ? (() => { const [h, m] = scheduledTime.split(':').map(Number); return `${h > 12 ? h - 12 : h || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; })() : '';
+      sendPushToUser(bookCaregiverId, {
+        title: `Exclusive offer from ${familyName}`,
+        body: `${serviceType.replace(/_/g, ' ')} on ${scheduledDate} at ${timeLabel} — 1 hour to respond`,
+        data: { url: '/#caretaker', type: 'exclusive_offer' },
+      }, 'exclusive_offer').catch(err => console.error('Push exclusive offer error:', err));
+    } catch (err) { console.error("Exclusive offer notification error:", err); }
+  }
+
   // Notify caregivers about new open/available jobs via WebSocket
   // Notify: all assigned caregivers for this care recipient + any nearby caregivers
-  const emitToUser = req.app.get("emitToUser");
   if (emitToUser) {
     try {
       // Get all caregivers assigned to this family

@@ -96,12 +96,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
   // Check if user has assigned caregivers
   const hasCaregiverData = assignedCaregivers !== null && assignedCaregivers.length > 0;
-  const totalSteps = hasCaregiverData ? 5 : 4;
+  const totalSteps = hasCaregiverData ? 3 : 2;
   const stepLabels = hasCaregiverData
-    ? ['Service', 'When', 'Duration', 'Caregiver', 'Review']
-    : ['Service', 'When', 'Duration', 'Review'];
-  const reviewStep = hasCaregiverData ? 5 : 4;
-  const caregiverStep = hasCaregiverData ? 4 : -1; // -1 = skip
+    ? ['Details', 'Caregiver', 'Review']
+    : ['Details', 'Review'];
+  const reviewStep = hasCaregiverData ? 3 : 2;
+  const caregiverStep = hasCaregiverData ? 2 : -1; // -1 = skip
 
   // When moving to caregiver step, find matches from API
   const findMatchingCaregivers = async () => {
@@ -210,6 +210,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
       recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
       caregiverId: selectedCaregiver?.caregiverId || undefined,
+      directOffer: (selectedCaregiver && !selectedCaregiver.available) ? true : undefined,
     };
     // Include proposed rate if set
     if (proposedRate && parseFloat(proposedRate) > 0) {
@@ -226,7 +227,11 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         if (isOpenRequest) {
           alert(`Care request posted!${recurrenceLabel}\n\nStatus: Open — waiting for caregiver match\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
         } else {
-          alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
+          if (selectedCaregiver && !selectedCaregiver.available) {
+            alert(`Direct offer sent to ${selectedCaregiver.name}!${recurrenceLabel}\n\nThey have 1 hour to respond before it opens to other caregivers.\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
+          } else {
+            alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
+          }
         }
         // Signal pages to re-fetch sessions (Schedule, Dashboard, etc.)
         window.dispatchEvent(new CustomEvent('sessions-updated'));
@@ -332,42 +337,54 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 <option value="health_wellness">Health & Wellness</option>
               </select>
             </div>
-          </>
-        )}
-
-        {step === 2 && (
-          <>
             <div className="modal-section">
-              <label className="modal-label">Date</label>
-              <input type="date" className="modal-input" value={date} min={typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(TimezoneHelper.DEFAULT_TZ) : new Date().toISOString().split('T')[0]} onChange={(e) => { setDate(e.target.value); setTime(''); }} />
+              <label className="modal-label">When do you need care?</label>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, color: '#888', marginBottom: 4, display: 'block' }}>Date</label>
+                  <input type="date" className="modal-input" value={date} min={typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(TimezoneHelper.DEFAULT_TZ) : new Date().toISOString().split('T')[0]} onChange={(e) => { setDate(e.target.value); setTime(''); }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, color: '#888', marginBottom: 4, display: 'block' }}>Start Time</label>
+                  <select className="modal-select" value={time} onChange={(e) => setTime(e.target.value)}>
+                    <option value="">Select a time...</option>
+                    {(() => {
+                      const opts = [];
+                      // If date is today, only show times at least 1 hour from now
+                      const tz = typeof TimezoneHelper !== 'undefined' ? (TimezoneHelper.DEFAULT_TZ || 'America/New_York') : 'America/New_York';
+                      const nowET = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getNow(tz) : new Date();
+                      const todayStr = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(tz) : nowET.toISOString().split('T')[0];
+                      const isToday = date === todayStr;
+                      const nowMins = isToday ? (nowET.getHours() * 60 + nowET.getMinutes()) : 0;
+                      const minStartMins = nowMins + 60; // at least 1 hour from now
+                      for (let h = 6; h <= 22; h++) {
+                        for (let m = 0; m < 60; m += 30) {
+                          if (h === 22 && m > 0) break;
+                          const slotMins = h * 60 + m;
+                          if (isToday && slotMins < minStartMins) continue;
+                          const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                          const ampm = h >= 12 ? 'PM' : 'AM';
+                          const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+                          const label = `${dh}:${String(m).padStart(2,'0')} ${ampm}`;
+                          opts.push(<option key={val} value={val}>{label}</option>);
+                        }
+                      }
+                      return opts;
+                    })()}
+                  </select>
+                </div>
+              </div>
             </div>
             <div className="modal-section">
-              <label className="modal-label">Preferred Start Time</label>
-              <select className="modal-select" value={time} onChange={(e) => setTime(e.target.value)}>
-                <option value="">Select a time...</option>
-                {(() => {
-                  const opts = [];
-                  // If date is today, only show times at least 1 hour from now
-                  const tz = typeof TimezoneHelper !== 'undefined' ? (TimezoneHelper.DEFAULT_TZ || 'America/New_York') : 'America/New_York';
-                  const nowET = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getNow(tz) : new Date();
-                  const todayStr = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(tz) : nowET.toISOString().split('T')[0];
-                  const isToday = date === todayStr;
-                  const nowMins = isToday ? (nowET.getHours() * 60 + nowET.getMinutes()) : 0;
-                  const minStartMins = nowMins + 60; // at least 1 hour from now
-                  for (let h = 6; h <= 22; h++) {
-                    for (let m = 0; m < 60; m += 30) {
-                      if (h === 22 && m > 0) break;
-                      const slotMins = h * 60 + m;
-                      if (isToday && slotMins < minStartMins) continue;
-                      const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-                      const ampm = h >= 12 ? 'PM' : 'AM';
-                      const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
-                      const label = `${dh}:${String(m).padStart(2,'0')} ${ampm}`;
-                      opts.push(<option key={val} value={val}>{label}</option>);
-                    }
-                  }
-                  return opts;
-                })()}
+              <label className="modal-label">How long do you need care?</label>
+              <select className="modal-select" value={duration} onChange={(e) => setDuration(e.target.value)}>
+                <option value="">Select...</option>
+                <option value="1">1 hour</option>
+                <option value="2">2 hours</option>
+                <option value="3">3 hours</option>
+                <option value="4">4 hours</option>
+                <option value="6">6 hours</option>
+                <option value="8">Full day (8 hours)</option>
               </select>
             </div>
             <div className="modal-section">
@@ -392,16 +409,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 ))}
               </div>
             </div>
-            {/* Short-notice rush banner */}
-            {date && time && shortNotice && (
-              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 18 }}>⚡</span>
-                <div style={{ fontSize: 13, color: '#e65100' }}>
-                  <strong>Short notice — 20% rush surcharge applies.</strong>
-                  <div style={{ color: '#795548', marginTop: 2 }}>Sessions booked less than 24 hours out include a surcharge. Schedule further ahead to avoid this.</div>
-                </div>
-              </div>
-            )}
             {recurrence !== 'none' && (
               <div className="modal-section">
                 <label className="modal-label">For how many weeks?</label>
@@ -417,31 +424,20 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 </div>
               </div>
             )}
+            {/* Short-notice rush banner */}
+            {date && time && shortNotice && (
+              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 18 }}>⚡</span>
+                <div style={{ fontSize: 13, color: '#e65100' }}>
+                  <strong>Short notice — 20% rush surcharge applies.</strong>
+                  <div style={{ color: '#795548', marginTop: 2 }}>Sessions booked less than 24 hours out include a surcharge. Schedule further ahead to avoid this.</div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
-        {step === 3 && (
-          <div className="modal-section">
-            <label className="modal-label">How long do you need care?</label>
-            <select className="modal-select" value={duration} onChange={(e) => setDuration(e.target.value)}>
-              <option value="">Select...</option>
-              <option value="1">1 hour</option>
-              <option value="2">2 hours</option>
-              <option value="3">3 hours</option>
-              <option value="4">4 hours</option>
-              <option value="6">6 hours</option>
-              <option value="8">Full day (8 hours)</option>
-            </select>
-            {shortNotice && (
-              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 16 }}>⚡</span>
-                <span style={{ fontSize: 13, color: '#e65100', fontWeight: 600 }}>Short notice — 20% rush surcharge will apply</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Caregiver selection step */}
+        {/* Caregiver selection step (now step 2) */}
         {step === caregiverStep && hasCaregiverData && (
           <div className="modal-section">
             <label className="modal-label">Caregivers for {formatTime12(time)} on {date}</label>
@@ -510,6 +506,14 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <label className="modal-label">Special Instructions (optional)</label>
               <textarea className="modal-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Any special notes for the caregiver..." rows={3}></textarea>
             </div>
+            {selectedCaregiver && !selectedCaregiver.available && (
+              <div style={{ background: '#fff8e1', border: '1px solid #ffc107', borderRadius: 10, padding: '12px 16px', marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span style={{ fontSize: 20 }}>⭐</span>
+                <div style={{ fontSize: 13 }}>
+                  <strong>Direct Offer</strong> — {selectedCaregiver.name} will get a 1-hour exclusive window to accept before this opens to other caregivers.
+                </div>
+              </div>
+            )}
             <div style={{ background: '#f8f9fa', padding: 16, borderRadius: 10, marginTop: 12 }}>
               <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: '#1b6b5a' }}>Booking Summary</div>
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px 12px', fontSize: 14 }}>
@@ -652,7 +656,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           </button>
           {step < reviewStep && step !== caregiverStep && (
             <button className="btn btn-primary" disabled={
-              (step === 1 && (!serviceType || (careRecipients.length > 1 && !selectedRecipientId))) || (step === 2 && (!date || !time)) || (step === 3 && !duration)
+              (step === 1 && (!serviceType || !date || !time || !duration || (careRecipients.length > 1 && !selectedRecipientId)))
             } onClick={() => {
               const nextStep = step + 1;
               setStep(nextStep);

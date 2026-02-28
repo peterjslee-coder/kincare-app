@@ -286,14 +286,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     }
   }, []);
 
-  // Listen for new_job WebSocket events — refresh dashboard
+  // Listen for new_job / exclusive_offer WebSocket events — refresh dashboard
   useEffect(() => {
     if (typeof onSocketEvent === 'function') {
-      const cleanup = onSocketEvent('new_job', () => {
-        // Re-fetch dashboard data to show new available jobs
+      const cleanup1 = onSocketEvent('new_job', () => {
         apiFetch('/api/dashboard').then(res => res?.ok && res.json().then(d => setData(d))).catch(() => {});
       });
-      return cleanup;
+      const cleanup2 = onSocketEvent('exclusive_offer', () => {
+        apiFetch('/api/dashboard').then(res => res?.ok && res.json().then(d => setData(d))).catch(() => {});
+      });
+      return () => { cleanup1 && cleanup1(); cleanup2 && cleanup2(); };
     }
   }, []);
 
@@ -436,6 +438,28 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setEarningsThisMonth(earnings);
     setSessionsThisMonth(monthSessions.length);
   }, [completedSessions]);
+
+  // Exclusive offers countdown timer (must be before early returns — React hook order rules)
+  const [offerCountdowns, setOfferCountdowns] = useState({});
+  const [dismissedOffers, setDismissedOffers] = useState({});
+  const exclusiveOffers = (data && data.exclusiveOffers) || [];
+
+  useEffect(() => {
+    if (exclusiveOffers.length === 0) return;
+    const tick = () => {
+      const now = Date.now();
+      const next = {};
+      exclusiveOffers.forEach(o => {
+        const exp = new Date(o.offerExpiresAt).getTime();
+        const remaining = Math.max(0, Math.floor((exp - now) / 1000));
+        next[o.id] = remaining;
+      });
+      setOfferCountdowns(next);
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [exclusiveOffers.length]);
 
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []).slice(0, 5);
@@ -945,6 +969,74 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         </div>
       )}
+
+      {/* Exclusive Offers — "Just For You" cards */}
+      {exclusiveOffers.filter(o => !dismissedOffers[o.id]).map(offer => {
+        const secs = offerCountdowns[offer.id] || 0;
+        const mins = Math.floor(secs / 60);
+        const secsRem = secs % 60;
+        const expired = secs <= 0;
+        const fmtTime = (t) => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; const dh = h > 12 ? h - 12 : h === 0 ? 12 : h; return `${dh}:${String(m).padStart(2, '0')} ${ap}`; };
+        const rate = offer.proposedRate ? `$${offer.proposedRate}/hr` : (offer.estimatedCost ? `$${offer.estimatedCost}` : '');
+        return (
+          <div key={offer.id} style={{
+            borderRadius: 14, overflow: 'hidden', marginBottom: 20,
+            border: expired ? '2px solid #ccc' : '2px solid #f9a825',
+            background: expired ? '#f5f5f5' : 'linear-gradient(135deg, #fffde7 0%, #fff8e1 100%)',
+            opacity: expired ? 0.7 : 1,
+            animation: expired ? 'none' : 'pulse-border 2s ease-in-out infinite',
+          }}>
+            <div style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 17, color: '#f57f17' }}>
+                  ⭐ Just For You
+                </div>
+                {!expired && (
+                  <div style={{ background: '#f57f17', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    {mins}:{String(secsRem).padStart(2, '0')}
+                  </div>
+                )}
+                {expired && (
+                  <div style={{ background: '#999', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Expired</div>
+                )}
+              </div>
+              <div style={{ fontSize: 14, color: '#333', marginBottom: 8 }}>
+                <strong>{offer.familyName}</strong> is requesting {(offer.serviceType || '').replace(/_/g, ' ')} for <strong>{offer.recipientName}</strong>
+              </div>
+              <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#666', marginBottom: 10, flexWrap: 'wrap' }}>
+                <span>📅 {offer.date}</span>
+                <span>🕐 {fmtTime(offer.time)}</span>
+                <span>⏱ {offer.durationHours}h</span>
+                {offer.recipientCity && <span>📍 {offer.recipientCity}</span>}
+              </div>
+              {rate && (
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#2e7d32', marginBottom: 10 }}>
+                  {rate} offered
+                </div>
+              )}
+              {offer.specialInstructions && (
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 10, fontStyle: 'italic' }}>"{offer.specialInstructions}"</div>
+              )}
+              {!expired ? (
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => handleClaimJob(offer.id)} disabled={claimingJobId === offer.id}
+                    style={{ flex: 1, padding: '12px 20px', background: '#f57f17', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                    {claimingJobId === offer.id ? 'Accepting...' : 'Accept This Offer'}
+                  </button>
+                  <button onClick={() => setDismissedOffers(prev => ({ ...prev, [offer.id]: true }))}
+                    style={{ padding: '12px 16px', background: 'transparent', color: '#999', border: '1px solid #ddd', borderRadius: 10, fontSize: 13, cursor: 'pointer' }}>
+                    Decline
+                  </button>
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, color: '#999', textAlign: 'center', padding: '8px 0' }}>
+                  Offer expired — now open to all caregivers
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
 
       {/* Find Work + Available Jobs — merged tile */}
       {(() => {
