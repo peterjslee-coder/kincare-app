@@ -1249,11 +1249,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
                         textTransform: 'capitalize',
                       }}>{s.status}</span>
-                      <button onClick={() => handleCancelJob(s.id, recipName)} disabled={cancellingJobId === s.id}
-                        style={{
-                          padding: '5px 14px', background: 'transparent', color: '#999', border: '1px solid #ddd',
-                          borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: cancellingJobId === s.id ? 'not-allowed' : 'pointer',
-                        }}>{cancellingJobId === s.id ? 'Cancelling...' : 'Cancel'}</button>
                     </div>
                   </div>
                 </div>
@@ -1863,7 +1858,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (
-        <VisitDetailModal sessionId={visitDetailSessionId} role="caregiver" onClose={() => setVisitDetailSessionId(null)} />
+        <VisitDetailModal sessionId={visitDetailSessionId} role="caregiver" onClose={() => setVisitDetailSessionId(null)} onRefresh={async () => {
+          const dashRes = await apiFetch('/api/dashboard');
+          if (dashRes?.ok) setData(await dashRes.json());
+        }} />
       )}
 
       {/* Reviews Modal */}

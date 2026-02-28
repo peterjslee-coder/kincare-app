@@ -1,7 +1,8 @@
-const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose }) => {
+const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, onRefresh }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [cancelling, setCancelling] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
 
   useEffect(() => {
@@ -320,7 +321,34 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose }
           );
         })()}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+          {role === 'caregiver' && data && ['confirmed', 'pending'].includes(data.status) && (
+            <button disabled={cancelling} onClick={async () => {
+              const recipName = data.recipient_name || 'this client';
+              if (!confirm(`Cancel your session with ${recipName}? The job will go back to the open pool.`)) return;
+              setCancelling(true);
+              try {
+                const res = await apiFetch(`/api/sessions/${sessionId}/cancel`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ reason: 'Caregiver cancelled from session detail' }),
+                });
+                if (res?.ok) {
+                  if (onRefresh) onRefresh();
+                  onClose();
+                } else {
+                  const err = await res.json().catch(() => ({}));
+                  alert(err.error || 'Failed to cancel');
+                }
+              } catch (err) {
+                alert('Network error');
+              }
+              setCancelling(false);
+            }} style={{
+              padding: '8px 16px', background: 'transparent', color: '#dc2626', border: '1px solid #fca5a5',
+              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: cancelling ? 'not-allowed' : 'pointer',
+            }}>{cancelling ? 'Cancelling...' : 'Cancel Session'}</button>
+          )}
+          {!(role === 'caregiver' && data && ['confirmed', 'pending'].includes(data.status)) && <div />}
           <button className="btn btn-outline" onClick={onClose}>Close</button>
         </div>
       </div>
