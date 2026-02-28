@@ -520,11 +520,48 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     </div>
   );
 
-  const handleClaimJob = async (jobId) => {
+  const flyMoney = (amount, btnEl) => {
+    if (!btnEl) return;
+    const rect = btnEl.getBoundingClientRect();
+    const el = document.createElement('div');
+    el.textContent = `$${amount}`;
+    Object.assign(el.style, {
+      position: 'fixed',
+      left: '0px',
+      top: `${rect.top + rect.height / 2 - 16}px`,
+      fontSize: '28px',
+      fontWeight: '900',
+      color: '#1b6b5a',
+      zIndex: '9999',
+      pointerEvents: 'none',
+      opacity: '0',
+      transform: 'scale(0.5)',
+      transition: 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
+      textShadow: '0 2px 8px rgba(27,107,90,0.3)',
+    });
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+      Object.assign(el.style, {
+        left: `${rect.left + rect.width / 2 - 30}px`,
+        opacity: '1',
+        transform: 'scale(1.2)',
+      });
+      setTimeout(() => {
+        Object.assign(el.style, {
+          transform: 'scale(1) translateY(-20px)',
+          opacity: '0',
+        });
+        setTimeout(() => el.remove(), 500);
+      }, 700);
+    });
+  };
+
+  const handleClaimJob = async (jobId, e, amount) => {
     setClaimingJobId(jobId);
     try {
       const res = await apiFetch(`/api/sessions/${jobId}/claim`, { method: 'PUT' });
       if (res?.ok) {
+        if (amount > 0 && e?.currentTarget) flyMoney(amount, e.currentTarget);
         showToast && showToast('Job accepted!', 'success');
         // Refresh dashboard
         const dashRes = await apiFetch('/api/dashboard');
@@ -1090,7 +1127,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
                         {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
                       </div>
-                      <button onClick={() => handleClaimJob(job.id)} disabled={claimingJobId === job.id}
+                      <button onClick={(e) => handleClaimJob(job.id, e, effectiveTotal)} disabled={claimingJobId === job.id}
                         style={{
                           padding: '10px 20px', background: claimingJobId === job.id ? '#ccc' : '#e8724a', color: '#fff', border: 'none',
                           borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
