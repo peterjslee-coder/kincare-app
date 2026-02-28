@@ -431,8 +431,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   }
 
   // Validate caregiver availability if a caregiver is specified (via matching or direct booking)
-  const { caregiverId: bookCaregiverId } = req.body;
-  if (bookCaregiverId) {
+  const { caregiverId: bookCaregiverId, directOffer } = req.body;
+  if (bookCaregiverId && !directOffer) {
     try {
       const [sy, smo, sd] = scheduledDate.split("-").map(Number);
       const schedDate = new Date(sy, smo - 1, sd, 12, 0, 0);
