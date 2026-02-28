@@ -1,7 +1,14 @@
 const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [step, setStep] = useState(1);
   const [serviceType, setServiceType] = useState('');
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(() => {
+    if (window.__requestCareDate) {
+      const d = window.__requestCareDate;
+      delete window.__requestCareDate;
+      return d;
+    }
+    return '';
+  });
   const [time, setTime] = useState('');
   const [duration, setDuration] = useState('');
   const [instructions, setInstructions] = useState('');

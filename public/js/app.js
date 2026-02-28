@@ -200,7 +200,10 @@ const App = () => {
 
   // Expose modal opener and navigation for child components
   useEffect(() => {
-    window.__openRequestCareModal = () => setShowRequestCareModal(true);
+    window.__openRequestCareModal = (prefillDate) => {
+      if (prefillDate) window.__requestCareDate = prefillDate;
+      setShowRequestCareModal(true);
+    };
     window.__navigateTo = (page) => setCurrentPage(page);
 
     // Push initial history entry so there's always something to go back to

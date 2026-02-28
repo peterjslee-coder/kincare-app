@@ -286,60 +286,92 @@ const Schedule = window.Schedule = () => {
             <span style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600 }}>{hoursMap[selectedDate] || 0} total hours</span>
           </div>
 
-          {selectedSessions.length > 0 ? selectedSessions.map((s) => (
-            <div key={s.id} onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
-              style={{
-                padding: '12px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer',
-                opacity: isPast(selectedDate) ? 0.75 : 1,
-              }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: isPast(selectedDate) ? '#888' : '#333' }}>
-                    {s.scheduled_time || '—'}
-                    <span style={{ fontWeight: 400, marginLeft: 8, color: '#666' }}>{formatServiceType(s.service_type)}</span>
+          {selectedSessions.length > 0 ? (
+            <>
+              {selectedSessions.map((s) => (
+                <div key={s.id} onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
+                  style={{
+                    padding: '12px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer',
+                    opacity: isPast(selectedDate) ? 0.75 : 1,
+                  }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: isPast(selectedDate) ? '#888' : '#333' }}>
+                        {s.scheduled_time || '—'}
+                        <span style={{ fontWeight: 400, marginLeft: 8, color: '#666' }}>{formatServiceType(s.service_type)}</span>
+                      </div>
+                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                        {s.caregiver_name || (s.status === 'open' ? 'Waiting for caregiver' : 'Unmatched')} — {s.recipient_name || 'Care recipient'}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {s.recurrence_rule && (
+                        <span style={{ background: '#ede7f6', color: '#5e35b1', padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>
+                          {s.recurrence_rule === 'weekly' ? '🔁 Weekly' : '🔁 Biweekly'}
+                        </span>
+                      )}
+                      <span style={getStatusBadge(s.status).style}>{getStatusBadge(s.status).label}</span>
+                      <span style={{ color: '#999', fontSize: 16 }}>{expandedSession === s.id ? '▾' : '▸'}</span>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                    {s.caregiver_name || (s.status === 'open' ? 'Waiting for caregiver' : 'Unmatched')} — {s.recipient_name || 'Care recipient'}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {s.recurrence_rule && (
-                    <span style={{ background: '#ede7f6', color: '#5e35b1', padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>
-                      {s.recurrence_rule === 'weekly' ? '🔁 Weekly' : '🔁 Biweekly'}
-                    </span>
-                  )}
-                  <span style={getStatusBadge(s.status).style}>{getStatusBadge(s.status).label}</span>
-                  <span style={{ color: '#999', fontSize: 16 }}>{expandedSession === s.id ? '▾' : '▸'}</span>
-                </div>
-              </div>
-              {expandedSession === s.id && (
-                <div style={{ marginTop: 12, padding: '12px', background: '#f9f9f9', borderRadius: 8, fontSize: 13 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' }}>
-                    <div><span style={{ color: '#888' }}>Duration:</span> <strong>{s.duration_hours || 2} hours</strong></div>
-                    <div><span style={{ color: '#888' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong></div>
-                    <div><span style={{ color: '#888' }}>Service:</span> <strong>{formatServiceType(s.service_type)}</strong></div>
-                    <div><span style={{ color: '#888' }}>Caregiver:</span> <strong>{s.caregiver_name || 'Pending match'}</strong></div>
-                  </div>
-                  {s.special_instructions && (
-                    <div style={{ marginTop: 8, padding: '8px', background: '#fff', borderRadius: 6, border: '1px solid #eee' }}>
-                      <div style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>Special Instructions</div>
-                      <div>{s.special_instructions}</div>
+                  {expandedSession === s.id && (
+                    <div style={{ marginTop: 12, padding: '12px', background: '#f9f9f9', borderRadius: 8, fontSize: 13 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' }}>
+                        <div><span style={{ color: '#888' }}>Duration:</span> <strong>{s.duration_hours || 2} hours</strong></div>
+                        <div><span style={{ color: '#888' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong></div>
+                        <div><span style={{ color: '#888' }}>Service:</span> <strong>{formatServiceType(s.service_type)}</strong></div>
+                        <div><span style={{ color: '#888' }}>Caregiver:</span> <strong>{s.caregiver_name || 'Pending match'}</strong></div>
+                      </div>
+                      {s.special_instructions && (
+                        <div style={{ marginTop: 8, padding: '8px', background: '#fff', borderRadius: 6, border: '1px solid #eee' }}>
+                          <div style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>Special Instructions</div>
+                          <div>{s.special_instructions}</div>
+                        </div>
+                      )}
+                      {s.caregiver_rating > 0 && (
+                        <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
+                          Caregiver rating: ⭐ {s.caregiver_rating}
+                        </div>
+                      )}
+                      <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
+                        style={{ marginTop: 10, padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        View Full Details
+                      </button>
                     </div>
                   )}
-                  {s.caregiver_rating > 0 && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
-                      Caregiver rating: ⭐ {s.caregiver_rating}
-                    </div>
-                  )}
-                  <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
-                    style={{ marginTop: 10, padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    View Full Details
-                  </button>
+                </div>
+              ))}
+              {!isPast(selectedDate) && (
+                <div onClick={() => window.__openRequestCareModal && window.__openRequestCareModal(selectedDate)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '14px', cursor: 'pointer', color: '#e8724a', fontSize: 13, fontWeight: 700,
+                    borderTop: '1px solid #f0f0f0', marginTop: 4, transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#fff8f4'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <span style={{ fontSize: 18 }}>+</span> Book care on {(() => { const p = selectedDate.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()}
                 </div>
               )}
+            </>
+          ) : (
+            <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+              {isPast(selectedDate) ? (
+                <p style={{ color: '#999', fontSize: 14 }}>No sessions on this date.</p>
+              ) : (
+                <>
+                  <p style={{ fontSize: 14, color: '#888', marginBottom: 14 }}>No care scheduled for this day yet.</p>
+                  <button onClick={() => window.__openRequestCareModal && window.__openRequestCareModal(selectedDate)}
+                    style={{
+                      padding: '12px 28px', background: '#e8724a', color: '#fff', border: 'none',
+                      borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                      boxShadow: '0 2px 8px rgba(232, 114, 74, 0.3)',
+                    }}>
+                    + Request Care for {(() => { const p = selectedDate.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()}
+                  </button>
+                </>
+              )}
             </div>
-          )) : (
-            <p style={{ color: '#999', padding: '16px 0', fontSize: 14 }}>No sessions scheduled for this date.</p>
           )}
         </div>
       )}
