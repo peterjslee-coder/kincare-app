@@ -85,6 +85,20 @@ const trackAuthEvent = window.trackAuthEvent = (flow, eventType, extra = {}) => 
   } catch (e) { /* ignore tracking errors */ }
 };
 
+// ─── Global error capture — sends JS errors to onboarding_events table ───
+window.onerror = function(msg, source, line, col) {
+  trackAuthEvent('frontend-error', 'error', {
+    error: String(msg).slice(0, 200),
+    source: (source || '').split('/').pop(),
+    line, col,
+  });
+};
+window.addEventListener('unhandledrejection', function(e) {
+  trackAuthEvent('frontend-error', 'unhandled_rejection', {
+    error: String(e.reason?.message || e.reason || '').slice(0, 200),
+  });
+});
+
 // ─── Shared timestamp parser ───
 // PostgreSQL TIMESTAMPTZ comes back as "2026-02-20 01:29:26.086383+00"
 // Some browsers choke on the space (need T) and bare "+00" (need +00:00 or Z).

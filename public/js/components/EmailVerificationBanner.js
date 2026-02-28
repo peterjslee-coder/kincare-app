@@ -27,17 +27,21 @@ const EmailVerificationBanner = window.EmailVerificationBanner = ({ userId }) =>
     if (cooldown > 0) return;
     setSending(true);
     setMessage(null);
+    trackAuthEvent('email-verify', 'resend_click', { userId });
     try {
       const res = await apiFetch('/api/auth/resend-verification', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
+        trackAuthEvent('email-verify', 'resend_success', { userId });
         setMessage({ type: 'success', text: 'Verification email sent!' });
         setLastSentAt(new Date());
         setCooldown(60);
       } else {
+        trackAuthEvent('email-verify', 'resend_error', { userId, error: data.error });
         setMessage({ type: 'error', text: data.error || 'Failed to send email.' });
       }
     } catch {
+      trackAuthEvent('email-verify', 'resend_error', { userId, error: 'network-error' });
       setMessage({ type: 'error', text: 'Something went wrong. Please try again.' });
     }
     setSending(false);

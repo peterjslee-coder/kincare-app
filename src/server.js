@@ -118,6 +118,15 @@ const apiLimiter = rateLimit({
 app.use("/api/", apiLimiter);
 
 // ─── Serve Frontend ───
+// Prevent browser from caching index.html so users always get fresh JS references
+app.use((req, res, next) => {
+  if (req.path === "/" || req.path === "/index.html") {
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Request logging
@@ -162,12 +171,19 @@ app.use("/api/connections", require("./routes/connections"));
 app.use("/api/help", require("./routes/help"));
 app.use("/api/reports", require("./routes/reports"));
 
+// ─── App version check (lightweight, no auth) ───
+const APP_VERSION = "1.34.22";
+app.get("/api/version", (req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.json({ version: APP_VERSION });
+});
+
 // ─── Health check ───
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     service: "InPlace API",
-    version: "0.2.0",
+    version: APP_VERSION,
     timestamp: new Date().toISOString(),
   });
 });

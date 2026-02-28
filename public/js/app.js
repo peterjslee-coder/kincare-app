@@ -281,6 +281,39 @@ const App = () => {
     return () => clearInterval(interval);
   }, [appState, currentUser?.id]);
 
+  // ─── Version heartbeat — auto-reload when a new deploy lands ───
+  useEffect(() => {
+    const checkVersion = async () => {
+      try {
+        const res = await fetch('/api/version', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.version && data.version !== window.APP_VERSION) {
+          console.log(`[version] Server=${data.version} Local=${window.APP_VERSION} — reloading`);
+          // Clear SW caches then hard reload
+          if (window.caches) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+          }
+          window.location.reload();
+        }
+      } catch {}
+    };
+    // Check on tab focus (user switches back to app)
+    const onFocus = () => checkVersion();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') onFocus();
+    });
+    // Also check every 5 minutes while tab is open
+    const interval = setInterval(checkVersion, 5 * 60 * 1000);
+    // Initial check after 10s (let the app finish loading first)
+    const initTimeout = setTimeout(checkVersion, 10000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(initTimeout);
+    };
+  }, []);
+
   // Update unread count on real-time message events
   useEffect(() => {
     if (typeof onSocketEvent !== 'function') return;
@@ -401,14 +434,17 @@ const App = () => {
     const vt = params.get('verify');
     if (vt) {
       window.history.replaceState({}, '', window.location.pathname);
+      const loggedIn = !!localStorage.getItem('auth_token');
+      trackAuthEvent('email-verify', 'attempt', { loggedIn, source: 'verify-link' });
       // Use raw fetch for verify — it's a public endpoint that works without auth
       fetch(API_BASE + `/api/auth/verify?token=${vt}`)
         .then(r => r.json())
         .then(data => {
           if (data?.message) {
+            trackAuthEvent('email-verify', 'success', { loggedIn });
             setVerifyMessage({ type: 'success', text: 'Email verified! You can log in now.' });
             // If user is logged in, refresh their data so banner disappears
-            if (localStorage.getItem('auth_token')) {
+            if (loggedIn) {
               apiFetch('/api/auth/me').then(r2 => r2?.json()).then(meData => {
                 if (meData?.user) {
                   setCurrentUser(prev => prev ? { ...prev, emailVerified: !!meData.user.email_verified } : prev);
@@ -419,14 +455,15 @@ const App = () => {
               setAppState('login');
             }
           } else {
+            trackAuthEvent('email-verify', 'error', { loggedIn, error: data?.error || 'unknown' });
             setVerifyMessage({ type: 'error', text: data?.error || 'Verification failed' });
-            // Also send to login if not logged in so they see the error
-            if (!localStorage.getItem('auth_token')) setAppState('login');
+            if (!loggedIn) setAppState('login');
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          trackAuthEvent('email-verify', 'error', { loggedIn, error: err?.message || 'network-error' });
           setVerifyMessage({ type: 'error', text: 'Verification failed. Please try again or contact support.' });
-          if (!localStorage.getItem('auth_token')) setAppState('login');
+          if (!loggedIn) setAppState('login');
         });
     }
 
