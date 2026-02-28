@@ -1016,28 +1016,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* Earnings Summary Tile */}
-      {profile && (
-        <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>This Month</div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#1b6b5a', marginTop: 2 }}>
-                ${parseFloat(earningsThisMonth || data.stats?.monthlyEarnings || 0).toFixed(2)}
-              </div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Sessions</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#333' }}>{sessionsThisMonth || data.stats?.completedThisMonth || 0}</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Rating</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#f59e0b' }}>{'\u2B50'} {profile.rating || '\u2014'}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Find Work + Available Jobs — merged tile */}
       {(() => {
         const sortedJobs = [...openJobs].sort((a, b) => {

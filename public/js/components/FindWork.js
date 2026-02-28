@@ -104,6 +104,14 @@ const FindWork = window.FindWork = () => {
           const p = data.profile || data.caregiver;
           if (p?.latitude && p?.longitude) {
             setProfileCenter([parseFloat(p.latitude), parseFloat(p.longitude)]);
+          } else if (p?.city || p?.zip) {
+            // Geocode from city/state/zip if no lat/lng stored
+            try {
+              const q = [p.city, p.state, p.zip].filter(Boolean).join(', ');
+              const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+              const geoData = await geoRes.json();
+              if (geoData[0]) setProfileCenter([parseFloat(geoData[0].lat), parseFloat(geoData[0].lon)]);
+            } catch {}
           }
           if (p?.max_travel_miles) setRadiusMiles(parseInt(p.max_travel_miles) || 10);
         }
