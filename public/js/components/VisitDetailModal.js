@@ -322,9 +322,10 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
         })()}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-          {data && ['confirmed', 'pending', 'open', 'requested'].includes(data.status) && (
+          {data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status) && (
             <button disabled={cancelling} onClick={async () => {
-              const otherParty = role === 'caregiver' ? (data.recipient_name || 'this client') : (data.caregiver_name || 'the caregiver');
+              const ss = data.session;
+              const otherParty = role === 'caregiver' ? (ss.recipient_name || 'this client') : (ss.caregiver_name || 'the caregiver');
               const confirmMsg = role === 'caregiver' ? `Cancel your session with ${otherParty}? The job will go back to the open pool.` : `Cancel this session with ${otherParty}?`;
               if (!confirm(confirmMsg)) return;
               setCancelling(true);
@@ -349,7 +350,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
               borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: cancelling ? 'not-allowed' : 'pointer',
             }}>{cancelling ? 'Cancelling...' : 'Cancel Session'}</button>
           )}
-          {!(data && ['confirmed', 'pending', 'open', 'requested'].includes(data.status)) && <div />}
+          {!(data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status)) && <div />}
           <button className="btn btn-outline" onClick={onClose}>Close</button>
         </div>
       </div>
