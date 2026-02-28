@@ -32,6 +32,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [jobSort, setJobSort] = useState('best_match');
   const calendarRef = useRef(null);
   const [claimingJobId, setClaimingJobId] = useState(null);
+  const [cancellingJobId, setCancellingJobId] = useState(null);
   // Inline profile editing state (for onboarding)
   const [profileForm, setProfileForm] = useState({ bio: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', foodAllergies: '', medicalConditions: '' });
   const [profileSaving, setProfileSaving] = useState(false);
@@ -575,6 +576,28 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       console.error('Claim job error:', err);
     }
     setClaimingJobId(null);
+  };
+
+  const handleCancelJob = async (sessionId, recipName) => {
+    if (!confirm(`Cancel your session with ${recipName}? The job will go back to the open pool for other caregivers.`)) return;
+    setCancellingJobId(sessionId);
+    try {
+      const res = await apiFetch(`/api/sessions/${sessionId}/cancel`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason: 'Caregiver cancelled from dashboard' }),
+      });
+      if (res?.ok) {
+        showToast && showToast('Session cancelled', 'success');
+        const dashRes = await apiFetch('/api/dashboard');
+        if (dashRes?.ok) setData(await dashRes.json());
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast ? showToast(err.error || 'Failed to cancel', 'error') : alert(err.error || 'Failed to cancel');
+      }
+    } catch (err) {
+      console.error('Cancel job error:', err);
+    }
+    setCancellingJobId(null);
   };
 
   const profile = data.profile || {};
@@ -1226,6 +1249,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
                         textTransform: 'capitalize',
                       }}>{s.status}</span>
+                      <button onClick={() => handleCancelJob(s.id, recipName)} disabled={cancellingJobId === s.id}
+                        style={{
+                          padding: '5px 14px', background: 'transparent', color: '#999', border: '1px solid #ddd',
+                          borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: cancellingJobId === s.id ? 'not-allowed' : 'pointer',
+                        }}>{cancellingJobId === s.id ? 'Cancelling...' : 'Cancel'}</button>
                     </div>
                   </div>
                 </div>
