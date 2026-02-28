@@ -278,8 +278,8 @@ async function sendPushToUser(userId, payload, eventType) {
     const notificationPayload = JSON.stringify({
       title: payload.title || "InPlace",
       body: payload.body || "",
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      icon: "/icons/badge-monochrome-96.png",
+      badge: "/icons/badge-monochrome-96.png",
       data: payload.data || {},
     });
 

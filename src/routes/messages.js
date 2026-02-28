@@ -403,9 +403,10 @@ router.post("/conversations/:id", async (req, res) => {
     const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Someone";
 
     // Push + WebSocket to partner
+    const preview = content.trim().length > 80 ? content.trim().substring(0, 77) + "..." : content.trim();
     sendPushToUser(partnerId, {
-      title: `New message from ${senderName}`,
-      body: content.trim().length > 100 ? content.trim().substring(0, 97) + "..." : content.trim(),
+      title: "InPlace",
+      body: `${senderName}: ${preview}`,
       data: { type: "message", senderId: userId, conversationId: newConvId },
     }).catch(() => {});
 
@@ -454,9 +455,10 @@ router.post("/conversations/:id", async (req, res) => {
   // Notify all other members
   const emitToUser = req.app.get("emitToUser");
   for (const member of members) {
+    const memberPreview = content.trim().length > 80 ? content.trim().substring(0, 77) + "..." : content.trim();
     sendPushToUser(member.user_id, {
-      title: `New message from ${senderName}`,
-      body: content.trim().length > 100 ? content.trim().substring(0, 97) + "..." : content.trim(),
+      title: "InPlace",
+      body: `${senderName}: ${memberPreview}`,
       data: { type: "message", senderId: userId, conversationId: convId },
     }).catch(() => {});
 
@@ -517,9 +519,10 @@ router.post("/", async (req, res) => {
   // Push + WebSocket
   const sender = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
   const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Someone";
+  const legacyPreview = content.length > 80 ? content.substring(0, 77) + "..." : content;
   sendPushToUser(recipientId, {
-    title: `New message from ${senderName}`,
-    body: content.length > 100 ? content.substring(0, 97) + "..." : content,
+    title: "InPlace",
+    body: `${senderName}: ${legacyPreview}`,
     data: { type: "message", senderId: req.user.id, conversationId: convId },
   }).catch(() => {});
 
