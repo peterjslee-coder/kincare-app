@@ -493,7 +493,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
             <div className="betty-info">
               {(() => {
                 const myLabel = careTeams.find(t => t.my_relationship_label)?.my_relationship_label;
-                return myLabel ? `Your ${myLabel.toLowerCase()} · ` : '';
+                return myLabel ? `${myLabel} · ` : '';
               })()}
               Living in {parent.location}
             </div>

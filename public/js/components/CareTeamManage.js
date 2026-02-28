@@ -208,11 +208,11 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
       <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 13, color: '#555' }}>
-            <span style={{ fontWeight: 600 }}>My relationship to {team.recipient_first_name}:</span>{' '}
+            <span style={{ fontWeight: 600 }}>I am {team.recipient_first_name}'s:</span>{' '}
             {editingLabel ? (
               <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                 <input value={labelText} onChange={(e) => setLabelText(e.target.value)}
-                  placeholder="e.g. Mother, Grandmother, Family friend"
+                  placeholder="e.g. Son, Daughter, Spouse, Friend"
                   style={{ padding: '4px 8px', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 13, width: 200 }}
                   autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleSaveLabel(); if (e.key === 'Escape') setEditingLabel(false); }} />
                 <button onClick={handleSaveLabel} style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>

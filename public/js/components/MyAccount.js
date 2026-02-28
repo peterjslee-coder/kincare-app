@@ -685,8 +685,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <h1 className="greeting">My Account</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+        <h1 className="greeting" style={{ margin: 0 }}>My Account</h1>
         {activeTab === 'profile' && !editing && (
           <button onClick={startEditing} style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             Edit Profile
