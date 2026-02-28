@@ -261,9 +261,22 @@ const Caregivers = window.Caregivers = () => {
       }
     });
 
-    // Caregiver pins
+    // Caregiver pins — offset colocated markers in a spiral
+    const cgLocCounts = {};
     allMapCaregivers.forEach((cg) => {
       if (!cg.latitude || !cg.longitude) return;
+
+      // Offset colocated markers so they don't stack
+      let pinLat = cg.latitude, pinLng = cg.longitude;
+      const locKey = parseFloat(cg.latitude).toFixed(4) + ',' + parseFloat(cg.longitude).toFixed(4);
+      cgLocCounts[locKey] = (cgLocCounts[locKey] || 0) + 1;
+      const cgIdx = cgLocCounts[locKey] - 1;
+      if (cgIdx > 0) {
+        const angle = (cgIdx * 137.5) * Math.PI / 180;
+        const dist = 0.0008 * Math.sqrt(cgIdx);
+        pinLat += dist * Math.cos(angle);
+        pinLng += dist * Math.sin(angle);
+      }
 
       const isAssigned = cg.isAssigned || assignedCgIds.has(cg.id);
       const pinColor = isAssigned ? '#e8724a' : '#2563eb';
@@ -285,7 +298,7 @@ const Caregivers = window.Caregivers = () => {
         iconAnchor: [0, 28],
       });
 
-      const marker = L.marker([cg.latitude, cg.longitude], { icon }).addTo(map);
+      const marker = L.marker([pinLat, pinLng], { icon }).addTo(map);
 
       // Hover tooltip with thumbnail
       marker.bindTooltip(`

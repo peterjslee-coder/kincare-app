@@ -162,6 +162,8 @@ const FindWork = window.FindWork = () => {
     if (viewMode !== 'map' || !mapRef.current) return;
     if (leafletMap.current) {
       leafletMap.current.invalidateSize();
+      // Re-center on profile if available
+      if (profileCenter) leafletMap.current.setView(profileCenter, 12);
       return;
     }
     const center = profileCenter || [37.2296, -80.4139];
@@ -170,10 +172,21 @@ const FindWork = window.FindWork = () => {
       attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
     }).addTo(map);
     leafletMap.current = map;
-    setTimeout(() => map.invalidateSize(), 150);
-  }, [viewMode]);
+    // Staggered invalidateSize for reliable rendering
+    const forceResize = () => { if (leafletMap.current) leafletMap.current.invalidateSize(true); };
+    forceResize();
+    setTimeout(forceResize, 100);
+    setTimeout(forceResize, 300);
+    setTimeout(forceResize, 600);
+    setTimeout(forceResize, 1200);
+    if (window.ResizeObserver && mapRef.current) {
+      const ro = new ResizeObserver(() => forceResize());
+      ro.observe(mapRef.current);
+      setTimeout(() => ro.disconnect(), 3000);
+    }
+  }, [viewMode, profileCenter]);
 
-  // Re-center when profile loads
+  // Re-center when profile loads (catches late-loading profile)
   useEffect(() => {
     if (leafletMap.current && profileCenter) {
       leafletMap.current.setView(profileCenter, 12);
@@ -225,12 +238,24 @@ const FindWork = window.FindWork = () => {
       }).addTo(map);
     }
 
-    // Add open request markers
+    // Add open request markers — offset colocated pins in a spiral
     const bounds = profileCenter ? [profileCenter] : [];
+    const locCounts = {};
     filteredRequests.forEach(s => {
-      const lat = parseFloat(s.recipient_lat);
-      const lng = parseFloat(s.recipient_lng);
+      let lat = parseFloat(s.recipient_lat);
+      let lng = parseFloat(s.recipient_lng);
       if (!lat || !lng) return;
+
+      // Offset colocated markers in a spiral so they don't stack
+      const locKey = lat.toFixed(4) + ',' + lng.toFixed(4);
+      locCounts[locKey] = (locCounts[locKey] || 0) + 1;
+      const idx = locCounts[locKey] - 1;
+      if (idx > 0) {
+        const angle = (idx * 137.5) * Math.PI / 180; // golden angle spiral
+        const dist = 0.0008 * Math.sqrt(idx); // ~80m per step
+        lat += dist * Math.cos(angle);
+        lng += dist * Math.sin(angle);
+      }
 
       const recipient = s.recipient_name || s.recipientName || 'Care Recipient';
       const service = (s.service_type || s.serviceType || '').replace(/_/g, ' ');
