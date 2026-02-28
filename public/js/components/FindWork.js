@@ -69,13 +69,12 @@ const FindWork = window.FindWork = () => {
   const handleSaveRates = async () => {
     setSavingRates(true);
     try {
-      const res = await apiFetch('/api/caregivers/me', {
+      const res = await apiFetch('/api/caregivers/rates', {
         method: 'PUT',
         body: JSON.stringify({
-          hourly_rate: parseFloat(rates.daytime) || 0,
-          nighttime_rate: parseFloat(rates.nighttime) || 0,
-          overnight_rate: parseFloat(rates.overnight) || 0,
-          min_overnight_hours: parseFloat(minOvernightHours) || 6,
+          rateDaytime: parseFloat(rates.daytime) || null,
+          rateNighttime: parseFloat(rates.nighttime) || null,
+          rateOvernight: parseFloat(rates.overnight) || null,
         }),
       });
       if (res?.ok) showToast('Rates saved!', 'success');
@@ -230,7 +229,7 @@ const FindWork = window.FindWork = () => {
       const lng = parseFloat(s.recipient_lng);
       if (!lat || !lng) return;
 
-      const recipient = s.recipient_name || s.recipientName || 'Client';
+      const recipient = s.recipient_name || s.recipientName || 'Care Recipient';
       const service = (s.service_type || s.serviceType || '').replace(/_/g, ' ');
       const cost = s.estimated_cost || s.estimatedCost;
       const dateStr = s.scheduled_date || s.date;
@@ -433,7 +432,7 @@ const FindWork = window.FindWork = () => {
           ) : assignments.length > 0 ? (
             <div style={{ display: 'grid', gap: 12 }}>
               {assignments.map(a => {
-                const name = `${a.first_name || a.firstName || ''} ${a.last_name || a.lastName || ''}`.trim() || 'Client';
+                const name = `${a.first_name || a.firstName || ''} ${a.last_name || a.lastName || ''}`.trim() || 'Care Recipient';
                 const city = a.location_city || a.city || '';
                 const conditions = a.health_conditions || a.healthConditions;
                 const condList = conditions ? (typeof conditions === 'string' ? JSON.parse(conditions) : conditions) : [];
@@ -632,7 +631,7 @@ const FindWork = window.FindWork = () => {
                 const time = s.scheduled_time || s.time;
                 const duration = s.duration_hours || s.durationHours;
                 const service = s.service_type || s.serviceType;
-                const recipient = s.recipient_name || s.recipientName || 'Client';
+                const recipient = s.recipient_name || s.recipientName || 'Care Recipient';
                 const cost = s.estimated_cost || s.estimatedCost;
                 const instructions = s.special_instructions || s.specialInstructions;
                 const dateStr = s.scheduled_date || s.date;
@@ -747,7 +746,7 @@ const FindWork = window.FindWork = () => {
                 const time = s.scheduled_time || s.time;
                 const duration = s.duration_hours || s.durationHours;
                 const service = s.service_type || s.serviceType;
-                const recipient = s.recipient_name || s.recipientName || 'Client';
+                const recipient = s.recipient_name || s.recipientName || 'Care Recipient';
                 const cost = s.caregiver_payout || s.estimated_cost || s.estimatedCost || s.actual_cost;
                 const statusColors = {
                   confirmed: { bg: '#e8f5e9', text: '#2e7d32' },

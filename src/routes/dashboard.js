@@ -77,7 +77,7 @@ async function familyDashboard(db, userId, res) {
     const next30 = next30Date.getFullYear() + '-' + String(next30Date.getMonth() + 1).padStart(2, '0') + '-' + String(next30Date.getDate()).padStart(2, '0');
 
     const upcoming = await db.prepare(`
-      SELECT cs.*,
+      SELECT DISTINCT ON (cs.id) cs.*,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
         cr.timezone AS care_timezone,
         u.first_name || ' ' || u.last_name AS caregiver_name,
@@ -94,7 +94,7 @@ async function familyDashboard(db, userId, res) {
         AND cs.scheduled_date >= ?
         AND cs.scheduled_date <= ?
         AND cs.status IN ('pending', 'confirmed', 'open', 'requested', 'in_progress')
-      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+      ORDER BY cs.id, cs.scheduled_date ASC, cs.scheduled_time ASC
       LIMIT 15
     `).all(userId, ...allRecipientIds, today, next30);
 
@@ -102,7 +102,7 @@ async function familyDashboard(db, userId, res) {
     const sevenDaysAgo = new Date(etNow); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
     const recentCompleted = await db.prepare(`
-      SELECT cs.*,
+      SELECT DISTINCT ON (cs.id) cs.*,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         vl.summary AS visit_summary,
@@ -116,7 +116,7 @@ async function familyDashboard(db, userId, res) {
       WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
         AND cs.status = 'completed'
         AND cs.scheduled_date >= ?
-      ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
+      ORDER BY cs.id, cs.scheduled_date DESC, cs.scheduled_time DESC
       LIMIT 5
     `).all(userId, ...allRecipientIds, sevenDaysAgoStr);
 
@@ -355,7 +355,7 @@ async function caregiverDashboard(db, userId, res) {
   const sevenDaysAgoCg = new Date(cgEtNow); sevenDaysAgoCg.setDate(sevenDaysAgoCg.getDate() - 7);
   const sevenDaysAgoCgStr = sevenDaysAgoCg.getFullYear() + '-' + String(sevenDaysAgoCg.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgoCg.getDate()).padStart(2, '0');
   const recentCompletedCg = await db.prepare(`
-    SELECT cs.*,
+    SELECT DISTINCT ON (cs.id) cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       cr.location_city,
       cr.timezone AS care_timezone,
@@ -367,7 +367,7 @@ async function caregiverDashboard(db, userId, res) {
     WHERE cs.caregiver_id = ?
       AND cs.status = 'completed'
       AND cs.scheduled_date >= ?
-    ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
+    ORDER BY cs.id, cs.scheduled_date DESC, cs.scheduled_time DESC
     LIMIT 5
   `).all(profile.id, sevenDaysAgoCgStr);
 

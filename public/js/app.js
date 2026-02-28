@@ -836,7 +836,7 @@ const App = () => {
       { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
       { id: 'caregivers', icon: '🤝', label: 'Care' },
       { id: 'messages', icon: '💬', label: 'Messages' },
-      { id: 'account', icon: '👤', label: 'More' },
+      { id: 'account', icon: '👤', label: 'Account' },
     ];
     if (currentUser?.isAdmin) {
       familyBottom.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
