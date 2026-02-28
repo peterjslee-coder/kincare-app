@@ -562,21 +562,26 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     return minsUntil <= 60 || profile.earlyCheckInAllowed;
   });
 
-  // Split sessions into today vs future (excluding completed)
-  const todaySessions = sessions.filter(s => {
+  // Split sessions into <24hr ("up next") vs >24hr ("scheduled")
+  const upNextSessions = sessions.filter(s => {
     if (s.status === 'completed') return false;
+    if (s.status === 'in_progress') return true;
     const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-    const etDate = TimezoneHelper.getToday(tz);
-    const sessionDate = (s.date || s.scheduled_date || '').split('T')[0];
-    return sessionDate === etDate;
+    const now = TimezoneHelper.getNow(tz);
+    const sDate = (s.date || s.scheduled_date || '').split('T')[0];
+    const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
+    const minsUntil = (sessionDT - now) / 60000;
+    return minsUntil < 24 * 60;
   });
 
-  const futureSessions = sessions.filter(s => {
-    if (s.status === 'completed') return false;
+  const scheduledSessions = sessions.filter(s => {
+    if (s.status === 'completed' || s.status === 'in_progress') return false;
     const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-    const etDate = TimezoneHelper.getToday(tz);
-    const sessionDate = (s.date || s.scheduled_date || '').split('T')[0];
-    return sessionDate !== etDate;
+    const now = TimezoneHelper.getNow(tz);
+    const sDate = (s.date || s.scheduled_date || '').split('T')[0];
+    const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
+    const minsUntil = (sessionDT - now) / 60000;
+    return minsUntil >= 24 * 60;
   });
 
   const CARE_TASKS = [
@@ -818,14 +823,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         return null;
       })()}
 
-      {/* TODAY — today's sessions at the very top */}
-      {todaySessions.length > 0 && (() => {
+      {/* UP NEXT — any session <24 hours away + in_progress, with check-in/out */}
+      {upNextSessions.length > 0 && (() => {
         const readySet = new Set(readyToCheckIn.map(s => s.id));
+        const sorted = [...upNextSessions].sort((a, b) => {
+          if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
+          if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
+          const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
+          const bKey = (b.date || b.scheduled_date || '') + (b.time || b.scheduled_time || '');
+          return aKey.localeCompare(bKey);
+        });
 
         return (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Today</div>
-            {todaySessions.map(s => {
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Up Next</div>
+            {sorted.map(s => {
               const isReady = readySet.has(s.id);
               const isActive = s.status === 'in_progress';
               const sDate = (s.date || s.scheduled_date || '').split('T')[0];
@@ -833,16 +845,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const etNow = TimezoneHelper.getNow(tz);
               const sessionStartET = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
               const minsUntil = (sessionStartET - etNow) / 60000;
+              const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
               const timeLabel = TimezoneHelper.formatTime(s.time || s.scheduled_time);
               const duration = s.durationHours || s.duration_hours;
               const svcType = s.serviceType || s.service_type;
               const recipName = s.recipientName || s.recipient_name || 'Session';
               const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
+              const noAddress = !s.hasAddress && s.status === 'confirmed';
 
-              const isDirectOffer = !!(s.offeredToCaregiverId || s.offered_to_caregiver_id);
-
-              // Check-in countdown — show for all upcoming confirmed sessions today
-              const checkInCountdown = (() => {
+              // Countdown label
+              const countdownLabel = (() => {
                 if (isReady || isActive) return null;
                 if (minsUntil <= 0) return null;
                 const hours = Math.floor(minsUntil / 60);
@@ -851,10 +863,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 return `${Math.ceil(minsUntil)} min until check-in`;
               })();
 
-              // Border color based on status
-              const borderColor = isActive ? '#f57f17' : (isReady) ? '#e8724a' : isDirectOffer ? '#7c3aed' : '#1b6b5a';
-              const borderWidth = isActive || isReady ? 3 : isDirectOffer ? 2 : 2;
-              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : (isReady) ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : isDirectOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : '#fff';
+              // Styling
+              const borderColor = isActive ? '#f57f17' : isReady ? '#e8724a' : noAddress ? '#dc2626' : '#1b6b5a';
+              const borderWidth = isActive || isReady ? 3 : 2;
+              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
+              const shadow = (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
 
               return (
                 <div key={s.id} className="card" onClick={(e) => {
@@ -865,22 +878,30 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   border: `${borderWidth}px solid ${borderColor}`,
                   borderRadius: 12,
                   background: bgStyle,
-                  boxShadow: (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)',
+                  boxShadow: shadow,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '180px' }}>
-                      {isDirectOffer && !isActive && !isReady && <div style={{ marginBottom: 4 }}><span style={{ background: '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\u2728'} Just For You</span></div>}
                       {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress Now</div>}
                       {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
-                      {checkInCountdown && <div style={{ fontSize: 11, fontWeight: 600, color: isDirectOffer ? '#7c3aed' : '#e8724a', marginBottom: 3 }}>{checkInCountdown}</div>}
+                      {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>{countdownLabel}</div>}
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                        {timeLabel}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
+                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
                       </div>
-                      {loc && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>}
+                      {loc ? (
+                        <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
+                      ) : noAddress ? (
+                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
+                      ) : null}
                       {s.specialInstructions && <div style={{ fontSize: 12, color: '#555', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#1b6b5a' }}>
+                          ${Math.round(s.caregiverPayout || parseFloat(s.estimatedCost) || 0)}
+                        </div>
+                      )}
                       {isActive && (
                         <button onClick={() => {
                           setCheckOutMood('');
@@ -916,6 +937,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                           boxShadow: '0 2px 8px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
                         }}>Check In Now</button>
+                      )}
+                      {!isReady && !isActive && (
+                        <span style={{
+                          padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
+                          color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
+                          textTransform: 'capitalize',
+                        }}>{s.status}</span>
                       )}
                     </div>
                   </div>
@@ -1082,19 +1111,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* Next Up — future sessions only (not today, not completed) */}
+      {/* Scheduled — sessions >24hr away, no check-in logic */}
       {(() => {
-        // Sort future sessions: in_progress first, then by date/time
-        const sorted = [...futureSessions].sort((a, b) => {
-          if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
-          if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
+        const sorted = [...scheduledSessions].sort((a, b) => {
           const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
           const bKey = (b.date || b.scheduled_date || '') + (b.time || b.scheduled_time || '');
           return aKey.localeCompare(bKey);
         });
-        const readySet = new Set(readyToCheckIn.map(s => s.id));
 
-        if (sorted.length === 0) return (
+        if (sorted.length === 0 && upNextSessions.length === 0) return (
           <div className="card" style={{ marginBottom: 16, padding: '24px', textAlign: 'center', borderLeft: '4px solid #1b6b5a' }}>
             <div style={{ fontSize: 20, marginBottom: 8 }}>{'\uD83D\uDCCB'}</div>
             <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 4 }}>No upcoming sessions</div>
@@ -1102,14 +1127,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         );
 
+        if (sorted.length === 0) return null;
+
         return (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              Next Up
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+              Scheduled
             </div>
             {sorted.slice(0, 5).map(s => {
-              const isReady = readySet.has(s.id);
-              const isActive = s.status === 'in_progress';
               const sDate = (s.date || s.scheduled_date || '').split('T')[0];
               const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
               const now = TimezoneHelper.getNow(tz);
@@ -1119,35 +1144,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const svcType = s.serviceType || s.service_type;
               const recipName = s.recipientName || s.recipient_name || 'Session';
               const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
-
-              // Urgency tiers
-              const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
-              const minsUntil = (sessionDT - now) / 60000;
-              const isImminent = !isActive && !isReady && s.status === 'confirmed' && minsUntil <= 60 && minsUntil > -120;
-              const isSoon = !isActive && !isReady && !isImminent && s.status === 'confirmed' && minsUntil <= 180 && minsUntil > 0;
               const noAddress = !s.hasAddress && s.status === 'confirmed';
 
-              // Countdown label for sessions further out
-              const countdownLabel = (() => {
-                if (isActive || isReady || isImminent || isSoon) return null;
-                if (minsUntil <= 0) return null;
-                const hoursUntil = minsUntil / 60;
-                const daysUntil = Math.floor(hoursUntil / 24);
-                if (daysUntil >= 2) return `in ${daysUntil} days`;
-                if (daysUntil === 1) return 'tomorrow';
-                if (hoursUntil >= 1) return `in ${Math.round(hoursUntil)}h`;
-                return `in ${Math.ceil(minsUntil)} min`;
-              })();
-
-              const isDirectOffer = !!(s.offeredToCaregiverId || s.offered_to_caregiver_id);
-
-              // Styling based on urgency
-              const borderColor = isActive ? '#f57f17' : (isReady || isImminent) ? '#e8724a' : isSoon ? '#e8724a' : noAddress ? '#dc2626' : isDirectOffer ? '#7c3aed' : '#1b6b5a';
-              const borderWidth = isActive || isReady || isImminent ? 3 : noAddress ? 2 : 2;
-              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)'
-                : (isReady || isImminent) ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : isDirectOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : '#fff';
-              const shadow = isActive ? '0 2px 12px rgba(245, 127, 23, 0.15)'
-                : (isReady || isImminent) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : isDirectOffer ? '0 2px 12px rgba(124, 58, 237, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
+              const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
+              const minsUntil = (sessionDT - now) / 60000;
+              const daysUntil = Math.floor(minsUntil / 60 / 24);
+              const dayCountLabel = daysUntil >= 2 ? `in ${daysUntil} days` : 'tomorrow';
 
               return (
                 <div key={s.id} className="card" onClick={(e) => {
@@ -1155,20 +1157,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   if (s.id) setVisitDetailSessionId(s.id);
                 }} style={{
                   marginBottom: 10, padding: '16px 18px', cursor: 'pointer',
-                  border: `${borderWidth}px solid ${borderColor}`,
+                  border: `2px solid ${noAddress ? '#dc2626' : '#1b6b5a'}`,
                   borderRadius: 12,
-                  background: bgStyle,
-                  boxShadow: shadow,
-                  animation: (isReady || isActive || isImminent) ? 'fadeIn 0.3s ease' : undefined,
+                  background: '#fff',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '180px' }}>
-                      {isDirectOffer && !isActive && !isReady && !isImminent && <div style={{ marginBottom: 4 }}><span style={{ background: '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\u2728'} Just For You</span></div>}
-                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress Now</div>}
-                      {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
-                      {isImminent && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{minsUntil <= 0 ? 'Started \u2014 awaiting check-in' : `Starting in ${Math.ceil(minsUntil)} min \u2014 Check In`}</div>}
-                      {isSoon && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>Coming up in {minsUntil <= 120 ? `${Math.ceil(minsUntil)} min` : `${Math.round(minsUntil / 60)}h`}</div>}
-                      {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: isDirectOffer ? '#7c3aed' : '#888', marginBottom: 3 }}>{countdownLabel}</div>}
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 3 }}>{dayCountLabel}</div>
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
@@ -1177,9 +1173,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       {loc ? (
                         <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
                       ) : noAddress ? (
-                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file — contact the family to confirm location</div>
+                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
                       ) : null}
-                      {s.specialInstructions && <div style={{ fontSize: 12, color: '#555', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
@@ -1187,50 +1182,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           ${Math.round(s.caregiverPayout || parseFloat(s.estimatedCost) || 0)}
                         </div>
                       )}
-                      {isActive && (
-                        <button onClick={() => {
-                          setCheckOutMood('');
-                          setCheckOutTags([]);
-                          setCheckOutCareFeedback('');
-                          setCheckOutServiceFeedback('');
-                          setCheckOutSummary('');
-                          setCheckOutSession(s);
-                        }} style={{
-                          padding: '10px 22px', background: '#c62828', color: '#fff', border: 'none',
-                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                          boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
-                        }}>Check Out</button>
-                      )}
-                      {isReady && !isActive && (
-                        <button onClick={() => {
-                          setCheckInMood('');
-                          setCheckInNotes(null);
-                          setCheckInLocation(null);
-                          setLocationError(null);
-                          if (navigator.geolocation) {
-                            navigator.geolocation.getCurrentPosition(
-                              (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-                              (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
-                              { timeout: 8000, enableHighAccuracy: false }
-                            );
-                          } else {
-                            setLocationError('Geolocation not supported');
-                          }
-                          setCheckInSession(s);
-                        }} style={{
-                          padding: '10px 22px', background: '#e8724a', color: '#fff', border: 'none',
-                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                          boxShadow: '0 2px 8px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
-                        }}>Check In Now</button>
-                      )}
-                      {!isReady && !isActive && (
-                        <span style={{
-                          padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                          background: (isImminent) ? '#fff3e0' : s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
-                          color: (isImminent) ? '#e8724a' : s.status === 'confirmed' ? '#2e7d32' : '#e65100',
-                          textTransform: 'capitalize',
-                        }}>{isImminent ? 'Check In' : s.status}</span>
-                      )}
+                      <span style={{
+                        padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        background: s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
+                        color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
+                        textTransform: 'capitalize',
+                      }}>{s.status}</span>
                     </div>
                   </div>
                 </div>
