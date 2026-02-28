@@ -2564,22 +2564,24 @@
 
 /* ===== "Today" session shimmer — draws the eye on first load ===== */
 @keyframes nextUpShimmer {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0%   { left: -100%; }
+  100% { left: 100%; }
 }
 .next-up-today-shimmer::after {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0; bottom: 0;
+  width: 100%;
+  left: -100%;
   background: linear-gradient(
     105deg,
-    transparent 30%,
-    rgba(232, 114, 74, 0.08) 45%,
-    rgba(232, 114, 74, 0.14) 50%,
-    rgba(232, 114, 74, 0.08) 55%,
-    transparent 70%
+    transparent 20%,
+    rgba(232, 114, 74, 0.12) 35%,
+    rgba(232, 114, 74, 0.22) 50%,
+    rgba(232, 114, 74, 0.12) 65%,
+    transparent 80%
   );
-  animation: nextUpShimmer 2s ease-in-out 0.5s 2;
+  animation: nextUpShimmer 1.4s ease-in-out 0.5s 2 forwards;
   pointer-events: none;
   border-radius: inherit;
 }
