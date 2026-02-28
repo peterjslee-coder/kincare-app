@@ -172,7 +172,7 @@ app.use("/api/help", require("./routes/help"));
 app.use("/api/reports", require("./routes/reports"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.34.30";
+const APP_VERSION = "1.34.31";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
