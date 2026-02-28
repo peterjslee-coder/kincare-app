@@ -439,6 +439,7 @@ async function caregiverDashboard(db, userId, res) {
         estimatedCost: s.estimated_cost,
         caregiverPayout: caregiverPayout,
         timezone: s.care_timezone || "America/New_York",
+        offeredToCaregiverId: s.offered_to_caregiver_id || null,
       };
     }),
     reviews: reviews.map(r => ({

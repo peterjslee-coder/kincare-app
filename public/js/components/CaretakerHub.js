@@ -839,21 +839,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const recipName = s.recipientName || s.recipient_name || 'Session';
               const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
 
-              // Check-in countdown
+              const isDirectOffer = !!(s.offeredToCaregiverId || s.offered_to_caregiver_id);
+
+              // Check-in countdown — show for all upcoming confirmed sessions today
               const checkInCountdown = (() => {
-                if (!isReady && !isActive && minsUntil > 0 && minsUntil <= 60) {
-                  const hours = Math.floor(minsUntil / 60);
-                  const mins = Math.round(minsUntil % 60);
-                  if (hours > 0) return `Check in in ${hours}h ${mins}m`;
-                  return `Check in in ${Math.ceil(minsUntil)} min`;
-                }
-                return null;
+                if (isReady || isActive) return null;
+                if (minsUntil <= 0) return null;
+                const hours = Math.floor(minsUntil / 60);
+                const mins = Math.round(minsUntil % 60);
+                if (hours > 0) return `${hours}h ${mins}m until check-in`;
+                return `${Math.ceil(minsUntil)} min until check-in`;
               })();
 
               // Border color based on status
-              const borderColor = isActive ? '#f57f17' : (isReady) ? '#e8724a' : '#1b6b5a';
-              const borderWidth = isActive || isReady ? 3 : 2;
-              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : (isReady) ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
+              const borderColor = isActive ? '#f57f17' : (isReady) ? '#e8724a' : isDirectOffer ? '#7c3aed' : '#1b6b5a';
+              const borderWidth = isActive || isReady ? 3 : isDirectOffer ? 2 : 2;
+              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : (isReady) ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : isDirectOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : '#fff';
 
               return (
                 <div key={s.id} className="card" onClick={(e) => {
@@ -868,9 +869,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '180px' }}>
+                      {isDirectOffer && !isActive && !isReady && <div style={{ marginBottom: 4 }}><span style={{ background: '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\u2728'} Just For You</span></div>}
                       {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress Now</div>}
                       {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
-                      {checkInCountdown && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>{checkInCountdown}</div>}
+                      {checkInCountdown && <div style={{ fontSize: 11, fontWeight: 600, color: isDirectOffer ? '#7c3aed' : '#e8724a', marginBottom: 3 }}>{checkInCountdown}</div>}
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                         {timeLabel}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
@@ -1137,13 +1139,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 return `in ${Math.ceil(minsUntil)} min`;
               })();
 
+              const isDirectOffer = !!(s.offeredToCaregiverId || s.offered_to_caregiver_id);
+
               // Styling based on urgency
-              const borderColor = isActive ? '#f57f17' : (isReady || isImminent) ? '#e8724a' : isSoon ? '#e8724a' : noAddress ? '#dc2626' : '#1b6b5a';
+              const borderColor = isActive ? '#f57f17' : (isReady || isImminent) ? '#e8724a' : isSoon ? '#e8724a' : noAddress ? '#dc2626' : isDirectOffer ? '#7c3aed' : '#1b6b5a';
               const borderWidth = isActive || isReady || isImminent ? 3 : noAddress ? 2 : 2;
               const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)'
-                : (isReady || isImminent) ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
+                : (isReady || isImminent) ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : isDirectOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : '#fff';
               const shadow = isActive ? '0 2px 12px rgba(245, 127, 23, 0.15)'
-                : (isReady || isImminent) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
+                : (isReady || isImminent) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : isDirectOffer ? '0 2px 12px rgba(124, 58, 237, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
 
               return (
                 <div key={s.id} className="card" onClick={(e) => {
@@ -1159,11 +1163,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '180px' }}>
+                      {isDirectOffer && !isActive && !isReady && !isImminent && <div style={{ marginBottom: 4 }}><span style={{ background: '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\u2728'} Just For You</span></div>}
                       {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress Now</div>}
                       {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
                       {isImminent && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{minsUntil <= 0 ? 'Started \u2014 awaiting check-in' : `Starting in ${Math.ceil(minsUntil)} min \u2014 Check In`}</div>}
                       {isSoon && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>Coming up in {minsUntil <= 120 ? `${Math.ceil(minsUntil)} min` : `${Math.round(minsUntil / 60)}h`}</div>}
-                      {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 3 }}>{countdownLabel}</div>}
+                      {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: isDirectOffer ? '#7c3aed' : '#888', marginBottom: 3 }}>{countdownLabel}</div>}
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
