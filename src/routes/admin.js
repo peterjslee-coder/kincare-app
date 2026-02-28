@@ -865,6 +865,29 @@ router.put("/users/:id/tester", async (req, res) => {
   }
 });
 
+// ─── PUT /api/admin/users/:id/verify-email — Admin override: toggle email verification ───
+router.put("/users/:id/verify-email", async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, email, email_verified FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const newValue = user.email_verified ? 0 : 1;
+    await db.prepare("UPDATE users SET email_verified = ?, email_verified_at = datetime('now'), updated_at = datetime('now') WHERE id = ?").run(newValue, req.params.id);
+
+    // Clean up any lingering verification tokens
+    if (newValue === 1) {
+      await db.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(req.params.id);
+    }
+
+    console.log(`  [admin] Email verification ${newValue ? 'granted' : 'revoked'} for ${user.email} by admin`);
+    res.json({ success: true, email_verified: !!newValue, email: user.email });
+  } catch (err) {
+    console.error("Admin verify-email toggle error:", err);
+    res.status(500).json({ error: "Failed to toggle email verification" });
+  }
+});
+
 // ─── POST /api/admin/reseed — Refresh demo data (PRESERVES real users) ───
 // Always uses demoOnly mode — real user data is NEVER touched.
 // Still requires confirmation as a safety measure.

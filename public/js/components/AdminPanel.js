@@ -756,7 +756,22 @@ const AdminPanel = window.AdminPanel = () => {
                       }}>{u.role === 'care_for' ? 'Care Recipient' : u.role}</span>
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      {u.email_verified ? '✅' : '—'}
+                      <button onClick={async () => {
+                        try {
+                          const res = await apiFetch(`/api/admin/users/${u.id}/verify-email`, { method: 'PUT' });
+                          if (res?.ok) {
+                            const data = await res.json();
+                            setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, email_verified: data.email_verified ? 1 : 0 } : usr));
+                          }
+                        } catch (err) { console.error('Toggle verify error:', err); }
+                      }} style={{
+                        padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                        border: 'none',
+                        background: u.email_verified ? '#e8f5e9' : '#fff3e0',
+                        color: u.email_verified ? '#1b6b5a' : '#e65100',
+                      }} title={u.email_verified ? 'Click to revoke email verification' : 'Click to manually verify email'}>
+                        {u.email_verified ? '✅ Verified' : '⚠ Unverified'}
+                      </button>
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       <button onClick={async () => {

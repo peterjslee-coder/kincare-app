@@ -401,22 +401,33 @@ const App = () => {
     const vt = params.get('verify');
     if (vt) {
       window.history.replaceState({}, '', window.location.pathname);
-      apiFetch(`/api/auth/verify?token=${vt}`)
-        .then(r => r?.json())
+      // Use raw fetch for verify — it's a public endpoint that works without auth
+      fetch(API_BASE + `/api/auth/verify?token=${vt}`)
+        .then(r => r.json())
         .then(data => {
           if (data?.message) {
-            setVerifyMessage({ type: 'success', text: data.message });
-            // Refresh user data so emailVerified updates and banner disappears
-            apiFetch('/api/auth/me').then(r2 => r2?.json()).then(meData => {
-              if (meData?.user) {
-                setCurrentUser(prev => prev ? { ...prev, emailVerified: !!meData.user.email_verified } : prev);
-              }
-            }).catch(() => {});
+            setVerifyMessage({ type: 'success', text: 'Email verified! You can log in now.' });
+            // If user is logged in, refresh their data so banner disappears
+            if (localStorage.getItem('auth_token')) {
+              apiFetch('/api/auth/me').then(r2 => r2?.json()).then(meData => {
+                if (meData?.user) {
+                  setCurrentUser(prev => prev ? { ...prev, emailVerified: !!meData.user.email_verified } : prev);
+                }
+              }).catch(() => {});
+            } else {
+              // Not logged in — send them to login page with the success banner
+              setAppState('login');
+            }
           } else {
             setVerifyMessage({ type: 'error', text: data?.error || 'Verification failed' });
+            // Also send to login if not logged in so they see the error
+            if (!localStorage.getItem('auth_token')) setAppState('login');
           }
         })
-        .catch(() => setVerifyMessage({ type: 'error', text: 'Verification failed' }));
+        .catch(() => {
+          setVerifyMessage({ type: 'error', text: 'Verification failed. Please try again or contact support.' });
+          if (!localStorage.getItem('auth_token')) setAppState('login');
+        });
     }
 
     // Check for care team invite token in URL
