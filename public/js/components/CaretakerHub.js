@@ -949,6 +949,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {/* Find Work + Available Jobs — merged tile */}
       {(() => {
         const sortedJobs = [...openJobs].sort((a, b) => {
+          // Direct offers always on top
+          const aOffer = a.offeredToCaregiverId ? 1 : 0;
+          const bOffer = b.offeredToCaregiverId ? 1 : 0;
+          if (aOffer !== bOffer) return bOffer - aOffer;
           if (jobSort === 'highest_pay') {
             const aRate = parseFloat(a.proposedRate) || 0;
             const bRate = parseFloat(b.proposedRate) || 0;
@@ -1007,21 +1011,26 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   const effectiveTotal = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
                   const effectivePerHour = hours > 0 ? Math.round(effectiveTotal / hours * 100) / 100 : 0;
 
+                  const isDirectOffer = !!job.offeredToCaregiverId;
+
                   return (
                     <div key={job.id} style={{
                       marginBottom: 8, padding: '14px 16px',
-                      background: job.hasConflict ? '#fffbf0' : '#fff',
+                      background: isDirectOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : job.hasConflict ? '#fffbf0' : '#fff',
                       borderRadius: 0,
-                      border: job.hasConflict ? '1px solid #ffd89b' : (!job.hasConflict && job.matchQuality === 'great') ? '2px solid #1b6b5a' : hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
-                      borderTop: job.hasConflict ? '1px solid #ffd89b' : '1px solid #f0f0f0',
+                      border: isDirectOffer ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : (!job.hasConflict && job.matchQuality === 'great') ? '2px solid #1b6b5a' : hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
+                      borderTop: isDirectOffer ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : '1px solid #f0f0f0',
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
                     }}>
                       <div style={{ flex: 1, minWidth: '180px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                          {isDirectOffer && (
+                            <span style={{ background: '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\u2728'} JUST FOR YOU</span>
+                          )}
                           {hasBonus && (
                             <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
                           )}
-                          {job.matchQuality === 'great' && !job.hasConflict && (
+                          {job.matchQuality === 'great' && !job.hasConflict && !isDirectOffer && (
                             <span style={{ background: '#1b6b5a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>GREAT MATCH</span>
                           )}
                           {job.hasConflict ? (

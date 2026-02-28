@@ -334,14 +334,16 @@ async function caregiverDashboard(db, userId, res) {
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     LEFT JOIN users fu ON cs.family_user_id = fu.id
-    WHERE cs.status IN ('open', 'requested')
+    WHERE (
+        (cs.status IN ('open', 'requested') AND (cs.caregiver_id IS NULL OR cs.caregiver_id = ?))
+        OR (cs.status = 'pending' AND cs.offered_to_caregiver_id = ?)
+      )
       AND cs.scheduled_date >= ?
       AND cs.scheduled_date <= ?
-      AND (cs.caregiver_id IS NULL OR cs.caregiver_id = ?)
       AND COALESCE(fu.is_demo, 0) = ?
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 10
-  `).all(today, fiveDayStr, profile.id, isDemo);
+  `).all(profile.id, userId, today, fiveDayStr, isDemo);
 
   // Recent reviews
   const reviews = await db.prepare(`
@@ -477,6 +479,7 @@ async function caregiverDashboard(db, userId, res) {
         distanceMiles: dist,
         matchScore: match.score,
         matchQuality: match.quality,
+        offeredToCaregiverId: s.offered_to_caregiver_id || null,
       };
     }),
     recentlyCompleted: recentCompletedCg.map(s => {
