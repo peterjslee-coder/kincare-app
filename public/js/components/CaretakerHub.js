@@ -557,11 +557,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   };
 
   const handleClaimJob = async (jobId, e, amount) => {
+    const btnEl = e?.currentTarget || null;
     setClaimingJobId(jobId);
     try {
       const res = await apiFetch(`/api/sessions/${jobId}/claim`, { method: 'PUT' });
       if (res?.ok) {
-        if (amount > 0 && e?.currentTarget) flyMoney(amount, e.currentTarget);
+        if (amount > 0 && btnEl) flyMoney(Math.round(amount), btnEl);
         showToast && showToast('Job accepted!', 'success');
         // Refresh dashboard
         const dashRes = await apiFetch('/api/dashboard');
