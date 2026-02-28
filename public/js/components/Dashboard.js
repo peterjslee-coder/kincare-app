@@ -193,8 +193,8 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const isNewUser = data?.isNewUser && !isDemo;
 
   // Onboarding checklist for real (non-demo) users
-  // Profile is "complete" when user has uploaded a photo (phone is collected at signup, so not a good check)
-  const hasProfile = !!user?.profile_photo;
+  // Profile is "started" once they have a name (collected at signup) — photo is optional, not a gate
+  const hasProfile = !!(user?.first_name || user?.firstName);
   const hasRecipient = (data?.parent || stats.assignedCaregivers > 0);
   const hasCareTeam = careTeams.length > 0;
   // Check if user joined via invite (is a member, not leader, of a care team)

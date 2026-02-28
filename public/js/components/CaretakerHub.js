@@ -783,7 +783,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setLocSaving(false);
   };
 
-  // First Steps checklist
+  // First Steps checklist — encouraging but NEVER blocks dashboard access
+  // Photo is optional and not in this list — families want to see one, but it's not a gate
   const firstSteps = [
     { id: 'profile', label: 'Complete your profile', done: !!(profile.bio && (profile.rateDaytime || profile.hourlyRate)) },
     { id: 'availability', label: 'Set your availability', done: availRules.length > 0 || availVisited },
@@ -793,13 +794,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     { id: 'bgcheck', label: 'Pay for background check ($30)', done: !!profile.background_check_paid || !!profile.isBackgroundChecked },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
-  // If admin marked available for jobs, skip all onboarding gates entirely
+  // If admin marked available for jobs, skip checklist display entirely
   const showFirstSteps = !profile.isAvailable && firstStepsDone < firstSteps.length;
-  const onboardingGated = !profile.isAvailable && !profile.onboardingComplete && showFirstSteps;
-  // When user clicks a step, they land on a tab where they can complete it — lift the blur
-  const stepTabs = ['availability', 'preferences', 'financials', 'profile'];
-  const isWorkingOnStep = onboardingGated && stepTabs.includes(activeTab);
-  const shouldBlur = onboardingGated && !isWorkingOnStep;
+  // NEVER gate/blur the dashboard — checklist is motivational, not a lock
+  const onboardingGated = false;
+  const shouldBlur = false;
 
   // Average hourly rate from completed sessions
   const totalHours = completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0);
