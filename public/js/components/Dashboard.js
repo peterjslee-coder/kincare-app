@@ -720,6 +720,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
               const isImminent = !isActive && s.status === 'confirmed' && minsUntil <= 60 && minsUntil > -120; // within 1 hour or started <2hr ago
               const isSoon = !isActive && !isImminent && s.status === 'confirmed' && minsUntil <= 180; // within 3 hours
               const isSeekingCaregiver = !s.caregiverName;
+              const isToday = sDate === todayStr && !isActive;
 
               // Border & background based on urgency
               const borderColor = isActive ? '#f57f17' : isImminent ? '#e8724a' : isSoon ? '#e8724a' : isSeekingCaregiver ? '#e8724a' : '#1b6b5a';
@@ -727,13 +728,15 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
               const borderWidth = isActive || isImminent ? 3 : 2;
 
               return (
-                <div key={s.id || idx} onClick={() => {
+                <div key={s.id || idx} className={isToday ? 'next-up-today-shimmer' : ''} onClick={() => {
                   if (s.id) setVisitDetailSessionId(s.id);
                 }} style={{
                   marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
                   border: `${borderWidth}px solid ${borderColor}`,
                   background: bgColor,
                   boxShadow: isImminent ? '0 2px 12px rgba(232, 114, 74, 0.15)' : isActive ? '0 2px 12px rgba(245, 127, 23, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)',
+                  position: isToday ? 'relative' : undefined,
+                  overflow: isToday ? 'hidden' : undefined,
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div style={{ flex: 1 }}>

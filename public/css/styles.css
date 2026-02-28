@@ -2561,3 +2561,25 @@
 
 /* Leaflet map pin overrides */
 .cg-map-pin { overflow: visible !important; background: none !important; border: none !important; }
+
+/* ===== "Today" session shimmer — draws the eye on first load ===== */
+@keyframes nextUpShimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.next-up-today-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(232, 114, 74, 0.08) 45%,
+    rgba(232, 114, 74, 0.14) 50%,
+    rgba(232, 114, 74, 0.08) 55%,
+    transparent 70%
+  );
+  animation: nextUpShimmer 2s ease-in-out 0.5s 2;
+  pointer-events: none;
+  border-radius: inherit;
+}
