@@ -391,6 +391,22 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS exclusive_until TIMESTAMPTZ`,
     // v1.34.35 — Accessibility preferences (text size, etc.) stored as JSON
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS accessibility_prefs TEXT`,
+    // v1.34.36 — Backfill linked_user_id for care_for users who have a CaredForView dashboard
+    // Match care_for user to care_recipient via the user's CaredForView session lookup pattern:
+    // CaredForView finds sessions WHERE cr.linked_user_id = user.id, so we reverse it:
+    // Find care_for users who aren't linked yet, and link them to the care_recipient
+    // created by their family (matched via care_teams.created_by = care_recipients.family_user_id)
+    `UPDATE care_recipients SET linked_user_id = sub.uid
+     FROM (
+       SELECT DISTINCT cr.id AS crid, u.id AS uid
+       FROM care_recipients cr
+       JOIN care_teams ct ON ct.care_recipient_id = cr.id
+       CROSS JOIN users u
+       WHERE cr.linked_user_id IS NULL
+         AND (u.role = 'care_for' OR u.roles LIKE '%care_for%')
+         AND ct.created_by = cr.family_user_id
+     ) sub
+     WHERE care_recipients.id = sub.crid AND care_recipients.linked_user_id IS NULL`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
