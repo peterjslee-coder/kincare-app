@@ -308,34 +308,11 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           </p>
         </div>
 
-        {/* How It Works */}
+        {/* Getting Started — unified onboarding */}
         <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header" style={{ fontSize: 16, fontWeight: 700 }}>How InPlace Works</div>
-          <div style={{ display: 'grid', gap: 20, marginTop: 8 }}>
-            {[
-              { icon: '🌷', title: 'Add your loved one', desc: 'Create a care profile with health details, medications, and preferences so caregivers know exactly what\'s needed.' },
-              { icon: '👨‍👩‍👦', title: 'Build your care team', desc: 'Invite siblings, family members, or friends to help coordinate care. Everyone stays on the same page.' },
-              { icon: '🔍', title: 'Find caregivers', desc: 'Search for qualified, background-checked caregivers in your area who match your needs.' },
-              { icon: '📅', title: 'Schedule & track', desc: 'Book care sessions, get real-time updates, photos, and visit summaries. Never wonder how things went.' },
-            ].map((step, i) => (
-              <div key={i} style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                <div style={{ width: 48, height: 48, borderRadius: 12, background: '#f0faf7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
-                  {step.icon}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 2 }}>{step.title}</div>
-                  <div style={{ fontSize: 13, color: '#666', lineHeight: 1.5 }}>{step.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Getting Started Checklist */}
-        <div className="card" style={{ borderLeft: '4px solid #e8724a', marginBottom: 24 }}>
           <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 20 }}>🚀</span>
-            <span style={{ fontWeight: 700 }}>Getting Started</span>
+            <span style={{ fontWeight: 700, fontSize: 16 }}>Getting Started</span>
             <span style={{ marginLeft: 'auto', fontSize: 12, color: '#888', display: 'flex', alignItems: 'center', gap: 8 }}>
               {onboardingSteps.filter(s => s.done).length} / {onboardingSteps.length} complete
               <button onClick={(e) => { e.stopPropagation(); dismissTile('onboarding', 'v1'); }} title="Dismiss checklist" style={{
@@ -344,41 +321,45 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
               }}>✕</button>
             </span>
           </div>
-          <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-            {onboardingSteps.map((step, idx) => (
-              <div key={step.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0',
-                borderBottom: idx < onboardingSteps.length - 1 ? '1px solid #f5f5f5' : 'none',
-                opacity: step.done ? 0.6 : 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%',
-                    background: step.done ? '#1b6b5a' : (idx === onboardingSteps.findIndex(s => !s.done) ? '#e8724a' : '#f0f0f0'),
-                    color: (step.done || idx === onboardingSteps.findIndex(s => !s.done)) ? '#fff' : '#ccc',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-                    {step.done ? '✓' : (idx + 1)}
+          <div style={{ display: 'grid', gap: 0, marginTop: 8 }}>
+            {onboardingSteps.map((step, idx) => {
+              const isNext = idx === onboardingSteps.findIndex(s => !s.done);
+              const hints = {
+                profile: 'Add your name, phone number, and location so caregivers can reach you.',
+                recipient: 'Create a care profile with health details, medications, and preferences.',
+                team: 'Invite siblings or family members so everyone stays on the same page.',
+                caregiver: 'Browse qualified, background-checked caregivers in your area.',
+                pwa: 'Get push notifications and quick access from your home screen.',
+              };
+              return (
+                <div key={step.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 0',
+                  borderBottom: idx < onboardingSteps.length - 1 ? '1px solid #f5f5f5' : 'none',
+                  opacity: step.done ? 0.55 : 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flex: 1 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', marginTop: 1,
+                      background: step.done ? '#1b6b5a' : (isNext ? '#e8724a' : '#f0f0f0'),
+                      color: (step.done || isNext) ? '#fff' : '#ccc',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
+                      {step.done ? '✓' : (idx + 1)}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: step.done ? 400 : 600, textDecoration: step.done ? 'line-through' : 'none', color: step.done ? '#888' : '#333' }}>
+                        {step.label}
+                      </div>
+                      {!step.done && hints[step.id] && (
+                        <div style={{ fontSize: 12, color: '#888', marginTop: 3, lineHeight: 1.4 }}>{hints[step.id]}</div>
+                      )}
+                    </div>
                   </div>
-                  <span style={{ fontSize: 14, fontWeight: step.done ? 400 : 600, textDecoration: step.done ? 'line-through' : 'none', color: step.done ? '#888' : '#333' }}>
-                    {step.label}
-                  </span>
+                  {!step.done && isNext && step.action && (
+                    <button onClick={step.action}
+                      style={{ padding: '8px 18px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
+                      {step.actionText}
+                    </button>
+                  )}
                 </div>
-                {!step.done && idx === onboardingSteps.findIndex(s => !s.done) && step.action && (
-                  <button onClick={step.action}
-                    style={{ padding: '6px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    {step.actionText}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Quick Tip */}
-        <div style={{ background: '#f0faf7', border: '1px solid #d0ede6', borderRadius: 12, padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          <span style={{ fontSize: 20, flexShrink: 0 }}>💡</span>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 14, color: '#1b6b5a', marginBottom: 2 }}>Quick tip</div>
-            <div style={{ fontSize: 13, color: '#555', lineHeight: 1.5 }}>
-              Start by adding your loved one's profile — it takes about 2 minutes. You can always update their health information, preferences, and emergency contacts later.
-            </div>
+              );
+            })}
           </div>
         </div>
       </>
