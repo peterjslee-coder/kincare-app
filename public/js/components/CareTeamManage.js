@@ -13,6 +13,9 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [expandedMember, setExpandedMember] = useState(null);
   const [recentVisits, setRecentVisits] = useState([]);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
+  const [smsPhone, setSmsPhone] = useState('');
+  const [notifChannel, setNotifChannel] = useState('push');
+  const [savingNotif, setSavingNotif] = useState(false);
   const { showToast } = useToast();
 
   const fetchTeam = async () => {
@@ -22,6 +25,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         const data = await res.json();
         setTeam(data.careTeam);
         setNewName(data.careTeam.name);
+        setSmsPhone(data.careTeam.recipient_sms_phone || '');
+        setNotifChannel(data.careTeam.recipient_notification_channel || 'push');
       }
     } catch (err) {
       console.error('Fetch care team error:', err);
@@ -161,6 +166,28 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
     }
   };
 
+  const handleSaveNotifications = async () => {
+    if (['sms', 'both'].includes(notifChannel) && !smsPhone.trim()) {
+      showToast('Phone number required for text message reminders', 'error');
+      return;
+    }
+    setSavingNotif(true);
+    try {
+      const res = await apiFetch(`/api/care-teams/${careTeamId}/recipient-notifications`, {
+        method: 'PUT',
+        body: JSON.stringify({ smsPhone: smsPhone.trim(), notificationChannel: notifChannel }),
+      });
+      if (res?.ok) {
+        showToast('Notification settings saved', 'success');
+        fetchTeam();
+      } else {
+        const data = await res?.json();
+        showToast(data?.error || 'Failed to save', 'error');
+      }
+    } catch { showToast('Failed to save notification settings', 'error'); }
+    setSavingNotif(false);
+  };
+
   if (loading) return <LoadingSpinner text="Loading care team..." />;
   if (!team) return <div className="card"><p style={{ color: '#666' }}>Care team not found.</p></div>;
 
@@ -285,6 +312,63 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
           </div>
         );
       })()}
+
+      {/* Notification Settings for Care Recipient */}
+      {isLeader && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #e8724a' }}>
+          <div className="card-header" style={{ color: '#e8724a' }}>{team.recipient_first_name}'s Notifications</div>
+          <p style={{ fontSize: 13, color: '#666', margin: '0 0 14px' }}>
+            Choose how {team.recipient_first_name} gets reminders about upcoming care sessions.
+          </p>
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Reminder method</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[
+                { value: 'push', label: 'App only', icon: '📱' },
+                { value: 'sms', label: 'Text only', icon: '💬' },
+                { value: 'both', label: 'App + Text', icon: '📱💬' },
+                { value: 'none', label: 'None', icon: '🔕' },
+              ].map(opt => (
+                <button key={opt.value} onClick={() => setNotifChannel(opt.value)}
+                  style={{
+                    padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: notifChannel === opt.value ? '2px solid #e8724a' : '1px solid #d0d0d0',
+                    background: notifChannel === opt.value ? '#fff5f0' : '#fff',
+                    color: notifChannel === opt.value ? '#e8724a' : '#555',
+                  }}>
+                  {opt.icon} {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {['sms', 'both'].includes(notifChannel) && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>{team.recipient_first_name}'s phone number</div>
+              <input type="tel" value={smsPhone} onChange={(e) => setSmsPhone(e.target.value)}
+                placeholder="(540) 555-1234"
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+              <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>US format: (540) 555-1234 or +15405551234</div>
+            </div>
+          )}
+
+          <div style={{ background: '#f0f8f5', padding: '10px 14px', borderRadius: 8, fontSize: 13, color: '#1b6b5a', marginBottom: 14 }}>
+            {notifChannel === 'none'
+              ? `${team.recipient_first_name} won't receive any session reminders.`
+              : notifChannel === 'sms'
+                ? `${team.recipient_first_name} will get a text 15 minutes before each session starts and before the caregiver leaves.`
+                : notifChannel === 'both'
+                  ? `${team.recipient_first_name} will get both app notifications and text messages for session reminders.`
+                  : `${team.recipient_first_name} will get app notifications for session reminders (requires the app installed).`}
+          </div>
+
+          <button onClick={handleSaveNotifications} disabled={savingNotif}
+            style={{ padding: '9px 20px', background: savingNotif ? '#999' : '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingNotif ? 'wait' : 'pointer' }}>
+            {savingNotif ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
+      )}
 
       {/* Invite Form */}
       {showInviteForm && isLeader && (

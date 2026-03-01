@@ -104,7 +104,9 @@ router.get("/:id", requireRole("family"), async (req, res) => {
       SELECT ct.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
         cr.age AS recipient_age, cr.location_city AS recipient_city, cr.location_state AS recipient_state,
         cr.linked_user_id AS recipient_linked_user_id,
-        lu.accessibility_prefs AS recipient_accessibility_prefs
+        lu.accessibility_prefs AS recipient_accessibility_prefs,
+        cr.sms_phone AS recipient_sms_phone,
+        cr.notification_channel AS recipient_notification_channel
       FROM care_teams ct
       JOIN care_recipients cr ON ct.care_recipient_id = cr.id
       LEFT JOIN users lu ON cr.linked_user_id = lu.id
@@ -570,6 +572,52 @@ router.put("/:teamId/member-prefs/:userId", authenticate, async (req, res) => {
   } catch (err) {
     console.error("Update member prefs error:", err);
     res.status(500).json({ error: "Failed to update member preferences" });
+  }
+});
+
+// ─── PUT /api/care-teams/:teamId/recipient-notifications ───
+// Update SMS notification settings for the care recipient (leader only)
+router.put("/:teamId/recipient-notifications", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { teamId } = req.params;
+    const { smsPhone, notificationChannel } = req.body;
+
+    // Verify caller is team leader
+    const membership = await db.prepare(
+      "SELECT role FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
+    ).get(teamId, req.user.id);
+    if (!membership) return res.status(404).json({ error: "Care team not found" });
+    if (membership.role !== "leader") return res.status(403).json({ error: "Only team leaders can update notification settings" });
+
+    // Validate notification channel
+    const validChannels = ["push", "sms", "both", "none"];
+    if (notificationChannel && !validChannels.includes(notificationChannel)) {
+      return res.status(400).json({ error: "Invalid notification channel. Must be: push, sms, both, or none" });
+    }
+
+    // Validate phone if SMS is selected
+    if (["sms", "both"].includes(notificationChannel) && !smsPhone) {
+      return res.status(400).json({ error: "Phone number required for text message reminders" });
+    }
+
+    // Get care recipient ID from team
+    const team = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(teamId);
+    if (!team) return res.status(404).json({ error: "Care team not found" });
+
+    // Update care recipient
+    await db.prepare(
+      "UPDATE care_recipients SET sms_phone = ?, notification_channel = ?, updated_at = NOW() WHERE id = ?"
+    ).run(smsPhone || null, notificationChannel || "push", team.care_recipient_id);
+
+    res.json({
+      success: true,
+      smsPhone: smsPhone || null,
+      notificationChannel: notificationChannel || "push",
+    });
+  } catch (err) {
+    console.error("Update recipient notifications error:", err);
+    res.status(500).json({ error: "Failed to update notification settings" });
   }
 });
 

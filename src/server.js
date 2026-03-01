@@ -172,7 +172,7 @@ app.use("/api/help", require("./routes/help"));
 app.use("/api/reports", require("./routes/reports"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.34.37";
+const APP_VERSION = "1.34.38";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -453,6 +453,8 @@ async function start() {
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n  InPlace API v0.9.0 running on port ${PORT}\n`);
     console.log(`  WebSocket server ready`);
+    const { isSmsConfigured } = require("./utils/sms");
+    console.log(`  SMS notifications: ${isSmsConfigured() ? "Twilio configured ✓" : "Twilio not configured (SMS reminders will be skipped)"}`);
   });
 }
 

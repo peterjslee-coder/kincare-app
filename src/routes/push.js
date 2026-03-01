@@ -321,7 +321,8 @@ async function sendSessionReminders(sessionId, reminderType) {
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
-        cr.linked_user_id AS care_for_user_id
+        cr.linked_user_id AS care_for_user_id,
+        cr.notification_channel, cr.sms_phone
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
@@ -365,8 +366,12 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "caregiver_arriving");
       }
 
-      // 3. To care recipient (if linked user exists): "Your caregiver is almost here!"
-      if (session.care_for_user_id && !teamUserIds.includes(session.care_for_user_id)) {
+      // 3. To care recipient — push and/or SMS based on notification_channel
+      const channel = session.notification_channel || "push";
+      const recipFirstName = session.recipient_first_name || "there";
+
+      // Push notification (if channel allows and linked user exists)
+      if (["push", "both"].includes(channel) && session.care_for_user_id && !teamUserIds.includes(session.care_for_user_id)) {
         await sendPushToUser(session.care_for_user_id, {
           title: "Your Caregiver is Almost Here!",
           body: `${caregiverName} will be at your door soon!`,
@@ -374,7 +379,14 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "caregiver_arriving_recipient");
       }
 
-      console.log(`  Session reminders (pre_check_in) sent for session ${sessionId} → ${teamUserIds.length} team members`);
+      // SMS (if channel allows and phone exists)
+      if (["sms", "both"].includes(channel) && session.sms_phone) {
+        const { sendSms } = require("../utils/sms");
+        const timeStr = session.scheduled_time ? session.scheduled_time.replace(/^0/, "") : "soon";
+        await sendSms(session.sms_phone, `Hi ${recipFirstName}, ${caregiverName} will be arriving at ${timeStr} today.`);
+      }
+
+      console.log(`  Session reminders (pre_check_in) sent for session ${sessionId} → ${teamUserIds.length} team members, channel: ${channel}`);
     } else if (reminderType === "pre_check_out") {
       // 1. To caregiver: "Time to wrap up"
       if (session.caregiver_user_id) {
@@ -395,7 +407,34 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "check_out_imminent");
       }
 
-      console.log(`  Session reminders (pre_check_out) sent for session ${sessionId} → ${teamUserIds.length} team members`);
+      // 3. To care recipient — push and/or SMS based on notification_channel
+      const coChannel = session.notification_channel || "push";
+      const coRecipName = session.recipient_first_name || "there";
+
+      if (["push", "both"].includes(coChannel) && session.care_for_user_id && !teamUserIds.includes(session.care_for_user_id)) {
+        await sendPushToUser(session.care_for_user_id, {
+          title: "Your Caregiver is About to Leave",
+          body: `${caregiverName} will be heading out soon.`,
+          data: { type: "caregiver_leaving_recipient", sessionId },
+        }, "caregiver_leaving_recipient");
+      }
+
+      if (["sms", "both"].includes(coChannel) && session.sms_phone) {
+        const { sendSms } = require("../utils/sms");
+        const endTime = session.scheduled_time && session.duration_hours
+          ? (() => {
+              const [h, m] = session.scheduled_time.split(":").map(Number);
+              const endH = h + Math.floor(session.duration_hours);
+              const endM = m + Math.round((session.duration_hours % 1) * 60);
+              const finalH = endH + Math.floor(endM / 60);
+              const finalM = endM % 60;
+              return `${finalH > 12 ? finalH - 12 : finalH}:${String(finalM).padStart(2, "0")} ${finalH >= 12 ? "PM" : "AM"}`;
+            })()
+          : "soon";
+        await sendSms(session.sms_phone, `Hi ${coRecipName}, ${caregiverName} will be heading out around ${endTime}.`);
+      }
+
+      console.log(`  Session reminders (pre_check_out) sent for session ${sessionId} → ${teamUserIds.length} team members, channel: ${coChannel}`);
     }
 
     // Mark this reminder as sent on the session (prevents duplicates)

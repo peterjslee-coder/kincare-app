@@ -407,6 +407,9 @@ async function initializeDatabase() {
          AND ct.created_by = cr.family_user_id
      ) sub
      WHERE care_recipients.id = sub.crid AND care_recipients.linked_user_id IS NULL`,
+    // v1.34.38 — SMS session reminders for care recipients (Tier 1)
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_phone TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS notification_channel TEXT DEFAULT 'push'`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
