@@ -163,9 +163,10 @@ router.get("/:id", requireRole("family", "admin"), async (req, res) => {
 });
 
 // ─── PUT /api/care-recipients/:id ───
-router.put("/:id", requireRole("family"), async (req, res) => {
+router.put("/:id", requireRole("family", "admin"), async (req, res) => {
   const db = await getDb();
-  const access = await hasAccess(db, req.params.id, req.user.id);
+  const isAdmin = req.user.role === "admin";
+  const access = isAdmin ? "owner" : await hasAccess(db, req.params.id, req.user.id);
   if (!access) return res.status(404).json({ error: "Care recipient not found" });
   if (access === "view") return res.status(403).json({ error: "You have view-only access to this care recipient" });
 
