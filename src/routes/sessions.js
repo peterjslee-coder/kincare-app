@@ -837,13 +837,118 @@ router.put("/:id/status", async (req, res) => {
   res.json({ session: updated });
 });
 
+// ─── GET /api/sessions/:id/care-briefing ───
+// Returns a care briefing for the caregiver, tailored by experience level.
+// Experienced caregivers get a short, focused reminder. New caregivers get the full briefing.
+router.get("/:id/care-briefing", async (req, res) => {
+  try {
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        cr.age, cr.health_conditions, cr.medications, cr.preferences,
+        cr.caregiver_briefing, cr.food_allergies, cr.pets,
+        cr.care_preferences, cr.care_preference_details
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    // Only the assigned caregiver can see the briefing
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const recipientName = session.recipient_first_name || "the care recipient";
+
+    // Count completed visits this caregiver has done with this care recipient
+    const visitHistory = await db.prepare(`
+      SELECT COUNT(*) as visit_count,
+        MAX(cs.scheduled_date) as last_visit_date
+      FROM care_sessions cs
+      JOIN visit_logs vl ON vl.session_id = cs.id
+      WHERE cs.caregiver_id = ? AND cs.care_recipient_id = ? AND cs.status = 'completed'
+    `).get(session.caregiver_id, session.care_recipient_id);
+
+    const visitCount = visitHistory?.visit_count || 0;
+    const isExperienced = visitCount >= 3;
+
+    // Recent care notes (last 5)
+    const recentNotes = await db.prepare(`
+      SELECT content, created_at FROM recipient_notes
+      WHERE care_recipient_id = ?
+      ORDER BY created_at DESC LIMIT 5
+    `).all(session.care_recipient_id);
+
+    // Recent visit moods (last 5 visits by any caregiver) — pattern data
+    const recentMoods = await db.prepare(`
+      SELECT vl.arrival_mood, vl.departure_mood, cs.scheduled_time, cs.service_type,
+        u.first_name AS caregiver_first_name
+      FROM visit_logs vl
+      JOIN care_sessions cs ON vl.session_id = cs.id
+      LEFT JOIN caregiver_profiles cp2 ON cs.caregiver_id = cp2.id
+      LEFT JOIN users u ON cp2.user_id = u.id
+      WHERE cs.care_recipient_id = ? AND cs.status = 'completed'
+      ORDER BY cs.scheduled_date DESC LIMIT 5
+    `).all(session.care_recipient_id);
+
+    // Parse health conditions
+    let healthConditions = [];
+    try { healthConditions = JSON.parse(session.health_conditions || '[]'); } catch { healthConditions = []; }
+    let medications = [];
+    try { medications = JSON.parse(session.medications || '[]'); } catch { medications = []; }
+
+    // Service type label
+    const serviceLabels = {
+      meals: "Meals & Groceries", rides: "Rides & Errands", companion: "Companionship",
+      companionship: "Companionship", personal_care: "Personal Care",
+      housekeeping: "Housekeeping", full_day: "Full Day Care",
+    };
+    const serviceLabel = serviceLabels[session.service_type] || session.service_type;
+
+    // Build the briefing
+    const briefing = {
+      recipientName,
+      recipientAge: session.age,
+      sessionServiceType: serviceLabel,
+      sessionTime: session.scheduled_time,
+      sessionDate: session.scheduled_date,
+      specialInstructions: session.special_instructions,
+      isExperienced,
+      visitCount,
+      lastVisitDate: visitHistory?.last_visit_date,
+      caregiverBriefing: session.caregiver_briefing || null,
+      healthConditions,
+      medications,
+      foodAllergies: session.food_allergies || null,
+      pets: session.pets || null,
+      preferences: session.preferences || null,
+      recentNotes: recentNotes.map(n => ({ content: n.content, createdAt: n.created_at })),
+      recentMoods: recentMoods.map(m => ({
+        arrivalMood: m.arrival_mood,
+        departureMood: m.departure_mood,
+        time: m.scheduled_time,
+        serviceType: m.service_type,
+        caregiverName: m.caregiver_first_name,
+      })),
+    };
+
+    res.json(briefing);
+  } catch (err) {
+    console.error("Care briefing error:", err);
+    res.status(500).json({ error: "Failed to load care briefing" });
+  }
+});
+
 // ─── POST /api/sessions/:id/check-in ───
 // Caregiver checks in — creates visit_log, sets session to in_progress
 // Timing gate: can only check in within 15 min of session start (or after start if late)
 router.post("/:id/check-in", async (req, res) => {
   try {
     const db = await getDb();
-    const { arrivalMood, checkInLatitude, checkInLongitude } = req.body;
+    const { arrivalMood, checkInLatitude, checkInLongitude, briefingAcknowledged } = req.body;
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id, cp.early_check_in_allowed,
@@ -890,8 +995,8 @@ router.post("/:id/check-in", async (req, res) => {
     // Create visit_log with check-in data + location
     const visitId = require("uuid").v4();
     await db.prepare(`
-      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, created_at)
-      VALUES (?, ?, ?, NOW(), ?, ?, ?, NOW())
+      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, briefing_acknowledged_at, created_at)
+      VALUES (?, ?, ?, NOW(), ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, NOW())
     `).run(visitId, req.params.id, session.caregiver_id, arrivalMood || null, checkInLatitude || null, checkInLongitude || null);
 
     // Get special instructions and recent notes for the caregiver

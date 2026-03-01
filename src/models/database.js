@@ -410,6 +410,10 @@ async function initializeDatabase() {
     // v1.34.38 — SMS session reminders for care recipients (Tier 1)
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_phone TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS notification_channel TEXT DEFAULT 'push'`,
+    // v1.34.46 — Caregiver-facing care briefing (concise, AI-summarized)
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS caregiver_briefing TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS caregiver_briefing_updated_at TIMESTAMPTZ`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS briefing_acknowledged_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
