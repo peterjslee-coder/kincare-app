@@ -256,7 +256,7 @@ app.use("/api/reports", require("./routes/reports"));
 app.use("/api/video", require("./routes/videoCall"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.34.45";
+const APP_VERSION = "1.34.46";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -440,6 +440,8 @@ async function start() {
   const { sendSessionReminders } = require("./routes/push");
   const NOTIFICATION_POLL_INTERVAL = 60 * 1000; // 1 minute
   const REMINDER_WINDOW_MINUTES = 15;
+  const OVERDUE_GRACE_MINUTES = 5; // how long after session start before "you're late" fires
+  const MAX_OVERDUE_WINDOW = 60;   // stop sending overdue alerts after 60 min
 
   setInterval(async () => {
     try {
@@ -486,6 +488,27 @@ async function start() {
         // Send if we're within the check-out notification window
         if (etNow >= reminderTime && etNow <= sessionEnd) {
           await sendSessionReminders(s.id, "pre_check_out");
+        }
+      }
+
+      // ─── Overdue check-in alerts ───
+      // Confirmed sessions today where start time + grace period has passed but caregiver hasn't checked in
+      const overdueCandidates = await pollDb.prepare(`
+        SELECT id, scheduled_date, scheduled_time, notifications_sent
+        FROM care_sessions
+        WHERE status = 'confirmed'
+          AND scheduled_date = ?
+          AND (notifications_sent IS NULL OR notifications_sent NOT LIKE '%overdue_check_in%')
+      `).all(todayStr);
+
+      for (const s of overdueCandidates) {
+        if (!s.scheduled_time) continue;
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time);
+        const overdueTime = new Date(sessionStart.getTime() + OVERDUE_GRACE_MINUTES * 60000);
+        const maxWindow = new Date(sessionStart.getTime() + MAX_OVERDUE_WINDOW * 60000);
+        // Send if we're past grace period but within the overdue window
+        if (etNow >= overdueTime && etNow <= maxWindow) {
+          await sendSessionReminders(s.id, "overdue_check_in");
         }
       }
     } catch (err) {

@@ -347,13 +347,21 @@ async function sendSessionReminders(sessionId, reminderType) {
       : (session.family_user_id ? [session.family_user_id] : []);
 
     if (reminderType === "pre_check_in") {
-      // 1. To caregiver: "Get ready to check in"
+      // 1. To caregiver: push + SMS "Get ready to check in"
       if (session.caregiver_user_id) {
         await sendPushToUser(session.caregiver_user_id, {
           title: "Get Ready to Check In",
           body: `Time to check in with ${recipientName} (session at ${session.scheduled_time})`,
           data: { type: "check_in_reminder", sessionId, page: "schedule" },
         }, "check_in_reminder");
+
+        // Also SMS the caregiver (push may not be enabled)
+        const cgUser = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.caregiver_user_id);
+        if (cgUser?.phone) {
+          const { sendSms } = require("../utils/sms");
+          const timeStr = session.scheduled_time ? session.scheduled_time.replace(/^0/, "") : "soon";
+          await sendSms(cgUser.phone, `InPlace: Heads up — your session with ${recipientName} starts at ${timeStr}. Don't forget to check in!`);
+        }
       }
 
       // 2. To entire care team: "Caregiver arriving soon"
@@ -388,13 +396,20 @@ async function sendSessionReminders(sessionId, reminderType) {
 
       console.log(`  Session reminders (pre_check_in) sent for session ${sessionId} → ${teamUserIds.length} team members, channel: ${channel}`);
     } else if (reminderType === "pre_check_out") {
-      // 1. To caregiver: "Time to wrap up"
+      // 1. To caregiver: push + SMS "Time to wrap up"
       if (session.caregiver_user_id) {
         await sendPushToUser(session.caregiver_user_id, {
           title: "Time to Wrap Up",
           body: `Get ready to check out with ${recipientName}`,
           data: { type: "check_out_reminder", sessionId, page: "schedule" },
         }, "check_out_reminder");
+
+        // Also SMS the caregiver
+        const cgUserCo = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.caregiver_user_id);
+        if (cgUserCo?.phone) {
+          const { sendSms } = require("../utils/sms");
+          await sendSms(cgUserCo.phone, `InPlace: Time to wrap up your session with ${recipientName}. Don't forget to check out!`);
+        }
       }
 
       // 2. To entire care team: "Session wrapping up"
@@ -435,6 +450,45 @@ async function sendSessionReminders(sessionId, reminderType) {
       }
 
       console.log(`  Session reminders (pre_check_out) sent for session ${sessionId} → ${teamUserIds.length} team members, channel: ${coChannel}`);
+    } else if (reminderType === "overdue_check_in") {
+      // ─── Caregiver is late — hasn't checked in after session start + grace period ───
+
+      // 1. To caregiver: urgent push + SMS
+      if (session.caregiver_user_id) {
+        await sendPushToUser(session.caregiver_user_id, {
+          title: "Check In Now!",
+          body: `Your session with ${recipientName} has started — please check in ASAP`,
+          data: { type: "overdue_check_in", sessionId, page: "schedule" },
+        }, "overdue_check_in");
+
+        // SMS the caregiver too (push may not be enabled)
+        const cgUser = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.caregiver_user_id);
+        if (cgUser?.phone) {
+          const { sendSms } = require("../utils/sms");
+          await sendSms(cgUser.phone, `InPlace: Your session with ${recipientName} has started. Please check in now!`);
+        }
+      }
+
+      // 2. To entire care team: caregiver hasn't checked in
+      for (const userId of teamUserIds) {
+        if (userId === session.caregiver_user_id) continue;
+        await sendPushToUser(userId, {
+          title: "Caregiver Late",
+          body: `${caregiverName} hasn't checked in yet for ${recipientName}'s session`,
+          data: { type: "overdue_check_in_family", sessionId, page: "dashboard" },
+        }, "overdue_check_in_family");
+      }
+
+      // 3. SMS the family/session creator if they have a phone
+      if (session.family_user_id) {
+        const familyUser = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.family_user_id);
+        if (familyUser?.phone) {
+          const { sendSms } = require("../utils/sms");
+          await sendSms(familyUser.phone, `InPlace: ${caregiverName} hasn't checked in yet for ${recipientName}'s session. You may want to follow up.`);
+        }
+      }
+
+      console.log(`  Session reminders (overdue_check_in) sent for session ${sessionId} → caregiver + ${teamUserIds.length} team members`);
     }
 
     // Mark this reminder as sent on the session (prevents duplicates)
