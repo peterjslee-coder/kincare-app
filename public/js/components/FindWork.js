@@ -748,6 +748,29 @@ const FindWork = window.FindWork = () => {
                       </div>
                     )}
 
+                    {/* Health condition tags */}
+                    {s.healthTags && s.healthTags.length > 0 && (
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
+                        {s.healthTags.map((tag, i) => (
+                          <span key={i} style={{
+                            padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                            background: '#fce4ec', color: '#c62828',
+                          }}>{tag}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Care summary snippet */}
+                    {s.careSummary && (
+                      <div style={{
+                        marginTop: 8, padding: '8px 12px', borderLeft: '3px solid #e8724a',
+                        background: '#fff8f5', borderRadius: '0 6px 6px 0', fontSize: 12, color: '#555', lineHeight: 1.4,
+                      }}>
+                        <div style={{ fontWeight: 600, fontSize: 11, color: '#e8724a', marginBottom: 3 }}>Care Notes</div>
+                        {s.careSummary.length >= 200 ? s.careSummary + '...' : s.careSummary}
+                      </div>
+                    )}
+
                     {isExpanded && (
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
                         <button onClick={(e) => { e.stopPropagation(); handleClaim(s.id); }}
