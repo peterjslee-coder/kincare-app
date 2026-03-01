@@ -195,13 +195,16 @@ router.post("/register", validateRegister, async (req, res) => {
     const id = uuid();
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Test account shortcut: last name ending in "Tester" auto-verifies + gets is_tester flag
+    const isTestAccount = /tester$/i.test((lastName || "").trim());
+
     const roles = JSON.stringify([role]);
     await db.prepare(`
-      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, email_verified)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
-    `).run(id, email, passwordHash, role, roles, firstName, lastName, phone || null);
+      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, email_verified, is_tester)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, email, passwordHash, role, roles, firstName, lastName, phone || null, isTestAccount ? 1 : 0, isTestAccount ? 1 : 0);
 
-    const user = { id, email, role, roles: [role], firstName, lastName, emailVerified: false };
+    const user = { id, email, role, roles: [role], firstName, lastName, emailVerified: isTestAccount };
     const token = generateToken(user);
 
     // Clean up signup intent if one was used
@@ -209,10 +212,12 @@ router.post("/register", validateRegister, async (req, res) => {
       await db.prepare("DELETE FROM signup_intents WHERE token = ?").run(signupToken).catch(() => {});
     }
 
-    // Send verification email (fire-and-forget)
-    sendVerificationEmail(db, id, email, firstName).catch(err =>
-      console.error("  [email] Failed to queue verification email:", err.message)
-    );
+    // Send verification email (skip for test accounts)
+    if (!isTestAccount) {
+      sendVerificationEmail(db, id, email, firstName).catch(err =>
+        console.error("  [email] Failed to queue verification email:", err.message)
+      );
+    }
 
     // Notify admins (push + email based on preferences)
     const roleName = role === "caregiver" ? "Caregiver" : role === "care_for" ? "Care Recipient" : "Family";
