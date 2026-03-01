@@ -36,6 +36,10 @@ const Messages = window.Messages = () => {
   const REACTION_EMOJIS = ['\u2764\uFE0F', '\uD83D\uDC4D', '\uD83D\uDC4E', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE4F'];
   const [currentUser, setCurrentUser] = useState(null);
 
+  // ─── In-app call state (Twilio Video) ───
+  const [callState, setCallState] = useState({ active: false, roomName: null, callType: null, remoteParticipantName: null, callDirection: null });
+  const [incomingCall, setIncomingCall] = useState(null); // { roomName, callType, callerId, callerName }
+
   const isMobile = window.innerWidth <= 768;
 
   // Fetch current user
@@ -446,34 +450,133 @@ const Messages = window.Messages = () => {
     setSending(false);
   };
 
-  const handleStartVideoCall = async () => {
-    const meetLink = 'https://meet.google.com/new';
-    const message = `📹 Started a video call — join here: ${meetLink}`;
-    setInputText(message);
-    // Use a small timeout to ensure state is updated, then send
-    setTimeout(() => {
-      setSending(true);
-      apiFetch(`/api/messages/conversations/${activeConvId}`, {
+  const handleStartCall = async (callType) => {
+    if (!activeConvId || !activeConv) return;
+
+    // Generate a unique room name
+    const roomName = 'inplace-' + activeConvId.substring(0, 8) + '-' + Date.now();
+    const otherMember = activeConv.members?.find(m => m.id !== currentUser?.id);
+    const remoteName = otherMember ? `${otherMember.first_name || ''} ${otherMember.last_name || ''}`.trim() : 'Unknown';
+
+    // Send a chat message about the call
+    const emoji = callType === 'video' ? '📹' : '📞';
+    const typeLabel = callType === 'video' ? 'video' : 'voice';
+    const message = `${emoji} Started a ${typeLabel} call`;
+
+    try {
+      await apiFetch(`/api/messages/conversations/${activeConvId}`, {
         method: 'POST',
         body: JSON.stringify({ content: message }),
-      })
-        .then(res => {
-          if (res?.ok) {
-            setInputText('');
-            return res.json();
-          }
-          throw new Error('Failed to send');
-        })
-        .then(data => {
-          fetchMessages(data.conversationId || activeConvId);
-          fetchConversations();
-        })
-        .catch(err => console.error('Video call message error:', err))
-        .finally(() => setSending(false));
-    }, 50);
+      });
+      fetchMessages(activeConvId);
+      fetchConversations();
+    } catch (err) {
+      console.error('Call message error:', err);
+    }
+
+    // Signal the other user via Socket.io
+    if (otherMember && window._socket) {
+      window._socket.emit('call_invite', {
+        targetUserId: otherMember.id,
+        roomName: roomName,
+        callType: callType,
+        callerName: currentUser ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() : 'Someone',
+      });
+    }
+
+    // Start the call locally
+    setCallState({
+      active: true,
+      roomName: roomName,
+      callType: callType,
+      remoteParticipantName: remoteName,
+      callDirection: 'outgoing',
+    });
   };
 
+  const handleEndCall = () => {
+    // Signal hangup to remote
+    if (callState.active && window._socket) {
+      const otherMember = activeConv?.members?.find(m => m.id !== currentUser?.id);
+      if (otherMember) {
+        window._socket.emit('call_hangup', {
+          targetUserId: otherMember.id,
+          roomName: callState.roomName,
+        });
+      }
+    }
+    setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, callDirection: null });
+  };
+
+  const handleAcceptIncoming = () => {
+    if (!incomingCall) return;
+    setCallState({
+      active: true,
+      roomName: incomingCall.roomName,
+      callType: incomingCall.callType,
+      remoteParticipantName: incomingCall.callerName,
+      callDirection: 'incoming',
+    });
+    if (window._socket) {
+      window._socket.emit('call_accept', {
+        callerId: incomingCall.callerId,
+        roomName: incomingCall.roomName,
+      });
+    }
+    setIncomingCall(null);
+  };
+
+  const handleDeclineIncoming = () => {
+    if (!incomingCall && window._socket) {
+      window._socket.emit('call_decline', {
+        callerId: incomingCall.callerId,
+        roomName: incomingCall.roomName,
+      });
+    }
+    setIncomingCall(null);
+  };
+
+  // Listen for incoming calls via Socket.io
+  useEffect(() => {
+    const cleanup = onSocketEvent('call_incoming', (data) => {
+      if (!callState.active) {
+        setIncomingCall(data);
+        // Auto-dismiss after 30 seconds if not answered
+        setTimeout(() => {
+          setIncomingCall(prev => prev?.roomName === data.roomName ? null : prev);
+        }, 30000);
+      }
+    });
+    const cleanup2 = onSocketEvent('call_ended', () => {
+      setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, callDirection: null });
+    });
+    const cleanup3 = onSocketEvent('call_declined', () => {
+      setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, callDirection: null });
+    });
+    return () => { cleanup(); cleanup2(); cleanup3(); };
+  }, [callState.active]);
+
   const renderMessageContent = (content) => {
+    // Detect call messages
+    const callMatch = content.match(/^(📹|📞) Started a (video|voice) call$/);
+    if (callMatch) {
+      const isVideoCall = callMatch[2] === 'video';
+      return React.createElement('div', {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '4px 0',
+          fontStyle: 'italic',
+          color: '#1b6b5a',
+        }
+      },
+        React.createElement('span', { style: { fontSize: 20 } }, isVideoCall ? '📹' : '📞'),
+        React.createElement('span', null, `Started a ${callMatch[2]} call`)
+      );
+    }
+
+    // Legacy Google Meet link support (for old messages)
     const meetLinkRegex = /https:\/\/meet\.google\.com\/\S+/g;
     const parts = content.split(meetLinkRegex);
     const links = content.match(meetLinkRegex) || [];
@@ -1005,8 +1108,37 @@ const Messages = window.Messages = () => {
             </div>
           )}
           <button
+            className="msg-voice-call-btn"
+            onClick={() => handleStartCall('voice')}
+            title="Start voice call"
+            style={{
+              background: 'none',
+              border: '2px solid #1b6b5a',
+              color: '#1b6b5a',
+              borderRadius: '8px',
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              transition: 'all 0.2s',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#1b6b5a';
+              e.currentTarget.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'none';
+              e.currentTarget.style.color = '#1b6b5a';
+            }}>
+            📞
+          </button>
+          <button
             className="msg-video-call-btn"
-            onClick={handleStartVideoCall}
+            onClick={() => handleStartCall('video')}
             title="Start video call"
             style={{
               background: 'none',
@@ -1256,30 +1388,77 @@ const Messages = window.Messages = () => {
     );
   };
 
+  // ─── Incoming call banner ───
+  const renderIncomingCallBanner = () => {
+    if (!incomingCall) return null;
+    const emoji = incomingCall.callType === 'video' ? '📹' : '📞';
+    const typeLabel = incomingCall.callType === 'video' ? 'Video' : 'Voice';
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+        background: 'linear-gradient(135deg, #1b6b5a, #2a9d8f)',
+        padding: '16px 24px', display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', color: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        animation: 'slideDown 0.3s ease',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 28, animation: 'pulse 1s infinite' }}>{emoji}</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{incomingCall.callerName || 'Someone'}</div>
+            <div style={{ fontSize: 13, opacity: 0.85 }}>Incoming {typeLabel} Call</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={handleDeclineIncoming}
+            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: '#e74c3c', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+            Decline
+          </button>
+          <button onClick={handleAcceptIncoming}
+            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: 'white', color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+            Accept
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // ─── Layout ───
+  const callOverlay = React.createElement(VideoCallOverlay, {
+    callState: callState,
+    onEndCall: handleEndCall,
+    currentUserId: currentUser?.id,
+  });
+
   if (isMobile) {
-    if (showFindPeople) return renderFindPeople();
-    if (showNewChat) return renderNewChatPicker();
-    if (activeConvId) return renderChatView();
-    return renderConversationList();
+    return (
+      <>
+        {renderIncomingCallBanner()}
+        {callOverlay}
+        {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : activeConvId ? renderChatView() : renderConversationList()}
+      </>
+    );
   }
 
   // Desktop: side-by-side
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 120px)', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
-      <div style={{ width: '320px', borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
-        {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : renderConversationList()}
-      </div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {activeConvId ? renderChatView() : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ccc' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '64px', marginBottom: '16px' }}>💬</div>
-              <div style={{ fontSize: '16px', color: '#999' }}>Select a conversation</div>
+    <>
+      {renderIncomingCallBanner()}
+      {callOverlay}
+      <div style={{ display: 'flex', height: 'calc(100vh - 120px)', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
+        <div style={{ width: '320px', borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+          {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : renderConversationList()}
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {activeConvId ? renderChatView() : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ccc' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '64px', marginBottom: '16px' }}>💬</div>
+                <div style={{ fontSize: '16px', color: '#999' }}>Select a conversation</div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 };

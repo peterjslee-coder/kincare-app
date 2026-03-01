@@ -45,6 +45,52 @@ io.on("connection", (socket) => {
   connectedUsers.get(userId).add(socket.id);
   console.log(`WS connected: ${socket.user.email} (${connectedUsers.get(userId).size} sockets)`);
 
+  // ─── Call signaling ───
+  socket.on("call_invite", (data) => {
+    // data: { targetUserId, roomName, callType, callerName }
+    const targetSockets = connectedUsers.get(data.targetUserId);
+    if (targetSockets) {
+      for (const sid of targetSockets) {
+        io.to(sid).emit("call_incoming", {
+          roomName: data.roomName,
+          callType: data.callType,
+          callerId: userId,
+          callerName: data.callerName,
+        });
+      }
+    }
+  });
+
+  socket.on("call_accept", (data) => {
+    // data: { callerId, roomName }
+    const callerSockets = connectedUsers.get(data.callerId);
+    if (callerSockets) {
+      for (const sid of callerSockets) {
+        io.to(sid).emit("call_accepted", { roomName: data.roomName });
+      }
+    }
+  });
+
+  socket.on("call_decline", (data) => {
+    // data: { callerId, roomName }
+    const callerSockets = connectedUsers.get(data.callerId);
+    if (callerSockets) {
+      for (const sid of callerSockets) {
+        io.to(sid).emit("call_declined", { roomName: data.roomName });
+      }
+    }
+  });
+
+  socket.on("call_hangup", (data) => {
+    // data: { targetUserId, roomName }
+    const targetSockets = connectedUsers.get(data.targetUserId);
+    if (targetSockets) {
+      for (const sid of targetSockets) {
+        io.to(sid).emit("call_ended", { roomName: data.roomName });
+      }
+    }
+  });
+
   socket.on("disconnect", () => {
     const sockets = connectedUsers.get(userId);
     if (sockets) {
@@ -170,9 +216,10 @@ app.use("/api/payments", require("./routes/payments"));
 app.use("/api/connections", require("./routes/connections"));
 app.use("/api/help", require("./routes/help"));
 app.use("/api/reports", require("./routes/reports"));
+app.use("/api/video", require("./routes/videoCall"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.34.39";
+const APP_VERSION = "1.34.40";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
