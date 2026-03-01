@@ -2615,6 +2615,12 @@
   animation: exclusivePulse 1.2s ease-in-out infinite;
 }
 
+/* ═══ Typing Indicator Animation ═══ */
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
 /* ═══ Accessibility: Text Size ═══ */
 
 /* Large text (1.25x — 20px base) */

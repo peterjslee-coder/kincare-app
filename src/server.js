@@ -91,6 +91,43 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ─── Typing indicators ───
+  socket.on("typing_start", (data) => {
+    // data: { conversationId }
+    // Broadcast to all members of the conversation except sender
+    const convId = data.conversationId;
+    if (!convId) return;
+    // Get all connected users and check if they're in this conversation
+    // For efficiency, broadcast to all connected users and let client filter
+    for (const [uid, sockets] of connectedUsers) {
+      if (uid === userId) continue;
+      for (const sid of sockets) {
+        io.to(sid).emit("typing_indicator", {
+          conversationId: convId,
+          userId: userId,
+          userName: socket.user.email, // will be enriched client-side
+        });
+      }
+    }
+  });
+
+  // ─── Read receipts ───
+  socket.on("messages_read", (data) => {
+    // data: { conversationId }
+    const convId = data.conversationId;
+    if (!convId) return;
+    for (const [uid, sockets] of connectedUsers) {
+      if (uid === userId) continue;
+      for (const sid of sockets) {
+        io.to(sid).emit("messages_read", {
+          conversationId: convId,
+          userId: userId,
+          readAt: new Date().toISOString(),
+        });
+      }
+    }
+  });
+
   socket.on("disconnect", () => {
     const sockets = connectedUsers.get(userId);
     if (sockets) {
@@ -219,7 +256,7 @@ app.use("/api/reports", require("./routes/reports"));
 app.use("/api/video", require("./routes/videoCall"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.34.41";
+const APP_VERSION = "1.34.42";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

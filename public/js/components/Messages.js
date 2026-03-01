@@ -40,6 +40,14 @@ const Messages = window.Messages = () => {
   const [callState, setCallState] = useState({ active: false, roomName: null, callType: null, remoteParticipantName: null, callDirection: null });
   const [incomingCall, setIncomingCall] = useState(null); // { roomName, callType, callerId, callerName }
 
+  // ─── Typing indicators ───
+  const [typingUsers, setTypingUsers] = useState({}); // { conversationId: { userId: { name, timeout } } }
+  const typingTimeoutRef = useRef(null);
+  const lastTypingEmitRef = useRef(0);
+
+  // ─── Read receipts ───
+  const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
+
   const isMobile = window.innerWidth <= 768;
 
   // Fetch current user
@@ -555,6 +563,90 @@ const Messages = window.Messages = () => {
     });
     return () => { cleanup(); cleanup2(); cleanup3(); };
   }, [callState.active]);
+
+  // ─── Typing indicator socket listener ───
+  useEffect(() => {
+    const cleanup = onSocketEvent('typing_indicator', (data) => {
+      // data: { conversationId, userId, userName }
+      setTypingUsers(prev => {
+        const convTypers = { ...(prev[data.conversationId] || {}) };
+        // Find the user's display name from conversations
+        const conv = conversations.find(c => c.id === data.conversationId);
+        const member = conv?.members?.find(m => m.id === data.userId);
+        const displayName = member ? `${member.first_name || ''}`.trim() || data.userName : data.userName;
+        // Clear existing timeout for this user
+        if (convTypers[data.userId]?.timeout) clearTimeout(convTypers[data.userId].timeout);
+        // Set new timeout to clear after 3 seconds
+        const timeout = setTimeout(() => {
+          setTypingUsers(prev2 => {
+            const updated = { ...(prev2[data.conversationId] || {}) };
+            delete updated[data.userId];
+            return { ...prev2, [data.conversationId]: updated };
+          });
+        }, 3000);
+        convTypers[data.userId] = { name: displayName, timeout };
+        return { ...prev, [data.conversationId]: convTypers };
+      });
+    });
+    return cleanup;
+  }, [conversations]);
+
+  // ─── Read receipt socket listener ───
+  useEffect(() => {
+    const cleanup = onSocketEvent('messages_read', (data) => {
+      // data: { conversationId, userId, readAt }
+      setReadReceipts(prev => ({
+        ...prev,
+        [data.conversationId]: {
+          ...(prev[data.conversationId] || {}),
+          [data.userId]: data.readAt,
+        }
+      }));
+    });
+    return cleanup;
+  }, []);
+
+  // ─── Emit read receipt when opening a conversation ───
+  useEffect(() => {
+    if (activeConvId && window._socket) {
+      window._socket.emit('messages_read', { conversationId: activeConvId });
+    }
+  }, [activeConvId, messages.length]);
+
+  // ─── Typing emit handler (debounced) ───
+  const emitTyping = useCallback(() => {
+    if (!activeConvId || !window._socket) return;
+    const now = Date.now();
+    // Only emit every 2 seconds
+    if (now - lastTypingEmitRef.current < 2000) return;
+    lastTypingEmitRef.current = now;
+    window._socket.emit('typing_start', { conversationId: activeConvId });
+  }, [activeConvId]);
+
+  // ─── Browser notification for incoming calls ───
+  useEffect(() => {
+    if (!incomingCall) return;
+    // Request notification permission and show notification if tab is not focused
+    if (document.hidden && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        const typeLabel = incomingCall.callType === 'video' ? 'Video' : 'Voice';
+        const n = new Notification(`Incoming ${typeLabel} Call`, {
+          body: `${incomingCall.callerName || 'Someone'} is calling you`,
+          icon: '/icons/icon-192x192.png',
+          tag: 'incoming-call',
+          requireInteraction: true,
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+        // Auto-close when call dismissed
+        const checkInterval = setInterval(() => {
+          if (!incomingCall) { n.close(); clearInterval(checkInterval); }
+        }, 500);
+        return () => { n.close(); clearInterval(checkInterval); };
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission();
+      }
+    }
+  }, [incomingCall]);
 
   const renderMessageContent = (content) => {
     // Detect call messages
@@ -1264,8 +1356,8 @@ const Messages = window.Messages = () => {
                           fontSize: '14px', lineHeight: 1.45, wordWrap: 'break-word',
                         }}>
                           {renderMessageContent(m.content)}
-                          <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : '#bbb', marginTop: '4px', textAlign: 'right' }}>
-                            {(() => {
+                          <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : '#bbb', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                            <span>{(() => {
                               const d = parseTimestamp(m.created_at);
                               if (!d) return '';
                               const now = new Date();
@@ -1276,6 +1368,19 @@ const Messages = window.Messages = () => {
                               if (isToday) return timeStr;
                               if (isYesterday) return 'Yesterday ' + timeStr;
                               return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + timeStr;
+                            })()}</span>
+                            {isSent && (() => {
+                              // Read receipt checkmarks for sent messages
+                              const convReceipts = readReceipts[activeConvId] || {};
+                              const msgTime = new Date(m.created_at).getTime();
+                              const isRead = Object.values(convReceipts).some(readAt => new Date(readAt).getTime() >= msgTime);
+                              return (
+                                <span title={isRead ? 'Read' : 'Sent'} style={{ display: 'inline-flex', alignItems: 'center' }}
+                                  dangerouslySetInnerHTML={{ __html: isRead
+                                    ? '<svg width="16" height="10" viewBox="0 0 24 14"><path d="M1 7l4.5 5L17 1" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 7l4.5 5L23 1" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                                    : '<svg width="12" height="10" viewBox="0 0 16 14"><path d="M1 7l4.5 5L15 1" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                                  }} />
+                              );
                             })()}
                           </div>
                         </div>
@@ -1345,6 +1450,25 @@ const Messages = window.Messages = () => {
               );
             })
           )}
+          {/* Typing indicator */}
+          {activeConvId && typingUsers[activeConvId] && Object.keys(typingUsers[activeConvId]).length > 0 && (() => {
+            const typers = Object.values(typingUsers[activeConvId]).map(t => t.name);
+            const label = typers.length === 1
+              ? `${typers[0]} is typing`
+              : typers.length === 2
+                ? `${typers[0]} and ${typers[1]} are typing`
+                : `${typers[0]} and ${typers.length - 1} others are typing`;
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px 2px', color: '#999', fontSize: 12 }}>
+                <div style={{ display: 'flex', gap: 3 }}>
+                  <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#1b6b5a', opacity: 0.6, animation: 'typingBounce 1.2s ease-in-out infinite' }} />
+                  <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#1b6b5a', opacity: 0.6, animation: 'typingBounce 1.2s ease-in-out 0.2s infinite' }} />
+                  <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#1b6b5a', opacity: 0.6, animation: 'typingBounce 1.2s ease-in-out 0.4s infinite' }} />
+                </div>
+                <span>{label}</span>
+              </div>
+            );
+          })()}
           <div ref={messagesEndRef} />
         </div>
 
@@ -1375,7 +1499,7 @@ const Messages = window.Messages = () => {
             className="msg-input"
             placeholder={replyTo ? "Type your reply..." : "Type a message..."}
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e) => { setInputText(e.target.value); if (e.target.value) emitTyping(); }}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
             disabled={sending}
           />

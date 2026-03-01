@@ -334,6 +334,40 @@ const App = () => {
     return cleanup;
   }, []);
 
+  // ─── Global incoming call notification (browser notification when not on Messages) ───
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const cleanup = onSocketEvent('call_incoming', (data) => {
+      // If on Messages page, the Messages component handles the banner UI
+      // But always fire browser notification if tab is hidden/unfocused
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const typeLabel = data.callType === 'video' ? 'Video' : 'Voice';
+        const n = new Notification(`Incoming ${typeLabel} Call`, {
+          body: `${data.callerName || 'Someone'} is calling you on InPlace`,
+          icon: '/icons/icon-192x192.png',
+          tag: 'incoming-call-global',
+          requireInteraction: true,
+        });
+        n.onclick = () => {
+          window.focus();
+          setActivePage('messages');
+          n.close();
+        };
+        // Auto-close after 30s
+        setTimeout(() => n.close(), 30000);
+      }
+      // If not on Messages page, navigate there
+      if (activePage !== 'messages') {
+        setActivePage('messages');
+      }
+    });
+    // Request notification permission on first load
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    return cleanup;
+  }, [activePage]);
+
   // ─── Role-color CSS custom properties ───
   // Must be here (before any early returns) to satisfy Rules of Hooks
   useEffect(() => {
