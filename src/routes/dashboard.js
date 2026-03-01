@@ -349,7 +349,7 @@ async function caregiverDashboard(db, userId, res) {
       AND COALESCE(fu.is_demo, 0) = ?
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 10
-  `).all(profile.id, userId, today, fiveDayStr, isDemo);
+  `).all(profile.id, profile.id, today, fiveDayStr, isDemo);
 
   // Recent reviews
   const reviews = await db.prepare(`
