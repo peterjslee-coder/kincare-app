@@ -366,6 +366,9 @@ async function caregiverDashboard(db, userId, res) {
       cr.latitude AS recipient_lat,
       cr.longitude AS recipient_lng,
       cr.timezone AS care_timezone,
+      cr.health_conditions AS cr_health_conditions,
+      cr.caregiver_briefing AS cr_caregiver_briefing,
+      cr.age AS recipient_age,
       fu.first_name || ' ' || fu.last_name AS family_name
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
@@ -536,6 +539,9 @@ async function caregiverDashboard(db, userId, res) {
         matchQuality: match.quality,
         offeredToCaregiverId: s.offered_to_caregiver_id || null,
         exclusiveUntil: s.exclusive_until || null,
+        recipientAge: s.recipient_age || null,
+        careSummary: s.cr_caregiver_briefing ? s.cr_caregiver_briefing.substring(0, 200) : null,
+        healthTags: (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })(),
       };
     }),
     recentlyCompleted: recentCompletedCg.map(s => {

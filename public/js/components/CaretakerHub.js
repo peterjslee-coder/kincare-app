@@ -30,6 +30,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingAcked, setBriefingAcked] = useState(false);
   const [checkInStep, setCheckInStep] = useState('briefing'); // 'briefing' | 'checkin'
+  // Expandable care profile state (Up Next cards)
+  const [expandedProfileId, setExpandedProfileId] = useState(null);
+  const [profileBriefings, setProfileBriefings] = useState({}); // sessionId -> briefing data
+  const [profileLoading, setProfileLoading] = useState(null);
   const avatarInputRef = useRef(null);
   const tabContentRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -969,6 +973,26 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
                       ) : null}
                       {s.specialInstructions && <div style={{ fontSize: 12, color: '#555', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
+                      {/* View Care Profile toggle */}
+                      <button onClick={(e) => {
+                        e.stopPropagation();
+                        if (expandedProfileId === s.id) {
+                          setExpandedProfileId(null);
+                        } else {
+                          setExpandedProfileId(s.id);
+                          if (!profileBriefings[s.id]) {
+                            setProfileLoading(s.id);
+                            apiFetch('/api/sessions/' + s.id + '/care-briefing')
+                              .then(r => r?.ok ? r.json() : null)
+                              .then(d => { if (d) setProfileBriefings(prev => ({...prev, [s.id]: d})); })
+                              .catch(err => console.warn('Profile fetch failed:', err))
+                              .finally(() => setProfileLoading(null));
+                          }
+                        }
+                      }} style={{
+                        marginTop: 8, padding: '4px 10px', background: 'transparent', border: '1px solid #ddd',
+                        borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#1b6b5a', cursor: 'pointer',
+                      }}>{expandedProfileId === s.id ? 'Hide Care Profile' : 'View Care Profile'}</button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
@@ -1035,6 +1059,53 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )}
                     </div>
                   </div>
+                  {/* Expandable Care Profile */}
+                  {expandedProfileId === s.id && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
+                      {profileLoading === s.id && <div style={{ fontSize: 12, color: '#888', padding: '8px 0' }}>Loading care profile...</div>}
+                      {profileBriefings[s.id] && (() => {
+                        const pb = profileBriefings[s.id];
+                        return (
+                          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+                            {pb.isExperienced && <div style={{ fontSize: 11, color: '#1b6b5a', fontWeight: 600, marginBottom: 6 }}>{'\u2705'} You've cared for {pb.recipientName} {pb.visitCount} time{pb.visitCount != 1 ? 's' : ''}</div>}
+                            {pb.caregiverBriefing && (
+                              <div style={{ padding: '8px 10px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, marginBottom: 8, color: '#555', whiteSpace: 'pre-line' }}>
+                                {pb.caregiverBriefing}
+                              </div>
+                            )}
+                            {pb.healthConditions && pb.healthConditions.length > 0 && (
+                              <div style={{ marginBottom: 6 }}>
+                                <span style={{ fontWeight: 600, color: '#333' }}>Health: </span>
+                                {pb.healthConditions.map((c, i) => (
+                                  <span key={i} style={{ background: '#fff3e0', color: '#e65100', padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600, marginRight: 4 }}>{c}</span>
+                                ))}
+                              </div>
+                            )}
+                            {pb.medications && pb.medications.length > 0 && (
+                              <div style={{ marginBottom: 6 }}>
+                                <span style={{ fontWeight: 600, color: '#333' }}>Medications: </span>
+                                <span style={{ color: '#666' }}>{pb.medications.join(', ')}</span>
+                              </div>
+                            )}
+                            {pb.foodAllergies && (
+                              <div style={{ marginBottom: 6 }}>
+                                <span style={{ fontWeight: 600, color: '#c62828' }}>Allergies: </span>
+                                <span style={{ color: '#c62828' }}>{pb.foodAllergies}</span>
+                              </div>
+                            )}
+                            {pb.recentMoods && pb.recentMoods.length > 0 && (
+                              <div style={{ marginBottom: 4 }}>
+                                <span style={{ fontWeight: 600, color: '#333' }}>Recent moods: </span>
+                                {pb.recentMoods.slice(0, 3).map((m, i) => (
+                                  <span key={i} style={{ fontSize: 11, color: '#666', marginRight: 6 }}>{m.arrivalMood}{'\u2192'}{m.departureMood}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1161,6 +1232,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         </div>
                         {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
                         {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
+                        {/* Health tags + care summary */}
+                        {job.healthTags && job.healthTags.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                            {job.healthTags.map((tag, idx) => (
+                              <span key={idx} style={{ fontSize: 10, background: '#fff3e0', color: '#e65100', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }}>{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                        {job.careSummary && (
+                          <div style={{ marginTop: 6, padding: '6px 8px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, fontSize: 11, color: '#555', lineHeight: 1.4 }}>
+                            {'\uD83D\uDCCB'} {job.careSummary.length > 150 ? job.careSummary.substring(0, 150) + '...' : job.careSummary}
+                          </div>
+                        )}
                       </div>
                       <button onClick={(e) => handleClaimJob(job.id, e, effectiveTotal)} disabled={claimingJobId === job.id}
                         style={{
