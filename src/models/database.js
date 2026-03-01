@@ -389,6 +389,8 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS offered_to_caregiver_id TEXT`,
     // v1.34.34 — Exclusive timer: when the direct offer expires and becomes open
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS exclusive_until TIMESTAMPTZ`,
+    // v1.34.35 — Accessibility preferences (text size, etc.) stored as JSON
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS accessibility_prefs TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

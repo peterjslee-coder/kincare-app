@@ -669,6 +669,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         { id: 'profile', label: 'Profile' },
         { id: 'security', label: 'Security' },
         { id: 'notifications', label: 'Notifications' },
+        { id: 'accessibility', label: 'Accessibility' },
         ...(isCaregiver ? [
           { id: 'payments', label: 'Payments & Earnings' },
           { id: 'documents', label: 'Documents' },
@@ -1191,6 +1192,50 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
           </div>
         </div>
       )}
+
+      {/* ─── Accessibility Tab ─── */}
+      {activeTab === 'accessibility' && (() => {
+        const a11yPrefs = (() => { try { return user?.accessibility_prefs ? JSON.parse(user.accessibility_prefs) : {}; } catch { return {}; } })();
+        const currentSize = a11yPrefs.textSize || 'default';
+        const handleTextSize = async (size) => {
+          const newPrefs = { ...a11yPrefs, textSize: size };
+          // Apply immediately for live preview
+          if (typeof applyTextSize === 'function') applyTextSize(size);
+          try {
+            const res = await apiFetch('/api/auth/me', {
+              method: 'PUT',
+              body: JSON.stringify({ accessibilityPrefs: newPrefs }),
+            });
+            if (res?.ok) {
+              const data = await res.json();
+              if (setCurrentUser && data.user) {
+                setCurrentUser(prev => prev ? { ...prev, ...data.user } : prev);
+              }
+              showToast('Text size updated');
+            }
+          } catch (err) { console.error('Save accessibility prefs error:', err); }
+        };
+        return (
+          <div>
+            <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Text Size</div>
+              <div style={{ color: '#666', marginBottom: 16 }}>Choose a text size that works best for you. Changes apply immediately across the entire app.</div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <button className={`text-size-pill text-size-pill-default ${currentSize === 'default' ? 'active' : ''}`}
+                  onClick={() => handleTextSize('default')}>Default</button>
+                <button className={`text-size-pill text-size-pill-large ${currentSize === 'large' ? 'active' : ''}`}
+                  onClick={() => handleTextSize('large')}>Large</button>
+                <button className={`text-size-pill text-size-pill-xlarge ${currentSize === 'xlarge' ? 'active' : ''}`}
+                  onClick={() => handleTextSize('xlarge')}>Extra Large</button>
+              </div>
+            </div>
+            <div className="card" style={{ padding: 20, background: '#f8f9fa' }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Preview</div>
+              <div>This is how your text will look across the app. Session details, messages, and navigation will all use this size.</div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ─── Payments Tab (Caregiver Only) ─── */}
       {activeTab === 'payments' && isCaregiver && (

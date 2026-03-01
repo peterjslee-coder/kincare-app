@@ -1,6 +1,19 @@
 const { useState, useEffect, useRef, useCallback, createContext, useContext } = React;
 const API_BASE = window.location.origin;
 
+// ─── Accessibility: Text size ───
+const applyTextSize = window.applyTextSize = (size) => {
+  document.body.classList.remove('text-size-large', 'text-size-xlarge');
+  if (size === 'large') document.body.classList.add('text-size-large');
+  else if (size === 'xlarge') document.body.classList.add('text-size-xlarge');
+  try { localStorage.setItem('inplace_textSize', size || 'default'); } catch {}
+};
+// Apply immediately from localStorage (before API loads) for instant visual
+try {
+  const savedSize = localStorage.getItem('inplace_textSize');
+  if (savedSize && savedSize !== 'default') applyTextSize(savedSize);
+} catch {}
+
 // ─── Phone formatting: (555) 123-4567 or international passthrough ───
 const formatPhone = window.formatPhone = (value, isInternational) => {
   if (!value) return '';

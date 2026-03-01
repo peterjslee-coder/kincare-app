@@ -102,9 +102,12 @@ router.get("/:id", requireRole("family"), async (req, res) => {
 
     const team = await db.prepare(`
       SELECT ct.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
-        cr.age AS recipient_age, cr.location_city AS recipient_city, cr.location_state AS recipient_state
+        cr.age AS recipient_age, cr.location_city AS recipient_city, cr.location_state AS recipient_state,
+        cr.linked_user_id AS recipient_linked_user_id,
+        lu.accessibility_prefs AS recipient_accessibility_prefs
       FROM care_teams ct
       JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+      LEFT JOIN users lu ON cr.linked_user_id = lu.id
       WHERE ct.id = ?
     `).get(req.params.id);
 
@@ -520,6 +523,53 @@ router.put("/:id/my-label", requireRole("family"), async (req, res) => {
   } catch (err) {
     console.error("Update relationship label error:", err);
     res.status(500).json({ error: "Failed to update relationship label" });
+  }
+});
+
+// ─── PUT /api/care-teams/:teamId/member-prefs/:userId ───
+// Let a family member set accessibility prefs for a care_for team member (e.g., Pete sets Betty's text size)
+router.put("/:teamId/member-prefs/:userId", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { teamId, userId: targetUserId } = req.params;
+    const { accessibilityPrefs } = req.body;
+
+    if (!accessibilityPrefs) {
+      return res.status(400).json({ error: "accessibilityPrefs required" });
+    }
+
+    // Verify caller is a family member of this team
+    const callerMember = await db.prepare(
+      "SELECT * FROM care_team_members WHERE care_team_id = ? AND user_id = ? AND status = 'accepted'"
+    ).get(teamId, req.user.id);
+    if (!callerMember) {
+      return res.status(403).json({ error: "Not a member of this care team" });
+    }
+
+    // Verify target user is a care recipient linked to this team
+    // Betty isn't in care_team_members — she's the care_recipient linked via care_teams.care_recipient_id → care_recipients.linked_user_id
+    const linkedRecipient = await db.prepare(
+      "SELECT cr.linked_user_id FROM care_teams ct JOIN care_recipients cr ON ct.care_recipient_id = cr.id WHERE ct.id = ? AND cr.linked_user_id = ?"
+    ).get(teamId, targetUserId);
+
+    // Also check if they're a care_for role member of the team (fallback)
+    const targetMember = !linkedRecipient ? await db.prepare(
+      "SELECT ctm.*, u.role FROM care_team_members ctm JOIN users u ON ctm.user_id = u.id WHERE ctm.care_team_id = ? AND ctm.user_id = ? AND ctm.status = 'accepted'"
+    ).get(teamId, targetUserId) : null;
+
+    if (!linkedRecipient && (!targetMember || targetMember.role !== 'care_for')) {
+      return res.status(403).json({ error: "Can only set preferences for care recipients in your team" });
+    }
+
+    // Update the target user's accessibility prefs
+    await db.prepare(
+      "UPDATE users SET accessibility_prefs = ? WHERE id = ?"
+    ).run(JSON.stringify(accessibilityPrefs), targetUserId);
+
+    res.json({ success: true, accessibilityPrefs });
+  } catch (err) {
+    console.error("Update member prefs error:", err);
+    res.status(500).json({ error: "Failed to update member preferences" });
   }
 });
 

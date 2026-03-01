@@ -2614,3 +2614,67 @@
 .exclusive-urgent {
   animation: exclusivePulse 1.2s ease-in-out infinite;
 }
+
+/* ═══ Accessibility: Text Size ═══ */
+
+/* Large text (1.25x — 20px base) */
+body.text-size-large { font-size: 20px !important; }
+body.text-size-large div:not([data-preserve-size]),
+body.text-size-large span:not([data-preserve-size]):not(.exclusive-urgent),
+body.text-size-large p,
+body.text-size-large button,
+body.text-size-large input,
+body.text-size-large select,
+body.text-size-large textarea,
+body.text-size-large label,
+body.text-size-large a,
+body.text-size-large li,
+body.text-size-large td,
+body.text-size-large th {
+  font-size: inherit !important;
+}
+body.text-size-large h1, body.text-size-large .hero-title { font-size: 32px !important; }
+body.text-size-large h2, body.text-size-large h3 { font-size: 24px !important; }
+
+/* Extra large text (1.5x — 24px base) */
+body.text-size-xlarge { font-size: 24px !important; }
+body.text-size-xlarge div:not([data-preserve-size]),
+body.text-size-xlarge span:not([data-preserve-size]):not(.exclusive-urgent),
+body.text-size-xlarge p,
+body.text-size-xlarge button,
+body.text-size-xlarge input,
+body.text-size-xlarge select,
+body.text-size-xlarge textarea,
+body.text-size-xlarge label,
+body.text-size-xlarge a,
+body.text-size-xlarge li,
+body.text-size-xlarge td,
+body.text-size-xlarge th {
+  font-size: inherit !important;
+}
+body.text-size-xlarge h1, body.text-size-xlarge .hero-title { font-size: 38px !important; }
+body.text-size-xlarge h2, body.text-size-xlarge h3 { font-size: 28px !important; }
+
+/* Text size pill selector */
+.text-size-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: 2px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.15s;
+  min-width: 80px;
+}
+.text-size-pill:hover { border-color: #1b6b5a; }
+.text-size-pill.active {
+  background: #1b6b5a;
+  color: #fff;
+  border-color: #1b6b5a;
+}
+.text-size-pill-default { font-size: 14px !important; }
+.text-size-pill-large { font-size: 18px !important; }
+.text-size-pill-xlarge { font-size: 22px !important; }

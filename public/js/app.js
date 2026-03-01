@@ -404,6 +404,11 @@ const App = () => {
             if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
               setShowDisclaimer(true);
             }
+            // Apply accessibility text size from user prefs
+            try {
+              const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
+              if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
+            } catch {}
             setAppState('app');
             // If returning user has a pending invite token, accept it now
             // Note: must re-read URL here since replaceState may not have run yet at this point
@@ -602,6 +607,11 @@ const App = () => {
           if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
             setShowDisclaimer(true);
           }
+          // Apply accessibility text size
+          try {
+            const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
+            if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
+          } catch {}
         }
       }
     }).catch(() => {});
@@ -649,6 +659,8 @@ const App = () => {
     setActiveRoleState(null);
     setCurrentPage('dashboard');
     setAppState('splash');
+    // Reset text size to default
+    if (typeof applyTextSize === 'function') applyTextSize('default');
     // Disconnect WebSocket
     if (typeof disconnectSocket === 'function') disconnectSocket();
   };
@@ -705,6 +717,7 @@ const App = () => {
               if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
                 setShowDisclaimer(true);
               }
+              try { const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
               setAppState('app');
             }
           }
@@ -753,6 +766,7 @@ const App = () => {
               if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
                 setShowDisclaimer(true);
               }
+              try { const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
               setAppState('app');
             }
           }

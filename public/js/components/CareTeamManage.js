@@ -240,6 +240,52 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         </div>
       </div>
 
+      {/* Display Settings for Care Recipient */}
+      {isLeader && team.recipient_linked_user_id && (() => {
+        const recipPrefs = (() => { try { return team.recipient_accessibility_prefs ? JSON.parse(team.recipient_accessibility_prefs) : {}; } catch { return {}; } })();
+        const recipSize = recipPrefs.textSize || 'default';
+        const handleRecipientTextSize = async (size) => {
+          try {
+            const res = await apiFetch(`/api/care-teams/${careTeamId}/member-prefs/${team.recipient_linked_user_id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ accessibilityPrefs: { ...recipPrefs, textSize: size } }),
+            });
+            if (res?.ok) {
+              showToast(`Text size updated for ${team.recipient_first_name}`, 'success');
+              fetchTeam();
+            } else {
+              const data = await res?.json();
+              showToast(data?.error || 'Failed to update', 'error');
+            }
+          } catch { showToast('Failed to update display settings', 'error'); }
+        };
+        return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #7c3aed' }}>
+            <div className="card-header" style={{ color: '#7c3aed' }}>Display Settings for {team.recipient_first_name}</div>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
+              Control what {team.recipient_first_name} sees when they log in. Changes apply to their view of the app.
+            </p>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 8 }}>Text Size</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button onClick={() => handleRecipientTextSize('default')}
+                  className={`text-size-pill text-size-pill-default ${recipSize === 'default' ? 'active' : ''}`}>
+                  Default
+                </button>
+                <button onClick={() => handleRecipientTextSize('large')}
+                  className={`text-size-pill text-size-pill-large ${recipSize === 'large' ? 'active' : ''}`}>
+                  Large
+                </button>
+                <button onClick={() => handleRecipientTextSize('xlarge')}
+                  className={`text-size-pill text-size-pill-xlarge ${recipSize === 'xlarge' ? 'active' : ''}`}>
+                  Extra Large
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Invite Form */}
       {showInviteForm && isLeader && (
         <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1b6b5a' }}>
