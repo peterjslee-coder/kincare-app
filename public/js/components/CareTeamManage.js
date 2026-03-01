@@ -16,6 +16,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [smsPhone, setSmsPhone] = useState('');
   const [notifChannel, setNotifChannel] = useState('push');
   const [savingNotif, setSavingNotif] = useState(false);
+  const [a11yExpanded, setA11yExpanded] = useState(false);
   const { showToast } = useToast();
 
   const fetchTeam = async () => {
@@ -267,109 +268,6 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         </div>
       </div>
 
-      {/* Display Settings for Care Recipient */}
-      {isLeader && team.recipient_linked_user_id && (() => {
-        const recipPrefs = (() => { try { return team.recipient_accessibility_prefs ? JSON.parse(team.recipient_accessibility_prefs) : {}; } catch { return {}; } })();
-        const recipSize = recipPrefs.textSize || 'default';
-        const handleRecipientTextSize = async (size) => {
-          try {
-            const res = await apiFetch(`/api/care-teams/${careTeamId}/member-prefs/${team.recipient_linked_user_id}`, {
-              method: 'PUT',
-              body: JSON.stringify({ accessibilityPrefs: { ...recipPrefs, textSize: size } }),
-            });
-            if (res?.ok) {
-              showToast(`Text size updated for ${team.recipient_first_name}`, 'success');
-              fetchTeam();
-            } else {
-              const data = await res?.json();
-              showToast(data?.error || 'Failed to update', 'error');
-            }
-          } catch { showToast('Failed to update display settings', 'error'); }
-        };
-        return (
-          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #7c3aed' }}>
-            <div className="card-header" style={{ color: '#7c3aed' }}>Display Settings for {team.recipient_first_name}</div>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
-              Control what {team.recipient_first_name} sees when they log in. Changes apply to their view of the app.
-            </p>
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 8 }}>Text Size</div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button onClick={() => handleRecipientTextSize('default')}
-                  className={`text-size-pill text-size-pill-default ${recipSize === 'default' ? 'active' : ''}`}>
-                  Default
-                </button>
-                <button onClick={() => handleRecipientTextSize('large')}
-                  className={`text-size-pill text-size-pill-large ${recipSize === 'large' ? 'active' : ''}`}>
-                  Large
-                </button>
-                <button onClick={() => handleRecipientTextSize('xlarge')}
-                  className={`text-size-pill text-size-pill-xlarge ${recipSize === 'xlarge' ? 'active' : ''}`}>
-                  Extra Large
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Notification Settings for Care Recipient */}
-      {isLeader && (
-        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #e8724a' }}>
-          <div className="card-header" style={{ color: '#e8724a' }}>{team.recipient_first_name}'s Notifications</div>
-          <p style={{ fontSize: 13, color: '#666', margin: '0 0 14px' }}>
-            Choose how {team.recipient_first_name} gets reminders about upcoming care sessions.
-          </p>
-
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Reminder method</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {[
-                { value: 'push', label: 'App only', icon: '📱' },
-                { value: 'sms', label: 'Text only', icon: '💬' },
-                { value: 'both', label: 'App + Text', icon: '📱💬' },
-                { value: 'none', label: 'None', icon: '🔕' },
-              ].map(opt => (
-                <button key={opt.value} onClick={() => setNotifChannel(opt.value)}
-                  style={{
-                    padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    border: notifChannel === opt.value ? '2px solid #e8724a' : '1px solid #d0d0d0',
-                    background: notifChannel === opt.value ? '#fff5f0' : '#fff',
-                    color: notifChannel === opt.value ? '#e8724a' : '#555',
-                  }}>
-                  {opt.icon} {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {['sms', 'both'].includes(notifChannel) && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>{team.recipient_first_name}'s phone number</div>
-              <input type="tel" value={smsPhone} onChange={(e) => setSmsPhone(e.target.value)}
-                placeholder="(540) 555-1234"
-                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
-              <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>US format: (540) 555-1234 or +15405551234</div>
-            </div>
-          )}
-
-          <div style={{ background: '#f0f8f5', padding: '10px 14px', borderRadius: 8, fontSize: 13, color: '#1b6b5a', marginBottom: 14 }}>
-            {notifChannel === 'none'
-              ? `${team.recipient_first_name} won't receive any session reminders.`
-              : notifChannel === 'sms'
-                ? `${team.recipient_first_name} will get a text 15 minutes before each session starts and before the caregiver leaves.`
-                : notifChannel === 'both'
-                  ? `${team.recipient_first_name} will get both app notifications and text messages for session reminders.`
-                  : `${team.recipient_first_name} will get app notifications for session reminders (requires the app installed).`}
-          </div>
-
-          <button onClick={handleSaveNotifications} disabled={savingNotif}
-            style={{ padding: '9px 20px', background: savingNotif ? '#999' : '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingNotif ? 'wait' : 'pointer' }}>
-            {savingNotif ? 'Saving...' : 'Save Settings'}
-          </button>
-        </div>
-      )}
-
       {/* Invite Form */}
       {showInviteForm && isLeader && (
         <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1b6b5a' }}>
@@ -523,6 +421,127 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Accessibility Options — collapsible at bottom */}
+      {isLeader && (
+        <div style={{ marginTop: 24 }}>
+          <button onClick={() => setA11yExpanded(!a11yExpanded)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 20px', background: '#fff', border: '1px solid #e0e0e0', borderRadius: a11yExpanded ? '12px 12px 0 0' : 12,
+              cursor: 'pointer', transition: 'border-radius 0.2s',
+            }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: '#1b6b5a' }}>
+              Accessibility Options for {team.recipient_first_name}
+            </span>
+            <span style={{ fontSize: 18, color: '#999', transition: 'transform 0.2s', transform: a11yExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>
+          </button>
+          {a11yExpanded && (
+            <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '16px 20px' }}>
+
+              {/* Display Settings for Care Recipient */}
+              {team.recipient_linked_user_id && (() => {
+                const recipPrefs = (() => { try { return team.recipient_accessibility_prefs ? JSON.parse(team.recipient_accessibility_prefs) : {}; } catch { return {}; } })();
+                const recipSize = recipPrefs.textSize || 'default';
+                const handleRecipientTextSize = async (size) => {
+                  try {
+                    const res = await apiFetch(`/api/care-teams/${careTeamId}/member-prefs/${team.recipient_linked_user_id}`, {
+                      method: 'PUT',
+                      body: JSON.stringify({ accessibilityPrefs: { ...recipPrefs, textSize: size } }),
+                    });
+                    if (res?.ok) {
+                      showToast(`Text size updated for ${team.recipient_first_name}`, 'success');
+                      fetchTeam();
+                    } else {
+                      const data = await res?.json();
+                      showToast(data?.error || 'Failed to update', 'error');
+                    }
+                  } catch { showToast('Failed to update display settings', 'error'); }
+                };
+                return (
+                  <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#7c3aed', marginBottom: 6 }}>Display Settings</div>
+                    <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
+                      Control what {team.recipient_first_name} sees when they log in. Changes apply to their view of the app.
+                    </p>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 8 }}>Text Size</div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <button onClick={() => handleRecipientTextSize('default')}
+                        className={`text-size-pill text-size-pill-default ${recipSize === 'default' ? 'active' : ''}`}>
+                        Default
+                      </button>
+                      <button onClick={() => handleRecipientTextSize('large')}
+                        className={`text-size-pill text-size-pill-large ${recipSize === 'large' ? 'active' : ''}`}>
+                        Large
+                      </button>
+                      <button onClick={() => handleRecipientTextSize('xlarge')}
+                        className={`text-size-pill text-size-pill-xlarge ${recipSize === 'xlarge' ? 'active' : ''}`}>
+                        Extra Large
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Notification Settings for Care Recipient */}
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#e8724a', marginBottom: 6 }}>{team.recipient_first_name}'s Notifications</div>
+                <p style={{ fontSize: 13, color: '#666', margin: '0 0 14px' }}>
+                  Choose how {team.recipient_first_name} gets reminders about upcoming care sessions.
+                </p>
+
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Reminder method</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {[
+                      { value: 'push', label: 'App only', icon: '📱' },
+                      { value: 'sms', label: 'Text only', icon: '💬' },
+                      { value: 'both', label: 'App + Text', icon: '📱💬' },
+                      { value: 'none', label: 'None', icon: '🔕' },
+                    ].map(opt => (
+                      <button key={opt.value} onClick={() => setNotifChannel(opt.value)}
+                        style={{
+                          padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                          border: notifChannel === opt.value ? '2px solid #e8724a' : '1px solid #d0d0d0',
+                          background: notifChannel === opt.value ? '#fff5f0' : '#fff',
+                          color: notifChannel === opt.value ? '#e8724a' : '#555',
+                        }}>
+                        {opt.icon} {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {['sms', 'both'].includes(notifChannel) && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>{team.recipient_first_name}'s phone number</div>
+                    <input type="tel" value={smsPhone} onChange={(e) => setSmsPhone(e.target.value)}
+                      placeholder="(540) 555-1234"
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                    <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>US format: (540) 555-1234 or +15405551234</div>
+                  </div>
+                )}
+
+                <div style={{ background: '#f0f8f5', padding: '10px 14px', borderRadius: 8, fontSize: 13, color: '#1b6b5a', marginBottom: 14 }}>
+                  {notifChannel === 'none'
+                    ? `${team.recipient_first_name} won't receive any session reminders.`
+                    : notifChannel === 'sms'
+                      ? `${team.recipient_first_name} will get a text 15 minutes before each session starts and before the caregiver leaves.`
+                      : notifChannel === 'both'
+                        ? `${team.recipient_first_name} will get both app notifications and text messages for session reminders.`
+                        : `${team.recipient_first_name} will get app notifications for session reminders (requires the app installed).`}
+                </div>
+
+                <button onClick={handleSaveNotifications} disabled={savingNotif}
+                  style={{ padding: '9px 20px', background: savingNotif ? '#999' : '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingNotif ? 'wait' : 'pointer' }}>
+                  {savingNotif ? 'Saving...' : 'Save Settings'}
+                </button>
+              </div>
+
+            </div>
+          )}
         </div>
       )}
 
