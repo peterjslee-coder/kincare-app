@@ -1208,8 +1208,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
             });
             if (res?.ok) {
               const data = await res.json();
-              if (setCurrentUser && data.user) {
-                setCurrentUser(prev => prev ? { ...prev, ...data.user } : prev);
+              if (data.user) {
+                setUser(prev => prev ? { ...prev, ...data.user } : prev);
+                if (setCurrentUser) setCurrentUser(prev => prev ? { ...prev, ...data.user } : prev);
               }
               showToast('Text size updated');
             }
