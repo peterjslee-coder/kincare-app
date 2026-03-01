@@ -22,6 +22,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [checkOutCareFeedback, setCheckOutCareFeedback] = useState('');
   const [checkOutServiceFeedback, setCheckOutServiceFeedback] = useState('');
   const [checkOutSummary, setCheckOutSummary] = useState('');
+  const [checkOutPhotos, setCheckOutPhotos] = useState([]);
+  const [checkOutPhotoUrls, setCheckOutPhotoUrls] = useState([]);
+  const checkOutPhotoRef = useRef(null);
   const [checkSubmitting, setCheckSubmitting] = useState(false);
   const [checkInLocation, setCheckInLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
@@ -467,6 +470,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const removePhoto = (idx) => {
     setLogPhotos(prev => prev.filter((_, i) => i !== idx));
     setPhotoPreviewUrls(prev => {
+      URL.revokeObjectURL(prev[idx]);
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const handleCheckOutPhotoSelect = (e) => {
+    const files = Array.from(e.target.files || []).slice(0, 5);
+    setCheckOutPhotos(prev => [...prev, ...files].slice(0, 5));
+    const newUrls = files.map(f => URL.createObjectURL(f));
+    setCheckOutPhotoUrls(prev => [...prev, ...newUrls].slice(0, 5));
+  };
+
+  const removeCheckOutPhoto = (idx) => {
+    setCheckOutPhotos(prev => prev.filter((_, i) => i !== idx));
+    setCheckOutPhotoUrls(prev => {
       URL.revokeObjectURL(prev[idx]);
       return prev.filter((_, i) => i !== idx);
     });
@@ -1007,6 +1025,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           setCheckOutCareFeedback('');
                           setCheckOutServiceFeedback('');
                           setCheckOutSummary('');
+                          setCheckOutPhotos([]);
+                          setCheckOutPhotoUrls(prev => { prev.forEach(u => URL.revokeObjectURL(u)); return []; });
                           setCheckOutSession(s);
                         }} style={{
                           padding: '10px 22px', background: '#c62828', color: '#fff', border: 'none',
@@ -1603,6 +1623,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               setCheckOutCareFeedback('');
               setCheckOutServiceFeedback('');
               setCheckOutSummary('');
+              setCheckOutPhotos([]);
+              setCheckOutPhotoUrls(prev => { prev.forEach(u => URL.revokeObjectURL(u)); return []; });
               setCheckOutSession(s);
             } else {
               setVisitLogSession(s);
@@ -2042,6 +2064,43 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               />
             </div>
 
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                📸 Visit Photos (optional, up to 5)
+              </label>
+              <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px' }}>
+                Share photos from the visit — activities, meals, smiles!
+              </p>
+              <input type="file" ref={checkOutPhotoRef} accept="image/*" multiple onChange={handleCheckOutPhotoSelect}
+                style={{ display: 'none' }} />
+              <button onClick={() => checkOutPhotoRef.current?.click()} style={{
+                padding: 14, background: checkOutPhotos.length > 0 ? '#e8f5e9' : '#f8f9fa',
+                border: checkOutPhotos.length > 0 ? '2px solid #1b6b5a' : '2px dashed #ccc', borderRadius: 10,
+                cursor: 'pointer', fontSize: 13, color: checkOutPhotos.length > 0 ? '#1b6b5a' : '#666',
+                width: '100%', fontWeight: checkOutPhotos.length > 0 ? 600 : 400,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxSizing: 'border-box',
+              }}>
+                <span style={{ fontSize: 18 }}>{checkOutPhotos.length > 0 ? '✅' : '📷'}</span>
+                {checkOutPhotos.length > 0 ? `${checkOutPhotos.length} photo${checkOutPhotos.length > 1 ? 's' : ''} selected` : 'Tap to add visit photos'}
+              </button>
+              {checkOutPhotoUrls.length > 0 && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  {checkOutPhotoUrls.map((url, idx) => (
+                    <div key={idx} style={{ position: 'relative', width: 64, height: 64 }}>
+                      <img src={url} alt={`Photo ${idx + 1}`} style={{
+                        width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid #ddd',
+                      }} />
+                      <button onClick={() => removeCheckOutPhoto(idx)} style={{
+                        position: 'absolute', top: -6, right: -6, width: 20, height: 20,
+                        background: '#c62828', color: '#fff', border: 'none', borderRadius: '50%',
+                        fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setCheckOutSession(null)} style={{
                 padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8,
@@ -2061,6 +2120,23 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     }),
                   });
                   if (res?.ok) {
+                    const checkOutData = await res.json();
+                    // Upload photos if any
+                    if (checkOutPhotos.length > 0 && checkOutData.visitLog?.id) {
+                      try {
+                        const formData = new FormData();
+                        checkOutPhotos.forEach(f => formData.append('photos', f));
+                        const token = localStorage.getItem('auth_token');
+                        await fetch(`${API_BASE}/api/photos/visit/${checkOutData.visitLog.id}`, {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${token}` },
+                          body: formData,
+                        });
+                      } catch (photoErr) { console.warn('Photo upload failed:', photoErr); }
+                    }
+                    checkOutPhotoUrls.forEach(u => URL.revokeObjectURL(u));
+                    setCheckOutPhotos([]);
+                    setCheckOutPhotoUrls([]);
                     showToast('Checked out! Session complete.', 'success');
                     setCheckOutSession(null);
                     const refreshRes = await apiFetch('/api/dashboard');
