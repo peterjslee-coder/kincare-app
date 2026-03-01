@@ -4,6 +4,7 @@ const { authenticate } = require("../middleware/auth");
 const { getNowInZone, getTodayStringInZone } = require("../utils/timezone");
 const { haversineDistance } = require("../utils/geocode");
 const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching");
+const { calculateSessionCost } = require("../utils/rateCalculator");
 
 const router = express.Router();
 router.use(authenticate);
@@ -318,9 +319,12 @@ async function caregiverDashboard(db, userId, res) {
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       cr.location_address, cr.location_city,
       cr.preferences AS recipient_preferences,
-      cr.timezone AS care_timezone
+      cr.timezone AS care_timezone,
+      cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
+      cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     WHERE cs.caregiver_id = ? AND cs.scheduled_date >= ? AND cs.status IN ('pending', 'confirmed', 'in_progress')
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 10
@@ -395,10 +399,13 @@ async function caregiverDashboard(db, userId, res) {
         cr.location_city,
         cr.timezone AS care_timezone,
         vl.summary AS visit_summary,
-        vl.departure_mood
+        vl.departure_mood,
+        cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
+        cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       WHERE cs.caregiver_id = ?
         AND cs.status = 'completed'
         AND cs.scheduled_date >= ?
@@ -452,11 +459,22 @@ async function caregiverDashboard(db, userId, res) {
       health_conditions: a.health_conditions ? JSON.parse(a.health_conditions) : [],
     })),
     upcomingSessions: upcoming.map(s => {
-      // 75/25 split: caregiver gets subtotal + 75% of surcharge
-      const sessionCost = parseFloat(s.estimated_cost) || 0;
-      const surcharge = parseFloat(s.short_notice_surcharge) || 0;
-      const subtotal = sessionCost - surcharge;
-      const caregiverPayout = Math.round((subtotal + surcharge * 0.75) * 100) / 100;
+      // 75/25 split: recompute from caregiver's actual rates (matches session detail endpoint)
+      const rates = {
+        daytime: s.cg_rate_daytime || s.cg_hourly_rate || 28,
+        nighttime: s.cg_rate_nighttime || s.cg_hourly_rate || 28,
+        overnight: s.cg_rate_overnight || s.cg_hourly_rate || 28,
+        base: s.cg_hourly_rate || 28,
+      };
+      const storedSurcharge = parseFloat(s.short_notice_surcharge) || 0;
+      const shortNotice = storedSurcharge > 0;
+      const costResult = calculateSessionCost(s.scheduled_time, null, rates, {
+        scheduledDate: s.scheduled_date,
+        durationHours: parseFloat(s.duration_hours || 2),
+        shortNotice,
+      });
+      const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * 0.75 * 100) / 100;
+      const caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
       return {
         id: s.id,
         date: s.scheduled_date,
@@ -521,11 +539,22 @@ async function caregiverDashboard(db, userId, res) {
       };
     }),
     recentlyCompleted: recentCompletedCg.map(s => {
-      // 75/25 split: caregiver gets subtotal + 75% of surcharge
-      const estCost = parseFloat(s.estimated_cost) || 0;
-      const surcharge = parseFloat(s.short_notice_surcharge) || 0;
-      const subtotal = estCost - surcharge;
-      const caregiverPayout = Math.round((subtotal + surcharge * 0.75) * 100) / 100;
+      // 75/25 split: recompute from caregiver's actual rates (matches session detail endpoint)
+      const rates = {
+        daytime: s.cg_rate_daytime || s.cg_hourly_rate || 28,
+        nighttime: s.cg_rate_nighttime || s.cg_hourly_rate || 28,
+        overnight: s.cg_rate_overnight || s.cg_hourly_rate || 28,
+        base: s.cg_hourly_rate || 28,
+      };
+      const storedSurcharge = parseFloat(s.short_notice_surcharge) || 0;
+      const shortNotice = storedSurcharge > 0;
+      const costResult = calculateSessionCost(s.scheduled_time, null, rates, {
+        scheduledDate: s.scheduled_date,
+        durationHours: parseFloat(s.duration_hours || 2),
+        shortNotice,
+      });
+      const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * 0.75 * 100) / 100;
+      const caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
       return {
         id: s.id,
         date: s.scheduled_date,

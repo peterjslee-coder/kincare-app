@@ -968,7 +968,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
                         <div style={{ fontSize: 20, fontWeight: 800, color: '#1b6b5a' }}>
-                          ${Math.round(s.caregiverPayout || parseFloat(s.estimatedCost) || 0)}
+                          ${(s.caregiverPayout || parseFloat(s.estimatedCost) || 0).toFixed(2)}
                         </div>
                       )}
                       {isActive && (
@@ -1233,7 +1233,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
                         <div style={{ fontSize: 20, fontWeight: 800, color: '#1b6b5a' }}>
-                          ${Math.round(s.caregiverPayout || parseFloat(s.estimatedCost) || 0)}
+                          ${(s.caregiverPayout || parseFloat(s.estimatedCost) || 0).toFixed(2)}
                         </div>
                       )}
                       <span style={{

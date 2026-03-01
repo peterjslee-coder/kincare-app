@@ -276,7 +276,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                   ))}
                   {cost.caregiverSurchargeShare > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#e8724a', fontWeight: 600, marginBottom: 3 }}>
-                      <span>Short-notice bonus (75%)</span>
+                      <span>Short notice bonus</span>
                       <span>+${cost.caregiverSurchargeShare.toFixed(2)}</span>
                     </div>
                   )}
