@@ -37,6 +37,16 @@ router.get("/", async (req, res) => {
 // ─── Family Dashboard (Pete's view) ───
 async function familyDashboard(db, userId, res) {
   try {
+    // Expire exclusive direct offers that have passed their 1-hour window
+    await db.exec(`
+      UPDATE care_sessions
+      SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
+      WHERE offered_to_caregiver_id IS NOT NULL
+        AND exclusive_until IS NOT NULL
+        AND exclusive_until < NOW()
+        AND status IN ('pending', 'open', 'requested')
+    `);
+
     const feePercent = await getPlatformFeePercent(db);
 
     // Get owned + shared recipients
@@ -84,13 +94,16 @@ async function familyDashboard(db, userId, res) {
           u.first_name || ' ' || u.last_name AS caregiver_name,
           cp.rating_avg AS caregiver_rating,
           fu.first_name || ' ' || fu.last_name AS booked_by_name,
-          vl.check_in_time
+          vl.check_in_time,
+          ofu.first_name AS offered_caregiver_name
         FROM care_sessions cs
         LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
         LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
         LEFT JOIN users u ON cp.user_id = u.id
         LEFT JOIN users fu ON cs.family_user_id = fu.id
         LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+        LEFT JOIN caregiver_profiles ocp ON cs.offered_to_caregiver_id = ocp.id
+        LEFT JOIN users ofu ON ocp.user_id = ofu.id
         WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
           AND cs.scheduled_date >= ?
           AND cs.scheduled_date <= ?
@@ -209,6 +222,9 @@ async function familyDashboard(db, userId, res) {
           timezone: s.care_timezone || "America/New_York",
           bookedBy: s.family_user_id !== userId ? s.booked_by_name : null,
           checkInTime: s.check_in_time || null,
+          offeredToCaregiverId: s.offered_to_caregiver_id || null,
+          exclusiveUntil: s.exclusive_until || null,
+          offeredCaregiverName: s.offered_caregiver_name || null,
         };
       }),
       recentActivity: recentActivity.map((a) => {
@@ -265,6 +281,16 @@ async function familyDashboard(db, userId, res) {
 
 // ─── Caregiver Dashboard (Maria's view) ───
 async function caregiverDashboard(db, userId, res) {
+  // Expire exclusive direct offers that have passed their 1-hour window
+  await db.exec(`
+    UPDATE care_sessions
+    SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
+    WHERE offered_to_caregiver_id IS NOT NULL
+      AND exclusive_until IS NOT NULL
+      AND exclusive_until < NOW()
+      AND status IN ('pending', 'open', 'requested')
+  `);
+
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
@@ -449,6 +475,7 @@ async function caregiverDashboard(db, userId, res) {
         caregiverPayout: caregiverPayout,
         timezone: s.care_timezone || "America/New_York",
         offeredToCaregiverId: s.offered_to_caregiver_id || null,
+        exclusiveUntil: s.exclusive_until || null,
       };
     }),
     reviews: reviews.map(r => ({
@@ -490,6 +517,7 @@ async function caregiverDashboard(db, userId, res) {
         matchScore: match.score,
         matchQuality: match.quality,
         offeredToCaregiverId: s.offered_to_caregiver_id || null,
+        exclusiveUntil: s.exclusive_until || null,
       };
     }),
     recentlyCompleted: recentCompletedCg.map(s => {

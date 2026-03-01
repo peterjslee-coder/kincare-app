@@ -387,6 +387,8 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS min_overnight_hours REAL DEFAULT 6`,
     // v1.34.5 — Direct offers: track which caregiver an offer was sent to
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS offered_to_caregiver_id TEXT`,
+    // v1.34.34 — Exclusive timer: when the direct offer expires and becomes open
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS exclusive_until TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

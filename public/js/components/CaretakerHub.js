@@ -30,6 +30,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [highlightTab, setHighlightTab] = useState(false);
   const [jobSort, setJobSort] = useState('best_match');
+  const [exclusiveTick, setExclusiveTick] = useState(0);
   const calendarRef = useRef(null);
   const [claimingJobId, setClaimingJobId] = useState(null);
   const [cancellingJobId, setCancellingJobId] = useState(null);
@@ -286,6 +287,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       window.location.hash = '';
     }
   }, []);
+
+  // Tick timer for exclusive offer countdowns (every 30s)
+  useEffect(() => {
+    const hasExclusive = data?.openJobs?.some(j => j.exclusiveUntil || j.exclusive_until);
+    if (!hasExclusive) return;
+    const iv = setInterval(() => setExclusiveTick(t => t + 1), 30000);
+    return () => clearInterval(iv);
+  }, [data?.openJobs]);
 
   // Listen for new_job WebSocket events — refresh dashboard
   useEffect(() => {
@@ -1081,20 +1090,27 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   const effectivePerHour = hours > 0 ? Math.round(effectiveTotal / hours * 100) / 100 : 0;
 
                   const isDirectOffer = !!job.offeredToCaregiverId;
+                  // Exclusive timer countdown
+                  const exclusiveUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
+                  const exclusiveRemaining = exclusiveUntil ? Math.max(0, Math.floor((exclusiveUntil - new Date()) / 60000)) : null;
+                  const exclusiveExpired = exclusiveUntil && exclusiveRemaining <= 0;
+                  const exclusiveUrgent = exclusiveRemaining !== null && exclusiveRemaining <= 10 && !exclusiveExpired;
 
                   return (
                     <div key={job.id} style={{
                       marginBottom: 8, padding: '14px 16px',
-                      background: isDirectOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : job.hasConflict ? '#fffbf0' : '#fff',
+                      background: (isDirectOffer && !exclusiveExpired) ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : job.hasConflict ? '#fffbf0' : '#fff',
                       borderRadius: 0,
-                      border: isDirectOffer ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : (!job.hasConflict && job.matchQuality === 'great') ? '2px solid #1b6b5a' : hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
-                      borderTop: isDirectOffer ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : '1px solid #f0f0f0',
+                      border: (isDirectOffer && !exclusiveExpired) ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : (!job.hasConflict && job.matchQuality === 'great') ? '2px solid #1b6b5a' : hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
+                      borderTop: (isDirectOffer && !exclusiveExpired) ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : '1px solid #f0f0f0',
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
                     }}>
                       <div style={{ flex: 1, minWidth: '180px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                          {isDirectOffer && (
-                            <span style={{ background: '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\u2728'} JUST FOR YOU</span>
+                          {isDirectOffer && !exclusiveExpired && (
+                            <span className={exclusiveUrgent ? 'exclusive-urgent' : ''} style={{ background: exclusiveUrgent ? '#e8724a' : '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
+                              {exclusiveRemaining !== null ? (exclusiveUrgent ? `\u23F1 ${exclusiveRemaining} min left!` : `\u2728 JUST FOR YOU \u00B7 ${exclusiveRemaining} min left`) : '\u2728 JUST FOR YOU'}
+                            </span>
                           )}
                           {hasBonus && (
                             <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>

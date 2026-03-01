@@ -18,6 +18,7 @@ const FindWork = window.FindWork = () => {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelLoading, setCancelLoading] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState(10);
+  const [exTick, setExTick] = useState(0);
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
   const markersRef = useRef([]);
@@ -165,6 +166,14 @@ const FindWork = window.FindWork = () => {
 
   useEffect(() => { if (bgCheckPaid !== null) fetchData(); }, [rangeDays, bgCheckPaid]);
 
+  // Tick timer for exclusive offer countdowns (every 30s)
+  useEffect(() => {
+    const hasEx = openRequests.some(s => s.exclusive_until);
+    if (!hasEx) return;
+    const iv = setInterval(() => setExTick(t => t + 1), 30000);
+    return () => clearInterval(iv);
+  }, [openRequests]);
+
   // ─── Map initialization ───
   useEffect(() => {
     if (viewMode !== 'map' || !mapRef.current) return;
@@ -271,7 +280,11 @@ const FindWork = window.FindWork = () => {
       const dateStr = s.scheduled_date || s.date;
       const time = s.scheduled_time || s.time;
       const isOffer = !!s.offered_to_caregiver_id;
-      const pinColor = isOffer ? '#7c3aed' : '#fb8c00';
+      const exUntil = s.exclusive_until ? new Date(s.exclusive_until) : null;
+      const exRemain = exUntil ? Math.max(0, Math.floor((exUntil - new Date()) / 60000)) : null;
+      const exExpired = exUntil && exRemain <= 0;
+      const activeOffer = isOffer && !exExpired;
+      const pinColor = activeOffer ? '#7c3aed' : '#fb8c00';
 
       const icon = L.divIcon({
         className: '',
@@ -282,7 +295,7 @@ const FindWork = window.FindWork = () => {
           font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;
           transform:translate(-50%,-100%);
         ">
-          ${isOffer ? '<div style="font-size:9px;letter-spacing:0.5px">✨ JUST FOR YOU</div>' : ''}
+          ${activeOffer ? '<div style="font-size:9px;letter-spacing:0.5px">✨ JUST FOR YOU' + (exRemain !== null ? ' · ' + exRemain + 'm' : '') + '</div>' : ''}
           <div>${recipient}</div>
           <div style="font-size:10px;font-weight:400;opacity:0.9">${service}${cost ? ' · $' + Math.round(parseFloat(s.caregiver_payout || cost)) : ''}</div>
         </div>`,
@@ -676,22 +689,27 @@ const FindWork = window.FindWork = () => {
                 const dateStr = s.scheduled_date || s.date;
                 const city = s.recipient_city || '';
                 const isDirectOffer = !!s.offered_to_caregiver_id;
+                const exUntil = s.exclusive_until ? new Date(s.exclusive_until) : null;
+                const exRemain = exUntil ? Math.max(0, Math.floor((exUntil - new Date()) / 60000)) : null;
+                const exExpired = exUntil && exRemain <= 0;
+                const exUrgent = exRemain !== null && exRemain <= 10 && !exExpired;
+                const activeOffer = isDirectOffer && !exExpired;
 
                 return (
                   <div key={s.id} className="card" style={{
-                    borderLeft: isDirectOffer ? '4px solid #7c3aed' : '4px solid #fb8c00', padding: 16, cursor: 'pointer',
+                    borderLeft: activeOffer ? '4px solid #7c3aed' : '4px solid #fb8c00', padding: 16, cursor: 'pointer',
                     transition: 'box-shadow 0.15s',
-                    background: isDirectOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : undefined,
-                    boxShadow: isDirectOffer ? '0 2px 12px rgba(124,58,237,0.15)' : undefined,
+                    background: activeOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : undefined,
+                    boxShadow: activeOffer ? '0 2px 12px rgba(124,58,237,0.15)' : undefined,
                   }} onClick={() => setExpandedId(isExpanded ? null : s.id)}>
-                    {isDirectOffer && (
-                      <div style={{
+                    {activeOffer && (
+                      <div className={exUrgent ? 'exclusive-urgent' : ''} style={{
                         display: 'inline-flex', alignItems: 'center', gap: 6,
-                        background: '#7c3aed', color: '#fff', padding: '3px 12px',
+                        background: exUrgent ? '#e8724a' : '#7c3aed', color: '#fff', padding: '3px 12px',
                         borderRadius: 20, fontSize: 12, fontWeight: 700, marginBottom: 10,
                         letterSpacing: '0.3px',
                       }}>
-                        <span>{'\u2728'}</span> Just For You
+                        <span>{exUrgent ? '\u23F1' : '\u2728'}</span> {exRemain !== null ? (exUrgent ? `${exRemain} min left!` : `Just For You \u00B7 ${exRemain} min left`) : 'Just For You'}
                       </div>
                     )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

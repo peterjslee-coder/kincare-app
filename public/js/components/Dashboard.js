@@ -874,7 +874,16 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
                         {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
                         {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
                       </div>
-                      {isSeekingCaregiver && <div style={{ fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 }}>Seeking caregiver</div>}
+                      {isSeekingCaregiver && !s.offeredToCaregiverId && <div style={{ fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 }}>Seeking caregiver</div>}
+                      {s.offeredToCaregiverId && (() => {
+                        const exUntil = s.exclusiveUntil ? new Date(s.exclusiveUntil) : null;
+                        const exRemain = exUntil ? Math.max(0, Math.floor((exUntil - new Date()) / 60000)) : null;
+                        const exExpired = exUntil && exRemain <= 0;
+                        return exExpired
+                          ? React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 } }, 'Now open to all caregivers')
+                          : React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#7c3aed', marginTop: 4 } },
+                              `\u2728 Sent to ${s.offeredCaregiverName || 'caregiver'}${exRemain !== null ? ` \u00B7 ${exRemain} min exclusive` : ''}`);
+                      })()}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       <span style={{
