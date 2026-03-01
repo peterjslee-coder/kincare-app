@@ -350,15 +350,15 @@ const App = () => {
         });
         n.onclick = () => {
           window.focus();
-          setActivePage('messages');
+          setCurrentPage('messages');
           n.close();
         };
         // Auto-close after 30s
         setTimeout(() => n.close(), 30000);
       }
       // If not on Messages page, navigate there
-      if (activePage !== 'messages') {
-        setActivePage('messages');
+      if (currentPage !== 'messages') {
+        setCurrentPage('messages');
       }
     });
     // Request notification permission on first load
@@ -366,7 +366,7 @@ const App = () => {
       Notification.requestPermission();
     }
     return cleanup;
-  }, [activePage]);
+  }, [currentPage]);
 
   // ─── Role-color CSS custom properties ───
   // Must be here (before any early returns) to satisfy Rules of Hooks
