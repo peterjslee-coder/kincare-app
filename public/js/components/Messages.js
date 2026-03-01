@@ -459,9 +459,9 @@ const Messages = window.Messages = () => {
     const remoteName = otherMember ? `${otherMember.first_name || ''} ${otherMember.last_name || ''}`.trim() : 'Unknown';
 
     // Send a chat message about the call
-    const emoji = callType === 'video' ? '📹' : '📞';
+    const callIcon = callType === 'video' ? '📹' : '📞';
     const typeLabel = callType === 'video' ? 'video' : 'voice';
-    const message = `${emoji} Started a ${typeLabel} call`;
+    const message = `${callIcon} Started a ${typeLabel} call`;
 
     try {
       await apiFetch(`/api/messages/conversations/${activeConvId}`, {
@@ -527,7 +527,7 @@ const Messages = window.Messages = () => {
   };
 
   const handleDeclineIncoming = () => {
-    if (!incomingCall && window._socket) {
+    if (incomingCall && window._socket) {
       window._socket.emit('call_decline', {
         callerId: incomingCall.callerId,
         roomName: incomingCall.roomName,
@@ -571,7 +571,13 @@ const Messages = window.Messages = () => {
           color: '#1b6b5a',
         }
       },
-        React.createElement('span', { style: { fontSize: 20 } }, isVideoCall ? '📹' : '📞'),
+        React.createElement('span', {
+          style: { display: 'flex', alignItems: 'center' },
+          dangerouslySetInnerHTML: { __html: isVideoCall
+            ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>'
+            : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'
+          }
+        }),
         React.createElement('span', null, `Started a ${callMatch[2]} call`)
       );
     }
@@ -1134,7 +1140,7 @@ const Messages = window.Messages = () => {
               e.currentTarget.style.background = 'none';
               e.currentTarget.style.color = '#1b6b5a';
             }}>
-            📞
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           </button>
           <button
             className="msg-video-call-btn"
@@ -1163,7 +1169,7 @@ const Messages = window.Messages = () => {
               e.currentTarget.style.background = 'none';
               e.currentTarget.style.color = '#1b6b5a';
             }}>
-            📹
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
           </button>
         </div>
 
@@ -1391,8 +1397,10 @@ const Messages = window.Messages = () => {
   // ─── Incoming call banner ───
   const renderIncomingCallBanner = () => {
     if (!incomingCall) return null;
-    const emoji = incomingCall.callType === 'video' ? '📹' : '📞';
     const typeLabel = incomingCall.callType === 'video' ? 'Video' : 'Voice';
+    const callSvg = incomingCall.callType === 'video'
+      ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>'
+      : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
     return (
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
@@ -1402,7 +1410,7 @@ const Messages = window.Messages = () => {
         animation: 'slideDown 0.3s ease',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 28, animation: 'pulse 1s infinite' }}>{emoji}</span>
+          <span style={{ display: 'flex', alignItems: 'center', animation: 'pulse 1s infinite' }} dangerouslySetInnerHTML={{ __html: callSvg }} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 16 }}>{incomingCall.callerName || 'Someone'}</div>
             <div style={{ fontSize: 13, opacity: 0.85 }}>Incoming {typeLabel} Call</div>
