@@ -274,11 +274,15 @@ const LoadingSpinner = window.LoadingSpinner = ({ text = 'Loading...' }) => {
 };
 
 // ─── Empty State Component ───
-const EmptyState = window.EmptyState = ({ icon = '📭', title, text }) => {
+const EmptyState = window.EmptyState = ({ icon = '📭', title, text, actionLabel, onAction }) => {
   return React.createElement('div', { className: 'empty-state' },
     React.createElement('div', { className: 'empty-state-icon' }, icon),
     title && React.createElement('div', { className: 'empty-state-title' }, title),
-    text && React.createElement('div', { className: 'empty-state-text' }, text)
+    text && React.createElement('div', { className: 'empty-state-text' }, text),
+    actionLabel && onAction && React.createElement('button', {
+      onClick: onAction,
+      style: { marginTop: 16, padding: '10px 24px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }
+    }, actionLabel)
   );
 };
 

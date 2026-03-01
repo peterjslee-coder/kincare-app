@@ -1,4 +1,4 @@
-const CareProfile = window.CareProfile = () => {
+const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [profile, setProfile] = useState(null);
   const [allRecipients, setAllRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -314,7 +314,7 @@ const CareProfile = window.CareProfile = () => {
   };
 
   if (loading) return <LoadingSpinner text="Loading care profile..." />;
-  if (!profile) return <EmptyState icon="\uD83D\uDC75" title="No care recipient found" text="Add a care recipient to get started." />;
+  if (!profile) return <EmptyState icon="👵" title="No care recipient found" text="Add a care recipient to get started." actionLabel="+ Add Your Loved One" onAction={() => onNavigate && onNavigate('recipients')} />;
 
   const canEdit = profile.access_level !== 'view';
   const healthConditions = parseJsonField(profile.health_conditions);

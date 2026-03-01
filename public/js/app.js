@@ -896,7 +896,7 @@ const App = () => {
       if (role === 'care_for') return <CaredForView key={pageKey} />;
       return <Dashboard key={pageKey} onNavigate={setCurrentPage} />;
     }
-    if (currentPage === 'care-profile') return <CareProfile key={pageKey} />;
+    if (currentPage === 'care-profile') return <CareProfile key={pageKey} onNavigate={setCurrentPage} />;
     if (currentPage === 'care-team') return <CareTeamPage key={pageKey} selectedTeamId={selectedCareTeamId} onNavigate={setCurrentPage} />;
     if (currentPage === 'find-work') return <FindWork key={pageKey} />;
     if (currentPage === 'schedule') return <Schedule key={pageKey} />;
