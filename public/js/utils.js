@@ -334,6 +334,7 @@ const connectSocket = window.connectSocket = (token) => {
   if (_socket) _socket.disconnect();
   if (!token || typeof io === 'undefined') return;
   _socket = io(API_BASE, { auth: { token }, transports: ['websocket', 'polling'] });
+  window._socket = _socket;
   _socket.on('connect', () => console.log('WS connected'));
   _socket.on('disconnect', () => console.log('WS disconnected'));
   // Re-register all listeners
@@ -345,7 +346,7 @@ const connectSocket = window.connectSocket = (token) => {
 };
 
 const disconnectSocket = window.disconnectSocket = () => {
-  if (_socket) { _socket.disconnect(); _socket = null; }
+  if (_socket) { _socket.disconnect(); _socket = null; window._socket = null; }
 };
 
 const onSocketEvent = window.onSocketEvent = (event, callback) => {
