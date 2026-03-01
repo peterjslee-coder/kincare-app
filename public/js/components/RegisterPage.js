@@ -32,7 +32,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     if (!formData.firstName.trim()) errs.push('First name');
     if (!formData.lastName.trim()) errs.push('Last name');
     if (!formData.email.trim() || !isValidEmail(formData.email)) errs.push('Valid email');
-    if (formData.password.length < 6) errs.push('Password (min 6 characters)');
+    if (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) errs.push('Password must meet all requirements');
     if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) errs.push('Passwords must match');
     if (!formData.confirmPassword) errs.push('Confirm password');
     return errs;
@@ -40,7 +40,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
 
   const isBasicInfoValid = () => {
     return formData.firstName.trim() && formData.lastName.trim() &&
-           isValidEmail(formData.email) && formData.password.length >= 6 &&
+           isValidEmail(formData.email) && formData.password.length >= 8 && /[A-Z]/.test(formData.password) && /[0-9]/.test(formData.password) && /[^A-Za-z0-9]/.test(formData.password) &&
            formData.confirmPassword && formData.password === formData.confirmPassword;
   };
 
@@ -59,11 +59,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   const handleNext = () => {
     if (step === 2 && isBasicInfoValid()) {
       setShowFieldErrors(false);
-      if (track === 'caregiver') {
-        setStep(3); // Go to disclosures
-      } else {
-        handleComplete(); // Family & care_for go straight to account creation
-      }
+      handleComplete(); // All tracks go straight to account creation
     } else {
       setShowFieldErrors(true);
     }
@@ -71,7 +67,6 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
 
   const handleBack = () => {
     setShowFieldErrors(false);
-    if (step === 3) { setStep(2); return; }
     if (step === 2) {
       if (prefilledRole || isInviteFlow) { onNavigate('splash'); return; }
       setTrack(null); setStep(1); return;
@@ -341,9 +336,18 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               {formData.email && !isValidEmail(formData.email) ? <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div> : <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Used to verify your account and for future payments</div>}
             </div>
             <div className="form-group">
-              <label>Password {showFieldErrors && formData.password.length < 6 && <span style={{ color: '#c0392b', fontSize: 12 }}>*min 6 chars</span>}</label>
-              <input type="password" value={formData.password} onChange={(e) => { setFormData(p => ({ ...p, password: e.target.value })); setShowFieldErrors(false); }} placeholder="At least 6 characters" style={showFieldErrors && formData.password.length < 6 ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-              <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Two-Factor Authentication and Biometric available for setup later</div>
+              <label>Password {showFieldErrors && (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*see requirements below</span>}</label>
+              <input type="password" value={formData.password} onChange={(e) => { setFormData(p => ({ ...p, password: e.target.value })); setShowFieldErrors(false); }} placeholder="Create a strong password" style={showFieldErrors && (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) ? { borderColor: '#c0392b', background: '#fdf0ed' } : formData.password.length >= 8 && /[A-Z]/.test(formData.password) && /[0-9]/.test(formData.password) && /[^A-Za-z0-9]/.test(formData.password) ? { borderColor: '#1b6b5a', background: '#f0faf8' } : {}} />
+              {formData.password.length > 0 ? (
+                <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px' }}>
+                  <div style={{ fontSize: 12, color: formData.password.length >= 8 ? '#1b6b5a' : '#c0392b' }}>{formData.password.length >= 8 ? '✓' : '✗'} At least 8 characters</div>
+                  <div style={{ fontSize: 12, color: /[A-Z]/.test(formData.password) ? '#1b6b5a' : '#c0392b' }}>{/[A-Z]/.test(formData.password) ? '✓' : '✗'} Uppercase letter</div>
+                  <div style={{ fontSize: 12, color: /[0-9]/.test(formData.password) ? '#1b6b5a' : '#c0392b' }}>{/[0-9]/.test(formData.password) ? '✓' : '✗'} Number</div>
+                  <div style={{ fontSize: 12, color: /[^A-Za-z0-9]/.test(formData.password) ? '#1b6b5a' : '#c0392b' }}>{/[^A-Za-z0-9]/.test(formData.password) ? '✓' : '✗'} Symbol (!@#$...)</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>8+ characters with uppercase, number & symbol. 2FA available later.</div>
+              )}
             </div>
             <div className="form-group">
               <label>Confirm Password {showFieldErrors && !formData.confirmPassword && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}{showFieldErrors && formData.confirmPassword && formData.password !== formData.confirmPassword && <span style={{ color: '#c0392b', fontSize: 12 }}>*doesn't match</span>}</label>
@@ -419,12 +423,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'space-between' }}>
           <button onClick={handleBack} className="btn btn-outline">{'\u2190'} Back</button>
           {step === 2 && (
-            <button onClick={handleNext} className="btn btn-primary" disabled={!isBasicInfoValid()} style={{ opacity: isBasicInfoValid() ? 1 : 0.5, cursor: isBasicInfoValid() ? 'pointer' : 'not-allowed' }}>
-              {track === 'caregiver' ? 'Next \u2192' : (registering ? 'Creating Account...' : 'Create My Account')}
-            </button>
-          )}
-          {step === 3 && (
-            <button onClick={handleComplete} className="btn btn-primary" disabled={!isDisclosuresValid() || registering} style={{ opacity: (isDisclosuresValid() && !registering) ? 1 : 0.5, cursor: (isDisclosuresValid() && !registering) ? 'pointer' : 'not-allowed' }}>
+            <button onClick={handleNext} className="btn btn-primary" disabled={!isBasicInfoValid() || registering} style={{ opacity: (isBasicInfoValid() && !registering) ? 1 : 0.5, cursor: (isBasicInfoValid() && !registering) ? 'pointer' : 'not-allowed' }}>
               {registering ? 'Creating Account...' : 'Create My Account'}
             </button>
           )}

@@ -13,6 +13,14 @@ router.get("/search", async (req, res) => {
     if (!q || q.trim().length < 2) return res.json({ users: [] });
 
     const db = await getDb();
+
+    // Block search for caregivers who haven't completed onboarding
+    if (req.user.role === 'caregiver') {
+      const cgProfile = await db.prepare("SELECT onboarding_complete FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+      if (!cgProfile || !cgProfile.onboarding_complete) {
+        return res.status(403).json({ error: "Complete your profile setup before searching for people.", profileIncomplete: true });
+      }
+    }
     const term = `%${q.trim().toLowerCase()}%`;
 
     const users = await db.prepare(`

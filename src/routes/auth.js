@@ -392,6 +392,13 @@ router.get("/me", authenticate, async (req, res) => {
   // Check linked OAuth accounts
   const oauthAccounts = await db.prepare("SELECT provider, provider_email FROM oauth_accounts WHERE user_id = ?").all(req.user.id);
 
+  // Check caregiver onboarding status
+  let onboardingComplete = null;
+  if (userRoles.includes('caregiver')) {
+    const cgProfile = await db.prepare("SELECT onboarding_complete FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    onboardingComplete = cgProfile ? !!cgProfile.onboarding_complete : false;
+  }
+
   res.json({
     user: {
       ...user,
@@ -402,6 +409,7 @@ router.get("/me", authenticate, async (req, res) => {
       is_tester: !!user.is_tester,
       twoFactorEnabled: !!(twoFa?.is_enabled),
       linkedAccounts: oauthAccounts || [],
+      onboarding_complete: onboardingComplete,
     },
   });
 });

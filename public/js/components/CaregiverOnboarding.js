@@ -96,6 +96,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     firstName: resumeUser?.firstName || '', lastName: resumeUser?.lastName || '',
     email: resumeUser?.email || '', password: '', confirmPassword: '',
     // Step 2 — Disclosures & Terms
+    acceptNoMedical: false,
     acceptBackgroundCheck: false,
     acceptStripePayments: false,
     accept1099: false,
@@ -238,6 +239,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (form.password !== form.confirmPassword) errs.confirmPassword = 'Passwords do not match';
     }
     if (stepNum === 2) {
+      if (!form.acceptNoMedical) errs.acceptNoMedical = 'You must acknowledge this to proceed';
       if (!form.acceptBackgroundCheck) errs.acceptBackgroundCheck = 'You must acknowledge this to proceed';
       if (!form.acceptStripePayments) errs.acceptStripePayments = 'You must acknowledge this to proceed';
       if (!form.accept1099) errs.accept1099 = 'You must acknowledge this to proceed';
@@ -814,6 +816,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               Please review and acknowledge the following terms to continue with your application.
             </p>
             {errorSummary()}
+            {disclosureCheck('acceptNoMedical',
+              'No Medical Care',
+              'InPlace does not provide at-home medical care in accordance with Virginia state law. Caregivers provide companionship, personal care, and household assistance only.'
+            )}
+
             {disclosureCheck('acceptBackgroundCheck',
               'Background Check Required',
               'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($35). This includes criminal history, driving record, and identity verification.'
@@ -892,7 +899,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <select style={errors.state ? inputErrorStyle : inputStyle} value={form.state}
                   onChange={(e) => updateForm('state', e.target.value)}>
                   <option value="">--</option>
-                  {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  <option value="VA">VA</option>
+                  <option disabled>───</option>
+                  {US_STATES.filter(s => s !== 'VA').map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 {errors.state && <div style={errorStyle}>{errors.state}</div>}
               </div>
@@ -1074,7 +1083,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <select style={errors.dlState ? inputErrorStyle : inputStyle} value={form.dlState}
                   onChange={(e) => updateForm('dlState', e.target.value)}>
                   <option value="">Select state</option>
-                  {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  <option value="VA" style={{ fontWeight: 600 }}>VA — Virginia</option>
+                  <option disabled>──────────</option>
+                  {US_STATES.filter(s => s !== 'VA').map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 {errors.dlState && <div style={errorStyle}>{errors.dlState}</div>}
               </div>

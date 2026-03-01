@@ -25,6 +25,64 @@ const FindWork = window.FindWork = () => {
   const circleRef = useRef(null);
   const { showToast } = useToast();
 
+  // ── Availability state ──
+  const [availRules, setAvailRules] = useState([]);
+  const [availLoading, setAvailLoading] = useState(false);
+  const [showAddRule, setShowAddRule] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [ruleForm, setRuleForm] = useState({
+    type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00',
+    isRecurring: true, specificDate: '', note: '', selectedDays: [],
+  });
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const fetchAvailability = async () => {
+    setAvailLoading(true);
+    try {
+      const res = await apiFetch('/api/availability');
+      if (res?.ok) {
+        const d = await res.json();
+        setAvailRules(d.rules || []);
+      }
+    } catch (err) { console.error('Availability fetch error:', err); }
+    setAvailLoading(false);
+  };
+
+  const handleSaveRule = async () => {
+    try {
+      if (editingRule) {
+        const body = { dayOfWeek: parseInt(ruleForm.dayOfWeek), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: ruleForm.isRecurring, specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null, type: ruleForm.type, note: ruleForm.note || null };
+        await apiFetch(`/api/availability/${editingRule.id}`, { method: 'PUT', body: JSON.stringify(body) });
+      } else if (ruleForm.isRecurring && ruleForm.selectedDays && ruleForm.selectedDays.length > 0) {
+        for (const dow of ruleForm.selectedDays) {
+          const body = { dayOfWeek: parseInt(dow), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: true, specificDate: null, type: ruleForm.type, note: ruleForm.note || null };
+          await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+        }
+      } else {
+        const body = { dayOfWeek: parseInt(ruleForm.dayOfWeek), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: ruleForm.isRecurring, specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null, type: ruleForm.type, note: ruleForm.note || null };
+        await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+      }
+      setShowAddRule(false);
+      setEditingRule(null);
+      setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '', selectedDays: [] });
+      fetchAvailability();
+    } catch (err) { console.error('Save rule error:', err); }
+  };
+
+  const handleDeleteRule = async (id) => {
+    try {
+      await apiFetch(`/api/availability/${id}`, { method: 'DELETE' });
+      fetchAvailability();
+    } catch (err) { console.error('Delete rule error:', err); }
+  };
+
+  const startEditRule = (rule) => {
+    setEditingRule(rule);
+    setRuleForm({ type: rule.type, dayOfWeek: rule.dayOfWeek, startTime: rule.startTime, endTime: rule.endTime, isRecurring: rule.isRecurring, specificDate: rule.specificDate || '', note: rule.note || '' });
+    setShowAddRule(true);
+  };
+
   // ── My Rates state ──
   const [rates, setRates] = useState({ daytime: '', nighttime: '', overnight: '' });
   const [minOvernightHours, setMinOvernightHours] = useState(6);
@@ -414,7 +472,12 @@ const FindWork = window.FindWork = () => {
       {/* ═══ AVAILABILITY SUB-TAB ═══ */}
       {subTab === 'availability' && (
         typeof AvailabilityTab !== 'undefined'
-          ? React.createElement(AvailabilityTab)
+          ? React.createElement(AvailabilityTab, {
+              rules: availRules, loading: availLoading, fetchAvailability,
+              showAddRule, setShowAddRule, editingRule, setEditingRule,
+              ruleForm, setRuleForm, handleSaveRule, handleDeleteRule, startEditRule,
+              dayNames, dayAbbr,
+            })
           : <div className="card" style={{ padding: 24, textAlign: 'center', color: '#888' }}>Availability calendar loading...</div>
       )}
 

@@ -428,6 +428,7 @@ const App = () => {
               profilePhoto: data.user.profile_photo || null,
               emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
               isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
+              onboardingComplete: data.user.onboarding_complete,
             });
             // Sync active role: use saved preference if valid, else default to first role
             const saved = getActiveRole();
@@ -631,6 +632,7 @@ const App = () => {
             profilePhoto: data.user.profile_photo || null,
             emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
             isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
+            onboardingComplete: data.user.onboarding_complete,
           });
           // Sync activeRole to new user's primary role
           if (userRoles.length === 1) {
@@ -842,10 +844,11 @@ const App = () => {
   // Role-based navigation items — main nav (top) and bottom nav (pinned to sidebar bottom)
   const getNavItems = () => {
     if (role === 'caregiver') {
+      const cgOnboarded = currentUser?.onboardingComplete !== false;
       return [
         { id: 'dashboard', icon: '🏠', label: 'Home' },
-        { id: 'find-work', icon: '🔍', label: 'Find Work', isAction: true },
-        { id: 'messages', icon: '💬', label: 'Messages' },
+        { id: 'find-work', icon: '🔍', label: 'Find Work', isAction: true, disabled: !cgOnboarded },
+        { id: 'messages', icon: '💬', label: 'Messages', disabled: !cgOnboarded },
       ];
     }
     if (role === 'care_for') {
@@ -916,10 +919,11 @@ const App = () => {
   // Bottom nav items (max 5 for mobile)
   const getBottomNavItems = () => {
     if (role === 'caregiver') {
+      const cgOnboarded = currentUser?.onboardingComplete !== false;
       return [
         { id: 'dashboard', icon: '🏠', label: 'Home' },
-        { id: 'find-work', icon: '🔍', label: 'Find Work', isAccent: true },
-        { id: 'messages', icon: '💬', label: 'Messages' },
+        { id: 'find-work', icon: '🔍', label: 'Find Work', isAccent: true, disabled: !cgOnboarded },
+        { id: 'messages', icon: '💬', label: 'Messages', disabled: !cgOnboarded },
         { id: 'account', icon: '👤', label: 'Account' },
       ];
     }
@@ -1012,13 +1016,13 @@ const App = () => {
             {getNavItems().map(item => {
               // Action button (orange highlight) — Request Care for family, Find Work for caregiver
               if (item.isAction) {
-                const actionClick = item.id === '_request_care'
+                const actionClick = item.disabled ? () => {} : item.id === '_request_care'
                   ? () => { setShowRequestCareModal(true); setSidebarOpen(false); }
                   : () => { handlePageChange(item.id); setSidebarOpen(false); };
                 return (
                   <li key={item.id} className="nav-item">
-                    <button onClick={actionClick} className="nav-link" style={{ background: '#e8724a', color: '#fff', fontWeight: 600 }}>
-                      <span className="nav-icon">{item.icon}</span> {item.label}
+                    <button onClick={actionClick} className="nav-link" style={item.disabled ? { background: '#999', color: 'rgba(255,255,255,0.5)', fontWeight: 600, cursor: 'not-allowed', opacity: 0.5 } : { background: '#e8724a', color: '#fff', fontWeight: 600 }} title={item.disabled ? 'Complete your profile first' : ''}>
+                      <span className="nav-icon">{item.icon}</span> {item.label} {item.disabled && '🔒'}
                     </button>
                   </li>
                 );
@@ -1027,9 +1031,9 @@ const App = () => {
               const isParentActive = currentPage === item.id || (item.children && item.children.some(c => currentPage === c.id));
               return (
                 <li key={item.id} className="nav-item">
-                  <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)} style={{ position: 'relative' }}>
+                  <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : () => handlePageChange(item.id)} style={item.disabled ? { position: 'relative', opacity: 0.4, cursor: 'not-allowed' } : { position: 'relative' }} title={item.disabled ? 'Complete your profile first' : ''}>
                     <span className="nav-icon">{item.icon}</span>
-                    {item.label}
+                    {item.label} {item.disabled && '🔒'}
                     {item.id === 'messages' && unreadMsgCount > 0 && (
                       <span style={{
                         marginLeft: 'auto', background: '#e8724a', color: '#fff', borderRadius: 10,
@@ -1125,7 +1129,7 @@ const App = () => {
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav">
         {getBottomNavItems().map(item => (
-          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={() => handlePageChange(item.id)} style={{ position: 'relative', ...(item.isAccent && currentPage !== item.id ? { color: '#e8724a' } : {}) }}>
+          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: '#e8724a' } : {}) }}>
             <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: '#fff3ed', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
             {item.id === 'messages' && unreadMsgCount > 0 && (
               <span style={{
