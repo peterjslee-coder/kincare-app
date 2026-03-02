@@ -108,7 +108,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     workLocationAddress: '', workCity: '', workState: '', workZip: '',
     travelRadius: '15',
     // Step 3 — Pets, Allergies & Medical
-    comfortableWithPets: null, petAllergies: '', foodAllergies: '', medicalConditions: '',
+    comfortableWithPets: null, petAllergies: '', foodAllergies: '', medicalConditions: '', openToInterview: null,
     // Step 4 — Legal / Checkr
     legalFirstName: '', legalLastName: '', dateOfBirth: '', ssnLast4: '',
     dlNumber: '', dlState: '', backgroundCheckConsent: false,
@@ -366,6 +366,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           travelRadius: parseInt(form.travelRadius) || 15,
           termsAcceptedAt: new Date().toISOString(),
           termsVersion: '1.0',
+          openToInterview: form.openToInterview,
         }),
       });
       const data = await res.json();
@@ -862,7 +863,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 3: Personal Info + Work Location ─── */}
         {step === 3 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '16px' }}>Personal Information</h2>
+            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '16px' }}>👤 Personal Information</h2>
             {errorSummary()}
             <div style={fieldGroup}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -915,7 +916,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {/* Work Location */}
             <div style={{ padding: '16px', background: '#f0faf8', borderRadius: '8px', marginBottom: '16px', border: '1px solid #d0e8e2' }}>
-              <h3 style={{ fontSize: '15px', color: '#1b6b5a', margin: '0 0 4px' }}>Preferred Work Location</h3>
+              <h3 style={{ fontSize: '15px', color: '#1b6b5a', margin: '0 0 4px' }}>📍 Preferred Work Location</h3>
               <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px' }}>
                 Where do you prefer to work? Leave blank to use your home address.
               </p>
@@ -949,33 +950,37 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               </div>
             </div>
             <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Hourly Rates *</label>
-              <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>6-hour minimum per booking</div>
+              <label style={labelStyle}>💰 Hourly Rates *</label>
+              <div style={{ fontSize: 12, color: '#1b6b5a', marginBottom: 4, fontWeight: 600 }}>Most caregivers in your area start at these rates:</div>
+              <div style={{ fontSize: 11, color: '#888', marginBottom: 10 }}>You can adjust anytime. 6-hour minimum per booking.</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>Daytime (6a–6p)</div>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4, fontWeight: 600 }}>☀️ Daytime (6a–6p)</div>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
                     <input type="number" min="15" max="200" style={errors.rateDaytime ? { ...inputErrorStyle, width: '100%' } : { ...inputStyle, width: '100%' }} value={form.rateDaytime}
-                      onChange={(e) => updateForm('rateDaytime', e.target.value)} placeholder="25" />
+                      onChange={(e) => updateForm('rateDaytime', e.target.value)} placeholder="24" />
                   </div>
+                  <div style={{ fontSize: 10, color: '#1b6b5a', marginTop: 2 }}>Suggested: $24/hr</div>
                   {errors.rateDaytime && <div style={errorStyle}>{errors.rateDaytime}</div>}
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>Evening (6p–12a)</div>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4, fontWeight: 600 }}>🌆 Evening (6p–12a)</div>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                    <input type="number" min="15" max="200" style={inputStyle} value={form.rateNighttime}
-                      onChange={(e) => updateForm('rateNighttime', e.target.value)} placeholder="30" />
+                    <input type="number" min="15" max="200" style={{ ...inputStyle, width: '100%' }} value={form.rateNighttime}
+                      onChange={(e) => updateForm('rateNighttime', e.target.value)} placeholder="28" />
                   </div>
+                  <div style={{ fontSize: 10, color: '#1b6b5a', marginTop: 2 }}>Suggested: $28/hr</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>Overnight (12a–6a)</div>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4, fontWeight: 600 }}>🌙 Overnight (12a–6a)</div>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                    <input type="number" min="15" max="200" style={inputStyle} value={form.rateOvernight}
-                      onChange={(e) => updateForm('rateOvernight', e.target.value)} placeholder="35" />
+                    <input type="number" min="15" max="200" style={{ ...inputStyle, width: '100%' }} value={form.rateOvernight}
+                      onChange={(e) => updateForm('rateOvernight', e.target.value)} placeholder="30" />
                   </div>
+                  <div style={{ fontSize: 10, color: '#1b6b5a', marginTop: 2 }}>Suggested: $30/hr</div>
                 </div>
               </div>
             </div>
@@ -988,14 +993,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {/* Pets, Allergies & Medical */}
             <div style={{ padding: '16px', background: '#faf8f5', borderRadius: '8px', marginBottom: '16px', border: '1px solid #e8e0d8' }}>
-              <h3 style={{ fontSize: '15px', color: '#8B6914', margin: '0 0 4px' }}>Pets, Allergies & Medical</h3>
+              <h3 style={{ fontSize: '15px', color: '#8B6914', margin: '0 0 4px' }}>🐾 Pets, Allergies & Medical</h3>
               <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px' }}>
                 This helps families match with the right caregiver. All fields are optional.
               </p>
               <div style={fieldGroup}>
                 <label style={labelStyle}>Are you comfortable working around pets?</label>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                  {[{ val: true, label: 'Yes, I love pets' }, { val: false, label: 'No, prefer pet-free' }].map(opt => (
+                  {[{ val: true, label: '🐾 Yes, I love pets!' }, { val: false, label: '🌿 Prefer pet-free' }].map(opt => (
                     <button key={String(opt.val)} onClick={() => updateForm('comfortableWithPets', opt.val)} style={{
                       flex: 1, padding: '10px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
                       border: form.comfortableWithPets === opt.val ? '2px solid #8B6914' : '2px solid #ddd',
@@ -1025,6 +1030,21 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   placeholder="e.g. asthma, mobility limitations (leave blank if none)" />
               </div>
             </div>
+            <div style={{ padding: '16px', background: '#f0faf8', border: '1px solid #d0e8e2', borderRadius: 10, marginBottom: 12 }}>
+              <label style={{ ...labelStyle, color: '#1b6b5a' }}>🤝 Are you open to a quick intro call with families before your first visit?</label>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>Some families like to meet caregivers briefly before the first appointment. This is totally optional.</div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[{ val: true, label: '👍 Yes, happy to!' }, { val: false, label: '⏭️ Skip for now' }].map(opt => (
+                  <button key={String(opt.val)} onClick={() => updateForm('openToInterview', opt.val)} style={{
+                    flex: 1, padding: '10px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                    border: form.openToInterview === opt.val ? '2px solid #1b6b5a' : '2px solid #ddd',
+                    background: form.openToInterview === opt.val ? '#e8f5e9' : '#fff',
+                    color: form.openToInterview === opt.val ? '#1b6b5a' : '#555',
+                    cursor: 'pointer',
+                  }}>{opt.label}</button>
+                ))}
+              </div>
+            </div>
 
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
@@ -1037,7 +1057,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 4: Legal / Checkr ─── */}
         {step === 4 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Background Check Information</h2>
+            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>🔒 Background Check Information</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
               This information is required for your background check and will be kept secure.
             </p>
@@ -1114,7 +1134,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 5: Certifications ─── */}
         {step === 5 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Certifications</h2>
+            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>📜 Certifications</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
               Add any professional certifications you hold. You can add multiple. Skip if you don't have any yet.
             </p>
@@ -1204,7 +1224,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           };
           return (
             <div className="card" style={{ padding: '24px' }}>
-              <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Academic Program</h2>
+              <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>🎓 Academic Program</h2>
               <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
                 Some caregivers are enrolled in educational programs that require tracking hours and types of work performed. Let us know if this applies to you.
               </p>
@@ -1369,7 +1389,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 8: Document Upload ─── */}
         {step === 8 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Upload Documents</h2>
+            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>📄 Upload Documents</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
               Upload photos of your driver's license (front and back). You can also upload certification documents.
             </p>

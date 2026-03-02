@@ -414,6 +414,8 @@ async function initializeDatabase() {
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS caregiver_briefing TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS caregiver_briefing_updated_at TIMESTAMPTZ`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS briefing_acknowledged_at TIMESTAMPTZ`,
+    // v1.34.55 — Caregiver interview openness preference
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS open_to_interview INTEGER`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
