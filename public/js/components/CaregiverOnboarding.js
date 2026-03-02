@@ -176,7 +176,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
   };
 
-  const TOTAL_STEPS = 9;
+  const TOTAL_STEPS = 8; // Step 7 (BG check payment) removed — handled in First Steps
   const US_STATES = [
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
     'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY',
@@ -252,7 +252,6 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!form.city.trim()) errs.city = 'Required';
       if (!form.state) errs.state = 'Required';
       if (!form.zip.trim()) errs.zip = 'Required';
-      if (!form.rateDaytime) errs.rateDaytime = 'Required';
     }
     if (stepNum === 4) {
       if (!form.legalFirstName.trim()) errs.legalFirstName = 'Required';
@@ -272,7 +271,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         if (isNursing && !form.acknowledgeNoMedicalCare) errs.acknowledgeNoMedicalCare = 'You must acknowledge this to continue';
       }
     }
-    if (stepNum === 8) {
+    if (stepNum === 7) { // Document upload validation (was step 8)
       const hasDLFront = form.documents.some(d => d.type === 'dl_front');
       const hasDLBack = form.documents.some(d => d.type === 'dl_back');
       if (!hasDLFront) errs.dl_front = "Driver's license front is required";
@@ -354,10 +353,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           bio: form.bio, yearsExperience: parseInt(form.yearsExperience) || 0,
-          hourlyRate: parseFloat(form.rateDaytime) || parseFloat(form.hourlyRate),
-          rateDaytime: parseFloat(form.rateDaytime) || null,
-          rateNighttime: parseFloat(form.rateNighttime) || null,
-          rateOvernight: parseFloat(form.rateOvernight) || null,
+          hourlyRate: 24,
+          rateDaytime: 24, rateNighttime: 28, rateOvernight: 30,
           specialties: [], certifications: [],
           city: form.city, state: form.state,
           address: form.addressLine1,
@@ -460,7 +457,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   // Step 8: Upload documents
   const handleUploadDocuments = async () => {
-    if (!validateStep(8)) return;
+    if (!validateStep(7)) return;
     setSaving(true);
     try {
       const token = authToken || window.AUTH_TOKEN;
@@ -484,14 +481,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       }, 1); // only 1 retry for uploads (they're larger)
       if (!res.ok) {
         const data = await res.json();
-        trackEvent('error', 8, { error: data.error, source: 'api', status: res.status });
+        trackEvent('error', 7, { error: data.error, source: 'api', status: res.status });
         setErrors({ submit: data.error }); setSaving(false); return;
       }
-      trackEvent('step_complete', 8);
-      setStep(9);
+      trackEvent('step_complete', 7);
+      setStep(8);
     } catch (err) {
       const msg = !navigator.onLine ? 'You appear to be offline. Please check your connection and try again.' : 'Upload failed — please check your connection and try again.';
-      trackEvent('error', 8, { error: msg, source: 'network' });
+      trackEvent('error', 7, { error: msg, source: 'network' });
       setErrors({ submit: msg });
     }
     setSaving(false);
@@ -659,9 +656,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     4: 'Background Check Info',
     5: 'Certifications',
     6: 'Academic Program',
-    7: 'Background Check Payment',
-    8: 'Document Upload',
-    9: 'Review & Complete',
+    7: 'Document Upload',
+    8: 'Review & Complete',
   };
 
   // Error summary banner — shows at top of step when validation fails
@@ -949,41 +945,6 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   onChange={(e) => updateForm('yearsExperience', e.target.value)} placeholder="0" />
               </div>
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>💰 Hourly Rates *</label>
-              <div style={{ fontSize: 12, color: '#1b6b5a', marginBottom: 4, fontWeight: 600 }}>Most caregivers in your area start at these rates:</div>
-              <div style={{ fontSize: 11, color: '#888', marginBottom: 10 }}>You can adjust your rates anytime from your account settings.</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4, fontWeight: 600 }}>☀️ Daytime (6a–6p)</div>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                    <input type="number" min="15" max="200" style={errors.rateDaytime ? { ...inputErrorStyle, width: '100%' } : { ...inputStyle, width: '100%' }} value={form.rateDaytime}
-                      onChange={(e) => updateForm('rateDaytime', e.target.value)} placeholder="24" />
-                  </div>
-                  <div style={{ fontSize: 10, color: '#1b6b5a', marginTop: 2 }}>Suggested: $24/hr</div>
-                  {errors.rateDaytime && <div style={errorStyle}>{errors.rateDaytime}</div>}
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4, fontWeight: 600 }}>🌆 Evening (6p–12a)</div>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                    <input type="number" min="15" max="200" style={{ ...inputStyle, width: '100%' }} value={form.rateNighttime}
-                      onChange={(e) => updateForm('rateNighttime', e.target.value)} placeholder="28" />
-                  </div>
-                  <div style={{ fontSize: 10, color: '#1b6b5a', marginTop: 2 }}>Suggested: $28/hr</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4, fontWeight: 600 }}>🌙 Overnight (12a–6a)</div>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                    <input type="number" min="15" max="200" style={{ ...inputStyle, width: '100%' }} value={form.rateOvernight}
-                      onChange={(e) => updateForm('rateOvernight', e.target.value)} placeholder="30" />
-                  </div>
-                  <div style={{ fontSize: 10, color: '#1b6b5a', marginTop: 2 }}>Suggested: $30/hr</div>
-                </div>
-              </div>
-            </div>
             <div style={fieldGroup}>
               <label style={labelStyle}>Bio</label>
               <textarea style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} value={form.bio}
@@ -1220,7 +1181,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               setSaving(false);
             }
             trackEvent('step_complete', 6, { needsProgramReports: !!form.needsProgramReports });
-            setStep(7);
+            setStep(7); // Docs (was step 8, bg check payment removed)
           };
           return (
             <div className="card" style={{ padding: '24px' }}>
@@ -1323,71 +1284,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           );
         })()}
 
-        {/* ─── Step 7: Background Check Payment ($30) ─── */}
+        {/* ─── Step 7: Document Upload ─── */}
         {step === 7 && (
-          <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Background Check Payment</h2>
-            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
-              A one-time $30 fee is required to initiate your Checkr background check. This covers criminal history, driving record, and identity verification.
-            </p>
-
-            {bgCheckPaid ? (
-              <div style={{
-                textAlign: 'center', padding: '32px 20px', background: '#e8f5e9',
-                borderRadius: '12px', marginBottom: '20px',
-              }}>
-                <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#9989;</div>
-                <h3 style={{ color: '#2e7d32', margin: '0 0 8px', fontSize: '18px' }}>Payment Received!</h3>
-                <p style={{ color: '#4caf50', margin: 0, fontSize: '14px' }}>
-                  Your background check has been initiated. You can continue with your application.
-                </p>
-              </div>
-            ) : (
-              <div style={{ marginBottom: '20px' }}>
-                <StripePaymentForm
-                  amount={30}
-                  description="This charge will appear as 'InPlace' on your statement."
-                  buttonText="Pay $30.00 — Background Check"
-                  onSuccess={(intent) => {
-                    setBgCheckPaid(true);
-                  }}
-                  onError={(msg) => {
-                    setErrors({ submit: msg });
-                  }}
-                />
-              </div>
-            )}
-
-            <div style={{
-              padding: '14px', background: '#f0faf8', borderRadius: '8px', marginBottom: '16px',
-              border: '1px solid #d0e8e2', fontSize: '13px', color: '#1b6b5a', lineHeight: '1.6',
-            }}>
-              <strong>Refund policy:</strong> Your $30 background check fee will be refunded to your InPlace account after you complete 10 care sessions. That's our way of investing in caregivers who stay with us.
-            </div>
-
-            {errors.submit && <div style={{ color: '#e74c3c', fontSize: '12px', marginBottom: '12px' }}>{errors.submit}</div>}
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {backBtn(6)}
-              <button onClick={() => setStep(8)} style={{
-                flex: 1, padding: '14px', background: '#1b6b5a',
-                color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px',
-                fontWeight: 600, cursor: 'pointer',
-              }}>{bgCheckPaid ? 'Continue' : 'Continue Without Payment'}</button>
-            </div>
-
-            {!bgCheckPaid && (
-              <div style={{
-                marginTop: '12px', padding: '14px', background: '#fff8e1', borderRadius: '8px',
-                border: '1px solid #ffe082', fontSize: '13px', color: '#b45309', lineHeight: '1.6',
-              }}>
-                <strong>Note:</strong> You can continue registration without paying now, but you won't be able to view available care requests or accept jobs on the platform until your background check payment is complete. You can pay later from your dashboard.
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ─── Step 8: Document Upload ─── */}
-        {step === 8 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>📄 Upload Documents</h2>
             <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
@@ -1504,14 +1402,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
             <div style={{ display: 'flex', gap: '10px' }}>
-              {backBtn(7)}
+              {backBtn(6)}
               {nextBtn(handleUploadDocuments, 'Upload & Continue')}
             </div>
           </div>
         )}
 
-        {/* ─── Step 9: Review & Complete ─── */}
-        {step === 9 && (
+        {/* ─── Step 8: Review & Complete ─── */}
+        {step === 8 && (
           <div className="card" style={{ padding: '24px' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#127881;</div>
@@ -1528,7 +1426,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <div><span style={{ color: '#888' }}>Name:</span> {form.firstName} {form.lastName}</div>
                 <div><span style={{ color: '#888' }}>Phone:</span> {form.phone}</div>
                 <div><span style={{ color: '#888' }}>Location:</span> {form.city}, {form.state} {form.zip}</div>
-                <div><span style={{ color: '#888' }}>Rates:</span> ${form.rateDaytime || form.hourlyRate}{form.rateNighttime ? `/$${form.rateNighttime}` : ''}{form.rateOvernight ? `/$${form.rateOvernight}` : ''}/hr</div>
+                <div><span style={{ color: '#888' }}>Rates:</span> Set from your dashboard</div>
                 <div><span style={{ color: '#888' }}>Experience:</span> {form.yearsExperience || 0} years</div>
                 <div><span style={{ color: '#888' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
                 <div><span style={{ color: '#888' }}>Documents:</span> {form.documents.length} uploaded</div>
@@ -1564,10 +1462,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <strong>What happens next:</strong>
               </p>
               <ul style={{ fontSize: '13px', color: '#b45309', margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
-                {!bgCheckPaid && <li>Pay for your background check ($30) from your dashboard</li>}
-                <li>Your background check {bgCheckPaid ? 'is being' : 'will be'} processed (typically 2-5 business days)</li>
-                <li>Once verified, complete your First Steps checklist to start accepting care requests</li>
-                <li>Set your availability and care preferences from your dashboard</li>
+                <li>Complete your <strong>First Steps</strong> checklist on your dashboard</li>
+                <li>Set your rates, care preferences, availability, and connect Stripe</li>
+                <li>Pay for your background check ($30) to unlock job listings</li>
+                <li>Once everything is complete, you can start accepting care requests!</li>
               </ul>
             </div>
 

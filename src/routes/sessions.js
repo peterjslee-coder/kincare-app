@@ -85,12 +85,9 @@ router.get("/", async (req, res) => {
       LEFT JOIN users fu ON cs.family_user_id = fu.id
       WHERE (
         cs.caregiver_id = ?
-        OR (cs.status IN ('requested', 'open', 'pending') AND (
-          cs.care_recipient_id IN (
-            SELECT care_recipient_id FROM caregiver_assignments
-            WHERE caregiver_profile_id = ? AND is_active = 1
-          )
-          OR cs.caregiver_id IS NULL
+        OR (cs.status IN ('requested', 'open', 'pending') AND cs.care_recipient_id IN (
+          SELECT care_recipient_id FROM caregiver_assignments
+          WHERE caregiver_profile_id = ? AND is_active = 1
         ))
       )
       AND COALESCE(fu.is_demo, 0) = ?
@@ -116,38 +113,7 @@ router.get("/", async (req, res) => {
 
   let sessions = await db.prepare(query).all(...params);
 
-  // For caregivers: also fetch ALL open care requests separately to ensure none are missed
-  if (activeRole !== 'family' && activeRole !== 'care_for') {
-    // Demo isolation: match current user's demo status
-    const meCheck = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
-    const isDemoCheck = meCheck && meCheck.is_demo ? 1 : 0;
-    const openQuery = `
-      SELECT cs.*,
-        cr.first_name || ' ' || cr.last_name AS recipient_name,
-        cr.preferences AS recipient_preferences,
-        cr.location_city AS recipient_city,
-        cr.location_state AS recipient_state,
-        cr.location_zip AS recipient_zip,
-        cr.latitude AS recipient_lat,
-        cr.longitude AS recipient_lng
-      FROM care_sessions cs
-      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-      LEFT JOIN users fu ON cs.family_user_id = fu.id
-      WHERE cs.status IN ('requested', 'open', 'pending') AND cs.caregiver_id IS NULL
-        AND COALESCE(fu.is_demo, 0) = ?
-    `;
-    let openParams = [isDemoCheck];
-    let openFilters = '';
-    if (from) { openFilters += " AND cs.scheduled_date >= ?"; openParams.push(from); }
-    if (to) { openFilters += " AND cs.scheduled_date <= ?"; openParams.push(to); }
-    openFilters += " ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC LIMIT 50";
-    const openSessions = await db.prepare(openQuery + openFilters).all(...openParams);
-    // Merge: add any open requests not already in the result set
-    const existingIds = new Set(sessions.map(s => s.id));
-    for (const s of openSessions) {
-      if (!existingIds.has(s.id)) sessions.push(s);
-    }
-  }
+  // Open care requests are shown in Find Work view, not in the calendar sessions list
 
   // Add platform fee info: caregiver gets full rate, platform fee added on top for family
   const feePercent = await getPlatformFeePercent(db);
