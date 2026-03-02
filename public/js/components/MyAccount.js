@@ -159,7 +159,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   const [editData, setEditData] = useState({});
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState(() => {
+    if (window.__accountTab) { const t = window.__accountTab; delete window.__accountTab; return t; }
+    return 'profile';
+  });
   const [notifications, setNotifications] = useState({
     sessionUpdates: true, caregiverMessages: true, healthAlerts: true, reminderEmails: false,
     push_messages: true, push_care_request: true, push_care_request_accepted: true, push_session_status: true

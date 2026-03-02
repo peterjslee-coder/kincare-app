@@ -1152,7 +1152,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, lineHeight: 1.5 }}>
               For the safety of our care recipients, you must complete a background check before viewing job details or accepting care requests. This is a one-time $30 fee that is refunded after 10 completed sessions.
             </div>
-            <button onClick={() => setActiveTab('financials')}
+            <button onClick={() => { window.__accountTab = 'payments'; if (window.__navigateTo) window.__navigateTo('account'); }}
               style={{ padding: '10px 24px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
               Go to Payments → Pay for Background Check
             </button>
