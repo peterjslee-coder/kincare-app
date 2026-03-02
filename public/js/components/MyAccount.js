@@ -216,7 +216,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   const [preferences, setPreferences] = useState(null);
   const [savingPrefs, setSavingPrefs] = useState(false);
   // Caregiver - Rate editing state
-  const [editRates, setEditRates] = useState(null);
+  const [editRates, setEditRates] = useState({ daytime: '24', nighttime: '28', overnight: '30' });
   const [savingRates, setSavingRates] = useState(false);
 
   const fetchUser = async () => {
@@ -435,7 +435,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         if (r?.ok) { const d = await r.json(); setBgCheckPaid(!!d.backgroundCheckPaid); }
       }).catch(() => {});
       apiFetch('/api/caregivers/me').then(async r => {
-        if (r?.ok) { const d = await r.json(); setEditRates({ daytime: d.profile?.rate_daytime || '', nighttime: d.profile?.rate_nighttime || '', overnight: d.profile?.rate_overnight || '' }); }
+        if (r?.ok) { const d = await r.json(); setEditRates({ daytime: d.profile?.rate_daytime || '24', nighttime: d.profile?.rate_nighttime || '28', overnight: d.profile?.rate_overnight || '30' }); }
       }).catch(() => {});
     }
   }, [activeTab]);
@@ -1317,46 +1317,43 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
           {/* Your Rates Card */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header">💰 Your Rates</div>
-            {editRates && (
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Set your hourly rates for each time period. You can adjust these anytime.</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
               <div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>☀️ Daytime</div>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                      <input type="number" min="15" max="200" value={editRates.daytime}
-                        onChange={(e) => setEditRates({...editRates, daytime: e.target.value})}
-                        style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
-                    </div>
-                    <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>6am–6pm</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>🌆 Evening</div>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                      <input type="number" min="15" max="200" value={editRates.nighttime}
-                        onChange={(e) => setEditRates({...editRates, nighttime: e.target.value})}
-                        style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
-                    </div>
-                    <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>6pm–12am</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>🌙 Overnight</div>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                      <input type="number" min="15" max="200" value={editRates.overnight}
-                        onChange={(e) => setEditRates({...editRates, overnight: e.target.value})}
-                        style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
-                    </div>
-                    <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>12am–6am</div>
-                  </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>☀️ Daytime</div>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
+                  <input type="number" min="15" max="200" value={editRates.daytime}
+                    onChange={(e) => setEditRates({...editRates, daytime: e.target.value})}
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
                 </div>
-                <button onClick={handleSaveRates} disabled={savingRates}
-                  style={{ padding: '8px 20px', background: savingRates ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                  {savingRates ? 'Saving...' : 'Update Rates'}
-                </button>
+                <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>6am–6pm</div>
               </div>
-            )}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>🌆 Evening</div>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
+                  <input type="number" min="15" max="200" value={editRates.nighttime}
+                    onChange={(e) => setEditRates({...editRates, nighttime: e.target.value})}
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
+                </div>
+                <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>6pm–12am</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>🌙 Overnight</div>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
+                  <input type="number" min="15" max="200" value={editRates.overnight}
+                    onChange={(e) => setEditRates({...editRates, overnight: e.target.value})}
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
+                </div>
+                <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>12am–6am</div>
+              </div>
+            </div>
+            <button onClick={handleSaveRates} disabled={savingRates}
+              style={{ padding: '8px 20px', background: savingRates ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              {savingRates ? 'Saving...' : 'Save Rates'}
+            </button>
           </div>
 
           {/* Stripe Connect Card */}
