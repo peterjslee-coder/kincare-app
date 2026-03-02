@@ -537,6 +537,9 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 I spent 25 years in the Air Force as a fighter pilot, eventually commanding at three levels including an Air Force flying wing. It was the kind of career that I loved, and the mission often came first. But there was a cost I didn't fully reckon with until later.
               </p>
               <p style={{ marginBottom: '16px' }}>
+                Now I'm leaving military life and moving back home to help take care of my family. It's a transition a lot of veterans face — you spend decades serving your country, and then you realize the people who need you most are the ones who've been waiting at home all along.
+              </p>
+              <p style={{ marginBottom: '16px' }}>
                 While I was deployed or stationed around the world, my mom was getting older. She needs help to stay at home. But what she wants is simple: to stay in her own home. Her flower beds, her kitchen, her neighborhood. That's where she feels like herself.
               </p>
               <p style={{ marginBottom: '16px' }}>
@@ -551,8 +554,14 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               <p style={{ marginBottom: '16px' }}>
                 This isn't just about aging parents. There are people recovering from life-changing injuries, managing chronic diseases, or living with conditions like autism or Down syndrome who need that same kind of regular, dependable support. Not institutionalized care — just a steady hand nearby.
               </p>
+              <p style={{ marginBottom: '16px' }}>
+                There's another side of this too. My community needs good work at fair wages. There are people all around us — nursing students, retirees, parents with flexible schedules, people who genuinely care about others — who would be incredible caregivers if someone just connected them with families who need help. Right now, agencies take huge cuts and treat caregivers like replaceable parts. That's not right. The people doing this work deserve to be paid fairly and treated as the professionals they are.
+              </p>
+              <p style={{ marginBottom: '16px' }}>
+                There's so much need for this kind of help, and so much untapped potential in our communities. What's missing isn't willingness — it's the connection. Families don't know who to trust. Caregivers don't know where to find work that values them. inPlace is the bridge. It's about building real relationships between families and the people who care for their loved ones, not just filling shifts.
+              </p>
               <p style={{ marginTop: '24px', fontSize: '16px', color: '#1a1a1a', fontWeight: 500, lineHeight: 1.7 }}>
-                I built this app and this business because it's what my siblings and our families need to keep Mom at home. I hope it helps you keep your loved ones where they want to be.
+                I built this app and this business because it's what my siblings and our families need to keep Mom at home — and because my community deserves a better way to give and receive care. I hope it helps you keep your loved ones where they want to be.
               </p>
             </div>
           </div>
