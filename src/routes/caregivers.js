@@ -270,14 +270,26 @@ router.get("/:id", async (req, res) => {
 // Get the current caregiver's own profile (for map centering, etc.)
 router.get("/me", requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
-  const profile = await db.prepare(`
+  let profile = await db.prepare(`
     SELECT cp.*, u.first_name, u.last_name, u.email, u.phone, u.avatar_url
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
     WHERE cp.user_id = ?
   `).get(req.user.id);
 
-  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+  // Auto-create caregiver profile if it doesn't exist yet (e.g. new registration)
+  if (!profile) {
+    const { v4: uuidv4 } = require("uuid");
+    const newId = uuidv4();
+    await db.prepare(`INSERT INTO caregiver_profiles (id, user_id) VALUES (?, ?)`).run(newId, req.user.id);
+    profile = await db.prepare(`
+      SELECT cp.*, u.first_name, u.last_name, u.email, u.phone, u.avatar_url
+      FROM caregiver_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.user_id = ?
+    `).get(req.user.id);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+  }
 
   res.json({ profile });
 });

@@ -450,7 +450,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     if (activeTab === 'preferences') {
       apiFetch('/api/caregivers/me').then(async r => {
         if (r?.ok) { const d = await r.json(); setPreferences(d.profile?.care_preferences ? JSON.parse(d.profile.care_preferences) : {}); }
-      }).catch(() => {});
+        else { setPreferences({}); }
+      }).catch(() => { setPreferences({}); });
     }
   }, [activeTab]);
 
