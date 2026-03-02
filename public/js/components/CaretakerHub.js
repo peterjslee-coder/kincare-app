@@ -402,10 +402,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   }, [activeTab]);
 
   // Fetch payout preference when financials tab is active
+  // Set bgCheckPaid from profile data on load
+  useEffect(() => {
+    if (data?.profile) {
+      setBgCheckPaid(!!data.profile.background_check_paid || !!data.profile.isBackgroundChecked);
+    }
+  }, [data?.profile?.background_check_paid, data?.profile?.isBackgroundChecked]);
+
   useEffect(() => {
     if (activeTab === 'financials') {
       fetchPayoutPreference();
-      setBgCheckPaid(!!data?.profile?.background_check_paid || !!data?.profile?.isBackgroundChecked);
     }
   }, [activeTab]);
 
@@ -1134,7 +1140,26 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       })()}
 
       {/* Find Work + Available Jobs — merged tile */}
-      {(() => {
+      {!bgCheckPaid && (
+        <div style={{ borderRadius: 14, overflow: 'hidden', marginBottom: 20, border: '1px solid #e5e7eb', background: '#fff' }}>
+          <div style={{ background: 'linear-gradient(135deg, #6b7280 0%, #9ca3af 100%)', color: '#fff', padding: '16px 20px' }}>
+            <div style={{ fontWeight: 700, fontSize: 17 }}>🔒 Find Work</div>
+            <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>Complete your background check to view available jobs</div>
+          </div>
+          <div style={{ padding: '24px 20px', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔐</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Background Check Required</div>
+            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, lineHeight: 1.5 }}>
+              For the safety of our care recipients, you must complete a background check before viewing job details or accepting care requests. This is a one-time $30 fee that is refunded after 10 completed sessions.
+            </div>
+            <button onClick={() => setActiveTab('financials')}
+              style={{ padding: '10px 24px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+              Go to Payments → Pay for Background Check
+            </button>
+          </div>
+        </div>
+      )}
+      {bgCheckPaid && (() => {
         const sortedJobs = [...openJobs].sort((a, b) => {
           // Direct offers always on top
           const aOffer = a.offeredToCaregiverId ? 1 : 0;

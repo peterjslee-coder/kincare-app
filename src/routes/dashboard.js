@@ -506,44 +506,48 @@ async function caregiverDashboard(db, userId, res) {
       reviewerName: r.reviewer_name,
       createdAt: r.created_at,
     })),
-    openJobs: openJobs.map(s => {
-      // Conflict detection: check against caregiver's upcoming sessions
-      const conflict = computeJobConflicts(s, upcoming);
-      // Distance from caregiver's location
-      const cgLat = profile.latitude || profile.work_latitude;
-      const cgLng = profile.longitude || profile.work_longitude;
-      const dist = (cgLat && cgLng && s.recipient_lat && s.recipient_lng)
-        ? Math.round(haversineDistance(cgLat, cgLng, s.recipient_lat, s.recipient_lng) * 10) / 10
-        : null;
-      // Match score
-      const match = computeMatchScore(s, profile, conflict.hasConflict, dist);
-      return {
-        id: s.id,
-        date: s.scheduled_date,
-        time: s.scheduled_time,
-        serviceType: s.service_type,
-        status: s.status,
-        durationHours: s.duration_hours,
-        recipientName: s.recipient_name,
-        recipientCity: s.recipient_city,
-        familyName: s.family_name,
-        specialInstructions: s.special_instructions,
-        estimatedCost: s.estimated_cost,
-        proposedRate: s.proposed_rate,
-        shortNoticeSurcharge: s.short_notice_surcharge,
-        timezone: s.care_timezone || "America/New_York",
-        hasConflict: conflict.hasConflict,
-        conflictWith: conflict.conflictWith,
-        distanceMiles: dist,
-        matchScore: match.score,
-        matchQuality: match.quality,
-        offeredToCaregiverId: s.offered_to_caregiver_id || null,
-        exclusiveUntil: s.exclusive_until || null,
-        recipientAge: s.recipient_age || null,
-        careSummary: s.cr_caregiver_briefing ? s.cr_caregiver_briefing.substring(0, 200) : null,
-        healthTags: (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })(),
-      };
-    }),
+    openJobs: (() => {
+      const bgCleared = !!profile.background_check_paid || !!profile.is_background_checked;
+      return openJobs.map(s => {
+        // Conflict detection: check against caregiver's upcoming sessions
+        const conflict = computeJobConflicts(s, upcoming);
+        // Distance from caregiver's location
+        const cgLat = profile.latitude || profile.work_latitude;
+        const cgLng = profile.longitude || profile.work_longitude;
+        const dist = (cgLat && cgLng && s.recipient_lat && s.recipient_lng)
+          ? Math.round(haversineDistance(cgLat, cgLng, s.recipient_lat, s.recipient_lng) * 10) / 10
+          : null;
+        // Match score
+        const match = computeMatchScore(s, profile, conflict.hasConflict, dist);
+        // If background check not cleared, strip sensitive care recipient info
+        return {
+          id: s.id,
+          date: s.scheduled_date,
+          time: s.scheduled_time,
+          serviceType: s.service_type,
+          status: s.status,
+          durationHours: s.duration_hours,
+          recipientName: bgCleared ? s.recipient_name : null,
+          recipientCity: bgCleared ? s.recipient_city : (s.recipient_city ? s.recipient_city.split(',')[0] : null),
+          familyName: bgCleared ? s.family_name : null,
+          specialInstructions: bgCleared ? s.special_instructions : null,
+          estimatedCost: s.estimated_cost,
+          proposedRate: s.proposed_rate,
+          shortNoticeSurcharge: s.short_notice_surcharge,
+          timezone: s.care_timezone || "America/New_York",
+          hasConflict: conflict.hasConflict,
+          conflictWith: conflict.conflictWith,
+          distanceMiles: dist,
+          matchScore: match.score,
+          matchQuality: match.quality,
+          offeredToCaregiverId: s.offered_to_caregiver_id || null,
+          exclusiveUntil: s.exclusive_until || null,
+          recipientAge: bgCleared ? (s.recipient_age || null) : null,
+          careSummary: bgCleared ? (s.cr_caregiver_briefing ? s.cr_caregiver_briefing.substring(0, 200) : null) : null,
+          healthTags: bgCleared ? (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })() : [],
+        };
+      });
+    })(),
     recentlyCompleted: recentCompletedCg.map(s => {
       // 75/25 split: recompute from caregiver's actual rates (matches session detail endpoint)
       const rates = {
