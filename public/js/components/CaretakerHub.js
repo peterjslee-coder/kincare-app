@@ -826,14 +826,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   };
 
   // First Steps checklist — encouraging but NEVER blocks dashboard access
-  // Photo is optional and not in this list — families want to see one, but it's not a gate
+  // New 5-step order per Pete's specs
+  const hasPhoto = !!profile.avatar_url;
+  const hasAvailability = availRules.length > 0;
+  const hasRates = !!(profile.rateDaytime || profile.hourlyRate);
+  const securityReviewed = !!localStorage.getItem('inplace_security_reviewed');
+  const stripeConnected = stripeStatus?.status === 'active';
+  const bgPaid = !!profile.background_check_paid || !!profile.isBackgroundChecked;
+  const hasPreferences = !!stoplightData;
+
   const firstSteps = [
-    { id: 'profile', label: 'Complete your profile', done: !!(profile.bio && (profile.rateDaytime || profile.hourlyRate)) },
-    { id: 'availability', label: 'Set your availability', done: availRules.length > 0 || availVisited },
-    { id: 'stoplight', label: 'Set your care preferences (stoplight)', done: !!stoplightData },
-    { id: 'photo', label: 'Upload a profile photo', done: !!profile.avatar_url },
-    { id: 'payments', label: 'Set up payments (Stripe)', done: stripeStatus?.status === 'active' },
-    { id: 'bgcheck', label: 'Pay for background check ($30)', done: !!profile.background_check_paid || !!profile.isBackgroundChecked },
+    { id: 'photo', label: 'Review your account page and add a profile picture', desc: 'Families want to see who they\'re inviting into their home', done: hasPhoto, missing: !hasPhoto ? 'Upload a profile photo' : null },
+    { id: 'avail-rates', label: 'Set your availability and rates', desc: 'Tell families when you\'re free and what you charge', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
+    { id: 'security', label: 'Make your account more secure', desc: 'Review your security settings and enable 2FA', done: securityReviewed, missing: !securityReviewed ? 'Open Settings and scroll to the bottom to review all options' : null },
+    { id: 'stripe-bg', label: 'Set up Stripe, add bank details, and pay for background check', desc: 'Required before you can accept paid jobs — $30 for background check', done: stripeConnected && bgPaid, missing: (() => { const m = []; if (!stripeConnected) m.push('connect Stripe'); if (!bgPaid) m.push('pay for background check ($30)'); const d = []; if (stripeConnected) d.push('Stripe connected ✓'); return (d.length > 0 ? d.join(', ') + ' — ' : '') + (m.length > 0 ? 'Still needed: ' + m.join(' and ') : ''); })() || null },
+    { id: 'preferences', label: 'Select your care preferences', desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
   // Show checklist whenever steps remain — disappears when ALL done (or admin overrides all fields)
@@ -899,6 +906,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         </div>
       </div>
+
+      {/* Welcome subtitle — shown during onboarding */}
+      {showFirstSteps && (
+        <div style={{ color: '#2e5984', fontWeight: 500, background: '#e8f0fe', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', lineHeight: 1.5, marginBottom: '20px' }}>
+          This is your home hub. When you finish onboarding you'll see available jobs and your calendar!
+        </div>
+      )}
 
       {/* Status Banner — only shows when there's an actionable status (skip if admin overrode to available) */}
       {!profile.isAvailable && (() => {
@@ -1443,93 +1457,70 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* Onboarding Gate Panel — non-dismissible */}
-      {onboardingGated && (
-        <div className="onboarding-gate-panel">
-          <h2 className="onboarding-gate-title">Finish Your Setup</h2>
-          <p className="onboarding-gate-subtitle">
-            You'll need your driver's license or ID, bank account information you'd like to get paid in,
-            and a credit/debit card for identity check and refundable background check.
-          </p>
-          <div className="onboarding-gate-progress">
-            <div className="progress-label">{firstStepsDone} of {firstSteps.length} complete</div>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: (firstStepsDone / firstSteps.length * 100) + '%' }}></div>
+      {/* First Steps — THE top tile on dashboard when steps remain */}
+      {showFirstSteps && (
+        <div style={{ background: '#fff', borderRadius: '14px', border: '2px solid #e8724a', padding: '20px 22px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#b45309' }}>First Steps</h3>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ height: '6px', background: '#f3e8d0', borderRadius: '3px', overflow: 'hidden', width: '120px', marginRight: '10px' }}>
+                <div style={{ height: '100%', background: '#2e5984', borderRadius: '3px', transition: 'width 0.3s', width: (firstStepsDone / firstSteps.length * 100) + '%' }}></div>
+              </div>
+              <span style={{ fontSize: '12px', color: '#888', whiteSpace: 'nowrap' }}>{firstStepsDone} of {firstSteps.length} complete</span>
             </div>
           </div>
           <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
-          <div className="onboarding-steps">
+          <div style={{ display: 'grid', gap: '8px' }}>
             {firstSteps.map((s, idx) => (
-              <div key={s.id} className={'onboarding-step' + (s.done ? ' done' : '')} onClick={() => {
+              <div key={s.id} onClick={() => {
                 if (s.done) return;
-                if (s.id === 'profile') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'availability') window.__navigateTo && window.__navigateTo('find-work');
-                if (s.id === 'stoplight') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
-                if (s.id === 'payments') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'bgcheck') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'photo') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'avail-rates') window.__navigateTo && window.__navigateTo('find-work');
+                if (s.id === 'security') { window.__navigateTo && window.__navigateTo('account'); setTimeout(() => { window.__accountTab = 'settings'; }, 50); }
+                if (s.id === 'stripe-bg') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'preferences') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
+              }} style={{
+                display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px',
+                borderRadius: '10px', border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',
+                background: s.done ? '#f1f8f1' : '#fff',
+                cursor: s.done ? 'default' : 'pointer',
+                transition: 'all 0.15s',
               }}>
-                <div className="step-circle">
-                  {s.done ? '\u2713' : (idx + 1)}
+                <div style={{
+                  width: '28px', height: '28px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '13px', fontWeight: 700, flexShrink: 0, marginTop: '1px',
+                  background: s.done ? '#4caf50' : 'transparent',
+                  color: s.done ? '#fff' : '#e8724a',
+                  border: s.done ? '2px solid #4caf50' : '2px solid #e8724a',
+                }}>{s.done ? '\u2713' : (idx + 1)}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: '14px', fontWeight: 600,
+                    color: s.done ? '#4caf50' : '#333',
+                    textDecoration: s.done ? 'line-through' : 'none',
+                    textDecorationColor: s.done ? '#a5d6a7' : undefined,
+                  }}>{s.label}</div>
+                  {!s.done && s.desc && <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{s.desc}</div>}
+                  {!s.done && s.missing && (
+                    <div style={{ marginTop: '6px', padding: '6px 10px', background: '#fff8f0', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '13px' }}>{'\u26A0\uFE0F'}</span> {s.missing}
+                    </div>
+                  )}
                 </div>
-                <div className="step-text">
-                  <div className="step-name">{s.label}</div>
-                  <div className="step-desc">
-                    {s.id === 'profile' && (s.done ? 'Bio and rate set' : (() => {
-                      const missing = [];
-                      if (!profile.bio) missing.push('bio');
-                      if (!profile.rateDaytime && !profile.hourlyRate) missing.push('hourly rate');
-                      return missing.length > 0 ? `Still needed: ${missing.join(' and ')}` : 'Add your bio and set your hourly rate';
-                    })())}
-                    {s.id === 'availability' && 'Tell families when you\'re free to work'}
-                    {s.id === 'stoplight' && 'Rate your comfort level with different care tasks'}
-                    {s.id === 'photo' && 'Families want to see who they\'re welcoming into their home'}
-                    {s.id === 'payments' && 'Connect your bank account through Stripe to get paid'}
-                    {s.id === 'bgcheck' && '$30 fee, refunded after your first 10 completed sessions'}
-                  </div>
-                </div>
-                {!s.done && <div className="step-arrow">{'\u2192'}</div>}
+                {!s.done && <span style={{ color: '#ccc', fontSize: '18px', marginTop: '3px' }}>{'\u203A'}</span>}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* First Steps Banner — shown when onboarding is complete but steps remain */}
-      {showFirstSteps && !onboardingGated && (
-        <div className="card" style={{ marginBottom: '20px', padding: '16px', background: '#fffbf0', border: '1px solid #ffe0a0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', color: '#b45309' }}>First Steps — {firstStepsDone}/{firstSteps.length} complete</h3>
-            <div style={{ width: '100px', height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ width: (firstStepsDone / firstSteps.length * 100) + '%', height: '100%', background: '#1b6b5a', borderRadius: '3px', transition: 'width 0.3s' }}></div>
-            </div>
-          </div>
-          <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
-          <div style={{ display: 'grid', gap: '8px' }}>
-            {firstSteps.map(s => (
-              <div key={s.id} onClick={() => {
-                if (s.done) return;
-                if (s.id === 'profile') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'availability') window.__navigateTo && window.__navigateTo('find-work');
-                if (s.id === 'stoplight') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
-                if (s.id === 'payments') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'bgcheck') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
-              }} style={{
-                display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', padding: '8px 10px',
-                color: s.done ? '#999' : '#333', cursor: s.done ? 'default' : 'pointer',
-                textDecoration: s.done ? 'line-through' : 'none',
-                background: s.done ? 'transparent' : '#fff', borderRadius: '8px',
-                border: s.done ? 'none' : '1px solid #f0e8d0',
-              }}>
-                <span style={{ width: '22px', height: '22px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, background: s.done ? '#e8f5e9' : '#fff3e0', color: s.done ? '#2e7d32' : '#b45309', flexShrink: 0 }}>
-                  {s.done ? '\u2713' : '\u25CB'}
-                </span>
-                <span style={{ flex: 1 }}>{s.label}</span>
-                {!s.done && <span style={{ fontSize: '14px', color: '#b45309' }}>{'\u2192'}</span>}
-              </div>
-            ))}
-          </div>
+      {/* Calendar Placeholder — shown when no availability set yet */}
+      {showFirstSteps && !hasAvailability && (
+        <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #e5e7eb', padding: '28px 22px', textAlign: 'center', marginBottom: '20px' }}>
+          <div style={{ fontSize: '40px', marginBottom: '8px', opacity: 0.5 }}>📅</div>
+          <div style={{ fontSize: '14px', color: '#999' }}>Your availability and booked sessions will show here later</div>
+          <div style={{ fontSize: '12px', color: '#bbb', marginTop: '4px' }}>Complete step 2 to set your availability and see your calendar</div>
         </div>
       )}
 

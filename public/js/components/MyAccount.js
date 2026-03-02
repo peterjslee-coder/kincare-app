@@ -420,6 +420,19 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
 
   useEffect(() => {
     if (activeTab === 'settings' || activeTab === 'security' || activeTab === 'devices') fetchDevices();
+    // Track security settings review — mark as reviewed when user scrolls to bottom of settings
+    if (activeTab === 'settings' && isCaregiver) {
+      const handleScroll = () => {
+        const scrollBottom = window.innerHeight + window.scrollY;
+        const docHeight = document.documentElement.scrollHeight;
+        if (scrollBottom >= docHeight - 100) {
+          localStorage.setItem('inplace_security_reviewed', '1');
+          window.removeEventListener('scroll', handleScroll);
+        }
+      };
+      window.addEventListener('scroll', handleScroll);
+      return () => window.removeEventListener('scroll', handleScroll);
+    }
   }, [activeTab]);
 
   // Fetch caregiver financial data
@@ -711,7 +724,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         { id: 'profile', label: 'Profile' },
         { id: 'settings', label: 'Settings' },
         ...(isCaregiver ? [
-          { id: 'payments', label: 'Payments & Rates' },
+          { id: 'payments', label: 'Payments' },
           { id: 'documents', label: 'Documents' },
           { id: 'preferences', label: 'Care Preferences' },
         ] : []),
@@ -763,7 +776,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {[
               { id: 'preferences', label: '1. Care Preferences', icon: '🟢' },
-              { id: 'payments', label: '2. Payments & Rates', icon: '💰' },
+              { id: 'payments', label: '2. Payments', icon: '💰' },
               { id: 'documents', label: '3. Upload Documents', icon: '📄' },
               { id: 'profile', label: '4. Review Profile', icon: '👤' },
               { id: 'settings', label: '5. Settings', icon: '⚙️' },
@@ -1314,47 +1327,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
       {/* ─── Payments Tab (Caregiver Only) ─── */}
       {activeTab === 'payments' && isCaregiver && (
         <div>
-          {/* Your Rates Card */}
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-header">💰 Your Rates</div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Set your hourly rates for each time period. You can adjust these anytime.</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>☀️ Daytime</div>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                  <input type="number" min="15" max="200" value={editRates.daytime}
-                    onChange={(e) => setEditRates({...editRates, daytime: e.target.value})}
-                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
-                </div>
-                <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>6am–6pm</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>🌆 Evening</div>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                  <input type="number" min="15" max="200" value={editRates.nighttime}
-                    onChange={(e) => setEditRates({...editRates, nighttime: e.target.value})}
-                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
-                </div>
-                <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>6pm–12am</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>🌙 Overnight</div>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
-                  <input type="number" min="15" max="200" value={editRates.overnight}
-                    onChange={(e) => setEditRates({...editRates, overnight: e.target.value})}
-                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
-                </div>
-                <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>12am–6am</div>
-              </div>
-            </div>
-            <button onClick={handleSaveRates} disabled={savingRates}
-              style={{ padding: '8px 20px', background: savingRates ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-              {savingRates ? 'Saving...' : 'Save Rates'}
-            </button>
-          </div>
+          {/* Rates have been moved to the Find Work page */}
 
           {/* Stripe Connect Card */}
           <div className="card">

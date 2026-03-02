@@ -754,10 +754,9 @@ const App = () => {
                 setShowDisclaimer(true);
               }
               try { const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
-              // Post-onboarding: send caregiver to Account page to complete setup
-              window.__accountTab = 'preferences';
+              // Post-onboarding: send caregiver to dashboard where First Steps guides them
               window.__postOnboarding = true;
-              setCurrentPage('account');
+              setCurrentPage('dashboard');
               setAppState('app');
             }
           }
@@ -773,10 +772,9 @@ const App = () => {
     return <CaregiverOnboarding resumeMode={true} resumeUser={{ firstName: currentUser.firstName, lastName: currentUser.lastName, email: currentUser.email }} onComplete={(token) => {
       // Token is null if cancelled, or the existing token on success
       if (token) {
-        // Profile was created — send to Account to complete setup
-        window.__accountTab = 'preferences';
+        // Profile was created — send to dashboard where First Steps guides them
         window.__postOnboarding = true;
-        setCurrentPage('account');
+        setCurrentPage('dashboard');
         setAppState('app');
       } else {
         // Cancelled — go back to dashboard (will show the "no profile" state)
@@ -809,10 +807,9 @@ const App = () => {
                 setShowDisclaimer(true);
               }
               try { const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
-              // Post-onboarding: send caregiver to Account page to complete setup
-              window.__accountTab = 'preferences';
+              // Post-onboarding: send caregiver to dashboard where First Steps guides them
               window.__postOnboarding = true;
-              setCurrentPage('account');
+              setCurrentPage('dashboard');
               setAppState('app');
             }
           }
