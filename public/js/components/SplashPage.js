@@ -352,6 +352,39 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         </div>
       </section>
 
+      {/* ── AI-Powered Care ── */}
+      <section style={{ padding: '64px 32px', background: '#fff' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+            <div style={{ display: 'inline-block', padding: '6px 16px', background: '#f0f4ff', border: '1px solid #d0daf0', borderRadius: '20px', fontSize: '12px', fontWeight: 600, color: '#4a5fa8', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '12px' }}>AI-Powered</div>
+            <h2 style={{ fontSize: '28px', color: '#1b6b5a', marginBottom: '10px' }}>Smarter Care, Not Just More Care</h2>
+            <p style={{ fontSize: '15px', color: '#666', maxWidth: '580px', margin: '0 auto', lineHeight: 1.6 }}>
+              AI works behind the scenes at every step — matching the right caregiver, tracking care patterns over time, and giving families insights that matter.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
+            {[
+              { icon: '\uD83E\uDDE0', title: 'Intelligent Matching', desc: 'AI considers skills, personality, schedule fit, location, and past family preferences to suggest the best caregiver — not just the nearest one.' },
+              { icon: '\uD83D\uDCCA', title: 'Care History & Patterns', desc: 'Every visit builds a living care record. AI spots trends in mood, mobility, and routine — so subtle changes don\'t go unnoticed.' },
+              { icon: '\uD83E\uDE7A', title: 'Medical Team Insights', desc: 'Share AI-generated care summaries with your loved one\'s doctors. Weeks of daily observations distilled into what clinicians actually need.' },
+              { icon: '\uD83D\uDD14', title: 'Proactive Alerts', desc: 'AI flags things families might miss: skipped medications, mood changes, declining mobility — before they become emergencies.' },
+              { icon: '\uD83D\uDCAC', title: 'Visit Summaries', desc: 'After every visit, caregivers log notes and AI helps structure them into clear, readable updates for the whole family.' },
+              { icon: '\uD83D\uDD12', title: 'Private & Secure', desc: 'Your family\'s health data is encrypted and never shared with third parties. AI runs for your benefit, not for ads or data mining.' },
+            ].map((c, i) => (
+              <div key={i} style={{
+                padding: '28px 24px', background: '#fafbff', borderRadius: '14px',
+                border: '1px solid #e4e8f4', boxShadow: '0 2px 8px rgba(74,95,168,0.04)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}>
+                <div style={{ fontSize: '28px', marginBottom: '12px' }}>{c.icon}</div>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>{c.title}</div>
+                <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.6 }}>{c.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Business Model ── */}
       <section style={{ padding: '64px 32px', background: '#fff' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
@@ -375,25 +408,35 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
 
       {/* ── Vision ── */}
       <section className="splash-vision" style={{ background: 'linear-gradient(135deg, #1b6b5a, #0f4238)', padding: '64px 32px', color: '#fff', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '30px', marginBottom: '12px', color: '#fff' }}>The Operating System for Care at Home</h2>
-        <p style={{ fontSize: '16px', opacity: 0.9, maxWidth: '600px', margin: '0 auto 32px', lineHeight: 1.6 }}>
-          Today: caregiver matching. Tomorrow: the complete coordination layer for everything your loved one needs.
+        <h2 style={{ fontSize: '30px', marginBottom: '12px', color: '#fff' }}>The AI-Powered Operating System for Care at Home</h2>
+        <p style={{ fontSize: '16px', opacity: 0.9, maxWidth: '640px', margin: '0 auto 16px', lineHeight: 1.6 }}>
+          Today: AI-matched caregivers, intelligent visit summaries, and care pattern tracking.
         </p>
-        <div className="splash-vision-pills" style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <p style={{ fontSize: '16px', opacity: 0.9, maxWidth: '640px', margin: '0 auto 36px', lineHeight: 1.6 }}>
+          Tomorrow: the complete AI coordination layer — medication adherence, doctor-ready health reports, predictive wellness alerts, and a care record that gets smarter every visit.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', maxWidth: '820px', margin: '0 auto' }}>
           {[
-            { icon: '\uD83E\uDD1D', label: 'Caregiver Matching' },
-            { icon: '\uD83D\uDC8A', label: 'Medication Tracking' },
-            { icon: '\uD83E\uDE7A', label: 'Doctor Coordination' },
-            { icon: '\uD83D\uDCAC', label: 'Family Messaging' },
-            { icon: '\uD83E\uDD16', label: 'AI Health Insights' },
-            { icon: '\uD83D\uDCB3', label: 'Integrated Payments' },
+            { icon: '\uD83E\uDDE0', label: 'AI Caregiver Matching', active: true },
+            { icon: '\uD83D\uDCCA', label: 'Care Pattern Analysis', active: true },
+            { icon: '\uD83D\uDCAC', label: 'AI Visit Summaries', active: true },
+            { icon: '\uD83E\uDE7A', label: 'Doctor-Ready Reports', active: false },
+            { icon: '\uD83D\uDC8A', label: 'Medication Intelligence', active: false },
+            { icon: '\uD83D\uDD14', label: 'Predictive Health Alerts', active: false },
+            { icon: '\uD83D\uDCB3', label: 'Integrated Payments', active: true },
+            { icon: '\uD83D\uDC65', label: 'Family Coordination', active: true },
           ].map((item, i) => (
             <div key={i} style={{
-              padding: '12px 20px', background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', fontSize: '13px',
+              padding: '14px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 500,
+              background: item.active ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+              border: item.active ? '1px solid rgba(255,255,255,0.25)' : '1px solid rgba(255,255,255,0.08)',
+              opacity: item.active ? 1 : 0.65,
+              display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center',
             }}>
-              <span style={{ fontSize: '18px', marginRight: '6px' }}>{item.icon}</span>
-              {item.label}
+              <span style={{ fontSize: '18px' }}>{item.icon}</span>
+              <span>{item.label}</span>
+              {item.active && <span style={{ fontSize: '9px', background: 'rgba(255,255,255,0.2)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>LIVE</span>}
+              {!item.active && <span style={{ fontSize: '9px', background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>SOON</span>}
             </div>
           ))}
         </div>
