@@ -275,12 +275,17 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   const db = await getDb();
-  const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked, care_stoplight, care_preferences FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
   // Gate: must have completed background check payment OR been cleared by admin
   if (!profile.background_check_paid && !profile.is_background_checked) {
     return res.status(403).json({ error: "You must complete your background check payment before accepting care requests. Visit your dashboard to pay." });
+  }
+
+  // Gate: must have set care preferences (stoplight)
+  if (!profile.care_stoplight && !profile.care_preferences) {
+    return res.status(403).json({ error: "Please set your care preferences before accepting jobs. Go to Account → Care Preferences." });
   }
 
   const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);

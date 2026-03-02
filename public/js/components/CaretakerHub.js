@@ -836,8 +836,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     { id: 'bgcheck', label: 'Pay for background check ($30)', done: !!profile.background_check_paid || !!profile.isBackgroundChecked },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
-  // If admin marked available for jobs, skip checklist display entirely
-  const showFirstSteps = !profile.isAvailable && firstStepsDone < firstSteps.length;
+  // Show checklist whenever steps remain — disappears when ALL done (or admin overrides all fields)
+  const showFirstSteps = firstStepsDone < firstSteps.length;
   // NEVER gate/blur the dashboard — checklist is motivational, not a lock
   const onboardingGated = false;
   const shouldBlur = false;
@@ -1462,12 +1462,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {firstSteps.map((s, idx) => (
               <div key={s.id} className={'onboarding-step' + (s.done ? ' done' : '')} onClick={() => {
                 if (s.done) return;
-                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', rateDaytime: profile.rateDaytime || profile.hourlyRate || '', rateNighttime: profile.rateNighttime || '', rateOvernight: profile.rateOvernight || '', foodAllergies: '', medicalConditions: '' }); window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'profile') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
                 if (s.id === 'availability') window.__navigateTo && window.__navigateTo('find-work');
-                if (s.id === 'stoplight') window.__navigateTo && window.__navigateTo('account');
+                if (s.id === 'stoplight') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
                 if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
-                if (s.id === 'payments') window.__navigateTo && window.__navigateTo('account');
-                if (s.id === 'bgcheck') window.__navigateTo && window.__navigateTo('account');
+                if (s.id === 'payments') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'bgcheck') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
               }}>
                 <div className="step-circle">
                   {s.done ? '\u2713' : (idx + 1)}
@@ -1509,21 +1509,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {firstSteps.map(s => (
               <div key={s.id} onClick={() => {
                 if (s.done) return;
-                if (s.id === 'profile') { setProfileForm({ bio: profile.bio || '', hourlyRate: profile.hourlyRate || '', rateDaytime: profile.rateDaytime || profile.hourlyRate || '', rateNighttime: profile.rateNighttime || '', rateOvernight: profile.rateOvernight || '', foodAllergies: '', medicalConditions: '' }); window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'profile') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
                 if (s.id === 'availability') window.__navigateTo && window.__navigateTo('find-work');
-                if (s.id === 'stoplight') window.__navigateTo && window.__navigateTo('account');
+                if (s.id === 'stoplight') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
                 if (s.id === 'photo') avatarInputRef.current && avatarInputRef.current.click();
-                if (s.id === 'payments') window.__navigateTo && window.__navigateTo('account');
-                if (s.id === 'bgcheck') window.__navigateTo && window.__navigateTo('account');
+                if (s.id === 'payments') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'bgcheck') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
               }} style={{
-                display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px',
+                display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', padding: '8px 10px',
                 color: s.done ? '#999' : '#333', cursor: s.done ? 'default' : 'pointer',
                 textDecoration: s.done ? 'line-through' : 'none',
+                background: s.done ? 'transparent' : '#fff', borderRadius: '8px',
+                border: s.done ? 'none' : '1px solid #f0e8d0',
               }}>
-                <span style={{ width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', background: s.done ? '#e8f5e9' : '#f0f0f0', color: s.done ? '#2e7d32' : '#999' }}>
+                <span style={{ width: '22px', height: '22px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, background: s.done ? '#e8f5e9' : '#fff3e0', color: s.done ? '#2e7d32' : '#b45309', flexShrink: 0 }}>
                   {s.done ? '\u2713' : '\u25CB'}
                 </span>
-                {s.label}
+                <span style={{ flex: 1 }}>{s.label}</span>
+                {!s.done && <span style={{ fontSize: '14px', color: '#b45309' }}>{'\u2192'}</span>}
               </div>
             ))}
           </div>
