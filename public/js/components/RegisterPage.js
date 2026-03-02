@@ -149,7 +149,6 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             <p style={{ margin: '0 0 4px' }}><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
             <p style={{ margin: '0 0 4px' }}><strong>Email:</strong> {formData.email}</p>
             <p style={{ margin: '0 0 4px' }}><strong>Role:</strong> {roleLabel}</p>
-            <p style={{ margin: '0 0 4px' }}><strong>Phone:</strong> {formData.phone || '(not provided)'}</p>
             {track === 'caregiver' && (
               <div style={{ borderTop: '1px solid #e0e0e0', marginTop: '8px', paddingTop: '8px' }}>
                 <p style={{ margin: '0 0 2px', color: '#1b6b5a' }}>{'✓'} No-medical-care disclosure acknowledged</p>
@@ -354,24 +353,6 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               <input type="password" value={formData.confirmPassword} onChange={(e) => { setFormData(p => ({ ...p, confirmPassword: e.target.value })); setShowFieldErrors(false); }} placeholder="Re-enter your password" style={showFieldErrors && (!formData.confirmPassword || formData.password !== formData.confirmPassword) ? { borderColor: '#c0392b', background: '#fdf0ed' } : formData.confirmPassword && formData.password === formData.confirmPassword ? { borderColor: '#1b6b5a', background: '#f0faf8' } : {}} />
               {formData.confirmPassword && formData.password === formData.confirmPassword && <div style={{ fontSize: '12px', color: '#1b6b5a', marginTop: '4px' }}>Passwords match</div>}
               {formData.confirmPassword && formData.password !== formData.confirmPassword && <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Passwords don't match</div>}
-            </div>
-            <div className="form-group">
-              <label>Phone <span style={{ color: '#999', fontSize: 12, fontWeight: 400 }}>(optional)</span></label>
-              <input type="tel" value={formData.phone}
-                onChange={(e) => setFormData(p => ({ ...p, phone: formatPhone(e.target.value, intlPhone) }))}
-                placeholder={intlPhone ? '+44 7911 123456' : '(555) 123-4567'} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                <div style={{ fontSize: '12px', color: '#888' }}>Required for setup, but not to begin</div>
-                <button type="button" onClick={() => { setIntlPhone(!intlPhone); setFormData(p => ({ ...p, phone: '' })); }}
-                  style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-                  {intlPhone ? 'US number' : 'International number'}
-                </button>
-              </div>
-              {intlPhone && (
-                <div style={{ fontSize: 12, color: '#e65100', background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 6, padding: '8px 10px', marginTop: 6 }}>
-                  {INTL_PHONE_DISCLAIMER}
-                </div>
-              )}
             </div>
           </>
         )}
