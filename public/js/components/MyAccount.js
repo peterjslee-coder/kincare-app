@@ -163,6 +163,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     if (window.__accountTab) { const t = window.__accountTab; delete window.__accountTab; return t; }
     return 'profile';
   });
+  const [postOnboarding, setPostOnboarding] = useState(() => {
+    if (window.__postOnboarding) { delete window.__postOnboarding; return true; }
+    return false;
+  });
   const [notifications, setNotifications] = useState({
     sessionUpdates: true, caregiverMessages: true, healthAlerts: true, reminderEmails: false,
     push_messages: true, push_care_request: true, push_care_request_accepted: true, push_session_status: true
@@ -745,6 +749,42 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
           <button key={t.id} onClick={() => { setActiveTab(t.id); setPwError(null); }} style={tabStyle(t.id)}>{t.label}</button>
         ))}
       </div>
+
+      {/* ─── Post-Onboarding Welcome Banner ─── */}
+      {postOnboarding && isCaregiver && (
+        <div style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', border: '2px solid #86efac', borderRadius: 14, padding: '20px 24px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 28 }}>🎉</span>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#166534' }}>Welcome to InPlace!</div>
+              <div style={{ fontSize: 13, color: '#15803d' }}>Let's finish setting up your account. Complete each tab below.</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[
+              { id: 'preferences', label: '1. Care Preferences', icon: '🟢' },
+              { id: 'payments', label: '2. Payments & Rates', icon: '💰' },
+              { id: 'documents', label: '3. Upload Documents', icon: '📄' },
+              { id: 'profile', label: '4. Review Profile', icon: '👤' },
+              { id: 'settings', label: '5. Settings', icon: '⚙️' },
+            ].map(s => (
+              <button key={s.id} onClick={() => setActiveTab(s.id)}
+                style={{
+                  padding: '8px 14px', border: activeTab === s.id ? '2px solid #1b6b5a' : '1px solid #bbf7d0',
+                  borderRadius: 10, fontSize: 13, fontWeight: activeTab === s.id ? 700 : 500,
+                  background: activeTab === s.id ? '#1b6b5a' : '#fff',
+                  color: activeTab === s.id ? '#fff' : '#166534', cursor: 'pointer',
+                }}>
+                {s.icon} {s.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setPostOnboarding(false)}
+            style={{ marginTop: 12, padding: '6px 16px', background: 'none', border: '1px solid #86efac', borderRadius: 8, fontSize: 12, color: '#15803d', cursor: 'pointer', fontWeight: 600 }}>
+            Dismiss — I'll explore on my own
+          </button>
+        </div>
+      )}
 
       {/* ─── Profile Tab ─── */}
       {activeTab === 'profile' && (
