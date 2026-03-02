@@ -256,7 +256,7 @@ app.use("/api/reports", require("./routes/reports"));
 app.use("/api/video", require("./routes/videoCall"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.34.58";
+const APP_VERSION = "1.34.59";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

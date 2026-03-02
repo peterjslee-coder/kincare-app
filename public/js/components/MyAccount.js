@@ -208,6 +208,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   // Caregiver - Care Preferences state
   const [preferences, setPreferences] = useState(null);
   const [savingPrefs, setSavingPrefs] = useState(false);
+  // Caregiver - Rate editing state
+  const [editRates, setEditRates] = useState(null);
+  const [savingRates, setSavingRates] = useState(false);
 
   const fetchUser = async () => {
     try {
@@ -409,7 +412,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'security' || activeTab === 'devices') fetchDevices();
+    if (activeTab === 'settings' || activeTab === 'security' || activeTab === 'devices') fetchDevices();
   }, [activeTab]);
 
   // Fetch caregiver financial data
@@ -423,6 +426,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
       }).catch(() => {});
       apiFetch('/api/dashboard').then(async r => {
         if (r?.ok) { const d = await r.json(); setBgCheckPaid(!!d.backgroundCheckPaid); }
+      }).catch(() => {});
+      apiFetch('/api/caregivers/me').then(async r => {
+        if (r?.ok) { const d = await r.json(); setEditRates({ daytime: d.profile?.rate_daytime || '', nighttime: d.profile?.rate_nighttime || '', overnight: d.profile?.rate_overnight || '' }); }
       }).catch(() => {});
     }
   }, [activeTab]);
@@ -631,6 +637,20 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     if (acctDocInputRef.current) acctDocInputRef.current.value = '';
   };
 
+  // Caregiver - Rate save handler
+  const handleSaveRates = async () => {
+    if (!editRates) return;
+    setSavingRates(true);
+    try {
+      const res = await apiFetch('/api/caregivers/me', {
+        method: 'PUT',
+        body: JSON.stringify({ rateDaytime: editRates.daytime, rateNighttime: editRates.nighttime, rateOvernight: editRates.overnight })
+      });
+      if (res?.ok) { showToast('Rates updated', 'success'); setEditRates(null); }
+    } catch (err) { showToast('Failed to save rates', 'error'); }
+    setSavingRates(false);
+  };
+
   // Caregiver - Document preview handler
   const handleViewDocument = async (docId) => {
     if (docPreviews[docId]) { setDocPreviews(p => { const n = {...p}; delete n[docId]; return n; }); return; }
@@ -678,14 +698,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   })();
 
   const tabs = isDemo
-    ? [{ id: 'profile', label: 'Profile' }, { id: 'notifications', label: 'Notifications' }]
+    ? [{ id: 'profile', label: 'Profile' }, { id: 'settings', label: 'Settings' }]
     : [
         { id: 'profile', label: 'Profile' },
-        { id: 'security', label: 'Security' },
-        { id: 'notifications', label: 'Notifications' },
-        { id: 'accessibility', label: 'Accessibility' },
+        { id: 'settings', label: 'Settings' },
         ...(isCaregiver ? [
-          { id: 'payments', label: 'Payments & Earnings' },
+          { id: 'payments', label: 'Payments & Rates' },
           { id: 'documents', label: 'Documents' },
           { id: 'preferences', label: 'Care Preferences' },
         ] : []),
@@ -953,9 +971,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
       )}
 
       {/* ─── Security Tab ─── */}
-      {activeTab === 'security' && !isDemo && (
+      {activeTab === 'settings' && (
         <div>
-          {/* Password Change */}
+          {/* ─── Security Section ─── */}
+          {!isDemo && (
+          <div>
+          <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>Security</h3>
           <div className="card">
             <div className="card-header">Password</div>
             {!changingPassword ? (
@@ -1168,14 +1189,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
               </div>
             )}
           </div>
-        </div>
-      )}
-
-
-      {/* ─── Notifications Tab ─── */}
-      {activeTab === 'notifications' && (
-        <div>
-          {/* Push notification enable/test section */}
+          </div>
+          )}
+          {/* ─── Notifications Section ─── */}
+          <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: 16, marginTop: 16 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>Notifications</h3>
+          </div>
           {typeof NotificationSettings !== 'undefined' && React.createElement(NotificationSettings, null)}
           <div className="card">
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1204,57 +1223,98 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
               </label>
             ))}
           </div>
+
+          {/* ─── Accessibility Section ─── */}
+          {(() => {
+            const a11yPrefs = (() => { try { return user?.accessibility_prefs ? JSON.parse(user.accessibility_prefs) : {}; } catch { return {}; } })();
+            const currentSize = a11yPrefs.textSize || 'default';
+            const handleTextSize = async (size) => {
+              const newPrefs = { ...a11yPrefs, textSize: size };
+              if (typeof applyTextSize === 'function') applyTextSize(size);
+              try {
+                const res = await apiFetch('/api/auth/me', {
+                  method: 'PUT',
+                  body: JSON.stringify({ accessibilityPrefs: newPrefs }),
+                });
+                if (res?.ok) {
+                  const data = await res.json();
+                  if (data.user) {
+                    setUser(prev => prev ? { ...prev, ...data.user } : prev);
+                    if (setCurrentUser) setCurrentUser(prev => prev ? { ...prev, ...data.user } : prev);
+                  }
+                  showToast('Text size updated');
+                }
+              } catch (err) { console.error('Save accessibility prefs error:', err); }
+            };
+            return (
+              <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: 16, marginTop: 16 }}>
+                <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>Accessibility</h3>
+                <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Text Size</div>
+                  <div style={{ color: '#666', marginBottom: 16 }}>Choose a text size that works best for you.</div>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <button className={`text-size-pill text-size-pill-default ${currentSize === 'default' ? 'active' : ''}`}
+                      onClick={() => handleTextSize('default')}>Default</button>
+                    <button className={`text-size-pill text-size-pill-large ${currentSize === 'large' ? 'active' : ''}`}
+                      onClick={() => handleTextSize('large')}>Large</button>
+                    <button className={`text-size-pill text-size-pill-xlarge ${currentSize === 'xlarge' ? 'active' : ''}`}
+                      onClick={() => handleTextSize('xlarge')}>Extra Large</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
-
-      {/* ─── Accessibility Tab ─── */}
-      {activeTab === 'accessibility' && (() => {
-        const a11yPrefs = (() => { try { return user?.accessibility_prefs ? JSON.parse(user.accessibility_prefs) : {}; } catch { return {}; } })();
-        const currentSize = a11yPrefs.textSize || 'default';
-        const handleTextSize = async (size) => {
-          const newPrefs = { ...a11yPrefs, textSize: size };
-          // Apply immediately for live preview
-          if (typeof applyTextSize === 'function') applyTextSize(size);
-          try {
-            const res = await apiFetch('/api/auth/me', {
-              method: 'PUT',
-              body: JSON.stringify({ accessibilityPrefs: newPrefs }),
-            });
-            if (res?.ok) {
-              const data = await res.json();
-              if (data.user) {
-                setUser(prev => prev ? { ...prev, ...data.user } : prev);
-                if (setCurrentUser) setCurrentUser(prev => prev ? { ...prev, ...data.user } : prev);
-              }
-              showToast('Text size updated');
-            }
-          } catch (err) { console.error('Save accessibility prefs error:', err); }
-        };
-        return (
-          <div>
-            <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Text Size</div>
-              <div style={{ color: '#666', marginBottom: 16 }}>Choose a text size that works best for you. Changes apply immediately across the entire app.</div>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <button className={`text-size-pill text-size-pill-default ${currentSize === 'default' ? 'active' : ''}`}
-                  onClick={() => handleTextSize('default')}>Default</button>
-                <button className={`text-size-pill text-size-pill-large ${currentSize === 'large' ? 'active' : ''}`}
-                  onClick={() => handleTextSize('large')}>Large</button>
-                <button className={`text-size-pill text-size-pill-xlarge ${currentSize === 'xlarge' ? 'active' : ''}`}
-                  onClick={() => handleTextSize('xlarge')}>Extra Large</button>
-              </div>
-            </div>
-            <div className="card" style={{ padding: 20, background: '#f8f9fa' }}>
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Preview</div>
-              <div>This is how your text will look across the app. Session details, messages, and navigation will all use this size.</div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ─── Payments Tab (Caregiver Only) ─── */}
       {activeTab === 'payments' && isCaregiver && (
         <div>
+          {/* Your Rates Card */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header">💰 Your Rates</div>
+            {editRates && (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>☀️ Daytime</div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
+                      <input type="number" min="15" max="200" value={editRates.daytime}
+                        onChange={(e) => setEditRates({...editRates, daytime: e.target.value})}
+                        style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>6am–6pm</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>🌆 Evening</div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
+                      <input type="number" min="15" max="200" value={editRates.nighttime}
+                        onChange={(e) => setEditRates({...editRates, nighttime: e.target.value})}
+                        style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>6pm–12am</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>🌙 Overnight</div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{ fontSize: 14, color: '#888', marginRight: 4 }}>$</span>
+                      <input type="number" min="15" max="200" value={editRates.overnight}
+                        onChange={(e) => setEditRates({...editRates, overnight: e.target.value})}
+                        style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>12am–6am</div>
+                  </div>
+                </div>
+                <button onClick={handleSaveRates} disabled={savingRates}
+                  style={{ padding: '8px 20px', background: savingRates ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  {savingRates ? 'Saving...' : 'Update Rates'}
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Stripe Connect Card */}
           <div className="card">
             <div className="card-header">Stripe Connect</div>

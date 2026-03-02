@@ -282,6 +282,30 @@ router.get("/me", requireRole("caregiver"), async (req, res) => {
   res.json({ profile });
 });
 
+// ─── PUT /api/caregivers/me ───
+// Update caregiver's own profile fields (care preferences, rates, etc.)
+router.put("/me", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  const { care_preferences, rateDaytime, rateNighttime, rateOvernight } = req.body;
+  const updates = [];
+  const params = [];
+
+  if (care_preferences !== undefined) { updates.push("care_preferences = ?"); params.push(care_preferences); }
+  if (rateDaytime !== undefined) { updates.push("rate_daytime = ?"); params.push(parseFloat(rateDaytime) || null); }
+  if (rateNighttime !== undefined) { updates.push("rate_nighttime = ?"); params.push(parseFloat(rateNighttime) || null); }
+  if (rateOvernight !== undefined) { updates.push("rate_overnight = ?"); params.push(parseFloat(rateOvernight) || null); }
+  if (rateDaytime !== undefined) { updates.push("hourly_rate = ?"); params.push(parseFloat(rateDaytime) || null); }
+
+  if (updates.length === 0) return res.json({ ok: true });
+
+  params.push(profile.id);
+  await db.prepare(`UPDATE caregiver_profiles SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  res.json({ ok: true });
+});
+
 // ─── POST /api/caregivers/profile ───
 // Create or update caregiver profile (for caregiver users)
 router.post("/profile", requireRole("caregiver"), async (req, res) => {

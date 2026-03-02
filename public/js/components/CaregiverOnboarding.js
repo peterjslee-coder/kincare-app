@@ -104,7 +104,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     acceptRefundPolicy: false,
     // Step 3 — Personal Info + Work Location
     phone: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '',
-    yearsExperience: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', bio: '',
+    yearsExperience: '', hourlyRate: '', rateDaytime: '24', rateNighttime: '28', rateOvernight: '30', bio: '',
     workLocationAddress: '', workCity: '', workState: '', workZip: '',
     travelRadius: '15',
     // Step 3 — Pets, Allergies & Medical
@@ -818,8 +818,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             </p>
             {errorSummary()}
             {disclosureCheck('acceptNoMedical',
-              'No Medical Care',
-              'InPlace does not provide at-home medical care in accordance with Virginia state law. Caregivers provide companionship, personal care, and household assistance only.'
+              'Important Notice — Non-Medical Care Platform',
+              'Although some caregivers on InPlace may hold medical licenses or certifications (such as CNA, LPN, or RN), this platform is not for seeking or administering medical care. All services provided through InPlace are limited to non-medical companionship, personal care, and household assistance. Licensed medical professionals using InPlace must understand they are operating in a non-medical capacity only. Future development may introduce medically supervised care options, but at this time, medical care is not available through InPlace.'
             )}
 
             {disclosureCheck('acceptBackgroundCheck',
@@ -952,7 +952,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>💰 Hourly Rates *</label>
               <div style={{ fontSize: 12, color: '#1b6b5a', marginBottom: 4, fontWeight: 600 }}>Most caregivers in your area start at these rates:</div>
-              <div style={{ fontSize: 11, color: '#888', marginBottom: 10 }}>You can adjust anytime. 6-hour minimum per booking.</div>
+              <div style={{ fontSize: 11, color: '#888', marginBottom: 10 }}>You can adjust your rates anytime from your account settings.</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                 <div>
                   <div style={{ fontSize: 11, color: '#666', marginBottom: 4, fontWeight: 600 }}>☀️ Daytime (6a–6p)</div>
