@@ -452,12 +452,15 @@ async function start() {
 
       // ─── Pre-check-in reminders ───
       // Find confirmed sessions today that haven't had pre_check_in notification
+      // Exclude demo sessions — demo data must never trigger real notifications
       const checkInCandidates = await pollDb.prepare(`
-        SELECT id, scheduled_date, scheduled_time, notifications_sent
-        FROM care_sessions
-        WHERE status = 'confirmed'
-          AND scheduled_date = ?
-          AND (notifications_sent IS NULL OR notifications_sent NOT LIKE '%pre_check_in%')
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent
+        FROM care_sessions cs
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        WHERE cs.status = 'confirmed'
+          AND cs.scheduled_date = ?
+          AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%pre_check_in%')
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
       `).all(todayStr);
 
       for (const s of checkInCandidates) {
@@ -473,11 +476,13 @@ async function start() {
       // ─── Pre-check-out reminders ───
       // Find in_progress sessions today that haven't had pre_check_out notification
       const checkOutCandidates = await pollDb.prepare(`
-        SELECT id, scheduled_date, scheduled_time, duration_hours, notifications_sent
-        FROM care_sessions
-        WHERE status = 'in_progress'
-          AND scheduled_date = ?
-          AND (notifications_sent IS NULL OR notifications_sent NOT LIKE '%pre_check_out%')
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.notifications_sent
+        FROM care_sessions cs
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        WHERE cs.status = 'in_progress'
+          AND cs.scheduled_date = ?
+          AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%pre_check_out%')
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
       `).all(todayStr);
 
       for (const s of checkOutCandidates) {
@@ -494,11 +499,13 @@ async function start() {
       // ─── Overdue check-in alerts ───
       // Confirmed sessions today where start time + grace period has passed but caregiver hasn't checked in
       const overdueCandidates = await pollDb.prepare(`
-        SELECT id, scheduled_date, scheduled_time, notifications_sent
-        FROM care_sessions
-        WHERE status = 'confirmed'
-          AND scheduled_date = ?
-          AND (notifications_sent IS NULL OR notifications_sent NOT LIKE '%overdue_check_in%')
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent
+        FROM care_sessions cs
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        WHERE cs.status = 'confirmed'
+          AND cs.scheduled_date = ?
+          AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%overdue_check_in%')
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
       `).all(todayStr);
 
       for (const s of overdueCandidates) {

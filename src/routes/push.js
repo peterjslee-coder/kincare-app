@@ -248,17 +248,21 @@ async function sendPushToUser(userId, payload, eventType) {
     return;
   }
 
-  // Check user notification preferences if eventType is provided
-  if (eventType) {
-    try {
-      const db = await getDb();
-      const user = await db.prepare("SELECT notification_prefs FROM users WHERE id = ?").get(userId);
-      if (user && user.notification_prefs) {
-        const prefs = JSON.parse(user.notification_prefs);
-        if (prefs[`push_${eventType}`] === false) return; // user opted out
-      }
-    } catch (e) { /* proceed if prefs check fails */ }
-  }
+  // NEVER send push notifications to demo users — prevents demo data from
+  // leaking notifications to real devices that tested with demo accounts
+  try {
+    const db = await getDb();
+    const targetUser = await db.prepare("SELECT is_demo, notification_prefs FROM users WHERE id = ?").get(userId);
+    if (targetUser?.is_demo) {
+      return; // silently skip demo users
+    }
+
+    // Check user notification preferences if eventType is provided
+    if (eventType && targetUser?.notification_prefs) {
+      const prefs = JSON.parse(targetUser.notification_prefs);
+      if (prefs[`push_${eventType}`] === false) return; // user opted out
+    }
+  } catch (e) { /* proceed if prefs check fails */ }
 
   try {
     const webpush = require("web-push");
