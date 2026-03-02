@@ -202,6 +202,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   const [docUploading, setDocUploading] = useState(null);
   const acctDocInputRef = useRef(null);
   const [pendingAcctDocType, setPendingAcctDocType] = useState(null);
+  const [docPreviews, setDocPreviews] = useState({});
+  const [cgCertifications, setCgCertifications] = useState([]);
 
   // Caregiver - Care Preferences state
   const [preferences, setPreferences] = useState(null);
@@ -425,11 +427,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     }
   }, [activeTab]);
 
-  // Fetch caregiver documents
+  // Fetch caregiver documents + certifications for expiry warnings
   useEffect(() => {
     if (activeTab === 'documents') {
       apiFetch('/api/caregiver-onboarding/documents').then(async r => {
         if (r?.ok) { const d = await r.json(); setDocuments(d.documents || []); }
+      }).catch(() => {});
+      apiFetch('/api/caregivers/me').then(async r => {
+        if (r?.ok) { const d = await r.json(); setCgCertifications(d.profile?.certifications || []); }
       }).catch(() => {});
     }
   }, [activeTab]);
@@ -624,6 +629,15 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     }
     setDocUploading(null);
     if (acctDocInputRef.current) acctDocInputRef.current.value = '';
+  };
+
+  // Caregiver - Document preview handler
+  const handleViewDocument = async (docId) => {
+    if (docPreviews[docId]) { setDocPreviews(p => { const n = {...p}; delete n[docId]; return n; }); return; }
+    try {
+      const r = await apiFetch(`/api/caregiver-onboarding/documents/${docId}/image`);
+      if (r?.ok) { const d = await r.json(); setDocPreviews(p => ({...p, [docId]: d.fileData})); }
+    } catch (err) { showToast('Failed to load document', 'error'); }
   };
 
   // Caregiver - Care Preferences handler
@@ -1340,7 +1354,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
       {/* ─── Documents Tab (Caregiver Only) ─── */}
       {activeTab === 'documents' && isCaregiver && (
         <div>
-          <input type="file" ref={acctDocInputRef} style={{ display: 'none' }}
+          <input type="file" ref={acctDocInputRef} style={{ display: 'none' }} accept="image/*"
             onChange={(e) => {
               if (pendingAcctDocType) {
                 handleDocumentUpload(pendingAcctDocType);
@@ -1348,16 +1362,67 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
               }
             }} />
 
+          {/* Expiration Warnings Banner */}
+          {(() => {
+            const now = new Date();
+            const soon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            const expiring = (cgCertifications || []).filter(c => {
+              if (!c.expiryDate) return false;
+              const exp = new Date(c.expiryDate);
+              return exp <= soon;
+            });
+            if (expiring.length === 0) return null;
+            return React.createElement('div', { className: 'card', style: { background: '#fff5f5', border: '2px solid #e53e3e', marginBottom: 16 } },
+              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } },
+                React.createElement('span', { style: { fontSize: 20 } }, '⚠️'),
+                React.createElement('span', { style: { fontSize: 14, fontWeight: 700, color: '#c53030' } }, 'Expiring Soon')
+              ),
+              expiring.map((c, i) => {
+                const exp = new Date(c.expiryDate);
+                const expired = exp < now;
+                return React.createElement('div', { key: i, style: { padding: '6px 0', fontSize: 13, color: expired ? '#c53030' : '#c05621' } },
+                  React.createElement('span', { style: { fontWeight: 600 } }, c.certType || 'Certification'),
+                  ' — ',
+                  expired
+                    ? React.createElement('span', { style: { fontWeight: 700, color: '#c53030' } }, 'EXPIRED ' + exp.toLocaleDateString())
+                    : React.createElement('span', null, 'Expires ' + exp.toLocaleDateString())
+                );
+              })
+            );
+          })()}
+
           {['drivers_license', 'certifications', 'background_check'].map(docType => {
-            const docLabel = { drivers_license: 'Driver\'s License', certifications: 'Certifications', background_check: 'Background Check' }[docType] || docType;
-            const isUploaded = documents.some(d => d.type === docType);
+            const docLabel = { drivers_license: "Driver's License", certifications: 'Certifications', background_check: 'Background Check' }[docType] || docType;
+            const docIcon = { drivers_license: '🪪', certifications: '📜', background_check: '🔒' }[docType] || '📄';
+            const uploaded = documents.filter(d => (d.document_type || d.type) === docType);
+            const isUploaded = uploaded.length > 0;
 
             return (
-              <div key={docType} className="card">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>{docLabel}</span>
-                  <span style={{ fontSize: 18 }}>{isUploaded ? '✅' : '⬜'}</span>
+              <div key={docType} className="card" style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{docIcon} {docLabel}</span>
+                  <span style={{ fontSize: 16 }}>{isUploaded ? '✅' : '⬜'}</span>
                 </div>
+
+                {isUploaded && uploaded.map(doc => (
+                  <div key={doc.id} style={{ marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#666', marginBottom: 4 }}>
+                      <span>{doc.file_name || 'Document'}</span>
+                      <span>·</span>
+                      <span>Uploaded {new Date(doc.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <button onClick={() => handleViewDocument(doc.id)}
+                      style={{ padding: '4px 12px', background: docPreviews[doc.id] ? '#e8724a' : '#f0f0f0', color: docPreviews[doc.id] ? '#fff' : '#333', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', marginRight: 8 }}>
+                      {docPreviews[doc.id] ? 'Hide' : 'View'}
+                    </button>
+                    {docPreviews[doc.id] && (
+                      <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid #ddd' }}>
+                        <img src={docPreviews[doc.id]} alt={docLabel} style={{ width: '100%', maxHeight: 300, objectFit: 'contain', background: '#f9f9f9' }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+
                 <button onClick={() => {
                   setPendingAcctDocType(docType);
                   acctDocInputRef.current?.click();
@@ -1369,6 +1434,34 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
               </div>
             );
           })}
+
+          {/* Certification Details with Expiry */}
+          {cgCertifications && cgCertifications.length > 0 && cgCertifications.some(c => c.certType) && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>📋 Certification Details</div>
+              {cgCertifications.filter(c => c.certType).map((cert, i) => {
+                const now = new Date();
+                const exp = cert.expiryDate ? new Date(cert.expiryDate) : null;
+                const isExpired = exp && exp < now;
+                const isSoon = exp && !isExpired && exp < new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                return (
+                  <div key={i} style={{ padding: '8px 0', borderBottom: i < cgCertifications.length - 1 ? '1px solid #eee' : 'none' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{cert.certType}</div>
+                    <div style={{ fontSize: 12, color: '#666' }}>
+                      {cert.certNumber && <span>#{cert.certNumber} </span>}
+                      {cert.issuer && <span>· {cert.issuer} </span>}
+                    </div>
+                    {exp && (
+                      <div style={{ fontSize: 12, marginTop: 2, fontWeight: isExpired || isSoon ? 700 : 400,
+                        color: isExpired ? '#c53030' : isSoon ? '#c05621' : '#666' }}>
+                        {isExpired ? '🔴 EXPIRED' : isSoon ? '🟡 Expiring soon' : '✅ Valid'} — {exp.toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
