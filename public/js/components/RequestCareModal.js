@@ -139,14 +139,14 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             if (daySlots.length === 0) { isAvailable = false; }
             else { for (let m = requestStart; m < requestEnd; m += 60) { const slotExists = daySlots.some(s => s.startMinutes <= m && s.startMinutes + 60 > m); if (!slotExists) { isAvailable = false; break; } } }
             matches.push({
-              name: cgName, caregiverId: cg.caregiver_profile_id,
+              name: cgName, caregiverId: cg.caregiver_profile_id, userId: cg.caregiver_user_id,
               skills: cg.specialties || [], rate: hasTieredRates ? `Day $${rateDaytime} \u00b7 Night $${rateNighttime}` : `$${rate}/hr`,
-              skillMatch: hasSkill, available: isAvailable,
+              skillMatch: hasSkill, available: isAvailable, openToInterview: !!cg.open_to_interview,
               reason: !isAvailable ? (daySlots.length === 0 ? 'Not scheduled this day' : 'Not available at this time') : undefined,
             });
           }
         } catch (err) {
-          matches.push({ name: cgName, caregiverId: cg.caregiver_profile_id, skills: cg.specialties || [], rate: `$${rate}/hr`, skillMatch: hasSkill, available: false, reason: 'Could not check availability' });
+          matches.push({ name: cgName, caregiverId: cg.caregiver_profile_id, userId: cg.caregiver_user_id, skills: cg.specialties || [], rate: `$${rate}/hr`, skillMatch: hasSkill, available: false, openToInterview: !!cg.open_to_interview, reason: 'Could not check availability' });
         }
       }
       matches.sort((a, b) => {
@@ -483,6 +483,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                           </div>
                         </div>
                         {!cg.available && <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>{cg.reason || 'Can still accept if available'}</div>}
+                        {cg.openToInterview && <div style={{ fontSize: 11, color: '#1b6b5a', marginTop: 3 }}>🤝 Open to intro call</div>}
                       </button>
                     ))}
                     <button type="button" onClick={() => setSelectedCaregiver(null)}
@@ -584,6 +585,23 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           {step === 1 && (
             <button className="btn btn-primary" disabled={!step1Complete} onClick={() => setStep(2)}>
               Next
+            </button>
+          )}
+          {step === 2 && selectedCaregiver?.openToInterview && (
+            <button type="button" onClick={async () => {
+              try {
+                const msg = `Hi ${selectedCaregiver.name.split(' ')[0]}, I'm interested in booking care on ${date} at ${time}. Would you be available for a quick intro call before we confirm? Looking forward to meeting you!`;
+                const convRes = await apiFetch('/api/messages/conversations', { method: 'POST', body: JSON.stringify({ memberIds: [selectedCaregiver.userId], name: null }) });
+                if (convRes?.ok) {
+                  const convData = await convRes.json();
+                  const cid = convData.conversationId || convData.conversation?.id || convData.id;
+                  await apiFetch(`/api/messages/conversations/${cid}`, { method: 'POST', body: JSON.stringify({ content: msg }) });
+                  alert('Intro call request sent! Check Messages to coordinate.');
+                }
+              } catch (err) { console.error('Interview request error:', err); }
+            }}
+              style={{ padding: '10px 16px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              🤝 Request Intro Call
             </button>
           )}
           {step === 2 && (

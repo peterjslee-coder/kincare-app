@@ -18,7 +18,7 @@ router.get("/", async (req, res) => {
       SELECT ca.*, cp.user_id AS caregiver_user_id,
         u.first_name, u.last_name, cp.rating_avg, cp.hourly_rate,
         cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
-        cp.specialties, cp.certifications,
+        cp.specialties, cp.certifications, cp.open_to_interview,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
       FROM caregiver_assignments ca
       JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
