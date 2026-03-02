@@ -182,19 +182,17 @@ const FindWork = window.FindWork = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const today = toLocal(new Date());
-      const end = new Date(); end.setDate(end.getDate() + rangeDays);
-      const endStr = toLocal(end);
-
-      const res = await apiFetch(`/api/sessions?from=${today}&to=${endStr}`);
+      // Use dashboard API for enriched data (match quality, distance, health tags, care summary)
+      const res = await apiFetch('/api/dashboard');
       if (res?.ok) {
         const d = await res.json();
-        const all = d.sessions || [];
-        const open = all.filter(s => ['requested', 'open', 'pending'].includes(s.status) && !s.caregiver_id);
+        // openJobs from dashboard already has matchQuality, distanceMiles, healthTags, careSummary, etc.
+        const jobs = d.openJobs || [];
         // Sort direct offers (Just For You) to the top
-        open.sort((a, b) => (b.offered_to_caregiver_id ? 1 : 0) - (a.offered_to_caregiver_id ? 1 : 0));
-        setOpenRequests(open);
-        setUpcomingSessions(all.filter(s => !['requested', 'open', 'pending'].includes(s.status) || s.caregiver_id));
+        jobs.sort((a, b) => (b.offeredToCaregiverId ? 1 : 0) - (a.offeredToCaregiverId ? 1 : 0));
+        setOpenRequests(jobs);
+        // upcomingSessions from dashboard has location, payout, health info
+        setUpcomingSessions(d.upcomingSessions || []);
       }
       setLastFetched(new Date());
     } catch (err) {
@@ -226,7 +224,7 @@ const FindWork = window.FindWork = () => {
 
   // Tick timer for exclusive offer countdowns (every 30s)
   useEffect(() => {
-    const hasEx = openRequests.some(s => s.exclusive_until);
+    const hasEx = openRequests.some(s => s.exclusiveUntil || s.exclusive_until);
     if (!hasEx) return;
     const iv = setInterval(() => setExTick(t => t + 1), 30000);
     return () => clearInterval(iv);
@@ -269,20 +267,18 @@ const FindWork = window.FindWork = () => {
   }, [profileCenter]);
 
   // Service filter options
-  const serviceTypes = [...new Set(openRequests.map(s => s.service_type || s.serviceType).filter(Boolean))];
+  const serviceTypes = [...new Set(openRequests.map(s => s.serviceType || s.service_type).filter(Boolean))];
 
   // Apply zip + service filters (computed before map effect so it can reference filteredRequests)
   let filteredRequests = openRequests;
   if (filterService !== 'all') {
-    filteredRequests = filteredRequests.filter(s => (s.service_type || s.serviceType) === filterService);
+    filteredRequests = filteredRequests.filter(s => (s.serviceType || s.service_type) === filterService);
   }
   if (zipFilter.trim()) {
     const z = zipFilter.trim().toLowerCase();
     filteredRequests = filteredRequests.filter(s => {
-      const city = (s.recipient_city || '').toLowerCase();
-      const state = (s.recipient_state || '').toLowerCase();
-      const zip = (s.recipient_zip || '').toLowerCase();
-      return city.includes(z) || state.includes(z) || zip.includes(z);
+      const city = (s.recipientCity || s.recipient_city || '').toLowerCase();
+      return city.includes(z);
     });
   }
 
@@ -317,8 +313,8 @@ const FindWork = window.FindWork = () => {
     const bounds = profileCenter ? [profileCenter] : [];
     const locCounts = {};
     filteredRequests.forEach(s => {
-      let lat = parseFloat(s.recipient_lat);
-      let lng = parseFloat(s.recipient_lng);
+      let lat = parseFloat(s.recipientLat || s.recipient_lat);
+      let lng = parseFloat(s.recipientLng || s.recipient_lng);
       if (!lat || !lng) return;
 
       // Offset colocated markers in a spiral so they don't stack
@@ -332,13 +328,13 @@ const FindWork = window.FindWork = () => {
         lng += dist * Math.sin(angle);
       }
 
-      const recipient = s.recipient_name || s.recipientName || 'Care Recipient';
-      const service = (s.service_type || s.serviceType || '').replace(/_/g, ' ');
-      const cost = s.estimated_cost || s.estimatedCost;
-      const dateStr = s.scheduled_date || s.date;
-      const time = s.scheduled_time || s.time;
-      const isOffer = !!s.offered_to_caregiver_id;
-      const exUntil = s.exclusive_until ? new Date(s.exclusive_until) : null;
+      const recipient = s.recipientName || s.recipient_name || 'Care Recipient';
+      const service = (s.serviceType || s.service_type || '').replace(/_/g, ' ');
+      const cost = s.estimatedCost || s.estimated_cost;
+      const dateStr = s.date || s.scheduled_date;
+      const time = s.time || s.scheduled_time;
+      const isOffer = !!s.offeredToCaregiverId;
+      const exUntil = s.exclusiveUntil ? new Date(s.exclusiveUntil) : null;
       const exRemain = exUntil ? Math.max(0, Math.floor((exUntil - new Date()) / 60000)) : null;
       const exExpired = exUntil && exRemain <= 0;
       const activeOffer = isOffer && !exExpired;
@@ -366,7 +362,7 @@ const FindWork = window.FindWork = () => {
           <div style="font-weight:700;font-size:14px;margin-bottom:4px">${recipient}</div>
           <div style="font-size:12px;color:#666;margin-bottom:2px">${service}</div>
           <div style="font-size:12px;color:#666;margin-bottom:2px">📅 ${dateStr} 🕐 ${time || ''}</div>
-          ${cost ? '<div style="font-size:14px;font-weight:700;color:#1b6b5a;margin-top:4px">$' + Math.round(parseFloat(s.caregiver_payout || cost)) + ' <span style=\\"font-size:10px;font-weight:600;color:#1b6b5a\\">your earnings</span></div>' : ''}
+          ${cost ? '<div style="font-size:14px;font-weight:700;color:#1b6b5a;margin-top:4px">$' + Math.round(parseFloat(s.caregiverPayout || s.caregiver_payout || cost)) + ' <span style=\\"font-size:10px;font-weight:600;color:#1b6b5a\\">your earnings</span></div>' : ''}
           <button onclick="document.dispatchEvent(new CustomEvent('findwork-claim',{detail:'${s.id}'}))" style="
             margin-top:8px;width:100%;padding:8px;background:#1b6b5a;color:#fff;border:none;border-radius:6px;
             font-size:13px;font-weight:600;cursor:pointer;
@@ -436,7 +432,7 @@ const FindWork = window.FindWork = () => {
   // Group upcoming sessions by date
   const sessionsByDate = {};
   upcomingSessions.forEach(s => {
-    const d = s.scheduled_date || s.date;
+    const d = s.date || s.scheduled_date;
     if (!sessionsByDate[d]) sessionsByDate[d] = [];
     sessionsByDate[d].push(s);
   });
@@ -486,9 +482,13 @@ const FindWork = window.FindWork = () => {
         <div>
           <div className="card" style={{ padding: 20, marginBottom: 16 }}>
             <h3 style={{ margin: '0 0 16px', fontSize: 16, color: '#1b6b5a' }}>💰 Your Hourly Rates</h3>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px', lineHeight: 1.6 }}>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px', lineHeight: 1.6 }}>
               Set your rates for each time tier. Families see these rates when booking, and your earnings are calculated based on when the session falls.
             </p>
+            <div style={{ padding: '10px 14px', background: '#f0faf8', borderRadius: 8, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 16 }}>{'\uD83D\uDCA1'}</span>
+              <span style={{ fontSize: 12, color: '#555', lineHeight: 1.5 }}>Most caregivers in your area charge <strong style={{ color: '#1b6b5a' }}>$25–$35/hr</strong> for daytime care. Setting competitive rates helps you get matched with more families.</span>
+            </div>
             <div style={{ display: 'grid', gap: 14 }}>
               {[
                 { key: 'daytime', label: 'Daytime (7am – 6pm)', icon: '☀️' },
@@ -743,62 +743,97 @@ const FindWork = window.FindWork = () => {
             <div style={{ display: 'grid', gap: 12 }}>
               {filteredRequests.map(s => {
                 const isExpanded = expandedId === s.id;
-                const time = s.scheduled_time || s.time;
-                const duration = s.duration_hours || s.durationHours;
-                const service = s.service_type || s.serviceType;
-                const recipient = s.recipient_name || s.recipientName || 'Care Recipient';
-                const cost = s.estimated_cost || s.estimatedCost;
-                const instructions = s.special_instructions || s.specialInstructions;
-                const dateStr = s.scheduled_date || s.date;
-                const city = s.recipient_city || '';
-                const isDirectOffer = !!s.offered_to_caregiver_id;
-                const exUntil = s.exclusive_until ? new Date(s.exclusive_until) : null;
+                const time = s.time || s.scheduled_time;
+                const duration = s.durationHours || s.duration_hours;
+                const service = s.serviceType || s.service_type;
+                const recipient = s.recipientName || s.recipient_name || 'Care Recipient';
+                const cost = s.estimatedCost || s.estimated_cost;
+                const instructions = s.specialInstructions || s.special_instructions;
+                const dateStr = s.date || s.scheduled_date;
+                const city = s.recipientCity || s.recipient_city || '';
+                const isDirectOffer = !!s.offeredToCaregiverId;
+                const exUntil = s.exclusiveUntil ? new Date(s.exclusiveUntil) : null;
                 const exRemain = exUntil ? Math.max(0, Math.floor((exUntil - new Date()) / 60000)) : null;
                 const exExpired = exUntil && exRemain <= 0;
                 const exUrgent = exRemain !== null && exRemain <= 10 && !exExpired;
                 const activeOffer = isDirectOffer && !exExpired;
 
+                // Match quality & distance (from dashboard enrichment)
+                const matchQuality = s.matchQuality;
+                const hasConflict = s.hasConflict;
+                const distMiles = s.distanceMiles;
+                const familyName = s.familyName;
+                const surcharge = parseFloat(s.shortNoticeSurcharge) || 0;
+                const hasBonus = surcharge > 0;
+                const proposedRate = parseFloat(s.proposedRate) || 0;
+                const hours = parseFloat(duration) || 1;
+                const baseCost = parseFloat(cost) || 0;
+                const basePerHour = proposedRate > 0 ? proposedRate : (hours > 0 ? Math.round(baseCost / hours) : 0);
+                const effectiveTotal = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
+
+                // Date label with countdown
+                const sDate = (dateStr || '').split('T')[0];
+                const dateParts = sDate ? sDate.split('-').map(Number) : [];
+                const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
+                const now = new Date();
+                const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
+                const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+
                 return (
                   <div key={s.id} className="card" style={{
-                    borderLeft: activeOffer ? '4px solid #7c3aed' : '4px solid #fb8c00', padding: 16, cursor: 'pointer',
+                    borderLeft: activeOffer ? '4px solid #7c3aed' : hasConflict ? '4px solid #ffd89b' : matchQuality === 'great' ? '4px solid #1b6b5a' : '4px solid #fb8c00',
+                    padding: 16, cursor: 'pointer',
                     transition: 'box-shadow 0.15s',
-                    background: activeOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : undefined,
+                    background: activeOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : hasConflict ? '#fffbf0' : undefined,
                     boxShadow: activeOffer ? '0 2px 12px rgba(124,58,237,0.15)' : undefined,
                   }} onClick={() => setExpandedId(isExpanded ? null : s.id)}>
-                    {activeOffer && (
-                      <div className={exUrgent ? 'exclusive-urgent' : ''} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        background: exUrgent ? '#e8724a' : '#7c3aed', color: '#fff', padding: '3px 12px',
-                        borderRadius: 20, fontSize: 12, fontWeight: 700, marginBottom: 10,
-                        letterSpacing: '0.3px',
-                      }}>
-                        <span>{exUrgent ? '\u23F1' : '\u2728'}</span> {exRemain !== null ? (exUrgent ? `${exRemain} min left!` : `Just For You \u00B7 ${exRemain} min left`) : 'Just For You'}
-                      </div>
-                    )}
+                    {/* Badge row: offer, match, conflict, distance, rate */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                      {activeOffer && (
+                        <span className={exUrgent ? 'exclusive-urgent' : ''} style={{
+                          background: exUrgent ? '#e8724a' : '#7c3aed', color: '#fff', padding: '2px 10px',
+                          borderRadius: 12, fontSize: 11, fontWeight: 700,
+                        }}>
+                          {exUrgent ? '\u23F1' : '\u2728'} {exRemain !== null ? (exUrgent ? `${exRemain} min left!` : `JUST FOR YOU \u00B7 ${exRemain} min`) : 'JUST FOR YOU'}
+                        </span>
+                      )}
+                      {hasBonus && (
+                        <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
+                      )}
+                      {matchQuality === 'great' && !hasConflict && !activeOffer && (
+                        <span style={{ background: '#1b6b5a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>GREAT MATCH</span>
+                      )}
+                      {hasConflict ? (
+                        <span style={{ background: '#ffd89b', color: '#c86b1f', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\u26A0'} Conflict</span>
+                      ) : (
+                        <span style={{ background: '#c8e6c9', color: '#2e7d32', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\u2713'} No Conflicts</span>
+                      )}
+                      {distMiles !== null && distMiles !== undefined && (
+                        <span style={{ fontSize: 11, color: '#888' }}>{distMiles} mi</span>
+                      )}
+                      {basePerHour > 0 && (
+                        <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
+                      )}
+                    </div>
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontWeight: 700, fontSize: 16, color: '#1a1a2e' }}>{recipient}</span>
-                          <span style={{
-                            padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                            background: '#fff3e0', color: '#e65100', textTransform: 'capitalize',
-                          }}>{(service || '').replace(/_/g, ' ')}</span>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: '#1a1a2e', marginBottom: 2 }}>
+                          {(service || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                         </div>
-                        <div style={{ fontSize: 13, color: '#555', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                          <span>📅 {formatDate(dateStr)}</span>
-                          <span>🕐 {formatTimeStr(time)}</span>
-                          <span>⏱️ {duration}h</span>
-                          {city && <span>📍 {city}</span>}
+                        <div style={{ fontSize: 13, color: '#555', marginBottom: 2 }}>
+                          {dayLabel}{time ? ` at ${formatTimeStr(time)}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
+                          {dayDiff !== null && dayDiff >= 2 && <span style={{ color: '#888', marginLeft: 6, fontSize: 11 }}>in {dayDiff} days</span>}
                         </div>
+                        {city && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>{'\uD83D\uDCCD'} {city}</div>}
+                        {familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {familyName}</div>}
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
                         <div style={{ fontSize: 24, fontWeight: 700, color: '#1b6b5a' }}>
-                          {cost ? `$${Math.round(parseFloat(s.caregiver_payout || cost))}` : '\u2014'}
+                          ${effectiveTotal > 0 ? effectiveTotal.toFixed(0) : (cost ? Math.round(parseFloat(cost)) : '\u2014')}
                         </div>
                         <div style={{ fontSize: 11, color: '#1b6b5a', fontWeight: 600 }}>Your earnings</div>
-                        <div style={{ fontSize: 11, color: '#888' }}>
-                          {cost && duration ? `$${Math.round((s.caregiver_payout || cost) / duration)}/hr` : ''}
-                        </div>
                       </div>
                     </div>
 
@@ -807,7 +842,7 @@ const FindWork = window.FindWork = () => {
                         fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 6,
                         whiteSpace: isExpanded ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>
-                        "{instructions}"
+                        {'\uD83D\uDCDD'} "{instructions}"
                       </div>
                     )}
 
@@ -817,7 +852,7 @@ const FindWork = window.FindWork = () => {
                         {s.healthTags.map((tag, i) => (
                           <span key={i} style={{
                             padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-                            background: '#fce4ec', color: '#c62828',
+                            background: '#fff3e0', color: '#e65100',
                           }}>{tag}</span>
                         ))}
                       </div>
@@ -839,11 +874,12 @@ const FindWork = window.FindWork = () => {
                         <button onClick={(e) => { e.stopPropagation(); handleClaim(s.id); }}
                           disabled={claimingId === s.id}
                           style={{
-                            width: '100%', padding: 14, background: '#1b6b5a', color: '#fff',
+                            width: '100%', padding: 14, background: '#e8724a', color: '#fff',
                             border: 'none', borderRadius: 10, fontSize: 16, fontWeight: 700,
                             cursor: 'pointer', opacity: claimingId === s.id ? 0.6 : 1,
+                            boxShadow: '0 2px 6px rgba(232,114,74,0.3)',
                           }}>
-                          {claimingId === s.id ? 'Accepting...' : '\u2713 Accept This Request'}
+                          {claimingId === s.id ? 'Accepting...' : '\u2713 Accept This Job'}
                         </button>
                       </div>
                     )}
@@ -890,45 +926,63 @@ const FindWork = window.FindWork = () => {
             )}
           </h2>
 
-          {sortedDates.length > 0 ? sortedDates.map(dateStr => (
+          {sortedDates.length > 0 ? sortedDates.map(dateStr => {
+            // Date countdown
+            const dParts = dateStr.split('-').map(Number);
+            const dObj = dParts.length === 3 ? new Date(dParts[0], dParts[1] - 1, dParts[2]) : null;
+            const now = new Date();
+            const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const dDiff = dObj ? Math.round((dObj - todayLocal) / 86400000) : null;
+            const dateLabel = dDiff === 0 ? 'Today' : dDiff === 1 ? 'Tomorrow' : dObj ? dObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) : formatDate(dateStr);
+            const countdownLabel = dDiff !== null && dDiff >= 2 ? `in ${dDiff} days` : '';
+
+            return (
             <div key={dateStr} style={{ marginBottom: 16 }}>
               <div style={{
-                fontSize: 13, fontWeight: 700, color: '#1b6b5a', marginBottom: 8,
-                padding: '4px 0', borderBottom: '1px solid #e8f5f1',
+                fontSize: 14, fontWeight: 700, color: '#1b6b5a', marginBottom: 8,
+                padding: '6px 0', borderBottom: '2px solid #e8f5f1',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}>
-                {formatDate(dateStr)}
+                <span>{dateLabel}</span>
+                {countdownLabel && <span style={{ fontSize: 11, fontWeight: 600, color: '#888', background: '#f5f5f5', padding: '2px 8px', borderRadius: 10 }}>{countdownLabel}</span>}
               </div>
               {sessionsByDate[dateStr].map(s => {
-                const time = s.scheduled_time || s.time;
-                const duration = s.duration_hours || s.durationHours;
-                const service = s.service_type || s.serviceType;
-                const recipient = s.recipient_name || s.recipientName || 'Care Recipient';
-                const cost = s.caregiver_payout || s.estimated_cost || s.estimatedCost || s.actual_cost;
+                const time = s.time || s.scheduled_time;
+                const duration = s.durationHours || s.duration_hours;
+                const service = s.serviceType || s.service_type;
+                const recipient = s.recipientName || s.recipient_name || 'Care Recipient';
+                const cost = s.caregiverPayout || s.caregiver_payout || s.estimatedCost || s.estimated_cost;
+                const location = s.location || s.recipientCity || '';
+                const familyName = s.familyName || '';
+                const healthTags = s.healthTags || [];
+                const careSummary = s.careSummary || '';
+                const instructions = s.specialInstructions || s.special_instructions || '';
                 const statusColors = {
-                  confirmed: { bg: '#e8f5e9', text: '#2e7d32' },
-                  pending: { bg: '#fff3e0', text: '#e65100' },
-                  completed: { bg: '#e0e0e0', text: '#666' },
+                  confirmed: { bg: '#e8f5e9', text: '#2e7d32', label: 'Confirmed' },
+                  pending: { bg: '#fff3e0', text: '#e65100', label: 'Pending' },
+                  in_progress: { bg: '#e3f2fd', text: '#1565c0', label: 'In Progress' },
+                  completed: { bg: '#e0e0e0', text: '#666', label: 'Completed' },
                 };
                 const sc = statusColors[s.status] || statusColors.pending;
 
                 return (
                   <div key={s.id} className="card" style={{
-                    borderLeft: '4px solid #42a5f5', padding: 14, marginBottom: 8,
+                    borderLeft: s.status === 'confirmed' ? '4px solid #1b6b5a' : '4px solid #42a5f5',
+                    padding: 16, marginBottom: 10,
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
-                          {recipient}{cost ? `, $${Math.round(parseFloat(cost))}` : ''}
-                        </div>
-                        <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                          {formatTimeStr(time)} · {duration}h · <span style={{ textTransform: 'capitalize' }}>{(service || '').replace(/_/g, ' ')}</span>
-                        </div>
-                      </div>
+                    {/* Header: service type + status + cancel */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 16, color: '#333' }}>
+                          {(service || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        </span>
                         <span style={{
                           padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                          background: sc.bg, color: sc.text, textTransform: 'capitalize',
-                        }}>{s.status}</span>
+                          background: sc.bg, color: sc.text,
+                        }}>{sc.label}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {cost && <span style={{ fontSize: 20, fontWeight: 700, color: '#1b6b5a' }}>${Math.round(parseFloat(cost))}</span>}
                         {['confirmed', 'pending'].includes(s.status) && (
                           <button onClick={() => setCancellingId(s.id)} style={{
                             padding: '3px 10px', borderRadius: 6, border: '1px solid #e0e0e0',
@@ -937,11 +991,50 @@ const FindWork = window.FindWork = () => {
                         )}
                       </div>
                     </div>
+
+                    {/* Details row: recipient, time, location */}
+                    <div style={{ fontSize: 13, color: '#555', marginBottom: 2 }}>
+                      <span style={{ fontWeight: 600 }}>{recipient}</span>
+                      {time ? ` \u2022 ${formatTimeStr(time)}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
+                    </div>
+                    {location && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {location}</div>}
+                    {familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Family: {familyName}</div>}
+
+                    {/* Special instructions from appointment maker */}
+                    {instructions && (
+                      <div style={{ fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 6 }}>
+                        {'\uD83D\uDCDD'} "{instructions}"
+                      </div>
+                    )}
+
+                    {/* Health condition tags */}
+                    {healthTags.length > 0 && (
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
+                        {healthTags.map((tag, i) => (
+                          <span key={i} style={{
+                            padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                            background: '#fff3e0', color: '#e65100',
+                          }}>{tag}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Care summary */}
+                    {careSummary && (
+                      <div style={{
+                        marginTop: 8, padding: '8px 12px', borderLeft: '3px solid #e8724a',
+                        background: '#fff8f5', borderRadius: '0 6px 6px 0', fontSize: 12, color: '#555', lineHeight: 1.4,
+                      }}>
+                        <div style={{ fontWeight: 600, fontSize: 11, color: '#e8724a', marginBottom: 3 }}>Care Notes</div>
+                        {careSummary.length >= 200 ? careSummary + '...' : careSummary}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
-          )) : (
+            );
+          }) : (
             <div className="card" style={{ textAlign: 'center', padding: '24px 20px' }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
               <p style={{ color: '#888', fontSize: 13, margin: 0 }}>
@@ -963,13 +1056,13 @@ const FindWork = window.FindWork = () => {
             {(() => {
               const s = upcomingSessions.find(x => x.id === cancellingId);
               if (!s) return null;
-              const sessionDT = new Date(`${s.scheduled_date || s.date}T${s.scheduled_time || s.time || '00:00'}`);
+              const sessionDT = new Date(`${s.date || s.scheduled_date}T${s.time || s.scheduled_time || '00:00'}`);
               const hoursAway = (sessionDT - new Date()) / (1000 * 60 * 60);
               const isLate = hoursAway < 24;
               return (
                 <div>
                   <div style={{ fontSize: 14, color: '#333', marginBottom: 12 }}>
-                    {s.recipient_name || s.recipientName} — {s.scheduled_date || s.date}
+                    {s.recipientName || s.recipient_name} — {s.date || s.scheduled_date}
                   </div>
                   {isLate && (
                     <div style={{ padding: '10px 14px', background: '#fce4ec', borderRadius: 8, border: '1px solid #ef9a9a', marginBottom: 12, fontSize: 13, color: '#c62828' }}>

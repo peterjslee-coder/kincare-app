@@ -320,14 +320,20 @@ async function caregiverDashboard(db, userId, res) {
       cr.location_address, cr.location_city,
       cr.preferences AS recipient_preferences,
       cr.timezone AS care_timezone,
+      cr.health_conditions AS cr_health_conditions,
+      cr.caregiver_briefing AS cr_caregiver_briefing,
+      cr.latitude AS recipient_lat,
+      cr.longitude AS recipient_lng,
+      fu.first_name || ' ' || fu.last_name AS family_name,
       cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
       cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    LEFT JOIN users fu ON cs.family_user_id = fu.id
     WHERE cs.caregiver_id = ? AND cs.scheduled_date >= ? AND cs.status IN ('pending', 'confirmed', 'in_progress')
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
-    LIMIT 10
+    LIMIT 20
   `).all(profile.id, today);
 
   // Monthly stats
@@ -381,7 +387,7 @@ async function caregiverDashboard(db, userId, res) {
       AND cs.scheduled_date <= ?
       AND COALESCE(fu.is_demo, 0) = ?
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
-    LIMIT 10
+    LIMIT 30
   `).all(profile.id, profile.id, today, fiveDayStr, isDemo);
 
   // Recent reviews
@@ -497,6 +503,12 @@ async function caregiverDashboard(db, userId, res) {
         timezone: s.care_timezone || "America/New_York",
         offeredToCaregiverId: s.offered_to_caregiver_id || null,
         exclusiveUntil: s.exclusive_until || null,
+        familyName: s.family_name || null,
+        healthTags: (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })(),
+        careSummary: s.cr_caregiver_briefing ? s.cr_caregiver_briefing.substring(0, 200) : null,
+        recipientCity: s.location_city || null,
+        recipientLat: s.recipient_lat || null,
+        recipientLng: s.recipient_lng || null,
       };
     }),
     reviews: reviews.map(r => ({
@@ -532,6 +544,7 @@ async function caregiverDashboard(db, userId, res) {
           familyName: bgCleared ? s.family_name : null,
           specialInstructions: bgCleared ? s.special_instructions : null,
           estimatedCost: s.estimated_cost,
+          caregiverPayout: s.estimated_cost,
           proposedRate: s.proposed_rate,
           shortNoticeSurcharge: s.short_notice_surcharge,
           timezone: s.care_timezone || "America/New_York",
@@ -545,6 +558,8 @@ async function caregiverDashboard(db, userId, res) {
           recipientAge: bgCleared ? (s.recipient_age || null) : null,
           careSummary: bgCleared ? (s.cr_caregiver_briefing ? s.cr_caregiver_briefing.substring(0, 200) : null) : null,
           healthTags: bgCleared ? (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })() : [],
+          recipientLat: bgCleared ? (s.recipient_lat || null) : null,
+          recipientLng: bgCleared ? (s.recipient_lng || null) : null,
         };
       });
     })(),
