@@ -529,6 +529,19 @@
 ### Frontend Modularization (v0.2.0)
 - [x] Split monolithic index.html (3,900 lines) into 17 modular files with zero-build-step CDN approach.
 
+### Caregiver Onboarding & UX Polish (v1.34.55–v1.34.58)
+- [x] **Password validation UI (v1.34.55):** Real-time red→green criteria indicators on registration (8+ chars, uppercase, number, symbol). Min password bumped from 6 to 8 chars.
+- [x] **Combine caregiver disclosures (v1.34.55):** Removed standalone disclosures step from registration. "No Medical Care" disclosure moved into CaregiverOnboarding step 2.
+- [x] **Nav gating for incomplete profiles (v1.34.55):** Caregivers with incomplete onboarding see greyed-out nav (Find Work, Messages) with 🔒 icon. Backend blocks search API for incomplete profiles.
+- [x] **Pin Virginia at top of state dropdowns (v1.34.55):** Both license state and address state dropdowns in CaregiverOnboarding pin "VA — Virginia" at top with separator.
+- [x] **Fix availability tab crash (v1.34.55):** FindWork.js rendered AvailabilityTab with zero props → white screen. Added full state management and all 13 required props.
+- [x] **Suggested caregiver rates (v1.34.56):** Rate fields show "Most caregivers in your area start at these rates" with $24/$28/$30 suggestions per tier.
+- [x] **Emoji onboarding fun-up (v1.34.56):** Added emojis to all section headings (👤📍🐾🔒📜🎓📄💰), pet comfort options (🐾/🌿).
+- [x] **Interview openness preference (v1.34.56):** New "🤝 Open to intro call" question in onboarding. Stored as `open_to_interview` column on `caregiver_profiles`.
+- [x] **Document viewer (v1.34.57):** My Account Documents tab now shows uploaded files with filename, date, and View/Hide image preview toggle.
+- [x] **Expiration warnings (v1.34.57):** Red/yellow banner for certifications expiring within 30 days. Certification details panel with color-coded expiry status.
+- [x] **Family-side interview request (v1.34.58):** Caregiver cards in RequestCareModal show "🤝 Open to intro call" badge. "Request Intro Call" button sends a message to the caregiver via existing messaging system.
+
 ## Future Features
 
 - [ ] **Location check-in and location tracking during sessions:** Real-time location tracking for caregivers during active care sessions. Check-in before starting session, live location updates on family-side map, automatic check-out on session end. Includes geofencing alerts if caregiver strays from expected service location. Requires GPS permissions on mobile.
