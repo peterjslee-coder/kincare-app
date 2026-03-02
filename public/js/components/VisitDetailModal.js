@@ -195,17 +195,17 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                     </div>
                   )}
 
-                  {/* Summary / notes */}
-                  {v.summary && (
+                  {/* Caregiver Notes (deduplicated — summary and care_feedback may contain the same text) */}
+                  {(v.care_feedback || v.summary) && (
                     <div style={{ marginBottom: 8 }}>
                       <div style={{ fontSize: 12, color: '#888', marginBottom: 2 }}>Caregiver Notes</div>
-                      <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5, background: '#fafafa', padding: 10, borderRadius: 8 }}>{v.summary}</div>
+                      <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5, background: '#fafafa', padding: 10, borderRadius: 8 }}>{v.care_feedback || v.summary}</div>
                     </div>
                   )}
-                  {v.care_feedback && (
+                  {v.summary && v.care_feedback && v.summary !== v.care_feedback && (
                     <div style={{ marginBottom: 8 }}>
-                      <div style={{ fontSize: 12, color: '#888', marginBottom: 2 }}>Care Feedback</div>
-                      <div style={{ fontSize: 13, color: '#555' }}>{v.care_feedback}</div>
+                      <div style={{ fontSize: 12, color: '#888', marginBottom: 2 }}>Additional Notes</div>
+                      <div style={{ fontSize: 13, color: '#555' }}>{v.summary}</div>
                     </div>
                   )}
 

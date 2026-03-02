@@ -2141,7 +2141,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
                       careFeedback: checkOutCareFeedback.trim() || null,
                       serviceFeedback: checkOutServiceFeedback.trim() || null,
-                      summary: checkOutCareFeedback.trim() || null,
+                      summary: null,
                     }),
                   });
                   if (res?.ok) {
