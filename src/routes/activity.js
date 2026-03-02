@@ -7,19 +7,31 @@ const router = express.Router();
 router.use(authenticate);
 
 // ─── GET /api/activity ───
-// Activity feed for the logged-in family user
+// Activity feed for the logged-in family user (includes shared care recipient activities)
 router.get("/", async (req, res) => {
   const db = await getDb();
+  const userId = req.user.id;
   const { unreadOnly, limit = 30 } = req.query;
+
+  // Get owned + shared recipient IDs (same scope as dashboard)
+  const ownedRecipients = await db.prepare(
+    "SELECT id FROM care_recipients WHERE family_user_id = ?"
+  ).all(userId);
+  const sharedRecipients = await db.prepare(
+    "SELECT care_recipient_id AS id FROM care_recipient_shares WHERE shared_with_user_id = ?"
+  ).all(userId);
+  const ownedIds = new Set(ownedRecipients.map(r => r.id));
+  const allRecipientIds = [...ownedRecipients, ...sharedRecipients.filter(r => !ownedIds.has(r.id))].map(r => r.id);
+  const recipientPlaceholders = allRecipientIds.length > 0 ? allRecipientIds.map(() => '?').join(',') : "'__none__'";
 
   let query = `
     SELECT af.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name
     FROM activity_feed af
     LEFT JOIN care_recipients cr ON af.care_recipient_id = cr.id
-    WHERE af.family_user_id = ?
+    WHERE (af.family_user_id = ? OR af.care_recipient_id IN (${recipientPlaceholders}))
   `;
-  const params = [req.user.id];
+  const params = [userId, ...allRecipientIds];
 
   if (unreadOnly === "true") {
     query += " AND af.is_read = 0";
@@ -30,10 +42,10 @@ router.get("/", async (req, res) => {
 
   const activities = await db.prepare(query).all(...params);
 
-  // Unread count
+  // Unread count (same scope)
   const unreadCount = await db.prepare(
-    "SELECT COUNT(*) as count FROM activity_feed WHERE family_user_id = ? AND is_read = 0"
-  ).get(req.user.id);
+    `SELECT COUNT(*) as count FROM activity_feed WHERE (family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})) AND is_read = 0`
+  ).get(userId, ...allRecipientIds);
 
   res.json({ activities, unreadCount: unreadCount.count });
 });
@@ -41,18 +53,44 @@ router.get("/", async (req, res) => {
 // ─── PUT /api/activity/:id/read ───
 router.put("/:id/read", requireRole("family"), async (req, res) => {
   const db = await getDb();
+  const userId = req.user.id;
+
+  // Allow marking read if user owns the activity OR shares the care recipient
+  const ownedRecipients = await db.prepare(
+    "SELECT id FROM care_recipients WHERE family_user_id = ?"
+  ).all(userId);
+  const sharedRecipients = await db.prepare(
+    "SELECT care_recipient_id AS id FROM care_recipient_shares WHERE shared_with_user_id = ?"
+  ).all(userId);
+  const ownedIds = new Set(ownedRecipients.map(r => r.id));
+  const allRecipientIds = [...ownedRecipients, ...sharedRecipients.filter(r => !ownedIds.has(r.id))].map(r => r.id);
+  const recipientPlaceholders = allRecipientIds.length > 0 ? allRecipientIds.map(() => '?').join(',') : "'__none__'";
+
   await db.prepare(
-    "UPDATE activity_feed SET is_read = 1 WHERE id = ? AND family_user_id = ?"
-  ).run(req.params.id, req.user.id);
+    `UPDATE activity_feed SET is_read = 1 WHERE id = ? AND (family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders}))`
+  ).run(req.params.id, userId, ...allRecipientIds);
   res.json({ success: true });
 });
 
 // ─── PUT /api/activity/read-all ───
 router.put("/read-all", requireRole("family"), async (req, res) => {
   const db = await getDb();
+  const userId = req.user.id;
+
+  // Mark all read for owned + shared care recipient activities
+  const ownedRecipients = await db.prepare(
+    "SELECT id FROM care_recipients WHERE family_user_id = ?"
+  ).all(userId);
+  const sharedRecipients = await db.prepare(
+    "SELECT care_recipient_id AS id FROM care_recipient_shares WHERE shared_with_user_id = ?"
+  ).all(userId);
+  const ownedIds = new Set(ownedRecipients.map(r => r.id));
+  const allRecipientIds = [...ownedRecipients, ...sharedRecipients.filter(r => !ownedIds.has(r.id))].map(r => r.id);
+  const recipientPlaceholders = allRecipientIds.length > 0 ? allRecipientIds.map(() => '?').join(',') : "'__none__'";
+
   await db.prepare(
-    "UPDATE activity_feed SET is_read = 1 WHERE family_user_id = ? AND is_read = 0"
-  ).run(req.user.id);
+    `UPDATE activity_feed SET is_read = 1 WHERE (family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})) AND is_read = 0`
+  ).run(userId, ...allRecipientIds);
   res.json({ success: true });
 });
 

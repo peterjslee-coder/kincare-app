@@ -387,7 +387,7 @@ const Caregivers = window.Caregivers = () => {
                 ? <> Day ${cg.rateDaytime} · Night ${cg.rateNighttime} · Overnight ${cg.rateOvernight}/hr</>
                 : <> ${cg.hourlyRate || '—'}/hr</>
               }
-              {cg.city && ` &bull; ${cg.city}, ${cg.state || ''}`}
+              {cg.city && <> • {cg.city}, {cg.state || ''}</>}
             </div>
             {cg.bio && (
               <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px', lineHeight: '1.4' }}>
