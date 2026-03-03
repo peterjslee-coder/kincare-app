@@ -228,10 +228,10 @@ const CareRecipients = window.CareRecipients = () => {
             {(r.location_city || r.city) && <p className="text-muted" style={{ fontSize: '13px' }}>{r.location_city ? `${r.location_city}, ${r.location_state}` : r.city}</p>}
             {r.consent_status && r.consent_status !== 'verified' && (
               <div style={{ marginTop: '6px', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, display: 'inline-block',
-                background: r.consent_status === 'pending' ? '#FFF3E0' : '#fce4ec',
-                color: r.consent_status === 'pending' ? '#e8724a' : '#c62828',
+                background: r.consent_status === 'pending' ? '#FFF3E0' : r.consent_status === 'attested' ? '#E3F2FD' : '#fce4ec',
+                color: r.consent_status === 'pending' ? '#e8724a' : r.consent_status === 'attested' ? '#1565C0' : '#c62828',
               }}>
-                {r.consent_status === 'pending' ? '\u23F3 Pending' : '\u274C ' + r.consent_status}
+                {r.consent_status === 'pending' ? '\u23F3 Pending' : r.consent_status === 'attested' ? '\u{1F4DD} Attested \u2014 awaiting code' : '\u274C ' + r.consent_status}
               </div>
             )}
           </div>

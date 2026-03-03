@@ -1938,7 +1938,7 @@ const AdminPanel = window.AdminPanel = () => {
                 <tbody>
                   {authzList.map(a => {
                     const tierLabels = { tier1: 'Self-signup', tier2: 'POA/Guardian', tier3: 'Family consent', unset: 'Unset' };
-                    const statusColors = { verified: '#1b6b5a', pending: '#e8724a', rejected: '#c0392b', revoked: '#999' };
+                    const statusColors = { verified: '#1b6b5a', pending: '#e8724a', attested: '#1565C0', rejected: '#c0392b', revoked: '#999' };
                     return (
                       <tr key={a.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                         <td style={{ padding: '10px 8px', fontWeight: 600 }}>{a.first_name} {a.last_name}</td>
@@ -1951,8 +1951,18 @@ const AdminPanel = window.AdminPanel = () => {
                         </td>
                         <td style={{ padding: '10px 8px' }}>
                           <span style={{ color: statusColors[a.consent_status] || '#999', fontWeight: 600 }}>
-                            {a.consent_status === 'verified' ? '\u2705' : a.consent_status === 'pending' ? '\u23F3' : a.consent_status === 'rejected' ? '\u274C' : '\u{1F6AB}'} {a.consent_status}
+                            {a.consent_status === 'verified' ? '\u2705' : a.consent_status === 'attested' ? '\u{1F4DD}' : a.consent_status === 'pending' ? '\u23F3' : a.consent_status === 'rejected' ? '\u274C' : '\u{1F6AB}'} {a.consent_status}
                           </span>
+                          {a.attestation_signed_at && (
+                            <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                              Attested by {a.attestation_signer || 'N/A'} on {new Date(a.attestation_signed_at).toLocaleDateString()}
+                            </div>
+                          )}
+                          {a.verification_status && (
+                            <div style={{ fontSize: '11px', color: a.verification_status === 'verified' ? '#1b6b5a' : a.verification_status === 'expired' ? '#e8724a' : '#888', marginTop: '2px' }}>
+                              Code: {a.verification_status}{a.verification_failed_attempts > 0 ? ` (${a.verification_failed_attempts} failed)` : ''}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: '10px 8px', textAlign: 'center' }}>{a.session_count || 0}</td>
                         <td style={{ padding: '10px 8px' }}>

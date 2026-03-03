@@ -1462,9 +1462,17 @@ router.get("/authorizations", requireAdmin, async (req, res) => {
              cr.consent_method, cr.consent_verified_at, cr.consent_reviewed_by, cr.consent_notes,
              cr.created_at,
              u.first_name AS family_first_name, u.last_name AS family_last_name, u.email AS family_email,
-             (SELECT COUNT(*) FROM care_sessions cs WHERE cs.care_recipient_id = cr.id) AS session_count
+             (SELECT COUNT(*) FROM care_sessions cs WHERE cs.care_recipient_id = cr.id) AS session_count,
+             att.signer_name AS attestation_signer, att.signed_at AS attestation_signed_at,
+             va.status AS verification_status, va.failed_attempts AS verification_failed_attempts
       FROM care_recipients cr
       LEFT JOIN users u ON u.id = cr.family_user_id
+      LEFT JOIN attestations att ON att.care_recipient_id = cr.id
+      LEFT JOIN (
+        SELECT DISTINCT ON (care_recipient_id) care_recipient_id, status, failed_attempts
+        FROM verification_attempts
+        ORDER BY care_recipient_id, created_at DESC
+      ) va ON va.care_recipient_id = cr.id
       WHERE 1=1
     `;
     const params = [];
