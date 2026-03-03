@@ -483,6 +483,8 @@ async function initializeDatabase() {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_fvc_recipient ON first_visit_confirmations(care_recipient_id)`,
     `CREATE INDEX IF NOT EXISTS idx_fvc_session ON first_visit_confirmations(session_id)`,
+    // v1.35.9 — Unique constraint to prevent double-submit race condition
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_fvc_session_unique ON first_visit_confirmations(session_id)`,
     // v1.35.0 — Backfill: existing care recipients with linked_user_id → tier1/verified/self_signup
     `UPDATE care_recipients SET authorization_tier = 'tier1', consent_status = 'verified', consent_method = 'self_signup', consent_verified_at = NOW() WHERE linked_user_id IS NOT NULL AND authorization_tier = 'unset'`,
     // v1.35.0 — Backfill: existing care recipients without linked_user_id → tier3/verified/legacy_account (don't break existing users)

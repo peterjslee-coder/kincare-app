@@ -1410,4 +1410,109 @@ router.get("/:id", async (req, res) => {
   res.json({ session, visitLog, photos, costBreakdown });
 });
 
+// ═══════════════════════════════════════════════════════════════════════
+// First-Visit Confirmation — caregiver confirms care recipient awareness
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── GET /api/sessions/:sessionId/first-visit-check ───
+// Returns whether this caregiver needs to complete a first-visit confirmation
+router.get("/:sessionId/first-visit-check", async (req, res) => {
+  try {
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.id AS caregiver_profile_id, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.sessionId);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can access this" });
+    }
+
+    // Check if there's already a first_visit_confirmations row for this caregiver + care_recipient pair
+    const existing = await db.prepare(
+      "SELECT id FROM first_visit_confirmations WHERE caregiver_id = ? AND care_recipient_id = ?"
+    ).get(session.caregiver_profile_id, session.care_recipient_id);
+
+    // Get care recipient name for the UI
+    const recipient = await db.prepare(
+      "SELECT first_name, last_name FROM care_recipients WHERE id = ?"
+    ).get(session.care_recipient_id);
+
+    res.json({
+      needsConfirmation: !existing,
+      recipientName: recipient ? `${recipient.first_name} ${recipient.last_name}`.trim() : 'the care recipient',
+    });
+  } catch (err) {
+    console.error("First-visit check error:", err);
+    res.status(500).json({ error: "Failed to check first-visit status" });
+  }
+});
+
+// ─── POST /api/sessions/:sessionId/first-visit-confirm ───
+// Submit first-visit confirmation (does NOT block check-in)
+router.post("/:sessionId/first-visit-confirm", async (req, res) => {
+  try {
+    const { confirmation, notes } = req.body;
+
+    const validConfirmations = ['yes', 'no', 'unable'];
+    if (!confirmation || !validConfirmations.includes(confirmation)) {
+      return res.status(400).json({ error: "Confirmation must be 'yes', 'no', or 'unable'" });
+    }
+
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.id AS caregiver_profile_id, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.sessionId);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can submit this" });
+    }
+
+    const id = require("uuid").v4();
+    await db.prepare(`
+      INSERT INTO first_visit_confirmations (id, care_recipient_id, caregiver_id, session_id, confirmation, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, session.care_recipient_id, session.caregiver_profile_id, req.params.sessionId, confirmation, notes || null);
+
+    // If 'no' or 'unable', notify the family
+    if (confirmation !== 'yes') {
+      const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+      const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "Caregiver";
+      const recipient = await db.prepare("SELECT first_name, last_name FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+      const recipientName = recipient ? `${recipient.first_name} ${recipient.last_name}`.trim() : "Care recipient";
+
+      const title = confirmation === 'no'
+        ? `${recipientName} may not be aware of care visit`
+        : `${caregiverName} unable to assess ${recipientName}'s awareness`;
+      const message = confirmation === 'no'
+        ? `${caregiverName} reported that ${recipientName} seems unaware of today's care visit.${notes ? ' Note: ' + notes : ''}`
+        : `${caregiverName} was unable to assess whether ${recipientName} is aware of today's care visit.${notes ? ' Note: ' + notes : ''}`;
+
+      try {
+        await db.prepare(`
+          INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata)
+          VALUES (?, ?, ?, 'first_visit_concern', ?, ?, ?)
+        `).run(require("uuid").v4(), session.family_user_id, session.care_recipient_id, title, message, JSON.stringify({ sessionId: req.params.sessionId, confirmation }));
+
+        const emitToUser = req.app.get("emitToUser");
+        if (emitToUser) emitToUser(session.family_user_id, "activity_update", { title, message });
+      } catch (notifErr) {
+        console.error("First-visit notification error:", notifErr.message);
+      }
+    }
+
+    res.json({ success: true, confirmation });
+  } catch (err) {
+    console.error("First-visit confirm error:", err);
+    res.status(500).json({ error: "Failed to submit first-visit confirmation" });
+  }
+});
+
 module.exports = router;

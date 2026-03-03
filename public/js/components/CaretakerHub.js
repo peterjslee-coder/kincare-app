@@ -32,7 +32,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [briefingData, setBriefingData] = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingAcked, setBriefingAcked] = useState(false);
-  const [checkInStep, setCheckInStep] = useState('briefing'); // 'briefing' | 'checkin'
+  const [checkInStep, setCheckInStep] = useState('briefing'); // 'briefing' | 'first-visit' | 'checkin'
+  // First-visit confirmation state
+  const [firstVisitNeeded, setFirstVisitNeeded] = useState(false);
+  const [firstVisitName, setFirstVisitName] = useState('');
+  const [firstVisitChoice, setFirstVisitChoice] = useState(''); // 'yes' | 'no' | 'unable'
+  const [firstVisitNotes, setFirstVisitNotes] = useState('');
+  const [firstVisitSubmitting, setFirstVisitSubmitting] = useState(false);
   // Expandable care profile state (Up Next cards)
   const [expandedProfileId, setExpandedProfileId] = useState(null);
   const [profileBriefings, setProfileBriefings] = useState({}); // sessionId -> briefing data
@@ -1887,7 +1893,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     style: { padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
                   }, 'Cancel'),
                   React.createElement('button', {
-                    onClick: () => setCheckInStep('checkin'),
+                    onClick: async () => {
+                      // Check if first-visit confirmation is needed
+                      try {
+                        const fvRes = await apiFetch('/api/sessions/' + checkInSession.id + '/first-visit-check');
+                        if (fvRes?.ok) {
+                          const fvData = await fvRes.json();
+                          if (fvData.needsConfirmation) {
+                            setFirstVisitNeeded(true);
+                            setFirstVisitName(fvData.recipientName || 'the care recipient');
+                            setFirstVisitChoice('');
+                            setFirstVisitNotes('');
+                            setCheckInStep('first-visit');
+                            return;
+                          }
+                        }
+                      } catch (e) { console.error('First-visit check failed:', e); }
+                      setCheckInStep('checkin');
+                    },
                     disabled: !briefingAcked,
                     style: {
                       padding: '10px 24px', background: briefingAcked ? '#1b6b5a' : '#ccc', color: '#fff', border: 'none',
@@ -1898,6 +1921,80 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 )
               );
             })()}
+
+            {/* ── STEP 1.5: First-Visit Confirmation (conditional) ── */}
+            {checkInStep === 'first-visit' && React.createElement('div', null,
+              React.createElement('div', { style: { textAlign: 'center', marginBottom: 20 } },
+                React.createElement('div', { style: { fontSize: 40, marginBottom: 8 } }, '\u{1F44B}'),
+                React.createElement('h3', { style: { marginTop: 0, marginBottom: 4, fontSize: 20 } }, 'First Visit Confirmation'),
+                React.createElement('p', { style: { fontSize: 13, color: '#666', margin: 0 } },
+                  'This is your first session with ' + firstVisitName + '. Please confirm their awareness.')
+              ),
+
+              React.createElement('div', { style: { padding: 16, background: '#FFF3E0', borderRadius: 10, border: '2px solid #e8724a', marginBottom: 16 } },
+                React.createElement('div', { style: { fontSize: 14, fontWeight: 700, marginBottom: 12, color: '#e65100' } },
+                  'Is ' + firstVisitName.split(' ')[0] + ' aware that you\'re here to provide care today?'),
+                [
+                  { key: 'yes', label: 'Yes, they acknowledged me', emoji: '\u2705' },
+                  { key: 'no', label: 'They seem unaware of my visit', emoji: '\u26A0\uFE0F' },
+                  { key: 'unable', label: 'Unable to assess their awareness', emoji: '\u2753' },
+                ].map(opt =>
+                  React.createElement('label', {
+                    key: opt.key,
+                    style: {
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 6,
+                      borderRadius: 8, cursor: 'pointer',
+                      background: firstVisitChoice === opt.key ? '#fff8e1' : '#fff',
+                      border: firstVisitChoice === opt.key ? '2px solid #e8724a' : '2px solid #eee',
+                    }
+                  },
+                    React.createElement('input', {
+                      type: 'radio', name: 'firstVisitChoice', value: opt.key,
+                      checked: firstVisitChoice === opt.key,
+                      onChange: () => setFirstVisitChoice(opt.key),
+                      style: { accentColor: '#e8724a' }
+                    }),
+                    React.createElement('span', { style: { fontSize: 16 } }, opt.emoji),
+                    React.createElement('span', { style: { fontSize: 13, fontWeight: firstVisitChoice === opt.key ? 700 : 400 } }, opt.label)
+                  )
+                ),
+
+                (firstVisitChoice === 'no' || firstVisitChoice === 'unable') && React.createElement('div', { style: { marginTop: 12 } },
+                  React.createElement('label', { style: { display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: '#666' } }, 'Notes (optional — will be shared with the family):'),
+                  React.createElement('textarea', {
+                    value: firstVisitNotes, onChange: e => setFirstVisitNotes(e.target.value),
+                    placeholder: 'Describe what you observed...',
+                    style: { width: '100%', minHeight: 70, padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }
+                  })
+                )
+              ),
+
+              React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 } },
+                React.createElement('button', {
+                  onClick: () => setCheckInStep('briefing'),
+                  style: { padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
+                }, '\u2190 Back'),
+                React.createElement('button', {
+                  onClick: async () => {
+                    if (!firstVisitChoice) return;
+                    setFirstVisitSubmitting(true);
+                    try {
+                      await apiFetch('/api/sessions/' + checkInSession.id + '/first-visit-confirm', {
+                        method: 'POST',
+                        body: JSON.stringify({ confirmation: firstVisitChoice, notes: firstVisitNotes || null }),
+                      });
+                    } catch (e) { console.error('First-visit confirm error:', e); }
+                    setFirstVisitSubmitting(false);
+                    setCheckInStep('checkin');
+                  },
+                  disabled: !firstVisitChoice || firstVisitSubmitting,
+                  style: {
+                    padding: '10px 24px', background: firstVisitChoice ? '#1b6b5a' : '#ccc', color: '#fff', border: 'none',
+                    borderRadius: 8, cursor: firstVisitChoice ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700,
+                  }
+                }, firstVisitSubmitting ? 'Submitting...' : 'Continue to Check In \u2192')
+              )
+            )}
 
             {/* ── STEP 2: Check In (mood, location, confirm) ── */}
             {checkInStep === 'checkin' && React.createElement('div', null,
@@ -1947,9 +2044,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
               React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 } },
                 React.createElement('button', {
-                  onClick: () => setCheckInStep('briefing'),
+                  onClick: () => setCheckInStep(firstVisitNeeded ? 'first-visit' : 'briefing'),
                   style: { padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
-                }, '← Back'),
+                }, '\u2190 Back'),
                 React.createElement('button', {
                   onClick: async () => {
                     setCheckSubmitting(true);
