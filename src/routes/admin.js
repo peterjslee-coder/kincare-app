@@ -1447,4 +1447,80 @@ router.post("/feedback/bulk-update", async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════
+// ─── AUTHORIZATIONS (Consent & Authorization Verification) ───
+// ═══════════════════════════════════════════════════════════════════════
+
+// GET /api/admin/authorizations — list care recipients with consent info
+router.get("/authorizations", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { status, tier } = req.query;
+
+    let sql = `
+      SELECT cr.id, cr.first_name, cr.last_name, cr.authorization_tier, cr.consent_status,
+             cr.consent_method, cr.consent_verified_at, cr.consent_reviewed_by, cr.consent_notes,
+             cr.created_at,
+             u.first_name AS family_first_name, u.last_name AS family_last_name, u.email AS family_email,
+             (SELECT COUNT(*) FROM care_sessions cs WHERE cs.care_recipient_id = cr.id) AS session_count
+      FROM care_recipients cr
+      LEFT JOIN users u ON u.id = cr.family_user_id
+      WHERE 1=1
+    `;
+    const params = [];
+    if (status) { sql += ` AND cr.consent_status = ?`; params.push(status); }
+    if (tier) { sql += ` AND cr.authorization_tier = ?`; params.push(tier); }
+    sql += ` ORDER BY cr.created_at DESC`;
+
+    const rows = await db.prepare(sql).all(...params);
+    res.json({ authorizations: rows });
+  } catch (err) {
+    console.error("Admin authorizations list error:", err);
+    res.status(500).json({ error: "Failed to fetch authorizations" });
+  }
+});
+
+// PUT /api/admin/authorizations/:id — admin approve/reject/revoke consent
+router.put("/authorizations/:id", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { id } = req.params;
+    const { action, notes } = req.body; // action: 'approve' | 'reject' | 'revoke'
+
+    const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+
+    const validActions = ['approve', 'reject', 'revoke'];
+    if (!validActions.includes(action)) {
+      return res.status(400).json({ error: "Action must be 'approve', 'reject', or 'revoke'" });
+    }
+
+    const statusMap = { approve: 'verified', reject: 'rejected', revoke: 'revoked' };
+    const methodMap = { approve: 'admin_approved', reject: null, revoke: null };
+    const newStatus = statusMap[action];
+    const newMethod = action === 'approve' ? 'admin_approved' : recipient.consent_method;
+    const verifiedAt = action === 'approve' ? new Date().toISOString() : recipient.consent_verified_at;
+
+    await db.prepare(`
+      UPDATE care_recipients
+      SET consent_status = ?, consent_method = ?, consent_verified_at = ?,
+          consent_reviewed_by = ?, consent_notes = ?, updated_at = NOW()
+      WHERE id = ?
+    `).run(newStatus, newMethod, verifiedAt, req.user.id, notes || null, id);
+
+    await logAdminAction(req, `authorization_${action}`, "care_recipient", id, {
+      previousStatus: recipient.consent_status,
+      newStatus,
+      tier: recipient.authorization_tier,
+      notes,
+    });
+
+    const updated = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);
+    res.json({ success: true, careRecipient: updated });
+  } catch (err) {
+    console.error("Admin authorization update error:", err);
+    res.status(500).json({ error: "Failed to update authorization" });
+  }
+});
+
 module.exports = router;

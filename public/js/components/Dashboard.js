@@ -376,6 +376,20 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         <h1 className="greeting">{isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`}</h1>
       </div>
 
+      {/* Consent warning banner — show if any care recipients have pending/rejected consent */}
+      {data?.careRecipients && data.careRecipients.some(cr => cr.consent_status && cr.consent_status !== 'verified') && (
+        <div style={{ background: '#FFF3E0', border: '1px solid #ffe0b2', borderRadius: '10px', padding: '14px 18px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '24px' }}>{'\u26A0\uFE0F'}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: '14px', color: '#e65100' }}>Authorization pending</div>
+            <div style={{ fontSize: '13px', color: '#795548', marginTop: '2px' }}>
+              {data.careRecipients.filter(cr => cr.consent_status && cr.consent_status !== 'verified').map(cr => (cr.first_name || cr.firstName) + ' ' + (cr.last_name || cr.lastName)).join(', ')} {'\u2014'} complete verification to book care.
+            </div>
+          </div>
+          <button onClick={() => onNavigate && onNavigate('recipients')} style={{ padding: '8px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>View</button>
+        </div>
+      )}
+
       {/* New User Welcome — prominent CTA to add care recipient */}
       {isNewUser && (
         <div className="card" style={{ textAlign: 'center', padding: '32px 24px', marginBottom: 20, borderLeft: '4px solid #e8724a' }}>

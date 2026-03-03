@@ -178,6 +178,16 @@ router.post("/request", async (req, res) => {
 
   if (!recipient) return res.status(404).json({ error: "Care recipient record not found" });
 
+  // ─── Consent gate: block booking if consent not verified ───
+  const crFull = await db.prepare("SELECT consent_status, authorization_tier FROM care_recipients WHERE id = ?").get(recipient.id);
+  if (crFull && crFull.consent_status && crFull.consent_status !== 'verified') {
+    return res.status(403).json({
+      error: 'Care authorization must be verified before booking',
+      consentStatus: crFull.consent_status,
+      authorizationTier: crFull.authorization_tier,
+    });
+  }
+
   // Estimate cost using default service-type rates (no specific caregiver yet)
   const defaultRates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
   const baseRate = defaultRates[serviceType] || 28;
@@ -399,6 +409,18 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
 
   if (!recipient) {
     return res.status(404).json({ error: "Care recipient not found" });
+  }
+
+  // ─── Consent gate: block booking if consent not verified ───
+  if (recipient.consent_status && recipient.consent_status !== 'verified') {
+    return res.status(403).json({
+      error: 'Care authorization must be verified before booking',
+      consentStatus: recipient.consent_status,
+      authorizationTier: recipient.authorization_tier,
+      message: recipient.authorization_tier === 'tier2'
+        ? 'Please upload your POA or guardianship documents for review.'
+        : 'Please complete the consent verification process.',
+    });
   }
 
   // Validate caregiver availability if a caregiver is specified (via matching or direct booking)

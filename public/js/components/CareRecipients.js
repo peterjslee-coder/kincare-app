@@ -226,6 +226,14 @@ const CareRecipients = window.CareRecipients = () => {
             <div className="recipient-card-name">{getName(r)}</div>
             <p className="text-muted" style={{ fontSize: '13px' }}>{r.age} years old</p>
             {(r.location_city || r.city) && <p className="text-muted" style={{ fontSize: '13px' }}>{r.location_city ? `${r.location_city}, ${r.location_state}` : r.city}</p>}
+            {r.consent_status && r.consent_status !== 'verified' && (
+              <div style={{ marginTop: '6px', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, display: 'inline-block',
+                background: r.consent_status === 'pending' ? '#FFF3E0' : '#fce4ec',
+                color: r.consent_status === 'pending' ? '#e8724a' : '#c62828',
+              }}>
+                {r.consent_status === 'pending' ? '\u23F3 Pending' : '\u274C ' + r.consent_status}
+              </div>
+            )}
           </div>
         ))}
       </div>

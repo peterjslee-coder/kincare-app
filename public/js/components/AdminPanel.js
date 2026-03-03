@@ -58,6 +58,11 @@ const AdminPanel = window.AdminPanel = () => {
   const [resetPwLoading, setResetPwLoading] = useState(null); // user id being reset
   const [resetPwMsg, setResetPwMsg] = useState(null); // { id, type, text }
   const [peopleSubTab, setPeopleSubTab] = useState('all'); // 'all', 'waitlist', 'invites'
+  // Authorizations tab state
+  const [authzList, setAuthzList] = useState([]);
+  const [authzLoading, setAuthzLoading] = useState(false);
+  const [authzFilter, setAuthzFilter] = useState('');
+  const [authzActionLoading, setAuthzActionLoading] = useState(null);
 
   useEffect(() => {
     loadStats();
@@ -73,6 +78,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'blocked') loadBlockedEmails();
     if (activeTab === 'help') loadHelpArticles();
     if (activeTab === 'onboarding') loadOnboardingEvents();
+    if (activeTab === 'authorizations') loadAuthorizations();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -186,6 +192,33 @@ const AdminPanel = window.AdminPanel = () => {
       }
     } catch (err) { console.error('Onboarding events load error:', err); }
     setObEventsLoading(false);
+  };
+
+  const loadAuthorizations = async () => {
+    setAuthzLoading(true);
+    try {
+      const q = authzFilter ? `?status=${authzFilter}` : '';
+      const res = await apiFetch(`/api/admin/authorizations${q}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setAuthzList(data.authorizations || []);
+      }
+    } catch (err) { console.error('Authorizations load error:', err); }
+    setAuthzLoading(false);
+  };
+
+  const handleAuthzAction = async (id, action, notes) => {
+    setAuthzActionLoading(id);
+    try {
+      const res = await apiFetch(`/api/admin/authorizations/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ action, notes }),
+      });
+      if (res?.ok) {
+        loadAuthorizations();
+      }
+    } catch (err) { console.error('Authorization action error:', err); }
+    setAuthzActionLoading(null);
   };
 
   const loadBlockedEmails = async () => {
@@ -528,6 +561,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'users', label: 'Users', icon: '👥' },
     { id: 'people', label: 'People', icon: '📋' },
     { id: 'activity', label: 'Activity', icon: '⚡' },
+    { id: 'authorizations', label: 'Auth', icon: '\u{1F512}' },
     { id: 'feedback', label: 'Feedback', icon: '💬' },
     { id: 'help', label: 'Help/FAQ', icon: '❓' },
     { id: 'financials', label: 'Financials', icon: '💰' },
@@ -1862,6 +1896,94 @@ const AdminPanel = window.AdminPanel = () => {
               <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No blocked emails</div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ─── Authorizations Tab ─── */}
+      {activeTab === 'authorizations' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ margin: 0, fontSize: '18px' }}>Care Authorizations</h2>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {['', 'pending', 'verified', 'rejected', 'revoked'].map(f => (
+                <button key={f} onClick={() => { setAuthzFilter(f); setTimeout(loadAuthorizations, 0); }}
+                  style={{
+                    padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600,
+                    cursor: 'pointer',
+                    background: authzFilter === f ? '#1b6b5a' : '#f0f0f0',
+                    color: authzFilter === f ? '#fff' : '#555',
+                  }}>
+                  {f || 'All'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {authzLoading && <LoadingSpinner text="Loading authorizations..." />}
+          {!authzLoading && authzList.length === 0 && (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>No authorization records found.</div>
+          )}
+          {!authzLoading && authzList.length > 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e0e0e0', textAlign: 'left' }}>
+                    <th style={{ padding: '10px 8px' }}>Recipient</th>
+                    <th style={{ padding: '10px 8px' }}>Family Member</th>
+                    <th style={{ padding: '10px 8px' }}>Tier</th>
+                    <th style={{ padding: '10px 8px' }}>Status</th>
+                    <th style={{ padding: '10px 8px' }}>Sessions</th>
+                    <th style={{ padding: '10px 8px' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {authzList.map(a => {
+                    const tierLabels = { tier1: 'Self-signup', tier2: 'POA/Guardian', tier3: 'Family consent', unset: 'Unset' };
+                    const statusColors = { verified: '#1b6b5a', pending: '#e8724a', rejected: '#c0392b', revoked: '#999' };
+                    return (
+                      <tr key={a.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: '10px 8px', fontWeight: 600 }}>{a.first_name} {a.last_name}</td>
+                        <td style={{ padding: '10px 8px' }}>{a.family_first_name} {a.family_last_name}<br /><span style={{ fontSize: '11px', color: '#999' }}>{a.family_email}</span></td>
+                        <td style={{ padding: '10px 8px' }}>
+                          <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
+                            background: a.authorization_tier === 'tier1' ? '#e8f5f2' : a.authorization_tier === 'tier2' ? '#e8eaf6' : '#FFF3E0',
+                            color: a.authorization_tier === 'tier1' ? '#1b6b5a' : a.authorization_tier === 'tier2' ? '#5c6bc0' : '#e8724a',
+                          }}>{tierLabels[a.authorization_tier] || a.authorization_tier}</span>
+                        </td>
+                        <td style={{ padding: '10px 8px' }}>
+                          <span style={{ color: statusColors[a.consent_status] || '#999', fontWeight: 600 }}>
+                            {a.consent_status === 'verified' ? '\u2705' : a.consent_status === 'pending' ? '\u23F3' : a.consent_status === 'rejected' ? '\u274C' : '\u{1F6AB}'} {a.consent_status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>{a.session_count || 0}</td>
+                        <td style={{ padding: '10px 8px' }}>
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            {a.consent_status !== 'verified' && (
+                              <button onClick={() => handleAuthzAction(a.id, 'approve')} disabled={authzActionLoading === a.id}
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#e8f5f2', color: '#1b6b5a' }}>
+                                Approve
+                              </button>
+                            )}
+                            {a.consent_status !== 'rejected' && a.consent_status !== 'verified' && (
+                              <button onClick={() => handleAuthzAction(a.id, 'reject')} disabled={authzActionLoading === a.id}
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#fce4ec', color: '#c62828' }}>
+                                Reject
+                              </button>
+                            )}
+                            {a.consent_status === 'verified' && (
+                              <button onClick={() => handleAuthzAction(a.id, 'revoke')} disabled={authzActionLoading === a.id}
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#f5f5f5', color: '#999' }}>
+                                Revoke
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
