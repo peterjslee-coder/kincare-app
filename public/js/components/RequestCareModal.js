@@ -348,7 +348,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                   <button type="button" onClick={calNext} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#666', padding: '4px 8px' }}>{'\u25B6'}</button>
                 </div>
                 {/* Day headers */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', fontSize: 10, fontWeight: 600, color: '#aaa', marginBottom: 4 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', fontSize: 10, fontWeight: 600, color: '#aaa', marginBottom: 4 }}>
                   {['S','M','T','W','T','F','S'].map((d, i) => <div key={i}>{d}</div>)}
                 </div>
                 {/* Day cells */}
