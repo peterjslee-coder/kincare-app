@@ -1,11 +1,26 @@
 const express = require("express");
 const crypto = require("crypto");
+const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 router.use(authenticate);
+
+// Multer for document uploads (PDF + images, 5MB max)
+const uploadDoc = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF and image files (JPEG, PNG, GIF, WebP) are allowed"));
+    }
+  },
+});
 
 // ─── Helper: check if user owns this care recipient ───
 async function getOwnedRecipient(db, recipientId, userId) {
@@ -237,6 +252,146 @@ router.post("/:recipientId/verify-code", async (req, res) => {
   } catch (err) {
     console.error("Verify code error:", err);
     res.status(500).json({ error: "Failed to verify code" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Tier 2 — Authorization Document Upload (POA / Guardianship)
+// ═══════════════════════════════════════════════════════════════════════
+
+const VALID_DOC_TYPES = ["POA", "Legal_Guardianship", "Court_Order", "Other"];
+
+// ─── POST /api/consent/:recipientId/documents ───
+// Upload an authorization document (tier2)
+router.post("/:recipientId/documents", uploadDoc.single("document"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded. Please select a PDF or image file." });
+    }
+
+    const documentType = req.body.document_type || req.body.documentType;
+    if (!documentType || !VALID_DOC_TYPES.includes(documentType)) {
+      return res.status(400).json({ error: `Invalid document type. Must be one of: ${VALID_DOC_TYPES.join(", ")}` });
+    }
+
+    const db = await getDb();
+    const recipient = await getOwnedRecipient(db, req.params.recipientId, req.user.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+
+    if (recipient.authorization_tier !== "tier2") {
+      return res.status(400).json({ error: "Document upload is only for tier 2 (POA/Guardian) authorization" });
+    }
+
+    // Convert to base64 data URI
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+
+    const id = uuid();
+    await db.prepare(`
+      INSERT INTO authorization_documents (id, care_recipient_id, submitted_by, document_type, file_data, file_name, file_size, mime_type, upload_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'uploaded')
+    `).run(id, req.params.recipientId, req.user.id, documentType, base64, req.file.originalname, req.file.size, req.file.mimetype);
+
+    res.json({
+      document: {
+        id,
+        documentType,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        uploadStatus: "uploaded",
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("Document upload error:", err);
+    if (err.message && err.message.includes("Only PDF")) {
+      return res.status(400).json({ error: err.message });
+    }
+    res.status(500).json({ error: "Failed to upload document" });
+  }
+});
+
+// ─── GET /api/consent/:recipientId/documents ───
+// List documents for a care recipient (metadata only, no file_data)
+router.get("/:recipientId/documents", async (req, res) => {
+  try {
+    const db = await getDb();
+    const recipient = await getOwnedRecipient(db, req.params.recipientId, req.user.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+
+    const docs = await db.prepare(`
+      SELECT id, document_type, file_name, file_size, mime_type, upload_status, admin_notes, reviewed_at, created_at
+      FROM authorization_documents
+      WHERE care_recipient_id = ?
+      ORDER BY created_at DESC
+    `).all(req.params.recipientId);
+
+    res.json({ documents: docs });
+  } catch (err) {
+    console.error("List documents error:", err);
+    res.status(500).json({ error: "Failed to list documents" });
+  }
+});
+
+// ─── GET /api/consent/:recipientId/documents/:docId/download ───
+// Download a document (binary response)
+router.get("/:recipientId/documents/:docId/download", async (req, res) => {
+  try {
+    const db = await getDb();
+
+    // Allow both family owner and admin to download
+    const isAdmin = req.user.role === "admin";
+    if (!isAdmin) {
+      const recipient = await getOwnedRecipient(db, req.params.recipientId, req.user.id);
+      if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+    }
+
+    const doc = await db.prepare(
+      "SELECT file_data, mime_type, file_name FROM authorization_documents WHERE id = ? AND care_recipient_id = ?"
+    ).get(req.params.docId, req.params.recipientId);
+
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    // Strip data URI prefix and decode base64
+    const base64Data = doc.file_data.replace(/^data:[^;]+;base64,/, "");
+    const buffer = Buffer.from(base64Data, "base64");
+
+    res.set({
+      "Content-Type": doc.mime_type,
+      "Content-Disposition": `attachment; filename="${doc.file_name}"`,
+      "Content-Length": buffer.length,
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error("Document download error:", err);
+    res.status(500).json({ error: "Failed to download document" });
+  }
+});
+
+// ─── DELETE /api/consent/:recipientId/documents/:docId ───
+// Delete a document (only if not yet approved)
+router.delete("/:recipientId/documents/:docId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const recipient = await getOwnedRecipient(db, req.params.recipientId, req.user.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+
+    const doc = await db.prepare(
+      "SELECT id, upload_status FROM authorization_documents WHERE id = ? AND care_recipient_id = ?"
+    ).get(req.params.docId, req.params.recipientId);
+
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    if (doc.upload_status === "approved") {
+      return res.status(403).json({ error: "Cannot delete an approved document" });
+    }
+
+    await db.prepare("DELETE FROM authorization_documents WHERE id = ?").run(req.params.docId);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Document delete error:", err);
+    res.status(500).json({ error: "Failed to delete document" });
   }
 });
 

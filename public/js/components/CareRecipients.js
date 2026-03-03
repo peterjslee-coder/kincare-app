@@ -310,7 +310,7 @@ const CareRecipients = window.CareRecipients = () => {
         </div>
       )}
 
-      {selected && !showAddForm && selected.authorization_tier === 'tier3' && selected.consent_status && selected.consent_status !== 'verified' && (
+      {selected && !showAddForm && (selected.authorization_tier === 'tier3' || selected.authorization_tier === 'tier2') && selected.consent_status && selected.consent_status !== 'verified' && (
         <ConsentVerification
           recipientId={selected.id}
           recipientName={getName(selected)}
