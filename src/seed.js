@@ -91,6 +91,16 @@ async function seed({ force = false, demoOnly = false } = {}) {
       await db.prepare(`DELETE FROM caregiver_documents WHERE user_id IN (${placeholders})`).run(...demoIds);
       await db.prepare(`DELETE FROM caregiver_profiles WHERE user_id IN (${placeholders})`).run(...demoIds);
 
+      // Consent & authorization records tied to demo care recipients
+      const demoCrIds = (await db.prepare(`SELECT id FROM care_recipients WHERE family_user_id IN (${placeholders})`).all(...demoIds)).map(r => r.id);
+      if (demoCrIds.length > 0) {
+        const crp = demoCrIds.map(() => '?').join(',');
+        try { await db.prepare(`DELETE FROM first_visit_confirmations WHERE care_recipient_id IN (${crp})`).run(...demoCrIds); } catch(e) {}
+        try { await db.prepare(`DELETE FROM verification_attempts WHERE care_recipient_id IN (${crp})`).run(...demoCrIds); } catch(e) {}
+        try { await db.prepare(`DELETE FROM attestations WHERE care_recipient_id IN (${crp})`).run(...demoCrIds); } catch(e) {}
+        try { await db.prepare(`DELETE FROM authorization_documents WHERE care_recipient_id IN (${crp})`).run(...demoCrIds); } catch(e) {}
+      }
+
       // Care recipients owned by demo family users
       await db.prepare(`DELETE FROM care_recipients WHERE family_user_id IN (${placeholders})`).run(...demoIds);
 
@@ -255,8 +265,9 @@ async function seed({ force = false, demoOnly = false } = {}) {
      health_conditions, medications, preferences,
      emergency_contact_name, emergency_contact_phone,
      pets, pet_allergies, food_allergies, medical_conditions,
-     linked_user_id, permission_tier)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     linked_user_id, permission_tier,
+     authorization_tier, consent_status, consent_method, consent_verified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
   `).run(
     bettyId, peteId, "Barbara", "Lowe", 78,
     "123 Main Street", "Blacksburg", "VA", "24060",
@@ -269,7 +280,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
     "None known",
     JSON.stringify(["Peanuts (severe — carries EpiPen)", "Shellfish (mild — causes hives)"]),
     "Early-stage dementia, mild arthritis (both knees), high blood pressure (controlled), occasional vertigo, poor hearing left ear (hearing aid)",
-    bettyUserId, "full"
+    bettyUserId, "full",
+    "tier1", "verified", "self_signup"
   );
 
   // ─── Care Recipient (Dorothy Henderson — Linda's mother) ───
@@ -281,8 +293,9 @@ async function seed({ force = false, demoOnly = false } = {}) {
      latitude, longitude,
      health_conditions, medications, preferences,
      emergency_contact_name, emergency_contact_phone,
-     pets, pet_allergies, food_allergies, medical_conditions)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     pets, pet_allergies, food_allergies, medical_conditions,
+     authorization_tier, consent_status, consent_method, consent_verified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
   `).run(
     dorothyId, hendersonFamilyId, "Dorothy", "Henderson", 82,
     "456 Oak Avenue", "Blacksburg", "VA", "24060",
@@ -294,7 +307,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
     "No pets",
     "Allergic to cats (sneezing, watery eyes)",
     "Gluten sensitivity — avoid wheat-based breads",
-    "Type 2 diabetes, hearing loss (wears hearing aids)"
+    "Type 2 diabetes, hearing loss (wears hearing aids)",
+    "tier3", "verified", "legacy_account"
   );
 
   // ─── Care Recipient (Arun Patel — Raj's father) ───
@@ -306,8 +320,9 @@ async function seed({ force = false, demoOnly = false } = {}) {
      latitude, longitude,
      health_conditions, medications, preferences,
      emergency_contact_name, emergency_contact_phone,
-     pets, pet_allergies, food_allergies, medical_conditions)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     pets, pet_allergies, food_allergies, medical_conditions,
+     authorization_tier, consent_status, consent_method, consent_verified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
   `).run(
     arunId, patelFamilyId, "Arun", "Patel", 75,
     "789 Elm Street", "Christiansburg", "VA", "24073",
@@ -319,7 +334,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
     "1 small dog (Kavi — miniature poodle, very calm)",
     "None",
     "Lactose intolerant — use dairy-free alternatives",
-    "Parkinson's disease (early stage), mild depression, occasional hand tremors"
+    "Parkinson's disease (early stage), mild depression, occasional hand tremors",
+    "tier3", "verified", "legacy_account"
   );
 
   // ─── Care Recipient (Carlos Santos — Maria's brother, TBI recovery) ───
@@ -331,8 +347,9 @@ async function seed({ force = false, demoOnly = false } = {}) {
      latitude, longitude,
      health_conditions, medications, preferences,
      emergency_contact_name, emergency_contact_phone,
-     pets, pet_allergies, food_allergies, medical_conditions)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     pets, pet_allergies, food_allergies, medical_conditions,
+     authorization_tier, consent_status, consent_method, consent_verified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
   `).run(
     carlosId, mariaUserId, "Carlos", "Santos", 34,
     "215 College Avenue", "Blacksburg", "VA", "24060",
@@ -344,7 +361,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
     "1 dog — Luna (golden retriever, therapy dog, very gentle, 3 yrs)",
     "None known",
     JSON.stringify(["Dairy (moderate — causes stomach cramps)"]),
-    "Traumatic brain injury (recovery), short-term memory issues, mild left-side weakness, anxiety"
+    "Traumatic brain injury (recovery), short-term memory issues, mild left-side weakness, anxiety",
+    "tier3", "verified", "legacy_account"
   );
 
   // David and Susan share Paul's Barbara record via care_recipient_shares (no duplicate care_recipient rows)

@@ -418,6 +418,75 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS open_to_interview INTEGER`,
     // v1.34.59 — Caregiver care preferences (JSON: green/yellow/red per service type)
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS care_preferences TEXT`,
+    // v1.35.0 — Consent & Authorization Verification System (Phase 1a)
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS authorization_tier TEXT DEFAULT 'unset'`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS consent_status TEXT DEFAULT 'pending'`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS consent_method TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS consent_verified_at TIMESTAMPTZ`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS consent_reviewed_by TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS consent_notes TEXT`,
+    // v1.35.0 — Authorization documents (Tier 2: POA, guardianship uploads)
+    `CREATE TABLE IF NOT EXISTS authorization_documents (
+      id TEXT PRIMARY KEY,
+      care_recipient_id TEXT NOT NULL,
+      submitted_by TEXT NOT NULL,
+      document_type TEXT NOT NULL,
+      file_data TEXT NOT NULL,
+      file_name TEXT,
+      file_size INTEGER,
+      mime_type TEXT,
+      upload_status TEXT DEFAULT 'uploaded',
+      admin_notes TEXT,
+      reviewed_by TEXT,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_docs_recipient ON authorization_documents(care_recipient_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_docs_submitted ON authorization_documents(submitted_by)`,
+    // v1.35.0 — Attestations (Tier 3: family member attests care recipient is aware)
+    `CREATE TABLE IF NOT EXISTS attestations (
+      id TEXT PRIMARY KEY,
+      care_recipient_id TEXT NOT NULL,
+      attesting_user_id TEXT NOT NULL,
+      relationship_to_recipient TEXT,
+      attestation_text TEXT NOT NULL,
+      signature_name TEXT NOT NULL,
+      signed_at TIMESTAMPTZ DEFAULT NOW(),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_attestations_recipient ON attestations(care_recipient_id)`,
+    // v1.35.0 — Verification attempts (Tier 3: phone/SMS/video/code verification of care recipient)
+    `CREATE TABLE IF NOT EXISTS verification_attempts (
+      id TEXT PRIMARY KEY,
+      attestation_id TEXT,
+      care_recipient_id TEXT NOT NULL,
+      verification_code TEXT,
+      verification_method TEXT DEFAULT 'code_entry',
+      status TEXT DEFAULT 'pending',
+      attempted_at TIMESTAMPTZ,
+      verified_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_verification_recipient ON verification_attempts(care_recipient_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_verification_status ON verification_attempts(status)`,
+    // v1.35.0 — First-visit confirmations (caregiver confirms care recipient awareness)
+    `CREATE TABLE IF NOT EXISTS first_visit_confirmations (
+      id TEXT PRIMARY KEY,
+      care_recipient_id TEXT NOT NULL,
+      caregiver_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      confirmation TEXT NOT NULL,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_fvc_recipient ON first_visit_confirmations(care_recipient_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_fvc_session ON first_visit_confirmations(session_id)`,
+    // v1.35.0 — Backfill: existing care recipients with linked_user_id → tier1/verified/self_signup
+    `UPDATE care_recipients SET authorization_tier = 'tier1', consent_status = 'verified', consent_method = 'self_signup', consent_verified_at = NOW() WHERE linked_user_id IS NOT NULL AND authorization_tier = 'unset'`,
+    // v1.35.0 — Backfill: existing care recipients without linked_user_id → tier3/verified/legacy_account (don't break existing users)
+    `UPDATE care_recipients SET authorization_tier = 'tier3', consent_status = 'verified', consent_method = 'legacy_account', consent_verified_at = NOW() WHERE linked_user_id IS NULL AND authorization_tier = 'unset'`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
