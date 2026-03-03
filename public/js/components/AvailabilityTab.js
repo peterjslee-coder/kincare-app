@@ -20,6 +20,44 @@ const AvailabilityTab = window.AvailabilityTab = ({
   const [monthSessions, setMonthSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
+  // Drag-to-select state
+  const [dragStart, setDragStart] = useState(null);
+  const [dragEnd, setDragEnd] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const isInDragRange = (day) => {
+    if (!isDragging || dragStart === null || dragEnd === null) return false;
+    const lo = Math.min(dragStart, dragEnd);
+    const hi = Math.max(dragStart, dragEnd);
+    return day >= lo && day <= hi;
+  };
+
+  const endDrag = (finalDay) => {
+    if (!isDragging || dragStart === null) { setIsDragging(false); setDragStart(null); setDragEnd(null); return; }
+    const lo = Math.min(dragStart, finalDay != null ? finalDay : dragStart);
+    const hi = Math.max(dragStart, finalDay != null ? finalDay : dragStart);
+    setIsDragging(false);
+    if (lo === hi) {
+      // Single click — toggle existing day selection
+      setSelectedDate(lo === selectedDate ? null : lo);
+    } else {
+      // Multi-day drag — open modal for batch creation
+      setSelectedDate(null);
+      setEditingRule(null);
+      const dates = [];
+      for (let d = lo; d <= hi; d++) dates.push(d);
+      setRuleForm({
+        type: 'available', dayOfWeek: 1,
+        startTime: '08:00', endTime: '17:00',
+        isRecurring: false, specificDate: '', note: '',
+        _batchDays: dates, _batchMonth: { year, month },
+      });
+      setShowAddRule(true);
+    }
+    setDragStart(null);
+    setDragEnd(null);
+  };
+
   useEffect(() => { fetchAvailability(); }, []);
 
   // Fetch sessions for visible month
@@ -118,7 +156,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
           <h3 style={{ margin: 0, color: '#333' }}>My Availability</h3>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#666' }}>Click a day to view or edit your availability</p>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#666' }}>Click a day to view details, or drag across days to set availability in bulk</p>
         </div>
         <button onClick={() => {
           setEditingRule(null);
@@ -151,12 +189,16 @@ const AvailabilityTab = window.AvailabilityTab = ({
             </div>
 
             {/* Calendar grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', userSelect: 'none' }}
+              onMouseLeave={() => { if (isDragging) endDrag(dragEnd); }}
+              onMouseUp={() => { if (isDragging) endDrag(dragEnd); }}
+            >
               {cells.map((day, idx) => {
                 if (day === null) return <div key={`e${idx}`} style={{ minHeight: '54px' }}></div>;
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === todayStr;
                 const isSelected = day === selectedDate;
+                const inDrag = isInDragRange(day);
                 const daySessions = sessionsByDate[dateStr] || [];
                 const avail = getAvailForDate(dateStr);
                 const availHrs = getAvailHours(avail.available);
@@ -181,10 +223,14 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 }
 
                 return (
-                  <div key={day} onClick={() => setSelectedDate(day === selectedDate ? null : day)} style={{
+                  <div key={day}
+                    onMouseDown={(e) => { e.preventDefault(); setDragStart(day); setDragEnd(day); setIsDragging(true); setSelectedDate(null); }}
+                    onMouseEnter={() => { if (isDragging) setDragEnd(day); }}
+                    onMouseUp={() => { if (isDragging) endDrag(day); }}
+                    style={{
                     minHeight: '54px', padding: '4px', borderRadius: '6px', cursor: 'pointer',
-                    background: isSelected ? '#e8f5f1' : bg,
-                    border: isSelected ? '2px solid #1b6b5a' : isToday ? '2px solid #e8724a' : `1px solid ${borderColor}`,
+                    background: inDrag ? '#e8f5f1' : isSelected ? '#e8f5f1' : bg,
+                    border: inDrag ? '2px solid #1b6b5a' : isSelected ? '2px solid #1b6b5a' : isToday ? '2px solid #e8724a' : `1px solid ${borderColor}`,
                     transition: 'all 0.15s', position: 'relative',
                   }}>
                     <div style={{ fontSize: '12px', fontWeight: isToday ? 700 : 500, color: isToday ? '#e8724a' : '#333' }}>{day}</div>
@@ -322,7 +368,15 @@ const AvailabilityTab = window.AvailabilityTab = ({
           <div style={{
             background: '#fff', borderRadius: '12px', padding: '24px', width: '420px', maxWidth: '90vw',
           }}>
-            <h3 style={{ marginTop: 0 }}>{editingRule ? 'Edit Rule' : 'Add Availability Rule'}</h3>
+            <h3 style={{ marginTop: 0 }}>{editingRule ? 'Edit Rule' : ruleForm._batchDays ? `Set Availability for ${ruleForm._batchDays.length} Days` : 'Add Availability Rule'}</h3>
+            {ruleForm._batchDays && (
+              <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#f0faf5', borderRadius: '8px', fontSize: '13px', color: '#1b6b5a' }}>
+                {ruleForm._batchDays.map(d => {
+                  const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                  return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                }).join(', ')}
+              </div>
+            )}
 
             {/* Rule Type */}
             <div style={{ marginBottom: '14px' }}>
@@ -338,7 +392,8 @@ const AvailabilityTab = window.AvailabilityTab = ({
               </div>
             </div>
 
-            {/* Recurring vs One-off */}
+            {/* Recurring vs One-off — hidden in batch mode */}
+            {!ruleForm._batchDays && (
             <div style={{ marginBottom: '14px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Frequency</label>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -351,9 +406,10 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 ))}
               </div>
             </div>
+            )}
 
-            {/* Day or Date */}
-            {ruleForm.isRecurring ? (
+            {/* Day or Date — hidden in batch mode */}
+            {!ruleForm._batchDays && ruleForm.isRecurring && (
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
                   {editingRule ? 'Day of Week' : 'Days of Week (select multiple)'}
@@ -395,7 +451,8 @@ const AvailabilityTab = window.AvailabilityTab = ({
                   </div>
                 )}
               </div>
-            ) : (
+            )}
+            {!ruleForm._batchDays && !ruleForm.isRecurring && (
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Date</label>
                 <input type="date" value={ruleForm.specificDate}

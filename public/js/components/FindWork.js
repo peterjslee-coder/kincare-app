@@ -54,6 +54,15 @@ const FindWork = window.FindWork = () => {
       if (editingRule) {
         const body = { dayOfWeek: parseInt(ruleForm.dayOfWeek), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: ruleForm.isRecurring, specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null, type: ruleForm.type, note: ruleForm.note || null };
         await apiFetch(`/api/availability/${editingRule.id}`, { method: 'PUT', body: JSON.stringify(body) });
+      } else if (ruleForm._batchDays && ruleForm._batchDays.length > 0) {
+        // Batch creation from drag-to-select (specific dates)
+        const cm = ruleForm._batchMonth || { year: new Date().getFullYear(), month: new Date().getMonth() };
+        for (const day of ruleForm._batchDays) {
+          const dateStr = `${cm.year}-${String(cm.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const d = new Date(dateStr + 'T12:00:00');
+          const body = { dayOfWeek: d.getDay(), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: false, specificDate: dateStr, type: ruleForm.type, note: ruleForm.note || null };
+          await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+        }
       } else if (ruleForm.isRecurring && ruleForm.selectedDays && ruleForm.selectedDays.length > 0) {
         for (const dow of ruleForm.selectedDays) {
           const body = { dayOfWeek: parseInt(dow), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: true, specificDate: null, type: ruleForm.type, note: ruleForm.note || null };
