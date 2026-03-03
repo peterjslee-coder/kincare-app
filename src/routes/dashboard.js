@@ -380,7 +380,7 @@ async function caregiverDashboard(db, userId, res) {
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     LEFT JOIN users fu ON cs.family_user_id = fu.id
     WHERE (
-        (cs.status IN ('open', 'requested') AND (cs.caregiver_id IS NULL OR cs.caregiver_id = ?))
+        (cs.status IN ('open', 'requested', 'pending') AND (cs.caregiver_id IS NULL OR cs.caregiver_id = ?))
         OR (cs.status = 'pending' AND cs.offered_to_caregiver_id = ?)
       )
       AND cs.scheduled_date >= ?
