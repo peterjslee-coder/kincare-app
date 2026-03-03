@@ -1,6 +1,6 @@
-// InPlace Service Worker — v1.35.4
-const CACHE_NAME = 'inplace-v1.35.4';
-const SW_VERSION = '1.35.4';
+// InPlace Service Worker — v1.35.5
+const CACHE_NAME = 'inplace-v1.35.5';
+const SW_VERSION = '1.35.5';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -20,6 +20,7 @@ const STATIC_ASSETS = [
   '/js/components/CaregiverScheduleModal.js',
   '/js/components/Caregivers.js',
   '/js/components/CareRecipients.js',
+  '/js/components/ConsentVerification.js',
   '/js/components/Messages.js',
   '/js/components/RequestCareModal.js',
   '/js/components/TwoFactorSetup.js',

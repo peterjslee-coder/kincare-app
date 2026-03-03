@@ -381,9 +381,14 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         <div style={{ background: '#FFF3E0', border: '1px solid #ffe0b2', borderRadius: '10px', padding: '14px 18px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '24px' }}>{'\u26A0\uFE0F'}</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: '14px', color: '#e65100' }}>Authorization pending</div>
+            <div style={{ fontWeight: 600, fontSize: '14px', color: '#e65100' }}>
+              {data.careRecipients.some(cr => cr.consent_status === 'attested') ? 'Verification in progress' : 'Authorization pending'}
+            </div>
             <div style={{ fontSize: '13px', color: '#795548', marginTop: '2px' }}>
-              {data.careRecipients.filter(cr => cr.consent_status && cr.consent_status !== 'verified').map(cr => (cr.first_name || cr.firstName) + ' ' + (cr.last_name || cr.lastName)).join(', ')} {'\u2014'} complete verification to book care.
+              {data.careRecipients.filter(cr => cr.consent_status && cr.consent_status !== 'verified').map(cr => {
+                const name = (cr.first_name || cr.firstName) + ' ' + (cr.last_name || cr.lastName);
+                return cr.consent_status === 'attested' ? name + ' \u2014 enter code to complete' : name + ' \u2014 complete verification to book care';
+              }).join('. ')}.
             </div>
           </div>
           <button onClick={() => onNavigate && onNavigate('recipients')} style={{ padding: '8px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>View</button>

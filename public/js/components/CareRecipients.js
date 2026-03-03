@@ -310,6 +310,16 @@ const CareRecipients = window.CareRecipients = () => {
         </div>
       )}
 
+      {selected && !showAddForm && selected.authorization_tier === 'tier3' && selected.consent_status && selected.consent_status !== 'verified' && (
+        <ConsentVerification
+          recipientId={selected.id}
+          recipientName={getName(selected)}
+          consentStatus={selected.consent_status}
+          authorizationTier={selected.authorization_tier}
+          onStatusChange={fetchRecipients}
+        />
+      )}
+
       {!showAddForm && (
         <button className="btn btn-primary" onClick={() => { resetForm(); setEditingId(null); setShowAddForm(true); }} style={{ marginTop: '32px' }}>+ Add Care Recipient</button>
       )}
