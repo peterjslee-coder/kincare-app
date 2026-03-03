@@ -9,6 +9,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     // Caregiver disclosures
     ackNoMedical: false, ackBgCheck: false, ackPayments: false,
   });
+  const [authHint, setAuthHint] = useState(null); // 'tier2' or 'tier3' — set during family authorization question
   const [showFieldErrors, setShowFieldErrors] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [regError, setRegError] = useState('');
@@ -69,6 +70,8 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     setShowFieldErrors(false);
     if (step === 2) {
       if (prefilledRole || isInviteFlow) { onNavigate('splash'); return; }
+      // Family track with authHint: go back to authorization question
+      if (track === 'family' && authHint) { setAuthHint(null); setStep(1); return; }
       setTrack(null); setStep(1); return;
     }
     onNavigate('splash');
@@ -100,6 +103,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
           lastName: formData.lastName,
           phone: normalizePhone(formData.phone),
           role,
+          ...(authHint ? { authHint } : {}),
           ...(signupToken ? { signupToken } : {})
         })
       });
@@ -218,7 +222,8 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               <div key={card.id} onClick={() => {
                 if (typeof trackAuthEvent === 'function') trackAuthEvent('registration', 'role_selected', { role: card.id });
                 setTrack(card.id);
-                setStep(2);
+                if (card.id === 'family') { /* stay on step 1 to show authorization question */ }
+                else setStep(2);
               }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '16px',
@@ -254,12 +259,103 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     );
   }
 
+  // ─── Screen 1.5: Family Authorization Question ───
+  if (step === 1 && track === 'family' && !authHint) {
+    const authCards = [
+      {
+        id: 'self',
+        icon: '\u{1F3E0}',
+        title: 'Myself \u2014 I need help at home',
+        subtitle: 'I\'m the one who will receive care',
+        color: '#5c6bc0',
+        bgColor: '#e8eaf6',
+      },
+      {
+        id: 'tier2',
+        icon: '\u{1F4C4}',
+        title: 'A family member \u2014 I have Power of Attorney or legal guardianship',
+        subtitle: 'You\'ll upload your legal document for verification',
+        color: '#1b6b5a',
+        bgColor: '#e8f5f2',
+      },
+      {
+        id: 'tier3',
+        icon: '\u{1F91D}',
+        title: 'A family member \u2014 they know and agree to this',
+        subtitle: 'We\'ll verify their awareness before the first visit',
+        color: '#e8724a',
+        bgColor: '#FFF3E0',
+      },
+    ];
+    return (
+      <div className="register-container">
+        {sandboxMode && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: '#ff9800', color: '#fff', textAlign: 'center', padding: '6px', fontSize: '13px', fontWeight: 700, zIndex: 9999, letterSpacing: '0.5px' }}>
+            SANDBOX MODE \u2014 no accounts will be created
+          </div>
+        )}
+        <div className="register-card" style={{ maxWidth: '480px', marginTop: sandboxMode ? '40px' : undefined }}>
+          <div className="register-header">
+            <div style={{ marginBottom: '16px' }}>
+              {typeof InPlaceIcon !== 'undefined' && React.createElement(InPlaceIcon, { width: 50, height: 50 })}
+            </div>
+            <h1 style={{ marginBottom: '8px' }}>Who is this care for?</h1>
+            <p style={{ color: '#666', fontSize: '15px', margin: 0 }}>This helps us set up the right experience and keep everyone safe.</p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '20px 0' }}>
+            {authCards.map(card => (
+              <div key={card.id} onClick={() => {
+                if (card.id === 'self') {
+                  setTrack('care_for');
+                  setStep(2);
+                } else {
+                  setAuthHint(card.id);
+                  setStep(2);
+                }
+              }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '16px',
+                  padding: '18px 20px', borderRadius: '12px',
+                  border: '2px solid #e8e8e8', cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  background: '#fff',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = card.color; e.currentTarget.style.background = card.bgColor; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e8e8e8'; e.currentTarget.style.background = '#fff'; }}
+              >
+                <div style={{
+                  width: '52px', height: '52px', borderRadius: '50%',
+                  background: card.bgColor, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '28px', flexShrink: 0,
+                }}>
+                  {card.icon}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#333', marginBottom: '2px' }}>{card.title}</div>
+                  <div style={{ fontSize: '13px', color: '#777', lineHeight: 1.4 }}>{card.subtitle}</div>
+                </div>
+                <div style={{ color: '#ccc', fontSize: '18px', flexShrink: 0 }}>{'\u2192'}</div>
+              </div>
+            ))}
+          </div>
+          <div className="text-center">
+            <p style={{ fontSize: '14px' }}><a onClick={() => { setTrack(null); }} style={{ color: '#888', cursor: 'pointer' }}>{'\u2190'} Back to role selection</a></p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ─── Screen 2: Basic Info (all roles) ───
   // ─── Screen 3: Caregiver Disclosures ───
-  const totalSteps = track === 'caregiver' ? 3 : 2;
+  const totalSteps = track === 'caregiver' ? 3 : (track === 'family' && authHint) ? 3 : 2;
   const stepLabels = track === 'caregiver'
     ? ['Choose Your Path', 'Your Information', 'Quick Disclosures']
+    : (track === 'family' && authHint)
+    ? ['Choose Your Path', 'Care Authorization', 'Your Information']
     : ['Choose Your Path', 'Your Information'];
+  // For family with authHint, step 2 (basic info) is visual step 3
+  const displayStep = (track === 'family' && authHint) ? step + 1 : step;
 
   return (
     <div className="register-container">
@@ -273,15 +369,15 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
           <h1 style={{ marginBottom: '4px' }}>
             {step === 2 ? 'Create Your Account' : 'Almost There'}
           </h1>
-          <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>{stepLabels[step - 1]}</p>
+          <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>{stepLabels[displayStep - 1]}</p>
         </div>
 
         {/* Step indicator */}
         <div className="step-indicator" style={{ marginBottom: '20px' }}>
           {stepLabels.map((s, i) => (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div className={'step-dot' + (step === i + 1 ? ' active' : '') + (step > i + 1 ? ' completed' : '')}>
-                {step <= i + 1 ? i + 1 : '\u2713'}
+              <div className={'step-dot' + (displayStep === i + 1 ? ' active' : '') + (displayStep > i + 1 ? ' completed' : '')}>
+                {displayStep <= i + 1 ? i + 1 : '\u2713'}
               </div>
               <div className="step-label" style={{ fontSize: '11px' }}>{s}</div>
             </div>
@@ -311,12 +407,16 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 border: `1px solid ${track === 'caregiver' ? '#ffe0b2' : track === 'care_for' ? '#c5cae9' : '#b2dfdb'}`,
               }}>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: '#333' }}>
-                  You are joining as {track === 'caregiver' ? 'a Caregiver' : track === 'care_for' ? 'someone who needs care' : 'a Family / Care Team Member'}
+                  {track === 'caregiver' ? 'You are joining as a Caregiver'
+                   : track === 'care_for' ? 'You are joining as someone who needs care'
+                   : authHint === 'tier2' ? 'Family member with legal authority (POA / guardianship)'
+                   : authHint === 'tier3' ? 'Family member \u2014 your loved one knows and consents'
+                   : 'You are joining as a Family / Care Team Member'}
                 </div>
                 <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
                   You can add other roles later from your account settings.
                   {!prefilledRole && !isInviteFlow && (
-                    <a onClick={() => { setTrack(null); setStep(1); setShowFieldErrors(false); }} style={{ marginLeft: '6px', color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Change</a>
+                    <a onClick={() => { setTrack(null); setAuthHint(null); setStep(1); setShowFieldErrors(false); }} style={{ marginLeft: '6px', color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Change</a>
                   )}
                 </div>
               </div>

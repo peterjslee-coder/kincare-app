@@ -219,6 +219,40 @@ router.post("/register", validateRegister, async (req, res) => {
       );
     }
 
+    // Auto-create care_recipient record for care_for signups (self-signup = Tier 1, auto-verified)
+    if (role === "care_for") {
+      try {
+        const crId = uuid();
+        await db.prepare(`
+          INSERT INTO care_recipients
+          (id, family_user_id, first_name, last_name, linked_user_id,
+           authorization_tier, consent_status, consent_method, consent_verified_at)
+          VALUES (?, ?, ?, ?, ?, 'tier1', 'verified', 'self_signup', NOW())
+        `).run(crId, id, firstName, lastName, id);
+
+        // Auto-create care team
+        const teamId = uuid();
+        await db.prepare(
+          "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
+        ).run(teamId, `${firstName} ${lastName}'s Care Team`, crId, id);
+        await db.prepare(
+          "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
+        ).run(uuid(), teamId, id, id);
+
+        // Auto-create care team conversation
+        const convId = uuid();
+        await db.prepare(
+          "INSERT INTO conversations (id, type, name, care_team_id, created_by) VALUES (?, 'care_team', ?, ?, ?)"
+        ).run(convId, `${firstName} ${lastName}'s Care Team`, teamId, id);
+        await db.prepare(
+          "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'admin')"
+        ).run(uuid(), convId, id);
+      } catch (crErr) {
+        console.error("  [auth] Failed to auto-create care recipient for care_for user:", crErr.message);
+        // Non-fatal — user account is already created, they can add recipient manually
+      }
+    }
+
     // Notify admins (push + email based on preferences)
     const roleName = role === "caregiver" ? "Caregiver" : role === "care_for" ? "Care Recipient" : "Family";
     notifyAdmins("new_registration", {
