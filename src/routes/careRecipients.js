@@ -49,6 +49,7 @@ router.post("/", requireRole("family"), async (req, res) => {
     firstName, lastName, age, address, city, state, zip,
     healthConditions, medications, preferences,
     emergencyContactName, emergencyContactPhone, emoji,
+    authorizationTier,
   } = req.body;
 
   if (!firstName || !lastName) {
@@ -65,14 +66,21 @@ router.post("/", requireRole("family"), async (req, res) => {
     if (geo) { lat = geo.lat; lng = geo.lng; }
   }
 
+  // Determine consent status based on authorization tier
+  const tier = ['tier1', 'tier2', 'tier3'].includes(authorizationTier) ? authorizationTier : 'tier3';
+  const consentStatus = tier === 'tier1' ? 'verified' : 'pending';
+  const consentMethod = tier === 'tier1' ? 'self_signup' : null;
+  const consentVerifiedAt = tier === 'tier1' ? new Date().toISOString() : null;
+
   await db.prepare(`
     INSERT INTO care_recipients
     (id, family_user_id, first_name, last_name, age,
      location_address, location_city, location_state, location_zip,
      latitude, longitude,
      health_conditions, medications, preferences,
-     emergency_contact_name, emergency_contact_phone, emoji)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     emergency_contact_name, emergency_contact_phone, emoji,
+     authorization_tier, consent_status, consent_method, consent_verified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.user.id, firstName, lastName, age || null,
     address || null, city || null, state || null, zip || null,
@@ -81,7 +89,8 @@ router.post("/", requireRole("family"), async (req, res) => {
     JSON.stringify(medications || []),
     preferences || null,
     emergencyContactName || null, emergencyContactPhone || null,
-    emoji || null
+    emoji || null,
+    tier, consentStatus, consentMethod, consentVerifiedAt
   );
 
   const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);

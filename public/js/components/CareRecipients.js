@@ -7,7 +7,8 @@ const CareRecipients = window.CareRecipients = () => {
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', city: '', state: '',
     sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
-    emergencyContactName: '', emergencyContactPhone: ''
+    emergencyContactName: '', emergencyContactPhone: '',
+    authorizationTier: 'tier3',
   });
   const [saveMsg, setSaveMsg] = useState('');
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -29,7 +30,8 @@ const CareRecipients = window.CareRecipients = () => {
     setFormData({
       firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', city: '', state: '',
       sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
-      emergencyContactName: '', emergencyContactPhone: ''
+      emergencyContactName: '', emergencyContactPhone: '',
+      authorizationTier: 'tier3',
     });
   };
 
@@ -60,6 +62,7 @@ const CareRecipients = window.CareRecipients = () => {
       preferences: r.preferences || '',
       emergencyContactName: r.emergency_contact_name || r.emergencyContactName || '',
       emergencyContactPhone: r.emergency_contact_phone || r.emergencyContactPhone || '',
+      authorizationTier: r.authorization_tier || 'tier3',
     });
     setEditingId(r.id);
     setShowAddForm(true);
@@ -86,6 +89,7 @@ const CareRecipients = window.CareRecipients = () => {
       preferences: formData.preferences,
       emergencyContactName: formData.emergencyContactName,
       emergencyContactPhone: formData.emergencyContactPhone,
+      authorizationTier: formData.authorizationTier || 'tier3',
     };
 
     try {
@@ -335,6 +339,35 @@ const CareRecipients = window.CareRecipients = () => {
               </select>
             </div>
           </div>
+          {!editingId && (
+            <div className="form-group" style={{ marginTop: '8px' }}>
+              <label style={{ fontWeight: 600, marginBottom: '8px', display: 'block' }}>Care Authorization</label>
+              <p style={{ fontSize: '13px', color: '#666', marginBottom: '12px', marginTop: 0 }}>How are you authorized to arrange care for this person?</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[
+                  { id: 'tier1', label: 'They signed up themselves', desc: 'The care recipient has their own account', color: '#1b6b5a', bg: '#e8f5f2' },
+                  { id: 'tier2', label: 'I have Power of Attorney or legal guardianship', desc: 'You\'ll need to upload your legal document for review', color: '#5c6bc0', bg: '#e8eaf6' },
+                  { id: 'tier3', label: 'They know and agree to me arranging care', desc: 'We\'ll verify their awareness before the first visit', color: '#e8724a', bg: '#FFF3E0' },
+                ].map(opt => (
+                  <div key={opt.id} onClick={() => fd('authorizationTier', opt.id)}
+                    style={{
+                      padding: '12px 16px', borderRadius: '10px', cursor: 'pointer',
+                      border: formData.authorizationTier === opt.id ? `2px solid ${opt.color}` : '2px solid #e8e8e8',
+                      background: formData.authorizationTier === opt.id ? opt.bg : '#fff',
+                      transition: 'all 0.2s',
+                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: 18, height: 18, borderRadius: '50%', border: formData.authorizationTier === opt.id ? `5px solid ${opt.color}` : '2px solid #ccc', flexShrink: 0, background: '#fff' }} />
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#333' }}>{opt.label}</div>
+                        <div style={{ fontSize: '12px', color: '#777', marginTop: '2px' }}>{opt.desc}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="form-group">
             <label>Avatar Emoji (optional)</label>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
