@@ -487,6 +487,8 @@ async function initializeDatabase() {
     `UPDATE care_recipients SET authorization_tier = 'tier1', consent_status = 'verified', consent_method = 'self_signup', consent_verified_at = NOW() WHERE linked_user_id IS NOT NULL AND authorization_tier = 'unset'`,
     // v1.35.0 — Backfill: existing care recipients without linked_user_id → tier3/verified/legacy_account (don't break existing users)
     `UPDATE care_recipients SET authorization_tier = 'tier3', consent_status = 'verified', consent_method = 'legacy_account', consent_verified_at = NOW() WHERE linked_user_id IS NULL AND authorization_tier = 'unset'`,
+    // v1.35.4 — Phase 2a: Add failed_attempts counter to verification_attempts
+    `ALTER TABLE verification_attempts ADD COLUMN IF NOT EXISTS failed_attempts INTEGER DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
