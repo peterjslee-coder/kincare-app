@@ -1465,7 +1465,12 @@ router.get("/authorizations", requireAdmin, async (req, res) => {
              (SELECT COUNT(*) FROM care_sessions cs WHERE cs.care_recipient_id = cr.id) AS session_count,
              att.signature_name AS attestation_signer, att.signed_at AS attestation_signed_at,
              (SELECT va.status FROM verification_attempts va WHERE va.care_recipient_id = cr.id ORDER BY va.created_at DESC LIMIT 1) AS verification_status,
-             (SELECT va2.failed_attempts FROM verification_attempts va2 WHERE va2.care_recipient_id = cr.id ORDER BY va2.created_at DESC LIMIT 1) AS verification_failed_attempts
+             (SELECT va2.failed_attempts FROM verification_attempts va2 WHERE va2.care_recipient_id = cr.id ORDER BY va2.created_at DESC LIMIT 1) AS verification_failed_attempts,
+             (SELECT ad.id FROM authorization_documents ad WHERE ad.care_recipient_id = cr.id ORDER BY ad.created_at DESC LIMIT 1) AS doc_id,
+             (SELECT ad2.document_type FROM authorization_documents ad2 WHERE ad2.care_recipient_id = cr.id ORDER BY ad2.created_at DESC LIMIT 1) AS doc_type,
+             (SELECT ad3.file_name FROM authorization_documents ad3 WHERE ad3.care_recipient_id = cr.id ORDER BY ad3.created_at DESC LIMIT 1) AS doc_file_name,
+             (SELECT ad4.upload_status FROM authorization_documents ad4 WHERE ad4.care_recipient_id = cr.id ORDER BY ad4.created_at DESC LIMIT 1) AS doc_upload_status,
+             (SELECT ad5.admin_notes FROM authorization_documents ad5 WHERE ad5.care_recipient_id = cr.id ORDER BY ad5.created_at DESC LIMIT 1) AS doc_admin_notes
       FROM care_recipients cr
       LEFT JOIN users u ON u.id = cr.family_user_id
       LEFT JOIN attestations att ON att.care_recipient_id = cr.id
@@ -1481,6 +1486,21 @@ router.get("/authorizations", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("Admin authorizations list error:", err);
     res.status(500).json({ error: "Failed to fetch authorizations" });
+  }
+});
+
+// GET /api/admin/documents/:docId — get full document for admin preview
+router.get("/documents/:docId", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const doc = await db.prepare(
+      "SELECT id, care_recipient_id, document_type, file_data, file_name, file_size, mime_type, upload_status, admin_notes, created_at FROM authorization_documents WHERE id = ?"
+    ).get(req.params.docId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    res.json({ document: doc });
+  } catch (err) {
+    console.error("Admin document preview error:", err);
+    res.status(500).json({ error: "Failed to fetch document" });
   }
 });
 
@@ -1500,7 +1520,6 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
     }
 
     const statusMap = { approve: 'verified', reject: 'rejected', revoke: 'revoked' };
-    const methodMap = { approve: 'admin_approved', reject: null, revoke: null };
     const newStatus = statusMap[action];
     const newMethod = action === 'approve' ? 'admin_approved' : recipient.consent_method;
     const verifiedAt = action === 'approve' ? new Date().toISOString() : recipient.consent_verified_at;
@@ -1512,12 +1531,48 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
       WHERE id = ?
     `).run(newStatus, newMethod, verifiedAt, req.user.id, notes || null, id);
 
+    // For tier2: also update the most recent authorization document status
+    if (recipient.authorization_tier === 'tier2' && (action === 'approve' || action === 'reject')) {
+      const latestDoc = await db.prepare(
+        "SELECT id FROM authorization_documents WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1"
+      ).get(id);
+      if (latestDoc) {
+        const docStatus = action === 'approve' ? 'approved' : 'rejected';
+        await db.prepare(
+          "UPDATE authorization_documents SET upload_status = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?"
+        ).run(docStatus, notes || null, req.user.id, latestDoc.id);
+      }
+    }
+
     await logAdminAction(req, `authorization_${action}`, "care_recipient", id, {
       previousStatus: recipient.consent_status,
       newStatus,
       tier: recipient.authorization_tier,
       notes,
     });
+
+    // Send activity feed entry + WebSocket notification to family
+    const recipientName = `${recipient.first_name} ${recipient.last_name}`.trim();
+    const activityTitle = action === 'approve'
+      ? `Authorization approved for ${recipientName}`
+      : action === 'reject'
+        ? `Authorization requires attention — ${recipientName}`
+        : `Authorization revoked for ${recipientName}`;
+    const activityMsg = action === 'approve'
+      ? `${recipientName}'s care authorization has been verified. You can now schedule care sessions.`
+      : action === 'reject'
+        ? `Your authorization document for ${recipientName} needs revision.${notes ? ' Note: ' + notes : ''} Please upload a new document.`
+        : `Authorization for ${recipientName} has been revoked. Please contact support if you believe this is an error.`;
+    try {
+      await db.prepare(`
+        INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(uuid(), recipient.family_user_id, id, `authorization_${action}`, activityTitle, activityMsg);
+      const emitToUser = req.app.get("emitToUser");
+      if (emitToUser) emitToUser(recipient.family_user_id, "activity_update", { title: activityTitle, message: activityMsg });
+    } catch (notifErr) {
+      console.error("Authorization notification error:", notifErr.message);
+    }
 
     const updated = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);
     res.json({ success: true, careRecipient: updated });

@@ -63,6 +63,10 @@ const AdminPanel = window.AdminPanel = () => {
   const [authzLoading, setAuthzLoading] = useState(false);
   const [authzFilter, setAuthzFilter] = useState('');
   const [authzActionLoading, setAuthzActionLoading] = useState(null);
+  const [docPreview, setDocPreview] = useState(null); // { fileData, mimeType, fileName }
+  const [docPreviewLoading, setDocPreviewLoading] = useState(false);
+  const [rejectModal, setRejectModal] = useState(null); // { id, name }
+  const [rejectNotes, setRejectNotes] = useState('');
 
   useEffect(() => {
     loadStats();
@@ -219,6 +223,25 @@ const AdminPanel = window.AdminPanel = () => {
       }
     } catch (err) { console.error('Authorization action error:', err); }
     setAuthzActionLoading(null);
+  };
+
+  const handleDocPreview = async (docId) => {
+    setDocPreviewLoading(true);
+    try {
+      const res = await apiFetch(`/api/admin/documents/${docId}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setDocPreview({ fileData: data.document.file_data, mimeType: data.document.mime_type, fileName: data.document.file_name });
+      }
+    } catch (err) { console.error('Doc preview error:', err); }
+    setDocPreviewLoading(false);
+  };
+
+  const handleRejectWithNotes = async () => {
+    if (!rejectModal) return;
+    await handleAuthzAction(rejectModal.id, 'reject', rejectNotes);
+    setRejectModal(null);
+    setRejectNotes('');
   };
 
   const loadBlockedEmails = async () => {
@@ -1905,7 +1928,7 @@ const AdminPanel = window.AdminPanel = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 style={{ margin: 0, fontSize: '18px' }}>Care Authorizations</h2>
             <div style={{ display: 'flex', gap: '6px' }}>
-              {['', 'pending', 'verified', 'rejected', 'revoked'].map(f => (
+              {['', 'pending', 'attested', 'verified', 'rejected', 'revoked'].map(f => (
                 <button key={f} onClick={() => { setAuthzFilter(f); setTimeout(loadAuthorizations, 0); }}
                   style={{
                     padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600,
@@ -1963,10 +1986,25 @@ const AdminPanel = window.AdminPanel = () => {
                               Code: {a.verification_status}{a.verification_failed_attempts > 0 ? ` (${a.verification_failed_attempts} failed)` : ''}
                             </div>
                           )}
+                          {a.doc_id && (
+                            <div style={{ fontSize: '11px', color: '#5c6bc0', marginTop: '4px' }}>
+                              {'\u{1F4C4}'} {a.doc_type?.replace('_', ' ') || 'Document'}: {a.doc_file_name || 'file'}
+                              <span style={{ marginLeft: '6px', padding: '1px 6px', borderRadius: '3px', fontSize: '10px', fontWeight: 600,
+                                background: a.doc_upload_status === 'approved' ? '#e8f5f2' : a.doc_upload_status === 'rejected' ? '#fce4ec' : '#fff3e0',
+                                color: a.doc_upload_status === 'approved' ? '#1b6b5a' : a.doc_upload_status === 'rejected' ? '#c62828' : '#e8724a',
+                              }}>{a.doc_upload_status}</span>
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: '10px 8px', textAlign: 'center' }}>{a.session_count || 0}</td>
                         <td style={{ padding: '10px 8px' }}>
                           <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            {a.doc_id && (
+                              <button onClick={() => handleDocPreview(a.doc_id)} disabled={docPreviewLoading}
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#e8eaf6', color: '#5c6bc0' }}>
+                                {'\u{1F50D}'} Preview
+                              </button>
+                            )}
                             {a.consent_status !== 'verified' && (
                               <button onClick={() => handleAuthzAction(a.id, 'approve')} disabled={authzActionLoading === a.id}
                                 style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#e8f5f2', color: '#1b6b5a' }}>
@@ -1974,7 +2012,8 @@ const AdminPanel = window.AdminPanel = () => {
                               </button>
                             )}
                             {a.consent_status !== 'rejected' && a.consent_status !== 'verified' && (
-                              <button onClick={() => handleAuthzAction(a.id, 'reject')} disabled={authzActionLoading === a.id}
+                              <button onClick={() => { setRejectModal({ id: a.id, name: `${a.first_name} ${a.last_name}` }); setRejectNotes(''); }}
+                                disabled={authzActionLoading === a.id}
                                 style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#fce4ec', color: '#c62828' }}>
                                 Reject
                               </button>
@@ -1992,6 +2031,50 @@ const AdminPanel = window.AdminPanel = () => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Document Preview Modal */}
+          {docPreview && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={() => setDocPreview(null)}>
+              <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+                onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px' }}>{'\u{1F4C4}'} {docPreview.fileName}</h3>
+                  <button onClick={() => setDocPreview(null)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#999' }}>{'\u2715'}</button>
+                </div>
+                <div style={{ flex: 1, overflow: 'auto', minHeight: '300px' }}>
+                  {docPreview.mimeType === 'application/pdf' ? (
+                    <iframe src={docPreview.fileData} style={{ width: '100%', height: '60vh', border: '1px solid #e0e0e0', borderRadius: '8px' }} title="Document preview" />
+                  ) : (
+                    <img src={docPreview.fileData} alt={docPreview.fileName} style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px', border: '1px solid #e0e0e0' }} />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reject Reason Modal */}
+          {rejectModal && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={() => setRejectModal(null)}>
+              <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '480px', width: '90%' }}
+                onClick={e => e.stopPropagation()}>
+                <h3 style={{ margin: '0 0 12px', fontSize: '16px' }}>{'\u274C'} Reject Authorization — {rejectModal.name}</h3>
+                <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px' }}>Provide a reason so the family knows what to correct:</p>
+                <textarea value={rejectNotes} onChange={e => setRejectNotes(e.target.value)}
+                  placeholder="e.g., Document is expired, signature is missing, illegible scan..."
+                  style={{ width: '100%', minHeight: '100px', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
+                  <button onClick={() => setRejectModal(null)}
+                    style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #ddd', background: '#fff', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={handleRejectWithNotes} disabled={authzActionLoading === rejectModal.id}
+                    style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#c62828', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                    Reject Authorization
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
