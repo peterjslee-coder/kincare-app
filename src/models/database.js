@@ -491,6 +491,64 @@ async function initializeDatabase() {
     `UPDATE care_recipients SET authorization_tier = 'tier3', consent_status = 'verified', consent_method = 'legacy_account', consent_verified_at = NOW() WHERE linked_user_id IS NULL AND authorization_tier = 'unset'`,
     // v1.35.4 — Phase 2a: Add failed_attempts counter to verification_attempts
     `ALTER TABLE verification_attempts ADD COLUMN IF NOT EXISTS failed_attempts INTEGER DEFAULT 0`,
+    // v1.36.0 — Phase 4a: Unified document verification system
+    `CREATE TABLE IF NOT EXISTS verified_documents (
+      id TEXT PRIMARY KEY,
+      owner_type TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      uploaded_by TEXT NOT NULL,
+      category TEXT NOT NULL,
+      document_type TEXT NOT NULL,
+      file_data TEXT NOT NULL,
+      file_name TEXT,
+      file_size INTEGER,
+      mime_type TEXT,
+      status TEXT DEFAULT 'pending',
+      ai_classification TEXT,
+      ai_reviewed_at TIMESTAMPTZ,
+      admin_reviewed_by TEXT,
+      admin_reviewed_at TIMESTAMPTZ,
+      admin_notes TEXT,
+      expires_at TIMESTAMPTZ,
+      replaced_by TEXT,
+      metadata TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_vdocs_owner ON verified_documents(owner_type, owner_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_vdocs_status ON verified_documents(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_vdocs_category ON verified_documents(category)`,
+    `CREATE INDEX IF NOT EXISTS idx_vdocs_uploaded_by ON verified_documents(uploaded_by)`,
+    // v1.36.0 — Consent audit log (family-facing timeline)
+    `CREATE TABLE IF NOT EXISTS consent_audit_log (
+      id TEXT PRIMARY KEY,
+      care_recipient_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      actor_role TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      metadata TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_cal_recipient ON consent_audit_log(care_recipient_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_cal_event ON consent_audit_log(event_type)`,
+    // v1.36.0 — Managed mode columns on care_recipients
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS managed_by_user_id TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS managed_reason TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS managed_at TIMESTAMPTZ`,
+    // v1.36.0 — Backfill: copy authorization_documents → verified_documents (idempotent via INSERT ... ON CONFLICT DO NOTHING)
+    `INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type, file_data, file_name, file_size, mime_type, status, admin_notes, admin_reviewed_by, admin_reviewed_at, created_at, updated_at)
+     SELECT id, 'care_recipient', care_recipient_id, submitted_by, 'consent', document_type, file_data, file_name, file_size, mime_type,
+       CASE upload_status WHEN 'approved' THEN 'approved' WHEN 'rejected' THEN 'rejected' ELSE 'pending' END,
+       admin_notes, reviewed_by, reviewed_at, created_at, updated_at
+     FROM authorization_documents WHERE id NOT IN (SELECT id FROM verified_documents) AND id IS NOT NULL`,
+    // v1.36.0 — Backfill: copy caregiver_documents → verified_documents
+    `INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type, file_data, file_name, file_size, mime_type, status, created_at, updated_at)
+     SELECT id, 'caregiver', (SELECT cp.id FROM caregiver_profiles cp WHERE cp.user_id = cd.user_id LIMIT 1), user_id,
+       CASE WHEN document_type IN ('dl_front', 'dl_back', 'drivers_license') THEN 'identity' ELSE 'certification' END,
+       CASE document_type WHEN 'dl_front' THEN 'DL_Front' WHEN 'dl_back' THEN 'DL_Back' WHEN 'drivers_license' THEN 'DL_Front' WHEN 'certification' THEN 'Other_Cert' ELSE 'Other' END,
+       file_data, file_name, 0, 'image/jpeg', 'pending', created_at, created_at
+     FROM caregiver_documents cd WHERE id NOT IN (SELECT id FROM verified_documents) AND id IS NOT NULL`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

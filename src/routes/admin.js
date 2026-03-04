@@ -1551,6 +1551,24 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
       notes,
     });
 
+    // Consent audit log
+    try {
+      const { logConsentAudit } = require("./documents");
+      const eventMap = { approve: "document_approved", reject: "document_rejected", revoke: "consent_revoked" };
+      const recipientLabel = `${recipient.first_name} ${recipient.last_name}`.trim();
+      const descMap = {
+        approve: `Admin approved authorization for ${recipientLabel}${notes ? '. Note: ' + notes : ''}`,
+        reject: `Admin rejected authorization for ${recipientLabel}${notes ? '. Reason: ' + notes : ''}`,
+        revoke: `Admin revoked consent for ${recipientLabel}${notes ? '. Reason: ' + notes : ''}`,
+      };
+      await logConsentAudit(db, {
+        careRecipientId: id, actorId: req.user.id, actorRole: "admin",
+        eventType: eventMap[action] || `authorization_${action}`,
+        description: descMap[action],
+        metadata: { previousStatus: recipient.consent_status, newStatus, tier: recipient.authorization_tier, notes },
+      });
+    } catch (auditErr) { console.error("Admin consent audit log error:", auditErr.message); }
+
     // Send activity feed entry + WebSocket notification to family
     const recipientName = `${recipient.first_name} ${recipient.last_name}`.trim();
     const activityTitle = action === 'approve'

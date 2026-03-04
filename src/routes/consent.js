@@ -123,6 +123,19 @@ router.post("/:recipientId/attest", async (req, res) => {
       "UPDATE care_recipients SET consent_status = 'attested', updated_at = NOW() WHERE id = ?"
     ).run(req.params.recipientId);
 
+    // Audit log
+    try {
+      const { logConsentAudit } = require("./documents");
+      const user = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+      const uName = user ? `${user.first_name} ${user.last_name}`.trim() : "Unknown";
+      await logConsentAudit(db, {
+        careRecipientId: req.params.recipientId, actorId: req.user.id, actorRole: "family",
+        eventType: "attestation_submitted",
+        description: `${uName} submitted attestation for ${recipientName} (relationship: ${relationshipToRecipient || 'not specified'})`,
+        metadata: { attestationId: id, signatureName: signatureName.trim(), relationship: relationshipToRecipient },
+      });
+    } catch (auditErr) { console.error("Attestation audit log error:", auditErr.message); }
+
     res.json({
       attestation: {
         id,
@@ -248,6 +261,24 @@ router.post("/:recipientId/verify-code", async (req, res) => {
       WHERE id = ?
     `).run(req.params.recipientId);
 
+    // Audit log
+    try {
+      const { logConsentAudit } = require("./documents");
+      const recipientName = `${recipient.first_name} ${recipient.last_name}`.trim();
+      await logConsentAudit(db, {
+        careRecipientId: req.params.recipientId, actorId: req.user.id, actorRole: "family",
+        eventType: "code_verified",
+        description: `Verification code confirmed for ${recipientName}. Consent verified via attestation + code.`,
+        metadata: { verificationAttemptId: attempt.id },
+      });
+      await logConsentAudit(db, {
+        careRecipientId: req.params.recipientId, actorId: "system", actorRole: "system",
+        eventType: "consent_granted",
+        description: `Consent granted for ${recipientName} via attestation + code verification`,
+        metadata: { method: "attestation_code", tier: recipient.authorization_tier },
+      });
+    } catch (auditErr) { console.error("Verify-code audit log error:", auditErr.message); }
+
     res.json({ verified: true, consentStatus: "verified" });
   } catch (err) {
     console.error("Verify code error:", err);
@@ -291,6 +322,49 @@ router.post("/:recipientId/documents", uploadDoc.single("document"), async (req,
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'uploaded')
     `).run(id, req.params.recipientId, req.user.id, documentType, base64, req.file.originalname, req.file.size, req.file.mimetype);
 
+    // ─── Dual-write to verified_documents + AI classification ───
+    let aiResult = null;
+    try {
+      const { classifyDocument } = require("../utils/documentAI");
+      const { logConsentAudit } = require("./documents");
+      const vDocId = uuid();
+
+      await db.prepare(`
+        INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type,
+          file_data, file_name, file_size, mime_type, status, created_at, updated_at)
+        VALUES (?, 'care_recipient', ?, ?, 'consent', ?, ?, ?, ?, ?, 'ai_review', NOW(), NOW())
+      `).run(vDocId, req.params.recipientId, req.user.id, documentType, base64, req.file.originalname, req.file.size, req.file.mimetype);
+
+      aiResult = await classifyDocument(base64, req.file.mimetype, documentType);
+      const aiStatus = (!aiResult.skipped && !aiResult.error && (!aiResult.isValid || !aiResult.matchesClaimed || aiResult.confidence < 0.5))
+        ? "ai_flagged" : "pending";
+
+      await db.prepare(`
+        UPDATE verified_documents SET status = ?, ai_classification = ?, ai_reviewed_at = NOW(), updated_at = NOW() WHERE id = ?
+      `).run(aiStatus, JSON.stringify(aiResult), vDocId);
+
+      // Audit log entries
+      const uploaderName = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+      const uName = uploaderName ? `${uploaderName.first_name} ${uploaderName.last_name}`.trim() : "Unknown";
+      const rName = `${recipient.first_name} ${recipient.last_name}`.trim();
+      await logConsentAudit(db, {
+        careRecipientId: req.params.recipientId, actorId: req.user.id, actorRole: "family",
+        eventType: "document_uploaded",
+        description: `${uName} uploaded ${documentType.replace(/_/g, " ")} document for ${rName}`,
+        metadata: { documentId: vDocId, documentType, aiConfidence: aiResult.confidence, aiStatus },
+      });
+      if (!aiResult.skipped && !aiResult.error) {
+        await logConsentAudit(db, {
+          careRecipientId: req.params.recipientId, actorId: "system", actorRole: "ai",
+          eventType: "document_classified",
+          description: `AI classified as "${aiResult.classification}" (${Math.round(aiResult.confidence * 100)}% confidence). ${aiResult.summary}`,
+          metadata: { documentId: vDocId, classification: aiResult.classification, confidence: aiResult.confidence, concerns: aiResult.concerns },
+        });
+      }
+    } catch (dualWriteErr) {
+      console.error("Dual-write to verified_documents failed (non-fatal):", dualWriteErr.message);
+    }
+
     res.json({
       document: {
         id,
@@ -300,6 +374,7 @@ router.post("/:recipientId/documents", uploadDoc.single("document"), async (req,
         mimeType: req.file.mimetype,
         uploadStatus: "uploaded",
         uploadedAt: new Date().toISOString(),
+        aiClassification: aiResult,
       },
     });
   } catch (err) {
