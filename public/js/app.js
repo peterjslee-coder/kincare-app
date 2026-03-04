@@ -206,6 +206,7 @@ const App = () => {
       setShowRequestCareModal(true);
     };
     window.__navigateTo = (page) => setCurrentPage(page);
+    window.__navHistory = navHistoryRef.current; // expose for feedback context
 
     // Push initial history entry so there's always something to go back to
     window.history.replaceState({ page: 'dashboard' }, '', window.location.pathname);
