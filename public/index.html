@@ -105,9 +105,18 @@
         '/js/app.js'
       ];
       try {
-        var sources = await Promise.all(
-          scripts.map(function(url) { return fetch(url + '?v=1.37.3').then(function(r) { return r.text(); }); })
-        );
+        // Fetch each script individually so we can identify which one fails
+        var sources = [];
+        for (var i = 0; i < scripts.length; i++) {
+          var url = scripts[i] + '?v=1.37.3';
+          try {
+            var r = await fetch(url);
+            if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + scripts[i]);
+            sources.push(await r.text());
+          } catch (fetchErr) {
+            throw new Error('Failed to load ' + scripts[i] + ': ' + fetchErr.message);
+          }
+        }
         var combined = sources.join('\n;\n');
         var compiled = Babel.transform(combined, { presets: ['react'] }).code;
         var scriptEl = document.createElement('script');
@@ -117,7 +126,8 @@
         console.error('InPlace load error:', err);
         document.getElementById('root').innerHTML =
           '<div style="padding:40px;text-align:center;color:#c00">' +
-          '<h2>Loading Error</h2><p>' + err.message + '</p></div>';
+          '<h2>Loading Error</h2><p>' + err.message + '</p>' +
+          '<p style="font-size:13px;color:#666;margin-top:12px">Try: pull down to refresh, or reinstall the app.</p></div>';
       }
     })();
 
