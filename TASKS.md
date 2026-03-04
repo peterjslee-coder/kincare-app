@@ -351,6 +351,11 @@
 
 ## Done
 
+### Feedback FAB + Nuke Fix (v1.37.2–v1.37.3)
+- [x] **Draggable feedback FAB (v1.37.3):** Feedback lightbulb now floats above all modals/popups (z-index 10000). Draggable via touch or mouse — position persists in localStorage. Users can always tap it, even during popups like booking modals.
+- [x] **Enhanced feedback context (v1.37.3):** When opening feedback, captures a snapshot of open modals/popups, active element, scroll position, and last 5 navigation breadcrumbs. Shows a "Captured: [page] • [popup]" hint in the form so users can see what screen was recorded.
+- [x] **Navigation history exposed (v1.37.3):** app.js now exposes navHistoryRef to window.__navHistory so FeedbackButton can include breadcrumb trail in submissions.
+
 ### Feedback Bug Fixes (v1.37.1)
 - [x] **AI summary state refresh:** CareProfile.js — when care preferences are saved (3+ rated) but no AI summary exists yet, now shows "Generate Care Summary" button + "Edit Preferences" link instead of always showing "Set Up Care Preferences" prompt. *(Feedback — Consent Tester, Mar 4)*
 - [x] **First Steps 2FA white screen:** CaretakerHub.js + MyAccount.js — (1) security step marks reviewed after 3 seconds on settings tab instead of requiring scroll-to-bottom (unreliable on mobile PWA), (2) First Steps security click now sets __accountTab before navigation and fires accountTabSwitch custom event for already-mounted MyAccount component, (3) added "I've reviewed my security settings" manual button as fallback. *(Feedback — Cary Taker, Mar 2)*
