@@ -5,10 +5,10 @@
  * IMPORTANT: The default "onboarding@resend.dev" sender can ONLY deliver
  * to the Resend account owner's email. To send to ANY address:
  *   1. Add & verify your domain in Resend dashboard (resend.com/domains)
- *   2. Set FROM_EMAIL=noreply@yourdomain.com in Railway env vars
+ *   2. Set FROM_EMAIL=hellothere@yourdomain.com in Railway env vars
  *
  * For yourinplace.com: Add a TXT record in Cloudflare for Resend verification,
- * then set FROM_EMAIL=noreply@yourinplace.com
+ * then set FROM_EMAIL=hellothere@yourinplace.com
  */
 
 const { Resend } = require("resend");
@@ -49,7 +49,7 @@ async function sendEmail({ to, subject, html }) {
 
   if (isSandbox) {
     console.warn(`  [email] ⚠️  Using sandbox sender (onboarding@resend.dev) — can only deliver to Resend account owner`);
-    console.warn(`  [email] To fix: set FROM_EMAIL=noreply@yourinplace.com after verifying domain in Resend dashboard`);
+    console.warn(`  [email] To fix: set FROM_EMAIL=hellothere@yourinplace.com after verifying domain in Resend dashboard`);
   }
 
   try {
