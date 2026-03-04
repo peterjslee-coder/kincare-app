@@ -98,7 +98,9 @@ https://yourinplace.com
         ├── availability.js    ← Caregiver availability CRUD, slot computation
         ├── analytics.js       ← Family dashboard analytics (6-month trends, service breakdown)
         ├── push.js            ← Push notification subscribe/unsubscribe
-        └── admin.js           ← Admin-only endpoints (stats, users, waitlist, activity, invites)
+        ├── consent.js         ← Consent/authorization (Tier 2 doc upload, Tier 3 attestation + outreach + admin review)
+        ├── documents.js       ← Document verification, AI classification, consent audit log
+        └── admin.js           ← Admin-only endpoints (stats, users, waitlist, activity, invites, consent review, bg check approval)
 ```
 
 ## Frontend Architecture
@@ -162,6 +164,18 @@ All tables use TEXT primary keys (UUIDs). Timestamps are TIMESTAMPTZ via `NOW()`
 
 All API responses follow `{ fieldName: value }` or `{ collectionName: [...] }` format. Routes use `authenticate` middleware from `src/middleware/auth.js`. The `req.user` object contains `{ id, email, role }` from the JWT payload.
 
+## Consent & Authorization System (v1.37.0)
+
+Three authorization tiers for care recipients:
+
+- **Tier 1 (Self-signup):** Care recipient has their own account — auto-verified, no consent needed.
+- **Tier 2 (POA/Guardianship):** Family uploads legal documents → AI classification via Claude → admin review → approve/reject.
+- **Tier 3 (Family Attestation):** Family signs attestation + provides care recipient's email → system sends outreach email directly to care recipient → care recipient responds (aware / questions / did not authorize) → admin reviews everything → approve/reject.
+
+Key files: `src/routes/consent.js` (auth per-route, not global — respond/:token endpoints are PUBLIC for care recipients), `src/routes/admin.js` (consent review + bg check approval), `public/js/components/ConsentVerification.js` (frontend flow), `public/js/components/ConsentResponsePage.js` (standalone public page for care recipient responses).
+
+The consent_outreach table tracks emails sent + recipient responses. Attestations have admin_status (pending/approved/rejected). First-visit confirmation by caregivers is BLOCKING — "no"/"unable" pauses future bookings.
+
 ## Local Development
 
 ```bash
@@ -211,6 +225,23 @@ The production PostgreSQL database is a Railway service. The `DATABASE_URL` env 
 
 When Pete says **"Run feedback loop"**, execute this full cycle:
 
+### Step 0 — Verify ADMIN_API_KEY (do this FIRST, every time)
+
+The feedback loop requires `ADMIN_API_KEY` to bypass 2FA on the production API.
+Check for it before doing anything else:
+
+```bash
+# In the repo .env file:
+grep ADMIN_API_KEY .env
+```
+
+- **If present** → proceed to Step 1.
+- **If missing** → STOP. Ask Pete for the key (it's in Railway env vars). Add it to `.env`:
+  ```
+  ADMIN_API_KEY=<the-key-from-railway>
+  ```
+  Then proceed. Do NOT attempt email/password login — it will hit 2FA and fail.
+
 ### Feedback Statuses (in the production DB)
 
 | Status | Meaning |
@@ -223,19 +254,19 @@ When Pete says **"Run feedback loop"**, execute this full cycle:
 
 ### The Loop (Fast Path)
 
-Use these two admin API endpoints for fast feedback triage:
+Use these two admin API endpoints for fast feedback triage. **All calls use the API key header — never email/password.**
 
 1. **Pull new feedback in one call:**
    ```
    GET https://yourinplace.com/api/admin/feedback/triage
-   Header: x-admin-api-key: <ADMIN_API_KEY>
+   Header: x-admin-api-key: $ADMIN_API_KEY
    ```
    Returns: `counts` (by status), `newItems` (full detail), `recentReviewed` (last 7 days), `summary` (one-line).
 
 2. **Read the new items, triage into TASKS.md**, then bulk-mark as reviewed:
    ```
    POST https://yourinplace.com/api/admin/feedback/bulk-update
-   Header: x-admin-api-key: <ADMIN_API_KEY>
+   Header: x-admin-api-key: $ADMIN_API_KEY
    Body: { "updates": [{ "id": "...", "status": "reviewed" }, ...] }
    ```
    Can also set `adminNotes` and `tags` per item. Praise items can go straight to `{ "status": "done" }`.

@@ -543,14 +543,25 @@ router.put("/mark-onboarding-complete", async (req, res) => {
   // Check availability rules
   const availRules = await db.prepare("SELECT id FROM availability WHERE user_id = ?").all(req.user.id);
 
-  // Verify all 6 criteria
+  // Verify core criteria (always required) + conditional criteria (when configured)
   const missing = [];
   if (!profile.bio || !profile.hourly_rate) missing.push("Profile (bio & hourly rate)");
   if (!availRules || availRules.length === 0) missing.push("Availability");
   if (!profile.care_stoplight) missing.push("Care preferences");
   if (!profile.avatar_url) missing.push("Profile photo");
-  if (!profile.stripe_onboard_complete) missing.push("Stripe payments");
-  if (!profile.background_check_paid && !profile.is_background_checked) missing.push("Background check");
+
+  // Conditional gates: only required when the service is configured
+  const stripeConfigured = !!(process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key);
+  const checkrConfigured = !!process.env.CHECKR_API_KEY;
+
+  if (stripeConfigured && !profile.stripe_onboard_complete) missing.push("Stripe payments");
+  if (checkrConfigured && !profile.background_check_paid && !profile.is_background_checked) {
+    missing.push("Background check");
+  }
+  // Allow admin-approved background checks to satisfy the gate regardless of Checkr
+  if (!checkrConfigured && !profile.is_background_checked && !profile.bg_check_admin_approved) {
+    // Not a hard gate — admin can manually approve, or skip if not configured
+  }
 
   if (missing.length > 0) {
     return res.status(400).json({ error: "Incomplete onboarding", missing });
@@ -559,6 +570,15 @@ router.put("/mark-onboarding-complete", async (req, res) => {
   await db.prepare("UPDATE caregiver_profiles SET onboarding_complete = 1 WHERE user_id = ?").run(req.user.id);
 
   res.json({ onboarding_complete: 1, message: "Onboarding complete! You're ready to accept care requests." });
+});
+
+// ─── GET /api/caregivers/platform-config ───
+// Returns which optional services are configured (for frontend graceful degradation)
+router.get("/platform-config", async (req, res) => {
+  res.json({
+    stripeConfigured: !!(process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key),
+    checkrConfigured: !!process.env.CHECKR_API_KEY,
+  });
 });
 
 module.exports = router;

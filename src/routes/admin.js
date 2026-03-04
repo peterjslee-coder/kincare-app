@@ -526,6 +526,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
     }
 
     // 3. HARD DELETE everything in a transaction
+    // IMPORTANT: Order matters — delete child rows before parent rows to avoid FK violations.
     await db.transaction(async (tx) => {
       const cgProfile = await tx.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(id);
       const cgId = cgProfile?.id;
@@ -542,6 +543,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
         await tx.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(cgId);
         await tx.prepare("DELETE FROM reviews WHERE caregiver_id = ?").run(cgId);
         await tx.prepare("DELETE FROM payments WHERE caregiver_id = ?").run(cgId);
+        await tx.prepare("DELETE FROM first_visit_confirmations WHERE caregiver_id = ?").run(cgId);
         // Sessions: delete offers first, then sessions
         const cgSessions = await tx.prepare("SELECT id FROM care_sessions WHERE caregiver_id = ?").all(cgId);
         for (const cs of cgSessions) {
@@ -556,9 +558,19 @@ router.delete("/users/:id/nuke", async (req, res) => {
       // Family-specific: care recipients + their cascading data
       const crs = await tx.prepare("SELECT id FROM care_recipients WHERE family_user_id = ?").all(id);
       for (const cr of crs) {
+        // Consent & authorization tables (must delete before care_recipients)
+        await tx.prepare("DELETE FROM consent_outreach WHERE care_recipient_id = ?").run(cr.id);
+        await tx.prepare("DELETE FROM consent_audit_log WHERE care_recipient_id = ?").run(cr.id);
+        await tx.prepare("DELETE FROM attestations WHERE care_recipient_id = ?").run(cr.id);
+        await tx.prepare("DELETE FROM verification_attempts WHERE care_recipient_id = ?").run(cr.id);
+        await tx.prepare("DELETE FROM first_visit_confirmations WHERE care_recipient_id = ?").run(cr.id);
+        await tx.prepare("DELETE FROM authorization_documents WHERE care_recipient_id = ?").run(cr.id);
+        await tx.prepare("DELETE FROM verified_documents WHERE owner_type = 'care_recipient' AND owner_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM recipient_notes WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM caregiver_assignments WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM care_recipient_shares WHERE care_recipient_id = ?").run(cr.id);
+        // Activity feed referencing this care recipient
+        await tx.prepare("DELETE FROM activity_feed WHERE care_recipient_id = ?").run(cr.id);
         // Sessions under this care recipient
         const crSessions = await tx.prepare("SELECT id FROM care_sessions WHERE care_recipient_id = ?").all(cr.id);
         for (const cs of crSessions) {
@@ -593,18 +605,25 @@ router.delete("/users/:id/nuke", async (req, res) => {
 
       // Documents & payments
       await tx.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(id);
+      await tx.prepare("DELETE FROM verified_documents WHERE uploaded_by = ?").run(id);
       await tx.prepare("DELETE FROM background_check_payments WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM payout_preferences WHERE user_id = ?").run(id);
 
-      // Social & messaging
+      // Social & messaging — must handle ALL FK references to users(id)
       await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM care_team_invites WHERE invited_by = ?").run(id);
       await tx.prepare("DELETE FROM platform_invites WHERE invited_by = ?").run(id);
       await tx.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(id, id);
       await tx.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM message_reactions WHERE user_id = ?").run(id);
-      // Messages: delete where sender
-      await tx.prepare("DELETE FROM messages WHERE sender_id = ?").run(id);
+      // Messages: delete where sender OR recipient (both columns REFERENCE users)
+      await tx.prepare("DELETE FROM messages WHERE sender_id = ? OR recipient_id = ?").run(id, id);
+      // Session offers: delete any offers FROM or TO this user (both REFERENCE users)
+      await tx.prepare("DELETE FROM session_offers WHERE from_user_id = ? OR to_user_id = ?").run(id, id);
+      // Conversations: nullify created_by (REFERENCES users, nullable in practice)
+      await tx.prepare("UPDATE conversations SET created_by = NULL WHERE created_by = ?").run(id);
+      // Blocked emails: nullify blocked_by (REFERENCES users, nullable)
+      await tx.prepare("UPDATE blocked_emails SET blocked_by = NULL WHERE blocked_by = ?").run(id);
 
       // Activity & feedback
       await tx.prepare("DELETE FROM activity_feed WHERE family_user_id = ?").run(id);
@@ -629,6 +648,9 @@ router.delete("/users/:id/nuke", async (req, res) => {
       await tx.prepare("DELETE FROM recipient_notes WHERE author_id = ?").run(id);
       // Care recipient shares
       await tx.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(id, id);
+
+      // Consent audit log entries by this user
+      await tx.prepare("DELETE FROM consent_audit_log WHERE actor_id = ?").run(id);
 
       // Finally: DELETE the user row
       await tx.prepare("DELETE FROM users WHERE id = ?").run(id);
@@ -1460,12 +1482,20 @@ router.get("/authorizations", requireAdmin, async (req, res) => {
     let sql = `
       SELECT cr.id, cr.first_name, cr.last_name, cr.authorization_tier, cr.consent_status,
              cr.consent_method, cr.consent_verified_at, cr.consent_reviewed_by, cr.consent_notes,
+             cr.email AS recipient_email, cr.sms_phone AS recipient_phone,
+             cr.bookings_paused, cr.bookings_paused_reason,
              cr.created_at,
              u.first_name AS family_first_name, u.last_name AS family_last_name, u.email AS family_email,
              (SELECT COUNT(*) FROM care_sessions cs WHERE cs.care_recipient_id = cr.id) AS session_count,
              att.signature_name AS attestation_signer, att.signed_at AS attestation_signed_at,
+             att.relationship_to_recipient AS attestation_relationship,
+             att.admin_status AS attestation_admin_status, att.admin_notes AS attestation_admin_notes,
              (SELECT va.status FROM verification_attempts va WHERE va.care_recipient_id = cr.id ORDER BY va.created_at DESC LIMIT 1) AS verification_status,
              (SELECT va2.failed_attempts FROM verification_attempts va2 WHERE va2.care_recipient_id = cr.id ORDER BY va2.created_at DESC LIMIT 1) AS verification_failed_attempts,
+             (SELECT co.recipient_response FROM consent_outreach co WHERE co.care_recipient_id = cr.id ORDER BY co.created_at DESC LIMIT 1) AS outreach_response,
+             (SELECT co2.responded_at FROM consent_outreach co2 WHERE co2.care_recipient_id = cr.id ORDER BY co2.created_at DESC LIMIT 1) AS outreach_responded_at,
+             (SELECT co3.sent_to_email FROM consent_outreach co3 WHERE co3.care_recipient_id = cr.id ORDER BY co3.created_at DESC LIMIT 1) AS outreach_sent_to,
+             (SELECT co4.recipient_response_notes FROM consent_outreach co4 WHERE co4.care_recipient_id = cr.id ORDER BY co4.created_at DESC LIMIT 1) AS outreach_response_notes,
              (SELECT ad.id FROM authorization_documents ad WHERE ad.care_recipient_id = cr.id ORDER BY ad.created_at DESC LIMIT 1) AS doc_id,
              (SELECT ad2.document_type FROM authorization_documents ad2 WHERE ad2.care_recipient_id = cr.id ORDER BY ad2.created_at DESC LIMIT 1) AS doc_type,
              (SELECT ad3.file_name FROM authorization_documents ad3 WHERE ad3.care_recipient_id = cr.id ORDER BY ad3.created_at DESC LIMIT 1) AS doc_file_name,
@@ -1530,6 +1560,22 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
           consent_reviewed_by = ?, consent_notes = ?, updated_at = NOW()
       WHERE id = ?
     `).run(newStatus, newMethod, verifiedAt, req.user.id, notes || null, id);
+
+    // For tier3: update the attestation admin_status
+    if (recipient.authorization_tier === 'tier3' && (action === 'approve' || action === 'reject')) {
+      const attAdminStatus = action === 'approve' ? 'approved' : 'rejected';
+      await db.prepare(`
+        UPDATE attestations SET admin_status = ?, admin_notes = ?, admin_reviewed_by = ?, admin_reviewed_at = NOW()
+        WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1
+      `).run(attAdminStatus, notes || null, req.user.id, id);
+
+      // If rejecting, also unpause bookings if they were paused
+      if (action === 'reject') {
+        await db.prepare(
+          "UPDATE care_recipients SET bookings_paused = 0, bookings_paused_reason = NULL, updated_at = NOW() WHERE id = ?"
+        ).run(id);
+      }
+    }
 
     // For tier2: also update the most recent authorization document status
     if (recipient.authorization_tier === 'tier2' && (action === 'approve' || action === 'reject')) {
@@ -1642,6 +1688,82 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("Admin authorization update error:", err);
     res.status(500).json({ error: "Failed to update authorization" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// ─── CONSENT REVIEW — Tier 3 pending attestations quick-view ───
+// ═══════════════════════════════════════════════════════════════════════
+
+// GET /api/admin/consent/pending — list tier3 attestations awaiting admin review
+router.get("/consent/pending", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(`
+      SELECT cr.id, cr.first_name, cr.last_name, cr.consent_status, cr.email AS recipient_email,
+             cr.sms_phone AS recipient_phone, cr.bookings_paused,
+             u.first_name AS family_first_name, u.last_name AS family_last_name, u.email AS family_email,
+             att.signature_name, att.relationship_to_recipient, att.signed_at, att.admin_status,
+             co.sent_to_email AS outreach_sent_to, co.outreach_type, co.recipient_response,
+             co.recipient_response_notes, co.responded_at AS outreach_responded_at, co.expires_at AS outreach_expires_at
+      FROM care_recipients cr
+      JOIN users u ON u.id = cr.family_user_id
+      LEFT JOIN attestations att ON att.care_recipient_id = cr.id
+      LEFT JOIN consent_outreach co ON co.care_recipient_id = cr.id
+      WHERE cr.authorization_tier = 'tier3'
+        AND cr.consent_status IN ('attested', 'pending')
+        AND COALESCE(att.admin_status, 'pending') = 'pending'
+      ORDER BY att.signed_at DESC NULLS LAST
+    `).all();
+    res.json({ pending: rows });
+  } catch (err) {
+    console.error("Admin consent pending error:", err);
+    res.status(500).json({ error: "Failed to fetch pending consent reviews" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// ─── CAREGIVER MANAGEMENT — Manual background check approval ───
+// ═══════════════════════════════════════════════════════════════════════
+
+// POST /api/admin/caregivers/:id/approve-bgcheck — manually approve a caregiver's background check
+router.post("/caregivers/:id/approve-bgcheck", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { id } = req.params;
+    const { notes } = req.body;
+
+    const profile = await db.prepare(
+      "SELECT cp.*, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON u.id = cp.user_id WHERE cp.user_id = ?"
+    ).get(id);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    await db.prepare(`
+      UPDATE caregiver_profiles
+      SET is_background_checked = 1, bg_check_admin_approved = 1,
+          bg_check_admin_approved_by = ?, bg_check_admin_approved_at = NOW()
+      WHERE user_id = ?
+    `).run(req.user.id, id);
+
+    await logAdminAction(req, "bgcheck_manual_approve", "caregiver", id, {
+      caregiverName: `${profile.first_name} ${profile.last_name}`.trim(),
+      notes,
+    });
+
+    // Notify the caregiver
+    try {
+      await db.prepare(`
+        INSERT INTO activity_feed (id, family_user_id, event_type, title, message, created_at)
+        VALUES (?, ?, 'bgcheck_approved', 'Background Check Approved', 'Your background check has been approved. You can now accept care sessions!', NOW())
+      `).run(uuid(), id);
+      const emitToUser = req.app.get("emitToUser");
+      if (emitToUser) emitToUser(id, "activity_update", { title: "Background Check Approved", message: "Your background check has been approved!" });
+    } catch (notifErr) { console.error("BG check notification error:", notifErr.message); }
+
+    res.json({ success: true, message: `Background check approved for ${profile.first_name} ${profile.last_name}`.trim() });
+  } catch (err) {
+    console.error("Admin bgcheck approve error:", err);
+    res.status(500).json({ error: "Failed to approve background check" });
   }
 });
 

@@ -167,6 +167,7 @@ const App = () => {
   const [appState, setAppState] = useState(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('reset')) return 'reset-password';
+    if (p.get('consent-response')) return 'consent-response';
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
@@ -390,6 +391,12 @@ const App = () => {
     const rt = p.get('reset');
     if (rt) window.history.replaceState({}, '', window.location.pathname);
     return rt || null;
+  });
+  const [consentResponseToken] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    const ct = p.get('consent-response');
+    if (ct) window.history.replaceState({}, '', window.location.pathname);
+    return ct || null;
   });
   const [verifyMessage, setVerifyMessage] = useState(null);
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
@@ -827,6 +834,7 @@ const App = () => {
   if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} />;
   if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;
   if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
+  if (appState === 'consent-response') return <ConsentResponsePage token={consentResponseToken} />;
 
   const role = activeRole || currentUser?.role || 'family';
 

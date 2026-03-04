@@ -77,6 +77,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState(null);
 
+  // Platform config (which services are configured)
+  const [platformConfig, setPlatformConfig] = useState({ stripeConfigured: true, checkrConfigured: true });
+
   // Payout preference state
   const [payoutSpeed, setPayoutSpeed] = useState('standard');
   const [payoutLoading, setPayoutLoading] = useState(false);
@@ -280,6 +283,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           if (d.profile && !d.profile.onboardingComplete) {
             fetchAvailability();
             apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
+            // Check which platform services are configured
+            apiFetch('/api/caregivers/platform-config').then(r => r?.ok && r.json().then(c => setPlatformConfig(c))).catch(() => {});
           }
         } else if (res?.status === 404) {
           setNoProfile(true);
@@ -845,7 +850,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     { id: 'photo', label: 'Review your account page and add a profile picture', desc: 'Families want to see who they\'re inviting into their home', done: hasPhoto, missing: !hasPhoto ? 'Upload a profile photo' : null },
     { id: 'avail-rates', label: 'Set your availability and rates', desc: 'Tell families when you\'re free and what you charge', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
     { id: 'security', label: 'Make your account more secure', desc: 'Review your security settings and enable 2FA', done: securityReviewed, missing: !securityReviewed ? 'Open Settings and scroll to the bottom to review all options' : null },
-    { id: 'stripe-bg', label: 'Set up Stripe, add bank details, and pay for background check', desc: 'Required before you can accept paid jobs — $30 for background check', done: stripeConnected && bgPaid, missing: (() => { const m = []; if (!stripeConnected) m.push('connect Stripe'); if (!bgPaid) m.push('pay for background check ($30)'); const d = []; if (stripeConnected) d.push('Stripe connected ✓'); return (d.length > 0 ? d.join(', ') + ' — ' : '') + (m.length > 0 ? 'Still needed: ' + m.join(' and ') : ''); })() || null },
+    { id: 'stripe-bg',
+      label: platformConfig.stripeConfigured ? 'Set up Stripe, add bank details, and pay for background check' : 'Payment & background check setup (coming soon)',
+      desc: platformConfig.stripeConfigured ? 'Required before you can accept paid jobs — $30 for background check' : 'Payment setup and background checks will be available soon. You can browse families and set up your profile in the meantime.',
+      done: platformConfig.stripeConfigured ? (stripeConnected && bgPaid) : true, // Mark done if not configured (non-blocking)
+      missing: platformConfig.stripeConfigured ? (() => { const m = []; if (!stripeConnected) m.push('connect Stripe'); if (!bgPaid) m.push('pay for background check ($30)'); const d = []; if (stripeConnected) d.push('Stripe connected \u2713'); return (d.length > 0 ? d.join(', ') + ' \u2014 ' : '') + (m.length > 0 ? 'Still needed: ' + m.join(' and ') : ''); })() || null : null },
     { id: 'preferences', label: 'Select your care preferences', desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
@@ -1482,7 +1491,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 if (s.done) return;
                 if (s.id === 'photo') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
                 if (s.id === 'avail-rates') window.__navigateTo && window.__navigateTo('find-work');
-                if (s.id === 'security') { window.__navigateTo && window.__navigateTo('account'); setTimeout(() => { window.__accountTab = 'settings'; }, 50); }
+                if (s.id === 'security') {
+                  window.__accountTab = 'settings';
+                  window.__navigateTo && window.__navigateTo('account');
+                  // Also fire event for already-mounted MyAccount to switch tabs
+                  setTimeout(() => window.dispatchEvent(new CustomEvent('accountTabSwitch', { detail: { tab: 'settings' } })), 100);
+                }
                 if (s.id === 'stripe-bg') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
                 if (s.id === 'preferences') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
               }} style={{
@@ -1512,6 +1526,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     <div style={{ marginTop: '6px', padding: '6px 10px', background: '#fff8f0', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '13px' }}>{'\u26A0\uFE0F'}</span> {s.missing}
                     </div>
+                  )}
+                  {!s.done && s.id === 'security' && (
+                    <button onClick={(e) => {
+                      e.stopPropagation();
+                      localStorage.setItem('inplace_security_reviewed', '1');
+                      window.location.reload();
+                    }} style={{
+                      marginTop: 6, padding: '4px 10px', borderRadius: 6,
+                      border: '1px solid #ccc', background: '#f8f8f8', color: '#666',
+                      fontSize: 11, cursor: 'pointer', fontWeight: 500,
+                    }}>I've reviewed my security settings</button>
                   )}
                 </div>
                 {!s.done && <span style={{ color: '#ccc', fontSize: '18px', marginTop: '3px' }}>{'\u203A'}</span>}

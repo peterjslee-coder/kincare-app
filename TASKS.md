@@ -139,6 +139,9 @@
 - [ ] **Volunteer user role for companionship.** New sign-up class for volunteers willing to provide companionship visits at no cost. Distinct from paid caregivers — different onboarding (no Stripe, no rates), different matching (families see "volunteer" badge), different liability model. Long-term feature tied to community expansion. *(Feedback — Cary Taker, Mar 1)* **P3**
 - [ ] **Medical professional role on care team.** New "medical" role for doctors/physicians who join a care team to liaise with the medical field. Doctor sees relevant health data, can add medical notes/orders, gets notified of health-related session feedback. Requires new role in care_team_members, scoped visibility, and potentially HIPAA considerations. *(Feedback — Cary Taker, Mar 1)* **P3**
 - [ ] **Caregiver-initiated visit proposals.** Allow caregivers to reach out to families to offer service proactively: "Would love to come by to check on Betty, have time next Tuesday" with a proposed visit and negotiable rate. Reverse of the current model where only families post care requests. Marketplace feature — ties into caregiver branding and rate negotiation. *(Feedback — Cary Taker, Mar 1)* **P3**
+- [ ] **No consent summary page for family members.** After a family member completes the consent/attestation flow, there's no page showing what they signed up for or what the care recipient consented to. Need a "what was agreed" summary view in the care team or documents section. *(Feedback — Consent Tester, Mar 4)* **P2**
+- [x] ~~**AI summary button still says "select care preferences" after saving them.** Fixed in v1.37.1. When preferences are saved (3+ rated), AI summary card now shows "Generate Care Summary" button + "Edit Preferences" link instead of the initial "Set Up Care Preferences" message. *(Feedback — Consent Tester, Mar 4)*~~
+- [x] ~~**First Steps 2FA review — white screen of death.** Fixed in v1.37.1. Three fixes: (1) security step marks as reviewed after 3 seconds on settings tab (not just scroll-to-bottom), (2) First Steps click sets __accountTab before navigation + fires accountTabSwitch event for already-mounted MyAccount, (3) added "I've reviewed my security settings" manual button as fallback. *(Feedback — Cary Taker, Mar 2)*~~
 
 
 ## Features — Up Next
@@ -347,6 +350,23 @@
 
 
 ## Done
+
+### Feedback Bug Fixes (v1.37.1)
+- [x] **AI summary state refresh:** CareProfile.js — when care preferences are saved (3+ rated) but no AI summary exists yet, now shows "Generate Care Summary" button + "Edit Preferences" link instead of always showing "Set Up Care Preferences" prompt. *(Feedback — Consent Tester, Mar 4)*
+- [x] **First Steps 2FA white screen:** CaretakerHub.js + MyAccount.js — (1) security step marks reviewed after 3 seconds on settings tab instead of requiring scroll-to-bottom (unreliable on mobile PWA), (2) First Steps security click now sets __accountTab before navigation and fires accountTabSwitch custom event for already-mounted MyAccount component, (3) added "I've reviewed my security settings" manual button as fallback. *(Feedback — Cary Taker, Mar 2)*
+- [x] **Feedback loop workflow:** Added ADMIN_API_KEY to .env (from Railway), updated CLAUDE.md with "Step 0 — verify API key" instructions, improved collect-feedback.js to fail fast when 2FA blocks login.
+- [x] **Admin nuke FK fix (from v1.37.0):** Verified comprehensive FK deletions in nuke transaction — all consent/authorization tables, messages.recipient_id, session_offers, conversations.created_by, activity_feed.care_recipient_id.
+
+### Consent System Redesign + Production Caregiver Readiness (v1.37.0)
+- [x] **Tier 3 consent redesign:** Replaced broken code-on-screen self-verification with proper 3-step flow: (1) family attestation with recipient contact info, (2) direct email outreach to care recipient with tokenized response page, (3) mandatory admin review before verification. Designed for three personas: eager recipients, reluctant recipients, and bad actors.
+- [x] **Care recipient outreach:** System sends branded email to care recipient explaining what inPlace is. Recipient can respond "Yes, I'm aware" / "I have questions" / "I did not authorize this" via standalone public page (no login required). "Did not authorize" immediately pauses bookings.
+- [x] **Admin consent review endpoints:** GET /api/admin/consent/pending for quick-view of tier3 attestations awaiting review. Enhanced authorization list with outreach response data, relationship info, and booking pause status.
+- [x] **First-visit confirmation blocking:** Caregiver "no"/"unable" responses now pause future bookings for the care recipient and notify admin. Previously non-blocking.
+- [x] **Disincentive structure:** Identity trail (verified email account), direct outreach (bad actor can't prevent), admin gate (human review), first-visit gate (caregiver meets recipient), legal language (consequences stated), rate limiting (max 3 tier3 recipients per family).
+- [x] **Production caregiver readiness:** Onboarding gates now conditional on env vars — if STRIPE_SECRET_KEY missing, Stripe gate skipped; if CHECKR_API_KEY missing, background check gate skipped. GET /api/caregivers/platform-config endpoint tells frontend what's configured. First Steps checklist shows "Coming soon" for unconfigured services.
+- [x] **Manual background check approval:** POST /api/admin/caregivers/:id/approve-bgcheck lets admin manually approve before Checkr is integrated.
+- [x] **Schema additions:** consent_outreach table (tracks emails + responses), care_recipients (email, bookings_paused, bookings_paused_reason), attestations (admin_status, admin_notes, admin_reviewed_by), caregiver_profiles (bg_check_admin_approved).
+- [x] **New component:** ConsentResponsePage.js — standalone public page for care recipient email responses, routed via ?consent-response=TOKEN URL param.
 
 ### Admin Tab Layout, Maria Dual-Role, Branding Sweep & Bug Fixes (v1.15.2–v1.16.0)
 - [x] **Branding icon sweep (v1.15.2):** Replaced all 12 remaining old icons (👩‍⚕️, 👨‍⚕️, 👵) with new branding (🤝, 🌷) across 8 component files.

@@ -8,13 +8,12 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
   const [agreed, setAgreed] = useState(false);
   const [signatureName, setSignatureName] = useState('');
   const [relationship, setRelationship] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [recipientPhone, setRecipientPhone] = useState('');
 
-  // Verification code state
-  const [code, setCode] = useState('');
-  const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
-  const [expiresAt, setExpiresAt] = useState(null);
-  const [hasActiveCode, setHasActiveCode] = useState(false);
-  const [attemptsRemaining, setAttemptsRemaining] = useState(5);
+  // Outreach / admin review state
+  const [outreach, setOutreach] = useState(null);
+  const [attestation, setAttestation] = useState(null);
 
   // Tier 2 document upload state
   const [documents, setDocuments] = useState([]);
@@ -34,11 +33,10 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
       if (res?.ok) {
         const data = await res.json();
         setStatus(data.consentStatus);
-        if (data.verification?.hasActiveCode) {
-          setHasActiveCode(true);
-          setExpiresAt(data.verification.expiresAt);
-          setAttemptsRemaining(5 - (data.verification.failedAttempts || 0));
-        }
+        if (data.recipientEmail) setRecipientEmail(data.recipientEmail);
+        if (data.recipientPhone) setRecipientPhone(data.recipientPhone);
+        if (data.outreach) setOutreach(data.outreach);
+        if (data.attestation) setAttestation(data.attestation);
       }
     } catch (err) {
       console.error('Load consent status error:', err);
@@ -109,17 +107,27 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
   };
 
   const handleAttest = async () => {
-    if (!agreed || !signatureName.trim()) return;
+    if (!agreed || !signatureName.trim() || !relationship) return;
+    if (!recipientEmail.trim() && !recipientPhone.trim()) {
+      setError('Please provide an email address or phone number for ' + firstName + ' so we can verify their awareness.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       const res = await apiFetch(`/api/consent/${recipientId}/attest`, {
         method: 'POST',
-        body: JSON.stringify({ signatureName: signatureName.trim(), relationshipToRecipient: relationship }),
+        body: JSON.stringify({
+          signatureName: signatureName.trim(),
+          relationshipToRecipient: relationship,
+          recipientEmail: recipientEmail.trim() || undefined,
+          recipientPhone: recipientPhone.trim() || undefined,
+        }),
       });
       if (res?.ok) {
         const data = await res.json();
         setStatus('attested');
+        setAttestation(data.attestation);
         setSuccess('Attestation signed successfully.');
         setTimeout(() => setSuccess(''), 3000);
         if (onStatusChange) onStatusChange();
@@ -133,85 +141,29 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
     setLoading(false);
   };
 
-  const handleGenerateCode = async () => {
+  const handleSendOutreach = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await apiFetch(`/api/consent/${recipientId}/generate-code`, { method: 'POST' });
+      const res = await apiFetch(`/api/consent/${recipientId}/send-outreach`, { method: 'POST' });
       if (res?.ok) {
         const data = await res.json();
-        setCode(data.code);
-        setExpiresAt(data.expiresAt);
-        setHasActiveCode(true);
-        setAttemptsRemaining(5);
-        setCodeDigits(['', '', '', '', '', '']);
+        setOutreach(data.outreach);
+        setSuccess(data.message);
+        setTimeout(() => setSuccess(''), 5000);
       } else {
         const data = await res.json();
-        setError(data.error || 'Failed to generate code');
+        setError(data.error || 'Failed to send verification email');
       }
     } catch (err) {
-      setError('Failed to generate code');
+      setError('Failed to send verification email');
     }
     setLoading(false);
   };
 
-  const handleCodeDigitChange = (index, value) => {
-    if (value.length > 1) value = value.slice(-1);
-    if (value && !/^\d$/.test(value)) return;
-    const newDigits = [...codeDigits];
-    newDigits[index] = value;
-    setCodeDigits(newDigits);
-    // Auto-focus next input
-    if (value && index < 5) {
-      const next = document.getElementById(`cv-digit-${index + 1}`);
-      if (next) next.focus();
-    }
-  };
-
-  const handleCodeKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !codeDigits[index] && index > 0) {
-      const prev = document.getElementById(`cv-digit-${index - 1}`);
-      if (prev) prev.focus();
-    }
-  };
-
-  const handleVerifyCode = async () => {
-    const enteredCode = codeDigits.join('');
-    if (enteredCode.length !== 6) {
-      setError('Please enter all 6 digits');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const res = await apiFetch(`/api/consent/${recipientId}/verify-code`, {
-        method: 'POST',
-        body: JSON.stringify({ code: enteredCode }),
-      });
-      const data = await res.json();
-      if (res?.ok && data.verified) {
-        setStatus('verified');
-        setSuccess('Verification complete! You can now book care sessions.');
-        if (onStatusChange) onStatusChange();
-      } else {
-        setError(data.error || 'Verification failed');
-        if (data.attemptsRemaining !== undefined) {
-          setAttemptsRemaining(data.attemptsRemaining);
-        }
-        setCodeDigits(['', '', '', '', '', '']);
-        const first = document.getElementById('cv-digit-0');
-        if (first) first.focus();
-      }
-    } catch (err) {
-      setError('Failed to verify code');
-    }
-    setLoading(false);
-  };
-
-  const isExpired = expiresAt && new Date(expiresAt) < new Date();
   const firstName = recipientName ? recipientName.split(' ')[0] : 'your loved one';
 
-  const attestationText = `I confirm that ${recipientName} is aware that I am arranging non-medical companion care services through inPlace on their behalf. I understand that ${recipientName} will be contacted directly to verify their awareness and consent before any caregiver visit is scheduled. I understand that misrepresenting this consent may result in account termination and potential legal liability.`;
+  const attestationText = `I confirm that ${recipientName} is aware that I am arranging non-medical companion care services through inPlace on their behalf. I understand that ${recipientName} will be contacted directly by inPlace to verify their awareness and consent before any caregiver visit is scheduled. I understand that misrepresenting this consent may result in immediate account termination, referral to appropriate authorities, and potential legal liability under Virginia law.`;
 
   // ─── Verified state ───
   if (status === 'verified') {
@@ -222,6 +174,23 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           <div>
             <div style={{ fontWeight: 600, color: '#2e7d32', fontSize: '15px' }}>Verified</div>
             <div style={{ color: '#558b2f', fontSize: '13px' }}>{recipientName}'s care authorization is complete. You can now book care sessions.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Rejected state ───
+  if (status === 'rejected' && authorizationTier === 'tier3') {
+    return (
+      <div style={{ background: '#fce4ec', border: '1px solid #ef9a9a', borderRadius: '12px', padding: '20px', marginTop: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '24px' }}>{'\u274C'}</span>
+          <div>
+            <div style={{ fontWeight: 600, color: '#c62828', fontSize: '15px' }}>Authorization Not Approved</div>
+            <div style={{ color: '#666', fontSize: '13px' }}>
+              {attestation?.adminNotes || 'Your attestation was reviewed and not approved. Please contact support or try a different authorization method.'}
+            </div>
           </div>
         </div>
       </div>
@@ -308,18 +277,23 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
     );
   }
 
-  // ─── Tier 3: Attestation state ───
+  // ═══════════════════════════════════════════════════════════════════════
+  // Tier 3: New 3-step flow — Attestation → Outreach → Admin Review
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // ─── Step 1: Attestation form (status === 'pending') ───
   if (status === 'pending') {
     return (
       <div style={{ background: '#fff', border: '2px solid #e8724a', borderRadius: '12px', padding: '24px', marginTop: '16px' }}>
-        <h3 style={{ color: '#e8724a', margin: '0 0 8px 0', fontSize: '17px' }}>Verify Care Authorization</h3>
+        <h3 style={{ color: '#e8724a', margin: '0 0 4px 0', fontSize: '17px' }}>Verify Care Authorization</h3>
         <p style={{ color: '#666', fontSize: '13px', margin: '0 0 20px 0' }}>
-          Before booking care for {firstName}, please confirm they're aware of this arrangement.
+          Before booking care for {firstName}, we need to confirm they're aware of this arrangement. This helps keep everyone safe.
         </p>
 
         {error && <div style={{ background: '#fce4ec', color: '#c62828', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
         {success && <div style={{ background: '#e8f5e9', color: '#2e7d32', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
 
+        {/* Attestation statement */}
         <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '8px', padding: '16px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6', color: '#5D4037' }}>
           <div style={{ fontWeight: 600, marginBottom: '8px', color: '#E65100' }}>Attestation Statement</div>
           {attestationText}
@@ -331,6 +305,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           <span style={{ fontSize: '14px', color: '#333' }}>I have read and agree to the above statement</span>
         </label>
 
+        {/* Relationship */}
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Your relationship to {firstName}</label>
           <select value={relationship} onChange={(e) => setRelationship(e.target.value)}
@@ -347,6 +322,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           </select>
         </div>
 
+        {/* Signature */}
         <div style={{ marginBottom: '20px' }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Type your full name as signature</label>
           <input type="text" value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
@@ -354,10 +330,39 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
             style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', fontStyle: 'italic', boxSizing: 'border-box' }} />
         </div>
 
-        <button onClick={handleAttest} disabled={loading || !agreed || !signatureName.trim()}
+        {/* Care recipient contact info */}
+        <div style={{ background: '#f0f7ff', border: '1px solid #bbdefb', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+          <div style={{ fontWeight: 600, fontSize: '14px', color: '#1565c0', marginBottom: '8px' }}>
+            How can we reach {firstName}?
+          </div>
+          <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px 0' }}>
+            We'll send {firstName} a brief message explaining that you've arranged care for them through inPlace.
+            This gives them a chance to confirm, ask questions, or let us know if something isn't right.
+          </p>
+
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
+              {firstName}'s email address
+            </label>
+            <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)}
+              placeholder="e.g. mom@email.com"
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box' }} />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
+              {firstName}'s phone number <span style={{ fontWeight: 400, color: '#999' }}>(optional if email provided)</span>
+            </label>
+            <input type="tel" value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value)}
+              placeholder="e.g. (555) 123-4567"
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box' }} />
+          </div>
+        </div>
+
+        <button onClick={handleAttest} disabled={loading || !agreed || !signatureName.trim() || !relationship || (!recipientEmail.trim() && !recipientPhone.trim())}
           style={{
             padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
-            background: agreed && signatureName.trim() ? '#1b6b5a' : '#ccc',
+            background: (agreed && signatureName.trim() && relationship && (recipientEmail.trim() || recipientPhone.trim())) ? '#1b6b5a' : '#ccc',
             color: '#fff', transition: 'background 0.2s',
           }}>
           {loading ? 'Submitting...' : 'Sign & Continue \u2192'}
@@ -366,101 +371,143 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
     );
   }
 
-  // ─── Code verification state ───
+  // ─── Step 2 & 3: Attested — show outreach + admin review status ───
   if (status === 'attested') {
+    const outreachSent = outreach && outreach.sentToEmail;
+    const recipientResponded = outreach && outreach.recipientResponse;
+    const isExpired = outreach && outreach.isExpired;
+    const adminStatus = attestation?.adminStatus || 'pending';
+
+    // Response labels
+    const responseLabels = {
+      yes_aware: { text: "Yes, I'm aware", color: '#2e7d32', icon: '\u2705' },
+      have_questions: { text: "I have questions", color: '#e8724a', icon: '\u2753' },
+      did_not_authorize: { text: "I did not authorize this", color: '#c62828', icon: '\u{1F6A8}' },
+    };
+
     return (
       <div style={{ background: '#fff', border: '2px solid #1b6b5a', borderRadius: '12px', padding: '24px', marginTop: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-          <span style={{ fontSize: '20px' }}>{'\u2705'}</span>
-          <span style={{ fontWeight: 600, color: '#1b6b5a', fontSize: '15px' }}>Attestation Signed</span>
+        {/* Step indicators */}
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '20px' }}>
+          {['Attestation', 'Outreach', 'Review'].map((step, i) => {
+            const isComplete = i === 0 || (i === 1 && outreachSent) || (i === 2 && adminStatus === 'approved');
+            const isActive = (i === 1 && !outreachSent) || (i === 2 && outreachSent && adminStatus === 'pending');
+            return (
+              <div key={step} style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{
+                  height: '4px', borderRadius: '2px', marginBottom: '6px',
+                  background: isComplete ? '#1b6b5a' : isActive ? '#e8724a' : '#e0e0e0',
+                }} />
+                <span style={{ fontSize: '11px', fontWeight: 600, color: isComplete ? '#1b6b5a' : isActive ? '#e8724a' : '#999' }}>{step}</span>
+              </div>
+            );
+          })}
         </div>
-
-        <p style={{ color: '#666', fontSize: '13px', margin: '0 0 20px 0' }}>
-          Now verify with {firstName} directly. Generate a 6-digit code, share it with {firstName}, and enter it below to confirm their awareness.
-        </p>
 
         {error && <div style={{ background: '#fce4ec', color: '#c62828', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
         {success && <div style={{ background: '#e8f5e9', color: '#2e7d32', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
 
-        {!hasActiveCode || isExpired ? (
-          <div>
-            {isExpired && <p style={{ color: '#e8724a', fontSize: '13px', marginBottom: '12px' }}>Previous code has expired. Generate a new one.</p>}
-            <button onClick={handleGenerateCode} disabled={loading}
-              style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', background: '#e8724a', color: '#fff', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}>
-              {loading ? 'Generating...' : 'Generate Verification Code'}
+        {/* Attestation confirmed */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <span style={{ fontSize: '18px' }}>{'\u2705'}</span>
+          <span style={{ fontWeight: 600, color: '#1b6b5a', fontSize: '14px' }}>Attestation signed by {attestation?.signatureName || signatureName}</span>
+        </div>
+
+        {/* Not yet sent outreach */}
+        {!outreachSent && (
+          <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+            <div style={{ fontWeight: 600, fontSize: '14px', color: '#E65100', marginBottom: '8px' }}>
+              Next: Send verification to {firstName}
+            </div>
+            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px 0' }}>
+              We'll email {firstName}{recipientEmail ? ` at ${recipientEmail}` : ''} to let them know about this care arrangement.
+              They can confirm their awareness, ask questions, or let us know if something isn't right.
+            </p>
+            <button onClick={handleSendOutreach} disabled={loading}
+              style={{
+                padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '14px', cursor: loading ? 'not-allowed' : 'pointer',
+                background: loading ? '#ccc' : '#e8724a', color: '#fff',
+              }}>
+              {loading ? 'Sending...' : '\u{1F4E7} Send Verification Email'}
             </button>
           </div>
-        ) : (
-          <div>
-            {code && (
-              <div style={{ background: '#f5f5f5', borderRadius: '10px', padding: '20px', marginBottom: '20px', textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '1px' }}>Verification Code</div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                  {code.split('').map((digit, i) => (
-                    <div key={i} style={{
-                      width: '44px', height: '52px', background: '#fff', border: '2px solid #1b6b5a', borderRadius: '8px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '24px', fontWeight: 700, color: '#1b6b5a',
-                    }}>{digit}</div>
-                  ))}
+        )}
+
+        {/* Outreach sent */}
+        {outreachSent && (
+          <div style={{ background: '#f0f7ff', border: '1px solid #bbdefb', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span style={{ fontSize: '16px' }}>{'\u{1F4E7}'}</span>
+              <span style={{ fontWeight: 600, fontSize: '14px', color: '#1565c0' }}>Verification email sent</span>
+            </div>
+            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 8px 0' }}>
+              Sent to <strong>{outreach.sentToEmail}</strong>
+              {outreach.expiresAt && <span> — expires {new Date(outreach.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+            </p>
+
+            {/* Recipient response */}
+            {recipientResponded ? (
+              <div style={{
+                background: responseLabels[outreach.recipientResponse]?.color === '#c62828' ? '#fce4ec' : '#e8f5e9',
+                borderRadius: '8px', padding: '12px', marginTop: '8px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 600 }}>
+                  <span>{responseLabels[outreach.recipientResponse]?.icon || ''}</span>
+                  <span style={{ color: responseLabels[outreach.recipientResponse]?.color }}>
+                    {firstName} responded: {responseLabels[outreach.recipientResponse]?.text || outreach.recipientResponse}
+                  </span>
                 </div>
-                {expiresAt && (
-                  <div style={{ fontSize: '12px', color: '#888', marginTop: '10px' }}>
-                    Expires: {new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                {outreach.recipientResponseNotes && (
+                  <div style={{ fontSize: '13px', color: '#666', marginTop: '6px', fontStyle: 'italic' }}>
+                    "{outreach.recipientResponseNotes}"
                   </div>
                 )}
               </div>
-            )}
-
-            <div style={{ background: '#E8F5E9', borderRadius: '8px', padding: '14px', marginBottom: '20px', fontSize: '13px', color: '#2E7D32' }}>
-              <strong>How to verify:</strong> Share this code with {firstName}. Then enter the same code below to confirm they received it and are aware of the care arrangement.
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '10px' }}>Enter verification code</label>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                {codeDigits.map((digit, i) => (
-                  <input key={i} id={`cv-digit-${i}`} type="text" inputMode="numeric" maxLength="1"
-                    value={digit} onChange={(e) => handleCodeDigitChange(i, e.target.value)}
-                    onKeyDown={(e) => handleCodeKeyDown(i, e)}
-                    style={{
-                      width: '44px', height: '52px', textAlign: 'center', fontSize: '22px', fontWeight: 700,
-                      border: '2px solid #ddd', borderRadius: '8px', outline: 'none',
-                      transition: 'border-color 0.2s',
-                    }}
-                    onFocus={(e) => { e.target.style.borderColor = '#1b6b5a'; }}
-                    onBlur={(e) => { e.target.style.borderColor = '#ddd'; }}
-                  />
-                ))}
+            ) : isExpired ? (
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ fontSize: '13px', color: '#e8724a', marginBottom: '8px' }}>
+                  The verification link has expired. You can send a new one.
+                </div>
+                <button onClick={handleSendOutreach} disabled={loading}
+                  style={{
+                    padding: '8px 16px', borderRadius: '6px', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer',
+                    background: '#e8724a', color: '#fff',
+                  }}>
+                  {loading ? 'Sending...' : 'Resend Verification'}
+                </button>
               </div>
-              {attemptsRemaining < 5 && attemptsRemaining > 0 && (
-                <div style={{ textAlign: 'center', fontSize: '12px', color: '#e8724a', marginTop: '8px' }}>
-                  {attemptsRemaining} attempt{attemptsRemaining !== 1 ? 's' : ''} remaining
-                </div>
-              )}
-              {attemptsRemaining <= 0 && (
-                <div style={{ textAlign: 'center', fontSize: '12px', color: '#c62828', marginTop: '8px' }}>
-                  Too many attempts. Please generate a new code.
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button onClick={handleVerifyCode} disabled={loading || codeDigits.join('').length !== 6 || attemptsRemaining <= 0}
-                style={{
-                  padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
-                  background: codeDigits.join('').length === 6 && attemptsRemaining > 0 ? '#1b6b5a' : '#ccc',
-                  color: '#fff',
-                }}>
-                {loading ? 'Verifying...' : 'Verify \u2192'}
-              </button>
-              <button onClick={handleGenerateCode} disabled={loading}
-                style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid #ddd', background: '#fff', color: '#666', fontSize: '13px', cursor: 'pointer' }}>
-                New Code
-              </button>
-            </div>
+            ) : (
+              <div style={{ fontSize: '13px', color: '#999', marginTop: '4px', fontStyle: 'italic' }}>
+                Waiting for {firstName} to respond...
+              </div>
+            )}
           </div>
         )}
+
+        {/* Admin review status */}
+        <div style={{
+          background: adminStatus === 'approved' ? '#e8f5e9' : '#f5f5f5',
+          border: '1px solid ' + (adminStatus === 'approved' ? '#c8e6c9' : '#e0e0e0'),
+          borderRadius: '8px', padding: '16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px' }}>
+              {adminStatus === 'approved' ? '\u2705' : adminStatus === 'rejected' ? '\u274C' : '\u23F3'}
+            </span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '14px', color: adminStatus === 'approved' ? '#2e7d32' : adminStatus === 'rejected' ? '#c62828' : '#666' }}>
+                {adminStatus === 'approved' ? 'Admin Approved' : adminStatus === 'rejected' ? 'Admin Review: Not Approved' : 'Awaiting Admin Review'}
+              </div>
+              <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>
+                {adminStatus === 'pending'
+                  ? 'Our team will review your attestation and ' + firstName + '\'s response. You\'ll be notified when the review is complete.'
+                  : adminStatus === 'rejected'
+                    ? (attestation?.adminNotes || 'Please contact support for more information.')
+                    : 'Authorization has been verified.'}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

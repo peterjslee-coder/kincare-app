@@ -420,8 +420,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
 
   useEffect(() => {
     if (activeTab === 'settings' || activeTab === 'security' || activeTab === 'devices') fetchDevices();
-    // Track security settings review — mark as reviewed when user scrolls to bottom of settings
-    if (activeTab === 'settings' && isCaregiver) {
+    // Track security settings review — mark as reviewed when user visits the settings tab
+    // Two triggers: (1) immediately after 3 seconds on the tab, (2) scroll to bottom
+    if (activeTab === 'settings') {
+      // Mark reviewed after spending 3 seconds on the settings tab (enough to glance at it)
+      const timer = setTimeout(() => {
+        localStorage.setItem('inplace_security_reviewed', '1');
+      }, 3000);
+      // Also mark on scroll to bottom (instant)
       const handleScroll = () => {
         const scrollBottom = window.innerHeight + window.scrollY;
         const docHeight = document.documentElement.scrollHeight;
@@ -431,9 +437,21 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
         }
       };
       window.addEventListener('scroll', handleScroll);
-      return () => window.removeEventListener('scroll', handleScroll);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('scroll', handleScroll);
+      };
     }
   }, [activeTab]);
+
+  // Listen for external tab switch requests (e.g., from First Steps click)
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.tab) setActiveTab(e.detail.tab);
+    };
+    window.addEventListener('accountTabSwitch', handler);
+    return () => window.removeEventListener('accountTabSwitch', handler);
+  }, []);
 
   // Fetch caregiver financial data
   useEffect(() => {

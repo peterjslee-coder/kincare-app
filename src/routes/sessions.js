@@ -1539,7 +1539,7 @@ router.post("/:sessionId/first-visit-confirm", async (req, res) => {
       ON CONFLICT (session_id) DO NOTHING
     `).run(id, session.care_recipient_id, session.caregiver_profile_id, req.params.sessionId, confirmation, notes || null);
 
-    // If 'no' or 'unable', notify the family
+    // If 'no' or 'unable', notify the family AND admin, pause future bookings
     if (confirmation !== 'yes') {
       const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
       const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "Caregiver";
@@ -1553,6 +1553,20 @@ router.post("/:sessionId/first-visit-confirm", async (req, res) => {
         ? `${caregiverName} reported that ${recipientName} seems unaware of today's care visit.${notes ? ' Note: ' + notes : ''}`
         : `${caregiverName} was unable to assess whether ${recipientName} is aware of today's care visit.${notes ? ' Note: ' + notes : ''}`;
 
+      // BLOCKING: Pause future bookings for this care recipient until resolved
+      try {
+        const pauseReason = confirmation === 'no'
+          ? `Caregiver reported care recipient seems unaware of visit (${new Date().toLocaleDateString()})`
+          : `Caregiver unable to assess care recipient awareness (${new Date().toLocaleDateString()})`;
+        await db.prepare(`
+          UPDATE care_recipients SET bookings_paused = 1, bookings_paused_reason = ?, updated_at = NOW()
+          WHERE id = ? AND COALESCE(bookings_paused, 0) = 0
+        `).run(pauseReason, session.care_recipient_id);
+      } catch (pauseErr) {
+        console.error("Bookings pause error:", pauseErr.message);
+      }
+
+      // Notify family
       try {
         await db.prepare(`
           INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata)
@@ -1563,6 +1577,22 @@ router.post("/:sessionId/first-visit-confirm", async (req, res) => {
         if (emitToUser) emitToUser(session.family_user_id, "activity_update", { title, message });
       } catch (notifErr) {
         console.error("First-visit notification error:", notifErr.message);
+      }
+
+      // Notify admin (Pete) — urgent
+      try {
+        const adminUsers = await db.prepare("SELECT id FROM users WHERE is_admin = 1").all();
+        const adminTitle = `First-visit concern: ${recipientName}`;
+        const adminMsg = `${caregiverName} reported a concern during first visit with ${recipientName}: ${confirmation === 'no' ? 'recipient seems unaware' : 'unable to assess awareness'}. Future bookings have been paused.${notes ? ' Caregiver notes: ' + notes : ''}`;
+        for (const admin of adminUsers) {
+          await db.prepare(`
+            INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
+            VALUES (?, ?, 'first_visit_concern_admin', ?, ?, ?, NOW())
+          `).run(require("uuid").v4(), admin.id, adminTitle, adminMsg,
+            JSON.stringify({ sessionId: req.params.sessionId, recipientId: session.care_recipient_id, confirmation, caregiverNotes: notes }));
+        }
+      } catch (adminErr) {
+        console.error("First-visit admin notification error:", adminErr.message);
       }
     }
 

@@ -1981,9 +1981,35 @@ const AdminPanel = window.AdminPanel = () => {
                               Attested by {a.attestation_signer || 'N/A'} on {new Date(a.attestation_signed_at).toLocaleDateString()}
                             </div>
                           )}
-                          {a.verification_status && (
-                            <div style={{ fontSize: '11px', color: a.verification_status === 'verified' ? '#1b6b5a' : a.verification_status === 'expired' ? '#e8724a' : '#888', marginTop: '2px' }}>
-                              Code: {a.verification_status}{a.verification_failed_attempts > 0 ? ` (${a.verification_failed_attempts} failed)` : ''}
+                          {a.attestation_relationship && (
+                            <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                              Relationship: {a.attestation_relationship}
+                            </div>
+                          )}
+                          {a.recipient_email && a.authorization_tier === 'tier3' && (
+                            <div style={{ fontSize: '11px', color: '#1565c0', marginTop: '2px' }}>
+                              {'\u{1F4E7}'} Recipient: {a.recipient_email}
+                            </div>
+                          )}
+                          {a.outreach_response && (
+                            <div style={{
+                              fontSize: '11px', marginTop: '4px', padding: '3px 8px', borderRadius: '4px',
+                              background: a.outreach_response === 'yes_aware' ? '#e8f5e9' : a.outreach_response === 'did_not_authorize' ? '#fce4ec' : '#fff3e0',
+                              color: a.outreach_response === 'yes_aware' ? '#2e7d32' : a.outreach_response === 'did_not_authorize' ? '#c62828' : '#e65100',
+                              fontWeight: 600,
+                            }}>
+                              {a.outreach_response === 'yes_aware' ? '\u2705 Aware' : a.outreach_response === 'did_not_authorize' ? '\u{1F6A8} Not authorized' : '\u2753 Has questions'}
+                              {a.outreach_response_notes && <span style={{ fontWeight: 400, marginLeft: '4px' }}>— "{a.outreach_response_notes}"</span>}
+                            </div>
+                          )}
+                          {a.outreach_sent_to && !a.outreach_response && (
+                            <div style={{ fontSize: '11px', color: '#999', marginTop: '2px', fontStyle: 'italic' }}>
+                              Outreach sent, awaiting response...
+                            </div>
+                          )}
+                          {a.bookings_paused === 1 && (
+                            <div style={{ fontSize: '11px', color: '#c62828', fontWeight: 600, marginTop: '4px' }}>
+                              {'\u{1F6D1}'} Bookings paused{a.bookings_paused_reason ? `: ${a.bookings_paused_reason}` : ''}
                             </div>
                           )}
                           {a.doc_id && (

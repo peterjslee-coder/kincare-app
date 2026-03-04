@@ -15,7 +15,9 @@ function getLogConsentAudit() {
 }
 
 const router = express.Router();
-router.use(authenticate);
+// NOTE: authenticate is applied per-route (not globally) because
+// the /respond/:token endpoints must be PUBLIC (care recipients
+// click email links without an account).
 
 // Multer for document uploads (PDF + images, 5MB max)
 const uploadDoc = multer({
@@ -40,12 +42,12 @@ async function getOwnedRecipient(db, recipientId, userId) {
 
 // ─── Helper: generate the attestation statement text ───
 function buildAttestationText(recipientName) {
-  return `I confirm that ${recipientName} is aware that I am arranging non-medical companion care services through inPlace on their behalf. I understand that ${recipientName} will be contacted directly to verify their awareness and consent before any caregiver visit is scheduled. I understand that misrepresenting this consent may result in account termination and potential legal liability.`;
+  return `I confirm that ${recipientName} is aware that I am arranging non-medical companion care services through inPlace on their behalf. I understand that ${recipientName} will be contacted directly by inPlace to verify their awareness and consent before any caregiver visit is scheduled. I understand that misrepresenting this consent may result in immediate account termination, referral to appropriate authorities, and potential legal liability under Virginia law.`;
 }
 
 // ─── GET /api/consent/:recipientId/status ───
 // Get full consent status for a care recipient
-router.get("/:recipientId/status", async (req, res) => {
+router.get("/:recipientId/status", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const recipient = await getOwnedRecipient(db, req.params.recipientId, req.user.id);
@@ -56,38 +58,38 @@ router.get("/:recipientId/status", async (req, res) => {
       "SELECT * FROM attestations WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1"
     ).get(req.params.recipientId);
 
-    // Get active verification attempt if exists
-    const verification = await db.prepare(
-      "SELECT * FROM verification_attempts WHERE care_recipient_id = ? AND status = 'pending' AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1"
+    // Get outreach record if exists
+    const outreach = await db.prepare(
+      "SELECT * FROM consent_outreach WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1"
     ).get(req.params.recipientId);
-
-    // Get most recent completed verification if no active one
-    const completedVerification = !verification ? await db.prepare(
-      "SELECT * FROM verification_attempts WHERE care_recipient_id = ? AND status = 'verified' ORDER BY verified_at DESC LIMIT 1"
-    ).get(req.params.recipientId) : null;
 
     res.json({
       consentStatus: recipient.consent_status,
       authorizationTier: recipient.authorization_tier,
       consentMethod: recipient.consent_method,
       consentVerifiedAt: recipient.consent_verified_at,
+      consentNotes: recipient.consent_notes,
+      recipientEmail: recipient.email,
+      recipientPhone: recipient.sms_phone,
+      bookingsPaused: !!recipient.bookings_paused,
       attestation: attestation ? {
         id: attestation.id,
         signatureName: attestation.signature_name,
         relationship: attestation.relationship_to_recipient,
         signedAt: attestation.signed_at,
+        adminStatus: attestation.admin_status || 'pending',
+        adminNotes: attestation.admin_notes,
       } : null,
-      verification: verification ? {
-        id: verification.id,
-        hasActiveCode: true,
-        expiresAt: verification.expires_at,
-        method: verification.verification_method,
-        failedAttempts: verification.failed_attempts || 0,
-      } : completedVerification ? {
-        id: completedVerification.id,
-        hasActiveCode: false,
-        verifiedAt: completedVerification.verified_at,
-        method: completedVerification.verification_method,
+      outreach: outreach ? {
+        id: outreach.id,
+        sentToEmail: outreach.sent_to_email,
+        sentToPhone: outreach.sent_to_phone,
+        outreachType: outreach.outreach_type,
+        recipientResponse: outreach.recipient_response,
+        recipientResponseNotes: outreach.recipient_response_notes,
+        respondedAt: outreach.responded_at,
+        expiresAt: outreach.expires_at,
+        isExpired: outreach.expires_at && new Date(outreach.expires_at) < new Date(),
       } : null,
     });
   } catch (err) {
@@ -96,14 +98,30 @@ router.get("/:recipientId/status", async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════
+// Tier 3 — Family Attestation + Direct Outreach + Admin Review
+// ═══════════════════════════════════════════════════════════════════════
+
 // ─── POST /api/consent/:recipientId/attest ───
 // Submit attestation for a tier3 care recipient
-router.post("/:recipientId/attest", async (req, res) => {
+// NOW ALSO collects care recipient contact info for direct outreach
+router.post("/:recipientId/attest", authenticate, async (req, res) => {
   try {
-    const { signatureName, relationshipToRecipient } = req.body;
+    const { signatureName, relationshipToRecipient, recipientEmail, recipientPhone } = req.body;
 
     if (!signatureName || !signatureName.trim()) {
       return res.status(400).json({ error: "Signature name is required" });
+    }
+
+    if (!relationshipToRecipient) {
+      return res.status(400).json({ error: "Please select your relationship to the care recipient" });
+    }
+
+    // Require at least one contact method for the care recipient
+    const hasEmail = recipientEmail && recipientEmail.trim();
+    const hasPhone = recipientPhone && recipientPhone.trim();
+    if (!hasEmail && !hasPhone) {
+      return res.status(400).json({ error: "Please provide an email address or phone number for the care recipient so we can verify their awareness." });
     }
 
     const db = await getDb();
@@ -114,8 +132,26 @@ router.post("/:recipientId/attest", async (req, res) => {
       return res.status(400).json({ error: "Attestation is only for tier 3 authorization" });
     }
 
-    if (recipient.consent_status !== "pending") {
-      return res.status(400).json({ error: `Attestation cannot be submitted — current status is '${recipient.consent_status}'` });
+    if (recipient.consent_status === "verified") {
+      return res.status(400).json({ error: "Consent is already verified" });
+    }
+
+    // Rate limiting: max 3 care recipients per family account
+    const recipientCount = await db.prepare(
+      "SELECT COUNT(*) as cnt FROM care_recipients WHERE family_user_id = ? AND authorization_tier = 'tier3'"
+    ).get(req.user.id);
+    if (recipientCount.cnt > 3) {
+      return res.status(400).json({ error: "You've reached the maximum number of care recipients. Please contact support for additional accounts." });
+    }
+
+    // Save care recipient contact info
+    if (hasEmail) {
+      await db.prepare("UPDATE care_recipients SET email = ?, updated_at = NOW() WHERE id = ?")
+        .run(recipientEmail.trim(), req.params.recipientId);
+    }
+    if (hasPhone) {
+      await db.prepare("UPDATE care_recipients SET sms_phone = ?, updated_at = NOW() WHERE id = ?")
+        .run(recipientPhone.trim(), req.params.recipientId);
     }
 
     const recipientName = `${recipient.first_name} ${recipient.last_name}`.trim();
@@ -123,9 +159,9 @@ router.post("/:recipientId/attest", async (req, res) => {
 
     const id = uuid();
     await db.prepare(`
-      INSERT INTO attestations (id, care_recipient_id, attesting_user_id, relationship_to_recipient, attestation_text, signature_name)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, req.params.recipientId, req.user.id, relationshipToRecipient || null, attestationText, signatureName.trim());
+      INSERT INTO attestations (id, care_recipient_id, attesting_user_id, relationship_to_recipient, attestation_text, signature_name, admin_status)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending')
+    `).run(id, req.params.recipientId, req.user.id, relationshipToRecipient, attestationText, signatureName.trim());
 
     // Update consent status to 'attested'
     await db.prepare(
@@ -140,8 +176,8 @@ router.post("/:recipientId/attest", async (req, res) => {
       await logConsentAudit(db, {
         careRecipientId: req.params.recipientId, actorId: req.user.id, actorRole: "family",
         eventType: "attestation_submitted",
-        description: `${uName} submitted attestation for ${recipientName} (relationship: ${relationshipToRecipient || 'not specified'})`,
-        metadata: { attestationId: id, signatureName: signatureName.trim(), relationship: relationshipToRecipient },
+        description: `${uName} submitted attestation for ${recipientName} (relationship: ${relationshipToRecipient})`,
+        metadata: { attestationId: id, signatureName: signatureName.trim(), relationship: relationshipToRecipient, recipientContactProvided: { email: !!hasEmail, phone: !!hasPhone } },
       });
     } catch (auditErr) { console.error("Attestation audit log error:", auditErr.message); }
 
@@ -152,6 +188,7 @@ router.post("/:recipientId/attest", async (req, res) => {
         relationship: relationshipToRecipient,
         attestationText,
         signedAt: new Date().toISOString(),
+        adminStatus: "pending",
       },
       consentStatus: "attested",
     });
@@ -161,138 +198,274 @@ router.post("/:recipientId/attest", async (req, res) => {
   }
 });
 
-// ─── POST /api/consent/:recipientId/generate-code ───
-// Generate a 6-digit verification code
-router.post("/:recipientId/generate-code", async (req, res) => {
+// ─── POST /api/consent/:recipientId/send-outreach ───
+// Send a verification email/notification directly to the care recipient
+// This replaces the old generate-code endpoint
+router.post("/:recipientId/send-outreach", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const recipient = await getOwnedRecipient(db, req.params.recipientId, req.user.id);
     if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
 
     if (recipient.consent_status !== "attested") {
-      return res.status(400).json({ error: "Attestation must be completed before generating a verification code" });
+      return res.status(400).json({ error: "Attestation must be completed before sending outreach" });
     }
 
-    // Invalidate any existing pending codes for this recipient
-    await db.prepare(
-      "UPDATE verification_attempts SET status = 'expired' WHERE care_recipient_id = ? AND status = 'pending'"
-    ).run(req.params.recipientId);
+    const recipientEmail = recipient.email;
+    if (!recipientEmail) {
+      return res.status(400).json({ error: "No email address on file for the care recipient. Please provide one during attestation." });
+    }
 
-    // Generate cryptographically random 6-digit code
-    const code = String(crypto.randomInt(100000, 999999));
-
-    // Get the attestation ID
+    // Get the attestation
     const attestation = await db.prepare(
       "SELECT id FROM attestations WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1"
     ).get(req.params.recipientId);
 
-    // Store in verification_attempts (72-hour expiry)
-    const id = uuid();
-    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
-    await db.prepare(`
-      INSERT INTO verification_attempts (id, attestation_id, care_recipient_id, verification_code, verification_method, status, expires_at)
-      VALUES (?, ?, ?, ?, 'code_entry', 'pending', ?)
-    `).run(id, attestation?.id || null, req.params.recipientId, code, expiresAt);
+    // Generate a unique outreach token (for the response page)
+    const outreachToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
 
-    res.json({ code, expiresAt, verificationId: id });
-  } catch (err) {
-    console.error("Generate verification code error:", err);
-    res.status(500).json({ error: "Failed to generate verification code" });
-  }
-});
-
-// ─── POST /api/consent/:recipientId/verify-code ───
-// Verify a submitted code
-router.post("/:recipientId/verify-code", async (req, res) => {
-  try {
-    const { code } = req.body;
-
-    if (!code || !String(code).trim()) {
-      return res.status(400).json({ error: "Verification code is required" });
-    }
-
-    const db = await getDb();
-    const recipient = await getOwnedRecipient(db, req.params.recipientId, req.user.id);
-    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
-
-    // Find the active (pending, unexpired) verification attempt
-    const attempt = await db.prepare(
-      "SELECT * FROM verification_attempts WHERE care_recipient_id = ? AND status = 'pending' AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1"
-    ).get(req.params.recipientId);
-
-    if (!attempt) {
-      return res.status(400).json({ error: "No active verification code. Please generate a new one." });
-    }
-
-    // Check failed attempts (max 5)
-    const failedAttempts = attempt.failed_attempts || 0;
-    if (failedAttempts >= 5) {
-      // Auto-expire this code
-      await db.prepare(
-        "UPDATE verification_attempts SET status = 'expired' WHERE id = ?"
-      ).run(attempt.id);
-      return res.status(400).json({ error: "Too many failed attempts. Please generate a new code.", attemptsRemaining: 0 });
-    }
-
-    // Check code match
-    if (String(code).trim() !== attempt.verification_code) {
-      // Increment failed attempts
-      const newFailed = failedAttempts + 1;
-      await db.prepare(
-        "UPDATE verification_attempts SET failed_attempts = ?, attempted_at = NOW() WHERE id = ?"
-      ).run(newFailed, attempt.id);
-
-      const remaining = 5 - newFailed;
-      if (remaining <= 0) {
-        await db.prepare(
-          "UPDATE verification_attempts SET status = 'expired' WHERE id = ?"
-        ).run(attempt.id);
-      }
-
-      return res.status(400).json({
-        error: "Incorrect verification code",
-        attemptsRemaining: Math.max(0, remaining),
-      });
-    }
-
-    // Code matches — mark verified
+    // Invalidate any existing pending outreach for this recipient
     await db.prepare(
-      "UPDATE verification_attempts SET status = 'verified', verified_at = NOW(), attempted_at = NOW() WHERE id = ?"
-    ).run(attempt.id);
+      "UPDATE consent_outreach SET expires_at = NOW() WHERE care_recipient_id = ? AND recipient_response IS NULL AND expires_at > NOW()"
+    ).run(req.params.recipientId);
 
-    // Update care recipient consent
+    const id = uuid();
     await db.prepare(`
-      UPDATE care_recipients SET
-        consent_status = 'verified',
-        consent_method = 'attestation_code',
-        consent_verified_at = NOW(),
-        updated_at = NOW()
-      WHERE id = ?
-    `).run(req.params.recipientId);
+      INSERT INTO consent_outreach (id, care_recipient_id, attestation_id, sent_to_email, outreach_type, outreach_token, expires_at)
+      VALUES (?, ?, ?, ?, 'email', ?, ?)
+    `).run(id, req.params.recipientId, attestation?.id || null, recipientEmail, outreachToken, expiresAt);
+
+    // Get family member info for the email
+    const familyUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const familyName = familyUser ? `${familyUser.first_name} ${familyUser.last_name}`.trim() : "A family member";
+    const recipientFirstName = recipient.first_name || "there";
+    const recipientName = `${recipient.first_name} ${recipient.last_name}`.trim();
+
+    // Get relationship from attestation
+    const fullAttestation = await db.prepare(
+      "SELECT relationship_to_recipient FROM attestations WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(req.params.recipientId);
+    const relationship = fullAttestation?.relationship_to_recipient || "family member";
+
+    // Send branded email to the care recipient
+    const { sendEmail, brandedHtml } = require("../utils/email");
+    const baseUrl = process.env.APP_URL || "https://yourinplace.com";
+    const responseUrl = `${baseUrl}/?consent-response=${outreachToken}`;
+
+    const emailHtml = brandedHtml({
+      title: "InPlace — Care Arrangement",
+      greeting: `Hi ${recipientFirstName},`,
+      body: `Your ${relationship.toLowerCase()}, <strong>${familyName}</strong>, has arranged non-medical companion care for you through InPlace.<br><br>` +
+        `<strong>What is InPlace?</strong><br>` +
+        `InPlace connects families with trusted, local caregivers who provide companionship, help around the house, and other non-medical assistance. ` +
+        `This is <em>not</em> medical care — it's friendly, professional help with daily living.<br><br>` +
+        `<strong>What happens next?</strong><br>` +
+        `If you're comfortable with this arrangement, please click the button below to let us know. ` +
+        `If you have questions or concerns, you can also let us know and someone from our team will reach out to you personally.<br><br>` +
+        `You can also simply ignore this email — no caregiver will visit without your knowledge.`,
+      ctaUrl: responseUrl,
+      ctaText: "Respond to This Arrangement",
+      footnote: `This email was sent because ${familyName} indicated you are aware of this care arrangement. ` +
+        `If you did not expect this email, please ignore it or <a href="${responseUrl}">let us know</a>. ` +
+        `Questions? Reply to this email or contact us at support@yourinplace.com.`,
+    });
+
+    const emailResult = await sendEmail({
+      to: recipientEmail,
+      subject: `${familyName} has arranged care for you through InPlace`,
+      html: emailHtml,
+    });
 
     // Audit log
     try {
       const logConsentAudit = getLogConsentAudit();
-      const recipientName = `${recipient.first_name} ${recipient.last_name}`.trim();
-      await logConsentAudit(db, {
-        careRecipientId: req.params.recipientId, actorId: req.user.id, actorRole: "family",
-        eventType: "code_verified",
-        description: `Verification code confirmed for ${recipientName}. Consent verified via attestation + code.`,
-        metadata: { verificationAttemptId: attempt.id },
-      });
       await logConsentAudit(db, {
         careRecipientId: req.params.recipientId, actorId: "system", actorRole: "system",
-        eventType: "consent_granted",
-        description: `Consent granted for ${recipientName} via attestation + code verification`,
-        metadata: { method: "attestation_code", tier: recipient.authorization_tier },
+        eventType: "outreach_sent",
+        description: `Verification email sent to ${recipientEmail} for ${recipientName}`,
+        metadata: { outreachId: id, sentTo: recipientEmail, emailSuccess: emailResult.success },
       });
-    } catch (auditErr) { console.error("Verify-code audit log error:", auditErr.message); }
+    } catch (auditErr) { console.error("Outreach audit log error:", auditErr.message); }
 
-    res.json({ verified: true, consentStatus: "verified" });
+    // Notify admin (Pete) that a new tier 3 attestation needs review
+    try {
+      const adminUsers = await db.prepare("SELECT id FROM users WHERE is_admin = 1").all();
+      for (const admin of adminUsers) {
+        await db.prepare(`
+          INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
+          VALUES (?, ?, 'consent_review_needed', 'Consent Review Needed', ?, ?, NOW())
+        `).run(
+          uuid(), admin.id,
+          `${familyName} submitted a Tier 3 attestation for ${recipientName}. Outreach email sent to ${recipientEmail}. Please review in the Admin panel.`,
+          JSON.stringify({ recipientId: req.params.recipientId, attestationId: attestation?.id, outreachId: id })
+        );
+      }
+    } catch (notifyErr) { console.error("Admin notification error:", notifyErr.message); }
+
+    res.json({
+      outreach: {
+        id,
+        sentToEmail: recipientEmail,
+        outreachType: "email",
+        expiresAt,
+        emailSent: emailResult.success,
+      },
+      message: emailResult.success
+        ? `A verification email has been sent to ${recipientEmail}. Our team will review your attestation and their response.`
+        : `We were unable to send the verification email right now, but your attestation has been submitted for admin review.`,
+    });
   } catch (err) {
-    console.error("Verify code error:", err);
-    res.status(500).json({ error: "Failed to verify code" });
+    console.error("Send outreach error:", err);
+    res.status(500).json({ error: "Failed to send outreach" });
   }
+});
+
+// ─── GET /api/consent/respond/:token ───
+// PUBLIC endpoint (no auth) — care recipient responds to outreach
+// This is hit from the email link
+router.get("/respond/:token", async (req, res) => {
+  try {
+    const db = await getDb();
+    const outreach = await db.prepare(
+      "SELECT co.*, cr.first_name, cr.last_name FROM consent_outreach co JOIN care_recipients cr ON cr.id = co.care_recipient_id WHERE co.outreach_token = ?"
+    ).get(req.params.token);
+
+    if (!outreach) {
+      return res.status(404).json({ error: "This verification link is not valid." });
+    }
+
+    if (outreach.expires_at && new Date(outreach.expires_at) < new Date()) {
+      return res.json({ expired: true, recipientName: outreach.first_name, message: "This verification link has expired. Please ask your family member to send a new one." });
+    }
+
+    if (outreach.recipient_response) {
+      return res.json({ alreadyResponded: true, recipientName: outreach.first_name, response: outreach.recipient_response });
+    }
+
+    // Get family member info
+    const attestation = await db.prepare(
+      "SELECT a.*, u.first_name as family_first, u.last_name as family_last, a.relationship_to_recipient FROM attestations a JOIN users u ON u.id = a.attesting_user_id WHERE a.id = ?"
+    ).get(outreach.attestation_id);
+
+    res.json({
+      valid: true,
+      recipientName: outreach.first_name,
+      familyMemberName: attestation ? `${attestation.family_first} ${attestation.family_last}`.trim() : "A family member",
+      relationship: attestation?.relationship_to_recipient || "family member",
+    });
+  } catch (err) {
+    console.error("Consent respond (GET) error:", err);
+    res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
+// ─── POST /api/consent/respond/:token ───
+// PUBLIC endpoint (no auth) — care recipient submits their response
+router.post("/respond/:token", async (req, res) => {
+  try {
+    const { response, notes } = req.body;
+
+    if (!response || !["yes_aware", "have_questions", "did_not_authorize"].includes(response)) {
+      return res.status(400).json({ error: "Please select a response" });
+    }
+
+    const db = await getDb();
+    const outreach = await db.prepare(
+      "SELECT * FROM consent_outreach WHERE outreach_token = ?"
+    ).get(req.params.token);
+
+    if (!outreach) {
+      return res.status(404).json({ error: "This verification link is not valid." });
+    }
+
+    if (outreach.expires_at && new Date(outreach.expires_at) < new Date()) {
+      return res.status(400).json({ error: "This verification link has expired." });
+    }
+
+    if (outreach.recipient_response) {
+      return res.status(400).json({ error: "You've already responded to this verification." });
+    }
+
+    // Record the response
+    await db.prepare(`
+      UPDATE consent_outreach SET recipient_response = ?, recipient_response_notes = ?, responded_at = NOW()
+      WHERE id = ?
+    `).run(response, notes || null, outreach.id);
+
+    // Audit log
+    try {
+      const logConsentAudit = getLogConsentAudit();
+      const recipient = await db.prepare("SELECT first_name, last_name FROM care_recipients WHERE id = ?").get(outreach.care_recipient_id);
+      const rName = recipient ? `${recipient.first_name} ${recipient.last_name}`.trim() : "Unknown";
+      const responseLabels = { yes_aware: "Yes, I'm aware", have_questions: "I have questions", did_not_authorize: "I did not authorize this" };
+      await logConsentAudit(db, {
+        careRecipientId: outreach.care_recipient_id, actorId: "care_recipient", actorRole: "care_recipient",
+        eventType: "outreach_response",
+        description: `${rName} responded to consent outreach: "${responseLabels[response]}"${notes ? ` — "${notes}"` : ""}`,
+        metadata: { outreachId: outreach.id, response, notes },
+      });
+    } catch (auditErr) { console.error("Outreach response audit error:", auditErr.message); }
+
+    // Notify admin of the response
+    try {
+      const recipient = await db.prepare("SELECT first_name, last_name FROM care_recipients WHERE id = ?").get(outreach.care_recipient_id);
+      const rName = recipient ? `${recipient.first_name} ${recipient.last_name}`.trim() : "Unknown";
+      const responseLabels = { yes_aware: "Yes, I'm aware", have_questions: "I have questions", did_not_authorize: "I did not authorize this" };
+      const adminUsers = await db.prepare("SELECT id FROM users WHERE is_admin = 1").all();
+      const urgency = response === "did_not_authorize" ? " ⚠️ URGENT:" : "";
+      for (const admin of adminUsers) {
+        await db.prepare(`
+          INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
+          VALUES (?, ?, 'consent_response_received', 'Consent Response Received', ?, ?, NOW())
+        `).run(
+          uuid(), admin.id,
+          `${urgency} ${rName} responded to consent outreach: "${responseLabels[response]}"${notes ? ` — Notes: "${notes}"` : ""}`,
+          JSON.stringify({ recipientId: outreach.care_recipient_id, outreachId: outreach.id, response })
+        );
+      }
+
+      // If "did_not_authorize" — immediately pause bookings and alert
+      if (response === "did_not_authorize") {
+        await db.prepare(`
+          UPDATE care_recipients SET bookings_paused = 1, bookings_paused_reason = 'Care recipient reported they did not authorize this arrangement', updated_at = NOW()
+          WHERE id = ?
+        `).run(outreach.care_recipient_id);
+      }
+    } catch (notifyErr) { console.error("Outreach response notification error:", notifyErr.message); }
+
+    const responseMessages = {
+      yes_aware: "Thank you for confirming! Your family member can now proceed with arranging care for you. If you ever have questions, don't hesitate to reach out.",
+      have_questions: "Thank you for letting us know. Someone from our team will reach out to you shortly to answer your questions.",
+      did_not_authorize: "Thank you for letting us know. We take this seriously and will investigate. No caregiver will be sent without your authorization.",
+    };
+
+    res.json({ success: true, message: responseMessages[response] });
+  } catch (err) {
+    console.error("Consent respond (POST) error:", err);
+    res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// LEGACY: Keep old generate-code and verify-code endpoints for backward
+// compatibility but mark them as deprecated
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── POST /api/consent/:recipientId/generate-code ─── (DEPRECATED)
+router.post("/:recipientId/generate-code", authenticate, async (req, res) => {
+  // Redirect to new outreach flow
+  return res.status(410).json({
+    error: "The code verification flow has been replaced. Please use the new outreach-based verification.",
+    redirect: "send-outreach",
+  });
+});
+
+// ─── POST /api/consent/:recipientId/verify-code ─── (DEPRECATED)
+router.post("/:recipientId/verify-code", authenticate, async (req, res) => {
+  return res.status(410).json({
+    error: "The code verification flow has been replaced. Consent is now verified via direct outreach to the care recipient and admin review.",
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -303,7 +476,7 @@ const VALID_DOC_TYPES = ["POA", "Legal_Guardianship", "Court_Order", "Other"];
 
 // ─── POST /api/consent/:recipientId/documents ───
 // Upload an authorization document (tier2)
-router.post("/:recipientId/documents", uploadDoc.single("document"), async (req, res) => {
+router.post("/:recipientId/documents", authenticate, uploadDoc.single("document"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded. Please select a PDF or image file." });
@@ -397,7 +570,7 @@ router.post("/:recipientId/documents", uploadDoc.single("document"), async (req,
 
 // ─── GET /api/consent/:recipientId/documents ───
 // List documents for a care recipient (metadata only, no file_data)
-router.get("/:recipientId/documents", async (req, res) => {
+router.get("/:recipientId/documents", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const recipient = await getOwnedRecipient(db, req.params.recipientId, req.user.id);
@@ -419,7 +592,7 @@ router.get("/:recipientId/documents", async (req, res) => {
 
 // ─── GET /api/consent/:recipientId/documents/:docId/download ───
 // Download a document (binary response)
-router.get("/:recipientId/documents/:docId/download", async (req, res) => {
+router.get("/:recipientId/documents/:docId/download", authenticate, async (req, res) => {
   try {
     const db = await getDb();
 
@@ -454,7 +627,7 @@ router.get("/:recipientId/documents/:docId/download", async (req, res) => {
 
 // ─── DELETE /api/consent/:recipientId/documents/:docId ───
 // Delete a document (only if not yet approved)
-router.delete("/:recipientId/documents/:docId", async (req, res) => {
+router.delete("/:recipientId/documents/:docId", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const recipient = await getOwnedRecipient(db, req.params.recipientId, req.user.id);

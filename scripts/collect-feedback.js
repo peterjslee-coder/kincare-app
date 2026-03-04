@@ -59,10 +59,21 @@ async function getAuthHeaders() {
   if (ADMIN_API_KEY) {
     return { "X-Admin-API-Key": ADMIN_API_KEY };
   }
+
+  // Try email/password login as fallback
   const loginRes = await request(`${BASE_URL}/api/auth/login`, {
     method: "POST",
     body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
   });
+
+  // 2FA blocks automated login — fail fast with clear instructions
+  if (loginRes.data && loginRes.data.requires2FA) {
+    console.error("❌ Admin account requires 2FA — can't authenticate without ADMIN_API_KEY.\n");
+    console.error("   Fix: Add ADMIN_API_KEY to your .env file (get it from Railway env vars):");
+    console.error("   echo 'ADMIN_API_KEY=your-key-here' >> .env\n");
+    process.exit(1);
+  }
+
   if (loginRes.status !== 200 || !loginRes.data.token) {
     console.error("❌ Login failed:", loginRes.data);
     console.error("💡 Tip: Set ADMIN_API_KEY env var to bypass login/2FA");

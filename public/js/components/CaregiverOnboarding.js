@@ -1443,30 +1443,23 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               </div>
             </div>
 
-            {!bgCheckPaid && (
-              <div style={{
-                padding: '14px', background: '#fef2f2', borderRadius: '8px', marginBottom: '16px',
-                border: '1px solid #fecaca',
-              }}>
-                <p style={{ fontSize: '14px', color: '#dc2626', margin: 0, fontWeight: 600 }}>
-                  Background check payment not yet completed
-                </p>
-                <p style={{ fontSize: '13px', color: '#b91c1c', margin: '6px 0 0', lineHeight: '1.5' }}>
-                  You'll need to complete your $30 background check payment from your dashboard before you can view available work or accept care requests.
-                </p>
-              </div>
-            )}
-
             <div style={{ padding: '14px', background: '#fff8f0', borderRadius: '8px', marginBottom: '16px', border: '1px solid #ffe0c0' }}>
               <p style={{ fontSize: '13px', color: '#b45309', margin: 0, lineHeight: '1.5' }}>
                 <strong>What happens next:</strong>
               </p>
               <ul style={{ fontSize: '13px', color: '#b45309', margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
                 <li>Complete your <strong>First Steps</strong> checklist on your dashboard</li>
-                <li>Set your rates, care preferences, availability, and connect Stripe</li>
-                <li>Pay for your background check ($30) to unlock job listings</li>
-                <li>Once everything is complete, you can start accepting care requests!</li>
+                <li>Set your rates, care preferences, and availability</li>
+                <li>Payment setup and background checks will be available soon from your dashboard</li>
+                <li>Once your profile is complete, you can start connecting with families!</li>
               </ul>
+            </div>
+
+            <div style={{ padding: '14px', background: '#e8f5e9', borderRadius: '8px', marginBottom: '16px', border: '1px solid #c8e6c9' }}>
+              <p style={{ fontSize: '13px', color: '#2e7d32', margin: 0, lineHeight: '1.5' }}>
+                As an independent contractor (1099), you set your own schedule, rates, and choose which care requests to accept.
+                InPlace connects you with families — you're your own boss.
+              </p>
             </div>
 
             <button onClick={handleComplete} style={{

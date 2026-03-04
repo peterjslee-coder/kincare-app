@@ -508,6 +508,22 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               </div>
             )}
           </div>
+        ) : Object.values(carePrefs).filter(v => v > 0).length >= 3 ? (
+          <div style={{ padding: '12px 0' }}>
+            <p style={{ fontSize: 13, color: '#555', margin: '0 0 12px', lineHeight: 1.5 }}>
+              Care preferences saved. Generate a summary that caregivers can review before visiting {profile.first_name}.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={generateAISummary} disabled={generatingAI} style={{
+                padding: '8px 16px', borderRadius: 8, border: 'none',
+                background: '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 13, cursor: generatingAI ? 'wait' : 'pointer',
+              }}>{'\u2728'} Generate Care Summary</button>
+              <button onClick={() => { setPrefsExpanded(true); }} style={{
+                padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc',
+                background: '#fff', color: '#666', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              }}>Edit Preferences</button>
+            </div>
+          </div>
         ) : (
           <div style={{ padding: '12px 0' }}>
             <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>

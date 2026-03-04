@@ -549,6 +549,39 @@ async function initializeDatabase() {
        CASE document_type WHEN 'dl_front' THEN 'DL_Front' WHEN 'dl_back' THEN 'DL_Back' WHEN 'drivers_license' THEN 'DL_Front' WHEN 'certification' THEN 'Other_Cert' ELSE 'Other' END,
        file_data, file_name, 0, 'image/jpeg', 'pending', created_at, created_at
      FROM caregiver_documents cd WHERE id NOT IN (SELECT id FROM verified_documents) AND id IS NOT NULL`,
+    // v1.37.0 — Consent redesign: care recipient email + outreach tracking
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS email TEXT`,
+    // v1.37.0 — Consent outreach: track what was sent to care recipient and their response
+    `CREATE TABLE IF NOT EXISTS consent_outreach (
+      id TEXT PRIMARY KEY,
+      care_recipient_id TEXT NOT NULL,
+      attestation_id TEXT,
+      sent_to_email TEXT,
+      sent_to_phone TEXT,
+      outreach_type TEXT DEFAULT 'email',
+      outreach_token TEXT UNIQUE,
+      recipient_response TEXT,
+      recipient_response_notes TEXT,
+      responded_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_outreach_recipient ON consent_outreach(care_recipient_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_outreach_token ON consent_outreach(outreach_token)`,
+    // v1.37.0 — Admin review fields on attestations
+    `ALTER TABLE attestations ADD COLUMN IF NOT EXISTS admin_reviewed_by TEXT`,
+    `ALTER TABLE attestations ADD COLUMN IF NOT EXISTS admin_reviewed_at TIMESTAMPTZ`,
+    `ALTER TABLE attestations ADD COLUMN IF NOT EXISTS admin_notes TEXT`,
+    `ALTER TABLE attestations ADD COLUMN IF NOT EXISTS admin_status TEXT DEFAULT 'pending'`,
+    // v1.37.0 — Consent notes on care_recipients (admin rejection reason, etc.)
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS consent_notes TEXT`,
+    // v1.37.0 — First-visit confirmation: add booking_paused flag for "no"/"unable" responses
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS bookings_paused INTEGER DEFAULT 0`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS bookings_paused_reason TEXT`,
+    // v1.37.0 — Caregiver production readiness: admin-managed background check override
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_admin_approved INTEGER DEFAULT 0`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_admin_approved_by TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_admin_approved_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
