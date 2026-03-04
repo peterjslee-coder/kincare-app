@@ -587,6 +587,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
         // Care teams linked to this care recipient
         const teams = await tx.prepare("SELECT id FROM care_teams WHERE care_recipient_id = ?").all(cr.id);
         for (const t of teams) {
+          await tx.prepare("UPDATE conversations SET care_team_id = NULL WHERE care_team_id = ?").run(t.id);
           await tx.prepare("DELETE FROM care_team_invites WHERE care_team_id = ?").run(t.id);
           await tx.prepare("DELETE FROM care_team_members WHERE care_team_id = ?").run(t.id);
         }
