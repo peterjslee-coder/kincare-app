@@ -872,6 +872,7 @@ const App = () => {
         { id: 'recipients', icon: '👥', label: 'Recipients' },
       ]},
       { id: 'care-team', icon: '👪', label: 'Care Team' },
+      { id: 'documents', icon: '📄', label: 'Documents' },
       { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
       { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
@@ -911,6 +912,7 @@ const App = () => {
     if (currentPage === 'find-work') return <FindWork key={pageKey} />;
     if (currentPage === 'schedule') return <Schedule key={pageKey} />;
     if (currentPage === 'caregivers') return <Caregivers key={pageKey} />;
+    if (currentPage === 'documents') return <Documents key={pageKey} onNavigate={setCurrentPage} />;
     if (currentPage === 'analytics') return <Analytics key={pageKey} />;
     if (currentPage === 'activity') return <ActivityFeed key={pageKey} />;
     if (currentPage === 'recipients') return <CareRecipients key={pageKey} />;
