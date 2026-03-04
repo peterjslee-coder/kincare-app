@@ -40,6 +40,42 @@ const uploadDoc = multer({
   },
 });
 
+// ─── Authorization helper: verify user can access documents for an entity ───
+async function canAccessOwner(db, userId, userRole, ownerType, ownerId) {
+  if (userRole === "admin") return true;
+
+  if (ownerType === "care_recipient") {
+    // Direct owner?
+    const cr = await db.prepare("SELECT family_user_id, linked_user_id FROM care_recipients WHERE id = ?").get(ownerId);
+    if (!cr) return false;
+    if (cr.family_user_id === userId) return true;
+    if (cr.linked_user_id === userId) return true;
+    // Shared via care_recipient_shares?
+    const share = await db.prepare("SELECT id FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?").get(ownerId, userId);
+    if (share) return true;
+    // Care team member?
+    const teamMember = await db.prepare(`
+      SELECT ctm.id FROM care_team_members ctm
+      JOIN care_teams ct ON ct.id = ctm.care_team_id
+      WHERE ct.care_recipient_id = ? AND ctm.user_id = ? AND ctm.status = 'active'
+    `).get(ownerId, userId);
+    if (teamMember) return true;
+    return false;
+  }
+
+  if (ownerType === "caregiver") {
+    const cp = await db.prepare("SELECT user_id FROM caregiver_profiles WHERE id = ?").get(ownerId);
+    if (!cp) return false;
+    return cp.user_id === userId;
+  }
+
+  if (ownerType === "user") {
+    return ownerId === userId;
+  }
+
+  return false;
+}
+
 // ─── Audit log helper ───
 async function logConsentAudit(db, { careRecipientId, actorId, actorRole, eventType, description, metadata }) {
   try {
@@ -74,23 +110,9 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
 
     const db = await getDb();
 
-    // Verify ownership: user must own the entity they're uploading for
-    if (owner_type === "care_recipient") {
-      const cr = await db.prepare("SELECT id, family_user_id, first_name, last_name FROM care_recipients WHERE id = ?").get(owner_id);
-      if (!cr) return res.status(404).json({ error: "Care recipient not found" });
-      if (cr.family_user_id !== req.user.id && req.user.role !== "admin") {
-        return res.status(403).json({ error: "You can only upload documents for your own care recipients" });
-      }
-    } else if (owner_type === "caregiver") {
-      const cp = await db.prepare("SELECT id, user_id FROM caregiver_profiles WHERE id = ?").get(owner_id);
-      if (!cp) return res.status(404).json({ error: "Caregiver profile not found" });
-      if (cp.user_id !== req.user.id && req.user.role !== "admin") {
-        return res.status(403).json({ error: "You can only upload documents for your own profile" });
-      }
-    } else if (owner_type === "user") {
-      if (owner_id !== req.user.id && req.user.role !== "admin") {
-        return res.status(403).json({ error: "You can only upload documents for yourself" });
-      }
+    // Verify ownership: user must have access to the entity they're uploading for
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, owner_type, owner_id))) {
+      return res.status(403).json({ error: "You do not have access to upload documents for this entity" });
     }
 
     // Convert to base64
@@ -156,7 +178,16 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
       });
 
       // AI classification audit entry
-      if (!aiResult.skipped && !aiResult.error) {
+      if (aiResult.error) {
+        await logConsentAudit(db, {
+          careRecipientId: owner_id,
+          actorId: "system",
+          actorRole: "ai",
+          eventType: "document_classified",
+          description: `AI classification failed for ${document_type.replace(/_/g, " ")} document: ${aiResult.error}`,
+          metadata: { documentId: docId, error: aiResult.error },
+        });
+      } else if (!aiResult.skipped) {
         await logConsentAudit(db, {
           careRecipientId: owner_id,
           actorId: "system",
@@ -201,6 +232,11 @@ router.get("/owner/:ownerType/:ownerId", authenticate, async (req, res) => {
     const { category, status } = req.query;
     const db = await getDb();
 
+    // Authorization check
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, ownerType, ownerId))) {
+      return res.status(403).json({ error: "You do not have access to these documents" });
+    }
+
     let sql = `
       SELECT id, owner_type, owner_id, uploaded_by, category, document_type,
              file_name, file_size, mime_type, status, ai_classification,
@@ -218,12 +254,25 @@ router.get("/owner/:ownerType/:ownerId", authenticate, async (req, res) => {
 
     const docs = await db.prepare(sql).all(...params);
 
-    // Parse AI classification JSON for each doc
-    const parsed = docs.map(d => ({
-      ...d,
-      ai_classification: d.ai_classification ? JSON.parse(d.ai_classification) : null,
-      metadata: d.metadata ? JSON.parse(d.metadata) : null,
-    }));
+    // Parse AI classification JSON, flag expired documents
+    const now = new Date();
+    const expiredIds = [];
+    const parsed = docs.map(d => {
+      const isExpired = d.expires_at && new Date(d.expires_at) < now && d.status === 'approved';
+      if (isExpired) expiredIds.push(d.id);
+      return {
+        ...d,
+        status: isExpired ? 'expired' : d.status,
+        ai_classification: d.ai_classification ? JSON.parse(d.ai_classification) : null,
+        metadata: d.metadata ? JSON.parse(d.metadata) : null,
+      };
+    });
+
+    // Lazily update expired docs in background (non-blocking)
+    if (expiredIds.length > 0) {
+      const placeholders = expiredIds.map(() => '?').join(',');
+      db.prepare(`UPDATE verified_documents SET status = 'expired', updated_at = NOW() WHERE id IN (${placeholders})`).run(...expiredIds).catch(e => console.error("Expire update error:", e));
+    }
 
     res.json({ documents: parsed });
   } catch (err) {
@@ -248,6 +297,11 @@ router.get("/:docId", authenticate, async (req, res) => {
 
     if (!doc) return res.status(404).json({ error: "Document not found" });
 
+    // Authorization check
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id))) {
+      return res.status(403).json({ error: "You do not have access to this document" });
+    }
+
     res.json({
       document: {
         ...doc,
@@ -267,8 +321,13 @@ router.get("/:docId", authenticate, async (req, res) => {
 router.get("/:docId/download", authenticate, async (req, res) => {
   try {
     const db = await getDb();
-    const doc = await db.prepare("SELECT file_data, file_name, mime_type FROM verified_documents WHERE id = ?").get(req.params.docId);
+    const doc = await db.prepare("SELECT file_data, file_name, mime_type, owner_type, owner_id FROM verified_documents WHERE id = ?").get(req.params.docId);
     if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    // Authorization check
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id))) {
+      return res.status(403).json({ error: "You do not have access to this document" });
+    }
 
     const base64Data = doc.file_data.replace(/^data:[^;]+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
@@ -368,6 +427,11 @@ router.get("/audit/:recipientId", authenticate, async (req, res) => {
     const db = await getDb();
     const { event_type } = req.query;
     const recipientId = req.params.recipientId;
+
+    // Authorization check — must have access to this care recipient
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, "care_recipient", recipientId))) {
+      return res.status(403).json({ error: "You do not have access to this care recipient's audit trail" });
+    }
 
     // Fetch consent status from care_recipients
     const recipient = await db.prepare(`

@@ -5,6 +5,15 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 
+// Lazy-loaded to avoid circular dependency (documents.js may require consent patterns)
+let _logConsentAudit;
+function getLogConsentAudit() {
+  if (!_logConsentAudit) {
+    _logConsentAudit = require("./documents").logConsentAudit;
+  }
+  return _logConsentAudit;
+}
+
 const router = express.Router();
 router.use(authenticate);
 
@@ -125,7 +134,7 @@ router.post("/:recipientId/attest", async (req, res) => {
 
     // Audit log
     try {
-      const { logConsentAudit } = require("./documents");
+      const logConsentAudit = getLogConsentAudit();
       const user = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
       const uName = user ? `${user.first_name} ${user.last_name}`.trim() : "Unknown";
       await logConsentAudit(db, {
@@ -263,7 +272,7 @@ router.post("/:recipientId/verify-code", async (req, res) => {
 
     // Audit log
     try {
-      const { logConsentAudit } = require("./documents");
+      const logConsentAudit = getLogConsentAudit();
       const recipientName = `${recipient.first_name} ${recipient.last_name}`.trim();
       await logConsentAudit(db, {
         careRecipientId: req.params.recipientId, actorId: req.user.id, actorRole: "family",
@@ -326,7 +335,7 @@ router.post("/:recipientId/documents", uploadDoc.single("document"), async (req,
     let aiResult = null;
     try {
       const { classifyDocument } = require("../utils/documentAI");
-      const { logConsentAudit } = require("./documents");
+      const logConsentAudit = getLogConsentAudit();
       const vDocId = uuid();
 
       await db.prepare(`

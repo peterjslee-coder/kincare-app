@@ -179,12 +179,21 @@ router.post("/request", async (req, res) => {
   if (!recipient) return res.status(404).json({ error: "Care recipient record not found" });
 
   // ─── Consent gate: block booking if consent not verified ───
-  const crFull = await db.prepare("SELECT consent_status, authorization_tier FROM care_recipients WHERE id = ?").get(recipient.id);
+  const crFull = await db.prepare("SELECT consent_status, authorization_tier, permission_tier FROM care_recipients WHERE id = ?").get(recipient.id);
   if (crFull && crFull.consent_status && crFull.consent_status !== 'verified') {
     return res.status(403).json({
       error: 'Care authorization must be verified before booking',
       consentStatus: crFull.consent_status,
       authorizationTier: crFull.authorization_tier,
+    });
+  }
+
+  // ─── Permission tier gate: block managed users, flag collaborative ───
+  const permTier = crFull?.permission_tier || 'full';
+  if (permTier === 'managed') {
+    return res.status(403).json({
+      error: 'Your account is managed by your care team. Contact them to request care.',
+      permissionTier: 'managed',
     });
   }
 
@@ -402,16 +411,39 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
 
   const db = await getDb();
 
-  // Verify the care recipient belongs to this family
-  const recipient = await db.prepare(
+  // Verify the care recipient belongs to this family (direct owner, shared, or care team)
+  let recipient = await db.prepare(
     "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
   ).get(careRecipientId, req.user.id);
+
+  if (!recipient) {
+    // Check care_recipient_shares
+    const shared = await db.prepare(
+      "SELECT care_recipient_id FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+    ).get(careRecipientId, req.user.id);
+    if (shared) {
+      recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(careRecipientId);
+    }
+    // Check care team membership
+    if (!recipient) {
+      const teamMember = await db.prepare(`
+        SELECT cr.* FROM care_recipients cr
+        JOIN care_teams ct ON ct.care_recipient_id = cr.id
+        JOIN care_team_members ctm ON ctm.care_team_id = ct.id
+        WHERE cr.id = ? AND ctm.user_id = ? AND ctm.status = 'active'
+      `).get(careRecipientId, req.user.id);
+      if (teamMember) recipient = teamMember;
+    }
+  }
 
   if (!recipient) {
     return res.status(404).json({ error: "Care recipient not found" });
   }
 
   // ─── Consent gate: block booking if consent not verified ───
+  // NOTE: This is a pre-check for immediate UI feedback. The actual enforcement
+  // happens inside the transaction below (SELECT ... FOR UPDATE) to prevent
+  // race conditions where consent is revoked between check and insert.
   if (recipient.consent_status && recipient.consent_status !== 'verified') {
     return res.status(403).json({
       error: 'Care authorization must be verified before booking',
@@ -513,34 +545,50 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   const recurrenceGroupId = isRecurring ? uuid() : null;
   const createdSessions = [];
 
-  for (const sessionDate of dates) {
-    const id = uuid();
-    // If family proposed a rate, use it for estimated cost instead of caregiver's rate
-    const finalCost = proposedRate && parseFloat(proposedRate) > 0
-      ? parseFloat(proposedRate) * durationHours
-      : estimatedCost;
+  // ─── Transaction: re-check consent under row lock, then insert sessions ───
+  try { await db.transaction(async (tx) => {
+    // Lock the care_recipients row to prevent concurrent consent changes
+    const lockedRecipient = await tx.prepare(
+      "SELECT consent_status, authorization_tier FROM care_recipients WHERE id = ? FOR UPDATE"
+    ).get(careRecipientId);
 
-    const isExclusive = directOffer && bookCaregiverId;
-    await db.prepare(`
-      INSERT INTO care_sessions
-      (id, care_recipient_id, family_user_id, service_type, status,
-       scheduled_date, scheduled_time, duration_hours,
-       special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
-       short_notice_surcharge, rate_tier, proposed_rate, offered_to_caregiver_id,
-       exclusive_until)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isExclusive ? "NOW() + INTERVAL '1 hour'" : 'NULL'})
-    `).run(
-      id, careRecipientId, req.user.id, serviceType, sessionStatus,
-      sessionDate, scheduledTime, durationHours,
-      specialInstructions || null, finalCost,
-      isRecurring ? recurrenceRule : null,
-      recurrenceGroupId,
-      costResult.surcharge || 0,
-      JSON.stringify(costResult.tierBreakdown),
-      proposedRate ? parseFloat(proposedRate) : null,
-      isExclusive ? bookCaregiverId : null
-    );
-    createdSessions.push(id);
+    if (lockedRecipient?.consent_status && lockedRecipient.consent_status !== 'verified') {
+      throw Object.assign(new Error('Consent revoked during booking'), { status: 403, userMessage: 'Care authorization is no longer verified. Please re-verify consent.' });
+    }
+
+    for (const sessionDate of dates) {
+      const id = uuid();
+      const finalCost = proposedRate && parseFloat(proposedRate) > 0
+        ? parseFloat(proposedRate) * durationHours
+        : estimatedCost;
+
+      const isExclusive = directOffer && bookCaregiverId;
+      await tx.prepare(`
+        INSERT INTO care_sessions
+        (id, care_recipient_id, family_user_id, service_type, status,
+         scheduled_date, scheduled_time, duration_hours,
+         special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
+         short_notice_surcharge, rate_tier, proposed_rate, offered_to_caregiver_id,
+         exclusive_until)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isExclusive ? "NOW() + INTERVAL '1 hour'" : 'NULL'})
+      `).run(
+        id, careRecipientId, req.user.id, serviceType, sessionStatus,
+        sessionDate, scheduledTime, durationHours,
+        specialInstructions || null, finalCost,
+        isRecurring ? recurrenceRule : null,
+        recurrenceGroupId,
+        costResult.surcharge || 0,
+        JSON.stringify(costResult.tierBreakdown),
+        proposedRate ? parseFloat(proposedRate) : null,
+        isExclusive ? bookCaregiverId : null
+      );
+      createdSessions.push(id);
+    }
+  }); } catch (txErr) {
+    if (txErr.status === 403) {
+      return res.status(403).json({ error: txErr.userMessage || txErr.message });
+    }
+    throw txErr; // re-throw unexpected errors
   }
 
   // Create activity feed entry
@@ -1475,10 +1523,20 @@ router.post("/:sessionId/first-visit-confirm", async (req, res) => {
       return res.status(403).json({ error: "Only the assigned caregiver can submit this" });
     }
 
+    // Check if already submitted (idempotent on retry / network glitch)
+    const existing = await db.prepare(
+      "SELECT id, confirmation FROM first_visit_confirmations WHERE session_id = ?"
+    ).get(req.params.sessionId);
+
+    if (existing) {
+      return res.json({ success: true, confirmation: existing.confirmation, alreadySubmitted: true });
+    }
+
     const id = require("uuid").v4();
     await db.prepare(`
       INSERT INTO first_visit_confirmations (id, care_recipient_id, caregiver_id, session_id, confirmation, notes)
       VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT (session_id) DO NOTHING
     `).run(id, session.care_recipient_id, session.caregiver_profile_id, req.params.sessionId, confirmation, notes || null);
 
     // If 'no' or 'unable', notify the family
