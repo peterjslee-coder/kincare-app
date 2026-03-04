@@ -27,6 +27,8 @@ const Documents = window.Documents = ({ onNavigate }) => {
   const [consentData, setConsentData] = useState({});
   const [consentLoading, setConsentLoading] = useState(false);
   const [auditTrails, setAuditTrails] = useState({});
+  const [participationSaving, setParticipationSaving] = useState(null); // recipientId being saved
+  const [participationConfirm, setParticipationConfirm] = useState(null); // { recipientId, newTier, recipientName }
 
   // Audit Tab State
   const [auditEntries, setAuditEntries] = useState([]);
@@ -238,6 +240,30 @@ const Documents = window.Documents = ({ onNavigate }) => {
       console.error('Failed to load audit trail:', error);
     } finally {
       setAuditLoading(false);
+    }
+  };
+
+  // Handle participation level change
+  const handleParticipationChange = async (recipientId, newTier) => {
+    setParticipationSaving(recipientId);
+    try {
+      const res = await apiFetch(`/api/care-recipients/${recipientId}/permissions`, {
+        method: 'PUT',
+        body: JSON.stringify({ permissionTier: newTier }),
+      });
+      if (res?.ok) {
+        // Refresh consent data to reflect change
+        await loadConsentData();
+        setParticipationConfirm(null);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to update participation level');
+      }
+    } catch (error) {
+      console.error('Participation change error:', error);
+      alert('Failed to update participation level');
+    } finally {
+      setParticipationSaving(null);
     }
   };
 
@@ -785,6 +811,45 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     }}>
                       🔒 Managed by <strong>{consent.managed_by}</strong>
                       {consent.managed_reason && <div style={{ marginTop: '4px' }}>Reason: {consent.managed_reason}</div>}
+                    </div>
+                  )}
+
+                  {/* Participation Level Control — only visible if managed_by is set */}
+                  {consent.managed_by_user_id && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '10px',
+                      backgroundColor: '#f7fafc',
+                      borderRadius: '6px',
+                      border: '1px solid #e2e8f0',
+                    }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>
+                        📊 Participation Level
+                      </div>
+                      <select
+                        value={consent.permission_tier || 'full'}
+                        onChange={(e) => setParticipationConfirm({
+                          recipientId: recipient.id,
+                          newTier: e.target.value,
+                          recipientName: recipient.name,
+                        })}
+                        disabled={participationSaving === recipient.id}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          borderRadius: '4px',
+                          border: '1px solid #cbd5e0',
+                          fontSize: '13px',
+                          backgroundColor: participationSaving === recipient.id ? '#edf2f7' : 'white',
+                        }}
+                      >
+                        <option value="full">Full — self-governing, can book sessions</option>
+                        <option value="collaborative">Collaborative — can request sessions (requires approval)</option>
+                        <option value="managed">Managed — view-only, care team decides</option>
+                      </select>
+                      {participationSaving === recipient.id && (
+                        <div style={{ fontSize: '11px', color: '#718096', marginTop: '4px' }}>Saving...</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1463,6 +1528,66 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 }}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Participation Level Confirmation Modal */}
+      {participationConfirm && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1001,
+          }}
+          onClick={() => setParticipationConfirm(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: 'white', borderRadius: '8px', padding: '24px',
+              maxWidth: '420px', width: '90%',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+            }}
+          >
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>
+              Change Participation Level
+            </h3>
+            <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4a5568', lineHeight: 1.5 }}>
+              Change <strong>{participationConfirm.recipientName}</strong>'s participation to{' '}
+              <strong>
+                {participationConfirm.newTier === 'full' ? 'Full' : participationConfirm.newTier === 'collaborative' ? 'Collaborative' : 'Managed'}
+              </strong>?
+              {participationConfirm.newTier === 'managed' && ' They will only be able to view their calendar and care info.'}
+              {participationConfirm.newTier === 'collaborative' && ' They can request care sessions but will need your approval.'}
+              {participationConfirm.newTier === 'full' && ' They will have full control over their care scheduling.'}
+              {' '}They will be notified of this change.
+            </p>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setParticipationConfirm(null)}
+                style={{
+                  padding: '8px 16px', backgroundColor: 'white',
+                  border: '1px solid #cbd5e0', borderRadius: '6px',
+                  cursor: 'pointer', fontSize: '13px', fontWeight: '500',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleParticipationChange(participationConfirm.recipientId, participationConfirm.newTier)}
+                disabled={participationSaving === participationConfirm.recipientId}
+                style={{
+                  padding: '8px 16px', backgroundColor: '#1b6b5a', color: 'white',
+                  border: 'none', borderRadius: '6px',
+                  cursor: 'pointer', fontSize: '13px', fontWeight: '500',
+                  opacity: participationSaving ? 0.6 : 1,
+                }}
+              >
+                {participationSaving ? 'Saving...' : 'Confirm Change'}
               </button>
             </div>
           </div>

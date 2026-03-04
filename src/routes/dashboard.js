@@ -621,6 +621,13 @@ async function careForDashboard(db, userId, res) {
     return res.json({ role: "care_for", userName: `${user.first_name} ${user.last_name}`, sessions: [], notes: [] });
   }
 
+  // Resolve managed-by user name if present
+  let managedByName = null;
+  if (recipient.managed_by_user_id) {
+    const mgr = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(recipient.managed_by_user_id);
+    if (mgr) managedByName = `${mgr.first_name} ${mgr.last_name}`;
+  }
+
   // All future sessions (calendar data) — use care-location timezone
   const today = getTodayStringInZone();
   const sessions = await db.prepare(`
@@ -651,6 +658,8 @@ async function careForDashboard(db, userId, res) {
     userName: `${user.first_name} ${user.last_name}`,
     careRecipientId: recipient.id,
     permissionTier: recipient.permission_tier || "full",
+    managedByName: managedByName,
+    managedReason: recipient.managed_reason || null,
     visibilitySettings: parseJson(recipient.visibility_settings) || null,
     careProfile: {
       healthConditions: parseJson(recipient.health_conditions),

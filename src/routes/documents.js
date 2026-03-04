@@ -367,26 +367,59 @@ router.get("/audit/:recipientId", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const { event_type } = req.query;
+    const recipientId = req.params.recipientId;
 
+    // Fetch consent status from care_recipients
+    const recipient = await db.prepare(`
+      SELECT cr.authorization_tier, cr.consent_status, cr.consent_method,
+        cr.consent_verified_at, cr.permission_tier, cr.managed_by_user_id,
+        cr.managed_reason, cr.managed_at, cr.attestation_signer,
+        cr.attestation_relationship, cr.attestation_signed_at
+      FROM care_recipients cr WHERE cr.id = ?
+    `).get(recipientId);
+
+    // Resolve managed_by user name if present
+    let managedByName = null;
+    if (recipient && recipient.managed_by_user_id) {
+      const mgr = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(recipient.managed_by_user_id);
+      if (mgr) managedByName = `${mgr.first_name} ${mgr.last_name}`;
+    }
+
+    // Audit trail entries
     let sql = `
       SELECT cal.*, u.first_name AS actor_first_name, u.last_name AS actor_last_name
       FROM consent_audit_log cal
       LEFT JOIN users u ON u.id = cal.actor_id
       WHERE cal.care_recipient_id = ?
     `;
-    const params = [req.params.recipientId];
+    const params = [recipientId];
 
     if (event_type) { sql += ` AND cal.event_type = ?`; params.push(event_type); }
     sql += ` ORDER BY cal.created_at DESC`;
 
     const entries = await db.prepare(sql).all(...params);
 
-    const parsed = entries.map(e => ({
+    const auditTrail = entries.map(e => ({
       ...e,
       metadata: e.metadata ? JSON.parse(e.metadata) : null,
     }));
 
-    res.json({ auditLog: parsed });
+    const consentStatus = recipient ? {
+      authorization_tier: recipient.authorization_tier,
+      consent_status: recipient.consent_status,
+      consent_method: recipient.consent_method,
+      consent_verified_at: recipient.consent_verified_at,
+      permission_tier: recipient.permission_tier || 'full',
+      managed_by: managedByName,
+      managed_by_user_id: recipient.managed_by_user_id,
+      managed_reason: recipient.managed_reason,
+      managed_at: recipient.managed_at,
+      attestation_signer: recipient.attestation_signer,
+      attestation_relationship: recipient.attestation_relationship,
+      attestation_signed_at: recipient.attestation_signed_at,
+    } : {};
+
+    res.json({ consentStatus, auditTrail, auditLog: auditTrail });
   } catch (err) {
     console.error("Audit log fetch error:", err);
     res.status(500).json({ error: "Failed to fetch audit log" });

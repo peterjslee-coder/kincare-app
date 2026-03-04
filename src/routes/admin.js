@@ -1542,6 +1542,51 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
           "UPDATE authorization_documents SET upload_status = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?"
         ).run(docStatus, notes || null, req.user.id, latestDoc.id);
       }
+
+      // Also update verified_documents status
+      const latestVDoc = await db.prepare(
+        "SELECT id FROM verified_documents WHERE owner_type = 'care_recipient' AND owner_id = ? AND category = 'consent' ORDER BY created_at DESC LIMIT 1"
+      ).get(id);
+      if (latestVDoc) {
+        const vDocStatus = action === 'approve' ? 'approved' : 'rejected';
+        await db.prepare(
+          "UPDATE verified_documents SET status = ?, admin_notes = ?, admin_reviewed_by = ?, admin_reviewed_at = NOW(), updated_at = NOW() WHERE id = ?"
+        ).run(vDocStatus, notes || null, req.user.id, latestVDoc.id);
+      }
+
+      // POA override: if approving tier2 for a recipient with self-consent (linked_user_id), activate managed mode
+      if (action === 'approve' && recipient.linked_user_id) {
+        const previousPerm = recipient.permission_tier || 'full';
+        if (previousPerm === 'full') {
+          await db.prepare(`
+            UPDATE care_recipients SET permission_tier = 'collaborative', managed_by_user_id = ?,
+              managed_reason = 'POA verified by admin', managed_at = NOW() WHERE id = ?
+          `).run(recipient.family_user_id, id);
+
+          // Log managed mode activation
+          try {
+            const { logConsentAudit } = require("./documents");
+            const rName = `${recipient.first_name} ${recipient.last_name}`.trim();
+            await logConsentAudit(db, {
+              careRecipientId: id, actorId: "system", actorRole: "system",
+              eventType: "managed_mode_activated",
+              description: `${rName}'s account transitioned to collaborative mode after POA verification. Care team now manages care decisions.`,
+              metadata: { previousPermission: previousPerm, newPermission: 'collaborative', triggeredBy: 'poa_approval' },
+            });
+          } catch (auditErr) { console.error("Managed mode audit error:", auditErr.message); }
+
+          // Notify care recipient
+          try {
+            const emitToUser = req.app.get("emitToUser");
+            const title = "Your account is now in collaborative mode";
+            const message = `A Power of Attorney document has been verified for your care. Your care team now helps manage your care sessions. You can still view your schedule and information.`;
+            await db.prepare(
+              "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'managed_mode_activated', ?, ?)"
+            ).run(uuid(), recipient.linked_user_id, id, title, message);
+            if (emitToUser) emitToUser(recipient.linked_user_id, "activity_update", { title, message });
+          } catch (notifErr) { console.error("Managed mode notification error:", notifErr.message); }
+        }
+      }
     }
 
     await logAdminAction(req, `authorization_${action}`, "care_recipient", id, {

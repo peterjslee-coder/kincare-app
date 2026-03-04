@@ -373,8 +373,56 @@ router.put("/:id/permissions", requireRole("family"), async (req, res) => {
   }
 
   try {
+    const previousTier = recipient.permission_tier || 'full';
+
     if (permissionTier) {
-      await db.prepare("UPDATE care_recipients SET permission_tier = ? WHERE id = ?").run(permissionTier, req.params.id);
+      await db.prepare("UPDATE care_recipients SET permission_tier = ?, updated_at = NOW() WHERE id = ?").run(permissionTier, req.params.id);
+
+      // Set managed_by fields if transitioning into managed/collaborative mode
+      if ((permissionTier === 'managed' || permissionTier === 'collaborative') && previousTier === 'full') {
+        await db.prepare(
+          "UPDATE care_recipients SET managed_by_user_id = ?, managed_reason = ?, managed_at = NOW() WHERE id = ?"
+        ).run(req.user.id, req.body.managedReason || 'Permission tier changed', req.params.id);
+      }
+      // Clear managed_by if going back to full
+      if (permissionTier === 'full' && previousTier !== 'full') {
+        await db.prepare(
+          "UPDATE care_recipients SET managed_by_user_id = NULL, managed_reason = NULL, managed_at = NULL WHERE id = ?"
+        ).run(req.params.id);
+      }
+
+      // Consent audit log
+      try {
+        const { logConsentAudit } = require("./documents");
+        const user = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+        const uName = user ? `${user.first_name} ${user.last_name}`.trim() : "Unknown";
+        const rName = `${recipient.first_name} ${recipient.last_name}`.trim();
+        const eventType = permissionTier === 'full' ? 'managed_mode_deactivated' : 'participation_level_changed';
+        await logConsentAudit(db, {
+          careRecipientId: req.params.id, actorId: req.user.id, actorRole: "family",
+          eventType,
+          description: `${uName} changed ${rName}'s participation from '${previousTier}' to '${permissionTier}'`,
+          metadata: { previousTier, newTier: permissionTier, reason: req.body.managedReason },
+        });
+      } catch (auditErr) { console.error("Permission change audit error:", auditErr.message); }
+
+      // Notify care recipient if they have a linked account
+      if (recipient.linked_user_id) {
+        try {
+          const emitToUser = req.app.get("emitToUser");
+          const uName2 = (await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id))?.first_name || "Your care team";
+          const title = permissionTier === 'full'
+            ? `Your account has been restored to full access`
+            : `Your account participation level has changed`;
+          const message = permissionTier === 'full'
+            ? `${uName2} has restored your full account access. You can now manage your own care sessions.`
+            : `${uName2} has changed your participation level to '${permissionTier}'.${permissionTier === 'managed' ? ' Your care team is now managing your sessions.' : ' Some actions may require care team approval.'}`;
+          await db.prepare(
+            "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'participation_changed', ?, ?)"
+          ).run(require("uuid").v4(), recipient.linked_user_id, req.params.id, title, message);
+          if (emitToUser) emitToUser(recipient.linked_user_id, "activity_update", { title, message });
+        } catch (notifErr) { console.error("Participation notification error:", notifErr.message); }
+      }
     }
     if (visibilitySettings !== undefined) {
       await db.prepare("UPDATE care_recipients SET visibility_settings = ? WHERE id = ?").run(
@@ -382,10 +430,13 @@ router.put("/:id/permissions", requireRole("family"), async (req, res) => {
       );
     }
 
-    const updated = await db.prepare("SELECT permission_tier, visibility_settings FROM care_recipients WHERE id = ?").get(req.params.id);
+    const updated = await db.prepare("SELECT permission_tier, visibility_settings, managed_by_user_id, managed_reason, managed_at FROM care_recipients WHERE id = ?").get(req.params.id);
     res.json({
       permissionTier: updated.permission_tier,
       visibilitySettings: updated.visibility_settings ? JSON.parse(updated.visibility_settings) : null,
+      managedByUserId: updated.managed_by_user_id,
+      managedReason: updated.managed_reason,
+      managedAt: updated.managed_at,
     });
   } catch (err) {
     console.error("Update permissions error:", err);

@@ -188,6 +188,8 @@ const CaredForView = window.CaredForView = () => {
   const userName = data.userName || 'Guest';
   const careProfile = data.careProfile || null;
   const permissionTier = data.permissionTier || 'full';
+  const managedByName = data.managedByName || null;
+  const managedReason = data.managedReason || null;
   const visSettings = data.visibilitySettings || null;
 
   // Visibility helper: in "full" mode everything is visible; in collaborative/managed, check visSettings
@@ -197,8 +199,9 @@ const CaredForView = window.CaredForView = () => {
     return !!visSettings[section];
   };
 
-  // Determine if the care recipient can edit (full = yes, collaborative = notes only, managed = no)
+  // Determine if the care recipient can edit (full = yes, collaborative = request-only, managed = no)
   const canEdit = permissionTier === 'full';
+  const canRequest = permissionTier === 'full' || permissionTier === 'collaborative';
   const canAddNotes = permissionTier === 'full' || permissionTier === 'collaborative';
 
   const selectedDaySessions = selectedDay ? getDaySessions(selectedDay) : [];
@@ -236,7 +239,41 @@ const CaredForView = window.CaredForView = () => {
       {/* Push notification prompt — shows if not yet enabled */}
       {typeof NotificationPrompt !== 'undefined' && React.createElement(NotificationPrompt, null)}
       <h1 className="greeting" style={{ marginBottom: '4px' }}>Hello, {userName}!</h1>
-      <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Here's what's coming up for you</p>
+      <p style={{ color: '#666', fontSize: '14px', marginBottom: permissionTier !== 'full' ? '12px' : '20px' }}>Here's what's coming up for you</p>
+
+      {/* Managed / Collaborative mode banner */}
+      {permissionTier === 'managed' && (
+        <div style={{
+          padding: '12px 16px', marginBottom: '20px', borderRadius: '10px',
+          background: '#fff8e1', border: '1px solid #ffe082',
+          display: 'flex', alignItems: 'center', gap: '10px',
+        }}>
+          <span style={{ fontSize: '20px' }}>🔒</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: '#e65100' }}>Managed Account</div>
+            <div style={{ fontSize: '12px', color: '#795548', marginTop: '2px' }}>
+              Your care is being managed by {managedByName || 'your care team'}.
+              {managedReason ? ` (${managedReason})` : ''} Contact them to request changes.
+            </div>
+          </div>
+        </div>
+      )}
+      {permissionTier === 'collaborative' && (
+        <div style={{
+          padding: '12px 16px', marginBottom: '20px', borderRadius: '10px',
+          background: '#e3f2fd', border: '1px solid #90caf9',
+          display: 'flex', alignItems: 'center', gap: '10px',
+        }}>
+          <span style={{ fontSize: '20px' }}>🤝</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: '#1565c0' }}>Collaborative Care</div>
+            <div style={{ fontSize: '12px', color: '#37474f', marginTop: '2px' }}>
+              Your care is co-managed with {managedByName || 'your care team'}.
+              You can request care sessions — your care team will review and approve them.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs — card grid (matches admin panel layout) */}
       {(() => { const rc = window.ROLE_COLOR || '#1b6b5a'; return (
@@ -412,18 +449,27 @@ const CaredForView = window.CaredForView = () => {
               )}
 
               {/* Request Care button / form (hidden in managed mode) */}
-              {canEdit && !showRequestForm && (
+              {canRequest && !showRequestForm && (
                 <button onClick={() => setShowRequestForm(true)} style={{
                   width: '100%', padding: '10px', background: '#fce4ec', color: '#c62828',
                   border: '1px dashed #f48fb1', borderRadius: 8, cursor: 'pointer',
                   fontSize: 13, fontWeight: 600,
                 }}>
-                  + Request Care for {new Date(viewYear, viewMonth, selectedDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {permissionTier === 'collaborative' ? '📋 Request Care (requires approval)' : '+ Request Care'} for {new Date(viewYear, viewMonth, selectedDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </button>
               )}
-              {canEdit && showRequestForm && (
+              {canRequest && showRequestForm && (
                 <div style={{ background: '#fef7f9', borderRadius: 8, padding: 16, border: '1px solid #f8bbd0' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#c62828', marginBottom: 12 }}>Request Care</div>
+                  {permissionTier === 'collaborative' && (
+                    <div style={{
+                      padding: '8px 12px', background: '#e3f2fd', borderRadius: 6,
+                      fontSize: 12, color: '#1565c0', marginBottom: 12,
+                      borderLeft: '3px solid #42a5f5',
+                    }}>
+                      This request will be sent to your care team for approval before a caregiver is matched.
+                    </div>
+                  )}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 600, color: '#666', display: 'block', marginBottom: 4 }}>Service Type</label>
@@ -538,14 +584,11 @@ const CaredForView = window.CaredForView = () => {
               )}
 
               {/* Permission notice */}
-              {permissionTier === 'view-only' && (
+              {(permissionTier === 'managed' || permissionTier === 'collaborative') && (
                 <div style={{ padding: '10px 14px', background: '#fff8e1', borderRadius: 8, fontSize: 12, color: '#f57f17', textAlign: 'center', marginTop: 8 }}>
-                  Your care team manages this information. Contact them to make changes.
-                </div>
-              )}
-              {permissionTier === 'managed' && (
-                <div style={{ padding: '10px 14px', background: '#fff8e1', borderRadius: 8, fontSize: 12, color: '#f57f17', textAlign: 'center', marginTop: 8 }}>
-                  This profile is managed by your care team.
+                  {permissionTier === 'managed'
+                    ? `This profile is managed by ${managedByName || 'your care team'}.`
+                    : `Profile changes are coordinated with ${managedByName || 'your care team'}.`}
                 </div>
               )}
             </React.Fragment>
