@@ -828,14 +828,23 @@ const App = () => {
     }} />;
   }
 
-  if (appState === 'invite') return <InviteLandingPage inviteInfo={inviteInfo} onNavigate={handleNavigate} />;
-  if (appState === 'splash') return <SplashPage onNavigate={handleNavigate} inviteInfo={inviteInfo} />;
-  if (appState === 'demo') return <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />;
-  if (appState === 'login') return <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />;
-  if (appState === 'register') return <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} />;
-  if (appState === 'forgot-password') return <ForgotPasswordPage onNavigate={handleNavigate} />;
-  if (appState === 'reset-password') return <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />;
-  if (appState === 'consent-response') return <ConsentResponsePage token={consentResponseToken} />;
+  // Pre-auth pages — wrap with FeedbackButton so testers can leave feedback before logging in
+  const preAuthPages = {
+    invite: <InviteLandingPage inviteInfo={inviteInfo} onNavigate={handleNavigate} />,
+    splash: <SplashPage onNavigate={handleNavigate} inviteInfo={inviteInfo} />,
+    demo: <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />,
+    login: <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />,
+    register: <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} />,
+    'forgot-password': <ForgotPasswordPage onNavigate={handleNavigate} />,
+    'reset-password': <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />,
+    'consent-response': <ConsentResponsePage token={consentResponseToken} />,
+  };
+  if (preAuthPages[appState]) {
+    return <>
+      {preAuthPages[appState]}
+      <FeedbackButton currentPage={appState} userRole="anonymous" currentUser={null} />
+    </>;
+  }
 
   const role = activeRole || currentUser?.role || 'family';
 

@@ -438,7 +438,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             </div>
             <div className="form-group">
               <label>Phone Number {showFieldErrors && !formData.phone.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-              <input type="tel" value={formData.phone} onChange={(e) => { const v = e.target.value.replace(/[^\d+\-()\s]/g, ''); setFormData(p => ({ ...p, phone: v })); setShowFieldErrors(false); }} placeholder="(555) 123-4567" style={showFieldErrors && !formData.phone.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+              <input type="tel" value={formData.phone} onChange={(e) => { const v = formatPhone(e.target.value, intlPhone); setFormData(p => ({ ...p, phone: v })); setShowFieldErrors(false); }} placeholder="(555) 123-4567" style={showFieldErrors && !formData.phone.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
               <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>For care coordination and emergencies</div>
             </div>
             <div className="form-group">
