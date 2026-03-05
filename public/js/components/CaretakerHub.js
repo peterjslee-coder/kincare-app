@@ -85,10 +85,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Platform config (which services are configured)
   const [platformConfig, setPlatformConfig] = useState({ stripeConfigured: true, checkrConfigured: true });
 
-  // Payout preference state
-  const [payoutSpeed, setPayoutSpeed] = useState('standard');
-  const [payoutLoading, setPayoutLoading] = useState(false);
-  const [payoutSaving, setPayoutSaving] = useState(false);
+  // Payout speed managed by Stripe directly — no surcharge from InPlace
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
   // Documents state
@@ -177,30 +174,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       }
     } catch (err) { console.error('Documents fetch error:', err); }
     setDocsLoading(false);
-  };
-
-  const fetchPayoutPreference = async () => {
-    setPayoutLoading(true);
-    try {
-      const res = await apiFetch('/api/payments/payout-preference');
-      if (res?.ok) {
-        const d = await res.json();
-        setPayoutSpeed(d.speed || 'standard');
-      }
-    } catch (err) { console.error('Payout pref fetch error:', err); }
-    setPayoutLoading(false);
-  };
-
-  const savePayoutPreference = async (speed) => {
-    setPayoutSaving(true);
-    try {
-      const res = await apiFetch('/api/payments/payout-preference', {
-        method: 'PUT',
-        body: JSON.stringify({ speed }),
-      });
-      if (res?.ok) setPayoutSpeed(speed);
-    } catch (err) { console.error('Payout pref save error:', err); }
-    setPayoutSaving(false);
   };
 
   const fetchReviews = async () => {
@@ -428,21 +401,85 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setIdVerLoading(false);
   };
 
-  // Stripe Connect onboarding handler
+  // Stripe Connect embedded onboarding state
+  const [showStripeOnboarding, setShowStripeOnboarding] = useState(false);
+  const stripeOnboardingRef = useRef(null);
+  const stripeConnectInstanceRef = useRef(null);
+
+  // Stripe Connect onboarding handler — creates account + opens embedded onboarding in-app
   const handleStripeOnboard = async () => {
     setStripeLoading(true);
     setStripeError(null);
     try {
+      // Step 1: Ensure the caregiver has a Stripe Connect account
       const res = await apiFetch('/api/payments/connect/onboard', { method: 'POST' });
-      if (res?.ok) {
-        const d = await res.json();
-        if (d.url) window.location.href = d.url;
-      } else {
+      if (!res?.ok) {
         const err = await res?.json().catch(() => ({}));
         setStripeError(err?.error || 'Failed to start Stripe onboarding. Please try again later.');
+        setStripeLoading(false);
+        return;
       }
-    } catch (err) { setStripeError('Could not connect to payment service. Please try again later.'); }
-    setStripeLoading(false);
+
+      // Step 2: Show the embedded onboarding container
+      setShowStripeOnboarding(true);
+      setStripeLoading(false);
+
+      // Step 3: Initialize Connect.js and mount onboarding component (after DOM renders)
+      await new Promise(r => setTimeout(r, 200));
+
+      const publishableKey = window.STRIPE_PUBLISHABLE_KEY || (await (async () => {
+        const configRes = await apiFetch('/api/payments/config');
+        if (configRes?.ok) {
+          const config = await configRes.json();
+          window.STRIPE_PUBLISHABLE_KEY = config.publishableKey;
+          return config.publishableKey;
+        }
+        return null;
+      })());
+
+      if (!publishableKey) {
+        setStripeError('Payment system not configured yet.');
+        return;
+      }
+
+      const fetchClientSecret = async () => {
+        const sessionRes = await apiFetch('/api/payments/connect/account-session', { method: 'POST' });
+        if (sessionRes?.ok) {
+          const d = await sessionRes.json();
+          return d.clientSecret;
+        }
+        throw new Error('Failed to create account session');
+      };
+
+      const connectInstance = window.StripeConnect.init({
+        publishableKey,
+        fetchClientSecret,
+        appearance: {
+          overlays: 'dialog',
+          variables: {
+            colorPrimary: '#1b6b5a',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          },
+        },
+      });
+
+      stripeConnectInstanceRef.current = connectInstance;
+      const onboardingComponent = connectInstance.create('account-onboarding');
+      onboardingComponent.setOnExit(() => {
+        setShowStripeOnboarding(false);
+        // Refresh Stripe Connect status after onboarding completes or closes
+        apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
+      });
+
+      if (stripeOnboardingRef.current) {
+        stripeOnboardingRef.current.innerHTML = '';
+        stripeOnboardingRef.current.appendChild(onboardingComponent);
+      }
+    } catch (err) {
+      console.error('Stripe onboarding error:', err);
+      setStripeError('Could not connect to payment service. Please try again later.');
+      setStripeLoading(false);
+    }
   };
 
   // Open Stripe Express Dashboard
@@ -481,12 +518,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       setBgCheckPaid(!!data.profile.background_check_paid || !!data.profile.isBackgroundChecked);
     }
   }, [data?.profile?.background_check_paid, data?.profile?.isBackgroundChecked]);
-
-  useEffect(() => {
-    if (activeTab === 'financials') {
-      fetchPayoutPreference();
-    }
-  }, [activeTab]);
 
   // Init tiered rates from profile (must be before early returns — React hook order rules)
   useEffect(() => {
@@ -1018,6 +1049,57 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
         return null;
       })()}
+
+      {/* Stripe Connect Onboarding — shows when not yet connected OR when embedded onboarding is open */}
+      {(!stripeStatus || stripeStatus.status === 'not_started' || stripeStatus.status === 'pending' || showStripeOnboarding) && (
+        <div className="card" style={{ marginBottom: 16, padding: '18px 20px', borderLeft: '4px solid #6366f1' }}>
+          {!showStripeOnboarding ? (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <span style={{ fontSize: 24, marginTop: 2 }}>💳</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#333', marginBottom: 4 }}>Set Up Payments</div>
+                <div style={{ fontSize: 13, color: '#555' }}>
+                  Connect your bank account to receive payments for care sessions. This takes about 5 minutes — Stripe handles everything securely.
+                </div>
+                {stripeError && (
+                  <div style={{ fontSize: 12, color: '#dc2626', marginTop: 6, padding: '6px 10px', background: '#fef2f2', borderRadius: 6 }}>
+                    {stripeError}
+                  </div>
+                )}
+                <button
+                  onClick={handleStripeOnboard}
+                  disabled={stripeLoading}
+                  style={{
+                    marginTop: 10, padding: '8px 18px', borderRadius: 8,
+                    background: stripeLoading ? '#94a3b8' : '#6366f1', color: '#fff',
+                    border: 'none', fontSize: 13, fontWeight: 600, cursor: stripeLoading ? 'wait' : 'pointer',
+                  }}
+                >
+                  {stripeLoading ? 'Setting up...' : stripeStatus?.status === 'pending' ? 'Continue Setup' : 'Set Up Payments'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Payment Setup</div>
+                <button onClick={() => {
+                  setShowStripeOnboarding(false);
+                  apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
+                }} style={{
+                  padding: '4px 10px', borderRadius: 6, border: '1px solid #ccc',
+                  background: '#f8f8f8', color: '#666', fontSize: 12, cursor: 'pointer',
+                }}>Close</button>
+              </div>
+              <div ref={stripeOnboardingRef} style={{ minHeight: 300 }}>
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#888' }}>
+                  Loading Stripe onboarding...
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Identity Verification Card — shows when Stripe is connected but identity not yet verified */}
       {stripeStatus?.status === 'active' && !idVerification.verified && (

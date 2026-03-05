@@ -20,7 +20,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=1.39.4">
+  <link rel="stylesheet" href="/css/styles.css?v=1.39.5">
 
   <!-- Leaflet CSS for maps (AreaMap, Caregivers nearby) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -43,6 +43,8 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <!-- Stripe.js for payments -->
   <script src="https://js.stripe.com/v3/"></script>
+  <!-- Stripe Connect.js for embedded onboarding -->
+  <script src="https://connect-js.stripe.com/v1.0/connect.js" async></script>
   <!-- Twilio Video SDK for in-app video/voice calls -->
   <script src="https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js"></script>
 
@@ -52,7 +54,7 @@
     Source files live in /js/ for easy editing — one component per file.
   -->
   <script>
-    window.APP_VERSION = '1.39.4';
+    window.APP_VERSION = '1.39.5';
     (async function() {
       var scripts = [
         '/js/utils.js',
@@ -108,7 +110,7 @@
         // Fetch each script individually so we can identify which one fails
         var sources = [];
         for (var i = 0; i < scripts.length; i++) {
-          var url = scripts[i] + '?v=1.39.4';
+          var url = scripts[i] + '?v=1.39.5';
           try {
             var r = await fetch(url);
             if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + scripts[i]);

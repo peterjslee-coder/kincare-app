@@ -319,7 +319,8 @@ router.get("/identity/status", requireRole("caregiver"), async (req, res) => {
 });
 
 // ─── POST /api/payments/connect/onboard ───
-// Create a Stripe Connect Express account for a caregiver and return the onboarding link
+// Create a Stripe Connect Express account for a caregiver (or reuse existing)
+// Returns the stripeAccountId — embedded onboarding handles the rest in-browser
 router.post("/connect/onboard", requireRole("caregiver"), requirePaymentsEnabled, async (req, res) => {
   const db = await getDb();
   let stripe;
@@ -367,19 +368,37 @@ router.post("/connect/onboard", requireRole("caregiver"), requirePaymentsEnabled
     }
   }
 
-  // Generate an Account Link for onboarding
+  res.json({ stripeAccountId });
+});
+
+// ─── POST /api/payments/connect/account-session ───
+// Create an AccountSession for embedded Connect onboarding component
+router.post("/connect/account-session", requireRole("caregiver"), requirePaymentsEnabled, async (req, res) => {
+  const db = await getDb();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured yet.", notConfigured: true });
+  }
+
+  const profile = await db.prepare("SELECT stripe_account_id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile?.stripe_account_id) {
+    return res.status(400).json({ error: "No Stripe account yet. Call /connect/onboard first." });
+  }
+
   try {
-    const accountLink = await stripe.accountLinks.create({
-      account: stripeAccountId,
-      refresh_url: `${BASE_URL}/#payments-refresh`,
-      return_url: `${BASE_URL}/#payments-complete`,
-      type: "account_onboarding",
+    const accountSession = await stripe.accountSessions.create({
+      account: profile.stripe_account_id,
+      components: {
+        account_onboarding: {
+          enabled: true,
+        },
+      },
     });
 
-    res.json({ url: accountLink.url, stripeAccountId });
+    res.json({ clientSecret: accountSession.client_secret });
   } catch (err) {
-    console.error("Stripe onboarding link error:", err);
-    res.status(500).json({ error: "Failed to generate onboarding link" });
+    console.error("Stripe AccountSession creation error:", err);
+    res.status(500).json({ error: "Failed to create onboarding session" });
   }
 });
 
@@ -523,16 +542,8 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
   }
 
-  // Check caregiver payout speed — if instant, add 2% surcharge to platform fee
-  const payoutPref = await db.prepare(
-    "SELECT speed FROM payout_preferences WHERE user_id = ?"
-  ).get(session.caregiver_user_id);
-  const payoutSpeed = payoutPref?.speed || "standard";
-  let instantSurchargeCents = 0;
-  if (payoutSpeed === "instant") {
-    instantSurchargeCents = Math.round(totalCents * 2 / 100); // 2% surcharge
-    platformFeeCents += instantSurchargeCents;
-  }
+  // Payout speed is the caregiver's choice — Stripe handles instant payout fees directly,
+  // we don't add any surcharge. Caregivers set their payout preference in their Stripe dashboard.
 
   try {
     const checkoutSession = await stripe.checkout.sessions.create({
@@ -561,19 +572,18 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
         inplace_session_id: sessionId,
         inplace_family_user_id: req.user.id,
         inplace_caregiver_id: session.caregiver_id,
-        payout_speed: payoutSpeed,
       },
     });
 
     // Create a pending payment record
     const paymentId = uuid();
     await db.prepare(`
-      INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_checkout_id, payout_speed, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', 'stripe', ?, ?, NOW())
+      INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_checkout_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', 'stripe', ?, NOW())
     `).run(
       paymentId, sessionId, req.user.id, session.caregiver_id,
       totalCents / 100, platformFeeCents / 100, (totalCents - platformFeeCents) / 100,
-      checkoutSession.id, payoutSpeed
+      checkoutSession.id
     );
 
     res.json({
@@ -582,7 +592,6 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
       amount: totalCents / 100,
       platformFee: platformFeeCents / 100,
       caregiverPayout: (totalCents - platformFeeCents) / 100,
-      payoutSpeed,
       achAvailable: true,
     });
   } catch (err) {
@@ -791,34 +800,8 @@ router.post("/background-check/confirm", requireRole("caregiver"), requirePaymen
   }
 });
 
-// ─── GET /api/payments/payout-preference ───
-// Get caregiver's payout speed preference
-router.get("/payout-preference", requireRole("caregiver"), async (req, res) => {
-  const db = await getDb();
-  const pref = await db.prepare("SELECT * FROM payout_preferences WHERE user_id = ?").get(req.user.id);
-  res.json({
-    speed: pref?.speed || "standard",
-    surchargePercent: 2,
-  });
-});
-
-// ─── PUT /api/payments/payout-preference ───
-// Set caregiver's payout speed preference
-router.put("/payout-preference", requireRole("caregiver"), async (req, res) => {
-  const db = await getDb();
-  const { speed } = req.body;
-  if (!speed || !["standard", "instant"].includes(speed)) {
-    return res.status(400).json({ error: "speed must be 'standard' or 'instant'" });
-  }
-
-  const existing = await db.prepare("SELECT id FROM payout_preferences WHERE user_id = ?").get(req.user.id);
-  if (existing) {
-    await db.prepare("UPDATE payout_preferences SET speed = ?, updated_at = NOW() WHERE user_id = ?").run(speed, req.user.id);
-  } else {
-    await db.prepare("INSERT INTO payout_preferences (id, user_id, speed, updated_at) VALUES (?, ?, ?, NOW())").run(uuid(), req.user.id, speed);
-  }
-
-  res.json({ speed, surchargePercent: 2 });
-});
+// Payout preferences removed — caregivers manage payout speed directly through their
+// Stripe Express dashboard. Stripe handles instant payout fees (1%, min 50¢) themselves.
+// We don't add surcharges or get involved in how fast caregivers receive their money.
 
 module.exports = router;
