@@ -7,6 +7,16 @@ const Caregivers = window.Caregivers = () => {
   const [activeTab, setActiveTab] = useState('nearby');
   const { showToast } = useToast();
 
+  // Privacy: hide caregiver full names in browse — show first name + last initial only
+  // Full names are revealed only after in-app connection/assignment
+  const privacyName = (cg, isAssigned) => {
+    if (isAssigned) return cg.name || 'Caregiver'; // assigned caregivers show full name
+    if (!cg.name) return 'Caregiver';
+    const parts = cg.name.trim().split(/\s+/);
+    if (parts.length < 2) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+  };
+
   // Location search state
   const [searchAddress, setSearchAddress] = useState('');
   const [searchRadius, setSearchRadius] = useState(25);
@@ -279,11 +289,12 @@ const Caregivers = window.Caregivers = () => {
       }
 
       const isAssigned = cg.isAssigned || assignedCgIds.has(cg.id);
+      const displayName = privacyName(cg, isAssigned);
       const pinColor = isAssigned ? '#e8724a' : '#2563eb';
       const distLabel = cg.distance != null ? ` &bull; ${cg.distance}mi` : '';
       const photoHtml = cg.profilePhoto
         ? `<img src="${cg.profilePhoto}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid ${pinColor};margin-right:8px;flex-shrink:0" />`
-        : `<div style="width:32px;height:32px;border-radius:50%;background:${pinColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;border:2px solid #fff;margin-right:8px;flex-shrink:0">${(cg.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>`;
+        : `<div style="width:32px;height:32px;border-radius:50%;background:${pinColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;border:2px solid #fff;margin-right:8px;flex-shrink:0">${(displayName || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>`;
 
       const icon = L.divIcon({
         className: 'cg-map-pin',
@@ -293,7 +304,7 @@ const Caregivers = window.Caregivers = () => {
           box-shadow:0 2px 6px rgba(0,0,0,0.3);
           font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;
           display:inline-flex;align-items:center;gap:3px;
-        ">${isAssigned ? '<span style="font-size:10px;line-height:1">⭐</span>' : ''}${cg.name}${distLabel}</div>`,
+        ">${isAssigned ? '<span style="font-size:10px;line-height:1">⭐</span>' : ''}${displayName}${distLabel}</div>`,
         iconSize: [120, 28],
         iconAnchor: [0, 28],
       });
@@ -305,7 +316,7 @@ const Caregivers = window.Caregivers = () => {
         <div style="display:flex;align-items:center;font-family:sans-serif;padding:2px">
           ${photoHtml}
           <div>
-            <div style="font-weight:700;font-size:12px">${cg.name}</div>
+            <div style="font-weight:700;font-size:12px">${displayName}</div>
             <div style="font-size:10px;color:#666">${isAssigned ? 'Assigned' : ''}${cg.distance != null ? `${isAssigned ? ' · ' : ''}${cg.distance}mi away` : ''}</div>
           </div>
         </div>
@@ -317,7 +328,7 @@ const Caregivers = window.Caregivers = () => {
           <div style="display:flex;align-items:center;margin-bottom:6px">
             ${photoHtml}
             <div>
-              <div style="font-weight:700;font-size:13px">${cg.name}</div>
+              <div style="font-weight:700;font-size:13px">${displayName}</div>
               ${isAssigned ? '<div style="font-size:10px;color:#e8724a;font-weight:600">⭐ Assigned</div>' : ''}
             </div>
           </div>
@@ -371,7 +382,7 @@ const Caregivers = window.Caregivers = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '20px', fontWeight: 700, color: '#1a1a2e' }}>{cg.name}</span>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: '#1a1a2e' }}>{privacyName(cg, isAssigned)}</span>
               {isAssigned && (
                 <span style={{ padding: '2px 8px', background: '#e8f5e9', color: '#2e7d32', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>Assigned</span>
               )}

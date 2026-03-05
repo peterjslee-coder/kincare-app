@@ -201,7 +201,8 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const hasProfile = !!(user?.first_name || user?.firstName) && !!(user?.phone);
   const hasRecipient = (data?.parent || stats.assignedCaregivers > 0);
   // Check consent status on the care recipient — "verified" means authorization is done
-  const recipientConsentDone = data?.parent?.consent_status === 'verified' || data?.parent?.consent_status === 'approved';
+  // Consider attested as "done" for checklist — user did their part, admin verification is pending
+  const recipientConsentDone = data?.parent?.consent_status === 'verified' || data?.parent?.consent_status === 'approved' || data?.parent?.consent_status === 'attested';
   const hasCareTeam = careTeams.length > 0;
   // Check if user joined via invite (is a member, not leader, of a care team)
   const isTeamMember = careTeams.some(t => t.my_role === 'member');
@@ -213,7 +214,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     ...(isTeamMember && !isTeamLeader ? [
       { id: 'recipient', label: 'Add a loved one to care for', done: true, action: null, actionText: null },
     ] : [
-      { id: 'recipient', label: 'Add a loved one & verify authorization', hint: 'Add your loved one\'s details, set up care preferences, and verify your authority to arrange care.', done: !!hasRecipient && !!recipientConsentDone, action: () => onNavigate && onNavigate('recipients'), actionText: 'Add Recipient' },
+      { id: 'recipient', label: 'Add a loved one & verify authorization', hint: hasRecipient && recipientConsentDone && data?.parent?.consent_status === 'attested' ? 'Your attestation has been submitted — we\'re verifying now.' : 'Add your loved one\'s details, set up care preferences, and verify your authority to arrange care.', done: !!hasRecipient && !!recipientConsentDone, action: () => onNavigate && onNavigate('recipients'), actionText: hasRecipient ? 'View Recipient' : 'Add Recipient' },
     ]),
     // Only leaders can invite others to the care team
     ...(isTeamMember && !isTeamLeader ? [] : [

@@ -15,6 +15,67 @@ const CareRecipients = window.CareRecipients = () => {
   const [photoUploading, setPhotoUploading] = useState(false);
   const { showToast } = useToast();
 
+  // Wizard state
+  const [wizardStep, setWizardStep] = useState(null);
+  const [savedRecipientId, setSavedRecipientId] = useState(null);
+  const [carePrefs, setCarePrefs] = useState({});
+  const [careDetails, setCareDetails] = useState({});
+  const [showAllPrefs, setShowAllPrefs] = useState(false);
+  const [attestAgreed, setAttestAgreed] = useState(false);
+  const [attestSignature, setAttestSignature] = useState('');
+  const [attestRelationship, setAttestRelationship] = useState('');
+  const [attestNotifyMethod, setAttestNotifyMethod] = useState('email');
+  const [attestLoading, setAttestLoading] = useState(false);
+  const [attestError, setAttestError] = useState('');
+  const [prefsLoading, setPrefsLoading] = useState(false);
+
+  const CARE_PREFS_LIST = [
+    { id: 'meal_prep', label: 'Meal preparation & cooking', icon: '🍳' },
+    { id: 'housekeeping', label: 'Light housekeeping (tidying, dishes, laundry)', icon: '🧹' },
+    { id: 'errands', label: 'Grocery shopping & errands', icon: '🛒' },
+    { id: 'med_reminders', label: 'Medication reminders (reminders only)', icon: '💊' },
+    { id: 'bathing', label: 'Help with bathing, grooming & dressing', icon: '🚿' },
+    { id: 'fall_prevention', label: 'Fall prevention & mobility assistance', icon: '🦯' },
+    { id: 'transportation', label: 'Transportation to appointments', icon: '🚗' },
+    { id: 'overnight', label: 'Overnight or evening supervision', icon: '🌙' },
+    { id: 'wandering', label: 'Wandering prevention', icon: '🚪' },
+    { id: 'vitals', label: 'Vital signs monitoring (BP, temperature)', icon: '🩺' },
+    { id: 'exercise', label: 'Exercise & physical therapy support', icon: '🏋️' },
+    { id: 'companionship', label: 'Companionship & conversation', icon: '💬' },
+    { id: 'hobbies', label: 'Engaging in hobbies & activities together', icon: '🎨' },
+    { id: 'social_outings', label: 'Social outing accompaniment', icon: '⛪' },
+    { id: 'patience', label: 'Patience with repetition & confusion', icon: '💛' },
+    { id: 'daily_updates', label: 'Daily updates & photos to family', icon: '📸' },
+    { id: 'consistent_caregiver', label: 'Consistent same-caregiver scheduling', icon: '🤝' },
+    { id: 'condition_experience', label: 'Experience with specific conditions', icon: '📋' },
+    { id: 'pets', label: 'Comfortable with pets in the home', icon: '🐾' },
+    { id: 'gardening', label: 'Gardening or light yard work', icon: '🌱' },
+    { id: 'outdoor_walks', label: 'Outdoor walks & fresh air time', icon: '🚶' },
+    { id: 'socializing_out', label: 'Socializing away from home', icon: '☕' },
+    { id: 'tech_help', label: 'Technology help (phone, tablet, video calls)', icon: '📱' },
+    { id: 'spiritual', label: 'Spiritual or religious practice support', icon: '🕊️' },
+  ];
+
+  const PREF_FOLLOW_UPS = {
+    med_reminders: 'How many medications? Any special timing?',
+    wandering: 'How frequent? Any known triggers?',
+    vitals: 'Which vitals? How often?',
+    exercise: 'Any prescribed exercises or PT routines?',
+    patience: 'Any specific behaviors we should know about?',
+    condition_experience: 'What conditions does your loved one have?',
+    pets: 'What kind of pets? Caregiver help needed?',
+    spiritual: 'What faith or practice?',
+    overnight: 'What does overnight supervision look like?',
+    transportation: 'How often? Any regular appointments?',
+  };
+
+  const RATING_OPTIONS = [
+    { value: 0, label: 'Not needed', color: '#e0e0e0', textColor: '#999' },
+    { value: 1, label: 'Nice to have', color: '#fff3e0', textColor: '#e65100' },
+    { value: 2, label: 'Important', color: '#e8f5e9', textColor: '#2e7d32' },
+    { value: 3, label: 'Must have', color: '#1b6b5a', textColor: '#fff' },
+  ];
+
   const fetchRecipients = async () => {
     const res = await apiFetch('/api/care-recipients');
     if (res?.ok) {
@@ -35,6 +96,16 @@ const CareRecipients = window.CareRecipients = () => {
       emergencyContactName: '', emergencyContactPhone: '',
       authorizationTier: 'tier3',
     });
+    setWizardStep(null);
+    setSavedRecipientId(null);
+    setCarePrefs({});
+    setCareDetails({});
+    setShowAllPrefs(false);
+    setAttestAgreed(false);
+    setAttestSignature('');
+    setAttestRelationship('');
+    setAttestNotifyMethod('email');
+    setAttestError('');
   };
 
   const startEditRecipient = (r) => {
@@ -108,11 +179,25 @@ const CareRecipients = window.CareRecipients = () => {
         response = await apiFetch('/api/care-recipients', { method: 'POST', body: JSON.stringify(payload) });
       }
       if (response?.ok) {
+        const data = await response.json();
         const msg = editingId ? 'Recipient updated!' : 'Recipient added!';
         setSaveMsg(msg);
         showToast(msg, 'success');
-        await fetchRecipients();
-        setTimeout(() => { setShowAddForm(false); setEditingId(null); resetForm(); setSaveMsg(''); }, 1500);
+
+        if (!editingId) {
+          // New recipient - start wizard
+          const newId = data.id || data.careRecipient?.id;
+          setSavedRecipientId(newId);
+          setWizardStep(1);
+        } else if (savedRecipientId) {
+          // Editing within wizard flow - continue wizard
+          setWizardStep(1);
+          setEditingId(null);
+        } else {
+          // Editing existing (not in wizard) - close normally
+          await fetchRecipients();
+          setTimeout(() => { setShowAddForm(false); setEditingId(null); resetForm(); setSaveMsg(''); }, 1500);
+        }
       } else {
         setSaveMsg('Error saving — please try again.');
         showToast('Error saving recipient', 'error');
@@ -122,6 +207,79 @@ const CareRecipients = window.CareRecipients = () => {
       setSaveMsg('Error saving — please try again.');
       showToast('Error saving recipient', 'error');
     }
+  };
+
+  const handleSavePreferences = async () => {
+    if (!savedRecipientId) return;
+    setPrefsLoading(true);
+    try {
+      const res = await apiFetch(`/api/care-recipients/${savedRecipientId}/preferences`, {
+        method: 'PUT',
+        body: JSON.stringify({ preferences: carePrefs, details: careDetails }),
+      });
+      if (res?.ok) {
+        showToast('Preferences saved!', 'success');
+        setWizardStep(2);
+      } else {
+        showToast('Error saving preferences', 'error');
+      }
+    } catch (err) {
+      console.error('Error saving preferences:', err);
+      showToast('Error saving preferences', 'error');
+    }
+    setPrefsLoading(false);
+  };
+
+  const handleAttestAndNotify = async () => {
+    if (!attestAgreed || !attestSignature || !attestRelationship) {
+      setAttestError('Please fill in all required fields');
+      return;
+    }
+    if (!attestSignature.trim() || attestSignature.trim().split(/\s+/).length < 2) {
+      setAttestError('Please type your full legal name as your signature.');
+      return;
+    }
+
+    setAttestLoading(true);
+    setAttestError('');
+
+    try {
+      // POST attestation (matches ConsentVerification.js API)
+      const attestRes = await apiFetch(`/api/consent/${savedRecipientId}/attest`, {
+        method: 'POST',
+        body: JSON.stringify({
+          signatureName: attestSignature.trim(),
+          relationshipToRecipient: attestRelationship,
+          recipientEmail: formData.email?.trim() || undefined,
+          recipientPhone: formData.phone?.trim() || undefined,
+        }),
+      });
+
+      if (!attestRes?.ok) {
+        setAttestError('Error submitting attestation');
+        setAttestLoading(false);
+        return;
+      }
+
+      // POST outreach/notification
+      const notifyRes = await apiFetch(`/api/consent/${savedRecipientId}/send-outreach`, {
+        method: 'POST',
+        body: JSON.stringify({
+          method: attestNotifyMethod,
+        }),
+      });
+
+      if (notifyRes?.ok) {
+        showToast('Attestation submitted and notification sent!', 'success');
+        setWizardStep(4);
+      } else {
+        setAttestError('Error sending notification');
+      }
+    } catch (err) {
+      console.error('Attestation error:', err);
+      setAttestError('Error completing attestation');
+    }
+    setAttestLoading(false);
   };
 
   // Resize image on canvas before upload to keep payload small
@@ -158,7 +316,6 @@ const CareRecipients = window.CareRecipients = () => {
       if (!file) return;
       setPhotoUploading(true);
       try {
-        // Resize to 800px max dimension, JPEG 80% quality
         const base64 = await resizeImage(file, 800, 0.8);
         const res = await apiFetch(`/api/care-recipients/${recipientId}/photo`, {
           method: 'PUT',
@@ -195,7 +352,6 @@ const CareRecipients = window.CareRecipients = () => {
         title: clickable ? 'Click to change photo' : undefined,
       }, React.createElement('img', { src: r.photo, alt: getName(r), style: { width: '100%', height: '100%', objectFit: 'cover' } }));
     }
-    // Show emoji if set, otherwise show initials
     if (r.emoji) {
       return React.createElement('div', {
         style: { width: size, height: size, borderRadius: '50%', background: '#f5f0ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.55, cursor: clickable ? 'pointer' : 'default', flexShrink: 0 },
@@ -222,117 +378,530 @@ const CareRecipients = window.CareRecipients = () => {
     } catch { return val || ''; }
   };
 
+  const WizardProgressBar = ({ currentStep }) => {
+    const steps = ['Add Your Loved One', 'Care Preferences', 'Verify Identity', 'Attest & Notify', 'All Set!'];
+    const tier3 = formData.authorizationTier === 'tier3';
+    const displaySteps = tier3 ? steps : [steps[0], steps[1], steps[2], steps[4]];
+
+    return (
+      <div style={{ marginBottom: '32px', position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+          {displaySteps.map((step, idx) => {
+            const isCompleted = idx < currentStep;
+            const isCurrent = idx === currentStep;
+            return (
+              <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                <div style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  background: isCompleted ? '#2e7d32' : isCurrent ? '#e8724a' : '#e0e0e0',
+                  color: isCompleted || isCurrent ? '#fff' : '#999',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  zIndex: 2,
+                  position: 'relative',
+                }}>
+                  {isCompleted ? '✓' : (idx + 1)}
+                </div>
+                <div style={{ fontSize: 12, marginTop: 8, textAlign: 'center', maxWidth: 100, color: isCurrent ? '#333' : '#999' }}>
+                  {step}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{
+          position: 'absolute',
+          top: 20,
+          left: 0,
+          right: 0,
+          height: 2,
+          background: '#e0e0e0',
+          zIndex: 1,
+          width: '100%',
+        }} />
+        <div style={{
+          position: 'absolute',
+          top: 20,
+          left: 0,
+          height: 2,
+          background: '#2e7d32',
+          zIndex: 1,
+          width: `${(currentStep / displaySteps.length) * 100}%`,
+          transition: 'width 0.3s ease',
+        }} />
+      </div>
+    );
+  };
+
+  // Wizard Step 1: Add Your Loved One (already shown in form)
+  // Wizard Step 2: Care Preferences
+  const WizardStep2 = () => {
+    const displayedPrefs = showAllPrefs ? CARE_PREFS_LIST : CARE_PREFS_LIST.slice(0, 10);
+
+    return (
+      <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
+        <WizardProgressBar currentStep={1} />
+        <h3 style={{ marginBottom: '8px', color: '#1b6b5a' }}>Care Preferences</h3>
+        <p style={{ color: '#666', fontSize: 14, marginBottom: '24px' }}>
+          Tell us about the care your loved one needs. We'll use this to match you with the right caregivers.
+        </p>
+
+        <div>
+          {displayedPrefs.map(pref => (
+            <div key={pref.id} style={{ marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <span style={{ fontSize: 20 }}>{pref.icon}</span>
+                <span style={{ flex: 1, fontWeight: 500, color: '#333' }}>{pref.label}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                {RATING_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setCarePrefs({ ...carePrefs, [pref.id]: opt.value })}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      border: carePrefs[pref.id] === opt.value ? `2px solid ${opt.color}` : '1px solid #ddd',
+                      background: carePrefs[pref.id] === opt.value ? opt.color : '#fff',
+                      color: carePrefs[pref.id] === opt.value ? opt.textColor : '#666',
+                      fontSize: 12,
+                      fontWeight: carePrefs[pref.id] === opt.value ? 600 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {carePrefs[pref.id] >= 2 && PREF_FOLLOW_UPS[pref.id] && (
+                <div style={{ marginTop: '8px', marginLeft: '32px' }}>
+                  <input
+                    type="text"
+                    placeholder={PREF_FOLLOW_UPS[pref.id]}
+                    value={careDetails[pref.id] || ''}
+                    onChange={(e) => setCareDetails({ ...careDetails, [pref.id]: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: 13,
+                      fontStyle: 'italic',
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+
+          {!showAllPrefs && CARE_PREFS_LIST.length > 10 && (
+            <button
+              type="button"
+              onClick={() => setShowAllPrefs(true)}
+              style={{
+                padding: '8px 12px',
+                color: '#1b6b5a',
+                background: '#e8f5f2',
+                border: '1px solid #1b6b5a',
+                borderRadius: '6px',
+                fontWeight: 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                marginTop: '16px',
+              }}
+            >
+              Show {CARE_PREFS_LIST.length - 10} more preferences
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleSavePreferences}
+            disabled={prefsLoading}
+            style={{ opacity: prefsLoading ? 0.6 : 1, cursor: prefsLoading ? 'not-allowed' : 'pointer' }}
+          >
+            {prefsLoading ? 'Saving...' : 'Continue'}
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => {
+              setWizardStep(null);
+              if (savedRecipientId) setEditingId(savedRecipientId);
+            }}
+          >
+            Back
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Wizard Step 3: Verify Identity & Payment (Coming Soon)
+  const WizardStep3 = () => {
+    return (
+      <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
+        <WizardProgressBar currentStep={2} />
+        <h3 style={{ marginBottom: '24px', color: '#1b6b5a' }}>Verify Identity & Payment</h3>
+
+        <div style={{
+          padding: '32px',
+          borderRadius: '12px',
+          border: '2px dashed #ddd',
+          background: '#f9f9f9',
+          textAlign: 'center',
+          opacity: 0.6,
+        }}>
+          <div style={{
+            display: 'inline-block',
+            padding: '8px 16px',
+            background: '#fff3e0',
+            color: '#e8724a',
+            borderRadius: '6px',
+            fontSize: 12,
+            fontWeight: 600,
+            marginBottom: '16px',
+          }}>
+            Coming Soon — Powered by Stripe Identity
+          </div>
+          <h4 style={{ marginTop: '16px', marginBottom: '12px', color: '#999' }}>Verify Your Identity</h4>
+          <p style={{ color: '#aaa', fontSize: 14, marginBottom: '20px' }}>
+            We'll verify your identity with a photo ID and selfie to ensure security. You'll also set up payment information here.
+          </p>
+          <p style={{
+            color: '#c62828',
+            fontSize: 13,
+            fontWeight: 600,
+            background: '#fce4ec',
+            padding: '12px',
+            borderRadius: '6px',
+          }}>
+            This step will be required before care can begin.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              if (formData.authorizationTier === 'tier3') {
+                setWizardStep(3);
+              } else {
+                setWizardStep(4);
+              }
+            }}
+          >
+            Skip for Now
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => setWizardStep(1)}
+          >
+            Back
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Wizard Step 4: Attest & Notify (for tier3 only)
+  const WizardStep4 = () => {
+    const recipientName = `${formData.firstName} ${formData.lastName}`;
+
+    return (
+      <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
+        <WizardProgressBar currentStep={3} />
+        <h3 style={{ marginBottom: '24px', color: '#1b6b5a' }}>Attest & Notify</h3>
+
+        {attestError && (
+          <div style={{
+            padding: '12px 16px',
+            borderRadius: '8px',
+            background: '#fce4ec',
+            color: '#c62828',
+            marginBottom: '20px',
+            fontSize: 13,
+          }}>
+            {attestError}
+          </div>
+        )}
+
+        <div style={{ background: '#f9f9f9', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
+          <p style={{ fontSize: 13, lineHeight: '1.6', color: '#333', margin: 0 }}>
+            I confirm that <strong>{recipientName}</strong> is aware that I am arranging non-medical companion care services through InPlace on their behalf. I understand that <strong>{recipientName}</strong> will be contacted directly by InPlace to verify their awareness and consent before any caregiver visit is scheduled. I understand that misrepresenting this consent may result in immediate account termination, referral to appropriate authorities, and potential legal liability under Virginia law.
+          </p>
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={attestAgreed}
+              onChange={(e) => setAttestAgreed(e.target.checked)}
+              style={{ cursor: 'pointer', width: 18, height: 18 }}
+            />
+            <span style={{ fontSize: 13, color: '#333' }}>I attest to the above statement</span>
+          </label>
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '20px' }}>
+          <label style={{ fontWeight: 600, marginBottom: '8px', display: 'block' }}>Your Signature</label>
+          <p style={{ fontSize: 12, color: '#888', marginBottom: '8px', marginTop: 0 }}>Type your full name exactly as it appears</p>
+          <input
+            type="text"
+            placeholder="e.g., John Smith"
+            value={attestSignature}
+            onChange={(e) => setAttestSignature(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
+          />
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '20px' }}>
+          <label style={{ fontWeight: 600, marginBottom: '8px', display: 'block' }}>Your Relationship</label>
+          <select
+            value={attestRelationship}
+            onChange={(e) => setAttestRelationship(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
+          >
+            <option value="">Select...</option>
+            <option value="Child">Adult Child</option>
+            <option value="Spouse">Spouse</option>
+            <option value="Sibling">Sibling</option>
+            <option value="Healthcare POA">Healthcare Power of Attorney</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div style={{ background: '#e8f5f2', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#1b6b5a', marginTop: 0, marginBottom: '12px' }}>How should we contact {recipientName}?</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {[
+              { id: 'email', label: 'Email', value: formData.email },
+              { id: 'text', label: 'Text Message', value: formData.phone },
+              { id: 'phone_call', label: 'Phone Call', value: formData.phone },
+            ].map(opt => (
+              <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="notify_method"
+                  value={opt.id}
+                  checked={attestNotifyMethod === opt.id}
+                  onChange={(e) => setAttestNotifyMethod(e.target.value)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 13, color: '#333' }}>
+                  {opt.label} {opt.value && <span style={{ color: '#888' }}>({opt.value})</span>}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleAttestAndNotify}
+            disabled={attestLoading}
+            style={{ opacity: attestLoading ? 0.6 : 1, cursor: attestLoading ? 'not-allowed' : 'pointer' }}
+          >
+            {attestLoading ? 'Submitting...' : 'Sign & Continue'}
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => setWizardStep(2)}
+            disabled={attestLoading}
+          >
+            Back
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Wizard Step 5: All Set (Completion)
+  const WizardStep5 = () => {
+    const recipientName = `${formData.firstName} ${formData.lastName}`;
+
+    return (
+      <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #2e7d32', textAlign: 'center' }}>
+        <WizardProgressBar currentStep={formData.authorizationTier === 'tier3' ? 4 : 3} />
+
+        <div style={{ fontSize: 48, marginBottom: '16px' }}>✓</div>
+        <h3 style={{ color: '#2e7d32', marginBottom: '12px' }}>You're All Set!</h3>
+        <p style={{ color: '#666', fontSize: 15, marginBottom: '24px' }}>
+          {recipientName} has been added to your care team. We're verifying the information you provided and will reach out to confirm everything.
+        </p>
+
+        <div style={{ background: '#f9f9f9', padding: '20px', borderRadius: '8px', marginBottom: '32px', textAlign: 'left' }}>
+          <p style={{ fontWeight: 600, color: '#333', marginTop: 0, marginBottom: '12px' }}>While we verify, you can:</p>
+          <ul style={{ margin: 0, paddingLeft: '20px', color: '#666', fontSize: 14 }}>
+            <li>Review care preferences and make adjustments</li>
+            <li>Upload additional photos or documents</li>
+            <li>Invite family members to the care team</li>
+            <li>Browse available caregivers in your area</li>
+          </ul>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setWizardStep(null); resetForm(); setShowAddForm(false);
+              fetchRecipients();
+              if (window.__navigateTo) window.__navigateTo('dashboard');
+            }}
+          >
+            Go to Dashboard
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => {
+              setWizardStep(null); resetForm(); setShowAddForm(false);
+              fetchRecipients();
+              if (window.__navigateTo) window.__navigateTo('care-team');
+            }}
+            style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a' }}
+          >
+            Invite Family to Care Team
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => {
+              setWizardStep(null); resetForm(); setShowAddForm(false);
+              fetchRecipients();
+              if (window.__navigateTo) window.__navigateTo('caregivers');
+            }}
+            style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a' }}
+          >
+            Browse Caregivers in Your Area
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) return <LoadingSpinner text="Loading care recipients..." />;
 
   return (
     <div>
       <h1 className="greeting">👥 Care Recipients</h1>
-      <div className="recipient-cards">
-        {recipients.map(r => (
-          <div key={r.id} className={`recipient-card ${selectedId === r.id ? 'selected' : ''}`} onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}>
-            <div style={{ marginBottom: '12px' }}><RecipientAvatar r={r} size={56} /></div>
-            <div className="recipient-card-name">{getName(r)}</div>
-            <p className="text-muted" style={{ fontSize: '13px' }}>{r.age} years old</p>
-            {(r.location_city || r.city) && <p className="text-muted" style={{ fontSize: '13px' }}>{r.location_city ? `${r.location_city}, ${r.location_state}` : r.city}</p>}
-            {r.consent_status && r.consent_status !== 'verified' && (
-              <div style={{ marginTop: '6px', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, display: 'inline-block',
-                background: r.consent_status === 'pending' ? '#FFF3E0' : r.consent_status === 'attested' ? '#E3F2FD' : '#fce4ec',
-                color: r.consent_status === 'pending' ? '#e8724a' : r.consent_status === 'attested' ? '#1565C0' : '#c62828',
-              }}>
-                {r.consent_status === 'pending' ? '\u23F3 Pending' : r.consent_status === 'attested' ? '\u{1F4DD} Attested \u2014 awaiting code' : '\u274C ' + r.consent_status}
+
+      {!showAddForm && !wizardStep && (
+        <>
+          <div className="recipient-cards">
+            {recipients.map(r => (
+              <div key={r.id} className={`recipient-card ${selectedId === r.id ? 'selected' : ''}`} onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}>
+                <div style={{ marginBottom: '12px' }}><RecipientAvatar r={r} size={56} /></div>
+                <div className="recipient-card-name">{getName(r)}</div>
+                <p className="text-muted" style={{ fontSize: '13px' }}>{r.age} years old</p>
+                {(r.location_city || r.city) && <p className="text-muted" style={{ fontSize: '13px' }}>{r.location_city ? `${r.location_city}, ${r.location_state}` : r.city}</p>}
+                {r.consent_status && r.consent_status !== 'verified' && (
+                  <div style={{ marginTop: '6px', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, display: 'inline-block',
+                    background: r.consent_status === 'pending' ? '#FFF3E0' : r.consent_status === 'attested' ? '#E3F2FD' : '#fce4ec',
+                    color: r.consent_status === 'pending' ? '#e8724a' : r.consent_status === 'attested' ? '#1565C0' : '#c62828',
+                  }}>
+                    {r.consent_status === 'pending' ? '\u23F3 Pending' : r.consent_status === 'attested' ? '\u{1F4DD} Attested \u2014 awaiting code' : '\u274C ' + r.consent_status}
+                  </div>
+                )}
               </div>
-            )}
+            ))}
           </div>
-        ))}
-      </div>
 
-      {selected && !showAddForm && (
-        <div className="card" style={{ marginTop: '32px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <RecipientAvatar r={selected} size={48} clickable={true} />
-              <span>{getName(selected)}</span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button onClick={() => handlePhotoUpload(selected.id)} disabled={photoUploading} style={{ padding: '6px 14px', background: '#f0f0f0', color: '#555', border: '1px solid #ddd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>
-                {photoUploading ? 'Uploading...' : (selected.photo ? 'Change Photo' : 'Add Photo')}
-              </button>
-              {selected.photo && (
-                <button onClick={() => handleRemovePhoto(selected.id)} style={{ padding: '6px 10px', background: '#fff0f0', color: '#c00', border: '1px solid #fdd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>Remove</button>
+          {selected && (
+            <div className="card" style={{ marginTop: '32px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <RecipientAvatar r={selected} size={48} clickable={true} />
+                  <span>{getName(selected)}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button onClick={() => handlePhotoUpload(selected.id)} disabled={photoUploading} style={{ padding: '6px 14px', background: '#f0f0f0', color: '#555', border: '1px solid #ddd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>
+                    {photoUploading ? 'Uploading...' : (selected.photo ? 'Change Photo' : 'Add Photo')}
+                  </button>
+                  {selected.photo && (
+                    <button onClick={() => handleRemovePhoto(selected.id)} style={{ padding: '6px 10px', background: '#fff0f0', color: '#c00', border: '1px solid #fdd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>Remove</button>
+                  )}
+                  <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
+                </div>
+              </div>
+              <div className="info-grid">
+                <div className="info-item"><div className="info-label">Age</div><div className="info-value">{selected.age}</div></div>
+                <div className="info-item"><div className="info-label">Location</div><div className="info-value">{selected.location_city ? `${selected.location_city}, ${selected.location_state}` : (selected.city || 'N/A')}</div></div>
+              </div>
+              {(selected.health_conditions || selected.healthConditions) && (
+                <div style={{ marginTop: '16px' }}>
+                  <strong>Health Conditions:</strong>
+                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{parseDisplay(selected.health_conditions || selected.healthConditions)}</p>
+                </div>
               )}
-              <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
-            </div>
-          </div>
-          <div className="info-grid">
-            <div className="info-item"><div className="info-label">Age</div><div className="info-value">{selected.age}</div></div>
-            <div className="info-item"><div className="info-label">Location</div><div className="info-value">{selected.location_city ? `${selected.location_city}, ${selected.location_state}` : (selected.city || 'N/A')}</div></div>
-          </div>
-          {(selected.health_conditions || selected.healthConditions) && (
-            <div style={{ marginTop: '16px' }}>
-              <strong>Health Conditions:</strong>
-              <p style={{ color: '#6c757d', marginTop: '8px' }}>{parseDisplay(selected.health_conditions || selected.healthConditions)}</p>
-            </div>
-          )}
-          {selected.medications && (
-            <div style={{ marginTop: '16px' }}>
-              <strong>Medications:</strong>
-              <p style={{ color: '#6c757d', marginTop: '8px' }}>{parseDisplay(selected.medications)}</p>
-            </div>
-          )}
-          {selected.pets && (
-            <div style={{ marginTop: '16px' }}>
-              <strong>Pets in the home:</strong>
-              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.pets}</p>
-            </div>
-          )}
-          {selected.pet_allergies && (
-            <div style={{ marginTop: '16px' }}>
-              <strong>Pet allergies:</strong>
-              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.pet_allergies}</p>
-            </div>
-          )}
-          {selected.food_allergies && (
-            <div style={{ marginTop: '16px' }}>
-              <strong>Food allergies:</strong>
-              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.food_allergies}</p>
-            </div>
-          )}
-          {selected.medical_conditions && (
-            <div style={{ marginTop: '16px' }}>
-              <strong>Additional medical conditions:</strong>
-              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.medical_conditions}</p>
-            </div>
-          )}
-          {selected.preferences && (
-            <div style={{ marginTop: '16px' }}>
-              <strong>Preferences:</strong>
-              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.preferences}</p>
+              {selected.medications && (
+                <div style={{ marginTop: '16px' }}>
+                  <strong>Medications:</strong>
+                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{parseDisplay(selected.medications)}</p>
+                </div>
+              )}
+              {selected.pets && (
+                <div style={{ marginTop: '16px' }}>
+                  <strong>Pets in the home:</strong>
+                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.pets}</p>
+                </div>
+              )}
+              {selected.pet_allergies && (
+                <div style={{ marginTop: '16px' }}>
+                  <strong>Pet allergies:</strong>
+                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.pet_allergies}</p>
+                </div>
+              )}
+              {selected.food_allergies && (
+                <div style={{ marginTop: '16px' }}>
+                  <strong>Food allergies:</strong>
+                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.food_allergies}</p>
+                </div>
+              )}
+              {selected.medical_conditions && (
+                <div style={{ marginTop: '16px' }}>
+                  <strong>Additional medical conditions:</strong>
+                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.medical_conditions}</p>
+                </div>
+              )}
+              {selected.preferences && (
+                <div style={{ marginTop: '16px' }}>
+                  <strong>Preferences:</strong>
+                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.preferences}</p>
+                </div>
+              )}
+              {(selected.emergency_contact_name || selected.emergencyContactName) && (
+                <div style={{ marginTop: '16px' }}>
+                  <strong>Emergency Contact:</strong>
+                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.emergency_contact_name || selected.emergencyContactName} — {formatPhone(selected.emergency_contact_phone || selected.emergencyContactPhone)}</p>
+                </div>
+              )}
             </div>
           )}
-          {(selected.emergency_contact_name || selected.emergencyContactName) && (
-            <div style={{ marginTop: '16px' }}>
-              <strong>Emergency Contact:</strong>
-              <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.emergency_contact_name || selected.emergencyContactName} — {formatPhone(selected.emergency_contact_phone || selected.emergencyContactPhone)}</p>
-            </div>
+
+          {selected && (selected.authorization_tier === 'tier3' || selected.authorization_tier === 'tier2') && selected.consent_status && selected.consent_status !== 'verified' && (
+            <ConsentVerification
+              recipientId={selected.id}
+              recipientName={getName(selected)}
+              consentStatus={selected.consent_status}
+              authorizationTier={selected.authorization_tier}
+              onStatusChange={fetchRecipients}
+            />
           )}
-        </div>
+
+          <button className="btn btn-primary" onClick={() => { resetForm(); setEditingId(null); setShowAddForm(true); setWizardStep(null); setSavedRecipientId(null); setCarePrefs({}); setCareDetails({}); setShowAllPrefs(false); setAttestAgreed(false); setAttestSignature(''); setAttestRelationship(''); setAttestNotifyMethod('email'); setAttestError(''); }} style={{ marginTop: '32px' }}>+ Add Care Recipient</button>
+        </>
       )}
 
-      {selected && !showAddForm && (selected.authorization_tier === 'tier3' || selected.authorization_tier === 'tier2') && selected.consent_status && selected.consent_status !== 'verified' && (
-        <ConsentVerification
-          recipientId={selected.id}
-          recipientName={getName(selected)}
-          consentStatus={selected.consent_status}
-          authorizationTier={selected.authorization_tier}
-          onStatusChange={fetchRecipients}
-        />
-      )}
-
-      {!showAddForm && (
-        <button className="btn btn-primary" onClick={() => { resetForm(); setEditingId(null); setShowAddForm(true); }} style={{ marginTop: '32px' }}>+ Add Care Recipient</button>
-      )}
-
-      {showAddForm && (
+      {showAddForm && wizardStep === null && (
         <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
           <h3 style={{ marginBottom: '24px', color: '#1b6b5a' }}>{editingId ? 'Edit Care Recipient' : 'Add New Care Recipient'}</h3>
           {saveMsg && (
@@ -414,7 +983,7 @@ const CareRecipients = window.CareRecipients = () => {
           </div>
           <div style={{ borderTop: '1px solid #eee', paddingTop: 12, marginTop: 8, marginBottom: 8 }}>
             <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Contact & Address</label>
-            <p style={{ fontSize: 13, color: '#666', marginTop: 0, marginBottom: 12 }}>Where does this person live? This helps verify their identity and lets caregivers find the location.</p>
+            <p style={{ fontSize: 13, color: '#666', marginTop: 0, marginBottom: 12 }}>Where does this person live? This helps verify their identity and lets caregivers find the location. This info will be used to contact your loved one and verify consent to visits.</p>
           </div>
           <div className="form-row">
             <div className="form-group">
@@ -489,11 +1058,17 @@ const CareRecipients = window.CareRecipients = () => {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button className="btn btn-primary" onClick={handleSaveRecipient}>{editingId ? 'Save Changes' : 'Add Recipient'}</button>
+            <button className="btn btn-primary" onClick={handleSaveRecipient}>{editingId ? 'Save Changes' : 'Save & Continue'}</button>
             <button className="btn btn-outline" onClick={() => { setShowAddForm(false); setEditingId(null); resetForm(); }}>Cancel</button>
           </div>
         </div>
       )}
+
+      {wizardStep === 1 && <WizardStep2 />}
+      {wizardStep === 2 && <WizardStep3 />}
+      {wizardStep === 3 && formData.authorizationTier === 'tier3' && <WizardStep4 />}
+      {wizardStep === 3 && formData.authorizationTier !== 'tier3' && <WizardStep5 />}
+      {wizardStep === 4 && <WizardStep5 />}
     </div>
   );
 };
