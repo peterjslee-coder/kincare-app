@@ -1,6 +1,7 @@
 const Schedule = window.Schedule = () => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [authGate, setAuthGate] = useState(null); // null = loading, true = blocked, false = ok
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -38,6 +39,23 @@ const Schedule = window.Schedule = () => {
     }
     setLoading(false);
   };
+
+  // Check if user has at least one verified care recipient — gate scheduling behind authorization
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch('/api/care-recipients');
+        if (res?.ok) {
+          const data = await res.json();
+          const list = data.careRecipients || data || [];
+          const hasVerified = list.some(r => r.consent_status === 'verified' || r.consent_status === 'approved' || r.authorization_tier === 'tier1');
+          setAuthGate(list.length === 0 ? true : !hasVerified);
+        } else {
+          setAuthGate(false); // If API fails, don't block
+        }
+      } catch { setAuthGate(false); }
+    })();
+  }, []);
 
   useEffect(() => {
     fetchSessions();
@@ -139,6 +157,22 @@ const Schedule = window.Schedule = () => {
         <h1 className="page-title">Schedule</h1>
         <p className="page-subtitle">{sessions.length > 0 ? 'Care calendar — click any day to see details' : 'Your care calendar'}</p>
       </div>
+
+      {authGate && (
+        <div style={{ background: '#FFF3E0', border: '1px solid #ffe0b2', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <span style={{ fontSize: 22 }}>🔒</span>
+          <div>
+            <div style={{ fontWeight: 600, color: '#e65100', fontSize: 15, marginBottom: 4 }}>Authorization Required</div>
+            <div style={{ fontSize: 13, color: '#6d4c00', lineHeight: 1.5 }}>
+              Before scheduling care, you'll need to add a loved one and complete the care authorization process.
+              This ensures everyone involved is aware and has consented to care arrangements.
+            </div>
+            <button onClick={() => window.__navigateTo && window.__navigateTo('recipients')} style={{ marginTop: 10, padding: '8px 18px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Complete Authorization
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Empty state for new users with no sessions */}
       {sessions.length === 0 && (

@@ -33,6 +33,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     if (!formData.firstName.trim()) errs.push('First name');
     if (!formData.lastName.trim()) errs.push('Last name');
     if (!formData.email.trim() || !isValidEmail(formData.email)) errs.push('Valid email');
+    if (!formData.phone.trim()) errs.push('Phone number');
     if (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) errs.push('Password must meet all requirements');
     if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) errs.push('Passwords must match');
     if (!formData.confirmPassword) errs.push('Confirm password');
@@ -41,7 +42,8 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
 
   const isBasicInfoValid = () => {
     return formData.firstName.trim() && formData.lastName.trim() &&
-           isValidEmail(formData.email) && formData.password.length >= 8 && /[A-Z]/.test(formData.password) && /[0-9]/.test(formData.password) && /[^A-Za-z0-9]/.test(formData.password) &&
+           isValidEmail(formData.email) && formData.phone.trim() &&
+           formData.password.length >= 8 && /[A-Z]/.test(formData.password) && /[0-9]/.test(formData.password) && /[^A-Za-z0-9]/.test(formData.password) &&
            formData.confirmPassword && formData.password === formData.confirmPassword;
   };
 
@@ -433,6 +435,11 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               <label>Email {showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
               <input type="email" value={formData.email} onChange={(e) => { setFormData(p => ({ ...p, email: e.target.value })); setShowFieldErrors(false); }} placeholder="you@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: '#f0f0f0', color: '#666' } : showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
               {formData.email && !isValidEmail(formData.email) ? <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div> : <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Used to verify your account and for future payments</div>}
+            </div>
+            <div className="form-group">
+              <label>Phone Number {showFieldErrors && !formData.phone.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
+              <input type="tel" value={formData.phone} onChange={(e) => { const v = e.target.value.replace(/[^\d+\-()\s]/g, ''); setFormData(p => ({ ...p, phone: v })); setShowFieldErrors(false); }} placeholder="(555) 123-4567" style={showFieldErrors && !formData.phone.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+              <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>For care coordination and emergencies</div>
             </div>
             <div className="form-group">
               <label>Password {showFieldErrors && (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*see requirements below</span>}</label>

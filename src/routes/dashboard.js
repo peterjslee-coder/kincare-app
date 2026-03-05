@@ -177,6 +177,8 @@ async function familyDashboard(db, userId, res) {
           preferences: primary.preferences,
           photo: primary.photo || null,
           emoji: primary.emoji || null,
+          consent_status: primary.consent_status || 'pending',
+          authorization_tier: primary.authorization_tier || 'unset',
           emergencyContact: {
             name: primary.emergency_contact_name,
             phone: primary.emergency_contact_phone,

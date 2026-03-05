@@ -582,6 +582,12 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_admin_approved INTEGER DEFAULT 0`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_admin_approved_by TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_admin_approved_at TIMESTAMPTZ`,
+    // v1.38.0 — User address fields (for billing, care coordination)
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS address_line1 TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS address_line2 TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS city TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS state TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS zip TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

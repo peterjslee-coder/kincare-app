@@ -197,27 +197,31 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const isNewUser = data?.isNewUser && !isDemo;
 
   // Onboarding checklist for real (non-demo) users
-  // Profile is "started" once they have a name (collected at signup) — photo is optional, not a gate
-  const hasProfile = !!(user?.first_name || user?.firstName);
+  // Profile is "complete" when they have name + phone (not just name from signup)
+  const hasProfile = !!(user?.first_name || user?.firstName) && !!(user?.phone);
   const hasRecipient = (data?.parent || stats.assignedCaregivers > 0);
+  // Check consent status on the care recipient — "verified" means authorization is done
+  const recipientConsentDone = data?.parent?.consent_status === 'verified' || data?.parent?.consent_status === 'approved';
   const hasCareTeam = careTeams.length > 0;
   // Check if user joined via invite (is a member, not leader, of a care team)
   const isTeamMember = careTeams.some(t => t.my_role === 'member');
   const isTeamLeader = careTeams.some(t => t.my_role === 'leader');
+  // Reordered: profile → add loved one → invite family → set up payment → search caregivers → install app
   const onboardingSteps = [
-    { id: 'profile', label: 'Complete your profile', done: !!hasProfile, action: () => onNavigate && onNavigate('account'), actionText: 'Go to Profile' },
-    // Members who joined via invite already have a care recipient through the team — grey this out
+    { id: 'profile', label: 'Complete your profile', hint: 'Add your name, phone number, and address so caregivers can reach you.', done: !!hasProfile, action: () => onNavigate && onNavigate('account'), actionText: 'Go to Profile' },
+    // Members who joined via invite already have a care recipient through the team
     ...(isTeamMember && !isTeamLeader ? [
       { id: 'recipient', label: 'Add a loved one to care for', done: true, action: null, actionText: null },
     ] : [
-      { id: 'recipient', label: 'Add a loved one to care for', done: !!hasRecipient, action: () => onNavigate && onNavigate('recipients'), actionText: 'Add Recipient' },
+      { id: 'recipient', label: 'Add a loved one & verify authorization', hint: 'Add your loved one\'s details, set up care preferences, and verify your authority to arrange care.', done: !!hasRecipient && !!recipientConsentDone, action: () => onNavigate && onNavigate('recipients'), actionText: 'Add Recipient' },
     ]),
     // Only leaders can invite others to the care team
     ...(isTeamMember && !isTeamLeader ? [] : [
       { id: 'team', label: 'Invite family to the care team', done: hasCareTeam, action: () => onNavigate && onNavigate('care-team'), actionText: 'Manage Team' },
     ]),
+    { id: 'payment', label: 'Set up payment method', hint: 'Connect your payment method so you can book care sessions.', done: false, action: () => onNavigate && onNavigate('account'), actionText: 'Coming Soon', disabled: true },
     { id: 'caregiver', label: 'Search for caregivers in your area', done: stats.assignedCaregivers > 0, action: () => onNavigate && onNavigate('caregivers'), actionText: 'Find Caregivers' },
-    { id: 'pwa', label: 'Install InPlace on your phone', done: !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || !!localStorage.getItem('pwa_setup_done'), action: () => setShowPwaGuide(true), actionText: 'Set Up' },
+    { id: 'pwa', label: 'Install InPlace on your phone', hint: 'Get push notifications and quick access from your home screen.', done: !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || !!localStorage.getItem('pwa_setup_done'), action: () => setShowPwaGuide(true), actionText: 'Set Up' },
   ];
   const onboardingComplete = onboardingSteps.every(s => s.done);
   const showOnboarding = !isDemo && !onboardingComplete;
@@ -324,34 +328,28 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
           <div style={{ display: 'grid', gap: 0, marginTop: 8 }}>
             {onboardingSteps.map((step, idx) => {
               const isNext = idx === onboardingSteps.findIndex(s => !s.done);
-              const hints = {
-                profile: 'Add your name, phone number, and location so caregivers can reach you.',
-                recipient: 'Create a care profile with health details, medications, and preferences.',
-                team: 'Invite siblings or family members so everyone stays on the same page.',
-                caregiver: 'Browse qualified, background-checked caregivers in your area.',
-                pwa: 'Get push notifications and quick access from your home screen.',
-              };
               return (
                 <div key={step.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 0',
                   borderBottom: idx < onboardingSteps.length - 1 ? '1px solid #f5f5f5' : 'none',
-                  opacity: step.done ? 0.55 : 1 }}>
+                  opacity: step.done ? 0.55 : (step.disabled ? 0.5 : 1) }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flex: 1 }}>
                     <div style={{ width: 32, height: 32, borderRadius: '50%', marginTop: 1,
-                      background: step.done ? '#1b6b5a' : (isNext ? '#e8724a' : '#f0f0f0'),
+                      background: step.done ? '#1b6b5a' : (isNext ? '#e8724a' : (step.disabled ? '#e0e0e0' : '#f0f0f0')),
                       color: (step.done || isNext) ? '#fff' : '#ccc',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-                      {step.done ? '✓' : (idx + 1)}
+                      {step.done ? '✓' : step.disabled ? '—' : (idx + 1)}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: step.done ? 400 : 600, textDecoration: step.done ? 'line-through' : 'none', color: step.done ? '#888' : '#333' }}>
                         {step.label}
+                        {step.disabled && <span style={{ fontSize: 11, color: '#5c6bc0', fontWeight: 600, marginLeft: 8 }}>Coming Soon</span>}
                       </div>
-                      {!step.done && hints[step.id] && (
-                        <div style={{ fontSize: 12, color: '#888', marginTop: 3, lineHeight: 1.4 }}>{hints[step.id]}</div>
+                      {!step.done && step.hint && (
+                        <div style={{ fontSize: 12, color: '#888', marginTop: 3, lineHeight: 1.4 }}>{step.hint}</div>
                       )}
                     </div>
                   </div>
-                  {!step.done && isNext && step.action && (
+                  {!step.done && !step.disabled && isNext && step.action && (
                     <button onClick={step.action}
                       style={{ padding: '8px 18px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
                       {step.actionText}

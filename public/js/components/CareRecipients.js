@@ -5,7 +5,8 @@ const CareRecipients = window.CareRecipients = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
-    firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', city: '', state: '',
+    firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', address: '', city: '', state: '', zip: '',
+    phone: '', email: '',
     sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
     emergencyContactName: '', emergencyContactPhone: '',
     authorizationTier: 'tier3',
@@ -28,7 +29,8 @@ const CareRecipients = window.CareRecipients = () => {
 
   const resetForm = () => {
     setFormData({
-      firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', city: '', state: '',
+      firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', address: '', city: '', state: '', zip: '',
+      phone: '', email: '',
       sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
       emergencyContactName: '', emergencyContactPhone: '',
       authorizationTier: 'tier3',
@@ -49,8 +51,12 @@ const CareRecipients = window.CareRecipients = () => {
       relationship: r.relationship || '',
       nickname: r.nickname || '',
       emoji: r.emoji || '',
+      address: r.location_address || r.address || '',
       city: r.location_city || r.city || '',
       state: r.location_state || r.state || '',
+      zip: r.location_zip || r.zip || '',
+      phone: r.sms_phone || r.phone || '',
+      email: r.email || '',
       sameAddress: false,
       healthConditions: parseField(r.health_conditions || r.healthConditions),
       medications: parseField(r.medications),
@@ -75,11 +81,13 @@ const CareRecipients = window.CareRecipients = () => {
       firstName: formData.firstName,
       lastName: formData.lastName,
       age: parseInt(formData.age) || 0,
-      address: null,
+      address: formData.address || null,
       emoji: formData.emoji || null,
       city: formData.city,
       state: formData.state,
-      zip: null,
+      zip: formData.zip || null,
+      phone: formData.phone || null,
+      email: formData.email || null,
       healthConditions: formData.healthConditions.split('\n').map(s => s.trim()).filter(Boolean),
       medications: formData.medications.split('\n').map(s => s.trim()).filter(Boolean),
       pets: formData.pets,
@@ -404,15 +412,43 @@ const CareRecipients = window.CareRecipients = () => {
               )}
             </div>
           </div>
+          <div style={{ borderTop: '1px solid #eee', paddingTop: 12, marginTop: 8, marginBottom: 8 }}>
+            <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Contact & Address</label>
+            <p style={{ fontSize: 13, color: '#666', marginTop: 0, marginBottom: 12 }}>Where does this person live? This helps verify their identity and lets caregivers find the location.</p>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Phone Number</label>
+              <input type="tel" value={formData.phone} onChange={(e) => fd('phone', e.target.value)} placeholder="(555) 123-4567" />
+            </div>
+            <div className="form-group">
+              <label>Email</label>
+              <input type="email" value={formData.email} onChange={(e) => fd('email', e.target.value)} placeholder="mom@email.com" />
+              <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>Used for care awareness verification</div>
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Street Address</label>
+            <input type="text" value={formData.address} onChange={(e) => fd('address', e.target.value)} placeholder="123 Oak Lane" />
+          </div>
           <div className="form-row">
             <div className="form-group">
               <label>City</label>
-              <input type="text" value={formData.city} onChange={(e) => fd('city', e.target.value)} />
+              <input type="text" value={formData.city} onChange={(e) => fd('city', e.target.value)} placeholder="Blacksburg" />
             </div>
-            <div className="form-group">
-              <label>State</label>
-              <input type="text" value={formData.state} onChange={(e) => fd('state', e.target.value)} />
+            <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label>State</label>
+                <input type="text" value={formData.state} onChange={(e) => fd('state', e.target.value)} placeholder="VA" />
+              </div>
+              <div>
+                <label>ZIP</label>
+                <input type="text" value={formData.zip} onChange={(e) => fd('zip', e.target.value)} placeholder="24060" />
+              </div>
             </div>
+          </div>
+          <div style={{ borderTop: '1px solid #eee', paddingTop: 12, marginTop: 8, marginBottom: 8 }}>
+            <label style={{ fontWeight: 600, display: 'block' }}>Health Information</label>
           </div>
           <div className="form-group">
             <label>Health Conditions (one per line)</label>

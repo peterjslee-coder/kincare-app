@@ -47,6 +47,7 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
 router.post("/", requireRole("family"), async (req, res) => {
   const {
     firstName, lastName, age, address, city, state, zip,
+    phone, email,
     healthConditions, medications, preferences,
     emergencyContactName, emergencyContactPhone, emoji,
     authorizationTier,
@@ -79,8 +80,9 @@ router.post("/", requireRole("family"), async (req, res) => {
      latitude, longitude,
      health_conditions, medications, preferences,
      emergency_contact_name, emergency_contact_phone, emoji,
+     sms_phone, email,
      authorization_tier, consent_status, consent_method, consent_verified_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.user.id, firstName, lastName, age || null,
     address || null, city || null, state || null, zip || null,
@@ -90,6 +92,7 @@ router.post("/", requireRole("family"), async (req, res) => {
     preferences || null,
     emergencyContactName || null, emergencyContactPhone || null,
     emoji || null,
+    phone || null, email || null,
     tier, consentStatus, consentMethod, consentVerifiedAt
   );
 
@@ -186,7 +189,7 @@ router.put("/:id", requireRole("family", "admin"), async (req, res) => {
     firstName, lastName, age, address, city, state, zip,
     healthConditions, medications, preferences,
     emergencyContactName, emergencyContactPhone, emoji,
-    aiCareSummary,
+    aiCareSummary, phone, email,
   } = req.body;
 
   // Re-geocode if address changed
@@ -218,6 +221,8 @@ router.put("/:id", requireRole("family", "admin"), async (req, res) => {
       preferences = COALESCE(?, preferences),
       emergency_contact_name = COALESCE(?, emergency_contact_name),
       emergency_contact_phone = COALESCE(?, emergency_contact_phone),
+      sms_phone = COALESCE(?, sms_phone),
+      email = COALESCE(?, email),
       emoji = ${('emoji' in req.body) ? '?' : 'emoji'},
       ai_care_summary = ${('aiCareSummary' in req.body) ? '?' : 'ai_care_summary'},
       ai_care_summary_updated_at = ${('aiCareSummary' in req.body) ? 'NOW()' : 'ai_care_summary_updated_at'},
@@ -233,6 +238,7 @@ router.put("/:id", requireRole("family", "admin"), async (req, res) => {
     medications ? JSON.stringify(medications) : null,
     preferences,
     emergencyContactName, emergencyContactPhone,
+    phone || null, email || null,
     ...('emoji' in req.body ? [emoji || null] : []),
     ...('aiCareSummary' in req.body ? [aiCareSummary] : []),
     ...('caregiverBriefing' in req.body ? [req.body.caregiverBriefing] : []),

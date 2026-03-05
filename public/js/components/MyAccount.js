@@ -506,6 +506,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
       petAllergies: user?.pet_allergies || '',
       foodAllergies: user?.food_allergies || '',
       medicalConditions: user?.medical_conditions || '',
+      addressLine1: user?.address_line1 || '',
+      addressLine2: user?.address_line2 || '',
+      city: user?.city || '',
+      state: user?.state || '',
+      zip: user?.zip || '',
     });
     setEditing(true);
   };
@@ -525,6 +530,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
           petAllergies: editData.petAllergies,
           foodAllergies: editData.foodAllergies,
           medicalConditions: editData.medicalConditions,
+          addressLine1: editData.addressLine1,
+          addressLine2: editData.addressLine2,
+          city: editData.city,
+          state: editData.state,
+          zip: editData.zip,
         }),
       });
       if (res?.ok) {
@@ -892,6 +902,31 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
                   <div style={fieldLabel}>Medical conditions to be aware of</div>
                   <input style={inputStyle} value={editData.medicalConditions} onChange={(e) => ed('medicalConditions', e.target.value)} placeholder="E.g., diabetes, hypertension, asthma" />
                 </div>
+                <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #eee', paddingTop: 12, marginTop: 4 }}>
+                  <div style={{ ...fieldLabel, fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Address</div>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={fieldLabel}>Street Address</div>
+                  <input style={inputStyle} value={editData.addressLine1 || ''} onChange={(e) => ed('addressLine1', e.target.value)} placeholder="123 Main St" />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={fieldLabel}>Apt / Suite / Unit</div>
+                  <input style={inputStyle} value={editData.addressLine2 || ''} onChange={(e) => ed('addressLine2', e.target.value)} placeholder="Apt 4B (optional)" />
+                </div>
+                <div>
+                  <div style={fieldLabel}>City</div>
+                  <input style={inputStyle} value={editData.city || ''} onChange={(e) => ed('city', e.target.value)} placeholder="Blacksburg" />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <div style={fieldLabel}>State</div>
+                    <input style={inputStyle} value={editData.state || ''} onChange={(e) => ed('state', e.target.value)} placeholder="VA" />
+                  </div>
+                  <div>
+                    <div style={fieldLabel}>ZIP</div>
+                    <input style={inputStyle} value={editData.zip || ''} onChange={(e) => ed('zip', e.target.value)} placeholder="24060" />
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="info-grid">
@@ -907,6 +942,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
                   <div className="info-label">Phone</div>
                   <div className="info-value">{formatPhone(user?.phone) || 'Not set'}</div>
                 </div>
+                {user?.address_line1 && (
+                  <div className="info-item">
+                    <div className="info-label">Address</div>
+                    <div className="info-value">{[user.address_line1, user.address_line2].filter(Boolean).join(', ')}{user.city || user.state ? `, ${[user.city, user.state, user.zip].filter(Boolean).join(' ')}` : ''}</div>
+                  </div>
+                )}
                 {/* Your Profiles — unified role display */}
                 <div style={{ marginTop: 4, marginBottom: -8 }}>
                   <div className="info-label" style={{ marginBottom: 10 }}>Your Profiles</div>
@@ -990,16 +1031,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
             )}
           </div>
 
-          <div className="card">
-            <div className="card-header">Subscription</div>
-            <div className="info-grid">
-              <div className="info-item">
-                <div className="info-label">Plan</div>
-                <div className="info-value">InPlace Beta - Free</div>
-              </div>
-              <div className="info-item">
-                <div className="info-label">Status</div>
-                <div className="info-value"><span className="badge badge-confirmed">Active</span></div>
+          <div className="card" style={{ background: 'linear-gradient(135deg, #f8f9ff 0%, #eef0ff 100%)', border: '1px dashed #b0b8d9' }}>
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Payment & Billing</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#5c6bc0', background: '#e8eaf6', padding: '2px 10px', borderRadius: 12 }}>Coming Soon</span>
+            </div>
+            <div style={{ padding: '8px 0', color: '#666', fontSize: 14, lineHeight: 1.6 }}>
+              <p style={{ margin: '0 0 8px' }}>Secure payments powered by Stripe will be available here soon.</p>
+              <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#888' }}>
+                <span>Payment methods</span>
+                <span>Billing history</span>
+                <span>Receipts</span>
               </div>
             </div>
           </div>
