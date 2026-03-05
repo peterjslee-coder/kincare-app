@@ -652,4 +652,35 @@ router.put("/platform-fee", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/financials/payments-enabled ───
+// Check if real payments are enabled
+router.get("/payments-enabled", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT value FROM platform_settings WHERE key = 'payments_enabled'").get();
+    res.json({ paymentsEnabled: row?.value === 'true' });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to check payment status" });
+  }
+});
+
+// ─── PUT /api/admin/financials/payments-enabled ───
+// Toggle real payments on/off — admin kill switch
+router.put("/payments-enabled", async (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: "enabled must be true or false" });
+  }
+  try {
+    const db = await getDb();
+    await db.prepare(
+      "INSERT INTO platform_settings (key, value) VALUES ('payments_enabled', ?) ON CONFLICT (key) DO UPDATE SET value = ?, updated_at = NOW()"
+    ).run(String(enabled), String(enabled));
+    console.log(`💰 Payments ${enabled ? 'ENABLED' : 'DISABLED'} by admin`);
+    res.json({ paymentsEnabled: enabled });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update payment status" });
+  }
+});
+
 module.exports = router;

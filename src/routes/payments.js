@@ -21,19 +21,163 @@ function getStripe() {
 const PLATFORM_FEE_PERCENT = 20; // InPlace takes 20%, caregivers keep 80%
 const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || process.env.stripe_publishable_key || "";
 const BASE_URL = process.env.BASE_URL || process.env.base_url || "https://yourinplace.com";
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || process.env.stripe_webhook_secret || "";
+
+// ─── Helper: check if payments are enabled by admin ───
+async function paymentsEnabled() {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT value FROM platform_settings WHERE key = 'payments_enabled'").get();
+    return row?.value === 'true';
+  } catch { return false; }
+}
+
+// ─── Middleware: gate Stripe-touching endpoints ───
+async function requirePaymentsEnabled(req, res, next) {
+  const enabled = await paymentsEnabled();
+  if (!enabled) {
+    return res.status(503).json({ error: "Payments are not currently enabled. An administrator must enable payments before transactions can be processed.", paymentsDisabled: true });
+  }
+  next();
+}
 
 // ─── GET /api/payments/config ───
-// Return publishable key to frontend (no auth required for checkout)
-router.get("/config", (req, res) => {
-  res.json({ publishableKey: STRIPE_PUBLISHABLE_KEY });
+// Return publishable key + enabled status to frontend (no auth required for checkout)
+router.get("/config", async (req, res) => {
+  const enabled = await paymentsEnabled();
+  res.json({ publishableKey: STRIPE_PUBLISHABLE_KEY, paymentsEnabled: enabled });
+});
+
+// ─── POST /api/payments/webhook ───
+// Stripe webhook handler — receives events about payment status changes
+// This must be BEFORE authenticate middleware and uses raw body for signature verification
+router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  let event;
+
+  // Verify webhook signature if secret is configured
+  if (WEBHOOK_SECRET) {
+    const sig = req.headers["stripe-signature"];
+    try {
+      const stripe = getStripe();
+      event = stripe.webhooks.constructEvent(req.body, sig, WEBHOOK_SECRET);
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err.message);
+      return res.status(400).json({ error: "Webhook signature verification failed" });
+    }
+  } else {
+    // No webhook secret — parse body but log warning
+    console.warn("⚠️  STRIPE_WEBHOOK_SECRET not configured — webhook signatures are NOT being verified");
+    try {
+      event = JSON.parse(req.body);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid JSON" });
+    }
+  }
+
+  const db = await getDb();
+
+  try {
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        const sessionId = session.metadata?.inplace_session_id;
+        if (!sessionId) break;
+
+        // Update payment record
+        await db.prepare(
+          "UPDATE payments SET status = 'completed', stripe_payment_intent = ?, updated_at = NOW() WHERE stripe_checkout_id = ?"
+        ).run(session.payment_intent, session.id);
+
+        // Update care session payment status
+        await db.prepare(
+          "UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?"
+        ).run(sessionId);
+
+        console.log(`✅ Payment completed for session ${sessionId}`);
+        break;
+      }
+
+      case "checkout.session.expired": {
+        const session = event.data.object;
+        // Mark payment as failed/expired
+        await db.prepare(
+          "UPDATE payments SET status = 'failed', updated_at = NOW() WHERE stripe_checkout_id = ?"
+        ).run(session.id);
+
+        console.log(`❌ Checkout expired for session ${session.metadata?.inplace_session_id}`);
+        break;
+      }
+
+      case "payment_intent.payment_failed": {
+        const intent = event.data.object;
+        await db.prepare(
+          "UPDATE payments SET status = 'failed', updated_at = NOW() WHERE stripe_payment_intent = ?"
+        ).run(intent.id);
+
+        // Also check background check payments
+        await db.prepare(
+          "UPDATE background_check_payments SET status = 'failed' WHERE stripe_payment_intent = ?"
+        ).run(intent.id);
+
+        console.log(`❌ Payment failed: ${intent.id} — ${intent.last_payment_error?.message || 'unknown error'}`);
+        break;
+      }
+
+      case "payment_intent.succeeded": {
+        const intent = event.data.object;
+
+        // Handle background check payments
+        if (intent.metadata?.type === "background_check") {
+          const userId = intent.metadata.inplace_user_id;
+          await db.prepare(
+            "UPDATE background_check_payments SET status = 'completed', completed_at = NOW() WHERE stripe_payment_intent = ? AND user_id = ?"
+          ).run(intent.id, userId);
+          await db.prepare(
+            "UPDATE caregiver_profiles SET background_check_paid = 1, updated_at = NOW() WHERE user_id = ?"
+          ).run(userId);
+          console.log(`✅ Background check payment confirmed for user ${userId}`);
+        }
+        break;
+      }
+
+      case "account.updated": {
+        // Caregiver's Connect account was updated (onboarding completed, etc.)
+        const account = event.data.object;
+        const isComplete = account.charges_enabled && account.payouts_enabled;
+        if (isComplete) {
+          await db.prepare(
+            "UPDATE caregiver_profiles SET stripe_onboard_complete = 1, updated_at = NOW() WHERE stripe_account_id = ?"
+          ).run(account.id);
+          console.log(`✅ Stripe Connect onboarding complete for account ${account.id}`);
+        }
+        break;
+      }
+
+      default:
+        // Unhandled event type — log but don't error
+        console.log(`Stripe webhook: unhandled event type ${event.type}`);
+    }
+  } catch (err) {
+    console.error(`Webhook handler error for ${event.type}:`, err);
+    // Still return 200 to prevent Stripe from retrying
+  }
+
+  res.json({ received: true });
 });
 
 // All other routes require auth
 router.use(authenticate);
 
+// ─── GET /api/payments/status ───
+// Check if payments are enabled (for frontend gating)
+router.get("/status", async (req, res) => {
+  const enabled = await paymentsEnabled();
+  res.json({ paymentsEnabled: enabled });
+});
+
 // ─── POST /api/payments/connect/onboard ───
 // Create a Stripe Connect Express account for a caregiver and return the onboarding link
-router.post("/connect/onboard", requireRole("caregiver"), async (req, res) => {
+router.post("/connect/onboard", requireRole("caregiver"), requirePaymentsEnabled, async (req, res) => {
   const db = await getDb();
   let stripe;
   try { stripe = getStripe(); } catch {
@@ -163,7 +307,7 @@ router.get("/connect/dashboard", requireRole("caregiver"), async (req, res) => {
 
 // ─── POST /api/payments/checkout ───
 // Create a Stripe Checkout Session for a care session (family pays)
-router.post("/checkout", requireRole("family"), async (req, res) => {
+router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (req, res) => {
   const db = await getDb();
   const stripe = getStripe();
   const { sessionId } = req.body;
@@ -407,7 +551,7 @@ router.get("/history", requireRole("family"), async (req, res) => {
 
 // ─── POST /api/payments/background-check ───
 // Create a PaymentIntent for the $30 background check fee (caregiver)
-router.post("/background-check", requireRole("caregiver"), async (req, res) => {
+router.post("/background-check", requireRole("caregiver"), requirePaymentsEnabled, async (req, res) => {
   const db = await getDb();
   let stripe;
   try { stripe = getStripe(); } catch {
@@ -463,7 +607,7 @@ router.post("/background-check", requireRole("caregiver"), async (req, res) => {
 
 // ─── POST /api/payments/background-check/confirm ───
 // Confirm background check payment succeeded
-router.post("/background-check/confirm", requireRole("caregiver"), async (req, res) => {
+router.post("/background-check/confirm", requireRole("caregiver"), requirePaymentsEnabled, async (req, res) => {
   const db = await getDb();
   let stripe;
   try { stripe = getStripe(); } catch {

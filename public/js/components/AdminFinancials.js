@@ -18,16 +18,21 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [feeInput, setFeeInput] = useState('20');
   const [feeSaving, setFeeSaving] = useState(false);
   const [feeMsg, setFeeMsg] = useState('');
+  // Payment kill switch
+  const [paymentsEnabled, setPaymentsEnabled] = useState(false);
+  const [paymentToggleLoading, setPaymentToggleLoading] = useState(false);
+  const [paymentToggleConfirm, setPaymentToggleConfirm] = useState(false);
 
   const fetchAll = async (showRefresh) => {
     if (showRefresh) setRefreshing(true);
     try {
-      const [sumRes, brkRes, insRes, txRes, feeRes] = await Promise.all([
+      const [sumRes, brkRes, insRes, txRes, feeRes, payRes] = await Promise.all([
         apiFetch('/api/admin/financials/summary'),
         apiFetch('/api/admin/financials/breakdown'),
         apiFetch('/api/admin/financials/insights'),
         apiFetch(`/api/admin/financials/transactions?page=${txPage}&limit=25`),
         apiFetch('/api/admin/financials/platform-fee'),
+        apiFetch('/api/admin/financials/payments-enabled'),
       ]);
       if (sumRes?.ok) setSummary(await sumRes.json());
       if (brkRes?.ok) setBreakdown(await brkRes.json());
@@ -37,6 +42,10 @@ const AdminFinancials = window.AdminFinancials = () => {
         const fd = await feeRes.json();
         setFeePercent(fd.platformFeePercent);
         setFeeInput(String(fd.platformFeePercent));
+      }
+      if (payRes?.ok) {
+        const pd = await payRes.json();
+        setPaymentsEnabled(pd.paymentsEnabled);
       }
       setLastUpdated(new Date());
     } catch (err) {
@@ -70,6 +79,22 @@ const AdminFinancials = window.AdminFinancials = () => {
       }
     } catch { setFeeMsg('Network error'); }
     setFeeSaving(false);
+  };
+
+  const togglePayments = async () => {
+    setPaymentToggleLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/financials/payments-enabled', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: !paymentsEnabled }),
+      });
+      if (res?.ok) {
+        const d = await res.json();
+        setPaymentsEnabled(d.paymentsEnabled);
+      }
+    } catch (err) { console.error('Toggle payments error:', err); }
+    setPaymentToggleLoading(false);
+    setPaymentToggleConfirm(false);
   };
 
   useEffect(() => { fetchAll(); }, []);
@@ -335,6 +360,73 @@ const AdminFinancials = window.AdminFinancials = () => {
         <KpiCard icon="📅" label="Sessions" current={kpi.totalSessions?.current} previous={kpi.totalSessions?.previous} isMoney={false} />
         <KpiCard icon="💎" label="Avg Session Value" current={kpi.avgSessionValue?.current} previous={kpi.avgSessionValue?.previous} />
         <KpiCard icon="🔍" label="BG Check Revenue" current={kpi.bgCheckRevenue?.current} previous={kpi.bgCheckRevenue?.previous} />
+      </div>
+
+      {/* Payment Kill Switch */}
+      <div className="card" style={{
+        marginBottom: 16,
+        borderLeft: `4px solid ${paymentsEnabled ? '#2e7d32' : '#c62828'}`,
+        background: paymentsEnabled ? '#f1f8e9' : '#fff3e0',
+      }}>
+        <div className="card-header">
+          <span className="card-icon">{paymentsEnabled ? '✅' : '🔒'}</span>
+          Live Payments
+          <span style={{
+            marginLeft: 8, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+            background: paymentsEnabled ? '#2e7d32' : '#c62828', color: '#fff',
+          }}>
+            {paymentsEnabled ? 'ENABLED' : 'DISABLED'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, color: '#555', flex: '1 1 300px' }}>
+            {paymentsEnabled
+              ? 'Real payments are active. Stripe will process charges, caregivers will receive payouts, and platform fees will settle to Mercury.'
+              : 'Payments are disabled. No charges will be processed. Caregivers cannot onboard to Stripe, and families cannot check out. Enable when ready to go live.'}
+          </div>
+          {!paymentToggleConfirm ? (
+            <button
+              onClick={() => setPaymentToggleConfirm(true)}
+              disabled={paymentToggleLoading}
+              style={{
+                padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: 700,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+                background: paymentsEnabled ? '#c62828' : '#2e7d32', color: '#fff',
+              }}
+            >
+              {paymentsEnabled ? 'Disable Payments' : 'Enable Payments'}
+            </button>
+          ) : (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+              background: 'rgba(0,0,0,0.05)', borderRadius: 8,
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: paymentsEnabled ? '#c62828' : '#2e7d32' }}>
+                {paymentsEnabled ? 'Disable real payments?' : 'Enable real payments? Real money will flow.'}
+              </span>
+              <button
+                onClick={togglePayments}
+                disabled={paymentToggleLoading}
+                style={{
+                  padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 700,
+                  cursor: paymentToggleLoading ? 'wait' : 'pointer',
+                  background: paymentsEnabled ? '#c62828' : '#2e7d32', color: '#fff',
+                }}
+              >
+                {paymentToggleLoading ? '...' : 'Confirm'}
+              </button>
+              <button
+                onClick={() => setPaymentToggleConfirm(false)}
+                style={{
+                  padding: '5px 14px', borderRadius: 6, border: '1px solid #ccc', background: '#fff',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#666',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Platform Fee Settings */}

@@ -176,6 +176,18 @@ Key files: `src/routes/consent.js` (auth per-route, not global — respond/:toke
 
 The consent_outreach table tracks emails sent + recipient responses. Attestations have admin_status (pending/approved/rejected). First-visit confirmation by caregivers is BLOCKING — "no"/"unable" pauses future bookings.
 
+## Payment System (v1.39.3 — Stripe Connect)
+
+**Money flow:** Family pays → Stripe processes → Stripe splits (80% caregiver, 20% platform) → Platform balance settles to Mercury bank account.
+
+**Admin kill switch:** Payments are OFF by default. An admin must enable them via the Financials tab toggle in AdminPanel. The `payments_enabled` key in `platform_settings` gates all Stripe-touching endpoints (`/connect/onboard`, `/checkout`, `/background-check`). When disabled, these endpoints return 503 with `paymentsDisabled: true`.
+
+**Webhook:** `POST /api/payments/webhook` receives Stripe events (checkout completed, payment failed, account updated). Uses raw body parsing for signature verification. Must be registered in Stripe Dashboard → Developers → Webhooks pointing at `https://yourinplace.com/api/payments/webhook`. Requires `STRIPE_WEBHOOK_SECRET` env var on Railway.
+
+**Key files:** `src/routes/payments.js` (all payment endpoints + webhook), `src/routes/financials.js` (admin financials + kill switch), `public/js/components/AdminFinancials.js` (admin UI), `public/js/components/FamilyPayments.js` (family payment history).
+
+**Env vars (Railway):** `stripe_secret_key` (live), `stripe_publishable_key` (live), `STRIPE_WEBHOOK_SECRET` (from Stripe webhook config).
+
 ## Local Development
 
 ```bash

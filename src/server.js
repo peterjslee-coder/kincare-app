@@ -171,7 +171,11 @@ app.use(cors({
 app.use(require("cookie-parser")());
 app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
 app.use("/api/care-recipients", express.json({ limit: "5mb" }));
-app.use(express.json({ limit: "100kb" }));
+// Skip JSON parsing for Stripe webhook — it needs the raw body for signature verification
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') return next();
+  express.json({ limit: "100kb" })(req, res, next);
+});
 app.use(limitBodySize(100000));
 
 // ─── Rate Limiting ───
@@ -258,7 +262,7 @@ app.use("/api/consent", require("./routes/consent"));
 app.use("/api/documents", require("./routes/documents"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.2";
+const APP_VERSION = "1.39.3";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
