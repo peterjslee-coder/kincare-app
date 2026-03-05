@@ -361,6 +361,22 @@ The server uses Socket.io for real-time updates. Express is wrapped in `http.cre
 - Frontend: same pattern for check-in gates and session comparisons
 - Push notification timing: compare against Eastern time, not server time (Railway runs in UTC)
 
+## Dev Rules (Persistent)
+
+These rules apply to every session. Do not skip them.
+
+1. **Every phone input uses display `(XXX) YYY-ZZZZ` unless intl toggle.** All phone inputs call `formatPhone()` from utils.js. Every phone field includes an "International number" toggle button. If the format is wrong, fix it in `formatPhone()` — one place, not 20.
+
+2. **Always bump version when deploying changes.** Three locations must be updated together: `window.APP_VERSION` in index.html (line ~55), cache-bust `?v=` params in index.html (lines ~23 and ~111), `APP_VERSION` in server.js, and `SW_VERSION`/`CACHE_NAME` in sw.js. If you don't bump, browsers serve stale files.
+
+3. **Always tell Pete what version number to look for after a push.** After `git push` and Railway deploy, say "Look for vX.Y.Z in the footer" so he can confirm the new code is live.
+
+4. **Always ask questions for intent on design changes.** Don't assume what the user wants. Ask clarifying questions before implementing any UX or layout change.
+
+5. **Ask if mockups are needed for major design changes.** Before building a significant UI change, offer to create a mockup or wireframe so Pete can approve the direction first.
+
+6. **Trust user bug reports — investigate code first.** When Pete reports a bug, look at the code before suggesting it might be caching or user error. He's usually right.
+
 ## Known Limitations
 
 1. Payments table exists but no payment processing (Stripe Connect planned for v1.3.0)
