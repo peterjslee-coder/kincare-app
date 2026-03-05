@@ -196,36 +196,9 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   const firstName = user?.first_name || user?.firstName || 'there';
   const isNewUser = data?.isNewUser && !isDemo;
 
-  // Onboarding checklist for real (non-demo) users
-  // Profile is "complete" when they have name + phone (not just name from signup)
+  // Core status checks for new user flow
   const hasProfile = !!(user?.first_name || user?.firstName) && !!(user?.phone);
   const hasRecipient = (data?.parent || stats.assignedCaregivers > 0);
-  // Check consent status on the care recipient — "verified" means authorization is done
-  // Consider attested as "done" for checklist — user did their part, admin verification is pending
-  const recipientConsentDone = data?.parent?.consent_status === 'verified' || data?.parent?.consent_status === 'approved' || data?.parent?.consent_status === 'attested';
-  const hasCareTeam = careTeams.length > 0;
-  // Check if user joined via invite (is a member, not leader, of a care team)
-  const isTeamMember = careTeams.some(t => t.my_role === 'member');
-  const isTeamLeader = careTeams.some(t => t.my_role === 'leader');
-  // Reordered: profile → add loved one → invite family → set up payment → search caregivers → install app
-  const onboardingSteps = [
-    { id: 'profile', label: 'Complete your profile', hint: 'Add your name, phone number, and address so caregivers can reach you.', done: !!hasProfile, action: () => onNavigate && onNavigate('account'), actionText: 'Go to Profile' },
-    // Members who joined via invite already have a care recipient through the team
-    ...(isTeamMember && !isTeamLeader ? [
-      { id: 'recipient', label: 'Add a loved one to care for', done: true, action: null, actionText: null },
-    ] : [
-      { id: 'recipient', label: 'Add a loved one & verify authorization', hint: hasRecipient && recipientConsentDone && data?.parent?.consent_status === 'attested' ? 'Your attestation has been submitted — we\'re verifying now.' : 'Add your loved one\'s details, set up care preferences, and verify your authority to arrange care.', done: !!hasRecipient && !!recipientConsentDone, action: () => onNavigate && onNavigate('recipients'), actionText: hasRecipient ? 'View Recipient' : 'Add Recipient' },
-    ]),
-    // Only leaders can invite others to the care team
-    ...(isTeamMember && !isTeamLeader ? [] : [
-      { id: 'team', label: 'Invite family to the care team', done: hasCareTeam, action: () => onNavigate && onNavigate('care-team'), actionText: 'Manage Team' },
-    ]),
-    { id: 'payment', label: 'Set up payment method', hint: 'Connect your payment method so you can book care sessions.', done: false, action: () => onNavigate && onNavigate('account'), actionText: 'Coming Soon', disabled: true },
-    { id: 'caregiver', label: 'Search for caregivers in your area', done: stats.assignedCaregivers > 0, action: () => onNavigate && onNavigate('caregivers'), actionText: 'Find Caregivers' },
-    { id: 'pwa', label: 'Install InPlace on your phone', hint: 'Get push notifications and quick access from your home screen.', done: !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || !!localStorage.getItem('pwa_setup_done'), action: () => setShowPwaGuide(true), actionText: 'Set Up' },
-  ];
-  const onboardingComplete = onboardingSteps.every(s => s.done);
-  const showOnboarding = !isDemo && !onboardingComplete;
 
   // ─── PWA Install Guide Modal ───
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -299,68 +272,64 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     </div>
   );
 
-  // ─── Welcome screen for brand new users ───
+  // ─── New user with NO care recipient → go straight into wizard ───
+  // Auto-navigate to the care recipients page which will launch the wizard automatically
+  useEffect(() => {
+    if (isNewUser && !hasRecipient && onNavigate && !loading) {
+      onNavigate('recipients');
+    }
+  }, [isNewUser, hasRecipient, loading]);
+
+  // ─── Welcome screen for new users who HAVE completed the wizard ───
+  // This is now a casual "explore the app" ideas list, not a mandatory checklist
   if (isNewUser) {
+    const exploreIdeas = [
+      { icon: '👥', label: 'Invite family to help coordinate care', action: () => onNavigate && onNavigate('care-team'), actionText: 'Care Team' },
+      { icon: '🔍', label: 'Browse caregivers in your area', action: () => onNavigate && onNavigate('caregivers'), actionText: 'Find Caregivers' },
+      { icon: '👤', label: 'Complete your profile with phone and address', action: () => onNavigate && onNavigate('account'), actionText: 'My Profile', done: hasProfile },
+      { icon: '📱', label: 'Install InPlace on your phone for notifications', action: () => setShowPwaGuide(true), actionText: 'Set Up', done: !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || !!localStorage.getItem('pwa_setup_done') },
+    ].filter(s => !s.done);
+
     return (
       <>
         {pwaGuide}
         {/* Welcome Hero */}
         <div style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #2a9d8f 100%)', borderRadius: 16, padding: '40px 32px', color: '#fff', marginBottom: 24, textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>👋</div>
-          <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 700 }}>Welcome to InPlace, {firstName}!</h1>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
+          <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 700 }}>You're off to a great start, {firstName}!</h1>
           <p style={{ margin: 0, fontSize: 16, opacity: 0.9, maxWidth: 480, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
-            You're taking a great step in coordinating care for someone you love. Let's get you set up in just a few minutes.
+            Your loved one has been added and we're verifying everything. Here are some things you can explore while you wait.
           </p>
         </div>
 
-        {/* Getting Started — unified onboarding */}
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 20 }}>🚀</span>
-            <span style={{ fontWeight: 700, fontSize: 16 }}>Getting Started</span>
-            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#888', display: 'flex', alignItems: 'center', gap: 8 }}>
-              {onboardingSteps.filter(s => s.done).length} / {onboardingSteps.length} complete
-              <button onClick={(e) => { e.stopPropagation(); dismissTile('onboarding', 'v1'); }} title="Dismiss checklist" style={{
-                background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
+        {/* Explore ideas — casual, not a checklist */}
+        {exploreIdeas.length > 0 && (
+          <div className="card" style={{ marginBottom: 24 }}>
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 20 }}>💡</span>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>Things to explore</span>
+              <button onClick={(e) => { e.stopPropagation(); dismissTile('onboarding', 'v2'); }} title="Dismiss" style={{
+                marginLeft: 'auto', background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
                 color: '#999', padding: '2px 8px', borderRadius: 6, fontWeight: 600,
               }}>✕</button>
-            </span>
-          </div>
-          <div style={{ display: 'grid', gap: 0, marginTop: 8 }}>
-            {onboardingSteps.map((step, idx) => {
-              const isNext = idx === onboardingSteps.findIndex(s => !s.done);
-              return (
-                <div key={step.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 0',
-                  borderBottom: idx < onboardingSteps.length - 1 ? '1px solid #f5f5f5' : 'none',
-                  opacity: step.done ? 0.55 : (step.disabled ? 0.5 : 1) }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flex: 1 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', marginTop: 1,
-                      background: step.done ? '#1b6b5a' : (isNext ? '#e8724a' : (step.disabled ? '#e0e0e0' : '#f0f0f0')),
-                      color: (step.done || isNext) ? '#fff' : '#ccc',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-                      {step.done ? '✓' : step.disabled ? '—' : (idx + 1)}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: step.done ? 400 : 600, textDecoration: step.done ? 'line-through' : 'none', color: step.done ? '#888' : '#333' }}>
-                        {step.label}
-                        {step.disabled && <span style={{ fontSize: 11, color: '#5c6bc0', fontWeight: 600, marginLeft: 8 }}>Coming Soon</span>}
-                      </div>
-                      {!step.done && step.hint && (
-                        <div style={{ fontSize: 12, color: '#888', marginTop: 3, lineHeight: 1.4 }}>{step.hint}</div>
-                      )}
-                    </div>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              {exploreIdeas.map((idea, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0',
+                  borderBottom: idx < exploreIdeas.length - 1 ? '1px solid #f5f5f5' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1 }}>
+                    <span style={{ fontSize: 22 }}>{idea.icon}</span>
+                    <span style={{ fontSize: 14, color: '#333' }}>{idea.label}</span>
                   </div>
-                  {!step.done && !step.disabled && isNext && step.action && (
-                    <button onClick={step.action}
-                      style={{ padding: '8px 18px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
-                      {step.actionText}
-                    </button>
-                  )}
+                  <button onClick={idea.action}
+                    style={{ padding: '8px 18px', background: '#f5f5f5', color: '#1b6b5a', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
+                    {idea.actionText}
+                  </button>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </>
     );
   }
@@ -391,21 +360,6 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
             </div>
           </div>
           <button onClick={() => onNavigate && onNavigate('recipients')} style={{ padding: '8px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>View</button>
-        </div>
-      )}
-
-      {/* New User Welcome — prominent CTA to add care recipient */}
-      {isNewUser && (
-        <div className="card" style={{ textAlign: 'center', padding: '32px 24px', marginBottom: 20, borderLeft: '4px solid #e8724a' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🏠</div>
-          <h3 style={{ margin: '0 0 8px', color: '#1a1a2e', fontSize: 18 }}>Let's get started</h3>
-          <p style={{ color: '#666', fontSize: 14, maxWidth: 400, margin: '0 auto 20px', lineHeight: 1.5 }}>
-            Add the person you're coordinating care for. This is how you'll manage their schedule, find caregivers, and track everything in one place.
-          </p>
-          <button className="btn btn-primary" onClick={() => onNavigate && onNavigate('recipients')}
-            style={{ padding: '14px 36px', fontSize: 16, fontWeight: 700 }}>
-            + Add Your Loved One
-          </button>
         </div>
       )}
 
@@ -447,42 +401,24 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         );
       })()}
 
-      {/* Onboarding Checklist (real users with some progress but not complete) */}
-      {showOnboarding && !isTileDismissed('onboarding', 'v1') && (
+      {/* Quick-access explore ideas for users who haven't filled out profile yet */}
+      {!isDemo && !hasProfile && !isTileDismissed('onboarding', 'v2') && (
         <div className="card" style={{ borderLeft: '4px solid #e8724a', marginBottom: 16 }}>
-          <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 20 }}>🚀</span>
-            <span>Getting Started</span>
-            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#888', display: 'flex', alignItems: 'center', gap: 8 }}>
-              {onboardingSteps.filter(s => s.done).length} / {onboardingSteps.length} complete
-              <button onClick={() => dismissTile('onboarding', 'v1')} title="Dismiss checklist" style={{
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>👤</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>Complete your profile with phone and address</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={() => onNavigate && onNavigate('account')}
+                style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                My Profile
+              </button>
+              <button onClick={() => dismissTile('onboarding', 'v2')} title="Dismiss" style={{
                 background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
                 color: '#999', padding: '2px 8px', borderRadius: 6, fontWeight: 600,
               }}>✕</button>
-            </span>
-          </div>
-          <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
-            {onboardingSteps.map((step) => (
-              <div key={step.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0',
-                opacity: step.done ? 0.6 : 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 24, height: 24, borderRadius: '50%',
-                    background: step.done ? '#1b6b5a' : '#f0f0f0', color: step.done ? '#fff' : '#ccc',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-                    {step.done ? '✓' : ''}
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: step.done ? 400 : 600, textDecoration: step.done ? 'line-through' : 'none', color: step.done ? '#888' : '#333' }}>
-                    {step.label}
-                  </span>
-                </div>
-                {!step.done && step.action && (
-                  <button onClick={step.action}
-                    style={{ padding: '4px 12px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    {step.actionText}
-                  </button>
-                )}
-              </div>
-            ))}
+            </div>
           </div>
         </div>
       )}

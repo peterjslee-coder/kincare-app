@@ -90,6 +90,17 @@ const CareRecipients = window.CareRecipients = () => {
 
   useEffect(() => { fetchRecipients(); }, []);
 
+  // Auto-start wizard when a new user arrives with no recipients
+  useEffect(() => {
+    if (!loading && recipients.length === 0 && !showAddForm && wizardStep === null) {
+      resetForm();
+      setEditingId(null);
+      setShowAddForm(true);
+      setWizardStep(null);
+      setSavedRecipientId(null);
+    }
+  }, [loading, recipients.length]);
+
   const resetForm = () => {
     setFormData({
       firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', address: '', city: '', state: '', zip: '',
@@ -792,9 +803,24 @@ const CareRecipients = window.CareRecipients = () => {
 
   if (loading) return <LoadingSpinner text="Loading care recipients..." />;
 
+  // Track if this is the first-time wizard (no recipients at all)
+  const isFirstTimeWizard = recipients.length === 0 && showAddForm && wizardStep === null;
+  const isInWizardFlow = showAddForm || wizardStep !== null;
+
   return (
     <div>
-      <h1 className="greeting">👥 Care Recipients</h1>
+      {/* Show welcome hero for first-time users entering the wizard */}
+      {recipients.length === 0 && isInWizardFlow && (
+        <div style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #2a9d8f 100%)', borderRadius: 16, padding: '32px 28px', color: '#fff', marginBottom: 24, textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>👋</div>
+          <h1 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 700 }}>Let's set up care for your loved one</h1>
+          <p style={{ margin: 0, fontSize: 15, opacity: 0.9, maxWidth: 440, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
+            We'll walk you through adding their details, your care preferences, and verifying your authorization — all in a few minutes.
+          </p>
+        </div>
+      )}
+
+      {recipients.length > 0 && <h1 className="greeting">👥 Care Recipients</h1>}
 
       {!showAddForm && !wizardStep && (
         <>
