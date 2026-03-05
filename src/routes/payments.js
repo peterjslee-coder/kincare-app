@@ -153,6 +153,32 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         break;
       }
 
+      case "identity.verification_session.verified": {
+        // Caregiver's identity has been successfully verified
+        const session = event.data.object;
+        const userId = session.metadata?.inplace_user_id;
+        if (userId) {
+          await db.prepare(
+            "UPDATE caregiver_profiles SET identity_verified = 1, identity_verification_status = 'verified', identity_verified_at = NOW(), updated_at = NOW() WHERE user_id = ?"
+          ).run(userId);
+          console.log(`✅ Identity verified for user ${userId}`);
+        }
+        break;
+      }
+
+      case "identity.verification_session.requires_input": {
+        // Verification failed or needs additional input
+        const session = event.data.object;
+        const userId = session.metadata?.inplace_user_id;
+        if (userId) {
+          await db.prepare(
+            "UPDATE caregiver_profiles SET identity_verification_status = 'requires_input', updated_at = NOW() WHERE user_id = ?"
+          ).run(userId);
+          console.log(`⚠️ Identity verification requires input for user ${userId} — ${session.last_error?.code || 'unknown'}`);
+        }
+        break;
+      }
+
       default:
         // Unhandled event type — log but don't error
         console.log(`Stripe webhook: unhandled event type ${event.type}`);
@@ -173,6 +199,123 @@ router.use(authenticate);
 router.get("/status", async (req, res) => {
   const enabled = await paymentsEnabled();
   res.json({ paymentsEnabled: enabled });
+});
+
+// ─── POST /api/payments/identity/create-session ───
+// Create a Stripe Identity VerificationSession for caregiver ID verification
+router.post("/identity/create-session", requireRole("caregiver"), requirePaymentsEnabled, async (req, res) => {
+  const db = await getDb();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured yet.", notConfigured: true });
+  }
+
+  const user = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+  const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  // If already verified, no need to create a new session
+  if (profile.identity_verified) {
+    return res.status(400).json({ error: "Identity already verified", alreadyVerified: true });
+  }
+
+  // Try to reuse existing session if it's still in a resumable state
+  if (profile.stripe_verification_session_id) {
+    try {
+      const existingSession = await stripe.identity.verificationSessions.retrieve(profile.stripe_verification_session_id);
+      if (existingSession.status === "requires_input" || existingSession.status === "created") {
+        // Session is still usable — return its client secret
+        return res.json({
+          clientSecret: existingSession.client_secret,
+          sessionId: existingSession.id,
+          status: existingSession.status,
+          reused: true,
+        });
+      }
+    } catch (e) {
+      // Session may have expired or been canceled — create a new one
+      console.log(`Previous verification session ${profile.stripe_verification_session_id} not reusable:`, e.message);
+    }
+  }
+
+  try {
+    const verificationSession = await stripe.identity.verificationSessions.create({
+      type: "document",
+      options: {
+        document: {
+          require_matching_selfie: true,
+        },
+      },
+      provided_details: {
+        email: user.email,
+      },
+      metadata: {
+        inplace_user_id: req.user.id,
+        inplace_profile_id: profile.id,
+        caregiver_name: `${user.first_name} ${user.last_name}`,
+      },
+    });
+
+    // Store session ID on caregiver profile
+    await db.prepare(
+      "UPDATE caregiver_profiles SET stripe_verification_session_id = ?, identity_verification_status = 'pending', updated_at = NOW() WHERE user_id = ?"
+    ).run(verificationSession.id, req.user.id);
+
+    res.json({
+      clientSecret: verificationSession.client_secret,
+      sessionId: verificationSession.id,
+      status: verificationSession.status,
+    });
+  } catch (err) {
+    console.error("Stripe Identity session creation error:", err);
+    res.status(500).json({ error: "Failed to create identity verification session" });
+  }
+});
+
+// ─── GET /api/payments/identity/status ───
+// Check caregiver's identity verification status
+router.get("/identity/status", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  // If we have a session but it's not verified, check Stripe for latest status
+  if (profile.stripe_verification_session_id && !profile.identity_verified) {
+    try {
+      const stripe = getStripe();
+      const session = await stripe.identity.verificationSessions.retrieve(profile.stripe_verification_session_id);
+
+      // Update local status if changed
+      let newStatus = session.status; // processing, verified, requires_input, canceled
+      if (session.status === "verified" && !profile.identity_verified) {
+        await db.prepare(
+          "UPDATE caregiver_profiles SET identity_verified = 1, identity_verification_status = 'verified', identity_verified_at = NOW(), updated_at = NOW() WHERE user_id = ?"
+        ).run(req.user.id);
+        newStatus = "verified";
+      } else if (session.status !== profile.identity_verification_status) {
+        await db.prepare(
+          "UPDATE caregiver_profiles SET identity_verification_status = ?, updated_at = NOW() WHERE user_id = ?"
+        ).run(session.status, req.user.id);
+      }
+
+      return res.json({
+        verified: session.status === "verified",
+        status: newStatus,
+        lastError: session.last_error?.code || null,
+        lastErrorReason: session.last_error?.reason || null,
+        verifiedAt: profile.identity_verified_at,
+      });
+    } catch (err) {
+      console.error("Stripe Identity status check error:", err);
+      // Fall through to local status
+    }
+  }
+
+  res.json({
+    verified: !!profile.identity_verified,
+    status: profile.identity_verification_status || "none",
+    verifiedAt: profile.identity_verified_at,
+  });
 });
 
 // ─── POST /api/payments/connect/onboard ───
@@ -332,6 +475,14 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
   if (!session.caregiver_id) return res.status(400).json({ error: "No caregiver assigned to this session" });
   if (!session.stripe_account_id || !session.stripe_onboard_complete) {
     return res.status(400).json({ error: "Caregiver has not completed Stripe setup" });
+  }
+
+  // Check caregiver identity verification
+  const caregiverProfile = await db.prepare(
+    "SELECT identity_verified FROM caregiver_profiles WHERE id = ?"
+  ).get(session.caregiver_id);
+  if (!caregiverProfile?.identity_verified) {
+    return res.status(400).json({ error: "Caregiver has not completed identity verification", identityRequired: true });
   }
 
   // Check if already paid

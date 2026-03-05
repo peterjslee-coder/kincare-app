@@ -588,6 +588,11 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS city TEXT`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS state TEXT`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS zip TEXT`,
+    // v1.39.4 — Stripe Identity Verification for caregivers
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS stripe_verification_session_id TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS identity_verified INTEGER DEFAULT 0`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS identity_verification_status TEXT DEFAULT 'none'`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS identity_verified_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
