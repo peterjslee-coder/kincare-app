@@ -437,9 +437,15 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               {formData.email && !isValidEmail(formData.email) ? <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>Please enter a valid email address</div> : <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Used to verify your account and for future payments</div>}
             </div>
             <div className="form-group">
-              <label>Phone Number {showFieldErrors && !formData.phone.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</label>
-              <input type="tel" value={formData.phone} onChange={(e) => { const v = formatPhone(e.target.value, intlPhone); setFormData(p => ({ ...p, phone: v })); setShowFieldErrors(false); }} placeholder="(555) 123-4567" style={showFieldErrors && !formData.phone.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
-              <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>For care coordination and emergencies</div>
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Phone Number {showFieldErrors && !formData.phone.trim() && <span style={{ color: '#c0392b', fontSize: 12 }}>*required</span>}</span>
+                <button type="button" onClick={() => { setIntlPhone(!intlPhone); setFormData(p => ({ ...p, phone: '' })); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                  {intlPhone ? 'US number' : 'International number'}
+                </button>
+              </label>
+              <input type="tel" value={formData.phone} onChange={(e) => { const v = formatPhone(e.target.value, intlPhone); setFormData(p => ({ ...p, phone: v })); setShowFieldErrors(false); }} placeholder={intlPhone ? '+44 20 7946 0958' : '(555) 123-4567'} style={showFieldErrors && !formData.phone.trim() ? { borderColor: '#c0392b', background: '#fdf0ed' } : {}} />
+              {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
+              {!intlPhone && <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>For care coordination and emergencies</div>}
             </div>
             <div className="form-group">
               <label>Password {showFieldErrors && (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) && <span style={{ color: '#c0392b', fontSize: 12 }}>*see requirements below</span>}</label>

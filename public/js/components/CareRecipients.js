@@ -13,6 +13,8 @@ const CareRecipients = window.CareRecipients = () => {
   });
   const [saveMsg, setSaveMsg] = useState('');
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [intlPhone, setIntlPhone] = useState(false);
+  const [intlEmergencyPhone, setIntlEmergencyPhone] = useState(false);
   const { showToast } = useToast();
 
   // Wizard state
@@ -987,8 +989,14 @@ const CareRecipients = window.CareRecipients = () => {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Phone Number</label>
-              <input type="tel" value={formData.phone} onChange={(e) => fd('phone', e.target.value)} placeholder="(555) 123-4567" />
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                Phone Number
+                <button type="button" onClick={() => { setIntlPhone(!intlPhone); fd('phone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                  {intlPhone ? 'US number' : 'International number'}
+                </button>
+              </label>
+              <input type="tel" value={formData.phone} onChange={(e) => fd('phone', formatPhone(e.target.value, intlPhone))} placeholder={intlPhone ? '+44 20 7946 0958' : '(555) 123-4567'} />
+              {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
             </div>
             <div className="form-group">
               <label>Email</label>
@@ -1053,8 +1061,13 @@ const CareRecipients = window.CareRecipients = () => {
               <input type="text" value={formData.emergencyContactName} onChange={(e) => fd('emergencyContactName', e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Emergency Contact Phone</label>
-              <input type="tel" value={formData.emergencyContactPhone} onChange={(e) => fd('emergencyContactPhone', formatPhone(e.target.value))} placeholder="(555) 123-4567" />
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                Emergency Contact Phone
+                <button type="button" onClick={() => { setIntlEmergencyPhone(!intlEmergencyPhone); fd('emergencyContactPhone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                  {intlEmergencyPhone ? 'US number' : 'International'}
+                </button>
+              </label>
+              <input type="tel" value={formData.emergencyContactPhone} onChange={(e) => fd('emergencyContactPhone', formatPhone(e.target.value, intlEmergencyPhone))} placeholder={intlEmergencyPhone ? '+44 20 7946 0958' : '(555) 123-4567'} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>

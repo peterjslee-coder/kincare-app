@@ -14,6 +14,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [recentVisits, setRecentVisits] = useState([]);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [smsPhone, setSmsPhone] = useState('');
+  const [intlPhone, setIntlPhone] = useState(false);
   const [notifChannel, setNotifChannel] = useState('push');
   const [savingNotif, setSavingNotif] = useState(false);
   const [a11yExpanded, setA11yExpanded] = useState(false);
@@ -516,11 +517,16 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
 
                 {['sms', 'both'].includes(notifChannel) && (
                   <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>{team.recipient_first_name}'s phone number</div>
-                    <input type="tel" value={smsPhone} onChange={(e) => setSmsPhone(e.target.value)}
-                      placeholder="(540) 555-1234"
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>
+                      {team.recipient_first_name}'s phone number
+                      <button type="button" onClick={() => { setIntlPhone(!intlPhone); setSmsPhone(''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                        {intlPhone ? 'US number' : 'International'}
+                      </button>
+                    </div>
+                    <input type="tel" value={smsPhone} onChange={(e) => setSmsPhone(formatPhone(e.target.value, intlPhone))}
+                      placeholder={intlPhone ? '+44 20 7946 0958' : '(540) 555-1234'}
                       style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
-                    <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>US format: (540) 555-1234 or +15405551234</div>
+                    {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
                   </div>
                 )}
 

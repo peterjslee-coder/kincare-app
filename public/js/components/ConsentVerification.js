@@ -10,6 +10,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
   const [relationship, setRelationship] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
+  const [intlPhone, setIntlPhone] = useState(false);
 
   // Outreach / admin review state
   const [outreach, setOutreach] = useState(null);
@@ -350,12 +351,16 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
-              {firstName}'s phone number <span style={{ fontWeight: 400, color: '#999' }}>(optional if email provided)</span>
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
+              <span>{firstName}'s phone number <span style={{ fontWeight: 400, color: '#999' }}>(optional if email provided)</span></span>
+              <button type="button" onClick={() => { setIntlPhone(!intlPhone); setRecipientPhone(''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                {intlPhone ? 'US number' : 'International'}
+              </button>
             </label>
-            <input type="tel" value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value)}
-              placeholder="e.g. (555) 123-4567"
+            <input type="tel" value={recipientPhone} onChange={(e) => setRecipientPhone(formatPhone(e.target.value, intlPhone))}
+              placeholder={intlPhone ? '+44 20 7946 0958' : '(555) 123-4567'}
               style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box' }} />
+            {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
           </div>
         </div>
 
