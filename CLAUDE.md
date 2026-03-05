@@ -377,9 +377,11 @@ These rules apply to every session. Do not skip them.
 
 6. **Trust user bug reports — investigate code first.** When Pete reports a bug, look at the code before suggesting it might be caching or user error. He's usually right.
 
+7. **NEVER trigger real payments from demo/seed data.** Stripe is live with real keys. Demo accounts (pete@inplace.care, maria@inplace.care, betty@inplace.care, etc.) do NOT have real Stripe Connect accounts. Never write code that creates Stripe Checkout Sessions, PaymentIntents, or transfers using demo/seed user data. Never seed `stripe_account_id` on demo caregiver profiles. Any payment-related code changes must be reviewed for demo safety — if a code path could reach Stripe's API with fake data, it's a bug. When testing payment flows, use Stripe's test mode keys locally, never the live keys.
+
 ## Known Limitations
 
-1. Payments table exists but no payment processing (Stripe Connect planned for v1.3.0)
+1. Stripe is live (real keys on Railway). Demo accounts have no Stripe Connect accounts and must never trigger real charges. See Dev Rule #7.
 2. Sibling users each have separate care_recipient records for Betty (no shared access model yet)
 3. Email delivery requires domain verification in Resend — sandbox sender only delivers to account owner
 4. Visit photos stored as base64 in PostgreSQL — works for demo but won't scale to production (use S3/R2 later)
