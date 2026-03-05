@@ -158,6 +158,17 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     return () => clearInterval(iv);
   }, [data?.upcomingSessions, imminentId]);
 
+  // ─── New user with NO care recipient → go straight into wizard ───
+  // Must be before early returns to avoid breaking Rules of Hooks
+  useEffect(() => {
+    if (loading || !data) return;
+    const isNew = data?.isNewUser && !(user?.is_demo || user?.isDemo);
+    const hasRec = !!(data?.parent || (data?.stats?.assignedCaregivers > 0));
+    if (isNew && !hasRec && onNavigate) {
+      onNavigate('recipients');
+    }
+  }, [loading, data, user]);
+
   const formatActivityTime = (createdAt) => {
     if (!createdAt) return '';
     const date = parseTimestamp(createdAt);
@@ -271,14 +282,6 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
       </div>
     </div>
   );
-
-  // ─── New user with NO care recipient → go straight into wizard ───
-  // Auto-navigate to the care recipients page which will launch the wizard automatically
-  useEffect(() => {
-    if (isNewUser && !hasRecipient && onNavigate && !loading) {
-      onNavigate('recipients');
-    }
-  }, [isNewUser, hasRecipient, loading]);
 
   // ─── Welcome screen for new users who HAVE completed the wizard ───
   // This is now a casual "explore the app" ideas list, not a mandatory checklist
