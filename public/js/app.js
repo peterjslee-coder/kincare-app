@@ -403,6 +403,7 @@ const App = () => {
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
   const pendingInviteRef = useRef(null); // Ref mirror — survives closures
   const [inviteInfo, setInviteInfo] = useState(null); // { email, role, teamName, recipientName, inviterName }
+  const [acceptingInvite, setAcceptingInvite] = useState(false); // True while invite acceptance is in-flight
   const [platformInviteToken, setPlatformInviteToken] = useState(null);
   const [selectedCareTeamId, setSelectedCareTeamId] = useState(null);
   // Email-first signup: prefilled from signup intent token
@@ -458,6 +459,7 @@ const App = () => {
             const inviteParam = new URLSearchParams(window.location.search).get('invite')
               || new URLSearchParams(window.__originalSearch || '').get('invite');
             if (inviteParam) {
+              setAcceptingInvite(true);
               apiFetch('/api/care-teams/accept-invite', {
                 method: 'POST',
                 body: JSON.stringify({ token: inviteParam }),
@@ -466,9 +468,19 @@ const App = () => {
                   const d = await r.json();
                   setVerifyMessage({ type: 'success', text: d.message || "You've joined the care team!" });
                   if (d.careTeamId) { setSelectedCareTeamId(d.careTeamId); setCurrentPage('care-team'); }
+                } else {
+                  try {
+                    const errData = await r.json();
+                    setVerifyMessage({ type: 'error', text: errData.error || 'Could not accept this invite. It may have expired.' });
+                  } catch {
+                    setVerifyMessage({ type: 'error', text: 'Could not accept this invite. It may have expired.' });
+                  }
                 }
-                // Silently ignore invite errors on auto-auth
-              }).catch(() => {});
+              }).catch(() => {
+                setVerifyMessage({ type: 'error', text: 'Could not accept this invite. Please check your connection and try again.' });
+              }).finally(() => {
+                setAcceptingInvite(false);
+              });
               setPendingInviteToken(null);
               pendingInviteRef.current = null;
               setInviteInfo(null);
@@ -679,6 +691,7 @@ const App = () => {
     // Accept pending care team invite if one exists (use ref to avoid stale closure)
     const inviteTokenNow = pendingInviteRef.current;
     if (inviteTokenNow) {
+      setAcceptingInvite(true);
       apiFetch('/api/care-teams/accept-invite', {
         method: 'POST',
         body: JSON.stringify({ token: inviteTokenNow }),
@@ -687,9 +700,20 @@ const App = () => {
           const data = await r.json();
           setVerifyMessage({ type: 'success', text: data.message || 'You\'ve joined the care team!' });
           if (data.careTeamId) { setSelectedCareTeamId(data.careTeamId); setCurrentPage('care-team'); }
+        } else {
+          // Show error to user — expired token, wrong email, etc.
+          try {
+            const errData = await r.json();
+            setVerifyMessage({ type: 'error', text: errData.error || 'Could not accept this invite. It may have expired.' });
+          } catch {
+            setVerifyMessage({ type: 'error', text: 'Could not accept this invite. It may have expired.' });
+          }
         }
-        // Silently ignore invite errors — user may have already joined, or invite was already used
-      }).catch(() => {});
+      }).catch(() => {
+        setVerifyMessage({ type: 'error', text: 'Could not accept this invite. Please check your connection and try again.' });
+      }).finally(() => {
+        setAcceptingInvite(false);
+      });
       setPendingInviteToken(null);
       pendingInviteRef.current = null;
       window.__originalSearch = ''; // Clear so auto-auth won't re-try
@@ -925,7 +949,7 @@ const App = () => {
     // Allow account & help so users can still manage settings or get help
     try {
       const wizardData = sessionStorage.getItem('inplace_wizard');
-      if (wizardData && currentPage !== 'recipients' && currentPage !== 'account' && currentPage !== 'help') {
+      if (wizardData && currentPage !== 'recipients' && currentPage !== 'account' && currentPage !== 'help' && currentPage !== 'care-team') {
         // Auto-redirect to wizard — use setTimeout to avoid render-during-render
         setTimeout(() => setCurrentPage('recipients'), 0);
         return <div key={pageKey} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: '#666' }}>Returning to setup...</div>;
@@ -935,7 +959,7 @@ const App = () => {
     if (currentPage === 'dashboard') {
       if (role === 'caregiver') return <CaretakerHub key={pageKey} onNeedsOnboarding={() => setAppState('resume-onboarding')} />;
       if (role === 'care_for') return <CaredForView key={pageKey} />;
-      return <Dashboard key={pageKey} onNavigate={setCurrentPage} />;
+      return <Dashboard key={pageKey} onNavigate={setCurrentPage} acceptingInvite={acceptingInvite} />;
     }
     if (currentPage === 'care-profile') return <CareProfile key={pageKey} onNavigate={setCurrentPage} />;
     if (currentPage === 'care-team') return <CareTeamPage key={pageKey} selectedTeamId={selectedCareTeamId} onNavigate={setCurrentPage} />;

@@ -1,4 +1,4 @@
-const Dashboard = window.Dashboard = ({ onNavigate }) => {
+const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -162,6 +162,9 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
   // Must be before early returns to avoid breaking Rules of Hooks
   useEffect(() => {
     if (loading || !data) return;
+    // Skip wizard redirect while an invite is being accepted — the invite flow
+    // will navigate to the care-team page once it resolves
+    if (acceptingInvite) return;
     // Check if there's a wizard in progress (saved in sessionStorage)
     try {
       const saved = sessionStorage.getItem('inplace_wizard');
@@ -176,7 +179,7 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     if (isNew && !hasRec && onNavigate) {
       onNavigate('recipients');
     }
-  }, [loading, data, user]);
+  }, [loading, data, user, acceptingInvite]);
 
   const formatActivityTime = (createdAt) => {
     if (!createdAt) return '';
