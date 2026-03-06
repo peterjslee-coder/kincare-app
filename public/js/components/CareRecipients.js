@@ -1013,7 +1013,7 @@ const CareRecipients = window.CareRecipients = () => {
             <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Contact & Address</label>
             <p style={{ fontSize: 13, color: '#666', marginTop: 0, marginBottom: 12 }}>Where does this person live? This helps verify their identity and lets caregivers find the location. This info will be used to contact your loved one and verify consent to visits.</p>
           </div>
-          <div className="form-row">
+          <div className="form-row" style={{ alignItems: 'end' }}>
             <div className="form-group">
               <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 Phone Number
