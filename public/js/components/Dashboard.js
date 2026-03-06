@@ -375,22 +375,28 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Latest Status */}
+      {/* Latest Status — only show when there's something actionable */}
       {!isNewUser && (() => {
         const upcomingCount = upcoming.length;
         const unreadCount = stats.unreadNotifications || 0;
-        let statusIcon = '📋';
-        let statusText = "Everything's on track. No upcoming sessions scheduled.";
-        let borderColor = '#1b6b5a';
+        let statusIcon, statusText, borderColor;
 
         if (upcomingCount > 0) {
           statusIcon = '📅';
           statusText = `You have ${upcomingCount} upcoming session${upcomingCount > 1 ? 's' : ''} this week.`;
           if (unreadCount > 0) statusText += ` ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}.`;
+          borderColor = '#1b6b5a';
+        } else if (unreadCount > 0) {
+          statusIcon = '🔔';
+          statusText = `You have ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}.`;
+          borderColor = '#1b6b5a';
         } else if (stats.assignedCaregivers === 0 && !parent) {
           statusIcon = '🔍';
           statusText = 'Get started by adding a loved one and finding caregivers in your area.';
           borderColor = '#e8724a';
+        } else {
+          // Nothing actionable — don't show the tile
+          return null;
         }
 
         const latestFingerprint = `${upcomingCount}-${unreadCount}-${stats.assignedCaregivers}`;
