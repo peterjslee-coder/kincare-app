@@ -1103,11 +1103,11 @@ const CareRecipients = window.CareRecipients = () => {
         </div>
       )}
 
-      {wizardStep === 1 && <WizardStep2 />}
-      {wizardStep === 2 && <WizardStep3 />}
-      {wizardStep === 3 && formData.authorizationTier === 'tier3' && <WizardStep4 />}
-      {wizardStep === 3 && formData.authorizationTier !== 'tier3' && <WizardStep5 />}
-      {wizardStep === 4 && <WizardStep5 />}
+      {wizardStep === 1 && WizardStep2()}
+      {wizardStep === 2 && WizardStep3()}
+      {wizardStep === 3 && formData.authorizationTier === 'tier3' && WizardStep4()}
+      {wizardStep === 3 && formData.authorizationTier !== 'tier3' && WizardStep5()}
+      {wizardStep === 4 && WizardStep5()}
     </div>
   );
 };
