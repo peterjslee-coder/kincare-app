@@ -1081,14 +1081,14 @@ const CareRecipients = window.CareRecipients = () => {
             <label>Preferences</label>
             <textarea value={formData.preferences} onChange={(e) => fd('preferences', e.target.value)} placeholder="Likes gardening, enjoys photo albums..." />
           </div>
-          <div className="form-row">
+          <div className="form-row" style={{ alignItems: 'end' }}>
             <div className="form-group">
               <label>Emergency Contact Name</label>
               <input type="text" value={formData.emergencyContactName} onChange={(e) => fd('emergencyContactName', e.target.value)} />
             </div>
             <div className="form-group">
               <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                Emergency Contact Phone
+                Phone
                 <button type="button" onClick={() => { setIntlEmergencyPhone(!intlEmergencyPhone); fd('emergencyContactPhone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                   {intlEmergencyPhone ? 'US number' : 'International'}
                 </button>
