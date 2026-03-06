@@ -832,6 +832,80 @@ Priority: **LOW** — When growth demands it.
 
 ---
 
+## HIPAA & PHI — Critical Pre-Launch Decision
+
+Priority: **HIGH** — Must resolve before real users.
+
+> All PHI fields are tagged with `/* PHI */` comments in `src/models/database.js`.
+> See the PHI Field Registry comment block at the top of the `initializeDb()` function.
+
+### The Core Question
+
+InPlace collects health information (conditions, medications, allergies) tied to identifiable care recipients. Under HIPAA, this is Protected Health Information (PHI). Before launching with real users, we must choose one of two paths:
+
+### Option A: Full HIPAA Compliance
+
+Accept PHI and ensure every service in the chain has a signed BAA:
+
+- [ ] **Database hosting BAA** — Turso enterprise plan offers HIPAA. Railway TBD — may need to move PHI to a separate HIPAA-compliant DB (AWS RDS, Google Cloud SQL with BAA)
+- [ ] **Identity verification BAA** — Use [Vouched.id](https://www.vouched.id/medical-identity-verification-solutions) instead of Stripe Identity for care recipients AND caregivers (caregivers access PHI). Vouched signs BAAs and is HIPAA/HITECH compliant. First 50 verifications free at Stripe; Vouched pricing is custom.
+- [ ] **AI services BAA** — If any AI features process PHI (summaries, suggestions), need BAA from provider. Anthropic, OpenAI offer BAAs on enterprise/API plans.
+- [ ] **Email/notifications BAA** — If health info appears in emails or push notifications
+- [ ] **Encryption at rest** — 2026 HIPAA rules make this mandatory (NIST standards)
+- [ ] **Audit logging** — Track all access to PHI fields
+- [ ] **Breach notification process** — Required by HIPAA Breach Notification Rule
+
+### Option B: Remove PHI Entirely
+
+Don't store health information. Simpler, faster to launch, no BAAs needed:
+
+- [ ] **Remove PHI fields** from `care_recipients`: health_conditions, medications, medical_conditions, food_allergies, pet_allergies
+- [ ] **Remove PHI fields** from `users`: medical_conditions, food_allergies, pet_allergies
+- [ ] **Restrict visit_logs** — Don't allow caregivers to log medical observations
+- [ ] **Restrict care_preferences** — Keep service preferences ("meal prep", "companionship") but remove medical follow-ups ("how many medications?")
+- [ ] **Add disclaimer**: "InPlace helps coordinate non-medical home care. We do not store or process medical information. For medical care coordination, consult your healthcare provider."
+- [ ] **Reframe medication reminders** — "Although we can help remind your loved one about daily routines, we do not store or process medical information on this platform."
+- [ ] **Keep Stripe Identity** for all users (no PHI = no HIPAA concern)
+
+### Hybrid Approach (Recommended?)
+
+- Keep non-medical care preferences (meal prep, companionship, transportation, etc.)
+- Remove explicit medical fields (health_conditions, medications, medical_conditions)
+- Add "medication reminders" as a simple yes/no preference without storing what medications
+- Add prominent disclaimer about non-medical care coordination
+- Use Stripe Identity for everyone (cheaper, already integrated)
+- Revisit full HIPAA compliance when/if medical care features are needed
+
+### Identity Verification — All Users Need It
+
+- **Caregivers**: Currently wired to Stripe Identity (`/api/payments/identity/create-session`). If we go Option A, switch to Vouched since caregivers access PHI.
+- **Care recipients / families**: WizardStep3 is currently a "Coming Soon" placeholder. Needs real verification before care can begin.
+- **Vouched.id** ([vouched.id](https://www.vouched.id)): HIPAA-compliant, signs BAAs, healthcare-specific (VouchedRx). API similar to Stripe Identity (document + selfie). Custom pricing.
+- **Stripe Identity**: $1.50/verification after first 50 free. NOT HIPAA-compliant. Fine if we go Option B (no PHI).
+
+### PHI Fields Currently Tagged in Database
+
+| Table | Field | Classification |
+|-------|-------|---------------|
+| care_recipients | health_conditions | PHI |
+| care_recipients | medications | PHI |
+| care_recipients | medical_conditions | PHI |
+| care_recipients | food_allergies | PHI |
+| care_recipients | pet_allergies | PHI |
+| care_recipients | care_preferences | PHI-risk (follow-up details) |
+| users | medical_conditions | PHI |
+| users | food_allergies | PHI |
+| users | pet_allergies | PHI |
+| visit_logs | summary | PHI |
+| visit_logs | notes | PHI |
+| visit_logs | mood_rating | PHI |
+| visit_logs | tasks_completed | PHI |
+| recipient_notes | content | PHI |
+| messages | content | PHI-risk |
+| care_sessions | special_instructions | PHI-risk |
+
+---
+
 ## Pete's Action Items (External Setup)
 
 > These unblock dev tasks above. Check them off as you go.

@@ -116,19 +116,51 @@ async function getDb() {
 async function initializeDatabase() {
   const db = await getDb();
 
+  // ┌──────────────────────────────────────────────────────────────────────┐
+  // │  ⚠️  PHI (Protected Health Information) FIELD REGISTRY             │
+  // │                                                                      │
+  // │  HIPAA Decision Pending — see ROADMAP.md "HIPAA & PHI" section.     │
+  // │  Fields tagged /* PHI */ below contain or may contain health info    │
+  // │  tied to identifiable individuals. Before going live with real       │
+  // │  users, we must either:                                              │
+  // │   (A) Obtain BAAs from all services that store/process these fields  │
+  // │       (Railway, Turso, any AI APIs), OR                              │
+  // │   (B) Remove these fields entirely and add a disclaimer:             │
+  // │       "InPlace does not store or process medical information."        │
+  // │                                                                      │
+  // │  Tables with PHI fields:                                             │
+  // │   • care_recipients: health_conditions, medications,                 │
+  // │     medical_conditions, food_allergies, pet_allergies,               │
+  // │     care_preferences (follow-up details may contain medical info)    │
+  // │   • users: medical_conditions, food_allergies, pet_allergies         │
+  // │   • visit_logs: summary, notes, mood_rating, tasks_completed        │
+  // │   • recipient_notes: content                                         │
+  // │   • messages: content (may contain health discussions)               │
+  // │   • care_sessions: special_instructions (may reference health)       │
+  // │                                                                      │
+  // │  Safe fields (NOT PHI): names, emails, phones, addresses,           │
+  // │   ages, payment data, caregiver profiles/rates, consent records,    │
+  // │   scheduling data, assignment records.                               │
+  // └──────────────────────────────────────────────────────────────────────┘
+
   const statements = [
     `CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, first_name TEXT NOT NULL, last_name TEXT NOT NULL, phone TEXT, avatar_url TEXT, notification_prefs TEXT, is_active INTEGER DEFAULT 1, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS care_recipients (id TEXT PRIMARY KEY, family_user_id TEXT NOT NULL REFERENCES users(id), first_name TEXT NOT NULL, last_name TEXT NOT NULL, age INTEGER, location_address TEXT, location_city TEXT, location_state TEXT, location_zip TEXT, latitude REAL, longitude REAL, health_conditions TEXT, medications TEXT, preferences TEXT, emergency_contact_name TEXT, emergency_contact_phone TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    /* PHI fields in care_recipients: health_conditions, medications, preferences (care_preferences follow-ups) */
+    `CREATE TABLE IF NOT EXISTS care_recipients (id TEXT PRIMARY KEY, family_user_id TEXT NOT NULL REFERENCES users(id), first_name TEXT NOT NULL, last_name TEXT NOT NULL, age INTEGER, location_address TEXT, location_city TEXT, location_state TEXT, location_zip TEXT, latitude REAL, longitude REAL, health_conditions TEXT /* PHI */, medications TEXT /* PHI */, preferences TEXT, emergency_contact_name TEXT, emergency_contact_phone TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS caregiver_profiles (id TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL REFERENCES users(id), bio TEXT, years_experience INTEGER DEFAULT 0, hourly_rate REAL NOT NULL, specialties TEXT, certifications TEXT, max_travel_miles REAL DEFAULT 10, is_background_checked INTEGER DEFAULT 0, is_available INTEGER DEFAULT 1, rating_avg REAL DEFAULT 0, rating_count INTEGER DEFAULT 0, location_city TEXT, location_state TEXT, latitude REAL, longitude REAL, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS availability (id TEXT PRIMARY KEY, caregiver_id TEXT NOT NULL REFERENCES caregiver_profiles(id), day_of_week INTEGER NOT NULL, start_time TEXT NOT NULL, end_time TEXT NOT NULL, is_recurring INTEGER DEFAULT 1, specific_date TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS care_sessions (id TEXT PRIMARY KEY, care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id), family_user_id TEXT NOT NULL REFERENCES users(id), caregiver_id TEXT REFERENCES caregiver_profiles(id), service_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', scheduled_date TEXT NOT NULL, scheduled_time TEXT NOT NULL, duration_hours REAL NOT NULL DEFAULT 2, special_instructions TEXT, estimated_cost REAL, actual_cost REAL, cancellation_reason TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS visit_logs (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES care_sessions(id), caregiver_id TEXT NOT NULL REFERENCES caregiver_profiles(id), check_in_time TIMESTAMPTZ, check_out_time TIMESTAMPTZ, summary TEXT, mood_rating TEXT, tasks_completed TEXT, notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`,
+    /* PHI risk in care_sessions: special_instructions — may reference health needs */
+    `CREATE TABLE IF NOT EXISTS care_sessions (id TEXT PRIMARY KEY, care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id), family_user_id TEXT NOT NULL REFERENCES users(id), caregiver_id TEXT REFERENCES caregiver_profiles(id), service_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', scheduled_date TEXT NOT NULL, scheduled_time TEXT NOT NULL, duration_hours REAL NOT NULL DEFAULT 2, special_instructions TEXT /* PHI-risk */, estimated_cost REAL, actual_cost REAL, cancellation_reason TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    /* PHI fields in visit_logs: summary, mood_rating, tasks_completed, notes — caregivers may document health observations */
+    `CREATE TABLE IF NOT EXISTS visit_logs (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES care_sessions(id), caregiver_id TEXT NOT NULL REFERENCES caregiver_profiles(id), check_in_time TIMESTAMPTZ, check_out_time TIMESTAMPTZ, summary TEXT /* PHI */, mood_rating TEXT /* PHI */, tasks_completed TEXT /* PHI */, notes TEXT /* PHI */, created_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS visit_photos (id TEXT PRIMARY KEY, visit_log_id TEXT NOT NULL REFERENCES visit_logs(id), photo_url TEXT NOT NULL, caption TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS activity_feed (id TEXT PRIMARY KEY, family_user_id TEXT NOT NULL REFERENCES users(id), care_recipient_id TEXT REFERENCES care_recipients(id), event_type TEXT NOT NULL, title TEXT NOT NULL, message TEXT, metadata TEXT, is_read INTEGER DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES care_sessions(id), family_user_id TEXT NOT NULL REFERENCES users(id), caregiver_id TEXT NOT NULL REFERENCES caregiver_profiles(id), rating INTEGER NOT NULL, comment TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES care_sessions(id), family_user_id TEXT NOT NULL REFERENCES users(id), caregiver_id TEXT NOT NULL REFERENCES caregiver_profiles(id), amount REAL NOT NULL, platform_fee REAL NOT NULL, caregiver_payout REAL NOT NULL, status TEXT NOT NULL DEFAULT 'pending', payment_method TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL REFERENCES users(id), recipient_id TEXT NOT NULL REFERENCES users(id), content TEXT NOT NULL, is_read INTEGER DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS recipient_notes (id TEXT PRIMARY KEY, care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id), author_id TEXT NOT NULL REFERENCES users(id), content TEXT NOT NULL, note_type TEXT DEFAULT 'general', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    /* PHI risk in messages: content — families and caregivers may discuss health topics */
+    `CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL REFERENCES users(id), recipient_id TEXT NOT NULL REFERENCES users(id), content TEXT NOT NULL /* PHI-risk */, is_read INTEGER DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW())`,
+    /* PHI fields in recipient_notes: content — free-text notes about care recipients likely contain health info */
+    `CREATE TABLE IF NOT EXISTS recipient_notes (id TEXT PRIMARY KEY, care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id), author_id TEXT NOT NULL REFERENCES users(id), content TEXT NOT NULL /* PHI */, note_type TEXT DEFAULT 'general', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS caregiver_assignments (id TEXT PRIMARY KEY, care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id), family_user_id TEXT NOT NULL REFERENCES users(id), caregiver_profile_id TEXT NOT NULL REFERENCES caregiver_profiles(id), is_active INTEGER DEFAULT 1, is_favorite INTEGER DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS waitlist (id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, name TEXT, role TEXT DEFAULT 'family', source TEXT DEFAULT 'splash', created_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS password_reset_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), token TEXT UNIQUE NOT NULL, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`,
@@ -254,14 +286,14 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS onboarding_complete INTEGER DEFAULT 0`,
     // v1.5.0 — Care recipient health profile
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS pets TEXT`,
-    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS pet_allergies TEXT`,
-    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS food_allergies TEXT`,
-    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS medical_conditions TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS pet_allergies TEXT`, /* PHI */
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS food_allergies TEXT`, /* PHI */
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS medical_conditions TEXT`, /* PHI */
     // v1.5.0 — User health/pet profile (for caregivers and family)
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS pets TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS pet_allergies TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS food_allergies TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_conditions TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS pet_allergies TEXT`, /* PHI */
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS food_allergies TEXT`, /* PHI */
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_conditions TEXT`, /* PHI */
     // v1.5.0 — Message type for special messages (video_call, system, etc.)
     `ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type TEXT DEFAULT 'text'`,
     `ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata TEXT`,
@@ -377,7 +409,7 @@ async function initializeDatabase() {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_message_reactions_message ON message_reactions(message_id)`,
     // v1.33.17 — Care preferences (rated importance) and AI-generated care summary
-    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS care_preferences TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS care_preferences TEXT`, /* PHI-risk — follow-up details may contain medical info */
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS care_preference_details TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_summary TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_summary_updated_at TIMESTAMPTZ`,
