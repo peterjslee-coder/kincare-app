@@ -419,6 +419,34 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         );
       })()}
 
+      {/* Admin setup: Email domain verification */}
+      {(user?.is_admin || user?.isAdmin) && !isTileDismissed('email-setup', 'v1') && (
+        <div className="card" style={{ borderLeft: '4px solid #7b61ff', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span style={{ fontSize: 18 }}>📧</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>Set up email domain verification</span>
+              </div>
+              <div style={{ fontSize: 13, color: '#666', lineHeight: 1.5 }}>
+                Consent verification emails to care recipients require a verified sender domain. Without this, outreach emails won't deliver.
+              </div>
+              <ol style={{ fontSize: 12, color: '#555', margin: '10px 0 0', paddingLeft: 20, lineHeight: 1.7 }}>
+                <li>Go to <strong>resend.com/domains</strong> and add <strong>yourinplace.com</strong></li>
+                <li>Add the TXT record Resend gives you in <strong>Cloudflare DNS</strong></li>
+                <li>Wait for verification (usually a few minutes)</li>
+                <li>Set <strong>FROM_EMAIL=hello@yourinplace.com</strong> in Railway environment variables</li>
+                <li>Redeploy on Railway</li>
+              </ol>
+            </div>
+            <button onClick={() => dismissTile('email-setup', 'v1')} title="Done — dismiss" style={{
+              background: '#f0f0f0', border: 'none', cursor: 'pointer', fontSize: 13,
+              color: '#999', padding: '2px 8px', borderRadius: 6, fontWeight: 600, flexShrink: 0,
+            }}>✕</button>
+          </div>
+        </div>
+      )}
+
       {/* Quick-access explore ideas for users who haven't filled out profile yet */}
       {!isDemo && !hasProfile && !isTileDismissed('onboarding', 'v2') && (
         <div className="card" style={{ borderLeft: '4px solid #e8724a', marginBottom: 16 }}>

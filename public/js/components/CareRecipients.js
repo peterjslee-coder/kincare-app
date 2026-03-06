@@ -356,20 +356,27 @@ const CareRecipients = window.CareRecipients = () => {
         return;
       }
 
-      // POST outreach/notification
-      const notifyRes = await apiFetch(`/api/consent/${savedRecipientId}/send-outreach`, {
-        method: 'POST',
-        body: JSON.stringify({
-          method: attestNotifyMethod,
-        }),
-      });
-
-      if (notifyRes?.ok) {
-        showToast('Attestation submitted and notification sent!', 'success');
-        setWizardStep(4);
-      } else {
-        setAttestError('Error sending notification');
+      // POST outreach/notification — don't block wizard if email fails
+      let outreachMsg = 'Attestation submitted!';
+      try {
+        const notifyRes = await apiFetch(`/api/consent/${savedRecipientId}/send-outreach`, {
+          method: 'POST',
+          body: JSON.stringify({
+            method: attestNotifyMethod,
+          }),
+        });
+        if (notifyRes?.ok) {
+          const notifyData = await notifyRes.json();
+          outreachMsg = notifyData.message || 'Attestation submitted and verification email sent!';
+        } else {
+          outreachMsg = 'Attestation submitted! Verification email will be sent once email is configured.';
+        }
+      } catch (emailErr) {
+        console.warn('Outreach send failed (non-blocking):', emailErr.message);
+        outreachMsg = 'Attestation submitted! Verification email will be sent shortly.';
       }
+      showToast(outreachMsg, 'success');
+      setWizardStep(4);
     } catch (err) {
       console.error('Attestation error:', err);
       setAttestError('Error completing attestation');
