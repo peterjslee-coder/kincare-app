@@ -344,11 +344,23 @@
   - **Implementation:** New component `FeedbackButton.js` (FAB + modal), new route file `src/routes/feedback.js`, new table in `database.js`, new tab in `AdminPanel.js`. Wire FAB into `app.js` so it renders on every page for authenticated users.
 
 
+## Dev Best Practices
+
+> Patterns and conventions learned the hard way. Claude should follow these when building new features.
+
+- **Admin task tiles for setup instructions.** When Claude needs Pete to do something manually (external setup, API config, DNS changes, etc.), don't just put it in TASKS.md — also add a dismissible tile to the Dashboard gated behind `user?.is_admin || user?.isAdmin`. The tile should have step-by-step instructions and a ✕ button that calls `dismissTile('tile-id', 'v1')`. This makes setup tasks impossible to miss. See the email domain verification tile (v1.39.20) as the reference pattern. The tile uses the existing `dismissedTiles` + `localStorage` system — no backend needed.
+- **Non-blocking side effects.** When a primary action triggers a secondary action (e.g., attestation → send outreach email), wrap the secondary in try/catch and let the user proceed even if it fails. Show an appropriate toast message. Never block a completed wizard step because a side-effect failed.
+- **Wizard state persistence.** Wizard progress is stored in `sessionStorage('inplace_wizard')`. When restoring, only `wizardStep` and `savedRecipientId` are persisted — formData is NOT. Always re-fetch from the API when resuming a wizard. See the `useEffect` in CareRecipients.js that fetches `/api/care-recipients/:id` on resume.
+- **Guided discovery tiles.** For post-wizard or post-setup actions the user should explore, use the 2×2 grid pattern from the Dashboard "Get Started" section (v1.39.19). Each tile tracks clicks via `localStorage('inplace_discovered')` and disappears once clicked. Include a "Dismiss all" option.
+- **Version bumping.** Every push must bump version in three files: `index.html` (3 occurrences), `sw.js` (3 occurrences), `server.js` (1 occurrence). Use the format `1.X.Y`. This ensures cache-busting on Railway auto-deploy.
+
+
 ## Pete's Action Items (External Setup)
 
 > Things only Pete can do — account signups, API keys, config. These unblock dev tasks above. Check them off as you go.
 
-- [ ] **Stripe: Add API keys to Railway.** You've created a Stripe account. Now go to Stripe Dashboard → Developers → API keys. Copy the **Secret key** and **Publishable key**. In Railway dashboard, add env vars: `STRIPE_SECRET_KEY` and `STRIPE_PUBLISHABLE_KEY`. (Use test-mode keys first — they start with `sk_test_` and `pk_test_`.) This unblocks: background check payment during caregiver onboarding + future Stripe Connect marketplace payments.
+- [x] ~~**Stripe: Add API keys to Railway.** You've created a Stripe account. Now go to Stripe Dashboard → Developers → API keys. Copy the **Secret key** and **Publishable key**. In Railway dashboard, add env vars: `STRIPE_SECRET_KEY` and `STRIPE_PUBLISHABLE_KEY`. (Use test-mode keys first — they start with `sk_test_` and `pk_test_`.) This unblocks: background check payment during caregiver onboarding + future Stripe Connect marketplace payments.~~
+- [x] ~~**Resend: Verify domain and set FROM_EMAIL.** Domain `yourinplace.com` verified in Resend dashboard. `FROM_EMAIL` and `RESEND_API_KEY` set in Railway env vars. Consent outreach emails are live.~~
 - [ ] **Checkr: Sign up and get API key.** Go to [checkr.com](https://checkr.com) and sign up for a partner/platform account. You'll get a `CHECKR_API_KEY`. Add it to Railway env vars. This unblocks: actually running background checks during caregiver onboarding. (Checkr has a sandbox/test mode for development.)
 - [ ] **Stripe: Decide background check price.** What should caregivers be charged for the background check? Checkr's basic check runs ~$25–$35. Do you want to pass cost through at-cost, mark up, or subsidize? Claude needs this number to build the payment step.
 - [ ] **Plausible Analytics: Sign up at plausible.io.** Add `yourinplace.com` as a site. The script tag is already in index.html — just needs the account created.
