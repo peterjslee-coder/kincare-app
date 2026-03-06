@@ -441,6 +441,56 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
         </div>
       )}
 
+      {/* Guided discovery tiles — "While you wait" actions from wizard completion */}
+      {!isDemo && parent && (() => {
+        const discoverItems = [
+          { id: 'discover-preferences', icon: '⚙️', label: 'Review care preferences', desc: 'Adjust schedules, medications, and daily routines', target: 'recipients' },
+          { id: 'discover-family', icon: '👨‍👩‍👧', label: 'Invite family to the care team', desc: 'Add siblings, relatives, or trusted friends', target: 'care-team' },
+          { id: 'discover-caregivers', icon: '🔍', label: 'Browse caregivers in your area', desc: 'See who\'s available nearby', target: 'caregivers' },
+          { id: 'discover-profile', icon: '👤', label: 'Complete your profile', desc: 'Add your phone number and address', target: 'account' },
+        ];
+        const clicked = (() => { try { return JSON.parse(localStorage.getItem('inplace_discovered') || '[]'); } catch { return []; } })();
+        const remaining = discoverItems.filter(d => !clicked.includes(d.id));
+        if (remaining.length === 0) return null;
+
+        const markClicked = (item) => {
+          try {
+            const cur = JSON.parse(localStorage.getItem('inplace_discovered') || '[]');
+            if (!cur.includes(item.id)) { cur.push(item.id); localStorage.setItem('inplace_discovered', JSON.stringify(cur)); }
+          } catch {}
+          onNavigate && onNavigate(item.target);
+        };
+
+        return (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Get Started</div>
+              <button onClick={() => {
+                try { localStorage.setItem('inplace_discovered', JSON.stringify(discoverItems.map(d => d.id))); } catch {}
+                setDismissedTiles(prev => ({ ...prev, _discoverForceHide: Date.now() }));
+              }} style={{ background: 'none', border: 'none', fontSize: 12, color: '#aaa', cursor: 'pointer', padding: '2px 6px' }}>Dismiss all</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              {remaining.map(item => (
+                <div key={item.id}
+                  onClick={() => markClicked(item)}
+                  style={{
+                    background: '#fff', border: '1px solid #e8e8e8', borderRadius: 12,
+                    padding: '16px 14px', cursor: 'pointer', transition: 'box-shadow 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#1b6b5a'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(27,107,90,0.1)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#e8e8e8'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <div style={{ fontSize: 22, marginBottom: 8 }}>{item.icon}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 4, lineHeight: 1.3 }}>{item.label}</div>
+                  <div style={{ fontSize: 12, color: '#888', lineHeight: 1.3 }}>{item.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {parent && (
         <div className="betty-card" style={{ cursor: 'pointer', position: 'relative' }}>
           <div onClick={() => onNavigate && onNavigate('care-profile')}>
