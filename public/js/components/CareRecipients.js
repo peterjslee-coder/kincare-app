@@ -67,6 +67,9 @@ const CareRecipients = window.CareRecipients = () => {
   const [attestLoading, setAttestLoading] = useState(false);
   const [attestError, setAttestError] = useState('');
   const [prefsLoading, setPrefsLoading] = useState(false);
+  // Stripe Connect state (hoisted from WizardStep3 to avoid conditional hooks)
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeStatus, setStripeStatus] = useState(null); // null, 'pending', 'complete'
 
   const CARE_PREFS_LIST = [
     { id: 'meal_prep', label: 'Meal preparation & cooking', icon: '🍳' },
@@ -185,6 +188,23 @@ const CareRecipients = window.CareRecipients = () => {
       setSavedRecipientId(null);
     }
   }, [loading, recipients.length]);
+
+  // Check Stripe Connect status when entering step 3 (wizardStep === 2)
+  useEffect(() => {
+    if (wizardStep !== 2) return;
+    (async () => {
+      try {
+        const res = await apiFetch('/api/stripe/connect-status');
+        if (res?.ok) {
+          const data = await res.json();
+          if (data.status === 'complete') setStripeStatus('complete');
+          else if (data.status === 'pending') setStripeStatus('pending');
+        }
+      } catch (err) {
+        console.log('Stripe status check:', err.message);
+      }
+    })();
+  }, [wizardStep]);
 
   const resetForm = () => {
     setFormData({
@@ -672,25 +692,6 @@ const CareRecipients = window.CareRecipients = () => {
 
   // Wizard Step 3: Verify Identity & Set Up Payments (Stripe Connect)
   const WizardStep3 = () => {
-    const [stripeLoading, setStripeLoading] = useState(false);
-    const [stripeStatus, setStripeStatus] = useState(null); // null, 'pending', 'complete'
-
-    // Check Stripe Connect status on mount
-    useEffect(() => {
-      (async () => {
-        try {
-          const res = await apiFetch('/api/stripe/connect-status');
-          if (res?.ok) {
-            const data = await res.json();
-            if (data.status === 'complete') setStripeStatus('complete');
-            else if (data.status === 'pending') setStripeStatus('pending');
-          }
-        } catch (err) {
-          console.log('Stripe status check:', err.message);
-        }
-      })();
-    }, []);
-
     const handleStripeConnect = async () => {
       setStripeLoading(true);
       try {
