@@ -409,8 +409,8 @@ const App = () => {
   const [signupPrefill, setSignupPrefill] = useState(null); // { email, role, signupToken }
 
   useEffect(() => {
-    // If we're in reset-password mode (set at init from URL), skip auto-login
-    if (appState === 'reset-password') return;
+    // If we're in a pre-auth URL mode (reset-password, consent-response), skip auto-login
+    if (appState === 'reset-password' || appState === 'consent-response') return;
 
     const savedToken = localStorage.getItem('auth_token');
     if (savedToken) {

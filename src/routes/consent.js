@@ -14,6 +14,13 @@ function getLogConsentAudit() {
   return _logConsentAudit;
 }
 
+// Helper: extract client IP (respects Railway/proxy X-Forwarded-For)
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return req.connection?.remoteAddress || req.socket?.remoteAddress || null;
+}
+
 const router = express.Router();
 // NOTE: authenticate is applied per-route (not globally) because
 // the /respond/:token endpoints must be PUBLIC (care recipients
@@ -158,10 +165,11 @@ router.post("/:recipientId/attest", authenticate, async (req, res) => {
     const attestationText = buildAttestationText(recipientName);
 
     const id = uuid();
+    const attesterIp = getClientIp(req);
     await db.prepare(`
-      INSERT INTO attestations (id, care_recipient_id, attesting_user_id, relationship_to_recipient, attestation_text, signature_name, admin_status)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending')
-    `).run(id, req.params.recipientId, req.user.id, relationshipToRecipient, attestationText, signatureName.trim());
+      INSERT INTO attestations (id, care_recipient_id, attesting_user_id, relationship_to_recipient, attestation_text, signature_name, admin_status, attester_ip)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(id, req.params.recipientId, req.user.id, relationshipToRecipient, attestationText, signatureName.trim(), attesterIp);
 
     // Update consent status to 'attested'
     await db.prepare(
@@ -328,7 +336,7 @@ router.get("/respond/:token", async (req, res) => {
   try {
     const db = await getDb();
     const outreach = await db.prepare(
-      "SELECT co.*, cr.first_name, cr.last_name FROM consent_outreach co JOIN care_recipients cr ON cr.id = co.care_recipient_id WHERE co.outreach_token = ?"
+      "SELECT co.*, cr.first_name, cr.last_name, cr.sms_phone FROM consent_outreach co JOIN care_recipients cr ON cr.id = co.care_recipient_id WHERE co.outreach_token = ?"
     ).get(req.params.token);
 
     if (!outreach) {
@@ -343,16 +351,45 @@ router.get("/respond/:token", async (req, res) => {
       return res.json({ alreadyResponded: true, recipientName: outreach.first_name, response: outreach.recipient_response });
     }
 
+    // Capture responder IP and compare with attester IP
+    const responderIp = getClientIp(req);
+    let ipMatch = false;
+    if (responderIp) {
+      await db.prepare("UPDATE consent_outreach SET responder_ip = ? WHERE id = ?").run(responderIp, outreach.id);
+      // Compare with attester IP
+      const attestation = await db.prepare(
+        "SELECT attester_ip FROM attestations WHERE id = ?"
+      ).get(outreach.attestation_id);
+      if (attestation?.attester_ip && attestation.attester_ip === responderIp) {
+        ipMatch = true;
+        await db.prepare("UPDATE consent_outreach SET ip_match_flag = 1 WHERE id = ?").run(outreach.id);
+      }
+    }
+
     // Get family member info
     const attestation = await db.prepare(
       "SELECT a.*, u.first_name as family_first, u.last_name as family_last, a.relationship_to_recipient FROM attestations a JOIN users u ON u.id = a.attesting_user_id WHERE a.id = ?"
     ).get(outreach.attestation_id);
+
+    // Mask phone number for display (e.g., (•••) •••-7472)
+    const phone = outreach.sms_phone;
+    let maskedPhone = null;
+    if (phone) {
+      const digits = phone.replace(/\D/g, "");
+      const last4 = digits.slice(-4);
+      maskedPhone = `(•••) •••-${last4}`;
+    }
 
     res.json({
       valid: true,
       recipientName: outreach.first_name,
       familyMemberName: attestation ? `${attestation.family_first} ${attestation.family_last}`.trim() : "A family member",
       relationship: attestation?.relationship_to_recipient || "family member",
+      phoneVerificationRequired: true,
+      phoneAvailable: !!phone,
+      maskedPhone,
+      phoneVerified: !!outreach.phone_verified_at,
+      ipMatch,
     });
   } catch (err) {
     console.error("Consent respond (GET) error:", err);
@@ -360,8 +397,134 @@ router.get("/respond/:token", async (req, res) => {
   }
 });
 
+// ─── POST /api/consent/respond/:token/send-code ───
+// PUBLIC — Send phone verification code to care recipient's phone
+router.post("/respond/:token/send-code", async (req, res) => {
+  try {
+    const { method } = req.body; // 'sms' or 'voice'
+    const db = await getDb();
+    const outreach = await db.prepare(
+      "SELECT co.*, cr.sms_phone, cr.first_name FROM consent_outreach co JOIN care_recipients cr ON cr.id = co.care_recipient_id WHERE co.outreach_token = ?"
+    ).get(req.params.token);
+
+    if (!outreach) return res.status(404).json({ error: "Invalid verification link." });
+    if (outreach.recipient_response) return res.status(400).json({ error: "Already responded." });
+    if (!outreach.sms_phone) return res.status(400).json({ error: "No phone number on file for verification." });
+
+    // Rate limit: max 5 codes per outreach per hour
+    const recentCodes = await db.prepare(
+      "SELECT COUNT(*) as cnt FROM consent_outreach WHERE id = ? AND phone_verification_sent_at > NOW() - INTERVAL '1 hour'"
+    ).get(outreach.id);
+    // Simple: just check the single record's sent_at
+    if (outreach.phone_verification_sent_at) {
+      const lastSent = new Date(outreach.phone_verification_sent_at);
+      const cooldown = 60 * 1000; // 60 seconds between codes
+      if (Date.now() - lastSent.getTime() < cooldown) {
+        return res.status(429).json({ error: "Please wait before requesting another code.", retryAfter: Math.ceil((cooldown - (Date.now() - lastSent.getTime())) / 1000) });
+      }
+    }
+
+    // Generate 6-digit code
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+
+    // Store code
+    await db.prepare(
+      "UPDATE consent_outreach SET phone_verification_code = ?, phone_verification_sent_at = NOW(), phone_verification_required = 1 WHERE id = ?"
+    ).run(code, outreach.id);
+
+    // Send via SMS or voice
+    const { sendSms } = require("../utils/sms");
+    if (method === "voice") {
+      // Use Twilio voice call to read the code
+      try {
+        const twilio = require("twilio");
+        const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+        const { formatPhoneE164 } = require("../utils/sms");
+        const formattedPhone = formatPhoneE164(outreach.sms_phone);
+        if (formattedPhone) {
+          const twiml = `<Response><Say voice="Polly.Joanna">Hello ${outreach.first_name}. Your InPlace verification code is: ${code.split("").join(", ")}. Again, your code is: ${code.split("").join(", ")}. Thank you.</Say></Response>`;
+          await client.calls.create({
+            twiml,
+            from: process.env.TWILIO_FROM_NUMBER,
+            to: formattedPhone,
+          });
+          console.log(`  [consent] Voice verification code sent to ${formattedPhone}`);
+          res.json({ success: true, method: "voice", message: `We're calling your phone now. Listen for your verification code.` });
+        } else {
+          res.status(400).json({ error: "Invalid phone number on file." });
+        }
+      } catch (voiceErr) {
+        console.error("Voice call error:", voiceErr.message);
+        // Fall back to SMS
+        const smsResult = await sendSms(outreach.sms_phone, `Your InPlace verification code is: ${code}. Enter this code to confirm your care arrangement.`);
+        res.json({ success: smsResult.success, method: "sms", message: smsResult.success ? "Code sent via text message." : "Unable to send code. Please try again." });
+      }
+    } else {
+      // Default: SMS
+      const smsResult = await sendSms(outreach.sms_phone, `Your InPlace verification code is: ${code}. Enter this code to confirm your care arrangement.`);
+      res.json({ success: smsResult.success, method: "sms", message: smsResult.success ? "Code sent to your phone via text." : "Unable to send code. Please try again." });
+    }
+  } catch (err) {
+    console.error("Send verification code error:", err);
+    res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
+// ─── POST /api/consent/respond/:token/verify-code ───
+// PUBLIC — Verify phone code before allowing response submission
+router.post("/respond/:token/verify-code", async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code || !code.trim()) return res.status(400).json({ error: "Please enter the verification code." });
+
+    const db = await getDb();
+    const outreach = await db.prepare(
+      "SELECT * FROM consent_outreach WHERE outreach_token = ?"
+    ).get(req.params.token);
+
+    if (!outreach) return res.status(404).json({ error: "Invalid verification link." });
+    if (outreach.phone_verified_at) return res.json({ success: true, alreadyVerified: true });
+
+    if (!outreach.phone_verification_code) {
+      return res.status(400).json({ error: "No code has been sent yet. Please request a code first." });
+    }
+
+    // Code expires after 10 minutes
+    const sentAt = new Date(outreach.phone_verification_sent_at);
+    if (Date.now() - sentAt.getTime() > 10 * 60 * 1000) {
+      return res.status(400).json({ error: "This code has expired. Please request a new one." });
+    }
+
+    if (code.trim() !== outreach.phone_verification_code) {
+      return res.status(400).json({ error: "Incorrect code. Please try again." });
+    }
+
+    // Mark phone as verified
+    await db.prepare("UPDATE consent_outreach SET phone_verified_at = NOW() WHERE id = ?").run(outreach.id);
+
+    // Audit log
+    try {
+      const logConsentAudit = getLogConsentAudit();
+      const recipient = await db.prepare("SELECT first_name, last_name FROM care_recipients WHERE id = ?").get(outreach.care_recipient_id);
+      const rName = recipient ? `${recipient.first_name} ${recipient.last_name}`.trim() : "Unknown";
+      await logConsentAudit(db, {
+        careRecipientId: outreach.care_recipient_id, actorId: "care_recipient", actorRole: "care_recipient",
+        eventType: "phone_verified",
+        description: `${rName} verified their phone number via code entry${outreach.ip_match_flag ? " (IP match flagged — same device as attester)" : ""}`,
+        metadata: { outreachId: outreach.id, ipMatchFlag: !!outreach.ip_match_flag },
+      });
+    } catch (auditErr) { console.error("Phone verify audit error:", auditErr.message); }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Verify code error:", err);
+    res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
 // ─── POST /api/consent/respond/:token ───
 // PUBLIC endpoint (no auth) — care recipient submits their response
+// NOW REQUIRES phone verification first
 router.post("/respond/:token", async (req, res) => {
   try {
     const { response, notes } = req.body;
@@ -385,6 +548,11 @@ router.post("/respond/:token", async (req, res) => {
 
     if (outreach.recipient_response) {
       return res.status(400).json({ error: "You've already responded to this verification." });
+    }
+
+    // Require phone verification before accepting response
+    if (!outreach.phone_verified_at) {
+      return res.status(403).json({ error: "Phone verification required. Please verify your phone number first." });
     }
 
     // Record the response
@@ -414,14 +582,15 @@ router.post("/respond/:token", async (req, res) => {
       const responseLabels = { yes_aware: "Yes, I'm aware", have_questions: "I have questions", did_not_authorize: "I did not authorize this" };
       const adminUsers = await db.prepare("SELECT id FROM users WHERE is_admin = 1").all();
       const urgency = response === "did_not_authorize" ? " ⚠️ URGENT:" : "";
+      const ipWarning = outreach.ip_match_flag ? " 🚨 SAME IP as attester — response came from same device/network." : "";
       for (const admin of adminUsers) {
         await db.prepare(`
           INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
           VALUES (?, ?, 'consent_response_received', 'Consent Response Received', ?, ?, NOW())
         `).run(
           uuid(), admin.id,
-          `${urgency} ${rName} responded to consent outreach: "${responseLabels[response]}"${notes ? ` — Notes: "${notes}"` : ""}`,
-          JSON.stringify({ recipientId: outreach.care_recipient_id, outreachId: outreach.id, response })
+          `${urgency} ${rName} responded to consent outreach: "${responseLabels[response]}"${ipWarning}${notes ? ` — Notes: "${notes}"` : ""}`,
+          JSON.stringify({ recipientId: outreach.care_recipient_id, outreachId: outreach.id, response, ipMatch: !!outreach.ip_match_flag })
         );
       }
 

@@ -625,6 +625,14 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS identity_verified INTEGER DEFAULT 0`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS identity_verification_status TEXT DEFAULT 'none'`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS identity_verified_at TIMESTAMPTZ`,
+    // v1.39.21 — IP fraud detection on consent outreach
+    `ALTER TABLE attestations ADD COLUMN IF NOT EXISTS attester_ip TEXT`, /* PHI-risk */
+    `ALTER TABLE consent_outreach ADD COLUMN IF NOT EXISTS responder_ip TEXT`, /* PHI-risk */
+    `ALTER TABLE consent_outreach ADD COLUMN IF NOT EXISTS ip_match_flag INTEGER DEFAULT 0`,
+    `ALTER TABLE consent_outreach ADD COLUMN IF NOT EXISTS phone_verification_required INTEGER DEFAULT 0`,
+    `ALTER TABLE consent_outreach ADD COLUMN IF NOT EXISTS phone_verification_code TEXT`,
+    `ALTER TABLE consent_outreach ADD COLUMN IF NOT EXISTS phone_verification_sent_at TIMESTAMPTZ`,
+    `ALTER TABLE consent_outreach ADD COLUMN IF NOT EXISTS phone_verified_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

@@ -2,6 +2,10 @@
  * ConsentResponsePage — Standalone page for care recipients to respond to consent outreach.
  * No authentication required. Care recipients click a link from their email
  * and land here to confirm, ask questions, or report unauthorized activity.
+ *
+ * v1.39.21: Now requires phone verification before submitting a response.
+ * A code is sent to the care recipient's phone (SMS or voice call).
+ * If the responder's IP matches the attester's IP, a warning is shown to admins.
  */
 const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
   const [loading, setLoading] = useState(true);
@@ -12,6 +16,23 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
   const [submittedMessage, setSubmittedMessage] = useState('');
   const [selectedResponse, setSelectedResponse] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Phone verification state
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeSending, setCodeSending] = useState(false);
+  const [codeMethod, setCodeMethod] = useState('sms');
+  const [verifyCode, setVerifyCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+
+  // Cooldown timer
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   useEffect(() => {
     if (!token) {
@@ -36,6 +57,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
         setData({ recipientName: json.recipientName });
       } else {
         setData(json);
+        if (json.phoneVerified) setPhoneVerified(true);
       }
     } catch (err) {
       console.error('Consent response load error:', err);
@@ -44,8 +66,56 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
     setLoading(false);
   };
 
+  const handleSendCode = async (method) => {
+    setCodeSending(true);
+    setVerifyError('');
+    try {
+      const res = await fetch(`/api/consent/respond/${token}/send-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: method || codeMethod }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setCodeSent(true);
+        setCodeMethod(json.method || method || 'sms');
+        setCooldown(60);
+      } else if (res.status === 429) {
+        setVerifyError(json.error);
+        setCooldown(json.retryAfter || 60);
+      } else {
+        setVerifyError(json.error || 'Unable to send code.');
+      }
+    } catch (err) {
+      setVerifyError('Unable to send code. Please try again.');
+    }
+    setCodeSending(false);
+  };
+
+  const handleVerifyCode = async () => {
+    if (!verifyCode.trim()) return;
+    setVerifying(true);
+    setVerifyError('');
+    try {
+      const res = await fetch(`/api/consent/respond/${token}/verify-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: verifyCode.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPhoneVerified(true);
+      } else {
+        setVerifyError(json.error || 'Incorrect code.');
+      }
+    } catch (err) {
+      setVerifyError('Something went wrong. Please try again.');
+    }
+    setVerifying(false);
+  };
+
   const handleSubmit = async () => {
-    if (!selectedResponse) return;
+    if (!selectedResponse || !phoneVerified) return;
     setSubmitting(true);
     setError('');
     try {
@@ -206,59 +276,177 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
           </p>
         </div>
 
-        {error && <div style={{ background: '#fce4ec', color: '#c62828', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+        {/* Phone Verification Step */}
+        {!phoneVerified && (
+          <div style={{
+            background: '#fff8e1', border: '1px solid #ffe082', borderRadius: '12px',
+            padding: '20px', marginBottom: '24px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '22px' }}>📱</span>
+              <div style={{ fontWeight: 600, color: '#333', fontSize: '15px' }}>Verify your identity</div>
+            </div>
+            <p style={{ color: '#555', fontSize: '13px', lineHeight: '1.6', margin: '0 0 16px' }}>
+              For your safety, we need to confirm it's really you. We'll send a verification code to your phone
+              {data.maskedPhone ? ` ending in ${data.maskedPhone.slice(-4)}` : ''}.
+            </p>
 
-        <div style={{ fontWeight: 600, color: '#333', fontSize: '15px', marginBottom: '12px' }}>
-          How would you like to respond?
-        </div>
-
-        {responseOptions.map(opt => {
-          const isSelected = selectedResponse === opt.id;
-          return (
-            <button key={opt.id} onClick={() => setSelectedResponse(opt.id)}
-              style={{
-                display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
-                background: isSelected ? opt.color : '#fff',
-                border: `2px solid ${isSelected ? opt.activeColor : '#e0e0e0'}`,
-                borderRadius: '10px', padding: '14px 16px', marginBottom: '10px',
-                transition: 'all 0.2s',
-              }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '20px' }}>{opt.icon}</span>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: isSelected ? opt.activeColor : '#333' }}>{opt.title}</div>
-                  <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{opt.description}</div>
+            {!data.phoneAvailable ? (
+              <div style={{ color: '#c62828', fontSize: '13px', padding: '10px', background: '#fce4ec', borderRadius: '8px' }}>
+                No phone number is on file. Please contact your family member to update your phone number, or email us at <a href="mailto:support@yourinplace.com" style={{ color: '#1b6b5a' }}>support@yourinplace.com</a>.
+              </div>
+            ) : !codeSent ? (
+              <div>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                  <button onClick={() => handleSendCode('sms')} disabled={codeSending}
+                    style={{
+                      flex: 1, padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 600,
+                      fontSize: '14px', cursor: codeSending ? 'not-allowed' : 'pointer',
+                      background: '#1b6b5a', color: '#fff',
+                    }}>
+                    {codeSending ? 'Sending...' : 'Text me a code'}
+                  </button>
+                  <button onClick={() => handleSendCode('voice')} disabled={codeSending}
+                    style={{
+                      flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #1b6b5a',
+                      fontWeight: 600, fontSize: '14px', cursor: codeSending ? 'not-allowed' : 'pointer',
+                      background: '#fff', color: '#1b6b5a',
+                    }}>
+                    {codeSending ? 'Sending...' : 'Call me instead'}
+                  </button>
+                </div>
+                {data.maskedPhone && (
+                  <div style={{ fontSize: '12px', color: '#888', textAlign: 'center' }}>
+                    Code will be sent to {data.maskedPhone}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: '13px', color: '#2e7d32', marginBottom: '12px', fontWeight: 500 }}>
+                  {codeMethod === 'voice'
+                    ? 'We\'re calling your phone now. Listen for your 6-digit code.'
+                    : 'A 6-digit code has been sent to your phone.'}
+                </div>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={verifyCode}
+                    onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="Enter 6-digit code"
+                    style={{
+                      flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #ddd',
+                      fontSize: '18px', textAlign: 'center', letterSpacing: '4px', fontWeight: 600,
+                    }}
+                  />
+                  <button onClick={handleVerifyCode} disabled={verifying || verifyCode.length < 6}
+                    style={{
+                      padding: '12px 20px', borderRadius: '8px', border: 'none', fontWeight: 600,
+                      fontSize: '14px', cursor: verifyCode.length >= 6 ? 'pointer' : 'not-allowed',
+                      background: verifyCode.length >= 6 ? '#1b6b5a' : '#ccc', color: '#fff',
+                    }}>
+                    {verifying ? '...' : 'Verify'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button
+                    onClick={() => handleSendCode(codeMethod)}
+                    disabled={cooldown > 0 || codeSending}
+                    style={{
+                      background: 'none', border: 'none', color: cooldown > 0 ? '#999' : '#1b6b5a',
+                      fontSize: '12px', cursor: cooldown > 0 ? 'default' : 'pointer', padding: 0,
+                    }}>
+                    {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                  </button>
+                  <button
+                    onClick={() => handleSendCode(codeMethod === 'sms' ? 'voice' : 'sms')}
+                    disabled={cooldown > 0 || codeSending}
+                    style={{
+                      background: 'none', border: 'none', color: cooldown > 0 ? '#999' : '#1b6b5a',
+                      fontSize: '12px', cursor: cooldown > 0 ? 'default' : 'pointer', padding: 0,
+                    }}>
+                    {codeMethod === 'sms' ? 'Call me instead' : 'Text me instead'}
+                  </button>
                 </div>
               </div>
-            </button>
-          );
-        })}
-
-        {/* Optional notes */}
-        {selectedResponse && (
-          <div style={{ marginTop: '16px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>
-              Anything you'd like to add? <span style={{ fontWeight: 400, color: '#999' }}>(optional)</span>
-            </label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any questions, concerns, or additional information..."
-              style={{
-                width: '100%', minHeight: '80px', padding: '10px 12px', borderRadius: '8px',
-                border: '1px solid #ddd', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box',
-                fontFamily: 'inherit',
-              }} />
+            )}
+            {verifyError && (
+              <div style={{ color: '#c62828', fontSize: '13px', marginTop: '10px', padding: '8px 12px', background: '#fce4ec', borderRadius: '6px' }}>
+                {verifyError}
+              </div>
+            )}
           </div>
         )}
 
-        <button onClick={handleSubmit} disabled={submitting || !selectedResponse}
-          style={{
-            width: '100%', padding: '14px', borderRadius: '10px', border: 'none',
-            fontWeight: 600, fontSize: '15px', cursor: selectedResponse ? 'pointer' : 'not-allowed',
-            background: selectedResponse ? '#1b6b5a' : '#ccc', color: '#fff',
-            marginTop: '20px', transition: 'background 0.2s',
+        {/* Phone verified badge */}
+        {phoneVerified && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            background: '#e8f5e9', borderRadius: '8px', padding: '10px 14px', marginBottom: '20px',
           }}>
-          {submitting ? 'Submitting...' : 'Submit Response'}
-        </button>
+            <span style={{ fontSize: '16px' }}>{'\u2705'}</span>
+            <span style={{ fontSize: '13px', color: '#2e7d32', fontWeight: 500 }}>Phone verified — you can now respond below</span>
+          </div>
+        )}
+
+        {error && <div style={{ background: '#fce4ec', color: '#c62828', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+
+        {/* Response options — only enabled after phone verification */}
+        <div style={{ opacity: phoneVerified ? 1 : 0.4, pointerEvents: phoneVerified ? 'auto' : 'none' }}>
+          <div style={{ fontWeight: 600, color: '#333', fontSize: '15px', marginBottom: '12px' }}>
+            How would you like to respond?
+          </div>
+
+          {responseOptions.map(opt => {
+            const isSelected = selectedResponse === opt.id;
+            return (
+              <button key={opt.id} onClick={() => setSelectedResponse(opt.id)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+                  background: isSelected ? opt.color : '#fff',
+                  border: `2px solid ${isSelected ? opt.activeColor : '#e0e0e0'}`,
+                  borderRadius: '10px', padding: '14px 16px', marginBottom: '10px',
+                  transition: 'all 0.2s',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '20px' }}>{opt.icon}</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: isSelected ? opt.activeColor : '#333' }}>{opt.title}</div>
+                    <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{opt.description}</div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+
+          {/* Optional notes */}
+          {selectedResponse && (
+            <div style={{ marginTop: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>
+                Anything you'd like to add? <span style={{ fontWeight: 400, color: '#999' }}>(optional)</span>
+              </label>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+                placeholder="Any questions, concerns, or additional information..."
+                style={{
+                  width: '100%', minHeight: '80px', padding: '10px 12px', borderRadius: '8px',
+                  border: '1px solid #ddd', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box',
+                  fontFamily: 'inherit',
+                }} />
+            </div>
+          )}
+
+          <button onClick={handleSubmit} disabled={submitting || !selectedResponse || !phoneVerified}
+            style={{
+              width: '100%', padding: '14px', borderRadius: '10px', border: 'none',
+              fontWeight: 600, fontSize: '15px', cursor: selectedResponse && phoneVerified ? 'pointer' : 'not-allowed',
+              background: selectedResponse && phoneVerified ? '#1b6b5a' : '#ccc', color: '#fff',
+              marginTop: '20px', transition: 'background 0.2s',
+            }}>
+            {submitting ? 'Submitting...' : 'Submit Response'}
+          </button>
+        </div>
 
         <p style={{ color: '#999', fontSize: '12px', textAlign: 'center', marginTop: '20px', marginBottom: 0 }}>
           You can also ignore this page — no caregiver will visit without proper verification.
