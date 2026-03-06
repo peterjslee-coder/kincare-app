@@ -499,42 +499,22 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             maxHeight: '85vh', overflow: 'auto', position: 'relative',
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           }}>
-            {/* Banner photo header */}
-            <div style={{ position: 'relative', width: '100%', height: '300px', borderRadius: '16px 16px 0 0', overflow: 'hidden', background: '#1a1a1a' }}>
-              <img src={"/images/founder-photo.jpg?v=" + (window.APP_VERSION || "1")} alt="Pete Lee" style={{
-                width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%',
-                display: 'block',
-              }} />
-              {/* Bottom gradient for text readability */}
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 40%, rgba(0,0,0,0) 100%)',
-              }}></div>
-              {/* Soft vignette edges */}
-              <div style={{
-                position: 'absolute', inset: 0,
-                boxShadow: 'inset 0 0 60px 20px rgba(0,0,0,0.3)',
-                pointerEvents: 'none',
-              }}></div>
-              {/* Close button */}
+            {/* Header */}
+            <div style={{ position: 'relative', padding: '32px 40px 0', borderRadius: '16px 16px 0 0' }}>
               <button onClick={() => setShowStory(false)} style={{
                 position: 'absolute', top: '12px', right: '12px',
-                background: 'rgba(0,0,0,0.35)', border: 'none', borderRadius: '50%',
+                background: '#f0f0f0', border: 'none', borderRadius: '50%',
                 width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-                zIndex: 2, backdropFilter: 'blur(4px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666',
               }}>{'\u2715'}</button>
-              {/* Name overlay at bottom of banner */}
-              <div style={{ position: 'absolute', bottom: '16px', left: '24px', right: '24px' }}>
-                <h2 style={{ fontSize: '24px', color: '#fff', marginBottom: '2px', fontWeight: 700, textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>Why I Built inPlace</h2>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>Pete Lee, Founder</div>
-              </div>
+              <h2 style={{ fontSize: '24px', color: '#1a1a1a', marginBottom: '2px', fontWeight: 700 }}>Why I Built inPlace</h2>
+              <div style={{ fontSize: '14px', color: '#888', marginBottom: '24px' }}>Pete Lee, Founder</div>
             </div>
 
             {/* Story content */}
             <div style={{ padding: '0 40px 48px', fontSize: '15px', color: '#444', lineHeight: 1.8 }}>
               <p style={{ marginBottom: '16px' }}>
-                I spent 25 years in the Air Force as a fighter pilot, eventually commanding at three levels including an Air Force flying wing. It was the kind of career that I loved, and the mission often came first. But there was a cost I didn't fully reckon with until later.
+                I spent 25 years serving in the military, eventually commanding at three levels. It was the kind of career that I loved, and the mission often came first. But there was a cost I didn't fully reckon with until later.
               </p>
               <p style={{ marginBottom: '16px' }}>
                 Now I'm leaving military life and moving back home to help take care of my family. It's a transition a lot of veterans face — you spend decades serving your country, and then you realize the people who need you most are the ones who've been waiting at home all along.
