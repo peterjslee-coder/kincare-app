@@ -124,6 +124,54 @@ const CareRecipients = window.CareRecipients = () => {
 
   useEffect(() => { fetchRecipients(); }, []);
 
+  // Restore form data when resuming wizard from sessionStorage
+  useEffect(() => {
+    if (savedRecipientId && wizardStep !== null && !formData.firstName) {
+      // Fetch the recipient's data to repopulate formData
+      (async () => {
+        try {
+          const res = await apiFetch(`/api/care-recipients/${savedRecipientId}`);
+          if (res?.ok) {
+            const data = await res.json();
+            const r = data.careRecipient || data;
+            const parseField = (val) => {
+              try {
+                const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+                return Array.isArray(parsed) ? parsed.join('\n') : (val || '');
+              } catch { return val || ''; }
+            };
+            setFormData({
+              firstName: r.first_name || r.firstName || '',
+              lastName: r.last_name || r.lastName || '',
+              age: r.age || '',
+              relationship: r.relationship || '',
+              nickname: r.nickname || '',
+              emoji: r.emoji || '',
+              address: r.location_address || r.address || '',
+              city: r.location_city || r.city || '',
+              state: r.location_state || r.state || '',
+              zip: r.location_zip || r.zip || '',
+              phone: r.phone || r.sms_phone || '',
+              email: r.email || '',
+              sameAddress: false,
+              healthConditions: parseField(r.health_conditions),
+              medications: parseField(r.medications),
+              pets: r.pets || '',
+              petAllergies: r.pet_allergies || r.petAllergies || '',
+              foodAllergies: r.food_allergies || r.foodAllergies || '',
+              medicalConditions: r.medical_conditions || r.medicalConditions || '',
+              personality: r.personality || '',
+              preferences: r.preferences || '',
+              emergencyContactName: r.emergency_contact_name || r.emergencyContactName || '',
+              emergencyContactPhone: r.emergency_contact_phone || r.emergencyContactPhone || '',
+              authorizationTier: r.authorization_tier || r.authorizationTier || 'tier3',
+            });
+          }
+        } catch (err) { console.error('Error restoring recipient data:', err); }
+      })();
+    }
+  }, [savedRecipientId, wizardStep]);
+
   // Auto-start wizard when a new user arrives with no recipients
   useEffect(() => {
     if (!loading && recipients.length === 0 && !showAddForm && wizardStep === null) {
@@ -429,6 +477,23 @@ const CareRecipients = window.CareRecipients = () => {
     const steps = ['Add Your Loved One', 'Care Preferences', 'Verify Identity', 'Attest & Notify', 'All Set!'];
     const tier3 = formData.authorizationTier === 'tier3';
     const displaySteps = tier3 ? steps : [steps[0], steps[1], steps[2], steps[4]];
+    // Map display index → wizardStep value (null=form, 1=prefs, 2=verify, 3=attest, 4=done)
+    const stepMap = tier3
+      ? [null, 1, 2, 3, 4]
+      : [null, 1, 2, 4];
+
+    const handleStepClick = (idx) => {
+      if (idx >= currentStep) return; // Can only go back to completed steps
+      const targetStep = stepMap[idx];
+      if (targetStep === null) {
+        // Go back to edit form
+        setShowAddForm(true);
+        if (savedRecipientId) setEditingId(savedRecipientId);
+        setWizardStep(null);
+      } else {
+        setWizardStep(targetStep);
+      }
+    };
 
     return (
       <div style={{ marginBottom: '32px', position: 'relative' }}>
@@ -436,8 +501,9 @@ const CareRecipients = window.CareRecipients = () => {
           {displaySteps.map((step, idx) => {
             const isCompleted = idx < currentStep;
             const isCurrent = idx === currentStep;
+            const isClickable = isCompleted;
             return (
-              <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+              <div key={idx} onClick={() => isClickable && handleStepClick(idx)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, cursor: isClickable ? 'pointer' : 'default' }}>
                 <div style={{
                   width: 40,
                   height: 40,
@@ -451,10 +517,12 @@ const CareRecipients = window.CareRecipients = () => {
                   fontSize: 14,
                   zIndex: 2,
                   position: 'relative',
+                  transition: 'transform 0.15s',
+                  ...(isClickable ? { ':hover': { transform: 'scale(1.1)' } } : {}),
                 }}>
                   {isCompleted ? '✓' : (idx + 1)}
                 </div>
-                <div style={{ fontSize: 12, marginTop: 8, textAlign: 'center', maxWidth: 100, color: isCurrent ? '#333' : '#999' }}>
+                <div style={{ fontSize: 12, marginTop: 8, textAlign: 'center', maxWidth: 100, color: isCurrent ? '#333' : isClickable ? '#2e7d32' : '#999', fontWeight: isClickable ? 500 : 400 }}>
                   {step}
                 </div>
               </div>
@@ -592,50 +660,182 @@ const CareRecipients = window.CareRecipients = () => {
     );
   };
 
-  // Wizard Step 3: Verify Identity & Payment (Coming Soon)
+  // Wizard Step 3: Verify Identity & Set Up Payments (Stripe Connect)
   const WizardStep3 = () => {
+    const [stripeLoading, setStripeLoading] = useState(false);
+    const [stripeStatus, setStripeStatus] = useState(null); // null, 'pending', 'complete'
+
+    // Check Stripe Connect status on mount
+    useEffect(() => {
+      (async () => {
+        try {
+          const res = await apiFetch('/api/stripe/connect-status');
+          if (res?.ok) {
+            const data = await res.json();
+            if (data.status === 'complete') setStripeStatus('complete');
+            else if (data.status === 'pending') setStripeStatus('pending');
+          }
+        } catch (err) {
+          console.log('Stripe status check:', err.message);
+        }
+      })();
+    }, []);
+
+    const handleStripeConnect = async () => {
+      setStripeLoading(true);
+      try {
+        const res = await apiFetch('/api/stripe/connect-onboarding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ returnUrl: window.location.href }),
+        });
+        if (res?.ok) {
+          const data = await res.json();
+          if (data.url) {
+            window.location.href = data.url;
+          }
+        } else {
+          alert('Unable to start Stripe setup. Please try again.');
+        }
+      } catch (err) {
+        console.error('Stripe Connect error:', err);
+        alert('Unable to connect to Stripe. Please try again.');
+      } finally {
+        setStripeLoading(false);
+      }
+    };
+
     return (
       <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
         <WizardProgressBar currentStep={2} />
-        <h3 style={{ marginBottom: '24px', color: '#1b6b5a' }}>Verify Identity & Payment</h3>
+        <h3 style={{ marginBottom: '24px', color: '#1b6b5a' }}>Verify Identity & Set Up Payments</h3>
 
+        {/* Identity Verification Section */}
         <div style={{
-          padding: '32px',
+          padding: '24px',
           borderRadius: '12px',
-          border: '2px dashed #ddd',
-          background: '#f9f9f9',
-          textAlign: 'center',
-          opacity: 0.6,
+          border: '1px solid #e0e0e0',
+          background: '#fafafa',
+          marginBottom: '20px',
         }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18,
+            }}>🛡️</div>
+            <div>
+              <h4 style={{ margin: 0, color: '#333', fontSize: 16 }}>Identity Verification</h4>
+              <p style={{ margin: 0, color: '#888', fontSize: 13 }}>Verify your identity with a photo ID</p>
+            </div>
+          </div>
           <div style={{
             display: 'inline-block',
-            padding: '8px 16px',
+            padding: '6px 12px',
             background: '#fff3e0',
             color: '#e8724a',
             borderRadius: '6px',
             fontSize: 12,
             fontWeight: 600,
-            marginBottom: '16px',
           }}>
             Coming Soon — Powered by Stripe Identity
           </div>
-          <h4 style={{ marginTop: '16px', marginBottom: '12px', color: '#999' }}>Verify Your Identity</h4>
-          <p style={{ color: '#aaa', fontSize: 14, marginBottom: '20px' }}>
-            We'll verify your identity with a photo ID and selfie to ensure security. You'll also set up payment information here.
-          </p>
-          <p style={{
-            color: '#c62828',
-            fontSize: 13,
-            fontWeight: 600,
-            background: '#fce4ec',
-            padding: '12px',
-            borderRadius: '6px',
-          }}>
-            This step will be required before care can begin.
+          <p style={{ color: '#666', fontSize: 13, marginTop: '12px', marginBottom: 0 }}>
+            Identity verification will be required before care can begin. We'll notify you when this is available.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
+        {/* Stripe Connect Payment Section */}
+        <div style={{
+          padding: '24px',
+          borderRadius: '12px',
+          border: stripeStatus === 'complete' ? '2px solid #4caf50' : '1px solid #e0e0e0',
+          background: stripeStatus === 'complete' ? '#e8f5e9' : '#fff',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: stripeStatus === 'complete' ? '#c8e6c9' : '#e3f2fd',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18,
+            }}>{stripeStatus === 'complete' ? '✅' : '💳'}</div>
+            <div>
+              <h4 style={{ margin: 0, color: '#333', fontSize: 16 }}>Payment Setup</h4>
+              <p style={{ margin: 0, color: '#888', fontSize: 13 }}>
+                {stripeStatus === 'complete'
+                  ? 'Stripe Connect is set up and ready'
+                  : 'Set up secure payments via Stripe Connect'}
+              </p>
+            </div>
+          </div>
+
+          {stripeStatus === 'complete' ? (
+            <div style={{
+              padding: '12px 16px',
+              background: '#c8e6c9',
+              borderRadius: '8px',
+              color: '#2e7d32',
+              fontSize: 14,
+              fontWeight: 500,
+            }}>
+              Payment setup complete. You're ready to pay caregivers securely through InPlace.
+            </div>
+          ) : stripeStatus === 'pending' ? (
+            <div>
+              <div style={{
+                padding: '12px 16px',
+                background: '#fff3e0',
+                borderRadius: '8px',
+                color: '#e65100',
+                fontSize: 14,
+                marginBottom: '12px',
+              }}>
+                Your Stripe account setup is in progress. Some information may still be needed.
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={handleStripeConnect}
+                disabled={stripeLoading}
+                style={{ background: '#635bff', borderColor: '#635bff' }}
+              >
+                {stripeLoading ? 'Loading...' : 'Continue Stripe Setup'}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p style={{ color: '#666', fontSize: 14, marginBottom: '16px' }}>
+                Connect your bank account or debit card so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe.
+              </p>
+              <ul style={{ color: '#666', fontSize: 13, marginBottom: '16px', paddingLeft: '20px' }}>
+                <li style={{ marginBottom: '6px' }}>Secure, encrypted payment processing</li>
+                <li style={{ marginBottom: '6px' }}>Pay caregivers directly after visits</li>
+                <li style={{ marginBottom: '6px' }}>Full transaction history and receipts</li>
+              </ul>
+              <button
+                className="btn btn-primary"
+                onClick={handleStripeConnect}
+                disabled={stripeLoading}
+                style={{ background: '#635bff', borderColor: '#635bff' }}
+              >
+                {stripeLoading ? 'Connecting...' : 'Set Up Payments with Stripe'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          marginTop: '16px',
+          padding: '12px',
+          background: '#f5f5f5',
+          borderRadius: '8px',
+          fontSize: 12,
+          color: '#888',
+          textAlign: 'center',
+        }}>
+          Powered by Stripe — Your financial data is never stored on InPlace servers.
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
           <button
             className="btn btn-primary"
             onClick={() => {
@@ -646,7 +846,7 @@ const CareRecipients = window.CareRecipients = () => {
               }
             }}
           >
-            Skip for Now
+            {stripeStatus === 'complete' ? 'Continue' : 'Skip for Now'}
           </button>
           <button
             className="btn btn-outline"
