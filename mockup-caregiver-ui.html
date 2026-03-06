@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InPlace Caregiver UI Mockup — v1.33.91</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+
+/* Layout */
+.app { display: flex; height: 100vh; overflow: hidden; }
+.sidebar { width: 220px; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; }
+.main { flex: 1; overflow-y: auto; background: #f8f9fa; }
+.content { max-width: 700px; margin: 0 auto; padding: 20px; }
+
+/* Sidebar */
+.sidebar-header { padding: 12px 20px 20px; border-bottom: 1px solid #e5e7eb; margin-bottom: 8px; }
+.sidebar-header h2 { font-size: 18px; color: #1b6b5a; }
+.sidebar-header .role { font-size: 12px; color: #888; margin-top: 2px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 20px; cursor: pointer; font-size: 14px; font-weight: 500; color: #555; transition: all 0.15s; border: none; background: none; width: 100%; text-align: left; }
+.nav-item:hover { background: #f0faf7; color: #1b6b5a; }
+.nav-item.active { background: #e8f5e9; color: #1b6b5a; font-weight: 700; border-right: 3px solid #1b6b5a; }
+.nav-item .icon { font-size: 20px; width: 28px; text-align: center; }
+.nav-item.accent { background: #1b6b5a; color: #fff; margin: 4px 12px; border-radius: 10px; justify-content: center; font-weight: 600; }
+.nav-item.accent:hover { background: #24897a; }
+
+/* Bottom Nav (mobile) */
+.bottom-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e5e7eb; z-index: 100; padding: 6px 0 env(safe-area-inset-bottom, 6px); }
+.bottom-nav-inner { display: flex; justify-content: space-around; }
+.bottom-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 12px; border: none; background: none; cursor: pointer; font-size: 10px; font-weight: 500; color: #888; }
+.bottom-btn.active { color: #1b6b5a; font-weight: 700; }
+.bottom-btn .icon { font-size: 22px; }
+
+/* Cards */
+.card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; margin-bottom: 12px; overflow: hidden; }
+.card-pad { padding: 16px 20px; }
+
+/* Tabs */
+.tab-bar { display: flex; border-bottom: 1px solid #e5e7eb; overflow-x: auto; background: #fff; border-radius: 12px 12px 0 0; }
+.tab-btn { padding: 12px 20px; border: none; background: none; font-size: 13px; font-weight: 500; color: #888; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; }
+.tab-btn.active { color: #1b6b5a; font-weight: 700; border-bottom-color: #1b6b5a; }
+
+/* Sub-tabs */
+.sub-tab-bar { display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; overflow-x: auto; }
+.sub-tab { padding: 10px 16px; border: none; background: none; font-size: 13px; font-weight: 500; color: #888; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.sub-tab.active { color: #1b6b5a; font-weight: 700; border-bottom-color: #1b6b5a; }
+
+/* Grid tabs (CaretakerHub style) */
+.tab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.tab-grid-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 14px 8px; border: none; border-radius: 12px; cursor: pointer; min-height: 72px; font-family: inherit; transition: all 0.15s; }
+.tab-grid-btn .tab-icon { font-size: 24px; }
+.tab-grid-btn .tab-label { font-size: 11px; font-weight: 600; }
+
+/* Section Labels */
+.section-label { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+
+/* Annotations */
+.annotation { background: #fffbeb; border: 1px solid #fbbf24; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 12px; color: #92400e; }
+.annotation strong { color: #78350f; }
+.annotation.moved { background: #eff6ff; border-color: #60a5fa; color: #1e40af; }
+.annotation.moved strong { color: #1e3a8a; }
+.annotation.new { background: #f0fdf4; border-color: #4ade80; color: #166534; }
+.annotation.new strong { color: #14532d; }
+.annotation.removed { background: #fef2f2; border-color: #f87171; color: #991b1b; }
+.annotation.removed strong { color: #7f1d1d; }
+
+/* Page selector */
+.page-selector { display: flex; gap: 8px; padding: 16px 20px; background: #1b6b5a; position: sticky; top: 0; z-index: 50; }
+.page-selector button { padding: 8px 16px; border: 2px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.page-selector button.active { background: #fff; color: #1b6b5a; border-color: #fff; }
+
+/* Stars */
+.stars { color: #f59e0b; }
+
+/* CTA card */
+.cta-card { background: linear-gradient(135deg, #1b6b5a 0%, #24897a 100%); color: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; cursor: pointer; }
+
+/* Session card */
+.session-card { padding: 16px 18px; border-radius: 12px; margin-bottom: 10px; }
+.session-card.upcoming { border: 2px solid #1b6b5a; background: #fff; }
+.session-card.ready { border: 3px solid #e8724a; background: linear-gradient(135deg, #fff3e0 0%, #fff 100%); }
+.session-card.active { border: 3px solid #f57f17; background: linear-gradient(135deg, #fffde7 0%, #fff 100%); }
+
+/* Rate inputs */
+.rate-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.rate-card { background: #f9fafb; border-radius: 10px; padding: 12px; border: 1px solid #e5e7eb; }
+.rate-card label { font-size: 11px; color: #888; display: block; margin-bottom: 6px; }
+.rate-card .value { font-size: 22px; font-weight: 700; color: #1b6b5a; }
+
+/* Document cards */
+.doc-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #f9fafb; border-radius: 10px; border: 1px solid #e5e7eb; margin-bottom: 8px; }
+.doc-card .doc-icon { font-size: 24px; }
+.doc-card .doc-info { flex: 1; }
+.doc-card .doc-name { font-size: 14px; font-weight: 600; color: #333; }
+.doc-card .doc-status { font-size: 12px; color: #888; }
+
+/* Stoplight */
+.stoplight-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+.stoplight-label { flex: 1; font-size: 13px; color: #333; }
+.light { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.light.green { background: #dcfce7; border-color: #22c55e; }
+.light.yellow { background: #fef9c3; border-color: #eab308; }
+.light.red { background: #fee2e2; border-color: #ef4444; }
+.light.active { box-shadow: 0 0 0 3px rgba(0,0,0,0.15); transform: scale(1.15); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .bottom-nav { display: block; }
+  .main { padding-bottom: 70px; }
+}
+
+/* View indicator */
+.view-indicator { text-align: center; padding: 8px; background: #1b6b5a; color: #fff; font-size: 13px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState } = React;
+
+// ─── Mock Data ───
+const MOCK_SESSIONS = [
+  { id: 1, name: 'Betty Smith', service: 'Companion Care', date: 'Today', time: '2:00 PM', duration: '4hr', status: 'ready', earnings: '$100', city: 'Blacksburg' },
+  { id: 2, name: 'Martha Jones', service: 'Personal Care', date: 'Tomorrow', time: '9:00 AM', duration: '6hr', status: 'confirmed', earnings: '$180', city: 'Christiansburg' },
+  { id: 3, name: 'Bob Wilson', service: 'Companion Care', date: 'Mar 2', time: '1:00 PM', duration: '3hr', status: 'confirmed', earnings: '$75', city: 'Radford' },
+];
+
+const MOCK_OPEN_JOBS = [
+  { id: 10, family: 'Johnson Family', service: 'Companion Care', date: 'Mar 3', time: '10:00 AM', duration: '4hr', city: 'Blacksburg', distance: '3.2 mi', potentialEarnings: '$100' },
+  { id: 11, family: 'Garcia Family', service: 'Personal Care', date: 'Mar 4', time: '8:00 AM', duration: '8hr', city: 'Radford', distance: '8.5 mi', potentialEarnings: '$240', bonus: true },
+  { id: 12, family: 'Chen Family', service: 'Respite Care', date: 'Mar 5', time: '2:00 PM', duration: '5hr', city: 'Christiansburg', distance: '5.1 mi', potentialEarnings: '$150' },
+];
+
+const MOCK_FAMILIES = [
+  { id: 1, name: 'Smith Family', recipient: 'Betty Smith', conditions: 'Alzheimer\'s (mild)', address: '123 Main St, Blacksburg', favorite: true },
+  { id: 2, name: 'Jones Family', recipient: 'Martha Jones', conditions: 'Mobility issues, diabetes', address: '456 Oak Ave, Christiansburg', favorite: false },
+];
+
+const MOCK_REVIEWS = [
+  { reviewer: 'Pete Lee', stars: 5, comment: 'Cary was wonderful with mom. Very patient and kind.', date: '2026-02-15' },
+  { reviewer: 'Sarah Johnson', stars: 5, comment: 'Excellent caregiver. Always on time and professional.', date: '2026-01-28' },
+  { reviewer: 'Maria Garcia', stars: 4, comment: 'Great with dad. Would book again.', date: '2026-01-10' },
+];
+
+const STOPLIGHT_ITEMS = [
+  'Bathing / Showering', 'Toileting', 'Feeding', 'Medication Reminders',
+  'Mobility Assistance', 'Meal Prep', 'Light Housekeeping', 'Companionship',
+  'Transportation', 'Dementia / Memory Care',
+];
+
+// ─── App ───
+const App = () => {
+  const [currentPage, setCurrentPage] = useState('home');
+  const [homeTab, setHomeTab] = useState('schedule');
+  const [findWorkSubTab, setFindWorkSubTab] = useState('jobs');
+  const [accountTab, setAccountTab] = useState('profile');
+  const [showReviewsModal, setShowReviewsModal] = useState(false);
+
+  const renderSidebar = () => (
+    <div className="sidebar">
+      <div className="sidebar-header">
+        <h2>InPlace</h2>
+        <div className="role">Caregiver</div>
+      </div>
+      <button className={`nav-item ${currentPage === 'home' ? 'active' : ''}`} onClick={() => setCurrentPage('home')}>
+        <span className="icon">🏠</span> Home
+      </button>
+      <button className="nav-item accent" onClick={() => setCurrentPage('find-work')}>
+        <span className="icon">🔍</span> Find Work
+      </button>
+      <button className={`nav-item ${currentPage === 'messages' ? 'active' : ''}`} onClick={() => setCurrentPage('messages')}>
+        <span className="icon">💬</span> Messages
+      </button>
+    </div>
+  );
+
+  const renderBottomNav = () => (
+    <div className="bottom-nav">
+      <div className="bottom-nav-inner">
+        <button className={`bottom-btn ${currentPage === 'home' ? 'active' : ''}`} onClick={() => setCurrentPage('home')}>
+          <span className="icon">🏠</span>Home
+        </button>
+        <button className={`bottom-btn ${currentPage === 'find-work' ? 'active' : ''}`} onClick={() => setCurrentPage('find-work')}>
+          <span className="icon">🔍</span>Find Work
+        </button>
+        <button className={`bottom-btn ${currentPage === 'messages' ? 'active' : ''}`} onClick={() => setCurrentPage('messages')}>
+          <span className="icon">💬</span>Messages
+        </button>
+        <button className={`bottom-btn ${currentPage === 'account' ? 'active' : ''}`} onClick={() => setCurrentPage('account')}>
+          <span className="icon">👤</span>Account
+        </button>
+      </div>
+    </div>
+  );
+
+  // ─── HOME (Dashboard) ───
+  const renderHome = () => (
+    <div className="content">
+      <div className="annotation new"><strong>CHANGED:</strong> Dashboard icon 🤝→🏠, label "My Dashboard"→"Home". Focused on what's next + finding work. Only 2 tabs remain (Calendar, Hour Reports) — down from 10.</div>
+
+      {/* Profile header with clickable rating */}
+      <div className="card card-pad" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>CT</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#333' }}>Cary Taker</div>
+          <div style={{ fontSize: 13, color: '#888' }}>Caregiver · Blacksburg, VA</div>
+        </div>
+        <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => setShowReviewsModal(true)}>
+          <div className="annotation new" style={{ marginBottom: 4, fontSize: 11 }}><strong>NEW:</strong> Click stars → reviews popup</div>
+          <div className="stars" style={{ fontSize: 18 }}>⭐ 4.8</div>
+          <div style={{ fontSize: 11, color: '#888' }}>3 reviews</div>
+        </div>
+      </div>
+
+      {/* Find Work CTA */}
+      <div className="annotation new"><strong>NEW:</strong> Prominent CTA card drives caregivers toward the Find Work flow</div>
+      <div className="cta-card" onClick={() => setCurrentPage('find-work')}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>🔍 Find Work</div>
+            <div style={{ fontSize: 13, opacity: 0.9 }}>Browse open care requests, set your availability & rates</div>
+          </div>
+          <div style={{ fontSize: 28, opacity: 0.7 }}>→</div>
+        </div>
+      </div>
+
+      {/* Earnings Summary */}
+      <div className="annotation new"><strong>NEW:</strong> Read-only earnings summary (was buried in earnings tab with 8 other tabs)</div>
+      <div className="card card-pad" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase' }}>This Month</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#1b6b5a', marginTop: 2 }}>$355</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Sessions</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#333' }}>4</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#888' }}>Rating</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#f59e0b' }}>⭐ 4.8</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Available Jobs (quick peek) */}
+      {MOCK_OPEN_JOBS.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div className="section-label">🔔 Available Jobs Nearby</div>
+          {MOCK_OPEN_JOBS.slice(0, 2).map(job => (
+            <div key={job.id} className="card card-pad" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8, borderLeft: job.bonus ? '3px solid #e8724a' : '3px solid #1b6b5a' }}>
+              <div style={{ flex: 1 }}>
+                {job.bonus && <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700, marginRight: 6 }}>BONUS PAY</span>}
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{job.service}</div>
+                <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{job.date} at {job.time} · {job.duration}</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>📍 {job.city} · {job.distance}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#1b6b5a' }}>{job.potentialEarnings}</div>
+                <button style={{ marginTop: 4, padding: '6px 14px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Accept</button>
+              </div>
+            </div>
+          ))}
+          <div style={{ textAlign: 'center', padding: 8 }}>
+            <span onClick={() => setCurrentPage('find-work')} style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600, cursor: 'pointer' }}>View all {MOCK_OPEN_JOBS.length} open jobs →</span>
+          </div>
+        </div>
+      )}
+
+      {/* Next Up */}
+      <div className="section-label">Next Up</div>
+      {MOCK_SESSIONS.map(s => (
+        <div key={s.id} className={`card session-card ${s.status}`}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              {s.status === 'ready' && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', marginBottom: 3 }}>Ready to Check In</div>}
+              {s.status === 'confirmed' && s.date === 'Tomorrow' && <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 3 }}>tomorrow</div>}
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{s.name}</div>
+              <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>{s.date} at {s.time} · {s.duration} · {s.service}</div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>📍 {s.city}</div>
+            </div>
+            <div>
+              {s.status === 'ready' ? (
+                <button style={{ padding: '10px 22px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Check In</button>
+              ) : (
+                <div>
+                  <span style={{ padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Confirmed</span>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a', marginTop: 4, textAlign: 'right' }}>{s.earnings}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {/* Tab Grid — only 2 tabs now */}
+      <div className="annotation removed" style={{ marginTop: 20 }}><strong>REDUCED:</strong> Tabs went from 10 down to 2. Removed: Availability, My Families, Area Map, Earnings, Financials, Reviews, Documents, Care Preferences</div>
+      <div className="tab-grid">
+        <button className="tab-grid-btn" onClick={() => setHomeTab('schedule')} style={{ background: homeTab === 'schedule' ? '#1b6b5a' : '#f5f5f5', color: homeTab === 'schedule' ? '#fff' : '#555' }}>
+          <span className="tab-icon">📅</span>
+          <span className="tab-label">Calendar</span>
+        </button>
+        <button className="tab-grid-btn" onClick={() => setHomeTab('reports')} style={{ background: homeTab === 'reports' ? '#1b6b5a' : '#f5f5f5', color: homeTab === 'reports' ? '#fff' : '#555' }}>
+          <span className="tab-icon">📊</span>
+          <span className="tab-label">Hour Reports</span>
+        </button>
+      </div>
+
+      <div className="card card-pad" style={{ minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+        {homeTab === 'schedule' ? '📅 Calendar view renders here (CaregiverCalendar component)' : '📊 Hour Reports render here'}
+      </div>
+
+      {/* Reviews Modal */}
+      {showReviewsModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowReviewsModal(false)}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 420, maxWidth: '90vw', maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 18, color: '#333' }}>⭐ Your Reviews (3)</h3>
+              <button onClick={() => setShowReviewsModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>✕</button>
+            </div>
+            <div className="annotation new" style={{ marginBottom: 12 }}><strong>NEW:</strong> Reviews now accessible from star rating at profile top (was a standalone tab)</div>
+            {MOCK_REVIEWS.map((r, i) => (
+              <div key={i} style={{ padding: '12px 0', borderBottom: i < MOCK_REVIEWS.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{r.reviewer}</div>
+                  <div className="stars">{'⭐'.repeat(r.stars)}</div>
+                </div>
+                <div style={{ fontSize: 13, color: '#555', lineHeight: 1.5 }}>{r.comment}</div>
+                <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>{r.date}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ─── FIND WORK ───
+  const renderFindWork = () => (
+    <div className="content">
+      <div className="annotation new"><strong>CHANGED:</strong> Find Work now has 4 sub-tabs. Availability, My Rates, and My Families moved here from Dashboard.</div>
+
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#333', marginBottom: 16 }}>🔍 Find Work</h2>
+
+      <div className="sub-tab-bar">
+        {[
+          { id: 'jobs', label: '🔔 Open Jobs' },
+          { id: 'availability', label: '🕐 Availability' },
+          { id: 'rates', label: '💰 My Rates' },
+          { id: 'families', label: '👪 My Families' },
+        ].map(t => (
+          <button key={t.id} className={`sub-tab ${findWorkSubTab === t.id ? 'active' : ''}`} onClick={() => setFindWorkSubTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Open Jobs */}
+      {findWorkSubTab === 'jobs' && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <button style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>📋 List</button>
+            <button style={{ padding: '6px 14px', background: '#f0f0f0', color: '#555', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>🗺️ Map</button>
+            <select style={{ padding: '6px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 12 }}>
+              <option>All Services</option>
+              <option>Companion Care</option>
+              <option>Personal Care</option>
+              <option>Respite Care</option>
+            </select>
+            <input placeholder="Filter by city/zip" style={{ padding: '6px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 12, flex: 1 }} />
+          </div>
+
+          <div className="annotation new"><strong>NEW:</strong> Each job card shows potential earnings calculated from your rates × job duration. "If I find work, I see more money."</div>
+
+          {MOCK_OPEN_JOBS.map(job => (
+            <div key={job.id} className="card card-pad" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderLeft: job.bonus ? '3px solid #e8724a' : undefined }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  {job.bonus && <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>}
+                  <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>{job.potentialEarnings}</span>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{job.service}</div>
+                <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>📅 {job.date} at {job.time} · {job.duration}</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>📍 {job.city} · {job.distance}</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.family}</div>
+              </div>
+              <button style={{ padding: '10px 20px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Accept Job</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Availability */}
+      {findWorkSubTab === 'availability' && (
+        <div>
+          <div className="annotation moved"><strong>MOVED FROM:</strong> Dashboard → Availability tab. Now lives in Find Work because availability directly affects what jobs you can take.</div>
+          <div className="card card-pad">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 16 }}>Your Availability</h3>
+              <button style={{ padding: '8px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Add Rule</button>
+            </div>
+            {['Monday', 'Wednesday', 'Friday'].map(day => (
+              <div key={day} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{day}</div>
+                  <div style={{ fontSize: 12, color: '#888' }}>8:00 AM – 5:00 PM · Recurring</div>
+                </div>
+                <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Available</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* My Rates */}
+      {findWorkSubTab === 'rates' && (
+        <div>
+          <div className="annotation moved"><strong>MOVED FROM:</strong> Dashboard → Earnings tab (rate setting section). Rates live in Find Work so you see pricing in context of finding jobs.</div>
+          <div className="card card-pad">
+            <h3 style={{ margin: '0 0 4px', fontSize: 16 }}>Your Rate Card</h3>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>These rates are used to calculate your earnings for each job.</p>
+
+            <div className="rate-group">
+              <div className="rate-card">
+                <label>☀️ Daytime (7am–6pm)</label>
+                <div className="value">$25/hr</div>
+              </div>
+              <div className="rate-card">
+                <label>🌙 Evening (6pm–12am)</label>
+                <div className="value">$30/hr</div>
+              </div>
+              <div className="rate-card">
+                <label>🌃 Overnight (12am–7am)</label>
+                <div className="value">$35/hr</div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 16, padding: '12px', background: '#f9fafb', borderRadius: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 4 }}>Overnight Minimum</div>
+              <div style={{ fontSize: 14, color: '#1b6b5a', fontWeight: 700 }}>6 hours</div>
+              <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>You won't be matched with overnight jobs shorter than this.</div>
+            </div>
+
+            <div style={{ marginTop: 16, padding: '12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #d4edda' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#166534', marginBottom: 4 }}>💡 How earnings are calculated</div>
+              <div style={{ fontSize: 12, color: '#555', lineHeight: 1.6 }}>
+                Your rate is applied based on the time tier: daytime rate for hours between 7am–6pm, evening rate for 6pm–12am, and overnight rate for 12am–7am. Multi-tier sessions blend rates proportionally. Short-notice jobs (&lt;24hr) may include a bonus.
+              </div>
+            </div>
+
+            <button style={{ marginTop: 16, width: '100%', padding: '12px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Save Rates</button>
+          </div>
+        </div>
+      )}
+
+      {/* My Families */}
+      {findWorkSubTab === 'families' && (
+        <div>
+          <div className="annotation moved"><strong>MOVED FROM:</strong> Dashboard → My Families tab. Now in Find Work — these are the families you're assigned to work with.</div>
+          {MOCK_FAMILIES.map(f => (
+            <div key={f.id} className="card card-pad">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>{f.name}</div>
+                {f.favorite && <span style={{ fontSize: 12, color: '#f59e0b' }}>⭐ Favorite</span>}
+              </div>
+              <div style={{ fontSize: 14, color: '#555' }}>Care recipient: <strong>{f.recipient}</strong></div>
+              <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>🏥 {f.conditions}</div>
+              <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>📍 {f.address}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ─── MY ACCOUNT ───
+  const renderAccount = () => (
+    <div className="content">
+      <div className="annotation new"><strong>CHANGED:</strong> Account now has 6 tabs (was 4). Added Payments, Documents, Care Preferences — all caregiver setup/identity info lives here.</div>
+
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#333', marginBottom: 16 }}>👤 My Account</h2>
+
+      <div className="tab-bar" style={{ borderRadius: '12px 12px 0 0', marginBottom: 0 }}>
+        {[
+          { id: 'profile', label: 'Profile' },
+          { id: 'security', label: 'Security' },
+          { id: 'notifications', label: 'Notifications' },
+          { id: 'payments', label: 'Payments' },
+          { id: 'documents', label: 'Documents' },
+          { id: 'preferences', label: 'Care Prefs' },
+        ].map(t => (
+          <button key={t.id} className={`tab-btn ${accountTab === t.id ? 'active' : ''}`} onClick={() => setAccountTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="card" style={{ borderRadius: '0 0 12px 12px', borderTop: 'none' }}>
+        {/* Profile */}
+        {accountTab === 'profile' && (
+          <div className="card-pad">
+            <p style={{ fontSize: 13, color: '#888' }}>Profile tab — unchanged from before. Name, phone, email, bio, photo, roles.</p>
+            <div style={{ padding: 40, textAlign: 'center', color: '#ccc' }}>[ Profile form — same as current ]</div>
+          </div>
+        )}
+
+        {/* Security */}
+        {accountTab === 'security' && (
+          <div className="card-pad">
+            <div className="annotation new"><strong>MERGED:</strong> Security + Devices tabs combined into one. Password, 2FA, passkeys at top → trusted devices list below.</div>
+            <h3 style={{ margin: '0 0 16px', fontSize: 16 }}>Security</h3>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>Password</div>
+              <button style={{ padding: '8px 16px', background: '#f0f0f0', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>Change Password</button>
+            </div>
+
+            <div style={{ marginBottom: 20, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 4 }}>Two-Factor Authentication</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Enabled</span>
+                <span style={{ fontSize: 12, color: '#888' }}>Since Jan 15, 2026</span>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>Passkeys</div>
+              <div style={{ fontSize: 13, color: '#888' }}>No passkeys registered</div>
+              <button style={{ marginTop: 8, padding: '8px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>+ Register Passkey</button>
+            </div>
+
+            <div style={{ paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+              <div className="annotation new"><strong>MERGED IN:</strong> Trusted devices (was separate "Devices" tab)</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>Trusted Devices</div>
+              <div style={{ fontSize: 13, color: '#888', padding: '12px', background: '#f9fafb', borderRadius: 8 }}>
+                Chrome on MacOS · Last active: Today<br />
+                Safari on iPhone · Last active: Yesterday
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Notifications */}
+        {accountTab === 'notifications' && (
+          <div className="card-pad">
+            <p style={{ fontSize: 13, color: '#888' }}>Notifications tab — unchanged.</p>
+            <div style={{ padding: 40, textAlign: 'center', color: '#ccc' }}>[ Notification preferences — same as current ]</div>
+          </div>
+        )}
+
+        {/* Payments */}
+        {accountTab === 'payments' && (
+          <div className="card-pad">
+            <div className="annotation moved"><strong>MOVED FROM:</strong> Dashboard → Financials tab. All payment setup lives in Account now.</div>
+
+            <h3 style={{ margin: '0 0 16px', fontSize: 16 }}>Payments</h3>
+
+            {/* Stripe Connect */}
+            <div style={{ padding: 16, background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>💳 Stripe Connect</div>
+                  <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Connected — payouts enabled</div>
+                </div>
+                <span style={{ padding: '4px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Active</span>
+              </div>
+            </div>
+
+            {/* Payout Speed */}
+            <div style={{ padding: 16, background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb', marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>Payout Speed</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={{ flex: 1, padding: 12, borderRadius: 8, border: '2px solid #1b6b5a', background: '#e8f5e9', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#1b6b5a' }}>Standard (2-3 days)</button>
+                <button style={{ flex: 1, padding: 12, borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 13, cursor: 'pointer', color: '#888' }}>Instant (1% fee)</button>
+              </div>
+            </div>
+
+            {/* Background Check */}
+            <div style={{ padding: 16, background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>🔍 Background Check ($30)</div>
+                  <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Required before accepting care requests. Refunded after 10 completed sessions.</div>
+                </div>
+                <span style={{ padding: '4px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>Paid</span>
+              </div>
+            </div>
+
+            {/* Fee Breakdown */}
+            <div style={{ padding: 16, background: '#f0fdf4', borderRadius: 10, border: '1px solid #d4edda' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#166534', marginBottom: 4 }}>💡 How you get paid</div>
+              <div style={{ fontSize: 12, color: '#555', lineHeight: 1.6 }}>
+                InPlace takes a 15% platform fee. You receive 85% of the session cost. Payouts happen on your chosen schedule after each completed session.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Documents */}
+        {accountTab === 'documents' && (
+          <div className="card-pad">
+            <div className="annotation moved"><strong>MOVED FROM:</strong> Dashboard → Documents tab. Identity documents belong in Account.</div>
+            <h3 style={{ margin: '0 0 16px', fontSize: 16 }}>Documents</h3>
+
+            <div className="doc-card">
+              <div className="doc-icon">🪪</div>
+              <div className="doc-info">
+                <div className="doc-name">Driver's License / ID</div>
+                <div className="doc-status" style={{ color: '#2e7d32' }}>✓ Uploaded Feb 10, 2026</div>
+              </div>
+              <button style={{ padding: '6px 14px', background: '#f0f0f0', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>Replace</button>
+            </div>
+
+            <div className="doc-card">
+              <div className="doc-icon">📜</div>
+              <div className="doc-info">
+                <div className="doc-name">Certifications</div>
+                <div className="doc-status">No file uploaded</div>
+              </div>
+              <button style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>Upload</button>
+            </div>
+
+            <div className="doc-card">
+              <div className="doc-icon">🔍</div>
+              <div className="doc-info">
+                <div className="doc-name">Background Check</div>
+                <div className="doc-status" style={{ color: '#2e7d32' }}>✓ Completed Jan 20, 2026</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Care Preferences */}
+        {accountTab === 'preferences' && (
+          <div className="card-pad">
+            <div className="annotation moved"><strong>MOVED FROM:</strong> Dashboard → Care Preferences tab. Your comfort level with care tasks — setup belongs in Account.</div>
+            <h3 style={{ margin: '0 0 4px', fontSize: 16 }}>Care Preferences</h3>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>Rate your comfort level with each type of care task. Families see this when choosing caregivers.</p>
+
+            <div style={{ display: 'flex', gap: 20, marginBottom: 12, paddingLeft: 4 }}>
+              <div style={{ flex: 1 }}></div>
+              <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#888' }}>
+                <span style={{ width: 28, textAlign: 'center' }}>✓</span>
+                <span style={{ width: 28, textAlign: 'center' }}>~</span>
+                <span style={{ width: 28, textAlign: 'center' }}>✕</span>
+              </div>
+            </div>
+
+            {STOPLIGHT_ITEMS.map((item, i) => {
+              const colors = ['green', 'green', 'yellow', 'green', 'green', 'green', 'green', 'green', 'yellow', 'red'];
+              return (
+                <div key={item} className="stoplight-row">
+                  <div className="stoplight-label">{item}</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div className={`light green ${colors[i] === 'green' ? 'active' : ''}`}>✓</div>
+                    <div className={`light yellow ${colors[i] === 'yellow' ? 'active' : ''}`}>~</div>
+                    <div className={`light red ${colors[i] === 'red' ? 'active' : ''}`}>✕</div>
+                  </div>
+                </div>
+              );
+            })}
+
+            <button style={{ marginTop: 16, width: '100%', padding: '12px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Save Preferences</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ─── Navigation Changes Summary ───
+  const renderNavChanges = () => (
+    <div className="content">
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#333', marginBottom: 16 }}>Navigation Changes Summary</h2>
+
+      <div className="card card-pad">
+        <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#1b6b5a' }}>Sidebar (Desktop) — 4→3 items</h3>
+        <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+              <th style={{ textAlign: 'left', padding: '8px 4px', color: '#888' }}>Before</th>
+              <th style={{ textAlign: 'left', padding: '8px 4px', color: '#888' }}>After</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={{ borderBottom: '1px solid #f0f0f0' }}><td style={{ padding: '8px 4px' }}>🤝 My Dashboard</td><td style={{ padding: '8px 4px', color: '#1b6b5a', fontWeight: 600 }}>🏠 Home</td></tr>
+            <tr style={{ borderBottom: '1px solid #f0f0f0' }}><td style={{ padding: '8px 4px' }}>🔍 Find Work</td><td style={{ padding: '8px 4px' }}>🔍 Find Work (unchanged)</td></tr>
+            <tr style={{ borderBottom: '1px solid #f0f0f0' }}><td style={{ padding: '8px 4px', color: '#ef4444', textDecoration: 'line-through' }}>💰 Financials</td><td style={{ padding: '8px 4px', color: '#888' }}>Removed (→ Account)</td></tr>
+            <tr><td style={{ padding: '8px 4px' }}>💬 Messages</td><td style={{ padding: '8px 4px' }}>💬 Messages (unchanged)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="card card-pad">
+        <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#1b6b5a' }}>Bottom Nav (Mobile) — 5→4 buttons</h3>
+        <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+              <th style={{ textAlign: 'left', padding: '8px 4px', color: '#888' }}>Before</th>
+              <th style={{ textAlign: 'left', padding: '8px 4px', color: '#888' }}>After</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={{ borderBottom: '1px solid #f0f0f0' }}><td style={{ padding: '8px 4px' }}>🤝 Home</td><td style={{ padding: '8px 4px', color: '#1b6b5a', fontWeight: 600 }}>🏠 Home</td></tr>
+            <tr style={{ borderBottom: '1px solid #f0f0f0' }}><td style={{ padding: '8px 4px' }}>🔍 Find Work</td><td style={{ padding: '8px 4px' }}>🔍 Find Work</td></tr>
+            <tr style={{ borderBottom: '1px solid #f0f0f0' }}><td style={{ padding: '8px 4px', color: '#ef4444', textDecoration: 'line-through' }}>💰 Money</td><td style={{ padding: '8px 4px', color: '#888' }}>Removed</td></tr>
+            <tr style={{ borderBottom: '1px solid #f0f0f0' }}><td style={{ padding: '8px 4px' }}>💬 Messages</td><td style={{ padding: '8px 4px' }}>💬 Messages</td></tr>
+            <tr><td style={{ padding: '8px 4px' }}>👤 Account</td><td style={{ padding: '8px 4px' }}>👤 Account</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="card card-pad">
+        <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#1b6b5a' }}>Dashboard Tabs — 10→2</h3>
+        <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+              <th style={{ textAlign: 'left', padding: '8px 4px', color: '#888' }}>Tab</th>
+              <th style={{ textAlign: 'left', padding: '8px 4px', color: '#888' }}>Where it went</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ['📅 Calendar', 'Stays on Dashboard', ''],
+              ['📊 Hour Reports', 'Stays on Dashboard', ''],
+              ['🕐 Availability', '→ Find Work sub-tab', 'moved'],
+              ['👪 My Families', '→ Find Work sub-tab', 'moved'],
+              ['🗺️ Area Map', '→ Find Work map view', 'moved'],
+              ['💰 Earnings (rates)', '→ Find Work "My Rates"', 'moved'],
+              ['💰 Earnings (stats)', '→ Dashboard summary card', 'new'],
+              ['🏦 Financials', '→ Account "Payments"', 'moved'],
+              ['⭐ Reviews', '→ Clickable star popup', 'new'],
+              ['📄 Documents', '→ Account tab', 'moved'],
+              ['🚦 Care Preferences', '→ Account tab', 'moved'],
+            ].map(([tab, dest, type], i) => (
+              <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                <td style={{ padding: '8px 4px' }}>{tab}</td>
+                <td style={{ padding: '8px 4px', color: type === 'moved' ? '#2563eb' : type === 'new' ? '#16a34a' : '#333', fontWeight: type ? 600 : 400 }}>{dest}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="app">
+      {renderSidebar()}
+      <div className="main">
+        <div className="page-selector">
+          <button className={currentPage === 'home' ? 'active' : ''} onClick={() => setCurrentPage('home')}>🏠 Home</button>
+          <button className={currentPage === 'find-work' ? 'active' : ''} onClick={() => setCurrentPage('find-work')}>🔍 Find Work</button>
+          <button className={currentPage === 'account' ? 'active' : ''} onClick={() => setCurrentPage('account')}>👤 Account</button>
+          <button className={currentPage === 'summary' ? 'active' : ''} onClick={() => setCurrentPage('summary')}>📋 Changes Summary</button>
+        </div>
+        {currentPage === 'home' && renderHome()}
+        {currentPage === 'find-work' && renderFindWork()}
+        {currentPage === 'messages' && <div className="content"><div className="card card-pad" style={{ textAlign: 'center', padding: 60, color: '#888' }}>💬 Messages — unchanged</div></div>}
+        {currentPage === 'account' && renderAccount()}
+        {currentPage === 'summary' && renderNavChanges()}
+      </div>
+      {renderBottomNav()}
+    </div>
+  );
+};
+
+ReactDOM.render(React.createElement(App), document.getElementById('root'));
+</script>
+</body>
+</html>

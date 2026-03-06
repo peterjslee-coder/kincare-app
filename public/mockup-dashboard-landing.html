@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caregiver Dashboard Landing — Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; background: #f8f9fa; line-height: 1.6; }
+
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 240px; background: #fff; border-right: 1px solid #e5e7eb; padding: 20px 0; flex-shrink: 0; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 20px; margin-bottom: 24px; }
+  .sidebar-logo .logo-box { width: 36px; height: 36px; background: #2e5984; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 16px; font-family: 'DM Sans', sans-serif; }
+  .sidebar-logo .logo-text { font-size: 18px; font-weight: 700; color: #2e5984; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 20px; font-size: 14px; color: #555; cursor: pointer; border-left: 3px solid transparent; transition: all 0.15s; }
+  .nav-item:hover { background: #f0f7ff; color: #2e5984; }
+  .nav-item.active { background: #e8f0fe; color: #2e5984; font-weight: 600; border-left-color: #2e5984; }
+  .nav-item.disabled { opacity: 0.4; cursor: not-allowed; }
+  .nav-item .icon { font-size: 18px; width: 24px; text-align: center; }
+
+  /* Main */
+  .main { flex: 1; padding: 24px 32px; max-width: 900px; overflow-y: auto; }
+
+  /* Welcome Header */
+  .welcome-header { margin-bottom: 6px; }
+  .welcome-header h1 { font-size: 24px; font-weight: 700; color: #333; }
+  .welcome-subtitle { font-size: 14px; color: #666; margin-bottom: 20px; }
+  .welcome-subtitle.hub-msg { color: #2e5984; font-weight: 500; background: #e8f0fe; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.5; margin-bottom: 20px; }
+
+  /* First Steps Card */
+  .first-steps-card { background: #fff; border-radius: 14px; border: 2px solid #e8724a; padding: 20px 22px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(232, 114, 74, 0.08); }
+  .first-steps-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .first-steps-header h2 { font-size: 17px; font-weight: 700; color: #b45309; }
+  .progress-bar { height: 6px; background: #f3e8d0; border-radius: 3px; overflow: hidden; flex: 1; margin-left: 16px; max-width: 200px; }
+  .progress-fill { height: 100%; background: #2e5984; border-radius: 3px; transition: width 0.3s; }
+  .progress-label { font-size: 12px; color: #888; margin-left: 10px; white-space: nowrap; }
+
+  /* Step Items */
+  .step-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; margin-bottom: 8px; border-radius: 10px; border: 1px solid #eee; cursor: pointer; transition: all 0.15s; position: relative; }
+  .step-item:hover { border-color: #2e5984; background: #f8fbff; }
+  .step-item.done { border-color: #c8e6c9; background: #f1f8f1; }
+  .step-item.done .step-circle { background: #4caf50; color: #fff; }
+  .step-circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #999; flex-shrink: 0; margin-top: 1px; }
+  .step-circle.active { border-color: #e8724a; color: #e8724a; }
+  .step-content { flex: 1; }
+  .step-label { font-size: 14px; font-weight: 600; color: #333; }
+  .step-item.done .step-label { color: #4caf50; text-decoration: line-through; text-decoration-color: #a5d6a7; }
+  .step-desc { font-size: 12px; color: #888; margin-top: 2px; }
+  .step-arrow { color: #ccc; font-size: 18px; margin-left: auto; margin-top: 3px; }
+  .step-item:hover .step-arrow { color: #2e5984; }
+
+  /* Missing Requirements */
+  .step-missing { margin-top: 6px; padding: 6px 10px; background: #fff8f0; border: 1px solid #fde68a; border-radius: 6px; font-size: 11px; color: #b45309; display: flex; align-items: center; gap: 6px; }
+  .step-missing .missing-icon { font-size: 13px; }
+
+  /* Calendar Placeholder */
+  .calendar-placeholder { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; padding: 28px 22px; text-align: center; margin-bottom: 20px; }
+  .calendar-placeholder .cal-icon { font-size: 40px; margin-bottom: 8px; opacity: 0.5; }
+  .calendar-placeholder .cal-text { font-size: 14px; color: #999; }
+  .calendar-placeholder .cal-hint { font-size: 12px; color: #bbb; margin-top: 4px; }
+
+  /* Calendar active (for contrast) */
+  .calendar-active { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; padding: 20px 22px; margin-bottom: 20px; }
+  .calendar-active h3 { font-size: 14px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+  .cal-week-header { display: grid; grid-template-columns: 60px repeat(7, 1fr); gap: 1px; margin-bottom: 4px; }
+  .cal-day-label { text-align: center; font-size: 11px; font-weight: 600; color: #999; padding: 4px; }
+  .cal-slot { height: 40px; background: #f9fafb; border-radius: 4px; border: 1px solid #eee; }
+
+  /* Toggle for view */
+  .mockup-toggle { position: fixed; top: 12px; right: 16px; display: flex; gap: 8px; z-index: 100; }
+  .mockup-toggle button { padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-size: 12px; font-weight: 600; cursor: pointer; color: #555; }
+  .mockup-toggle button.active { background: #2e5984; color: #fff; border-color: #2e5984; }
+
+  /* Note banner */
+  .mockup-note { background: #fef3c7; border: 1px solid #fde68a; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 12px; color: #92400e; }
+  .mockup-note strong { color: #78350f; }
+</style>
+</head>
+<body>
+
+<div class="mockup-toggle">
+  <button class="active" onclick="showView('fresh')">Fresh Signup (0/5)</button>
+  <button onclick="showView('partial')">Partially Done (2/5)</button>
+  <button onclick="showView('complete')">All Complete</button>
+</div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-box">iP</div>
+      <div class="logo-text">InPlace</div>
+    </div>
+    <div class="nav-item active"><span class="icon">🏠</span> Dashboard</div>
+    <div class="nav-item"><span class="icon">📅</span> Schedule</div>
+    <div class="nav-item disabled" id="nav-findwork"><span class="icon">🔍</span> Find Work</div>
+    <div class="nav-item disabled" id="nav-messages"><span class="icon">💬</span> Messages</div>
+    <div class="nav-item"><span class="icon">👤</span> My Account</div>
+    <div class="nav-item"><span class="icon">⚙️</span> Settings</div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main">
+    <div class="mockup-note">
+      <strong>MOCKUP</strong> — This is a static preview of the new caregiver dashboard landing page after initial onboarding completes. Toggle views above to see different states.
+    </div>
+
+    <!-- VIEW: Fresh signup (0/5 done) -->
+    <div id="view-fresh">
+      <div class="welcome-header">
+        <h1>Welcome, Edwina!</h1>
+      </div>
+      <div class="welcome-subtitle hub-msg">
+        This is your home hub. When you finish onboarding you'll see available jobs and your calendar!
+      </div>
+
+      <!-- First Steps -->
+      <div class="first-steps-card">
+        <div class="first-steps-header">
+          <h2>First Steps</h2>
+          <div style="display:flex;align-items:center;">
+            <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+            <div class="progress-label">0 of 5 complete</div>
+          </div>
+        </div>
+
+        <!-- Step 1: Profile photo -->
+        <div class="step-item" onclick="alert('→ Opens profile photo upload on My Account page')">
+          <div class="step-circle active">1</div>
+          <div class="step-content">
+            <div class="step-label">Review your account page and add a profile picture</div>
+            <div class="step-desc">Families want to see who they're inviting into their home</div>
+          </div>
+          <div class="step-arrow">›</div>
+        </div>
+
+        <!-- Step 2: Availability + Rates -->
+        <div class="step-item" onclick="alert('→ Opens Find Work page (availability + rates section)')">
+          <div class="step-circle active">2</div>
+          <div class="step-content">
+            <div class="step-label">Set your availability and rates</div>
+            <div class="step-desc">Tell families when you're free and what you charge</div>
+          </div>
+          <div class="step-arrow">›</div>
+        </div>
+
+        <!-- Step 3: Security -->
+        <div class="step-item" onclick="alert('→ Opens Settings page')">
+          <div class="step-circle active">3</div>
+          <div class="step-content">
+            <div class="step-label">Make your account more secure</div>
+            <div class="step-desc">Review your security settings and enable 2FA</div>
+          </div>
+          <div class="step-arrow">›</div>
+        </div>
+
+        <!-- Step 4: Stripe + BG Check -->
+        <div class="step-item" onclick="alert('→ Opens Stripe setup / BG check payment section')">
+          <div class="step-circle active">4</div>
+          <div class="step-content">
+            <div class="step-label">Set up Stripe, add bank details, and pay for background check</div>
+            <div class="step-desc">Required before you can accept paid jobs — $30 for background check</div>
+          </div>
+          <div class="step-arrow">›</div>
+        </div>
+
+        <!-- Step 5: Care preferences -->
+        <div class="step-item" onclick="alert('→ Opens care preferences page')">
+          <div class="step-circle active">5</div>
+          <div class="step-content">
+            <div class="step-label">Select your care preferences</div>
+            <div class="step-desc">Your selections help us match you to compatible clients</div>
+          </div>
+          <div class="step-arrow">›</div>
+        </div>
+      </div>
+
+      <!-- Calendar Placeholder -->
+      <div class="calendar-placeholder">
+        <div class="cal-icon">📅</div>
+        <div class="cal-text">Your availability and booked sessions will show here later</div>
+        <div class="cal-hint">Complete step 2 to set your availability and see your calendar</div>
+      </div>
+    </div>
+
+    <!-- VIEW: Partial (2/5 done — photo + availability/rates done) -->
+    <div id="view-partial" style="display:none;">
+      <div class="welcome-header">
+        <h1>Welcome, Edwina!</h1>
+      </div>
+      <div class="welcome-subtitle" style="color: #666;">
+        Blacksburg, VA · Companion Care, Personal Care
+      </div>
+
+      <!-- First Steps -->
+      <div class="first-steps-card">
+        <div class="first-steps-header">
+          <h2>First Steps</h2>
+          <div style="display:flex;align-items:center;">
+            <div class="progress-bar"><div class="progress-fill" style="width: 40%"></div></div>
+            <div class="progress-label">2 of 5 complete</div>
+          </div>
+        </div>
+
+        <!-- Step 1: DONE -->
+        <div class="step-item done">
+          <div class="step-circle" style="background:#4caf50;color:#fff;border-color:#4caf50;">✓</div>
+          <div class="step-content">
+            <div class="step-label">Review your account page and add a profile picture</div>
+          </div>
+        </div>
+
+        <!-- Step 2: DONE -->
+        <div class="step-item done">
+          <div class="step-circle" style="background:#4caf50;color:#fff;border-color:#4caf50;">✓</div>
+          <div class="step-content">
+            <div class="step-label">Set your availability and rates</div>
+          </div>
+        </div>
+
+        <!-- Step 3: Not done — user CLICKED but didn't scroll -->
+        <div class="step-item" onclick="alert('→ Opens Settings page')">
+          <div class="step-circle active">3</div>
+          <div class="step-content">
+            <div class="step-label">Make your account more secure</div>
+            <div class="step-desc">Review your security settings and enable 2FA</div>
+            <div class="step-missing">
+              <span class="missing-icon">⚠️</span> You opened the page but didn't review all settings — please scroll to the bottom
+            </div>
+          </div>
+          <div class="step-arrow">›</div>
+        </div>
+
+        <!-- Step 4: Partially done — Stripe connected, bg check NOT paid -->
+        <div class="step-item" onclick="alert('→ Opens Stripe/BG check section')">
+          <div class="step-circle active">4</div>
+          <div class="step-content">
+            <div class="step-label">Set up Stripe, add bank details, and pay for background check</div>
+            <div class="step-missing">
+              <span class="missing-icon">⚠️</span> Stripe connected ✓ — Still need: pay for background check ($30)
+            </div>
+          </div>
+          <div class="step-arrow">›</div>
+        </div>
+
+        <!-- Step 5: Not started -->
+        <div class="step-item" onclick="alert('→ Opens care preferences')">
+          <div class="step-circle active">5</div>
+          <div class="step-content">
+            <div class="step-label">Select your care preferences</div>
+            <div class="step-desc">Your selections help us match you to compatible clients</div>
+          </div>
+          <div class="step-arrow">›</div>
+        </div>
+      </div>
+
+      <!-- Calendar — now shows since step 2 is done -->
+      <div class="calendar-active">
+        <h3>Your Schedule</h3>
+        <div class="cal-week-header">
+          <div></div>
+          <div class="cal-day-label">Sun</div>
+          <div class="cal-day-label">Mon</div>
+          <div class="cal-day-label">Tue</div>
+          <div class="cal-day-label">Wed</div>
+          <div class="cal-day-label">Thu</div>
+          <div class="cal-day-label">Fri</div>
+          <div class="cal-day-label">Sat</div>
+        </div>
+        <div class="cal-week-header">
+          <div style="font-size:11px;color:#999;padding:8px 4px;">8 AM</div>
+          <div class="cal-slot"></div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot"></div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot"></div>
+        </div>
+        <div class="cal-week-header">
+          <div style="font-size:11px;color:#999;padding:8px 4px;">12 PM</div>
+          <div class="cal-slot"></div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot"></div>
+          <div class="cal-slot"></div>
+          <div class="cal-slot"></div>
+          <div class="cal-slot"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: All Complete -->
+    <div id="view-complete" style="display:none;">
+      <div class="welcome-header">
+        <h1>Welcome, Edwina!</h1>
+      </div>
+      <div class="welcome-subtitle" style="color: #666;">
+        Blacksburg, VA · Companion Care, Personal Care
+      </div>
+
+      <!-- No First Steps — all done, it disappears -->
+
+      <!-- Stats row (what they see when fully onboarded) -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+        <div style="background:#fff;border-radius:12px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+          <div style="font-size:24px;font-weight:800;color:#2e5984;">$0</div>
+          <div style="font-size:11px;color:#999;">This month</div>
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+          <div style="font-size:24px;font-weight:800;color:#2e5984;">0</div>
+          <div style="font-size:11px;color:#999;">Sessions</div>
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:16px;text-align:center;border:1px solid #e5e7eb;">
+          <div style="font-size:24px;font-weight:800;color:#2e5984;">⭐ —</div>
+          <div style="font-size:11px;color:#999;">Rating</div>
+        </div>
+      </div>
+
+      <!-- Up Next (empty state) -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #e5e7eb;padding:20px;margin-bottom:20px;">
+        <div style="font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Up Next</div>
+        <div style="text-align:center;padding:16px;color:#999;font-size:13px;">No upcoming sessions — check Find Work for available jobs!</div>
+      </div>
+
+      <!-- Calendar (active) -->
+      <div class="calendar-active">
+        <h3>Your Schedule</h3>
+        <div class="cal-week-header">
+          <div></div>
+          <div class="cal-day-label">Sun</div>
+          <div class="cal-day-label">Mon</div>
+          <div class="cal-day-label">Tue</div>
+          <div class="cal-day-label">Wed</div>
+          <div class="cal-day-label">Thu</div>
+          <div class="cal-day-label">Fri</div>
+          <div class="cal-day-label">Sat</div>
+        </div>
+        <div class="cal-week-header">
+          <div style="font-size:11px;color:#999;padding:8px 4px;">8 AM</div>
+          <div class="cal-slot"></div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot"></div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot" style="background:#e8f0fe;border-color:#bbcfe8;">
+            <div style="font-size:10px;padding:4px;color:#2e5984;font-weight:600;">Available</div>
+          </div>
+          <div class="cal-slot"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function showView(view) {
+  document.getElementById('view-fresh').style.display = view === 'fresh' ? '' : 'none';
+  document.getElementById('view-partial').style.display = view === 'partial' ? '' : 'none';
+  document.getElementById('view-complete').style.display = view === 'complete' ? '' : 'none';
+  document.querySelectorAll('.mockup-toggle button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  // Update sidebar state
+  const fw = document.getElementById('nav-findwork');
+  const msg = document.getElementById('nav-messages');
+  if (view === 'complete') {
+    fw.classList.remove('disabled');
+    msg.classList.remove('disabled');
+  } else {
+    fw.classList.add('disabled');
+    msg.classList.add('disabled');
+  }
+}
+</script>
+</body>
+</html>

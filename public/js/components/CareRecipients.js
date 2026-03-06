@@ -1013,9 +1013,9 @@ const CareRecipients = window.CareRecipients = () => {
             <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Contact & Address</label>
             <p style={{ fontSize: 13, color: '#666', marginTop: 0, marginBottom: 12 }}>Where does this person live? This helps verify their identity and lets caregivers find the location. This info will be used to contact your loved one and verify consent to visits.</p>
           </div>
-          <div className="form-row" style={{ alignItems: 'end' }}>
+          <div className="form-row" style={{ alignItems: 'start' }}>
             <div className="form-group">
-              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 20, marginBottom: 6 }}>
                 Phone Number
                 <button type="button" onClick={() => { setIntlPhone(!intlPhone); fd('phone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                   {intlPhone ? 'US number' : 'International number'}
@@ -1025,7 +1025,7 @@ const CareRecipients = window.CareRecipients = () => {
               {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
             </div>
             <div className="form-group">
-              <label>Email</label>
+              <label style={{ display: 'flex', alignItems: 'center', height: 20, marginBottom: 6 }}>Email</label>
               <input type="email" value={formData.email} onChange={(e) => fd('email', e.target.value)} placeholder="mom@email.com" />
               <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>Used for care awareness verification</div>
             </div>
@@ -1081,13 +1081,13 @@ const CareRecipients = window.CareRecipients = () => {
             <label>Preferences</label>
             <textarea value={formData.preferences} onChange={(e) => fd('preferences', e.target.value)} placeholder="Likes gardening, enjoys photo albums..." />
           </div>
-          <div className="form-row" style={{ alignItems: 'end' }}>
+          <div className="form-row" style={{ alignItems: 'start' }}>
             <div className="form-group">
-              <label>Emergency Contact Name</label>
+              <label style={{ display: 'flex', alignItems: 'center', height: 20, marginBottom: 6 }}>Emergency Contact Name</label>
               <input type="text" value={formData.emergencyContactName} onChange={(e) => fd('emergencyContactName', e.target.value)} />
             </div>
             <div className="form-group">
-              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 20, marginBottom: 6 }}>
                 Phone
                 <button type="button" onClick={() => { setIntlEmergencyPhone(!intlEmergencyPhone); fd('emergencyContactPhone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                   {intlEmergencyPhone ? 'US number' : 'International'}
