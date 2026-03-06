@@ -20,7 +20,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=1.39.15">
+  <link rel="stylesheet" href="/css/styles.css?v=1.39.16">
 
   <!-- Leaflet CSS for maps (AreaMap, Caregivers nearby) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -54,7 +54,7 @@
     Source files live in /js/ for easy editing — one component per file.
   -->
   <script>
-    window.APP_VERSION = '1.39.15';
+    window.APP_VERSION = '1.39.16';
     (async function() {
       var scripts = [
         '/js/utils.js',
@@ -110,7 +110,7 @@
         // Fetch each script individually so we can identify which one fails
         var sources = [];
         for (var i = 0; i < scripts.length; i++) {
-          var url = scripts[i] + '?v=1.39.15';
+          var url = scripts[i] + '?v=1.39.16';
           try {
             var r = await fetch(url);
             if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + scripts[i]);

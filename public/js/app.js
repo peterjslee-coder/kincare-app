@@ -920,6 +920,18 @@ const App = () => {
     // Role-aware page rendering
     // key includes currentUser.id so demo account switches force full remount (fresh data fetch)
     const pageKey = currentPage + '-' + (currentUser?.id || '') + '-' + pageNavCount;
+
+    // ─── Wizard guard: if setup wizard is in progress, redirect to it ───
+    // Allow account & help so users can still manage settings or get help
+    try {
+      const wizardData = sessionStorage.getItem('inplace_wizard');
+      if (wizardData && currentPage !== 'recipients' && currentPage !== 'account' && currentPage !== 'help') {
+        // Auto-redirect to wizard — use setTimeout to avoid render-during-render
+        setTimeout(() => setCurrentPage('recipients'), 0);
+        return <div key={pageKey} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: '#666' }}>Returning to setup...</div>;
+      }
+    } catch {}
+
     if (currentPage === 'dashboard') {
       if (role === 'caregiver') return <CaretakerHub key={pageKey} onNeedsOnboarding={() => setAppState('resume-onboarding')} />;
       if (role === 'care_for') return <CaredForView key={pageKey} />;
