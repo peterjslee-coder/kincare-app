@@ -30,6 +30,7 @@ const CareRecipients = window.CareRecipients = () => {
   // Wrap setters to auto-persist wizard progress to sessionStorage
   const setWizardStep = (step) => {
     _setWizardStep(step);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     try {
       if (step === null) {
         sessionStorage.removeItem('inplace_wizard');
