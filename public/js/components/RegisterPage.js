@@ -265,28 +265,20 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   if (step === 1 && track === 'family' && !authHint) {
     const authCards = [
       {
-        id: 'self',
-        icon: '\u{1F3E0}',
-        title: 'Myself \u2014 I need help at home',
-        subtitle: 'I\'m the one who will receive care',
-        color: '#5c6bc0',
-        bgColor: '#e8eaf6',
-      },
-      {
-        id: 'tier2',
-        icon: '\u{1F4C4}',
-        title: 'A family member \u2014 I have Power of Attorney or legal guardianship',
-        subtitle: 'You\'ll upload your legal document for verification',
+        id: 'tier3',
+        icon: '\u{1F91D}',
+        title: 'They know and agree to this',
+        subtitle: 'We\'ll verify their awareness before the first visit',
         color: '#1b6b5a',
         bgColor: '#e8f5f2',
       },
       {
-        id: 'tier3',
-        icon: '\u{1F91D}',
-        title: 'A family member \u2014 they know and agree to this',
-        subtitle: 'We\'ll verify their awareness before the first visit',
-        color: '#e8724a',
-        bgColor: '#FFF3E0',
+        id: 'tier2',
+        icon: '\u{1F4C4}',
+        title: 'I have Power of Attorney or legal guardianship',
+        subtitle: 'You\'ll upload your legal document for verification',
+        color: '#5c6bc0',
+        bgColor: '#e8eaf6',
       },
     ];
     return (
@@ -301,19 +293,14 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             <div style={{ marginBottom: '16px' }}>
               {typeof InPlaceIcon !== 'undefined' && React.createElement(InPlaceIcon, { width: 50, height: 50 })}
             </div>
-            <h1 style={{ marginBottom: '8px' }}>Who is this care for?</h1>
-            <p style={{ color: '#666', fontSize: '15px', margin: 0 }}>This helps us set up the right experience and keep everyone safe.</p>
+            <h1 style={{ marginBottom: '8px' }}>How is care being arranged?</h1>
+            <p style={{ color: '#666', fontSize: '15px', margin: 0 }}>This helps us set up the right verification and keep everyone safe.</p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '20px 0' }}>
             {authCards.map(card => (
               <div key={card.id} onClick={() => {
-                if (card.id === 'self') {
-                  setTrack('care_for');
-                  setStep(2);
-                } else {
-                  setAuthHint(card.id);
-                  setStep(2);
-                }
+                setAuthHint(card.id);
+                setStep(2);
               }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '16px',
