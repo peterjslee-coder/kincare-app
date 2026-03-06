@@ -158,10 +158,19 @@ const Dashboard = window.Dashboard = ({ onNavigate }) => {
     return () => clearInterval(iv);
   }, [data?.upcomingSessions, imminentId]);
 
-  // ─── New user with NO care recipient → go straight into wizard ───
+  // ─── Resume in-progress wizard or send new users into wizard ───
   // Must be before early returns to avoid breaking Rules of Hooks
   useEffect(() => {
     if (loading || !data) return;
+    // Check if there's a wizard in progress (saved in sessionStorage)
+    try {
+      const saved = sessionStorage.getItem('inplace_wizard');
+      if (saved && onNavigate) {
+        onNavigate('recipients');
+        return;
+      }
+    } catch {}
+    // New user with no care recipient → start wizard
     const isNew = data?.isNewUser && !(user?.is_demo || user?.isDemo);
     const hasRec = !!(data?.parent || (data?.stats?.assignedCaregivers > 0));
     if (isNew && !hasRec && onNavigate) {
