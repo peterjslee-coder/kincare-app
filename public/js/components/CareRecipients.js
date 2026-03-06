@@ -17,9 +17,42 @@ const CareRecipients = window.CareRecipients = () => {
   const [intlEmergencyPhone, setIntlEmergencyPhone] = useState(false);
   const { showToast } = useToast();
 
-  // Wizard state
-  const [wizardStep, setWizardStep] = useState(null);
-  const [savedRecipientId, setSavedRecipientId] = useState(null);
+  // Wizard state — restore from sessionStorage if user was mid-wizard
+  const storedWizard = (() => {
+    try {
+      const s = sessionStorage.getItem('inplace_wizard');
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
+  })();
+  const [wizardStep, _setWizardStep] = useState(storedWizard?.step ?? null);
+  const [savedRecipientId, _setSavedRecipientId] = useState(storedWizard?.recipientId ?? null);
+
+  // Wrap setters to auto-persist wizard progress to sessionStorage
+  const setWizardStep = (step) => {
+    _setWizardStep(step);
+    try {
+      if (step === null) {
+        sessionStorage.removeItem('inplace_wizard');
+      } else {
+        const cur = JSON.parse(sessionStorage.getItem('inplace_wizard') || '{}');
+        sessionStorage.setItem('inplace_wizard', JSON.stringify({ ...cur, step }));
+      }
+    } catch {}
+  };
+  const setSavedRecipientId = (id) => {
+    _setSavedRecipientId(id);
+    try {
+      if (id === null) {
+        const cur = JSON.parse(sessionStorage.getItem('inplace_wizard') || '{}');
+        delete cur.recipientId;
+        if (Object.keys(cur).length) sessionStorage.setItem('inplace_wizard', JSON.stringify(cur));
+        else sessionStorage.removeItem('inplace_wizard');
+      } else {
+        const cur = JSON.parse(sessionStorage.getItem('inplace_wizard') || '{}');
+        sessionStorage.setItem('inplace_wizard', JSON.stringify({ ...cur, recipientId: id }));
+      }
+    } catch {}
+  };
   const [carePrefs, setCarePrefs] = useState({});
   const [careDetails, setCareDetails] = useState({});
   const [showAllPrefs, setShowAllPrefs] = useState(false);
