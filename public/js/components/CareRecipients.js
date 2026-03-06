@@ -30,6 +30,9 @@ const CareRecipients = window.CareRecipients = () => {
   // Wrap setters to auto-persist wizard progress to sessionStorage
   const setWizardStep = (step) => {
     _setWizardStep(step);
+    // Scroll to top — try .main-content container first (desktop layout), fall back to window
+    const mc = document.querySelector('.main-content');
+    if (mc) mc.scrollTo({ top: 0, behavior: 'smooth' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
     try {
       if (step === null) {
