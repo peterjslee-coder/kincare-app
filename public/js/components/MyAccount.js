@@ -198,6 +198,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
   const [showPasskeyNameInput, setShowPasskeyNameInput] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
 
+  // Family - Identity & Payment status
+  const [familyStripeStatus, setFamilyStripeStatus] = useState(null); // null | 'not_started' | 'pending' | 'complete'
+  const [familyIdentityStatus, setFamilyIdentityStatus] = useState(null); // null | 'not_started' | 'pending' | 'verified'
+
   // Caregiver - Payments state
   const [stripeStatus, setStripeStatus] = useState(null);
   const [payoutPref, setPayoutPref] = useState('standard');
@@ -452,6 +456,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
     window.addEventListener('accountTabSwitch', handler);
     return () => window.removeEventListener('accountTabSwitch', handler);
   }, []);
+
+  // Fetch family Stripe Connect + identity status on profile tab
+  useEffect(() => {
+    if (activeTab !== 'profile') return;
+    apiFetch('/api/stripe/connect-status').then(async r => {
+      if (r?.ok) { const d = await r.json(); setFamilyStripeStatus(d.status || 'not_started'); }
+      else setFamilyStripeStatus('not_started');
+    }).catch(() => setFamilyStripeStatus('not_started'));
+    // Identity verification status — placeholder until Stripe Identity or Vouched.id is wired up
+    setFamilyIdentityStatus('not_started');
+  }, [activeTab]);
 
   // Fetch caregiver financial data
   useEffect(() => {
@@ -942,12 +957,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
                   <div className="info-label">Phone</div>
                   <div className="info-value">{formatPhone(user?.phone) || 'Not set'}</div>
                 </div>
-                {user?.address_line1 && (
-                  <div className="info-item">
-                    <div className="info-label">Address</div>
-                    <div className="info-value">{[user.address_line1, user.address_line2].filter(Boolean).join(', ')}{user.city || user.state ? `, ${[user.city, user.state, user.zip].filter(Boolean).join(' ')}` : ''}</div>
-                  </div>
-                )}
+                <div className="info-item">
+                  <div className="info-label">Address</div>
+                  <div className="info-value">{user?.address_line1
+                    ? `${[user.address_line1, user.address_line2].filter(Boolean).join(', ')}${user.city || user.state ? `, ${[user.city, user.state, user.zip].filter(Boolean).join(' ')}` : ''}`
+                    : React.createElement('span', { style: { color: '#e8724a', cursor: 'pointer' }, onClick: () => setEditing(true) }, '+ Add your address')
+                  }</div>
+                </div>
                 {/* Your Profiles — unified role display */}
                 <div style={{ marginTop: 4, marginBottom: -8 }}>
                   <div className="info-label" style={{ marginBottom: 10 }}>Your Profiles</div>
@@ -1031,18 +1047,90 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
             )}
           </div>
 
-          <div className="card" style={{ background: 'linear-gradient(135deg, #f8f9ff 0%, #eef0ff 100%)', border: '1px dashed #b0b8d9' }}>
+          {/* Identity Verification Card */}
+          <div className="card">
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Payment & Billing</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#5c6bc0', background: '#e8eaf6', padding: '2px 10px', borderRadius: 12 }}>Coming Soon</span>
+              <span>Identity Verification</span>
+              {familyIdentityStatus === 'verified'
+                ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#2e7d32', background: '#e8f5e9', padding: '2px 10px', borderRadius: 12 } }, '\u2705 Verified')
+                : familyIdentityStatus === 'pending'
+                  ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#e65100', background: '#fff3e0', padding: '2px 10px', borderRadius: 12 } }, 'Pending')
+                  : React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#5c6bc0', background: '#e8eaf6', padding: '2px 10px', borderRadius: 12 } }, 'Not Started')
+              }
             </div>
             <div style={{ padding: '8px 0', color: '#666', fontSize: 14, lineHeight: 1.6 }}>
-              <p style={{ margin: '0 0 8px' }}>Secure payments powered by Stripe will be available here soon.</p>
-              <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#888' }}>
-                <span>Payment methods</span>
-                <span>Billing history</span>
-                <span>Receipts</span>
-              </div>
+              {familyIdentityStatus === 'verified' ? (
+                <p style={{ margin: 0 }}>Your identity has been verified. Thank you for helping keep InPlace safe.</p>
+              ) : (
+                <>
+                  <p style={{ margin: '0 0 10px' }}>Verify your identity with a photo ID to ensure the safety of everyone on the platform.</p>
+                  <div style={{ padding: '10px 14px', background: '#fff3e0', borderRadius: 8, fontSize: 13, color: '#e65100' }}>
+                    Identity verification will be available soon. We'll notify you when it's ready.
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Payment & Billing Card */}
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Payment & Billing</span>
+              {familyStripeStatus === 'complete'
+                ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#2e7d32', background: '#e8f5e9', padding: '2px 10px', borderRadius: 12 } }, '\u2705 Connected')
+                : familyStripeStatus === 'pending'
+                  ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#e65100', background: '#fff3e0', padding: '2px 10px', borderRadius: 12 } }, 'In Progress')
+                  : React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#888', background: '#f0f0f0', padding: '2px 10px', borderRadius: 12 } }, 'Not Set Up')
+              }
+            </div>
+            <div style={{ padding: '8px 0', color: '#666', fontSize: 14, lineHeight: 1.6 }}>
+              {familyStripeStatus === 'complete' ? (
+                <div>
+                  <p style={{ margin: '0 0 10px' }}>Your payment method is connected via Stripe. You can pay caregivers securely through InPlace.</p>
+                  <button onClick={async () => {
+                    try {
+                      const res = await apiFetch('/api/stripe/connect-onboarding', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ returnUrl: window.location.href }),
+                      });
+                      if (res?.ok) { const d = await res.json(); if (d.url) window.location.href = d.url; }
+                    } catch {}
+                  }} style={{ padding: '8px 16px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    Manage Payment Settings
+                  </button>
+                </div>
+              ) : familyStripeStatus === 'pending' ? (
+                <div>
+                  <p style={{ margin: '0 0 10px' }}>Your Stripe account setup is in progress. Some information may still be needed.</p>
+                  <button onClick={async () => {
+                    try {
+                      const res = await apiFetch('/api/stripe/connect-onboarding', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ returnUrl: window.location.href }),
+                      });
+                      if (res?.ok) { const d = await res.json(); if (d.url) window.location.href = d.url; }
+                    } catch {}
+                  }} style={{ padding: '8px 16px', background: '#635bff', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    Continue Stripe Setup
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ margin: '0 0 10px' }}>Set up a payment method so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe.</p>
+                  <button onClick={async () => {
+                    try {
+                      const res = await apiFetch('/api/stripe/connect-onboarding', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ returnUrl: window.location.href }),
+                      });
+                      if (res?.ok) { const d = await res.json(); if (d.url) window.location.href = d.url; }
+                      else if (typeof showToast === 'function') showToast('Unable to start Stripe setup', 'error');
+                    } catch { if (typeof showToast === 'function') showToast('Unable to connect to Stripe', 'error'); }
+                  }} style={{ padding: '8px 16px', background: '#635bff', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    Set Up Payments with Stripe
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
