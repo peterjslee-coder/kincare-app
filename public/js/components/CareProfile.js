@@ -334,20 +334,27 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
   return (
     <>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <h1 className="page-title">My Loved One</h1>
-        {!editing ? (
-          canEdit && <button onClick={startEditing} style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
-            Edit Profile
-          </button>
-        ) : (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={cancelEditing} style={{ padding: '8px 16px', background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
-            <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
-              {saving ? 'Saving...' : 'Save Changes'}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {!editing && onNavigate && (
+            <button onClick={() => onNavigate('recipients')} style={{ padding: '8px 14px', background: '#fff', color: '#1b6b5a', border: '1.5px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+              + Add Another Person
             </button>
-          </div>
-        )}
+          )}
+          {!editing ? (
+            canEdit && <button onClick={startEditing} style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+              Edit Profile
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={cancelEditing} style={{ padding: '8px 16px', background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {allRecipients.length > 1 && (
@@ -821,6 +828,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           </div>
         </div>
         )
+      )}
+
+      {/* ── Care Team shortcut card ── */}
+      {!editing && onNavigate && (
+        <div className="card" style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', cursor: 'pointer' }} onClick={() => onNavigate('care-team')}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#1b6b5a' }}>👪 Care Team</div>
+            <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>View members, invite family, and manage caregivers</div>
+          </div>
+          <span style={{ fontSize: 20, color: '#ccc' }}>›</span>
+        </div>
       )}
     </>
   );

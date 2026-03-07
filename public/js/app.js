@@ -913,9 +913,7 @@ const App = () => {
       { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { id: '_request_care', icon: '➕', label: 'Request Care', isAction: true },
       { id: 'care-profile', icon: '🌷', label: 'My Loved One', children: [
-        { id: 'recipients', icon: '👥', label: 'Recipients' },
-      ]},
-      { id: 'care-team', icon: '👪', label: 'Care Team', children: [
+        { id: 'care-team', icon: '👪', label: 'Care Team' },
         { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
       ]},
       { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
@@ -1001,7 +999,7 @@ const App = () => {
     const familyBottom = [
       { id: 'dashboard', icon: '🏠', label: 'Home' },
       { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
-      { id: 'care-team', icon: '👪', label: 'Care Team' },
+      { id: 'care-profile', icon: '🌷', label: 'Loved One' },
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'account', icon: '👤', label: 'Account' },
     ];
