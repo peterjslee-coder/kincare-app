@@ -89,6 +89,7 @@ router.get("/:recipientId/status", authenticate, async (req, res) => {
       } : null,
       outreach: outreach ? {
         id: outreach.id,
+        sentAt: outreach.created_at,
         sentToEmail: outreach.sent_to_email,
         sentToPhone: outreach.sent_to_phone,
         outreachType: outreach.outreach_type,

@@ -374,7 +374,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               }).join('. ')}.
             </div>
           </div>
-          <button onClick={() => onNavigate && onNavigate('recipients')} style={{ padding: '8px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>View</button>
+          <button onClick={() => { if (onNavigate) { window.__accountTab = 'documents'; window.__documentsTab = 'consent'; onNavigate('account'); } }} style={{ padding: '8px 16px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>View Status</button>
         </div>
       )}
 

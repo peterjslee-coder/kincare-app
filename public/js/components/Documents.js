@@ -1,6 +1,9 @@
 const Documents = window.Documents = ({ onNavigate }) => {
   // Tabs: 'documents', 'consent', 'audit'
-  const [activeTab, setActiveTab] = useState('documents');
+  const [activeTab, setActiveTab] = useState(() => {
+    if (window.__documentsTab) { const t = window.__documentsTab; delete window.__documentsTab; return t; }
+    return 'documents';
+  });
 
   // Documents Tab State
   const [documents, setDocuments] = useState([]);
@@ -97,11 +100,14 @@ const Documents = window.Documents = ({ onNavigate }) => {
   useEffect(() => {
     const loadCareRecipients = async () => {
       try {
-        const response = await apiFetch('/api/care-recipients');
-        if (response.careRecipients) {
-          setCareRecipients(response.careRecipients);
-          if (response.careRecipients.length > 0) {
-            setUploadRecipientId(response.careRecipients[0].id);
+        const res = await apiFetch('/api/care-recipients');
+        if (res?.ok) {
+          const data = await res.json();
+          if (data.careRecipients) {
+            setCareRecipients(data.careRecipients);
+            if (data.careRecipients.length > 0) {
+              setUploadRecipientId(data.careRecipients[0].id);
+            }
           }
         }
       } catch (error) {
@@ -118,12 +124,12 @@ const Documents = window.Documents = ({ onNavigate }) => {
     }
   }, [activeTab, selectedRecipientFilter, selectedCategoryFilter, selectedStatusFilter]);
 
-  // Load consent data when consent tab is active
+  // Load consent data when consent tab is active (also re-runs when careRecipients loads)
   useEffect(() => {
-    if (activeTab === 'consent') {
+    if (activeTab === 'consent' && careRecipients.length > 0) {
       loadConsentData();
     }
-  }, [activeTab]);
+  }, [activeTab, careRecipients]);
 
   // Load audit trail when audit tab is active
   useEffect(() => {
@@ -139,17 +145,19 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
       // If filtering by specific recipient, fetch for that recipient
       if (selectedRecipientFilter !== 'all') {
-        const response = await apiFetch(`/api/documents/owner/care_recipient/${selectedRecipientFilter}`);
-        if (response.documents) {
-          docs = response.documents;
+        const res = await apiFetch(`/api/documents/owner/care_recipient/${selectedRecipientFilter}`);
+        if (res?.ok) {
+          const data = await res.json();
+          if (data.documents) docs = data.documents;
         }
       } else {
         // Fetch documents for all care recipients
         for (const recipient of careRecipients) {
           try {
-            const response = await apiFetch(`/api/documents/owner/care_recipient/${recipient.id}`);
-            if (response.documents) {
-              docs = [...docs, ...response.documents];
+            const res = await apiFetch(`/api/documents/owner/care_recipient/${recipient.id}`);
+            if (res?.ok) {
+              const data = await res.json();
+              if (data.documents) docs = [...docs, ...data.documents];
             }
           } catch (error) {
             console.error(`Failed to load documents for ${recipient.id}:`, error);
@@ -182,12 +190,23 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
       for (const recipient of careRecipients) {
         try {
-          const response = await apiFetch(`/api/documents/audit/${recipient.id}`);
-          if (response.consentStatus) {
-            data[recipient.id] = response.consentStatus;
+          // Fetch audit trail + basic consent fields
+          const auditRes = await apiFetch(`/api/documents/audit/${recipient.id}`);
+          if (auditRes?.ok) {
+            const auditData = await auditRes.json();
+            if (auditData.consentStatus) data[recipient.id] = { ...auditData.consentStatus };
+            if (auditData.auditTrail) trails[recipient.id] = auditData.auditTrail;
           }
-          if (response.auditTrail) {
-            trails[recipient.id] = response.auditTrail;
+          // Also fetch detailed consent status — outreach email + attestation details
+          const statusRes = await apiFetch(`/api/consent/${recipient.id}/status`);
+          if (statusRes?.ok) {
+            const statusData = await statusRes.json();
+            data[recipient.id] = {
+              ...(data[recipient.id] || {}),
+              attestation: statusData.attestation || null,
+              outreach: statusData.outreach || null,
+              bookingsPaused: statusData.bookingsPaused,
+            };
           }
         } catch (error) {
           console.error(`Failed to load consent data for ${recipient.id}:`, error);
@@ -209,17 +228,19 @@ const Documents = window.Documents = ({ onNavigate }) => {
       let entries = [];
 
       if (auditRecipientFilter !== 'all') {
-        const response = await apiFetch(`/api/documents/audit/${auditRecipientFilter}`);
-        if (response.auditTrail) {
-          entries = response.auditTrail;
+        const res = await apiFetch(`/api/documents/audit/${auditRecipientFilter}`);
+        if (res?.ok) {
+          const data = await res.json();
+          if (data.auditTrail) entries = data.auditTrail;
         }
       } else {
         // Load for all recipients
         for (const recipient of careRecipients) {
           try {
-            const response = await apiFetch(`/api/documents/audit/${recipient.id}`);
-            if (response.auditTrail) {
-              entries = [...entries, ...response.auditTrail];
+            const res = await apiFetch(`/api/documents/audit/${recipient.id}`);
+            if (res?.ok) {
+              const data = await res.json();
+              if (data.auditTrail) entries = [...entries, ...data.auditTrail];
             }
           } catch (error) {
             console.error(`Failed to load audit for ${recipient.id}:`, error);
@@ -853,6 +874,61 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     </div>
                   )}
                 </div>
+
+                {/* ── Attestation Details ── */}
+                {consent.attestation && (
+                  <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#4a5568', marginBottom: 6 }}>📝 Who Authorized This</div>
+                    <div style={{ fontSize: '13px', color: '#2d3748' }}>
+                      <strong>{consent.attestation.signatureName}</strong>
+                      {consent.attestation.relationship && <span style={{ color: '#718096' }}> ({consent.attestation.relationship})</span>}
+                    </div>
+                    {consent.attestation.signedAt && (
+                      <div style={{ fontSize: '12px', color: '#718096', marginTop: 2 }}>Signed {formatDate(consent.attestation.signedAt)}</div>
+                    )}
+                    {consent.attestation.adminStatus && consent.attestation.adminStatus !== 'pending' && (
+                      <div style={{ marginTop: 4, fontSize: 12, color: consent.attestation.adminStatus === 'approved' ? '#38a169' : '#e53e3e', fontWeight: 600 }}>
+                        {consent.attestation.adminStatus === 'approved' ? '✅ Admin approved' : '❌ Admin rejected'}
+                        {consent.attestation.adminNotes && <span style={{ fontWeight: 400, color: '#666' }}> — {consent.attestation.adminNotes}</span>}
+                      </div>
+                    )}
+                    {consent.attestation.adminStatus === 'pending' && (
+                      <div style={{ marginTop: 4, fontSize: 12, color: '#b7791f' }}>⏳ Pending admin review</div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Outreach Email Details ── */}
+                {consent.outreach && (
+                  <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#4a5568', marginBottom: 6 }}>📧 Consent Email Sent To Your Loved One</div>
+                    <div style={{ fontSize: '13px', color: '#2d3748' }}>
+                      <strong>{consent.outreach.sentToEmail}</strong>
+                    </div>
+                    {consent.outreach.sentAt && (
+                      <div style={{ fontSize: '12px', color: '#718096', marginTop: 2 }}>Sent {formatDate(consent.outreach.sentAt)}</div>
+                    )}
+                    {consent.outreach.isExpired && !consent.outreach.recipientResponse && (
+                      <div style={{ marginTop: 6, fontSize: 12, background: '#fff3cd', color: '#856404', padding: '4px 8px', borderRadius: 4 }}>
+                        ⚠️ This email link has expired. Resend from the care profile if needed.
+                      </div>
+                    )}
+                    {!consent.outreach.recipientResponse && !consent.outreach.isExpired && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: '#718096' }}>
+                        Waiting for their response — you can share the email with them or call to let them know it's coming.
+                      </div>
+                    )}
+                    {consent.outreach.recipientResponse && (
+                      <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 6, background: consent.outreach.recipientResponse === 'aware' ? '#e8f5e9' : consent.outreach.recipientResponse === 'did_not_authorize' ? '#fde8e8' : '#fff8e1', border: `1px solid ${consent.outreach.recipientResponse === 'aware' ? '#a5d6a7' : consent.outreach.recipientResponse === 'did_not_authorize' ? '#f5c6cb' : '#ffe082'}` }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: consent.outreach.recipientResponse === 'aware' ? '#2e7d32' : consent.outreach.recipientResponse === 'did_not_authorize' ? '#c62828' : '#795548' }}>
+                          {consent.outreach.recipientResponse === 'aware' ? '✅ They confirmed they are aware' : consent.outreach.recipientResponse === 'did_not_authorize' ? '🚫 They said they did NOT authorize this' : '❓ They have questions'}
+                        </div>
+                        {consent.outreach.recipientResponseNotes && <div style={{ fontSize: 12, color: '#555', marginTop: 3 }}>{consent.outreach.recipientResponseNotes}</div>}
+                        {consent.outreach.respondedAt && <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>Responded {formatDate(consent.outreach.respondedAt)}</div>}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Consent Journey Timeline */}
                 {trail.length > 0 && (
