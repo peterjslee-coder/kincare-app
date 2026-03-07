@@ -915,13 +915,12 @@ const App = () => {
       { id: 'care-profile', icon: '🌷', label: 'My Loved One', children: [
         { id: 'recipients', icon: '👥', label: 'Recipients' },
       ]},
-      { id: 'care-team', icon: '👪', label: 'Care Team' },
-      { id: 'documents', icon: '📄', label: 'Documents' },
-      { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
+      { id: 'care-team', icon: '👪', label: 'Care Team', children: [
+        { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
+      ]},
       { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'messages', icon: '💬', label: 'Messages' },
-      { id: 'payments', icon: '💳', label: 'Payments' },
     ];
     if (currentUser?.isAdmin) {
       familyNav.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
@@ -968,15 +967,15 @@ const App = () => {
     if (currentPage === 'find-work') return <FindWork key={pageKey} />;
     if (currentPage === 'schedule') return <Schedule key={pageKey} />;
     if (currentPage === 'caregivers') return <Caregivers key={pageKey} />;
-    if (currentPage === 'documents') return <Documents key={pageKey} onNavigate={setCurrentPage} />;
+    if (currentPage === 'documents') { window.__accountTab = 'documents'; return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />; }
     if (currentPage === 'analytics') return <Analytics key={pageKey} />;
     if (currentPage === 'activity') return <ActivityFeed key={pageKey} />;
     if (currentPage === 'recipients') return <CareRecipients key={pageKey} />;
     if (currentPage === 'messages') return <Messages key={pageKey} />;
-    if (currentPage === 'account') return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} />;
+    if (currentPage === 'account') return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />;
     if (currentPage === 'help') return <HelpPage key={pageKey} currentUser={currentUser} onNavigate={setCurrentPage} />;
-    if (currentPage === 'financials') return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} />; {/* Financials moved to Account */}
-    if (currentPage === 'payments') return <FamilyPayments key={pageKey} />;
+    if (currentPage === 'financials') return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />; {/* Financials moved to Account */}
+    if (currentPage === 'payments') { window.__accountTab = 'payments'; return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />; }
     if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={pageKey} />;
     return <Dashboard key={pageKey} onNavigate={setCurrentPage} />;
   };
@@ -1002,7 +1001,7 @@ const App = () => {
     const familyBottom = [
       { id: 'dashboard', icon: '🏠', label: 'Home' },
       { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
-      { id: 'caregivers', icon: '🤝', label: 'Care' },
+      { id: 'care-team', icon: '👪', label: 'Care Team' },
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'account', icon: '👤', label: 'Account' },
     ];

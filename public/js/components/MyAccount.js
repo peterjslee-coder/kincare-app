@@ -151,7 +151,7 @@ const DeleteAccountSection = ({ onDeleted }) => {
   );
 };
 
-const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
+const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -770,7 +770,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
           { id: 'payments', label: 'Payments' },
           { id: 'documents', label: 'Documents' },
           { id: 'preferences', label: 'Care Preferences' },
-        ] : []),
+        ] : [
+          { id: 'documents', label: '📄 Documents' },
+          { id: 'payments', label: '💳 Payments' },
+        ]),
       ];
 
   const handleLogoutFromAccount = () => {
@@ -1470,6 +1473,16 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
             );
           })()}
         </div>
+      )}
+
+      {/* ─── Documents Tab (Family) ─── */}
+      {activeTab === 'documents' && !isCaregiver && (
+        <Documents onNavigate={onNavigate || (() => {})} />
+      )}
+
+      {/* ─── Payments Tab (Family) ─── */}
+      {activeTab === 'payments' && !isCaregiver && (
+        <FamilyPayments />
       )}
 
       {/* ─── Payments Tab (Caregiver Only) ─── */}
