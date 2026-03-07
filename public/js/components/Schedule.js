@@ -240,16 +240,14 @@ const Schedule = window.Schedule = () => {
         </span>
       </div>
 
-      {/* Calendar grid — clean cells with dot indicators */}
+      {/* Calendar grid — single unified grid so headers and cells always align */}
       <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: 12 }}>
-        {/* Day headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#fafafa', borderBottom: '1px solid #eee' }}>
-          {dayNames.map(d => (
-            <div key={d} style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#999', textTransform: 'uppercase' }}>{d}</div>
-          ))}
-        </div>
-        {/* Day cells */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+          {/* Day headers — row 1 */}
+          {dayNames.map(d => (
+            <div key={d} style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#999', textTransform: 'uppercase', background: '#fafafa', borderBottom: '1px solid #eee' }}>{d}</div>
+          ))}
+          {/* Day cells */}
           {cells.map((day, idx) => {
             if (day === null) {
               return <div key={`empty-${idx}`} style={{ minHeight: 64, background: '#fafafa', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }}></div>;

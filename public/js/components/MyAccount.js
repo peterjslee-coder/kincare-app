@@ -878,7 +878,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser }) => {
           <div className="card">
             <div className="card-header">Profile Information</div>
             {editing ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(220px, 100%), 1fr))', gap: 16 }}>
                 <div>
                   <div style={fieldLabel}>First Name</div>
                   <input style={inputStyle} value={editData.firstName} onChange={(e) => ed('firstName', e.target.value)} />

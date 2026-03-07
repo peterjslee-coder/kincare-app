@@ -383,13 +383,19 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             {date && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Start time</div>
-                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-                  {getTimeOptions().map(opt => (
-                    <button key={opt.val} type="button" onClick={() => setTime(opt.val)} style={pill(time === opt.val)}>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+                {getTimeOptions().length === 0 ? (
+                  <div style={{ padding: '10px 14px', background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, fontSize: 13, color: '#795548' }}>
+                    ⏰ No times available for today — please select a future date above.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                    {getTimeOptions().map(opt => (
+                      <button key={opt.val} type="button" onClick={() => setTime(opt.val)} style={pill(time === opt.val)}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -583,9 +589,16 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             {step === 1 ? 'Cancel' : 'Back'}
           </button>
           {step === 1 && (
-            <button className="btn btn-primary" disabled={!step1Complete} onClick={() => setStep(2)}>
-              Next
-            </button>
+            <div style={{ flex: 1 }}>
+              <button className="btn btn-primary" disabled={!step1Complete} onClick={() => setStep(2)} style={{ width: '100%' }}>
+                Next
+              </button>
+              {!step1Complete && (serviceType || date || time || duration) && (
+                <div style={{ fontSize: 11, color: '#999', textAlign: 'center', marginTop: 6 }}>
+                  {!serviceType ? 'Select a care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration'}
+                </div>
+              )}
+            </div>
           )}
           {step === 2 && selectedCaregiver?.openToInterview && (
             <button type="button" onClick={async () => {

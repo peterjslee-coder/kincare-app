@@ -364,7 +364,9 @@ const App = () => {
       }
     });
     // Request notification permission on first load
-    if ('Notification' in window && Notification.permission === 'default') {
+    // Guard typeof check: some browsers (older Android WebView) have Notification
+    // in window but without requestPermission as a callable function
+    if ('Notification' in window && typeof Notification.requestPermission === 'function' && Notification.permission === 'default') {
       Notification.requestPermission();
     }
     return cleanup;

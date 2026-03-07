@@ -102,8 +102,8 @@ const AreaMap = window.AreaMap = () => {
     if (!leafletMap.current || assignments.length === 0) return;
     const map = leafletMap.current;
 
-    // Clear previous markers
-    markersRef.current.forEach(m => map.removeLayer(m));
+    // Clear previous markers — guard in case map was destroyed between renders
+    markersRef.current.forEach(m => { try { map.removeLayer(m); } catch (e) {} });
     markersRef.current = [];
 
     const bounds = [];
@@ -170,9 +170,9 @@ const AreaMap = window.AreaMap = () => {
     if (!leafletMap.current) return;
     const map = leafletMap.current;
 
-    // Remove old circle
+    // Remove old circle — guard in case map was destroyed between renders
     if (circleRef.current) {
-      map.removeLayer(circleRef.current);
+      try { map.removeLayer(circleRef.current); } catch (e) {}
       circleRef.current = null;
     }
 

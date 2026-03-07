@@ -625,6 +625,11 @@ const CareRecipients = window.CareRecipients = () => {
                 ))}
               </div>
 
+              {pref.id === 'med_reminders' && carePrefs[pref.id] >= 1 && (
+                <div style={{ marginTop: '6px', marginLeft: '32px', padding: '6px 10px', background: '#e8f5e9', borderRadius: 6, fontSize: 12, color: '#2e7d32' }}>
+                  💊 Note: Caregivers can remind your loved one to take their medication — they do not administer or handle medications directly.
+                </div>
+              )}
               {carePrefs[pref.id] >= 2 && PREF_FOLLOW_UPS[pref.id] && (
                 <div style={{ marginTop: '8px', marginLeft: '32px' }}>
                   <input
@@ -1170,13 +1175,14 @@ const CareRecipients = window.CareRecipients = () => {
             />
           )}
 
-          <button className="btn btn-primary" onClick={() => { resetForm(); setEditingId(null); setShowAddForm(true); setWizardStep(null); setSavedRecipientId(null); setCarePrefs({}); setCareDetails({}); setShowAllPrefs(false); setAttestAgreed(false); setAttestSignature(''); setAttestRelationship(''); setAttestNotifyMethod('email'); setAttestError(''); }} style={{ marginTop: '32px' }}>+ Add Care Recipient</button>
+          <button className="btn btn-primary" onClick={() => { resetForm(); setEditingId(null); setShowAddForm(true); setWizardStep(null); setSavedRecipientId(null); setCarePrefs({}); setCareDetails({}); setShowAllPrefs(false); setAttestAgreed(false); setAttestSignature(''); setAttestRelationship(''); setAttestNotifyMethod('email'); setAttestError(''); }} style={{ marginTop: '32px' }}>+ Add someone you're caring for</button>
         </>
       )}
 
       {showAddForm && wizardStep === null && (
         <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
-          <h3 style={{ marginBottom: '24px', color: '#1b6b5a' }}>{editingId ? 'Edit Care Recipient' : 'Add New Care Recipient'}</h3>
+          <h3 style={{ marginBottom: '4px', color: '#1b6b5a' }}>{editingId ? 'Edit Care Recipient' : 'Who are you setting up care for?'}</h3>
+          {!editingId && <p style={{ fontSize: 13, color: '#888', marginTop: 0, marginBottom: '20px' }}>Add details about the person who will be receiving care — a parent, spouse, or other loved one.</p>}
           {saveMsg && (
             <div style={{ padding: '10px 16px', borderRadius: 8, marginBottom: 16, background: saveMsg.includes('Error') ? '#fce4ec' : '#e8f5e9', color: saveMsg.includes('Error') ? '#c62828' : '#2e7d32', fontWeight: 500, fontSize: 14 }}>{saveMsg}</div>
           )}
