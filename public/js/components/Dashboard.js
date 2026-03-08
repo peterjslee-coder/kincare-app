@@ -370,7 +370,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             <div style={{ fontSize: '13px', color: '#795548', marginTop: '2px' }}>
               {data.careRecipients.filter(cr => cr.consent_status && cr.consent_status !== 'verified').map(cr => {
                 const name = (cr.first_name || cr.firstName) + ' ' + (cr.last_name || cr.lastName);
-                return cr.consent_status === 'attested' ? name + ' \u2014 enter code to complete' : name + ' \u2014 complete verification to book care';
+                return cr.consent_status === 'attested' ? name + ' \u2014 awaiting response from ' + (cr.first_name || name) : name + ' \u2014 complete verification to book care';
               }).join('. ')}.
             </div>
           </div>
@@ -807,13 +807,22 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         const showAll = nextUpExpanded || nextUp.length <= 2;
         const visible = showAll ? nextUp : nextUp.slice(0, 2);
 
+        const hasBookableRecipient = data?.careRecipients?.some(cr => !cr.consent_status || cr.consent_status === 'verified');
+        const showConsentGate = data?.careRecipients?.length > 0 && !hasBookableRecipient;
+
         if (nextUp.length === 0) return (
           <div style={{ marginBottom: 16, border: '2px solid #e0e0e0', borderRadius: 14, padding: '20px 18px', textAlign: 'center' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Next Up</div>
             <div style={{ fontSize: 14, color: '#888' }}>No sessions scheduled</div>
-            <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
-              marginTop: 10, padding: '8px 20px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            }}>+ Request Care</button>
+            {showConsentGate ? (
+              <button onClick={() => { if (onNavigate) { window.__accountTab = 'documents'; window.__documentsTab = 'consent'; onNavigate('account'); } }} style={{
+                marginTop: 10, padding: '8px 20px', background: '#e0e0e0', color: '#888', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}>⚠️ Complete consent verification to book</button>
+            ) : (
+              <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
+                marginTop: 10, padding: '8px 20px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}>+ Request Care</button>
+            )}
           </div>
         );
 
@@ -823,9 +832,15 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Next Up {nextUp.length > 2 && !showAll ? `(${nextUp.length})` : ''}
               </div>
-              <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
-                padding: '4px 12px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-              }}>+ Request Care</button>
+              {showConsentGate ? (
+                <button onClick={() => { if (onNavigate) { window.__accountTab = 'documents'; window.__documentsTab = 'consent'; onNavigate('account'); } }} style={{
+                  padding: '4px 12px', background: '#e0e0e0', color: '#888', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                }}>⚠️ Verify consent first</button>
+              ) : (
+                <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
+                  padding: '4px 12px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                }}>+ Request Care</button>
+              )}
             </div>
             <div style={{ position: 'relative' }}>
             {visible.map((s, idx) => {

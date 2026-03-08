@@ -109,8 +109,8 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
 
   const handleAttest = async () => {
     if (!agreed || !signatureName.trim() || !relationship) return;
-    if (!recipientEmail.trim() && !recipientPhone.trim()) {
-      setError('Please provide an email address or phone number for ' + firstName + ' so we can verify their awareness.');
+    if (!recipientEmail.trim()) {
+      setError('Please provide an email address for ' + firstName + '. We\'ll send a verification notification to that address.');
       return;
     }
     setLoading(true);
@@ -334,16 +334,16 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
         {/* Care recipient contact info */}
         <div style={{ background: '#f0f7ff', border: '1px solid #bbdefb', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
           <div style={{ fontWeight: 600, fontSize: '14px', color: '#1565c0', marginBottom: '8px' }}>
-            How can we reach {firstName}?
+            📧 How we'll reach {firstName}
           </div>
           <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px 0' }}>
-            We'll send {firstName} a brief message explaining that you've arranged care for them through inPlace.
-            This gives them a chance to confirm, ask questions, or let us know if something isn't right.
+            We'll send {firstName} an email explaining that you've arranged care for them through InPlace.
+            They'll have a chance to confirm, ask questions, or flag any concerns. An email address is required to send this notification.
           </p>
 
           <div style={{ marginBottom: '12px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
-              {firstName}'s email address
+              {firstName}'s email address <span style={{ color: '#c62828', fontWeight: 700 }}>*</span>
             </label>
             <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)}
               placeholder="e.g. mom@email.com"
@@ -352,7 +352,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
 
           <div>
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
-              <span>{firstName}'s phone number <span style={{ fontWeight: 400, color: '#999' }}>(optional if email provided)</span></span>
+              <span>{firstName}'s phone number <span style={{ fontWeight: 400, color: '#999' }}>(optional — for emergency contact only)</span></span>
               <button type="button" onClick={() => { setIntlPhone(!intlPhone); setRecipientPhone(''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                 {intlPhone ? 'US number' : 'International'}
               </button>
@@ -364,10 +364,13 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           </div>
         </div>
 
-        <button onClick={handleAttest} disabled={loading || !agreed || !signatureName.trim() || !relationship || (!recipientEmail.trim() && !recipientPhone.trim())}
+        {!recipientEmail.trim() && (agreed && signatureName.trim() && relationship) && (
+          <div style={{ fontSize: '12px', color: '#c62828', marginBottom: '8px' }}>An email address is required to send the verification notification.</div>
+        )}
+        <button onClick={handleAttest} disabled={loading || !agreed || !signatureName.trim() || !relationship || !recipientEmail.trim()}
           style={{
             padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
-            background: (agreed && signatureName.trim() && relationship && (recipientEmail.trim() || recipientPhone.trim())) ? '#1b6b5a' : '#ccc',
+            background: (agreed && signatureName.trim() && relationship && recipientEmail.trim()) ? '#1b6b5a' : '#ccc',
             color: '#fff', transition: 'background 0.2s',
           }}>
           {loading ? 'Submitting...' : 'Sign & Continue \u2192'}
