@@ -871,6 +871,22 @@ router.put("/users/:id/onboarding", async (req, res) => {
   }
 });
 
+// ─── PUT /api/admin/users/:id/photo — Admin set profile photo (base64) ───
+router.put("/users/:id/photo", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { photo } = req.body;
+    if (!photo) return res.status(400).json({ error: "photo is required" });
+    const user = await db.prepare("SELECT id, email FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    await db.prepare("UPDATE users SET profile_photo = ?, avatar_url = ?, updated_at = NOW() WHERE id = ?").run(photo, photo, req.params.id);
+    res.json({ success: true, email: user.email });
+  } catch (err) {
+    console.error("Admin photo update error:", err);
+    res.status(500).json({ error: "Failed to update photo" });
+  }
+});
+
 // ─── PUT /api/admin/users/:id/tester — Toggle is_tester flag ───
 router.put("/users/:id/tester", async (req, res) => {
   try {
