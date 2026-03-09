@@ -65,6 +65,9 @@ const getCsrfToken = window.getCsrfToken = () => {
   return match ? match[1] : null;
 };
 
+// Track whether a refresh is already in flight (prevent thundering herd)
+let _refreshPromise = null;
+
 const apiFetch = window.apiFetch = async (url, options = {}) => {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
@@ -72,9 +75,31 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   const csrf = getCsrfToken();
   if (csrf) headers['X-CSRF-Token'] = csrf;
   const response = await fetch(API_BASE + url, { ...options, headers, credentials: 'same-origin' });
-  if (response.status === 401) {
+  if (response.status === 401 && url !== '/api/auth/refresh') {
+    // Attempt silent token refresh before logging out
+    try {
+      if (!_refreshPromise) {
+        _refreshPromise = fetch(API_BASE + '/api/auth/refresh', {
+          method: 'POST', credentials: 'same-origin',
+          headers: getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {},
+        });
+      }
+      const refreshRes = await _refreshPromise;
+      _refreshPromise = null;
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        setAuthToken(data.token);
+        // Retry the original request with new token
+        const retryHeaders = { 'Content-Type': 'application/json', ...options.headers };
+        if (data.token) retryHeaders['Authorization'] = `Bearer ${data.token}`;
+        if (ACTIVE_ROLE) retryHeaders['X-Active-Role'] = ACTIVE_ROLE;
+        const newCsrf = getCsrfToken();
+        if (newCsrf) retryHeaders['X-CSRF-Token'] = newCsrf;
+        return fetch(API_BASE + url, { ...options, headers: retryHeaders, credentials: 'same-origin' });
+      }
+    } catch (e) { _refreshPromise = null; }
+    // Refresh failed — log out
     setAuthToken(null);
-    // Clear server cookie on 401
     const _lcsrf = getCsrfToken();
     fetch(API_BASE + '/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: _lcsrf ? { 'X-CSRF-Token': _lcsrf } : {} }).catch(() => {});
     return null;

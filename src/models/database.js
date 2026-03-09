@@ -636,6 +636,8 @@ async function initializeDatabase() {
     // v1.39.38 — Account lockout after failed logins
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_failed_login TIMESTAMPTZ`,
+    // v1.39.43 — Refresh tokens for session revocation
+    `CREATE TABLE IF NOT EXISTS refresh_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), token_hash TEXT UNIQUE NOT NULL, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

@@ -2,7 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
-const { generateToken, setAuthCookie, setCsrfCookie } = require("../middleware/auth");
+const { generateToken, setAuthCookie, setCsrfCookie, generateRefreshToken, setRefreshCookie } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -177,6 +177,8 @@ router.post("/exchange", (req, res) => {
   }
   setAuthCookie(res, data.token);
   setCsrfCookie(res);
+  const refreshToken = await generateRefreshToken(data.user.id);
+  setRefreshCookie(res, refreshToken);
   res.json({ token: data.token, user: data.user });
 });
 

@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
-const { generateToken, authenticate, setAuthCookie, clearAuthCookie, setCsrfCookie } = require("../middleware/auth");
+const { generateToken, authenticate, setAuthCookie, clearAuthCookie, generateRefreshToken, setRefreshCookie, revokeRefreshToken, revokeAllUserRefreshTokens, setCsrfCookie } = require("../middleware/auth");
 const { validateRegister, validateLogin, validateProfileUpdate } = require("../middleware/validate");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const { sendPushToAdmins, notifyAdmins } = require("./push");
@@ -263,6 +263,8 @@ router.post("/register", validateRegister, async (req, res) => {
 
     setAuthCookie(res, token);
     setCsrfCookie(res);
+    const refreshToken = await generateRefreshToken(id);
+    setRefreshCookie(res, refreshToken);
     res.status(201).json({ user, token });
   } catch (err) {
     console.error("Registration error:", err);
@@ -378,6 +380,8 @@ router.post("/login", validateLogin, async (req, res) => {
 
     setAuthCookie(res, token);
     setCsrfCookie(res);
+    const refreshToken = await generateRefreshToken(user.id);
+    setRefreshCookie(res, refreshToken);
     res.json(responseData);
   } catch (err) {
     console.error("Login error:", err);
@@ -423,9 +427,68 @@ router.post("/demo-login", async (req, res) => {
 });
 
 // ─── POST /api/auth/logout ───
-router.post("/logout", (req, res) => {
+router.post("/logout", async (req, res) => {
+  // Revoke the refresh token if present
+  const refreshCookie = req.cookies?.refresh_token;
+  if (refreshCookie) {
+    await revokeRefreshToken(refreshCookie).catch(() => {});
+  }
   clearAuthCookie(res);
   res.json({ ok: true });
+});
+
+// ─── POST /api/auth/refresh ─── (silent token refresh using httpOnly refresh_token cookie)
+router.post("/refresh", async (req, res) => {
+  try {
+    const rawToken = req.cookies?.refresh_token;
+    if (!rawToken) {
+      return res.status(401).json({ error: "No refresh token", code: "NO_REFRESH_TOKEN" });
+    }
+
+    const db = await getDb();
+    const tokenHash = require("crypto").createHash("sha256").update(rawToken).digest("hex");
+    const stored = await db.prepare(
+      "SELECT rt.*, u.id as uid, u.email, u.role, u.roles, u.first_name, u.last_name, u.is_admin, u.is_demo, u.email_verified, u.is_active FROM refresh_tokens rt JOIN users u ON rt.user_id = u.id WHERE rt.token_hash = ?"
+    ).get(tokenHash);
+
+    if (!stored) {
+      return res.status(401).json({ error: "Invalid refresh token", code: "INVALID_REFRESH_TOKEN" });
+    }
+    if (new Date(stored.expires_at) < new Date()) {
+      await db.prepare("DELETE FROM refresh_tokens WHERE token_hash = ?").run(tokenHash);
+      return res.status(401).json({ error: "Refresh token expired", code: "REFRESH_TOKEN_EXPIRED" });
+    }
+    if (!stored.is_active) {
+      return res.status(401).json({ error: "Account deactivated", code: "ACCOUNT_DEACTIVATED" });
+    }
+
+    // Rotate: delete old refresh token, issue new one
+    await db.prepare("DELETE FROM refresh_tokens WHERE token_hash = ?").run(tokenHash);
+
+    let userRoles;
+    try { userRoles = stored.roles ? JSON.parse(stored.roles) : [stored.role]; }
+    catch { userRoles = [stored.role]; }
+
+    const user = { id: stored.uid, email: stored.email, role: stored.role, roles: userRoles };
+    const newAccessToken = generateToken(user);
+    setAuthCookie(res, newAccessToken);
+    setCsrfCookie(res);
+
+    const newRefreshToken = await generateRefreshToken(stored.uid);
+    setRefreshCookie(res, newRefreshToken);
+
+    res.json({
+      user: {
+        id: stored.uid, email: stored.email, role: stored.role, roles: userRoles,
+        firstName: stored.first_name, lastName: stored.last_name,
+        emailVerified: !!stored.email_verified, isDemo: !!stored.is_demo, isAdmin: !!stored.is_admin,
+      },
+      token: newAccessToken,
+    });
+  } catch (err) {
+    console.error("Token refresh error:", err);
+    res.status(500).json({ error: "Token refresh failed" });
+  }
 });
 
 // ─── POST /api/auth/change-password ───
