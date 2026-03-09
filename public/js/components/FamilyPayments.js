@@ -1,10 +1,25 @@
-// FamilyPayments — Payment history + ACH savings for family users
+// FamilyPayments — Payment method setup + history for family users
 const FamilyPayments = window.FamilyPayments = () => {
   const [payments, setPayments] = useState([]);
   const [totalSpent, setTotalSpent] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [stripeStatus, setStripeStatus] = useState(null); // null | 'not_setup' | 'pending' | 'complete'
+  const [cardInfo, setCardInfo] = useState(null); // { brand, last4, expMonth, expYear }
+  const [setupLoading, setSetupLoading] = useState(false);
 
   useEffect(() => {
+    // Fetch payment method status
+    apiFetch('/api/payments/family/status').then(async r => {
+      if (r?.ok) {
+        const d = await r.json();
+        setStripeStatus(d.status || 'not_setup');
+        if (d.card) setCardInfo(d.card);
+      } else {
+        setStripeStatus('not_setup');
+      }
+    }).catch(() => setStripeStatus('not_setup'));
+
+    // Fetch payment history
     const fetchHistory = async () => {
       try {
         const res = await apiFetch('/api/payments/history');
@@ -19,8 +34,27 @@ const FamilyPayments = window.FamilyPayments = () => {
     fetchHistory();
   }, []);
 
+  const handleStripeSetup = async () => {
+    setSetupLoading(true);
+    try {
+      const res = await apiFetch('/api/payments/family/setup', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnUrl: window.location.href }),
+      });
+      if (res?.ok) {
+        const d = await res.json();
+        if (d.url) window.location.href = d.url;
+      } else {
+        if (typeof showToast === 'function') showToast('Unable to start Stripe setup', 'error');
+      }
+    } catch {
+      if (typeof showToast === 'function') showToast('Unable to connect to Stripe', 'error');
+    }
+    setSetupLoading(false);
+  };
+
   const formatDate = (d) => {
-    if (!d) return '—';
+    if (!d) return '\u2014';
     try { return (parseTimestamp(d) || new Date(d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
     catch { return d; }
   };
@@ -43,16 +77,60 @@ const FamilyPayments = window.FamilyPayments = () => {
 
   if (loading) {
     return (
-      <div className="page-container">
-        <h1 style={{ marginBottom: '24px' }}>💳 Payments</h1>
+      <div>
         <div className="loading-spinner" style={{ textAlign: 'center', padding: '60px' }}>Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="page-container">
-      <h1 style={{ marginBottom: '24px' }}>💳 Payments</h1>
+    <div>
+      {/* Payment Method Card */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Payment Method</span>
+          {stripeStatus === 'complete'
+            ? <span style={{ fontSize: 11, fontWeight: 600, color: '#2e7d32', background: '#e8f5e9', padding: '2px 10px', borderRadius: 12 }}>Connected</span>
+            : stripeStatus === 'pending'
+              ? <span style={{ fontSize: 11, fontWeight: 600, color: '#e65100', background: '#fff3e0', padding: '2px 10px', borderRadius: 12 }}>In Progress</span>
+              : <span style={{ fontSize: 11, fontWeight: 600, color: '#888', background: '#f0f0f0', padding: '2px 10px', borderRadius: 12 }}>Not Set Up</span>
+          }
+        </div>
+        {stripeStatus === 'complete' ? (
+          <div>
+            {cardInfo && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: '#f8f9fa', borderRadius: 8 }}>
+                <span style={{ fontSize: 22 }}>💳</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize' }}>{cardInfo.brand} ending in {cardInfo.last4}</div>
+                  <div style={{ fontSize: 12, color: '#888' }}>Expires {cardInfo.expMonth}/{cardInfo.expYear}</div>
+                </div>
+              </div>
+            )}
+            <p style={{ margin: '0 0 10px', fontSize: 14, color: '#666' }}>Your payment method is connected. You can pay caregivers securely through InPlace.</p>
+            <button onClick={handleStripeSetup} disabled={setupLoading}
+              style={{ padding: '8px 16px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {setupLoading ? 'Loading...' : 'Update Payment Method'}
+            </button>
+          </div>
+        ) : stripeStatus === 'pending' ? (
+          <div>
+            <p style={{ margin: '0 0 10px', fontSize: 14, color: '#666' }}>Your Stripe setup is in progress. Some information may still be needed.</p>
+            <button onClick={handleStripeSetup} disabled={setupLoading}
+              style={{ padding: '8px 16px', background: '#635bff', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {setupLoading ? 'Loading...' : 'Continue Stripe Setup'}
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p style={{ margin: '0 0 10px', fontSize: 14, color: '#666' }}>Add a payment method so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe.</p>
+            <button onClick={handleStripeSetup} disabled={setupLoading}
+              style={{ padding: '8px 16px', background: '#635bff', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {setupLoading ? 'Loading...' : 'Set Up Payments with Stripe'}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* ACH Savings Banner */}
       <div className="card" style={{
@@ -71,19 +149,16 @@ const FamilyPayments = window.FamilyPayments = () => {
               background: 'rgba(255,255,255,0.7)', borderRadius: '8px', padding: '12px',
             }}>
               <div>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '2px' }}>💳 Credit Card</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '2px' }}>Credit Card</div>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: '#c62828' }}>2.9% + $0.30</div>
                 <div style={{ fontSize: '12px', color: '#999' }}>e.g. $6.10 on a $200 session</div>
               </div>
               <div>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '2px' }}>🏦 Bank Transfer</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '2px' }}>Bank Transfer</div>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: '#2e7d32' }}>0.8% (max $5)</div>
                 <div style={{ fontSize: '12px', color: '#999' }}>e.g. $1.60 on a $200 session</div>
               </div>
             </div>
-            <p style={{ margin: '10px 0 0', fontSize: '13px', color: '#558b2f' }}>
-              ✨ We pass 100% of the savings on to you. Select "Bank Transfer" at checkout.
-            </p>
           </div>
         </div>
       </div>
@@ -124,8 +199,8 @@ const FamilyPayments = window.FamilyPayments = () => {
                 {payments.map(p => (
                   <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                     <td style={{ padding: '10px 12px' }}>{formatDate(p.scheduledDate || p.createdAt)}</td>
-                    <td style={{ padding: '10px 12px' }}>{p.caregiverName || '—'}</td>
-                    <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{(p.serviceType || '—').replace(/_/g, ' ')}</td>
+                    <td style={{ padding: '10px 12px' }}>{p.caregiverName || '\u2014'}</td>
+                    <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{(p.serviceType || '\u2014').replace(/_/g, ' ')}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>${(p.amount || 0).toFixed(2)}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>{statusBadge(p.status)}</td>
                   </tr>
@@ -138,7 +213,7 @@ const FamilyPayments = window.FamilyPayments = () => {
 
       {/* Info Note */}
       <div style={{ marginTop: '16px', padding: '14px 16px', background: '#f8f9fa', borderRadius: '8px', fontSize: '13px', color: '#666' }}>
-        💡 <strong>Tip:</strong> Your payment method is selected at checkout time. Choose "Bank Transfer" when prompted to save on fees. ACH transfers typically take 3–5 business days to settle.
+        <strong>Tip:</strong> Your payment method is selected at checkout time. Choose "Bank Transfer" when prompted to save on fees. ACH transfers typically take 3-5 business days to settle.
       </div>
     </div>
   );

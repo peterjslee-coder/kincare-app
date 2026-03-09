@@ -1083,68 +1083,6 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             </div>
           </div>
 
-          {/* Payment & Billing Card */}
-          <div className="card">
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Payment & Billing</span>
-              {familyStripeStatus === 'complete'
-                ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#2e7d32', background: '#e8f5e9', padding: '2px 10px', borderRadius: 12 } }, '\u2705 Connected')
-                : familyStripeStatus === 'pending'
-                  ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#e65100', background: '#fff3e0', padding: '2px 10px', borderRadius: 12 } }, 'In Progress')
-                  : React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#888', background: '#f0f0f0', padding: '2px 10px', borderRadius: 12 } }, 'Not Set Up')
-              }
-            </div>
-            <div style={{ padding: '8px 0', color: '#666', fontSize: 14, lineHeight: 1.6 }}>
-              {familyStripeStatus === 'complete' ? (
-                <div>
-                  <p style={{ margin: '0 0 10px' }}>Your payment method is connected via Stripe. You can pay caregivers securely through InPlace.</p>
-                  <button onClick={async () => {
-                    try {
-                      const res = await apiFetch('/api/payments/family/setup', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ returnUrl: window.location.href }),
-                      });
-                      if (res?.ok) { const d = await res.json(); if (d.url) window.location.href = d.url; }
-                    } catch {}
-                  }} style={{ padding: '8px 16px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                    Manage Payment Settings
-                  </button>
-                </div>
-              ) : familyStripeStatus === 'pending' ? (
-                <div>
-                  <p style={{ margin: '0 0 10px' }}>Your Stripe account setup is in progress. Some information may still be needed.</p>
-                  <button onClick={async () => {
-                    try {
-                      const res = await apiFetch('/api/payments/family/setup', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ returnUrl: window.location.href }),
-                      });
-                      if (res?.ok) { const d = await res.json(); if (d.url) window.location.href = d.url; }
-                    } catch {}
-                  }} style={{ padding: '8px 16px', background: '#635bff', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                    Continue Stripe Setup
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <p style={{ margin: '0 0 10px' }}>Set up a payment method so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe.</p>
-                  <button onClick={async () => {
-                    try {
-                      const res = await apiFetch('/api/payments/family/setup', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ returnUrl: window.location.href }),
-                      });
-                      if (res?.ok) { const d = await res.json(); if (d.url) window.location.href = d.url; }
-                      else if (typeof showToast === 'function') showToast('Unable to start Stripe setup', 'error');
-                    } catch { if (typeof showToast === 'function') showToast('Unable to connect to Stripe', 'error'); }
-                  }} style={{ padding: '8px 16px', background: '#635bff', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                    Set Up Payments with Stripe
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
           <div className="card">
             <div className="card-header">Health & Safety</div>
             {editing ? (
