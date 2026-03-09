@@ -1603,4 +1603,198 @@ router.post("/:sessionId/first-visit-confirm", async (req, res) => {
   }
 });
 
+// ─── POST /api/sessions/:id/propose-time ───
+// Caregiver proposes a different time for an open session (counter-offer)
+router.post("/:id/propose-time", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { proposedDate, proposedTime, message } = req.body;
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+    const roles = (req.user.roles || activeRole || "").split(",").map(r => r.trim());
+
+    if (!roles.includes("caregiver")) {
+      return res.status(403).json({ error: "Only caregivers can propose times" });
+    }
+    if (!proposedDate || !proposedTime) {
+      return res.status(400).json({ error: "Proposed date and time are required" });
+    }
+
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    const session = await db.prepare(`
+      SELECT cs.*, cr.first_name AS recipient_first_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (!["open", "requested", "pending"].includes(session.status)) {
+      return res.status(400).json({ error: "This session is no longer available for proposals" });
+    }
+
+    // Check if this caregiver already has a pending proposal for this session
+    const existing = await db.prepare(
+      "SELECT id FROM time_proposals WHERE session_id = ? AND caregiver_user_id = ? AND status = 'pending'"
+    ).get(req.params.id, userId);
+    if (existing) {
+      return res.status(400).json({ error: "You already have a pending proposal for this session" });
+    }
+
+    const proposalId = require("uuid").v4();
+    await db.prepare(`
+      INSERT INTO time_proposals (id, session_id, caregiver_profile_id, caregiver_user_id, proposed_date, proposed_time, message, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+    `).run(proposalId, req.params.id, profile.id, userId, proposedDate, proposedTime, message || null);
+
+    // Notify family
+    const emitToUser = req.app.get("emitToUser");
+    const sendPushToUser = req.app.get("sendPushToUser");
+    const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+    const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "A caregiver";
+
+    // Format the proposed time for display
+    const [h, m] = proposedTime.split(":");
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const timeStr = `${hour12}:${m} ${ampm}`;
+
+    const title = `${caregiverName} proposed a different time`;
+    const body = `${caregiverName} would like to care for ${session.recipient_first_name} on ${proposedDate} at ${timeStr} instead. Tap to review.`;
+
+    await db.prepare(
+      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'time_proposal', ?, ?, ?)"
+    ).run(require("uuid").v4(), session.family_user_id, session.care_recipient_id, title, body,
+      JSON.stringify({ proposalId, sessionId: req.params.id, caregiverName, proposedDate, proposedTime: timeStr }));
+
+    if (emitToUser) {
+      emitToUser(session.family_user_id, "time_proposal", { proposalId, sessionId: req.params.id, caregiverName, proposedDate, proposedTime: timeStr });
+      emitToUser(session.family_user_id, "activity_update", {});
+    }
+    if (sendPushToUser) {
+      sendPushToUser(session.family_user_id, { title, body, data: { type: "time_proposal", sessionId: req.params.id } }, "time_proposal").catch(() => {});
+    }
+
+    res.json({ proposal: { id: proposalId, status: "pending" } });
+  } catch (err) {
+    console.error("Propose-time error:", err);
+    res.status(500).json({ error: "Failed to submit time proposal" });
+  }
+});
+
+// ─── PUT /api/sessions/:id/proposals/:proposalId/accept ───
+// Family accepts a caregiver's time proposal → confirms session with new time + that caregiver
+router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+
+    const proposal = await db.prepare(`
+      SELECT tp.*, cs.family_user_id, cs.status AS session_status, cs.care_recipient_id,
+        cr.first_name AS recipient_first_name,
+        u.first_name AS cg_first_name, u.last_name AS cg_last_name
+      FROM time_proposals tp
+      JOIN care_sessions cs ON tp.session_id = cs.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users u ON tp.caregiver_user_id = u.id
+      WHERE tp.id = ? AND tp.session_id = ?
+    `).get(req.params.proposalId, req.params.id);
+
+    if (!proposal) return res.status(404).json({ error: "Proposal not found" });
+    if (proposal.family_user_id !== userId) {
+      return res.status(403).json({ error: "Only the requesting family can accept proposals" });
+    }
+    if (proposal.status !== "pending") {
+      return res.status(400).json({ error: `Proposal is already ${proposal.status}` });
+    }
+    if (!["open", "requested", "pending"].includes(proposal.session_status)) {
+      return res.status(400).json({ error: "This session is no longer available" });
+    }
+
+    // Update the session with the new time and assign the caregiver
+    await db.prepare(`
+      UPDATE care_sessions SET
+        scheduled_date = ?, scheduled_time = ?,
+        caregiver_id = ?, status = 'confirmed', updated_at = NOW()
+      WHERE id = ?
+    `).run(proposal.proposed_date, proposal.proposed_time, proposal.caregiver_profile_id, req.params.id);
+
+    // Mark this proposal as accepted, decline any other pending proposals for same session
+    await db.prepare("UPDATE time_proposals SET status = 'accepted', responded_at = NOW() WHERE id = ?").run(req.params.proposalId);
+    await db.prepare("UPDATE time_proposals SET status = 'declined', responded_at = NOW() WHERE session_id = ? AND id != ? AND status = 'pending'").run(req.params.id, req.params.proposalId);
+
+    // Notify the caregiver
+    const emitToUser = req.app.get("emitToUser");
+    const sendPushToUser = req.app.get("sendPushToUser");
+    const caregiverName = `${proposal.cg_first_name} ${proposal.cg_last_name}`;
+
+    const title = "Your proposed time was accepted!";
+    const body = `Your time proposal for ${proposal.recipient_first_name} has been accepted. The session is confirmed.`;
+
+    if (emitToUser) {
+      emitToUser(proposal.caregiver_user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+      emitToUser(userId, "session_update", { sessionId: req.params.id, status: "confirmed" });
+    }
+    if (sendPushToUser) {
+      sendPushToUser(proposal.caregiver_user_id, { title, body, data: { type: "proposal_accepted", sessionId: req.params.id } }, "proposal_accepted").catch(() => {});
+    }
+
+    res.json({ session: { id: req.params.id, status: "confirmed", date: proposal.proposed_date, time: proposal.proposed_time } });
+  } catch (err) {
+    console.error("Accept-proposal error:", err);
+    res.status(500).json({ error: "Failed to accept proposal" });
+  }
+});
+
+// ─── PUT /api/sessions/:id/proposals/:proposalId/decline ───
+// Family declines a caregiver's time proposal
+router.put("/:id/proposals/:proposalId/decline", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+
+    const proposal = await db.prepare(`
+      SELECT tp.*, cs.family_user_id, cr.first_name AS recipient_first_name,
+        u.first_name AS cg_first_name, u.last_name AS cg_last_name
+      FROM time_proposals tp
+      JOIN care_sessions cs ON tp.session_id = cs.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users u ON tp.caregiver_user_id = u.id
+      WHERE tp.id = ? AND tp.session_id = ?
+    `).get(req.params.proposalId, req.params.id);
+
+    if (!proposal) return res.status(404).json({ error: "Proposal not found" });
+    if (proposal.family_user_id !== userId) {
+      return res.status(403).json({ error: "Only the requesting family can decline proposals" });
+    }
+    if (proposal.status !== "pending") {
+      return res.status(400).json({ error: `Proposal is already ${proposal.status}` });
+    }
+
+    await db.prepare("UPDATE time_proposals SET status = 'declined', responded_at = NOW() WHERE id = ?").run(req.params.proposalId);
+
+    // Notify the caregiver
+    const emitToUser = req.app.get("emitToUser");
+    const sendPushToUser = req.app.get("sendPushToUser");
+
+    const title = "Time proposal declined";
+    const body = `Your proposed time for ${proposal.recipient_first_name} was not accepted. The request is still open if you'd like to accept at the original time.`;
+
+    if (emitToUser) {
+      emitToUser(proposal.caregiver_user_id, "session_update", { sessionId: req.params.id });
+    }
+    if (sendPushToUser) {
+      sendPushToUser(proposal.caregiver_user_id, { title, body, data: { type: "proposal_declined", sessionId: req.params.id } }, "proposal_declined").catch(() => {});
+    }
+
+    res.json({ proposal: { id: req.params.proposalId, status: "declined" } });
+  } catch (err) {
+    console.error("Decline-proposal error:", err);
+    res.status(500).json({ error: "Failed to decline proposal" });
+  }
+});
+
 module.exports = router;

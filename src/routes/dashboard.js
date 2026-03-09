@@ -150,6 +150,33 @@ async function familyDashboard(db, userId, res) {
       `SELECT COUNT(*) as count FROM activity_feed WHERE (family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})) AND is_read = 0`
     ).get(userId, ...allRecipientIds);
 
+    // Pending time proposals from caregivers for this family's sessions
+    let pendingProposals = [];
+    try {
+      pendingProposals = await db.prepare(`
+        SELECT tp.*,
+          u.first_name || ' ' || u.last_name AS caregiver_name,
+          cp.rating_avg AS caregiver_rating,
+          cs.scheduled_date AS original_date,
+          cs.scheduled_time AS original_time,
+          cs.service_type,
+          cs.duration_hours,
+          cr.first_name || ' ' || cr.last_name AS recipient_name
+        FROM time_proposals tp
+        JOIN care_sessions cs ON tp.session_id = cs.id
+        JOIN caregiver_profiles cp ON tp.caregiver_profile_id = cp.id
+        JOIN users u ON tp.caregiver_user_id = u.id
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+          AND tp.status = 'pending'
+        ORDER BY tp.created_at DESC
+        LIMIT 20
+      `).all(userId, ...allRecipientIds);
+    } catch (e) {
+      // time_proposals table may not exist yet if migration hasn't run
+      console.log('Proposals query skipped (table may not exist yet):', e.message);
+    }
+
     const avgRating = await db.prepare(`
       SELECT AVG(cp.rating_avg) as avg
       FROM care_sessions cs
@@ -243,6 +270,21 @@ async function familyDashboard(db, userId, res) {
           sessionId: meta.sessionId || null,
         };
       }),
+      pendingProposals: pendingProposals.map(p => ({
+        id: p.id,
+        sessionId: p.session_id,
+        caregiverName: p.caregiver_name,
+        caregiverRating: p.caregiver_rating,
+        proposedDate: p.proposed_date,
+        proposedTime: p.proposed_time,
+        message: p.message,
+        originalDate: p.original_date,
+        originalTime: p.original_time,
+        serviceType: p.service_type,
+        durationHours: p.duration_hours,
+        recipientName: p.recipient_name,
+        createdAt: p.created_at,
+      })),
       recentlyCompleted: await Promise.all(recentCompleted.map(async (s) => {
         let condTags = [];
         try { condTags = s.condition_tags ? JSON.parse(s.condition_tags) : []; } catch(e) {}

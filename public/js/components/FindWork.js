@@ -19,6 +19,11 @@ const FindWork = window.FindWork = () => {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState(10);
   const [exTick, setExTick] = useState(0);
+  const [proposingFor, setProposingFor] = useState(null); // session object for proposal modal
+  const [proposalDate, setProposalDate] = useState('');
+  const [proposalTime, setProposalTime] = useState('');
+  const [proposalMsg, setProposalMsg] = useState('');
+  const [proposalLoading, setProposalLoading] = useState(false);
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
   const markersRef = useRef([]);
@@ -417,6 +422,40 @@ const FindWork = window.FindWork = () => {
       showToast('Failed to accept request', 'error');
     }
     setClaimingId(null);
+  };
+
+  const openProposalModal = (session) => {
+    // Pre-fill with the original date but shift time by the conflict amount
+    setProposingFor(session);
+    setProposalDate(session.date || '');
+    // Default: shift 2 hours later than original time
+    const [h, m] = (session.time || '09:00').split(':');
+    const shifted = Math.min(parseInt(h) + 2, 20);
+    setProposalTime(`${String(shifted).padStart(2, '0')}:${m}`);
+    setProposalMsg('');
+  };
+
+  const handlePropose = async () => {
+    if (!proposingFor || !proposalDate || !proposalTime) return;
+    setProposalLoading(true);
+    try {
+      const res = await apiFetch(`/api/sessions/${proposingFor.id}/propose-time`, {
+        method: 'POST',
+        body: JSON.stringify({ proposedDate: proposalDate, proposedTime: proposalTime, message: proposalMsg || null }),
+      });
+      if (res?.ok) {
+        showToast('Time proposal sent to family!', 'success');
+        setProposingFor(null);
+        fetchData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.error || 'Failed to send proposal', 'error');
+      }
+    } catch (err) {
+      console.error('Propose error:', err);
+      showToast('Failed to send proposal', 'error');
+    }
+    setProposalLoading(false);
   };
 
   const formatTimeStr = (t) => {
@@ -890,6 +929,17 @@ const FindWork = window.FindWork = () => {
                           }}>
                           {claimingId === s.id ? 'Accepting...' : '\u2713 Accept This Job'}
                         </button>
+                        {hasConflict && (
+                          <button onClick={(e) => { e.stopPropagation(); openProposalModal(s); }}
+                            style={{
+                              width: '100%', padding: 12, marginTop: 8,
+                              background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a',
+                              borderRadius: 10, fontSize: 14, fontWeight: 600,
+                              cursor: 'pointer',
+                            }}>
+                            {'\u{1F504}'} Propose Different Time
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1097,6 +1147,52 @@ const FindWork = window.FindWork = () => {
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+      {/* ─── Propose Time Modal ─── */}
+      {proposingFor && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setProposingFor(null)}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }}></div>
+          <div style={{
+            position: 'relative', background: '#fff', borderRadius: 16, padding: 24,
+            maxWidth: 420, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 18, color: '#333' }}>Propose Different Time</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#888' }}>
+              Suggest a time that works for you. The family will be notified and can accept or decline.
+            </p>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#444', marginBottom: 4 }}>Date</label>
+              <input type="date" value={proposalDate} onChange={(e) => setProposalDate(e.target.value)}
+                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#444', marginBottom: 4 }}>Time</label>
+              <input type="time" value={proposalTime} onChange={(e) => setProposalTime(e.target.value)}
+                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#444', marginBottom: 4 }}>Note to family (optional)</label>
+              <textarea value={proposalMsg} onChange={(e) => setProposalMsg(e.target.value)}
+                placeholder="e.g., I have another appointment until 1 PM but am free after that"
+                rows={2} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setProposingFor(null)}
+                style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #ddd', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#666' }}>
+                Cancel
+              </button>
+              <button onClick={handlePropose} disabled={proposalLoading || !proposalDate || !proposalTime}
+                style={{
+                  flex: 2, padding: 12, borderRadius: 10, border: 'none',
+                  background: '#1b6b5a', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                  opacity: (proposalLoading || !proposalDate || !proposalTime) ? 0.6 : 1,
+                }}>
+                {proposalLoading ? 'Sending...' : 'Send Proposal'}
+              </button>
+            </div>
           </div>
         </div>
       )}

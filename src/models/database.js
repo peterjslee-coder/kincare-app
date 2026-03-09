@@ -640,6 +640,19 @@ async function initializeDatabase() {
     `CREATE TABLE IF NOT EXISTS refresh_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), token_hash TEXT UNIQUE NOT NULL, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`,
     // v1.39.47 — Stripe Customer ID for family payment setup
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT`,
+    // v1.39.59 — Time proposals (caregiver counter-offers for scheduling conflicts)
+    `CREATE TABLE IF NOT EXISTS time_proposals (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES care_sessions(id),
+      caregiver_profile_id TEXT NOT NULL REFERENCES caregiver_profiles(id),
+      caregiver_user_id TEXT NOT NULL REFERENCES users(id),
+      proposed_date TEXT NOT NULL,
+      proposed_time TEXT NOT NULL,
+      message TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      responded_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
