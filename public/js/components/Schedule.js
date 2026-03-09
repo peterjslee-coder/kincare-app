@@ -193,26 +193,15 @@ const Schedule = window.Schedule = () => {
           ) : (
             <React.Fragment>
               <p style={{ color: '#666', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>
-                Request care to get started. Your sessions will appear here on the calendar so you can track everything in one place.
+                Select a day on the calendar below to book your first care session. Your sessions will appear here so you can track everything in one place.
               </p>
-              <button className="btn btn-primary" onClick={() => {
-                if (window.__openRequestCareModal) window.__openRequestCareModal();
-              }} style={{ padding: '12px 32px', fontSize: 15 }}>
-                Request Care
-              </button>
             </React.Fragment>
           )}
         </div>
       )}
 
-      {/* Month navigation + Request Care shortcut */}
+      {/* Month navigation */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        {getActiveRole() !== 'caregiver' && (
-          <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
-            padding: '6px 14px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8,
-            fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-          }}>+ Request Care</button>
-        )}
         <div style={{ flex: 1 }} />
         <button onClick={prevMonth} style={{
           padding: '8px 16px', background: '#fff', border: '1px solid #d0d0d0',
@@ -433,21 +422,6 @@ const Schedule = window.Schedule = () => {
         <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} />
       )}
 
-      {/* Floating action button — quick book */}
-      {getActiveRole() !== 'caregiver' && (
-        <button onClick={() => window.__openRequestCareModal && window.__openRequestCareModal()}
-          style={{
-            position: 'fixed', bottom: 80, right: 24, width: 56, height: 56,
-            borderRadius: '50%', background: '#e8724a', color: '#fff', border: 'none',
-            fontSize: 28, fontWeight: 300, cursor: 'pointer', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 14px rgba(232, 114, 74, 0.4)',
-            zIndex: 90, lineHeight: 1,
-          }}
-          title="Request Care">
-          +
-        </button>
-      )}
     </>
   );
 };

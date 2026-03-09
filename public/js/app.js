@@ -1079,7 +1079,7 @@ const App = () => {
               // Action button (orange highlight) — Request Care for family, Find Work for caregiver
               if (item.isAction) {
                 const actionClick = item.disabled ? () => {} : item.id === '_request_care'
-                  ? () => { setShowRequestCareModal(true); setSidebarOpen(false); }
+                  ? () => { handlePageChange('schedule'); setSidebarOpen(false); }
                   : () => { handlePageChange(item.id); setSidebarOpen(false); };
                 return (
                   <li key={item.id} className="nav-item">

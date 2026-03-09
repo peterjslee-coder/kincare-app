@@ -24,16 +24,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [careRecipients, setCareRecipients] = useState([]);
   const [selectedRecipientId, setSelectedRecipientId] = useState('');
   const [submitError, setSubmitError] = useState('');
-
-  // Mini-calendar state — initialize to month of pre-filled date or current month
-  const [calMonth, setCalMonth] = useState(() => {
-    if (date) {
-      const p = date.split('-').map(Number);
-      return { year: p[0], month: p[1] - 1 };
-    }
-    const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth() };
-  });
+  const [existingSessions, setExistingSessions] = useState([]);
 
   // Short-notice detection
   const shortNotice = (() => {
@@ -64,13 +55,14 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   };
   const displayCost = getDisplayCost();
 
-  // Fetch care recipients and assigned caregivers on mount
+  // Fetch care recipients, assigned caregivers, and existing sessions on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [assignRes, recipRes] = await Promise.all([
+        const [assignRes, recipRes, sessRes] = await Promise.all([
           apiFetch('/api/assignments'),
           apiFetch('/api/care-recipients'),
+          apiFetch('/api/sessions?limit=100'),
         ]);
         if (assignRes?.ok) {
           const data = await assignRes.json();
@@ -84,6 +76,10 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           setCareRecipients(recipients);
           if (recipients.length === 1) setSelectedRecipientId(recipients[0].id);
         }
+        if (sessRes?.ok) {
+          const data = await sessRes.json();
+          setExistingSessions((data.sessions || []).filter(s => s.status !== 'cancelled'));
+        }
       } catch (err) {
         console.error('Failed to fetch data:', err);
         setAssignedCaregivers([]);
@@ -91,6 +87,32 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     };
     fetchData();
   }, []);
+
+  // Build sessions-by-date map for calendar indicators
+  const sessionsByDate = {};
+  existingSessions.forEach(s => {
+    const d = s.scheduled_date;
+    if (!sessionsByDate[d]) sessionsByDate[d] = [];
+    sessionsByDate[d].push(s);
+  });
+
+  // Overlap detection — check if selected time+duration conflicts with existing sessions
+  const getOverlaps = () => {
+    if (!date || !time || !duration) return [];
+    const daySess = sessionsByDate[date] || [];
+    if (daySess.length === 0) return [];
+    const parseTime = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+    const newStart = parseTime(time);
+    const newEnd = newStart + parseInt(duration) * 60;
+    return daySess.filter(s => {
+      if (!s.scheduled_time) return false;
+      if (s.status === 'cancelled') return false;
+      const sStart = parseTime(s.scheduled_time);
+      const sEnd = sStart + (s.duration_hours || 2) * 60;
+      return newStart < sEnd && newEnd > sStart;
+    });
+  };
+  const overlappingSessions = getOverlaps();
 
   // Pre-fill rate from local caregiver average
   useEffect(() => {
@@ -220,15 +242,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     }
   }, [step, selectedCaregiver]);
 
-  // ─── Mini calendar helpers ───
+  // ─── Date helpers ───
   const tz = typeof TimezoneHelper !== 'undefined' ? (TimezoneHelper.DEFAULT_TZ || 'America/New_York') : 'America/New_York';
   const todayStr = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(tz) : (() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-' + String(n.getDate()).padStart(2,'0'); })();
-  const calDaysInMonth = new Date(calMonth.year, calMonth.month + 1, 0).getDate();
-  const calFirstDay = new Date(calMonth.year, calMonth.month, 1).getDay();
-  const calMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const getCalDateStr = (day) => `${calMonth.year}-${String(calMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  const calPrev = () => setCalMonth(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: p.month - 1 });
-  const calNext = () => setCalMonth(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: p.month + 1 });
 
   // Time pill options — filtered for today
   const getTimeOptions = () => {
@@ -289,7 +305,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540, maxHeight: '92vh', overflow: 'auto' }}>
         <button className="modal-close" onClick={onClose}>{'\u2715'}</button>
-        <div className="modal-header">Request Care</div>
+        <div className="modal-header">{date ? 'Book Care' : 'Request Care'}</div>
 
         {/* Step indicator — just 2 dots */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
@@ -337,46 +353,46 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               </div>
             </div>
 
-            {/* Inline mini-calendar */}
+            {/* Date display — pre-selected from Schedule calendar */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Date</div>
-              <div style={{ border: '1px solid #e8e8e8', borderRadius: 10, padding: '10px 12px', background: '#fafafa' }}>
-                {/* Month nav */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <button type="button" onClick={calPrev} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#666', padding: '4px 8px' }}>{'\u25C0'}</button>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#1b6b5a' }}>{calMonthNames[calMonth.month]} {calMonth.year}</span>
-                  <button type="button" onClick={calNext} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#666', padding: '4px 8px' }}>{'\u25B6'}</button>
+              {date ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1, padding: '10px 14px', background: '#f0f7f5', border: '1px solid #d4edda', borderRadius: 10, fontSize: 15, fontWeight: 600, color: '#1b6b5a' }}>
+                    {(() => { const p = date.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); })()}
+                  </div>
+                  <button type="button" onClick={() => { onClose(); if (window.__navigateTo) window.__navigateTo('schedule'); }}
+                    style={{ padding: '8px 12px', background: 'none', border: '1px solid #ddd', borderRadius: 8, fontSize: 12, color: '#888', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    Change
+                  </button>
                 </div>
-                {/* Day headers */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center', fontSize: 10, fontWeight: 600, color: '#aaa', marginBottom: 4 }}>
-                  {['S','M','T','W','T','F','S'].map((d, i) => <div key={i}>{d}</div>)}
+              ) : (
+                <div style={{ padding: '14px', background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 10, fontSize: 13, color: '#795548', textAlign: 'center' }}>
+                  Please select a date from the calendar first.
+                  <button type="button" onClick={() => { onClose(); if (window.__navigateTo) window.__navigateTo('schedule'); }}
+                    style={{ display: 'block', margin: '8px auto 0', padding: '8px 20px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    Go to Calendar
+                  </button>
                 </div>
-                {/* Day cells */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-                  {Array.from({ length: calFirstDay }, (_, i) => <div key={'e'+i}></div>)}
-                  {Array.from({ length: calDaysInMonth }, (_, i) => {
-                    const day = i + 1;
-                    const ds = getCalDateStr(day);
-                    const isPast = ds < todayStr;
-                    const isSel = ds === date;
-                    const isToday = ds === todayStr;
+              )}
+              {/* Show existing sessions for selected date */}
+              {date && sessionsByDate[date] && sessionsByDate[date].length > 0 && (
+                <div style={{ marginTop: 8, padding: '8px 10px', background: '#f0faf7', border: '1px solid #d4edda', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#1b6b5a', marginBottom: 4 }}>Already scheduled:</div>
+                  {sessionsByDate[date].sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).map((s, si) => {
+                    const t = s.scheduled_time ? (() => { const [h] = s.scheduled_time.split(':').map(Number); const ampm = h >= 12 ? 'p' : 'a'; const dh = h > 12 ? h - 12 : h === 0 ? 12 : h; return `${dh}${ampm}`; })() : '?';
+                    const statusColors = { confirmed: '#1b6b5a', in_progress: '#f57f17', completed: '#666', open: '#e8724a', requested: '#e8724a', pending: '#e8724a' };
+                    const statusLabels = { confirmed: 'Confirmed', in_progress: 'In Progress', completed: 'Done', open: 'Requested', requested: 'Requested', pending: 'Pending' };
                     return (
-                      <button key={day} type="button" disabled={isPast}
-                        onClick={() => { setDate(ds); setTime(''); }}
-                        style={{
-                          width: '100%', aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 13, fontWeight: isToday ? 800 : isSel ? 700 : 400, cursor: isPast ? 'default' : 'pointer',
-                          border: isSel ? '2px solid #1b6b5a' : 'none', borderRadius: '50%',
-                          background: isSel ? '#1b6b5a' : 'transparent',
-                          color: isSel ? '#fff' : isPast ? '#ccc' : isToday ? '#e8724a' : '#333',
-                          opacity: isPast ? 0.5 : 1, padding: 0,
-                        }}>
-                        {day}
-                      </button>
+                      <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#555', padding: '2px 0' }}>
+                        <span style={{ fontWeight: 600, minWidth: 24 }}>{t}</span>
+                        <span>{s.service_type || 'Care'}</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 600, color: statusColors[s.status] || '#999', textTransform: 'capitalize' }}>{statusLabels[s.status] || s.status}</span>
+                      </div>
                     );
                   })}
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Time pills — only show if date is selected */}
@@ -409,6 +425,31 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                       {opt.label}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Overlap warning */}
+            {overlappingSessions.length > 0 && (
+              <div style={{ marginBottom: 14, padding: '10px 12px', background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>{'\u26A0\uFE0F'}</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e65100', marginBottom: 4 }}>Time overlap detected</div>
+                    <div style={{ fontSize: 12, color: '#795548', lineHeight: 1.4 }}>
+                      This session ({formatTime12(time)} – {formatTime12((() => { const [h,m] = time.split(':').map(Number); const endMin = h*60+(m||0)+parseInt(duration)*60; return `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`; })())}) overlaps with:
+                    </div>
+                    {overlappingSessions.map((s, si) => {
+                      const sTime = s.scheduled_time ? formatTime12(s.scheduled_time) : '?';
+                      const endH = s.scheduled_time ? (() => { const [h,m] = s.scheduled_time.split(':').map(Number); const endMin = h*60+(m||0)+(s.duration_hours||2)*60; return `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`; })() : '';
+                      return (
+                        <div key={si} style={{ fontSize: 12, color: '#795548', marginTop: 3, paddingLeft: 4 }}>
+                          {'\u2022'} {sTime}{endH ? ` – ${formatTime12(endH)}` : ''} — {(s.service_type || 'Care').replace('_', ' ')} ({s.status})
+                        </div>
+                      );
+                    })}
+                    <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}>You can still proceed, but check that this doesn't create a scheduling conflict.</div>
+                  </div>
                 </div>
               </div>
             )}
