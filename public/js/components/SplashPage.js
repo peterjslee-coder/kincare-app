@@ -158,7 +158,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           {/* Photo layer — tries local first, then Unsplash CDN */}
           <div style={{
             position: 'absolute', inset: 0, zIndex: 1,
-            backgroundImage: 'url(https://images.unsplash.com/photo-1556912167-f556f1f39fdf?w=1200&q=80)',
+            backgroundImage: 'url(/images/hero-home.jpg)',
             backgroundSize: 'cover', backgroundPosition: 'center 50%',
           }}></div>
           {/* Left fade overlay */}
