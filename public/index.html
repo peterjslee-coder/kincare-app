@@ -20,7 +20,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=1.39.43">
+  <link rel="stylesheet" href="/css/styles.css?v=1.39.44">
 
   <!-- Leaflet CSS for maps (AreaMap, Caregivers nearby) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -31,10 +31,9 @@
 <body>
   <div id="root"></div>
 
-  <!-- React + Babel CDN -->
+  <!-- React CDN (Babel removed — JSX is pre-compiled at build time) -->
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" integrity="sha384-tMH8h3BGESGckSAVGZ82T9n90ztNXxvdwvdM6UoR56cYcf+0iGXBliJ29D+wZ/x8"></script>
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" integrity="sha384-bm7MnzvK++ykSwVJ2tynSE5TRdN+xL418osEVF2DE/L/gfWHj91J2Sphe582B1Bh"></script>
-  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js" integrity="sha384-1qlE7MZPM2pHD/pBZCU/yB8UCP52RYL8bge/qNdfNBCWToySp8/M+JL2waXU4hjJ"></script>
 
   <!-- SimpleWebAuthn Browser — passkey/biometric login -->
   <script crossorigin="anonymous" src="https://unpkg.com/@simplewebauthn/browser@11/dist/bundle/index.umd.min.js" integrity="sha384-MEoU+35r/Mcpi7hzGCSKXkm+Yu7nRyDqV8z+GjTNBhxzV/JrQXe88JTG1ol0+F1e"></script>
@@ -48,90 +47,11 @@
   <!-- Twilio Video SDK for in-app video/voice calls -->
   <script crossorigin="anonymous" src="https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js" integrity="sha384-LtJzs64tk3PAa681ns6wcoWn86JMS2vpZclJ8ZVv8/LeN0Pd8oghQr+t1RazIs5y"></script>
 
-  <!--
-    Async loader: fetches all modular source files in parallel,
-    concatenates in order, and compiles once through Babel.
-    Source files live in /js/ for easy editing — one component per file.
-  -->
-  <script>
-    window.APP_VERSION = '1.39.43';
-    (async function() {
-      var scripts = [
-        '/js/utils.js',
-        '/js/components/TimezoneHelper.js',
-        '/js/components/InPlaceIcon.js',
-        '/js/components/SplashPage.js',
-        '/js/components/InviteLandingPage.js',
-        '/js/components/LoginPage.js',
-        '/js/components/RegisterPage.js',
-        '/js/components/ForgotPasswordPage.js',
-        '/js/components/ResetPasswordPage.js',
-        '/js/components/Dashboard.js',
-        '/js/components/CareProfile.js',
-        '/js/components/Schedule.js',
-        '/js/components/ActivityFeed.js',
-        '/js/components/CaregiverScheduleModal.js',
-        '/js/components/Caregivers.js',
-        '/js/components/CareRecipients.js',
-        '/js/components/ConsentVerification.js',
-        '/js/components/ConsentResponsePage.js',
-        '/js/components/Documents.js',
-        '/js/components/VideoCallOverlay.js',
-        '/js/components/Messages.js',
-        '/js/components/RequestCareModal.js',
-        '/js/components/VisitDetailModal.js',
-        '/js/components/TwoFactorSetup.js',
-        '/js/components/MyAccount.js',
-        '/js/components/CareTeamManage.js',
-        '/js/components/CareTeamPage.js',
-        '/js/components/CaredForView.js',
-        '/js/components/AvailabilityTab.js',
-        '/js/components/OfferNegotiationPanel.js',
-        '/js/components/CaregiverCalendar.js',
-        '/js/components/HourReports.js',
-        '/js/components/CaretakerHub.js',
-        '/js/components/AreaMap.js',
-        '/js/components/FindWork.js',
-        '/js/components/Analytics.js',
-        '/js/components/EmailVerificationBanner.js',
-        '/js/components/DisclaimerModal.js',
-        '/js/components/FeedbackButton.js',
-        '/js/components/NotificationPrompt.js',
-        '/js/components/DemoPickerPage.js',
-        '/js/components/StripePaymentForm.js',
-        '/js/components/CaregiverOnboarding.js',
-        '/js/components/FamilyPayments.js',
-        '/js/components/AdminFinancials.js',
-        '/js/components/HelpPage.js',
-        '/js/components/AdminPanel.js',
-        '/js/app.js'
-      ];
-      try {
-        // Fetch all scripts in parallel, then concatenate in dependency order
-        var sources = await Promise.all(scripts.map(async function(path) {
-          var url = path + '?v=1.39.43';
-          try {
-            var r = await fetch(url);
-            if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + path);
-            return await r.text();
-          } catch (fetchErr) {
-            throw new Error('Failed to load ' + path + ': ' + fetchErr.message);
-          }
-        }));
-        var combined = sources.join('\n;\n');
-        var compiled = Babel.transform(combined, { presets: ['react'] }).code;
-        var scriptEl = document.createElement('script');
-        scriptEl.textContent = compiled;
-        document.body.appendChild(scriptEl);
-      } catch (err) {
-        console.error('InPlace load error:', err);
-        document.getElementById('root').innerHTML =
-          '<div style="padding:40px;text-align:center;color:#c00">' +
-          '<h2>Loading Error</h2><p>' + err.message + '</p>' +
-          '<p style="font-size:13px;color:#666;margin-top:12px">Try: pull down to refresh, or reinstall the app.</p></div>';
-      }
-    })();
+  <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
+  <script>window.APP_VERSION = '1.39.44';</script>
+  <script src="/js-compiled/bundle.js?v=1.39.44"></script>
 
+  <script>
     // Service worker: register/update without destroying push subscriptions
     // Previous approach nuked all SWs on every load, which invalidated push endpoints.
     // New approach: clear stale caches but preserve the SW registration so push subscriptions survive.
