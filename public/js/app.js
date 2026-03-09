@@ -910,7 +910,7 @@ const App = () => {
     }
     // family (default)
     const familyNav = [
-      { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
+      { id: 'dashboard', icon: '🏠', label: 'Home' },
       { id: '_request_care', icon: '➕', label: 'Request Care', isAction: true },
       { id: 'care-profile', icon: '🌷', label: 'My Loved One', children: [
         { id: 'care-team', icon: '👪', label: 'Care Team' },
@@ -998,7 +998,6 @@ const App = () => {
     }
     const familyBottom = [
       { id: 'dashboard', icon: '🏠', label: 'Home' },
-      { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
       { id: 'care-profile', icon: '🌷', label: 'Loved One' },
       { id: 'messages', icon: '💬', label: 'Messages' },
       { id: 'account', icon: '👤', label: 'Account' },
