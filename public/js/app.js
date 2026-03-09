@@ -293,8 +293,15 @@ const App = () => {
         if (!res.ok) return;
         const data = await res.json();
         if (data.version && data.version !== window.APP_VERSION) {
+          // Guard: don't reload if we already tried recently (prevents infinite loops if HTML is cached)
+          const lastReload = sessionStorage.getItem('_versionReloadAt');
+          const now = Date.now();
+          if (lastReload && (now - parseInt(lastReload, 10)) < 60000) {
+            console.log(`[version] Mismatch (server=${data.version} local=${window.APP_VERSION}) but skipping — reloaded <60s ago`);
+            return;
+          }
+          sessionStorage.setItem('_versionReloadAt', String(now));
           console.log(`[version] Server=${data.version} Local=${window.APP_VERSION} — reloading`);
-          // Clear SW caches then hard reload
           if (window.caches) {
             const keys = await caches.keys();
             await Promise.all(keys.map(k => caches.delete(k)));
