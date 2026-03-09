@@ -82,10 +82,13 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
 
   const formatAnswer = (text) => {
     // Simple markdown-lite: **bold**, \n for line breaks
+    // Escape HTML to prevent XSS, then apply safe markdown-like transforms
+    const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const parts = text.split('\n');
     return parts.map((line, i) => {
-      // Bold
-      const formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      // Escape first, then apply bold formatting on the safe string
+      const escaped = escapeHtml(line);
+      const formatted = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       // Numbered lists
       const isListItem = /^\d+\.\s/.test(line.trim());
       const isBullet = /^[-•]\s/.test(line.trim());

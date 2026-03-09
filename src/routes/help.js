@@ -37,7 +37,7 @@ router.get("/", async (req, res) => {
       if (authHeader) {
         const jwt = require("jsonwebtoken");
         const token = authHeader.replace("Bearer ", "");
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "dev-secret-change-me");
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         userRole = req.headers["x-active-role"] || (decoded.roles ? decoded.roles[0] : decoded.role);
       }
     } catch {

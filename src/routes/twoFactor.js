@@ -128,7 +128,7 @@ router.post("/verify", async (req, res) => {
 
     // Decode the temp token (it contains userId, stored as a signed value)
     const jwt = require("jsonwebtoken");
-    const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
+    const JWT_SECRET = process.env.JWT_SECRET;
     let decoded;
     try {
       decoded = jwt.verify(tempToken, JWT_SECRET + "-2fa-temp");

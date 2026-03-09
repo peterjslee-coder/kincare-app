@@ -15,7 +15,11 @@ const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("./u
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is required. Set it in .env or environment.");
+  process.exit(1);
+}
 
 // ─── Socket.io Setup ───
 const ALLOWED_ORIGINS = process.env.NODE_ENV === "production"
@@ -262,7 +266,7 @@ app.use("/api/consent", require("./routes/consent"));
 app.use("/api/documents", require("./routes/documents"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.35";
+const APP_VERSION = "1.39.36";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

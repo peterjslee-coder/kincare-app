@@ -187,7 +187,7 @@ router.post("/test", authenticate, async (req, res) => {
       res.json({ success: true, sent, total: subs.length, removed });
     }
   } catch (err) {
-    res.status(500).json({ error: "Failed to send test push: " + err.message });
+    console.error("Push test error:", err.message); res.status(500).json({ error: "Failed to send test push" });
   }
 });
 

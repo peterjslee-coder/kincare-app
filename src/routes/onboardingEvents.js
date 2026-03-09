@@ -24,7 +24,7 @@ router.post("/", async (req, res) => {
     if (header && header.startsWith("Bearer ")) {
       try {
         const jwt = require("jsonwebtoken");
-        const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
+        const JWT_SECRET = process.env.JWT_SECRET;
         const decoded = jwt.verify(header.split(" ")[1], JWT_SECRET);
         userId = decoded.id;
         userEmail = userEmail || decoded.email;

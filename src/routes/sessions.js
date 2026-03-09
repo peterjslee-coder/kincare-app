@@ -134,7 +134,7 @@ router.get("/", async (req, res) => {
   res.json({ sessions });
   } catch (err) {
     console.error("GET /api/sessions error:", err.message, err.stack);
-    res.status(500).json({ error: "Failed to fetch sessions", detail: err.message });
+    console.error("Sessions fetch error:", err.message); res.status(500).json({ error: "Failed to fetch sessions" });
   }
 });
 

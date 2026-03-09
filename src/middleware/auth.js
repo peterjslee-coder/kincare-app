@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || null;
 
 function generateToken(user) {
@@ -21,12 +22,35 @@ function generateToken(user) {
 }
 
 async function authenticate(req, res, next) {
-  // Option 1: Admin API key (for automated scripts — bypasses JWT + 2FA)
+  // Option 1: Admin API key + TOTP code (for automated scripts)
   const apiKey = req.headers["x-admin-api-key"];
   if (apiKey && ADMIN_API_KEY && apiKey === ADMIN_API_KEY) {
-    req.user = { id: "api-key-admin", email: "admin@api", roles: ["family"], role: "family" };
-    req.isAdmin = true;
-    return next();
+    // Require a valid TOTP code from an admin user's authenticator app
+    const totpCode = req.headers["x-admin-totp"];
+    if (!totpCode) {
+      return res.status(401).json({ error: "Admin TOTP code required (x-admin-totp header)" });
+    }
+    try {
+      const { getDb } = require("../models/database");
+      const db = await getDb();
+      // Find any admin user with 2FA enabled to validate the TOTP code against
+      const adminUser = await db.prepare(
+        "SELECT u.id, u.email, t.totp_secret FROM users u JOIN user_2fa t ON u.id = t.user_id WHERE u.is_admin = 1 AND t.is_enabled = 1 LIMIT 1"
+      ).get();
+      if (!adminUser || !adminUser.totp_secret) {
+        return res.status(401).json({ error: "No admin 2FA configured — cannot validate TOTP" });
+      }
+      const otplib = require("otplib");
+      const verifyResult = otplib.verifySync({ token: totpCode, secret: adminUser.totp_secret });
+      if (!verifyResult.valid) {
+        return res.status(401).json({ error: "Invalid TOTP code" });
+      }
+      req.user = { id: adminUser.id, email: adminUser.email, roles: ["family"], role: "family" };
+      req.isAdmin = true;
+      return next();
+    } catch (err) {
+      return res.status(401).json({ error: "TOTP verification failed" });
+    }
   }
 
   // Option 2: Bearer JWT token

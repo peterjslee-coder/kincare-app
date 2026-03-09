@@ -427,7 +427,7 @@ router.delete("/users/:id", async (req, res) => {
     res.json({ success: true, message: `Soft-deleted user ${user.email} → ${anonEmail}` });
   } catch (err) {
     console.error("Admin delete user error:", err);
-    res.status(500).json({ error: "Failed to delete user: " + (err.message || "") });
+    console.error("User deletion error:", err.message); res.status(500).json({ error: "Failed to delete user" });
   }
 });
 
@@ -662,7 +662,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
     res.json({ success: true, message: `☢️ Permanently deleted ${user.email} and all associated data.` });
   } catch (err) {
     console.error("Nuke user error:", err);
-    res.status(500).json({ error: "Nuke failed: " + (err.message || "") });
+    console.error("Nuke error:", err.message); res.status(500).json({ error: "Operation failed" });
   }
 });
 
@@ -964,7 +964,7 @@ router.post("/reseed", async (req, res) => {
     });
   } catch (err) {
     console.error("Admin reseed error:", err);
-    res.status(500).json({ error: "Reseed failed: " + (err.message || "") });
+    console.error("Reseed error:", err.message); res.status(500).json({ error: "Reseed failed" });
   }
 });
 
@@ -984,7 +984,7 @@ router.get("/reseed-backups", async (req, res) => {
     ).all();
     res.json({ backups });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Admin API error:", err.message); res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -996,7 +996,7 @@ router.get("/reseed-backups/:id", async (req, res) => {
     if (!backup) return res.status(404).json({ error: "Backup not found" });
     res.json({ id: backup.id, created_at: backup.created_at, data: JSON.parse(backup.data) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Admin API error:", err.message); res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -1044,7 +1044,7 @@ router.post("/restore-user", async (req, res) => {
     });
   } catch (err) {
     console.error("Restore user error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("Admin API error:", err.message); res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -1254,7 +1254,7 @@ router.post("/repair-demo", async (req, res) => {
     res.json({ ok: true, results });
   } catch (err) {
     console.error("❌ Demo repair error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("Admin API error:", err.message); res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -1271,7 +1271,7 @@ router.post("/reseed-demo", authenticate, checkAdmin, requireAdmin, async (req, 
     res.json({ ok: true, message: "Demo data fully reseeded with all rich data (sessions, messages, notes, reviews, care teams, etc.)" });
   } catch (err) {
     console.error("❌ Demo reseed error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("Admin API error:", err.message); res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -1297,10 +1297,7 @@ router.get("/audit-log", async (req, res) => {
 // ─── PUT /api/admin/sessions/:id/status — Admin force-set session status ───
 router.put("/sessions/:id/status", async (req, res) => {
   try {
-    const apiKey = req.headers["x-admin-api-key"];
-    if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+    // Auth handled by router-level authenticate + requireAdmin middleware
     const db = await getDb();
     const { status, offered_to_caregiver_id } = req.body;
 
@@ -1328,10 +1325,6 @@ router.put("/sessions/:id/status", async (req, res) => {
 // ─── PUT /api/admin/caregivers/:userId/early-check-in — Toggle early check-in permission ───
 router.put("/caregivers/:userId/early-check-in", async (req, res) => {
   try {
-    const apiKey = req.headers["x-admin-api-key"];
-    if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
     const db = await getDb();
     const { allowed } = req.body;
     if (allowed === undefined) {
@@ -1362,10 +1355,6 @@ router.put("/caregivers/:userId/early-check-in", async (req, res) => {
 // ─── GET /api/admin/sessions/open — List open sessions for admin ───
 router.get("/sessions/open", async (req, res) => {
   try {
-    const apiKey = req.headers["x-admin-api-key"];
-    if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
     const db = await getDb();
     const rows = await db.prepare(`
       SELECT cs.id, cs.status, cs.scheduled_date, cs.scheduled_time, cs.offered_to_caregiver_id,
@@ -1377,7 +1366,8 @@ router.get("/sessions/open", async (req, res) => {
     `).all();
     res.json({ sessions: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Admin open sessions error:", err);
+    res.status(500).json({ error: "Failed to fetch open sessions" });
   }
 });
 

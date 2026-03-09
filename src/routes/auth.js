@@ -318,7 +318,7 @@ router.post("/login", validateLogin, async (req, res) => {
       if (!deviceTrusted) {
         // Return temp token for 2FA verification (5 min expiry)
         const jwtLib = require("jsonwebtoken");
-        const JWT_SECRET = process.env.JWT_SECRET || "inplace-dev-secret-change-me";
+        const JWT_SECRET = process.env.JWT_SECRET;
         const tempToken = jwtLib.sign({ id: user.id }, JWT_SECRET + "-2fa-temp", { expiresIn: "5m" });
 
         return res.json({
@@ -844,7 +844,7 @@ router.delete("/me", authenticate, async (req, res) => {
     res.json({ success: true, message: "Account deleted" });
   } catch (err) {
     console.error("Account deletion error:", err);
-    res.status(500).json({ error: "Failed to delete account. " + (err.message || "") });
+    console.error("Account deletion error:", err.message); res.status(500).json({ error: "Failed to delete account" });
   }
 });
 
