@@ -1,9 +1,11 @@
-// InPlace Service Worker — v1.39.47
-const CACHE_NAME = 'inplace-v1.39.47';
-const SW_VERSION = '1.39.47';
+// InPlace Service Worker — v1.39.48
+const CACHE_NAME = 'inplace-v1.39.48';
+const SW_VERSION = '1.39.48';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
+  '/vendor/react.production.min.js',
+  '/vendor/react-dom.production.min.js',
   '/js-compiled/bundle.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -11,23 +13,14 @@ const STATIC_ASSETS = [
   '/manifest.json',
 ];
 
-// CDN assets to cache (React + ReactDOM only — Babel removed in v1.39.44)
-const CDN_ASSETS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
-];
-
 // Install: cache static assets, skip waiting immediately
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      const localPromises = STATIC_ASSETS.map((url) =>
+      const promises = STATIC_ASSETS.map((url) =>
         cache.add(url).catch(() => console.log('SW: skip caching', url))
       );
-      const cdnPromises = CDN_ASSETS.map((url) =>
-        cache.add(url).catch(() => console.log('SW: skip CDN caching', url))
-      );
-      return Promise.all([...localPromises, ...cdnPromises]);
+      return Promise.all(promises);
     })
   );
   self.skipWaiting();
