@@ -160,8 +160,25 @@ app.set("trust proxy", 1); // Trust first proxy (Cloudflare/Railway) for X-Forwa
 
 // Security headers via Helmet
 app.use(helmet({
-  contentSecurityPolicy: false,       // Disabled — frontend uses inline Babel/JSX compilation
-  crossOriginEmbedderPolicy: false,   // Disabled — loads CDN scripts (React, Leaflet, etc.)
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'", "'unsafe-eval'", "'unsafe-inline'",  // Required for Babel client-side compilation
+        "https://cdnjs.cloudflare.com", "https://unpkg.com", "https://cdn.socket.io",
+        "https://js.stripe.com", "https://connect-js.stripe.com",
+        "https://sdk.twilio.com", "https://plausible.io",
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "https://plausible.io", "https://api.stripe.com", "wss:", "ws:"],
+      frameSrc: ["https://js.stripe.com", "https://connect-js.stripe.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      mediaSrc: ["'self'", "blob:"],
+      workerSrc: ["'self'", "blob:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,   // Loads CDN scripts (React, Leaflet, etc.)
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 }));
 
@@ -266,7 +283,7 @@ app.use("/api/consent", require("./routes/consent"));
 app.use("/api/documents", require("./routes/documents"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.36";
+const APP_VERSION = "1.39.37";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

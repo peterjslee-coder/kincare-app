@@ -4,6 +4,7 @@ const multer = require("multer");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
+const { validateMagicBytes } = require("../utils/fileValidation");
 
 const router = express.Router();
 
@@ -113,6 +114,14 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
     // Verify ownership: user must have access to the entity they're uploading for
     if (!(await canAccessOwner(db, req.user.id, req.user.role, owner_type, owner_id))) {
       return res.status(403).json({ error: "You do not have access to upload documents for this entity" });
+    }
+
+    // Validate magic bytes match claimed MIME type (prevent disguised uploads)
+    const magicCheck = validateMagicBytes(req.file.buffer, req.file.mimetype);
+    if (!magicCheck.valid) {
+      return res.status(400).json({
+        error: `File content doesn't match its type. Expected ${req.file.mimetype}${magicCheck.detected ? `, detected ${magicCheck.detected}` : ""}`,
+      });
     }
 
     // Convert to base64

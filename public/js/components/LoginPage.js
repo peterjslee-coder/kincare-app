@@ -184,14 +184,13 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
 
   const handleQuickLogin = async (acct) => {
     setEmail(acct.email);
-    setPassword('inplace123');
     setLoading(true);
     setError(null);
     trackAuthEvent('demo', 'demo_login', { email: acct.email, label: acct.label, source: 'login_page' });
     try {
-      const response = await apiFetch('/api/auth/login', {
+      const response = await apiFetch('/api/auth/demo-login', {
         method: 'POST',
-        body: JSON.stringify({ email: acct.email, password: 'inplace123' })
+        body: JSON.stringify({ email: acct.email })
       });
       if (!response || !response.ok) throw new Error('Login failed');
       const data = await response.json();

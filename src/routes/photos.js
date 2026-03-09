@@ -3,6 +3,7 @@ const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { validateMagicBytes } = require("../utils/fileValidation");
 
 const router = express.Router();
 router.use(authenticate);
@@ -55,6 +56,11 @@ router.post(
     const photos = [];
     for (let i = 0; i < req.files.length; i++) {
       const file = req.files[i];
+      // Validate magic bytes match claimed MIME type
+      const magicCheck = validateMagicBytes(file.buffer, file.mimetype);
+      if (!magicCheck.valid) {
+        return res.status(400).json({ error: `Photo ${i + 1}: file content doesn't match its claimed type` });
+      }
       const base64 = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
       const id = uuid();
 

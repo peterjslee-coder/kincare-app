@@ -42,7 +42,11 @@ function isValidEmail(email) {
  */
 function isValidPassword(password) {
   if (!password || typeof password !== "string") return false;
-  return password.length >= 8 && password.length <= MAX_LENGTHS.password;
+  if (password.length < 8 || password.length > MAX_LENGTHS.password) return false;
+  if (!/[A-Z]/.test(password)) return false;    // at least one uppercase
+  if (!/[0-9]/.test(password)) return false;    // at least one number
+  if (!/[^A-Za-z0-9]/.test(password)) return false; // at least one special char
+  return true;
 }
 
 /**
@@ -78,7 +82,7 @@ function validateRegister(req, res, next) {
   }
 
   if (!isValidPassword(password)) {
-    return res.status(400).json({ error: "Password must be 8-128 characters" });
+    return res.status(400).json({ error: "Password must be 8-128 characters with at least one uppercase letter, one number, and one special character" });
   }
 
   if (!isValidLength(firstName, MAX_LENGTHS.firstName)) {

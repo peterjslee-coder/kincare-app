@@ -95,10 +95,10 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
     if (account.email === currentUser?.email) return;
     setSwitching(account.email);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/auth/demo-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: account.email, password: 'inplace123' }),
+        body: JSON.stringify({ email: account.email }),
       });
       const data = await res.json();
       if (data.token) {

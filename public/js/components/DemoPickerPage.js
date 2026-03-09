@@ -35,10 +35,10 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
     setLoading(account.email);
     trackAuthEvent('demo', 'demo_login', { email: account.email, role: account.role, label: account.label, source: 'demo_picker' });
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/auth/demo-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: account.email, password: 'inplace123' }),
+        body: JSON.stringify({ email: account.email }),
       });
       const data = await res.json();
       if (data.token) {
@@ -164,7 +164,7 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
 
         {/* Footer note */}
         <div style={{ textAlign: 'center', marginTop: '32px', color: '#999', fontSize: '13px' }}>
-          All demo accounts use password <strong style={{ color: '#666' }}>inplace123</strong> — or just click any card above.
+          Click any card above to explore InPlace as that user.
         </div>
       </div>
     </div>

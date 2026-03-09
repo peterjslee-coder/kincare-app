@@ -363,6 +363,41 @@ router.post("/login", validateLogin, async (req, res) => {
   }
 });
 
+// ─── POST /api/auth/demo-login ───
+// Passwordless login for demo accounts only — no credentials exposed in client JS
+const DEMO_EMAILS = [
+  'paul@inplace.care', 'maria@inplace.care', 'barbara@inplace.care',
+  'david.lowe@inplace.care', 'susan.lowe@inplace.care',
+];
+router.post("/demo-login", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !DEMO_EMAILS.includes(email.toLowerCase())) {
+      return res.status(400).json({ error: "Invalid demo account" });
+    }
+    const db = await getDb();
+    const user = await db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND is_demo = 1").get(email);
+    if (!user) {
+      return res.status(404).json({ error: "Demo account not found" });
+    }
+    const token = generateToken(user);
+    let roles;
+    try { roles = user.roles ? JSON.parse(user.roles) : [user.role]; } catch { roles = [user.role]; }
+    res.json({
+      user: {
+        id: user.id, email: user.email, role: user.role, roles,
+        first_name: user.first_name, last_name: user.last_name,
+        profile_photo: user.profile_photo || null,
+        is_demo: true,
+      },
+      token,
+    });
+  } catch (err) {
+    console.error("Demo login error:", err);
+    res.status(500).json({ error: "Demo login failed" });
+  }
+});
+
 // ─── POST /api/auth/change-password ───
 router.post("/change-password", authenticate, async (req, res) => {
   try {
