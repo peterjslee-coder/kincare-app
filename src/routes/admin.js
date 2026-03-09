@@ -717,6 +717,87 @@ router.post("/users/:id/reset-password", async (req, res) => {
   }
 });
 
+// ─── Customer Service: Reviews Management ───
+
+// GET /api/admin/reviews — Fetch reviews with optional filters
+router.get("/reviews", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { status, maxRating, limit: lim } = req.query;
+    const maxR = parseInt(maxRating) || 3;
+    const limitN = Math.min(parseInt(lim) || 50, 200);
+    let where = "WHERE r.rating < ?";
+    const params = [maxR];
+
+    if (status && status !== 'all') {
+      where += " AND COALESCE(r.admin_status, 'pending') = ?";
+      params.push(status);
+    }
+
+    params.push(limitN);
+
+    const rows = await db.prepare(`
+      SELECT r.*,
+        fu.first_name || ' ' || fu.last_name AS family_name,
+        fu.email AS family_email,
+        cu.first_name || ' ' || cu.last_name AS caregiver_name,
+        cp.rating_avg AS caregiver_rating_avg,
+        cp.rating_count AS caregiver_rating_count,
+        cs.scheduled_date, cs.scheduled_time, cs.service_type,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        au.first_name || ' ' || au.last_name AS reviewed_by_name
+      FROM reviews r
+      JOIN users fu ON r.family_user_id = fu.id
+      JOIN caregiver_profiles cp ON r.caregiver_id = cp.id
+      JOIN users cu ON cp.user_id = cu.id
+      JOIN care_sessions cs ON r.session_id = cs.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users au ON r.admin_reviewed_by = au.id
+      ${where}
+      ORDER BY r.created_at DESC
+      LIMIT ?
+    `).all(...params);
+
+    // Summary counts
+    const counts = await db.prepare(`
+      SELECT
+        COUNT(*) FILTER (WHERE rating < 3) AS total_flagged,
+        COUNT(*) FILTER (WHERE rating < 3 AND COALESCE(admin_status, 'pending') = 'pending') AS pending,
+        COUNT(*) FILTER (WHERE rating < 3 AND admin_status = 'reviewed') AS reviewed,
+        COUNT(*) FILTER (WHERE rating < 3 AND admin_status = 'escalated') AS escalated,
+        COUNT(*) FILTER (WHERE rating < 3 AND admin_status = 'resolved') AS resolved
+      FROM reviews
+    `).get();
+
+    res.json({ reviews: rows, counts });
+  } catch (err) {
+    console.error("Admin reviews fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch reviews" });
+  }
+});
+
+// PUT /api/admin/reviews/:id — Update admin status/notes on a review
+router.put("/reviews/:id", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { admin_status, admin_notes } = req.body;
+    if (!admin_status) return res.status(400).json({ error: "admin_status is required" });
+
+    const review = await db.prepare("SELECT id FROM reviews WHERE id = ?").get(req.params.id);
+    if (!review) return res.status(404).json({ error: "Review not found" });
+
+    await db.prepare(`
+      UPDATE reviews SET admin_status = ?, admin_notes = ?, admin_reviewed_by = ?, admin_reviewed_at = NOW()
+      WHERE id = ?
+    `).run(admin_status, admin_notes || null, req.user.id, req.params.id);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin review update error:", err);
+    res.status(500).json({ error: "Failed to update review" });
+  }
+});
+
 // ─── GET /api/admin/blocked-emails ─── List all blocked emails
 router.get("/blocked-emails", authenticate, checkAdmin, requireAdmin, async (req, res) => {
   try {

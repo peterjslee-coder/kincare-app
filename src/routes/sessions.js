@@ -1376,9 +1376,10 @@ router.post("/:id/review", async (req, res) => {
     if (existing) return res.status(409).json({ error: "You already reviewed this session" });
 
     const reviewId = uuid();
+    const adminStatus = rating < 3 ? 'flagged' : 'ok';
     await db.prepare(
-      "INSERT INTO reviews (id, session_id, family_user_id, caregiver_id, rating, comment, review_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(reviewId, req.params.id, userId, caregiverId, rating, comment || null, reviewType);
+      "INSERT INTO reviews (id, session_id, family_user_id, caregiver_id, rating, comment, review_type, admin_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(reviewId, req.params.id, userId, caregiverId, rating, comment || null, reviewType, adminStatus);
 
     // Update caregiver average rating
     const stats = await db.prepare(

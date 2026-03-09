@@ -641,6 +641,13 @@ async function initializeDatabase() {
     // v1.39.47 — Stripe Customer ID for family payment setup
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT`,
     // v1.39.59 — Time proposals (caregiver counter-offers for scheduling conflicts)
+    // v1.39.60 — Admin review tracking for customer service
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS admin_status TEXT DEFAULT 'pending'`,
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS admin_notes TEXT`,
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS admin_reviewed_by TEXT`,
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS admin_reviewed_at TIMESTAMPTZ`,
+    // Auto-flag reviews < 3 stars as 'flagged' on insert is handled in application logic
+
     `CREATE TABLE IF NOT EXISTS time_proposals (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES care_sessions(id),

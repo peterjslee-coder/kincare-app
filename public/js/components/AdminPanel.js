@@ -67,6 +67,14 @@ const AdminPanel = window.AdminPanel = () => {
   const [docPreviewLoading, setDocPreviewLoading] = useState(false);
   const [rejectModal, setRejectModal] = useState(null); // { id, name }
   const [rejectNotes, setRejectNotes] = useState('');
+  // Customer service — flagged reviews
+  const [csReviews, setCsReviews] = useState([]);
+  const [csCounts, setCsCounts] = useState({});
+  const [csLoading, setCsLoading] = useState(false);
+  const [csFilter, setCsFilter] = useState('pending');
+  const [csExpanded, setCsExpanded] = useState(null);
+  const [csNotes, setCsNotes] = useState('');
+  const [csActionLoading, setCsActionLoading] = useState(null);
 
   useEffect(() => {
     loadStats();
@@ -83,6 +91,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'help') loadHelpArticles();
     if (activeTab === 'onboarding') loadOnboardingEvents();
     if (activeTab === 'authorizations') loadAuthorizations();
+    if (activeTab === 'customerservice') loadCsReviews();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -223,6 +232,41 @@ const AdminPanel = window.AdminPanel = () => {
       }
     } catch (err) { console.error('Authorization action error:', err); }
     setAuthzActionLoading(null);
+  };
+
+  // ─── Customer Service: load flagged reviews ───
+  const loadCsReviews = async () => {
+    setCsLoading(true);
+    try {
+      const statusParam = csFilter === 'all' ? 'all' : csFilter;
+      const res = await apiFetch(`/api/admin/reviews?status=${statusParam}&maxRating=3`);
+      if (res?.ok) {
+        const data = await res.json();
+        setCsReviews(data.reviews || []);
+        setCsCounts(data.counts || {});
+      }
+    } catch (err) { console.error('CS reviews load error:', err); }
+    setCsLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'customerservice') loadCsReviews();
+  }, [csFilter]);
+
+  const handleCsAction = async (reviewId, newStatus) => {
+    setCsActionLoading(reviewId);
+    try {
+      const res = await apiFetch(`/api/admin/reviews/${reviewId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ admin_status: newStatus, admin_notes: csNotes || null }),
+      });
+      if (res?.ok) {
+        setCsExpanded(null);
+        setCsNotes('');
+        loadCsReviews();
+      }
+    } catch (err) { console.error('CS action error:', err); }
+    setCsActionLoading(null);
   };
 
   const handleDocPreview = async (docId) => {
@@ -585,6 +629,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'people', label: 'People', icon: '📋' },
     { id: 'activity', label: 'Activity', icon: '⚡' },
     { id: 'authorizations', label: 'Auth', icon: '\u{1F512}' },
+    { id: 'customerservice', label: 'Customer Svc', icon: '🛎️' },
     { id: 'feedback', label: 'Feedback', icon: '💬' },
     { id: 'help', label: 'Help/FAQ', icon: '❓' },
     { id: 'financials', label: 'Financials', icon: '💰' },
@@ -1719,6 +1764,173 @@ const AdminPanel = window.AdminPanel = () => {
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Customer Service Tab ─── */}
+      {activeTab === 'customerservice' && (
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Customer Service — Flagged Reviews</h2>
+          <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+            Reviews rated below 3 stars are automatically flagged for admin review. Triage each one, add notes, and mark as reviewed, escalated, or resolved.
+          </p>
+
+          {/* Summary badges */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+            {[
+              { key: 'pending', label: 'Pending', color: '#e65100', bg: '#fff3e0' },
+              { key: 'flagged', label: 'Flagged', color: '#c62828', bg: '#ffebee' },
+              { key: 'reviewed', label: 'Reviewed', color: '#1565c0', bg: '#e3f2fd' },
+              { key: 'escalated', label: 'Escalated', color: '#6a1b9a', bg: '#f3e5f5' },
+              { key: 'resolved', label: 'Resolved', color: '#2e7d32', bg: '#e8f5e9' },
+            ].map(b => (
+              <div key={b.key} onClick={() => setCsFilter(b.key)} style={{
+                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: csFilter === b.key ? b.color : b.bg,
+                color: csFilter === b.key ? '#fff' : b.color,
+                border: `1px solid ${b.color}`,
+                transition: 'all 0.15s',
+              }}>
+                {b.label} {csCounts[b.key] != null ? `(${csCounts[b.key]})` : ''}
+              </div>
+            ))}
+            <div onClick={() => setCsFilter('all')} style={{
+              padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              background: csFilter === 'all' ? '#555' : '#f5f5f5',
+              color: csFilter === 'all' ? '#fff' : '#555',
+              border: '1px solid #ccc',
+            }}>
+              All ({csCounts.total_flagged || 0})
+            </div>
+          </div>
+
+          {csLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>Loading reviews...</div>
+          ) : csReviews.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#999', background: '#f9f9f9', borderRadius: 12 }}>
+              No {csFilter !== 'all' ? csFilter : 'flagged'} reviews found.
+            </div>
+          ) : (
+            <div>
+              {csReviews.map((r) => {
+                const isExpanded = csExpanded === r.id;
+                const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+                const statusColors = { pending: '#e65100', flagged: '#c62828', reviewed: '#1565c0', escalated: '#6a1b9a', resolved: '#2e7d32', ok: '#999' };
+                const st = r.admin_status || 'pending';
+                return (
+                  <div key={r.id} style={{
+                    marginBottom: 10, borderRadius: 12, border: '1px solid #e0e0e0',
+                    background: st === 'flagged' || st === 'pending' ? '#fffbf5' : '#fff',
+                    overflow: 'hidden',
+                  }}>
+                    {/* Review header — clickable to expand */}
+                    <div onClick={() => { setCsExpanded(isExpanded ? null : r.id); setCsNotes(r.admin_notes || ''); }}
+                      style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ color: '#e8724a', fontSize: 16, letterSpacing: 1 }}>{stars}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{r.caregiver_name}</span>
+                          <span style={{
+                            padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
+                            background: statusColors[st] + '20', color: statusColors[st],
+                            textTransform: 'uppercase',
+                          }}>{st}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#666' }}>
+                          From {r.family_name} • {r.recipient_name || 'Care Visit'}
+                          {r.service_type ? ` • ${r.service_type}` : ''}
+                          {r.scheduled_date ? ` • ${new Date(r.scheduled_date).toLocaleDateString()}` : ''}
+                        </div>
+                        {r.comment && (
+                          <div style={{ fontSize: 13, color: '#444', marginTop: 6, fontStyle: 'italic' }}>
+                            "{r.comment.length > 120 && !isExpanded ? r.comment.slice(0, 120) + '...' : r.comment}"
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#999', whiteSpace: 'nowrap' }}>
+                        {new Date(r.created_at).toLocaleDateString()}
+                        <div style={{ marginTop: 2 }}>{isExpanded ? '▲' : '▼'}</div>
+                      </div>
+                    </div>
+
+                    {/* Expanded detail + actions */}
+                    {isExpanded && (
+                      <div style={{ padding: '0 16px 16px', borderTop: '1px solid #f0f0f0' }}>
+                        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 12, marginBottom: 12 }}>
+                          <div>
+                            <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Caregiver</div>
+                            <div style={{ fontSize: 13, color: '#333' }}>{r.caregiver_name}</div>
+                            <div style={{ fontSize: 12, color: '#666' }}>
+                              Overall: {'★'.repeat(Math.round(r.caregiver_rating_avg || 0))} {r.caregiver_rating_avg || 'N/A'} ({r.caregiver_rating_count || 0} reviews)
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Family</div>
+                            <div style={{ fontSize: 13, color: '#333' }}>{r.family_name}</div>
+                            <div style={{ fontSize: 12, color: '#666' }}>{r.family_email}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Session</div>
+                            <div style={{ fontSize: 13, color: '#333' }}>
+                              {r.scheduled_date ? new Date(r.scheduled_date).toLocaleDateString() : 'N/A'}
+                              {r.scheduled_time ? ` at ${r.scheduled_time}` : ''}
+                            </div>
+                            <div style={{ fontSize: 12, color: '#666' }}>{r.review_type === 'late_cancellation' ? 'Late cancellation review' : 'Session review'}</div>
+                          </div>
+                        </div>
+
+                        {r.comment && (
+                          <div style={{ padding: '10px 14px', background: '#f9f9f9', borderRadius: 8, marginBottom: 12, fontSize: 13, color: '#333', lineHeight: 1.5 }}>
+                            {r.comment}
+                          </div>
+                        )}
+
+                        {r.admin_reviewed_at && (
+                          <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>
+                            Last reviewed by {r.reviewed_by_name || 'admin'} on {new Date(r.admin_reviewed_at).toLocaleString()}
+                          </div>
+                        )}
+
+                        <div style={{ marginBottom: 12 }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Admin Notes</label>
+                          <textarea value={csNotes} onChange={(e) => setCsNotes(e.target.value)}
+                            placeholder="Add internal notes about this review (optional)..."
+                            style={{ width: '100%', minHeight: 60, padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {st !== 'reviewed' && (
+                            <button disabled={csActionLoading === r.id} onClick={() => handleCsAction(r.id, 'reviewed')}
+                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#1565c0', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
+                              Mark Reviewed
+                            </button>
+                          )}
+                          {st !== 'escalated' && (
+                            <button disabled={csActionLoading === r.id} onClick={() => handleCsAction(r.id, 'escalated')}
+                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#6a1b9a', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
+                              Escalate
+                            </button>
+                          )}
+                          {st !== 'resolved' && (
+                            <button disabled={csActionLoading === r.id} onClick={() => handleCsAction(r.id, 'resolved')}
+                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2e7d32', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
+                              Resolve
+                            </button>
+                          )}
+                          {st !== 'pending' && (
+                            <button disabled={csActionLoading === r.id} onClick={() => handleCsAction(r.id, 'pending')}
+                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', color: '#666', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
+                              Reset to Pending
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
