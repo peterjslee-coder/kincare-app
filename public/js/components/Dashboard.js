@@ -147,6 +147,25 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     return () => { c1(); c2(); c3(); };
   }, []);
 
+  // Refresh dashboard when tab regains focus (catches missed socket events)
+  useEffect(() => {
+    let lastFetch = Date.now();
+    const onFocus = () => {
+      // Only refetch if at least 30s since last fetch (avoid rapid-fire on tab switching)
+      if (Date.now() - lastFetch > 30000) {
+        lastFetch = Date.now();
+        fetchDashboard();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') onFocus();
+    });
+    return () => {
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
   // Tick every 30s so in-progress countdowns stay live
   useEffect(() => {
     const hasActive = data?.upcomingSessions?.some(s => s.status === 'in_progress');
