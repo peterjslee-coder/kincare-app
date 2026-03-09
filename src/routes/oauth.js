@@ -1,9 +1,19 @@
 const express = require("express");
+const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { generateToken } = require("../middleware/auth");
 
 const router = express.Router();
+
+// In-memory store for single-use OAuth auth codes (code → { token, user, expiresAt })
+const oauthCodes = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, data] of oauthCodes) {
+    if (now > data.expiresAt) oauthCodes.delete(code);
+  }
+}, 60 * 1000);
 
 // Google OAuth configuration
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -18,10 +28,11 @@ router.get("/google", (req, res) => {
 
   const redirectUri = `${APP_URL}/api/oauth/google/callback`;
   const scope = encodeURIComponent("openid email profile");
-  const state = require("crypto").randomBytes(16).toString("hex");
+  const state = crypto.randomBytes(16).toString("hex");
 
   // Store state in a short-lived cookie for CSRF protection
-  res.cookie("oauth_state", state, { httpOnly: true, maxAge: 600000, sameSite: "lax" });
+  const isProduction = process.env.NODE_ENV === "production";
+  res.cookie("oauth_state", state, { httpOnly: true, maxAge: 600000, sameSite: "lax", secure: isProduction });
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${state}&access_type=offline&prompt=consent`;
 
@@ -32,6 +43,13 @@ router.get("/google", (req, res) => {
 router.get("/google/callback", async (req, res) => {
   try {
     const { code, state } = req.query;
+
+    // Validate CSRF state parameter
+    const savedState = req.cookies?.oauth_state;
+    if (!state || !savedState || state !== savedState) {
+      return res.redirect(`${APP_URL}?oauth_error=invalid_state`);
+    }
+    res.clearCookie("oauth_state");
 
     if (!code) {
       return res.redirect(`${APP_URL}?oauth_error=no_code`);
@@ -122,23 +140,42 @@ router.get("/google/callback", async (req, res) => {
       }
     }
 
-    // Generate JWT
+    // Generate JWT and a single-use auth code (never put JWT in URL)
     const token = generateToken(user);
+    const authCode = crypto.randomBytes(32).toString("hex");
+    oauthCodes.set(authCode, {
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        emailVerified: true,
+        isDemo: !!user.is_demo,
+      },
+      expiresAt: Date.now() + 60 * 1000, // 60 seconds
+    });
 
-    // Redirect to app with token (frontend will pick it up from URL)
-    res.redirect(`${APP_URL}?oauth_token=${token}&oauth_user=${encodeURIComponent(JSON.stringify({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      emailVerified: true,
-      isDemo: !!user.is_demo,
-    }))}`);
+    res.redirect(`${APP_URL}?oauth_code=${authCode}`);
   } catch (err) {
     console.error("Google OAuth callback error:", err);
     res.redirect(`${APP_URL}?oauth_error=server_error`);
   }
+});
+
+// ─── POST /api/oauth/exchange ─── Exchange single-use auth code for JWT
+router.post("/exchange", (req, res) => {
+  const { code } = req.body;
+  if (!code || !oauthCodes.has(code)) {
+    return res.status(400).json({ error: "Invalid or expired auth code" });
+  }
+  const data = oauthCodes.get(code);
+  oauthCodes.delete(code); // single-use
+  if (Date.now() > data.expiresAt) {
+    return res.status(400).json({ error: "Auth code expired" });
+  }
+  res.json({ token: data.token, user: data.user });
 });
 
 // ─── GET /api/oauth/config ─── Return whether Google OAuth is configured (public)

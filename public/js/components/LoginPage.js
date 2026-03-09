@@ -38,21 +38,32 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     }
 
     const params = new URLSearchParams(window.location.search);
-    const oauthToken = params.get('oauth_token');
-    const oauthUser = params.get('oauth_user');
+    const oauthCode = params.get('oauth_code');
     const oauthError = params.get('oauth_error');
 
-    if (oauthToken && oauthUser) {
-      try {
-        const user = JSON.parse(decodeURIComponent(oauthUser));
-        setAuthToken(oauthToken);
-        window.history.replaceState({}, '', window.location.pathname);
-        trackAuthEvent('login', 'oauth_success', { email: user.email, provider: 'google' });
-        onLogin(user);
-      } catch (e) {
-        console.error('OAuth parse error:', e);
-        trackAuthEvent('login', 'error', { error: 'OAuth parse error', source: 'oauth_callback' });
-      }
+    if (oauthCode) {
+      window.history.replaceState({}, '', window.location.pathname);
+      apiFetch('/api/oauth/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: oauthCode }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.token && data.user) {
+            setAuthToken(data.token);
+            trackAuthEvent('login', 'oauth_success', { email: data.user.email, provider: 'google' });
+            onLogin(data.user);
+          } else {
+            setError('Google sign-in failed. Please try again.');
+            trackAuthEvent('login', 'error', { error: data.error || 'exchange_failed', source: 'oauth' });
+          }
+        })
+        .catch(e => {
+          console.error('OAuth exchange error:', e);
+          setError('Google sign-in failed. Please try again.');
+          trackAuthEvent('login', 'error', { error: 'OAuth exchange error', source: 'oauth_callback' });
+        });
     }
     if (oauthError) {
       trackAuthEvent('login', 'error', { error: 'Google sign-in failed', source: 'oauth' });
