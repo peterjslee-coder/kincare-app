@@ -287,9 +287,22 @@ router.post("/login", validateLogin, async (req, res) => {
       return res.status(401).json({ error: "We don't have an account with that email. Check for typos, or sign up if you're new.", code: "EMAIL_NOT_FOUND" });
     }
 
+    // Account lockout: 5 failed attempts → 15 minute cooldown
+    const MAX_ATTEMPTS = 5;
+    const LOCKOUT_MINUTES = 15;
+    if (user.failed_login_attempts >= MAX_ATTEMPTS && user.last_failed_login) {
+      const lockoutUntil = new Date(user.last_failed_login).getTime() + LOCKOUT_MINUTES * 60 * 1000;
+      if (Date.now() < lockoutUntil) {
+        const minsLeft = Math.ceil((lockoutUntil - Date.now()) / 60000);
+        return res.status(429).json({ error: `Too many failed attempts. Try again in ${minsLeft} minute${minsLeft !== 1 ? "s" : ""}, or use "Forgot password" to reset.`, code: "ACCOUNT_LOCKED" });
+      }
+    }
+
     // Check if password was force-reset (must_change_password + recent password_changed_at = admin reset)
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
+      // Track failed attempt
+      await db.prepare("UPDATE users SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1, last_failed_login = CURRENT_TIMESTAMP WHERE id = ?").run(user.id);
       // Check if there's a pending password reset token (admin-initiated or user-initiated)
       const pendingReset = await db.prepare(
         "SELECT id FROM password_reset_tokens WHERE user_id = ? AND expires_at > NOW()"
@@ -298,6 +311,11 @@ router.post("/login", validateLogin, async (req, res) => {
         return res.status(401).json({ error: "Your password was recently reset. Check your email for a reset link, or use \"Forgot password\" below.", code: "PASSWORD_RESET_PENDING" });
       }
       return res.status(401).json({ error: "Incorrect password. Try again, or use \"Forgot password\" if you can't remember it.", code: "WRONG_PASSWORD" });
+    }
+
+    // Reset failed attempts on successful login
+    if (user.failed_login_attempts > 0) {
+      await db.prepare("UPDATE users SET failed_login_attempts = 0, last_failed_login = NULL WHERE id = ?").run(user.id);
     }
 
     // Check if 2FA is enabled

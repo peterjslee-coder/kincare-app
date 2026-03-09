@@ -633,6 +633,9 @@ async function initializeDatabase() {
     `ALTER TABLE consent_outreach ADD COLUMN IF NOT EXISTS phone_verification_code TEXT`,
     `ALTER TABLE consent_outreach ADD COLUMN IF NOT EXISTS phone_verification_sent_at TIMESTAMPTZ`,
     `ALTER TABLE consent_outreach ADD COLUMN IF NOT EXISTS phone_verified_at TIMESTAMPTZ`,
+    // v1.39.38 — Account lockout after failed logins
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_failed_login TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
