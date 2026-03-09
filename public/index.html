@@ -35,8 +35,8 @@
   <script src="/vendor/react.production.min.js"></script>
   <script src="/vendor/react-dom.production.min.js"></script>
 
-  <!-- SimpleWebAuthn Browser — passkey/biometric login -->
-  <script crossorigin="anonymous" src="https://unpkg.com/@simplewebauthn/browser@11/dist/bundle/index.umd.min.js"></script>
+  <!-- SimpleWebAuthn Browser — passkey/biometric login (self-hosted, was unpkg CDN) -->
+  <script src="/vendor/simplewebauthn-browser.min.js"></script>
   <script crossorigin="anonymous" src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
   <!-- Leaflet JS for maps -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -48,8 +48,8 @@
   <script crossorigin="anonymous" src="https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js"></script>
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
-  <script>window.APP_VERSION = '1.39.57';</script>
-  <script src="/js-compiled/bundle.js?v=1.39.57"></script>
+  <script>window.APP_VERSION = '1.39.58';</script>
+  <script src="/js-compiled/bundle.js?v=1.39.58"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version
