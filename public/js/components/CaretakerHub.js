@@ -52,6 +52,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const calendarRef = useRef(null);
   const [claimingJobId, setClaimingJobId] = useState(null);
   const [cancellingJobId, setCancellingJobId] = useState(null);
+  // Propose different time (for conflict jobs on dashboard)
+  const [proposingFor, setProposingFor] = useState(null);
+  const [proposalDate, setProposalDate] = useState('');
+  const [proposalTime, setProposalTime] = useState('');
+  const [proposalMsg, setProposalMsg] = useState('');
+  const [proposalLoading, setProposalLoading] = useState(false);
   // Inline profile editing state (for onboarding)
   const [profileForm, setProfileForm] = useState({ bio: '', hourlyRate: '', rateDaytime: '', rateNighttime: '', rateOvernight: '', foodAllergies: '', medicalConditions: '' });
   const [profileSaving, setProfileSaving] = useState(false);
@@ -751,6 +757,44 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       console.error('Cancel job error:', err);
     }
     setCancellingJobId(null);
+  };
+
+  const openProposalModal = (job) => {
+    setProposingFor(job);
+    setProposalDate(job.date || job.scheduled_date || '');
+    // Shift time +2 hours as a starting suggestion to avoid the conflict
+    const origTime = job.time || job.scheduled_time || '';
+    if (origTime) {
+      const [h, m] = origTime.split(':').map(Number);
+      const newH = Math.min(h + 2, 20);
+      setProposalTime(`${String(newH).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}`);
+    } else {
+      setProposalTime('');
+    }
+    setProposalMsg('');
+  };
+
+  const handlePropose = async () => {
+    if (!proposingFor || !proposalDate || !proposalTime) return;
+    setProposalLoading(true);
+    try {
+      const res = await apiFetch(`/api/sessions/${proposingFor.id}/propose-time`, {
+        method: 'POST',
+        body: JSON.stringify({ proposedDate: proposalDate, proposedTime: proposalTime, message: proposalMsg || null }),
+      });
+      if (res?.ok) {
+        showToast && showToast('Time proposal sent to family!', 'success');
+        setProposingFor(null);
+        const dashRes = await apiFetch('/api/dashboard');
+        if (dashRes?.ok) setData(await dashRes.json());
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast ? showToast(err.error || 'Failed to send proposal', 'error') : alert(err.error || 'Failed to send proposal');
+      }
+    } catch (err) {
+      console.error('Propose time error:', err);
+    }
+    setProposalLoading(false);
   };
 
   const profile = data.profile || {};
@@ -1542,12 +1586,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           </div>
                         )}
                       </div>
-                      <button onClick={(e) => handleClaimJob(job.id, e, effectiveTotal)} disabled={claimingJobId === job.id}
-                        style={{
-                          padding: '10px 20px', background: claimingJobId === job.id ? '#ccc' : '#e8724a', color: '#fff', border: 'none',
-                          borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
-                          boxShadow: '0 2px 6px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
-                        }}>{claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                        <button onClick={(e) => handleClaimJob(job.id, e, effectiveTotal)} disabled={claimingJobId === job.id}
+                          style={{
+                            padding: '10px 20px', background: claimingJobId === job.id ? '#ccc' : '#e8724a', color: '#fff', border: 'none',
+                            borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
+                            boxShadow: '0 2px 6px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
+                          }}>{claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
+                        {job.hasConflict && (
+                          <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
+                            style={{
+                              padding: '7px 14px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a',
+                              borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}>Propose Different Time</button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -2553,6 +2606,49 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             )) : (
               <p style={{ color: '#888', fontSize: 14, textAlign: 'center', margin: '20px 0' }}>No reviews yet</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Propose Different Time Modal */}
+      {proposingFor && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setProposingFor(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 400, maxHeight: '85vh', overflowY: 'auto' }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: '#333' }}>Propose Different Time</h3>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>
+              Suggest an alternate time for this visit. The family will be notified and can accept or decline.
+            </p>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Date</label>
+              <input type="date" value={proposalDate} onChange={(e) => setProposalDate(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Time</label>
+              <input type="time" value={proposalTime} onChange={(e) => setProposalTime(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Message (optional)</label>
+              <textarea value={proposalMsg} onChange={(e) => setProposalMsg(e.target.value)}
+                placeholder="e.g., I have another appointment until 1 PM but am free after that"
+                style={{ width: '100%', minHeight: 70, padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setProposingFor(null)}
+                style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid #ddd', background: '#fff', color: '#666', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={handlePropose} disabled={proposalLoading || !proposalDate || !proposalTime}
+                style={{
+                  flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none',
+                  background: (proposalLoading || !proposalDate || !proposalTime) ? '#ccc' : '#1b6b5a',
+                  color: '#fff', fontSize: 14, fontWeight: 600, cursor: proposalLoading ? 'wait' : 'pointer',
+                }}>
+                {proposalLoading ? 'Sending...' : 'Send Proposal'}
+              </button>
+            </div>
           </div>
         </div>
       )}
