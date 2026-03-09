@@ -471,7 +471,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   // Fetch caregiver financial data
   useEffect(() => {
     if (activeTab === 'payments') {
-      apiFetch('/api/payments/connect-status').then(async r => {
+      apiFetch('/api/payments/connect/status').then(async r => {
         if (r?.ok) { const d = await r.json(); setStripeStatus(d); }
       }).catch(() => {});
       apiFetch('/api/payments/payout-preference').then(async r => {
@@ -641,12 +641,15 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   // Caregiver - Payments handlers
   const handleConnectStripe = async () => {
     try {
-      const res = await apiFetch('/api/payments/connect-account', { method: 'POST' });
+      const res = await apiFetch('/api/payments/connect/link', { method: 'POST' });
       if (res?.ok) {
         const data = await res.json();
         if (data.url) {
           window.location.href = data.url;
         }
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        showToast(err?.error || 'Failed to start Stripe setup', 'error');
       }
     } catch (err) {
       showToast('Failed to start Stripe setup', 'error');

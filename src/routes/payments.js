@@ -488,6 +488,61 @@ router.post("/connect/account-session", requireRole("caregiver"), requirePayment
   }
 });
 
+// ─── POST /api/payments/connect/link ───
+// Create a Stripe Account Link for redirect-based onboarding (used by MyAccount Payments tab)
+router.post("/connect/link", requireRole("caregiver"), requirePaymentsEnabled, async (req, res) => {
+  const db = await getDb();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured yet.", notConfigured: true });
+  }
+
+  const profile = await db.prepare("SELECT stripe_account_id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+
+  let stripeAccountId = profile?.stripe_account_id;
+
+  // Create account first if needed
+  if (!stripeAccountId) {
+    try {
+      const user = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+      const account = await stripe.accounts.create({
+        type: "express",
+        country: "US",
+        email: user.email,
+        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+        business_type: "individual",
+        individual: {
+          first_name: profile?.legal_first_name || user.first_name,
+          last_name: profile?.legal_last_name || user.last_name,
+          email: user.email,
+        },
+        metadata: { inplace_user_id: req.user.id },
+      });
+      stripeAccountId = account.id;
+      await db.prepare(
+        "UPDATE caregiver_profiles SET stripe_account_id = ?, stripe_onboard_complete = 0, updated_at = NOW() WHERE user_id = ?"
+      ).run(stripeAccountId, req.user.id);
+    } catch (err) {
+      console.error("Stripe account creation error:", err);
+      return res.status(500).json({ error: "Failed to create Stripe account" });
+    }
+  }
+
+  try {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    const accountLink = await stripe.accountLinks.create({
+      account: stripeAccountId,
+      refresh_url: `${origin}/account#payments-refresh`,
+      return_url: `${origin}/account#payments-complete`,
+      type: "account_onboarding",
+    });
+    res.json({ url: accountLink.url });
+  } catch (err) {
+    console.error("Stripe Account Link error:", err);
+    res.status(500).json({ error: "Failed to create onboarding link" });
+  }
+});
+
 // ─── GET /api/payments/connect/status ───
 // Check caregiver's Stripe Connect account status
 router.get("/connect/status", requireRole("caregiver"), async (req, res) => {
