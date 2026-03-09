@@ -20,24 +20,24 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=1.39.45">
+  <link rel="stylesheet" href="/css/styles.css?v=1.39.46">
 
   <!-- Leaflet CSS for maps (AreaMap, Caregivers nearby) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 
   <!-- Plausible Analytics — privacy-friendly, no cookies, GDPR compliant -->
-  <script defer data-domain="yourinplace.com" src="https://plausible.io/js/script.js" integrity="sha384-TDBMBYT3vz715r8UIyVTB4AUTXubXmLI02DeDWgyDahvCXmPV4Vgx2m6yQvI19d/" crossorigin="anonymous"></script>
+  <script defer data-domain="yourinplace.com" src="https://plausible.io/js/script.js"></script>
 </head>
 <body>
   <div id="root"></div>
 
   <!-- React CDN (Babel removed — JSX is pre-compiled at build time) -->
-  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" integrity="sha384-tMH8h3BGESGckSAVGZ82T9n90ztNXxvdwvdM6UoR56cYcf+0iGXBliJ29D+wZ/x8"></script>
-  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" integrity="sha384-bm7MnzvK++ykSwVJ2tynSE5TRdN+xL418osEVF2DE/L/gfWHj91J2Sphe582B1Bh"></script>
+  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 
   <!-- SimpleWebAuthn Browser — passkey/biometric login -->
-  <script crossorigin="anonymous" src="https://unpkg.com/@simplewebauthn/browser@11/dist/bundle/index.umd.min.js" integrity="sha384-MEoU+35r/Mcpi7hzGCSKXkm+Yu7nRyDqV8z+GjTNBhxzV/JrQXe88JTG1ol0+F1e"></script>
-  <script crossorigin="anonymous" src="https://cdn.socket.io/4.7.4/socket.io.min.js" integrity="sha384-Gr6Lu2Ajx28mzwyVR8CFkULdCU7kMlZ9UthllibdOSo6qAiN+yXNHqtgdTvFXMT4"></script>
+  <script crossorigin="anonymous" src="https://unpkg.com/@simplewebauthn/browser@11/dist/bundle/index.umd.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
   <!-- Leaflet JS for maps -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <!-- Stripe.js for payments (no SRI — Stripe serves dynamic versions) -->
@@ -45,11 +45,11 @@
   <!-- Stripe Connect.js for embedded onboarding (no SRI — dynamic) -->
   <script src="https://connect-js.stripe.com/v1.0/connect.js" async></script>
   <!-- Twilio Video SDK for in-app video/voice calls -->
-  <script crossorigin="anonymous" src="https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js" integrity="sha384-LtJzs64tk3PAa681ns6wcoWn86JMS2vpZclJ8ZVv8/LeN0Pd8oghQr+t1RazIs5y"></script>
+  <script crossorigin="anonymous" src="https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js"></script>
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
-  <script>window.APP_VERSION = '1.39.45';</script>
-  <script src="/js-compiled/bundle.js?v=1.39.45"></script>
+  <script>window.APP_VERSION = '1.39.46';</script>
+  <script src="/js-compiled/bundle.js?v=1.39.46"></script>
 
   <script>
     // Service worker: register/update without destroying push subscriptions
