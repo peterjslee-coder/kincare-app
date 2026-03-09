@@ -839,7 +839,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {disclosureCheck('accept1099',
               '1099 Tax Reporting',
-              'As an independent contractor, you will receive a 1099-NEC for earnings over $600 in a calendar year. You are responsible for your own taxes, including self-employment tax.'
+              'As an independent contractor, you will receive a 1099-NEC from Stripe for earnings over $600 in a calendar year. When you set up your payout account, Stripe will securely collect your full SSN directly for IRS reporting — InPlace never sees or stores your full SSN. You are responsible for your own taxes, including self-employment tax.'
             )}
 
             {disclosureCheck('acceptIndependentContractor',
@@ -1028,9 +1028,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {step === 4 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>🔒 Background Check Information</h2>
-            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
+            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
               This information is required for your background check and will be kept secure.
             </p>
+            <div style={{ padding: '12px 14px', background: '#f0faf8', borderRadius: '8px', marginBottom: '18px', border: '1px solid #d4ede8' }}>
+              <p style={{ fontSize: '13px', color: '#1b6b5a', margin: 0, lineHeight: '1.5' }}>
+                <strong>About your SSN:</strong> We only store the last 4 digits here for identity verification during the background check.
+                When you set up your payout account, Stripe will securely collect your full SSN directly — InPlace never sees or stores it.
+                This is required by the IRS so that Stripe can issue your 1099-NEC for earnings over $600 in a calendar year.
+              </p>
+            </div>
             {errorSummary()}
             <div style={rowStyle}>
               <div style={fieldGroup}>
