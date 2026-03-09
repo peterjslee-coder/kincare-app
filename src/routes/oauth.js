@@ -165,7 +165,7 @@ router.get("/google/callback", async (req, res) => {
 });
 
 // ─── POST /api/oauth/exchange ─── Exchange single-use auth code for JWT
-router.post("/exchange", (req, res) => {
+router.post("/exchange", async (req, res) => {
   const { code } = req.body;
   if (!code || !oauthCodes.has(code)) {
     return res.status(400).json({ error: "Invalid or expired auth code" });
