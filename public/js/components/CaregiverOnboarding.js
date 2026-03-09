@@ -29,12 +29,19 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   // ─── Resilient fetch: auto-retry on transient network failures ───
   const resilientFetch = async (url, options, retries = 2) => {
+    // Auto-inject CSRF token for state-changing requests
+    if (options && ['POST', 'PUT', 'DELETE', 'PATCH'].includes((options.method || '').toUpperCase())) {
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (typeof window !== 'undefined' && window.getCsrfToken ? window.getCsrfToken() : null);
+      if (csrf && options.headers) {
+        options.headers['X-CSRF-Token'] = csrf;
+      }
+    }
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         if (!navigator.onLine) {
           throw new Error('OFFLINE');
         }
-        const res = await fetch(url, options);
+        const res = await fetch(url, { credentials: 'same-origin', ...options });
         return res;
       } catch (err) {
         if (err.message === 'OFFLINE') throw err;
@@ -68,6 +75,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const token = authToken || window.AUTH_TOKEN;
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : null;
+      if (csrf) headers['X-CSRF-Token'] = csrf;
       fetch('/api/onboarding-events', {
         method: 'POST', headers,
         body: JSON.stringify({

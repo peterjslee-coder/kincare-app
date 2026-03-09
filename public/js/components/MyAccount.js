@@ -681,9 +681,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       formData.append('types', JSON.stringify([docType]));
       formData.append('metadata', JSON.stringify([{}]));
       const token = window.AUTH_TOKEN;
+      const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
+      const _csrfH = _csrf ? { 'X-CSRF-Token': _csrf } : {};
       const res = await fetch('/api/caregiver-onboarding/documents', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'same-origin',
+        headers: { 'Authorization': `Bearer ${token}`, ..._csrfH },
         body: formData,
       });
       if (res.ok) {
@@ -779,7 +782,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   const handleLogoutFromAccount = () => {
     AUTH_TOKEN = null;
     // Clear httpOnly cookie via server
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+    const _lcsrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: _lcsrf ? { 'X-CSRF-Token': _lcsrf } : {} }).catch(() => {});
     if (typeof disconnectSocket === 'function') disconnectSocket();
     window.location.reload();
   };

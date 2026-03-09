@@ -104,9 +104,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       formData.append('types', JSON.stringify([docType]));
       formData.append('metadata', JSON.stringify([{}]));
       const token = window.AUTH_TOKEN;
+      const csrfHeaders = {};
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
+      if (csrf) csrfHeaders['X-CSRF-Token'] = csrf;
       const res = await fetch('/api/caregiver-onboarding/documents', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'same-origin',
+        headers: { 'Authorization': `Bearer ${token}`, ...csrfHeaders },
         body: formData,
       });
       if (res.ok) {
@@ -620,9 +624,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           const formData = new FormData();
           logPhotos.forEach(f => formData.append('photos', f));
           const token = window.AUTH_TOKEN;
+          const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
+          const _csrfH = _csrf ? { 'X-CSRF-Token': _csrf } : {};
           await fetch(`${API_BASE}/api/photos/visit/${logData.visitLog.id}`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
+            credentials: 'same-origin',
+            headers: { 'Authorization': `Bearer ${token}`, ..._csrfH },
             body: formData,
           });
         }
@@ -2483,9 +2490,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         const formData = new FormData();
                         checkOutPhotos.forEach(f => formData.append('photos', f));
                         const token = window.AUTH_TOKEN;
+                        const __csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
+                        const __csrfH = __csrf ? { 'X-CSRF-Token': __csrf } : {};
                         await fetch(`${API_BASE}/api/photos/visit/${checkOutData.visitLog.id}`, {
                           method: 'POST',
-                          headers: { 'Authorization': `Bearer ${token}` },
+                          credentials: 'same-origin',
+                          headers: { 'Authorization': `Bearer ${token}`, ...__csrfH },
                           body: formData,
                         });
                       } catch (photoErr) { console.warn('Photo upload failed:', photoErr); }

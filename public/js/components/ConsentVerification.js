@@ -69,10 +69,13 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
       const formData = new FormData();
       formData.append('document', file);
       formData.append('document_type', selectedDocType);
-      const token = localStorage.getItem('token');
+      const token = window.AUTH_TOKEN;
+      const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
+      const _csrfH = _csrf ? { 'X-CSRF-Token': _csrf } : {};
       const res = await fetch(`/api/consent/${recipientId}/documents`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'same-origin',
+        headers: { 'Authorization': `Bearer ${token}`, ..._csrfH },
         body: formData,
       });
       if (res.ok) {

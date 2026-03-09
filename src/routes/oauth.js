@@ -2,7 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
-const { generateToken, setAuthCookie } = require("../middleware/auth");
+const { generateToken, setAuthCookie, setCsrfCookie } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -176,6 +176,7 @@ router.post("/exchange", (req, res) => {
     return res.status(400).json({ error: "Auth code expired" });
   }
   setAuthCookie(res, data.token);
+  setCsrfCookie(res);
   res.json({ token: data.token, user: data.user });
 });
 

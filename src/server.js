@@ -187,7 +187,7 @@ app.use(cors({
   origin: ALLOWED_ORIGINS,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Active-Role", "x-admin-api-key"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Active-Role", "x-admin-api-key", "x-csrf-token"],
 }));
 app.use(require("cookie-parser")());
 app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
@@ -247,6 +247,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── CSRF Protection ───
+const { verifyCsrf } = require("./middleware/auth");
+app.use("/api", verifyCsrf);
+
 // ─── Routes ───
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/care-recipients", require("./routes/careRecipients"));
@@ -283,7 +287,7 @@ app.use("/api/consent", require("./routes/consent"));
 app.use("/api/documents", require("./routes/documents"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.40";
+const APP_VERSION = "1.39.41";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
-const { generateToken, authenticate, setAuthCookie, clearAuthCookie } = require("../middleware/auth");
+const { generateToken, authenticate, setAuthCookie, clearAuthCookie, setCsrfCookie } = require("../middleware/auth");
 const { validateRegister, validateLogin, validateProfileUpdate } = require("../middleware/validate");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const { sendPushToAdmins, notifyAdmins } = require("./push");
@@ -262,6 +262,7 @@ router.post("/register", validateRegister, async (req, res) => {
     });
 
     setAuthCookie(res, token);
+    setCsrfCookie(res);
     res.status(201).json({ user, token });
   } catch (err) {
     console.error("Registration error:", err);
@@ -376,6 +377,7 @@ router.post("/login", validateLogin, async (req, res) => {
     }
 
     setAuthCookie(res, token);
+    setCsrfCookie(res);
     res.json(responseData);
   } catch (err) {
     console.error("Login error:", err);
@@ -499,6 +501,7 @@ router.get("/me", authenticate, async (req, res) => {
   // Include token for in-memory use (WebSocket auth) — cookie handles persistence
   const token = generateToken(user);
   setAuthCookie(res, token);
+  setCsrfCookie(res);
   res.json({
     user: {
       ...user,
@@ -619,6 +622,7 @@ router.post("/add-role", authenticate, async (req, res) => {
     });
 
     setAuthCookie(res, token);
+    setCsrfCookie(res);
     res.json({ roles: currentRoles, token });
   } catch (err) {
     console.error("Add role error:", err);
@@ -675,6 +679,7 @@ router.post("/remove-role", authenticate, async (req, res) => {
     ).run(uuid(), user.id, "Role Removed", `Removed ${removeRole} role from account`);
 
     setAuthCookie(res, token);
+    setCsrfCookie(res);
     res.json({ roles: newRoles, token, primaryRole: newPrimaryRole });
   } catch (err) {
     console.error("Remove role error:", err);

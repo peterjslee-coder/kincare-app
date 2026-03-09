@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
@@ -136,4 +137,36 @@ function clearAuthCookie(res) {
   res.clearCookie("auth_token", { path: "/" });
 }
 
-module.exports = { generateToken, authenticate, requireRole, requireAdmin, setAuthCookie, clearAuthCookie };
+// CSRF protection — double-submit cookie pattern
+// Server sets a JS-readable csrf_token cookie; frontend reads it and sends as X-CSRF-Token header.
+// Server compares header to cookie. An attacker on a different origin can't read the cookie.
+function setCsrfCookie(res) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const isProduction = process.env.NODE_ENV === "production";
+  res.cookie("csrf_token", token, {
+    httpOnly: false, // must be readable by frontend JS
+    secure: isProduction,
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/",
+  });
+  return token;
+}
+
+function verifyCsrf(req, res, next) {
+  // Skip for safe methods (GET, HEAD, OPTIONS)
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+  // Skip for admin API key auth (server-to-server, no cookie)
+  if (req.headers["x-admin-api-key"]) return next();
+  // Skip if no auth cookie present (public endpoints like login/register)
+  if (!req.cookies?.auth_token) return next();
+
+  const cookieToken = req.cookies?.csrf_token;
+  const headerToken = req.headers["x-csrf-token"];
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    return res.status(403).json({ error: "Invalid CSRF token" });
+  }
+  next();
+}
+
+module.exports = { generateToken, authenticate, requireRole, requireAdmin, setAuthCookie, clearAuthCookie, setCsrfCookie, verifyCsrf };

@@ -1,7 +1,7 @@
 const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
-const { generateToken, authenticate, setAuthCookie } = require("../middleware/auth");
+const { generateToken, authenticate, setAuthCookie, setCsrfCookie } = require("../middleware/auth");
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -281,6 +281,7 @@ router.post("/authenticate/verify", async (req, res) => {
     console.log(`  [passkey] Authenticated ${passkey.email} via passkey "${passkey.name}"`);
 
     setAuthCookie(res, token);
+    setCsrfCookie(res);
     res.json({
       token,
       user: {

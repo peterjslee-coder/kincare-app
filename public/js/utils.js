@@ -59,15 +59,24 @@ const setActiveRole = window.setActiveRole = (role) => {
 };
 const getActiveRole = window.getActiveRole = () => ACTIVE_ROLE;
 
+// Read CSRF token from cookie (set by server, JS-readable)
+const getCsrfToken = window.getCsrfToken = () => {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match ? match[1] : null;
+};
+
 const apiFetch = window.apiFetch = async (url, options = {}) => {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
   if (ACTIVE_ROLE) headers['X-Active-Role'] = ACTIVE_ROLE;
+  const csrf = getCsrfToken();
+  if (csrf) headers['X-CSRF-Token'] = csrf;
   const response = await fetch(API_BASE + url, { ...options, headers, credentials: 'same-origin' });
   if (response.status === 401) {
     setAuthToken(null);
     // Clear server cookie on 401
-    fetch(API_BASE + '/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+    const _lcsrf = getCsrfToken();
+    fetch(API_BASE + '/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: _lcsrf ? { 'X-CSRF-Token': _lcsrf } : {} }).catch(() => {});
     return null;
   }
   return response;
