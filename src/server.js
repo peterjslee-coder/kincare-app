@@ -358,7 +358,19 @@ app.use((err, req, res, next) => {
 
 // ─── Start ───
 async function start() {
-  await initializeDatabase();
+  // Retry DB connection up to 5 times (Railway internal DNS can be slow on cold start)
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      await initializeDatabase();
+      break; // success
+    } catch (err) {
+      console.error(`  DB init attempt ${attempt}/5 failed:`, err.message);
+      if (attempt === 5) throw err;
+      const delay = attempt * 2000; // 2s, 4s, 6s, 8s
+      console.log(`  Retrying in ${delay / 1000}s...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
 
   // Initialize VAPID keys for push notifications (env → DB → auto-generate)
   const { initializeVapidKeys } = require("./routes/push");
