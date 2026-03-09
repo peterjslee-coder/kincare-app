@@ -141,15 +141,31 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           </div>
         </div>
         <div className="splash-hero-image" style={{ position: 'relative' }}>
+          {/* Warm gradient fallback — always visible behind the photo */}
           <div style={{
             position: 'absolute', inset: 0,
-            backgroundImage: 'url(https://images.unsplash.com/photo-1556911220-bff31c812dba?w=1200&q=80)',
+            background: 'linear-gradient(135deg, #f0faf8 0%, #d4ede8 30%, #e8ddd0 60%, #f5e6d8 100%)',
+          }}></div>
+          {/* Care-themed decorative elements over the gradient */}
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, zIndex: 0 }}>
+            <div style={{ fontSize: 72, opacity: 0.15 }}>{'\u{1F3E0}'}</div>
+            <div style={{ display: 'flex', gap: 24, opacity: 0.12 }}>
+              <span style={{ fontSize: 36 }}>{'\u{1F9D1}\u{200D}\u{2695}\u{FE0F}'}</span>
+              <span style={{ fontSize: 36 }}>{'\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}'}</span>
+              <span style={{ fontSize: 36 }}>{'\u2764\uFE0F'}</span>
+            </div>
+          </div>
+          {/* Photo layer — loads on top of gradient when available */}
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 1,
+            backgroundImage: 'url(/images/hero-home.jpg)',
             backgroundSize: 'cover', backgroundPosition: 'center 40%',
           }}></div>
+          {/* Left fade overlay */}
           <div style={{
             position: 'absolute', inset: 0,
             background: 'linear-gradient(to right, #ffffff 0%, rgba(255,255,255,0.55) 30%, rgba(255,255,255,0) 60%)',
-            zIndex: 1,
+            zIndex: 2,
           }}></div>
         </div>
       </section>
