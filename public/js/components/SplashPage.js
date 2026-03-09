@@ -161,10 +161,10 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             backgroundImage: 'url(/images/hero-home.jpg)',
             backgroundSize: 'cover', backgroundPosition: 'center 50%',
           }}></div>
-          {/* Left fade overlay */}
+          {/* Left fade overlay — gentle blend so text side stays clean */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(to right, #ffffff 0%, rgba(255,255,255,0.55) 30%, rgba(255,255,255,0) 60%)',
+            background: 'linear-gradient(to right, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.25) 25%, rgba(255,255,255,0) 45%)',
             zIndex: 2,
           }}></div>
         </div>
