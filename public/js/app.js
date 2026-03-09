@@ -916,7 +916,6 @@ const App = () => {
         { id: 'care-team', icon: '👪', label: 'Care Team' },
         { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
       ]},
-      { id: 'schedule', icon: React.createElement(_DayIcon, null), label: 'Schedule' },
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
