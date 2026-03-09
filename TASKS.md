@@ -157,6 +157,18 @@
 - [ ] **After adding care recipient, no path forward.** User lands back on the care recipient page with no indication of what to do next. "This isn't a wizard, it just dumped me on a menu page." Need auto-advance to next step (care preferences → verification → done). *(Feedback #8 — Son Tester, Mar 5 v1.38.0)* **P0**
 - [ ] **Format ALL phone numbers consistently as (XXX) YYY-ZZZZ.** Phone numbers still display in inconsistent formats across the app. Apply input mask + display formatting everywhere. *(Feedback #12 — Son Tester, Mar 5 v1.38.0)* **P1**
 
+- [ ] **Mobile formatting broken on feedback/general pages.** Pete reports "formatting on mobile screen doesn't work here." Needs investigation — which page specifically. *(Feedback — Pete, Mar 6)* **P2**
+- [ ] **Calendar text misaligned — days don't match numbers.** Days-of-week header doesn't line up with the date numbers below. *(Feedback — Pete, Mar 6)* **P1**
+- [ ] **"Next" button unresponsive when scheduling care.** Pete tried to schedule care and couldn't click Next — "looks available but doesn't work." Investigate schedule request flow click handler. *(Feedback — Pete, Mar 6)* **P0**
+- [ ] **Unfilled request escalation reminders.** If a care request goes unfilled: 48hr out → "raise your pay offer"; 24hr → "still no one, raise offer"; 1hr prior → "cancelled, no caretaker found." Auto-escalation system. *(Feedback — Pete, Mar 6)* **P2**
+- [ ] **Caregiver drag-and-select on calendar not working.** Cary reports drag-to-select doesn't work on the caregiver calendar view. *(Feedback — Cary, Mar 6)* **P1**
+- [ ] **Map search → caregiver shows only 1 week.** Selecting Cary from map search only shows one week of availability with no way to see more. Should show monthly calendar or a scheduling shortcut with Cary prefilled. *(Feedback — Pete, Mar 6)* **P2**
+- [ ] **Caregiver appointment tiles need more detail on tap.** Cary wants to tap appointment tiles for care needs, notes from care team, feedback. Currently too sparse. *(Feedback — Cary, Mar 6)* **P2**
+- [ ] **"$120 flew over" animation on accept — visual bug.** When Cary accepted Tony Nav's appointment, "$120" animated to the confirmed tab. Unintended animation. *(Feedback — Cary, Mar 6)* **P2**
+- [ ] **Cancellation policy acknowledgment for caregivers.** On accepting an appointment, caregiver must check a box: "I understand I must cancel 24+ hours before start, or the care team can leave a review." *(Feedback — Cary, Mar 6)* **P2**
+- [ ] **Family cancellation charge acknowledgment.** Families must click something acknowledging they'll be charged if cancelling inside 24 hours. *(Feedback — Cary, Mar 6)* **P2**
+- [ ] **2FA First Steps checklist doesn't clear properly.** Cary: "instructions say scroll to bottom of settings page, I've done that, it doesn't clear. Click again → white screen." May be related to previously fixed WSD but needs re-verification. *(Feedback — Cary, Mar 6)* **P1**
+
 ## Features — Up Next
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
