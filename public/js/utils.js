@@ -46,8 +46,8 @@ const formatServiceType = window.formatServiceType = (type) => {
 let AUTH_TOKEN = null;
 const setAuthToken = window.setAuthToken = (token) => {
   AUTH_TOKEN = token;
-  if (token) localStorage.setItem('auth_token', token);
-  else localStorage.removeItem('auth_token');
+  // Token is now stored in httpOnly cookie by the server — no localStorage
+  // Keep in-memory for WebSocket auth and in-flight requests
 };
 
 // Active role for dual-role users (which view/mode they're in)
@@ -63,8 +63,13 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
   if (ACTIVE_ROLE) headers['X-Active-Role'] = ACTIVE_ROLE;
-  const response = await fetch(API_BASE + url, { ...options, headers });
-  if (response.status === 401) { setAuthToken(null); return null; }
+  const response = await fetch(API_BASE + url, { ...options, headers, credentials: 'same-origin' });
+  if (response.status === 401) {
+    setAuthToken(null);
+    // Clear server cookie on 401
+    fetch(API_BASE + '/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+    return null;
+  }
   return response;
 };
 
@@ -470,8 +475,7 @@ const checkPushHealth = window.checkPushHealth = async () => {
     }
 
     // Verify server knows about this subscription
-    const token = window.AUTH_TOKEN || localStorage.getItem('auth_token');
-    if (!token) return; // not logged in
+    if (!window.AUTH_TOKEN) return; // not logged in
 
     const statusRes = await apiFetch('/api/push/status');
     if (statusRes && statusRes.ok) {

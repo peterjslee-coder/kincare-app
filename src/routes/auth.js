@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
-const { generateToken, authenticate } = require("../middleware/auth");
+const { generateToken, authenticate, setAuthCookie, clearAuthCookie } = require("../middleware/auth");
 const { validateRegister, validateLogin, validateProfileUpdate } = require("../middleware/validate");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const { sendPushToAdmins, notifyAdmins } = require("./push");
@@ -261,6 +261,7 @@ router.post("/register", validateRegister, async (req, res) => {
       data: { type: "new_registration", userId: id, email },
     });
 
+    setAuthCookie(res, token);
     res.status(201).json({ user, token });
   } catch (err) {
     console.error("Registration error:", err);
@@ -374,6 +375,7 @@ router.post("/login", validateLogin, async (req, res) => {
       responseData.mustChangePassword = true;
     }
 
+    setAuthCookie(res, token);
     res.json(responseData);
   } catch (err) {
     console.error("Login error:", err);
@@ -401,6 +403,8 @@ router.post("/demo-login", async (req, res) => {
     const token = generateToken(user);
     let roles;
     try { roles = user.roles ? JSON.parse(user.roles) : [user.role]; } catch { roles = [user.role]; }
+    // Demo sessions: clear any persistent cookie (don't persist demo logins)
+    clearAuthCookie(res);
     res.json({
       user: {
         id: user.id, email: user.email, role: user.role, roles,
@@ -414,6 +418,12 @@ router.post("/demo-login", async (req, res) => {
     console.error("Demo login error:", err);
     res.status(500).json({ error: "Demo login failed" });
   }
+});
+
+// ─── POST /api/auth/logout ───
+router.post("/logout", (req, res) => {
+  clearAuthCookie(res);
+  res.json({ ok: true });
 });
 
 // ─── POST /api/auth/change-password ───
@@ -486,6 +496,9 @@ router.get("/me", authenticate, async (req, res) => {
     onboardingComplete = cgProfile ? !!cgProfile.onboarding_complete : false;
   }
 
+  // Include token for in-memory use (WebSocket auth) — cookie handles persistence
+  const token = generateToken(user);
+  setAuthCookie(res, token);
   res.json({
     user: {
       ...user,
@@ -498,6 +511,7 @@ router.get("/me", authenticate, async (req, res) => {
       linkedAccounts: oauthAccounts || [],
       onboarding_complete: onboardingComplete,
     },
+    token,
   });
 });
 
@@ -604,6 +618,7 @@ router.post("/add-role", authenticate, async (req, res) => {
       data: { type: "role_added", userId: user.id },
     });
 
+    setAuthCookie(res, token);
     res.json({ roles: currentRoles, token });
   } catch (err) {
     console.error("Add role error:", err);
@@ -659,6 +674,7 @@ router.post("/remove-role", authenticate, async (req, res) => {
       "INSERT INTO activity_feed (id, user_id, type, title, body, created_at) VALUES (?, ?, 'role_removed', ?, ?, NOW())"
     ).run(uuid(), user.id, "Role Removed", `Removed ${removeRole} role from account`);
 
+    setAuthCookie(res, token);
     res.json({ roles: newRoles, token, primaryRole: newPrimaryRole });
   } catch (err) {
     console.error("Remove role error:", err);

@@ -680,7 +680,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       formData.append('documents', file);
       formData.append('types', JSON.stringify([docType]));
       formData.append('metadata', JSON.stringify([{}]));
-      const token = window.AUTH_TOKEN || localStorage.getItem('auth_token');
+      const token = window.AUTH_TOKEN;
       const res = await fetch('/api/caregiver-onboarding/documents', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
@@ -777,8 +777,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       ];
 
   const handleLogoutFromAccount = () => {
-    localStorage.removeItem('auth_token');
     AUTH_TOKEN = null;
+    // Clear httpOnly cookie via server
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
     if (typeof disconnectSocket === 'function') disconnectSocket();
     window.location.reload();
   };

@@ -9,7 +9,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const [inviteError, setInviteError] = useState(null);
   const [loading, setLoading] = useState(resumeMode ? false : true);
   const [saving, setSaving] = useState(false);
-  const [authToken, setAuthTokenState] = useState(resumeMode ? (window.AUTH_TOKEN || localStorage.getItem('auth_token')) : null);
+  const [authToken, setAuthTokenState] = useState(resumeMode ? window.AUTH_TOKEN : null);
   const [profileId, setProfileId] = useState(null);
   const [errors, setErrors] = useState({});
   const [intlPhone, setIntlPhone] = useState(false);
@@ -314,7 +314,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const token = data.token;
       setAuthTokenState(token);
       if (typeof setAuthToken === 'function') setAuthToken(token);
-      localStorage.setItem('auth_token', token);
+      // Token stored in httpOnly cookie by server; keep in-memory for WebSocket
       window.AUTH_TOKEN = token;
 
       // Accept platform invite (skip for email-first signup flow)

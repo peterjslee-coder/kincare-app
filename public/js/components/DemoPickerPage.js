@@ -42,9 +42,8 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
       });
       const data = await res.json();
       if (data.token) {
-        // Set token in memory only — don't persist demo sessions to localStorage
+        // Set token in memory only (cookie cleared by server for demo logins)
         AUTH_TOKEN = data.token;
-        localStorage.removeItem('auth_token');
         // Clear stale active role from previous demo user
         if (window.setActiveRole) window.setActiveRole(null);
         if (window.connectSocket) connectSocket(data.token);

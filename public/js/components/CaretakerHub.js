@@ -103,7 +103,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       formData.append('documents', file);
       formData.append('types', JSON.stringify([docType]));
       formData.append('metadata', JSON.stringify([{}]));
-      const token = window.AUTH_TOKEN || localStorage.getItem('auth_token');
+      const token = window.AUTH_TOKEN;
       const res = await fetch('/api/caregiver-onboarding/documents', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
@@ -619,7 +619,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         if (logPhotos.length > 0 && logData.visitLog?.id) {
           const formData = new FormData();
           logPhotos.forEach(f => formData.append('photos', f));
-          const token = localStorage.getItem('auth_token');
+          const token = window.AUTH_TOKEN;
           await fetch(`${API_BASE}/api/photos/visit/${logData.visitLog.id}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
@@ -2482,7 +2482,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       try {
                         const formData = new FormData();
                         checkOutPhotos.forEach(f => formData.append('photos', f));
-                        const token = localStorage.getItem('auth_token');
+                        const token = window.AUTH_TOKEN;
                         await fetch(`${API_BASE}/api/photos/visit/${checkOutData.visitLog.id}`, {
                           method: 'POST',
                           headers: { 'Authorization': `Bearer ${token}` },

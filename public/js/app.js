@@ -102,9 +102,8 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
       });
       const data = await res.json();
       if (data.token) {
-        // Set token in memory only — don't persist demo sessions to localStorage
+        // Set token in memory only (cookie cleared by server for demo logins)
         AUTH_TOKEN = data.token;
-        localStorage.removeItem('auth_token');
         // Clear stale active role from previous demo user
         if (window.setActiveRole) window.setActiveRole(null);
         if (window.connectSocket) connectSocket(data.token);
@@ -415,15 +414,15 @@ const App = () => {
     // If we're in a pre-auth URL mode (reset-password, consent-response), skip auto-login
     if (appState === 'reset-password' || appState === 'consent-response') return;
 
-    const savedToken = localStorage.getItem('auth_token');
-    if (savedToken) {
-      AUTH_TOKEN = savedToken;
-      // Auto-connect WebSocket if returning user
-      if (typeof connectSocket === 'function') connectSocket(savedToken);
-      // Restore user session from token
-      apiFetch('/api/auth/me').then(async r => {
+    // Restore session from httpOnly cookie (server reads cookie automatically)
+    apiFetch('/api/auth/me').then(async r => {
         if (r?.ok) {
           const data = await r.json();
+          // Server includes token for in-memory use (WebSocket auth)
+          if (data.token) {
+            AUTH_TOKEN = data.token;
+            if (typeof connectSocket === 'function') connectSocket(data.token);
+          }
           if (data.user) {
             // Don't auto-restore demo sessions — send them back to splash
             if (data.user.is_demo) {
@@ -490,7 +489,6 @@ const App = () => {
           }
         }
       }).catch(() => {});
-    }
     const params = new URLSearchParams(window.location.search);
     // Preserve original search params before any replaceState calls strip them
     window.__originalSearch = window.location.search;
@@ -499,7 +497,7 @@ const App = () => {
     const vt = params.get('verify');
     if (vt) {
       window.history.replaceState({}, '', window.location.pathname);
-      const loggedIn = !!localStorage.getItem('auth_token');
+      const loggedIn = !!AUTH_TOKEN;
       trackAuthEvent('email-verify', 'attempt', { loggedIn, source: 'verify-link' });
       // Use raw fetch for verify — it's a public endpoint that works without auth
       fetch(API_BASE + `/api/auth/verify?token=${vt}`)
@@ -545,7 +543,7 @@ const App = () => {
           if (data?.invite) {
             setInviteInfo(data.invite);
             // Only show invite page if user is NOT already logged in
-            if (!localStorage.getItem('auth_token')) {
+            if (!AUTH_TOKEN) {
               setAppState('invite');
             }
           }
@@ -686,9 +684,8 @@ const App = () => {
       window._pushHealthTimer = setInterval(() => checkPushHealth().catch(() => {}), 30 * 60 * 1000);
     }
     // Connect WebSocket for real-time updates
-    const token = localStorage.getItem('auth_token');
-    if (token && typeof connectSocket === 'function') {
-      connectSocket(token);
+    if (AUTH_TOKEN && typeof connectSocket === 'function') {
+      connectSocket(AUTH_TOKEN);
     }
     // Accept pending care team invite if one exists (use ref to avoid stale closure)
     const inviteTokenNow = pendingInviteRef.current;
@@ -770,7 +767,7 @@ const App = () => {
       // Restore user from the token
       if (token) {
         AUTH_TOKEN = token;
-        localStorage.setItem('auth_token', token);
+        // Token stored in httpOnly cookie by server; keep in-memory for WebSocket
         if (typeof connectSocket === 'function') connectSocket(token);
         apiFetch('/api/auth/me').then(async r => {
           if (r?.ok) {
@@ -823,7 +820,7 @@ const App = () => {
       setSignupPrefill(null);
       if (token) {
         AUTH_TOKEN = token;
-        localStorage.setItem('auth_token', token);
+        // Token stored in httpOnly cookie by server; keep in-memory for WebSocket
         if (typeof connectSocket === 'function') connectSocket(token);
         apiFetch('/api/auth/me').then(async r => {
           if (r?.ok) {

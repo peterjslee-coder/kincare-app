@@ -53,14 +53,16 @@ async function authenticate(req, res, next) {
     }
   }
 
-  // Option 2: Bearer JWT token
+  // Option 2: Bearer JWT token (header or httpOnly cookie)
   const header = req.headers.authorization;
-  if (!header || !header.startsWith("Bearer ")) {
+  const cookieToken = req.cookies?.auth_token;
+  const tokenSource = header?.startsWith("Bearer ") ? header.split(" ")[1] : cookieToken;
+  if (!tokenSource) {
     return res.status(401).json({ error: "Authentication required" });
   }
 
   try {
-    const token = header.split(" ")[1];
+    const token = tokenSource;
     const decoded = jwt.verify(token, JWT_SECRET);
 
     // Block soft-deleted accounts — JWT was issued before deletion so it's still valid,
@@ -118,4 +120,20 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { generateToken, authenticate, requireRole, requireAdmin };
+// Set JWT as httpOnly cookie (used by login, register, OAuth exchange)
+function setAuthCookie(res, token) {
+  const isProduction = process.env.NODE_ENV === "production";
+  res.cookie("auth_token", token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches JWT expiry)
+    path: "/",
+  });
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie("auth_token", { path: "/" });
+}
+
+module.exports = { generateToken, authenticate, requireRole, requireAdmin, setAuthCookie, clearAuthCookie };

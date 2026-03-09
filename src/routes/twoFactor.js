@@ -175,7 +175,7 @@ router.post("/verify", async (req, res) => {
 
     // Get full user for token generation
     const user = await db.prepare("SELECT * FROM users WHERE id = ?").get(decoded.id);
-    const { generateToken } = require("../middleware/auth");
+    const { generateToken, setAuthCookie } = require("../middleware/auth");
     const token = generateToken(user);
 
     // Remember device if requested
@@ -191,6 +191,7 @@ router.post("/verify", async (req, res) => {
       ).run(deviceId, decoded.id, deviceFingerprint, deviceName, expiresAt);
     }
 
+    setAuthCookie(res, token);
     res.json({
       user: {
         id: user.id,
