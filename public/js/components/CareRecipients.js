@@ -194,7 +194,7 @@ const CareRecipients = window.CareRecipients = () => {
     if (wizardStep !== 2) return;
     (async () => {
       try {
-        const res = await apiFetch('/api/stripe/connect-status');
+        const res = await apiFetch('/api/payments/family/status');
         if (res?.ok) {
           const data = await res.json();
           if (data.status === 'complete') setStripeStatus('complete');
@@ -700,7 +700,7 @@ const CareRecipients = window.CareRecipients = () => {
     const handleStripeConnect = async () => {
       setStripeLoading(true);
       try {
-        const res = await apiFetch('/api/stripe/connect-onboarding', {
+        const res = await apiFetch('/api/payments/family/setup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ returnUrl: window.location.href }),

@@ -460,7 +460,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   // Fetch family Stripe Connect + identity status on profile tab
   useEffect(() => {
     if (activeTab !== 'profile') return;
-    apiFetch('/api/stripe/connect-status').then(async r => {
+    apiFetch('/api/payments/family/status').then(async r => {
       if (r?.ok) { const d = await r.json(); setFamilyStripeStatus(d.status || 'not_started'); }
       else setFamilyStripeStatus('not_started');
     }).catch(() => setFamilyStripeStatus('not_started'));
@@ -1097,7 +1097,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <p style={{ margin: '0 0 10px' }}>Your payment method is connected via Stripe. You can pay caregivers securely through InPlace.</p>
                   <button onClick={async () => {
                     try {
-                      const res = await apiFetch('/api/stripe/connect-onboarding', {
+                      const res = await apiFetch('/api/payments/family/setup', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ returnUrl: window.location.href }),
                       });
@@ -1112,7 +1112,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <p style={{ margin: '0 0 10px' }}>Your Stripe account setup is in progress. Some information may still be needed.</p>
                   <button onClick={async () => {
                     try {
-                      const res = await apiFetch('/api/stripe/connect-onboarding', {
+                      const res = await apiFetch('/api/payments/family/setup', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ returnUrl: window.location.href }),
                       });
@@ -1127,7 +1127,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <p style={{ margin: '0 0 10px' }}>Set up a payment method so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe.</p>
                   <button onClick={async () => {
                     try {
-                      const res = await apiFetch('/api/stripe/connect-onboarding', {
+                      const res = await apiFetch('/api/payments/family/setup', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ returnUrl: window.location.href }),
                       });

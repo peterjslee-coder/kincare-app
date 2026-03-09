@@ -201,6 +201,92 @@ router.get("/status", async (req, res) => {
   res.json({ paymentsEnabled: enabled });
 });
 
+// ─── POST /api/payments/family/setup ───
+// Create a Stripe Checkout Session in setup mode so a family user can save a payment method
+router.post("/family/setup", requireRole("family"), requirePaymentsEnabled, async (req, res) => {
+  const db = await getDb();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured yet.", notConfigured: true });
+  }
+
+  const user = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  let customerId = user.stripe_customer_id;
+
+  // Create a Stripe Customer if one doesn't exist
+  if (!customerId) {
+    try {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: `${user.first_name} ${user.last_name}`,
+        metadata: { inplace_user_id: user.id },
+      });
+      customerId = customer.id;
+      await db.prepare("UPDATE users SET stripe_customer_id = ? WHERE id = ?").run(customerId, user.id);
+    } catch (err) {
+      console.error("Stripe customer creation error:", err);
+      return res.status(500).json({ error: "Failed to create Stripe customer" });
+    }
+  }
+
+  const { returnUrl } = req.body;
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "setup",
+      customer: customerId,
+      payment_method_types: ["card"],
+      success_url: `${returnUrl || BASE_URL + '/#my-account'}?stripe_setup=success`,
+      cancel_url: `${returnUrl || BASE_URL + '/#my-account'}?stripe_setup=cancel`,
+      metadata: {
+        inplace_user_id: user.id,
+        type: "family_payment_setup",
+      },
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error("Stripe setup session error:", err);
+    res.status(500).json({ error: "Failed to create Stripe setup session" });
+  }
+});
+
+// ─── GET /api/payments/family/status ───
+// Check if a family user has a saved payment method
+router.get("/family/status", requireRole("family"), async (req, res) => {
+  const db = await getDb();
+  const user = await db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(req.user.id);
+
+  if (!user?.stripe_customer_id) {
+    return res.json({ status: "not_setup", hasPaymentMethod: false });
+  }
+
+  try {
+    const stripe = getStripe();
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: user.stripe_customer_id,
+      type: "card",
+      limit: 1,
+    });
+
+    if (paymentMethods.data.length > 0) {
+      const pm = paymentMethods.data[0];
+      return res.json({
+        status: "complete",
+        hasPaymentMethod: true,
+        card: { brand: pm.card.brand, last4: pm.card.last4, expMonth: pm.card.exp_month, expYear: pm.card.exp_year },
+      });
+    }
+
+    return res.json({ status: "pending", hasPaymentMethod: false });
+  } catch (err) {
+    console.error("Family payment status error:", err);
+    return res.json({ status: "not_setup", hasPaymentMethod: false });
+  }
+});
+
 // ─── POST /api/payments/identity/create-session ───
 // Create a Stripe Identity VerificationSession for caregiver ID verification
 router.post("/identity/create-session", requireRole("caregiver"), requirePaymentsEnabled, async (req, res) => {
