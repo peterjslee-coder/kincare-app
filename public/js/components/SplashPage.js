@@ -155,10 +155,10 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               <span style={{ fontSize: 36 }}>{'\u2764\uFE0F'}</span>
             </div>
           </div>
-          {/* Photo layer — loads on top of gradient when available */}
+          {/* Photo layer — tries local first, then Unsplash CDN */}
           <div style={{
             position: 'absolute', inset: 0, zIndex: 1,
-            backgroundImage: 'url(/images/hero-home.jpg)',
+            backgroundImage: 'url(https://images.unsplash.com/photo-1556911220-bff31c812dba?w=1200&q=80)',
             backgroundSize: 'cover', backgroundPosition: 'center 40%',
           }}></div>
           {/* Left fade overlay */}
