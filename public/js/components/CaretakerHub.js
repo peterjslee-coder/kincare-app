@@ -766,6 +766,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     if (job.conflictEndTime) {
       // conflictEndTime is already in 24h format (e.g. "14:30") and accounts for travel buffer
       setProposalTime(job.conflictEndTime);
+      // Prefill message: "I have an appointment until 2:00 PM but can be there after."
+      const [eh, em] = job.conflictEndTime.split(':').map(Number);
+      const ampm = eh >= 12 ? 'PM' : 'AM';
+      const dh = eh > 12 ? eh - 12 : eh === 0 ? 12 : eh;
+      const freeAt = `${dh}:${String(em).padStart(2, '0')} ${ampm}`;
+      setProposalMsg(`I have an appointment until ${freeAt} but can be there after.`);
     } else {
       // Fallback: shift original time +2 hours
       const origTime = job.time || job.scheduled_time || '';
@@ -776,8 +782,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       } else {
         setProposalTime('');
       }
+      setProposalMsg('');
     }
-    setProposalMsg('');
   };
 
   const handlePropose = async () => {
