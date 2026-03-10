@@ -762,14 +762,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const openProposalModal = (job) => {
     setProposingFor(job);
     setProposalDate(job.date || job.scheduled_date || '');
-    // Shift time +2 hours as a starting suggestion to avoid the conflict
-    const origTime = job.time || job.scheduled_time || '';
-    if (origTime) {
-      const [h, m] = origTime.split(':').map(Number);
-      const newH = Math.min(h + 2, 20);
-      setProposalTime(`${String(newH).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}`);
+    // Suggest a start time AFTER the conflict ends (includes travel buffer)
+    if (job.conflictEndTime) {
+      // conflictEndTime is already in 24h format (e.g. "14:30") and accounts for travel buffer
+      setProposalTime(job.conflictEndTime);
     } else {
-      setProposalTime('');
+      // Fallback: shift original time +2 hours
+      const origTime = job.time || job.scheduled_time || '';
+      if (origTime) {
+        const [h, m] = origTime.split(':').map(Number);
+        const newH = Math.min(h + 2, 20);
+        setProposalTime(`${String(newH).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}`);
+      } else {
+        setProposalTime('');
+      }
     }
     setProposalMsg('');
   };

@@ -36,14 +36,20 @@ function computeJobConflicts(job, existingSessions) {
 
     // Check overlap: job starts before session+buffer ends AND job ends after session starts
     if (jobStartMin < sEndMin && jobEndMin > (sStartMin - TRAVEL_BUFFER_MINUTES)) {
+      // Calculate the earliest time the caregiver is free (session end + travel buffer)
+      const freeAtMin = sStartMin + sDuration * 60 + TRAVEL_BUFFER_MINUTES;
+      const freeAtH = Math.floor(freeAtMin / 60);
+      const freeAtM = freeAtMin % 60;
+      const conflictEndTime = `${String(freeAtH).padStart(2, '0')}:${String(freeAtM).padStart(2, '0')}`;
       return {
         hasConflict: true,
         conflictWith: formatTime12(sTime),
+        conflictEndTime, // 24h format — earliest the caregiver is available
       };
     }
   }
 
-  return { hasConflict: false, conflictWith: null };
+  return { hasConflict: false, conflictWith: null, conflictEndTime: null };
 }
 
 /**

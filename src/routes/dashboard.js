@@ -594,6 +594,7 @@ async function caregiverDashboard(db, userId, res) {
           timezone: s.care_timezone || "America/New_York",
           hasConflict: conflict.hasConflict,
           conflictWith: conflict.conflictWith,
+          conflictEndTime: conflict.conflictEndTime || null,
           distanceMiles: dist,
           matchScore: match.score,
           matchQuality: match.quality,
