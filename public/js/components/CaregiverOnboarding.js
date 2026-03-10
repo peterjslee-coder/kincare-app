@@ -112,6 +112,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     acceptIndependentContractor: false,
     acceptRefundPolicy: false,
     acceptTransportation: false,
+    acceptConfidentiality: false,
     // Step 3 — Personal Info + Work Location
     phone: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '',
     yearsExperience: '', hourlyRate: '', rateDaytime: '24', rateNighttime: '28', rateOvernight: '30', bio: '',
@@ -256,6 +257,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!form.acceptIndependentContractor) errs.acceptIndependentContractor = 'You must acknowledge this to proceed';
       if (!form.acceptRefundPolicy) errs.acceptRefundPolicy = 'You must acknowledge this to proceed';
       if (!form.acceptTransportation) errs.acceptTransportation = 'You must acknowledge this to proceed';
+      if (!form.acceptConfidentiality) errs.acceptConfidentiality = 'You must acknowledge this to proceed';
     }
     if (stepNum === 3) {
       if (!form.phone.trim()) errs.phone = 'Required';
@@ -857,6 +859,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             {disclosureCheck('acceptTransportation',
               'Transportation & Auto Insurance Requirements',
               'If you transport care recipients in your personal vehicle, you are required to carry auto insurance with a business use endorsement that covers transporting others for paid care work. Your liability limits must meet or exceed your state\'s required minimums. InPlace will conduct a Motor Vehicle Record (MVR) check as part of your background check to verify your driving history. You may not transport care recipients until these requirements are met. If you drive the care recipient\'s vehicle, the family is responsible for ensuring you are covered under their auto policy. InPlace is not liable for accidents or incidents that occur during transportation.'
+            )}
+
+            {disclosureCheck('acceptConfidentiality',
+              'Confidentiality & Protected Information',
+              'As a caregiver on InPlace, you will have access to sensitive personal and health-related information about care recipients, including their medical conditions, medications, care needs, daily routines, and household details. You agree to keep all care recipient information strictly confidential and not share, discuss, photograph, or disclose it to anyone outside the care team — including on social media, with friends or family, or with other clients. This obligation continues even after you stop providing care through InPlace. Unauthorized disclosure of care recipient information may result in immediate removal from the platform and may expose you to legal liability. If you become aware of any unauthorized access to or disclosure of care recipient information, you must notify InPlace immediately.'
             )}
 
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
