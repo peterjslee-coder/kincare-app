@@ -1612,7 +1612,8 @@ router.post("/:id/propose-time", async (req, res) => {
     const { proposedDate, proposedTime, message } = req.body;
     const userId = req.user.id;
     const activeRole = req.user.activeRole || req.user.role;
-    const roles = (req.user.roles || activeRole || "").split(",").map(r => r.trim());
+    const rawRoles = req.user.roles || activeRole || "";
+    const roles = Array.isArray(rawRoles) ? rawRoles : String(rawRoles).split(",").map(r => r.trim());
 
     if (!roles.includes("caregiver")) {
       return res.status(403).json({ error: "Only caregivers can propose times" });
