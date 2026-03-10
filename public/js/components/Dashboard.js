@@ -1011,6 +1011,79 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
+      {/* Time Proposals — direct requests from caregivers, shown prominently at top */}
+      {(() => {
+        const proposals = data?.pendingProposals || [];
+        if (proposals.length === 0) return null;
+        const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#7b61ff', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+              {'\u{1F4E8}'} Time Proposals ({proposals.length})
+            </div>
+            {proposals.map((p) => {
+              const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
+              const origTime = TimezoneHelper.formatTime(p.originalTime);
+              const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
+              const propTime = TimezoneHelper.formatTime(p.proposedTime);
+              const isLoading = proposalActionLoading === p.id;
+              return (
+                <div key={p.id} style={{
+                  marginBottom: 10, padding: '14px 16px', borderRadius: 12,
+                  border: '2px solid #7b61ff', background: '#f5f0ff',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 2 }}>
+                        {p.caregiverName} proposed a different time
+                      </div>
+                      <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
+                        For {p.recipientName || 'Care Visit'}{p.serviceType ? ` \u2022 ${formatServiceType(p.serviceType)}` : ''}{p.durationHours ? ` \u2022 ${p.durationHours}hr` : ''}
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: p.message ? 8 : 0 }}>
+                        <div>
+                          <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
+                          <div style={{ fontSize: 13, color: '#888', textDecoration: 'line-through' }}>{origDay} at {origTime}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, color: '#7b61ff', fontWeight: 600, textTransform: 'uppercase' }}>Proposed</div>
+                          <div style={{ fontSize: 14, color: '#7b61ff', fontWeight: 600 }}>{propDay} at {propTime}</div>
+                        </div>
+                      </div>
+                      {p.message && (
+                        <div style={{ fontSize: 13, color: '#555', fontStyle: 'italic', background: '#ede7f6', padding: '6px 10px', borderRadius: 6, marginTop: 4 }}>
+                          "{p.message}"
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+                    <button
+                      disabled={isLoading}
+                      onClick={() => handleProposalAction(p.sessionId, p.id, 'decline')}
+                      style={{
+                        padding: '8px 18px', borderRadius: 8, border: '1px solid #e0e0e0', background: '#fff',
+                        color: '#c62828', fontSize: 13, fontWeight: 600, cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.6 : 1,
+                      }}>
+                      Decline
+                    </button>
+                    <button
+                      disabled={isLoading}
+                      onClick={() => handleProposalAction(p.sessionId, p.id, 'accept')}
+                      style={{
+                        padding: '8px 18px', borderRadius: 8, border: 'none', background: '#7b61ff',
+                        color: '#fff', fontSize: 13, fontWeight: 600, cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.6 : 1,
+                      }}>
+                      Accept New Time
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {/* Open Requests — unclaimed jobs the family posted */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
@@ -1084,78 +1157,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
-      {/* Time Proposals — caregivers proposing alternate times */}
-      {(() => {
-        const proposals = data?.pendingProposals || [];
-        if (proposals.length === 0) return null;
-        const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
-        return (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              Time Proposals ({proposals.length})
-            </div>
-            {proposals.map((p) => {
-              const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
-              const origTime = TimezoneHelper.formatTime(p.originalTime);
-              const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
-              const propTime = TimezoneHelper.formatTime(p.proposedTime);
-              const isLoading = proposalActionLoading === p.id;
-              return (
-                <div key={p.id} style={{
-                  marginBottom: 10, padding: '14px 16px', borderRadius: 12,
-                  border: '2px solid #1b6b5a', background: '#f0faf8',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 2 }}>
-                        {p.caregiverName} proposed a different time
-                      </div>
-                      <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
-                        For {p.recipientName || 'Care Visit'}{p.serviceType ? ` \u2022 ${formatServiceType(p.serviceType)}` : ''}{p.durationHours ? ` \u2022 ${p.durationHours}hr` : ''}
-                      </div>
-                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: p.message ? 8 : 0 }}>
-                        <div>
-                          <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
-                          <div style={{ fontSize: 13, color: '#888', textDecoration: 'line-through' }}>{origDay} at {origTime}</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 11, color: '#1b6b5a', fontWeight: 600, textTransform: 'uppercase' }}>Proposed</div>
-                          <div style={{ fontSize: 14, color: '#1b6b5a', fontWeight: 600 }}>{propDay} at {propTime}</div>
-                        </div>
-                      </div>
-                      {p.message && (
-                        <div style={{ fontSize: 13, color: '#555', fontStyle: 'italic', background: '#e8f5f1', padding: '6px 10px', borderRadius: 6, marginTop: 4 }}>
-                          "{p.message}"
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
-                    <button
-                      disabled={isLoading}
-                      onClick={() => handleProposalAction(p.sessionId, p.id, 'decline')}
-                      style={{
-                        padding: '8px 18px', borderRadius: 8, border: '1px solid #e0e0e0', background: '#fff',
-                        color: '#c62828', fontSize: 13, fontWeight: 600, cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.6 : 1,
-                      }}>
-                      Decline
-                    </button>
-                    <button
-                      disabled={isLoading}
-                      onClick={() => handleProposalAction(p.sessionId, p.id, 'accept')}
-                      style={{
-                        padding: '8px 18px', borderRadius: 8, border: 'none', background: '#1b6b5a',
-                        color: '#fff', fontSize: 13, fontWeight: 600, cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.6 : 1,
-                      }}>
-                      Accept New Time
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
+      {/* Time Proposals moved to top — see above Awaiting Caregiver */}
 
       {stats.unreadNotifications > 0 && (
         <div style={{ background: '#fff3e0', border: '1px solid #ffe0b2', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
