@@ -1,0 +1,403 @@
+const express = require("express");
+const { getDb } = require("../models/database");
+const { authenticate, requireRole } = require("../middleware/auth");
+const { writeAuditLog } = require("../middleware/auditLog");
+
+const router = express.Router();
+
+// ─── Checkr API helpers ───
+const CHECKR_API_BASE = "https://api.checkr.com/v1";
+
+function getCheckrKey() {
+  const key = process.env.CHECKR_API_KEY;
+  if (!key) throw new Error("CHECKR_API_KEY not configured");
+  return key;
+}
+
+async function checkrRequest(method, path, body = null) {
+  const key = getCheckrKey();
+  const opts = {
+    method,
+    headers: {
+      "Authorization": "Basic " + Buffer.from(key + ":").toString("base64"),
+      "Content-Type": "application/json",
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+
+  const res = await fetch(`${CHECKR_API_BASE}${path}`, opts);
+  const data = await res.json();
+  if (!res.ok) {
+    console.error(`[checkr] ${method} ${path} failed:`, data);
+    throw new Error(data.error || data.message || `Checkr API error ${res.status}`);
+  }
+  return data;
+}
+
+// ─── POST /api/checkr/initiate ───
+// Called after background check payment succeeds.
+// Creates a Checkr candidate and sends them an invitation to complete the check.
+// Caregiver must have: legal name, DOB, SSN last 4, address, and consent.
+router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+
+  try {
+    // Verify Checkr is configured
+    getCheckrKey();
+  } catch {
+    return res.status(503).json({ error: "Background check service is not configured yet." });
+  }
+
+  try {
+    const profile = await db.prepare(
+      "SELECT * FROM caregiver_profiles WHERE user_id = ?"
+    ).get(req.user.id);
+
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    // Verify payment was made
+    if (!profile.background_check_paid) {
+      return res.status(400).json({ error: "Background check payment required first" });
+    }
+
+    // Verify consent
+    if (!profile.background_check_consent) {
+      return res.status(400).json({ error: "Background check consent required" });
+    }
+
+    // Check if already initiated
+    if (profile.checkr_candidate_id && profile.checkr_invitation_id) {
+      return res.json({
+        status: "already_initiated",
+        checkrStatus: profile.checkr_status,
+        message: "Background check has already been initiated."
+      });
+    }
+
+    // Verify required fields
+    const user = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+    const missing = [];
+    if (!profile.legal_first_name) missing.push("legal first name");
+    if (!profile.legal_last_name) missing.push("legal last name");
+    if (!profile.date_of_birth) missing.push("date of birth");
+    if (!profile.ssn_last4) missing.push("SSN last 4");
+    if (!user.email) missing.push("email");
+    if (missing.length > 0) {
+      return res.status(400).json({
+        error: `Missing required info: ${missing.join(", ")}`,
+        missing
+      });
+    }
+
+    // Step 1: Create candidate in Checkr
+    console.log(`[checkr] Creating candidate for ${profile.legal_first_name} ${profile.legal_last_name}`);
+    const candidate = await checkrRequest("POST", "/candidates", {
+      first_name: profile.legal_first_name,
+      last_name: profile.legal_last_name,
+      email: user.email,
+      dob: profile.date_of_birth, // YYYY-MM-DD
+      ssn: profile.ssn_last4, // Checkr accepts last 4 for invitation flow
+      zipcode: profile.zip || undefined,
+      driver_license_number: profile.dl_number || undefined,
+      driver_license_state: profile.dl_state || undefined,
+    });
+
+    console.log(`[checkr] Candidate created: ${candidate.id}`);
+
+    // Save candidate ID immediately
+    await db.prepare(
+      "UPDATE caregiver_profiles SET checkr_candidate_id = ?, checkr_status = 'initiated', updated_at = NOW() WHERE user_id = ?"
+    ).run(candidate.id, req.user.id);
+
+    // Step 2: Create invitation — Checkr emails the candidate a link
+    // to provide full SSN, consent, and complete the background check
+    console.log(`[checkr] Creating invitation for candidate ${candidate.id}`);
+
+    // Use the configured package or default to basic+mvr
+    const packageSlug = process.env.CHECKR_PACKAGE || "driver_pro";
+
+    const invitation = await checkrRequest("POST", "/invitations", {
+      candidate_id: candidate.id,
+      package: packageSlug,
+    });
+
+    console.log(`[checkr] Invitation created: ${invitation.id}, status: ${invitation.status}`);
+
+    // Save invitation ID
+    await db.prepare(
+      "UPDATE caregiver_profiles SET checkr_invitation_id = ?, checkr_status = 'invitation_sent', updated_at = NOW() WHERE user_id = ?"
+    ).run(invitation.id, req.user.id);
+
+    // Audit log
+    writeAuditLog({
+      userId: req.user.id,
+      userEmail: user.email,
+      userRole: "caregiver",
+      action: "checkr_initiated",
+      endpoint: "/api/checkr/initiate",
+      method: "POST",
+      details: { candidateId: candidate.id, invitationId: invitation.id, package: packageSlug },
+      severity: "info",
+    });
+
+    res.json({
+      status: "invitation_sent",
+      message: "Background check initiated. You'll receive an email from Checkr to complete the process.",
+      candidateId: candidate.id,
+      invitationId: invitation.id,
+      invitationUrl: invitation.invitation_url || null,
+    });
+
+  } catch (err) {
+    console.error("[checkr] Initiation error:", err);
+    res.status(500).json({ error: "Failed to initiate background check. Please try again or contact support." });
+  }
+});
+
+// ─── GET /api/checkr/status ───
+// Check current Checkr status for the logged-in caregiver
+router.get("/status", authenticate, requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+
+  try {
+    const profile = await db.prepare(
+      "SELECT checkr_status, checkr_candidate_id, checkr_invitation_id, checkr_report_id, is_background_checked, background_check_paid FROM caregiver_profiles WHERE user_id = ?"
+    ).get(req.user.id);
+
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    const response = {
+      checkrConfigured: !!process.env.CHECKR_API_KEY,
+      paid: !!profile.background_check_paid,
+      status: profile.checkr_status || "pending",
+      cleared: !!profile.is_background_checked,
+      candidateId: profile.checkr_candidate_id || null,
+      invitationId: profile.checkr_invitation_id || null,
+      reportId: profile.checkr_report_id || null,
+    };
+
+    // If we have a candidate but status is stale, check Checkr for updates
+    if (profile.checkr_candidate_id && !profile.is_background_checked && process.env.CHECKR_API_KEY) {
+      try {
+        const candidate = await checkrRequest("GET", `/candidates/${profile.checkr_candidate_id}`);
+        if (candidate.report_ids && candidate.report_ids.length > 0) {
+          const reportId = candidate.report_ids[0];
+          const report = await checkrRequest("GET", `/reports/${reportId}`);
+
+          // Update our records with latest status
+          let newStatus = profile.checkr_status;
+          let cleared = false;
+          if (report.status === "clear") {
+            newStatus = "clear";
+            cleared = true;
+          } else if (report.status === "consider") {
+            newStatus = "consider"; // has flags but not disqualified
+          } else if (report.status === "pending") {
+            newStatus = "processing";
+          }
+
+          await db.prepare(
+            "UPDATE caregiver_profiles SET checkr_status = ?, checkr_report_id = ?, is_background_checked = ? WHERE user_id = ?"
+          ).run(newStatus, reportId, cleared ? 1 : 0, req.user.id);
+
+          response.status = newStatus;
+          response.cleared = cleared;
+          response.reportId = reportId;
+        }
+      } catch (err) {
+        console.error("[checkr] Status check error:", err.message);
+        // Don't fail the request — return cached status
+      }
+    }
+
+    res.json(response);
+  } catch (err) {
+    console.error("[checkr] Status error:", err);
+    res.status(500).json({ error: "Failed to check background check status" });
+  }
+});
+
+// ─── POST /api/checkr/webhook ───
+// Receives webhook events from Checkr when report/invitation status changes
+// This endpoint must be publicly accessible (no auth)
+// Configure in Checkr Dashboard → Developer Settings → New Webhook → URL: https://yourinplace.com/api/checkr/webhook
+router.post("/webhook", express.json(), async (req, res) => {
+  const db = await getDb();
+
+  // Verify webhook signature if secret is configured
+  const webhookSecret = process.env.CHECKR_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const signature = req.headers["x-checkr-signature"];
+    if (!signature) {
+      console.warn("[checkr-webhook] Missing signature header");
+      return res.status(401).json({ error: "Missing signature" });
+    }
+    // Checkr uses HMAC-SHA256
+    const crypto = require("crypto");
+    const expectedSig = crypto
+      .createHmac("sha256", webhookSecret)
+      .update(JSON.stringify(req.body))
+      .digest("hex");
+    if (signature !== expectedSig) {
+      console.warn("[checkr-webhook] Invalid signature");
+      return res.status(401).json({ error: "Invalid signature" });
+    }
+  }
+
+  const { type, data } = req.body;
+  console.log(`[checkr-webhook] Event: ${type}`);
+
+  try {
+    switch (type) {
+      // ─── Invitation completed — candidate filled out the Checkr form ───
+      case "invitation.completed": {
+        const { id: invitationId, candidate_id } = data.object;
+        console.log(`[checkr-webhook] Invitation completed: ${invitationId}, candidate: ${candidate_id}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'processing', updated_at = NOW() WHERE checkr_invitation_id = ? OR checkr_candidate_id = ?"
+        ).run(invitationId, candidate_id);
+
+        writeAuditLog({
+          action: "checkr_invitation_completed",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { invitationId, candidateId: candidate_id },
+          severity: "info",
+        });
+        break;
+      }
+
+      // ─── Report completed — background check is done ───
+      case "report.completed": {
+        const report = data.object;
+        const { id: reportId, candidate_id, status, result } = report;
+        console.log(`[checkr-webhook] Report completed: ${reportId}, candidate: ${candidate_id}, status: ${status}, result: ${result}`);
+
+        // Status can be: "clear", "consider", "suspended", "dispute"
+        const cleared = status === "clear";
+        const checkrStatus = status === "clear" ? "clear" : status;
+
+        const updated = await db.prepare(
+          `UPDATE caregiver_profiles SET
+            checkr_status = ?,
+            checkr_report_id = ?,
+            is_background_checked = ?,
+            updated_at = NOW()
+          WHERE checkr_candidate_id = ?`
+        ).run(checkrStatus, reportId, cleared ? 1 : 0, candidate_id);
+
+        if (updated.changes > 0) {
+          console.log(`[checkr-webhook] Caregiver profile updated — cleared: ${cleared}`);
+        } else {
+          console.warn(`[checkr-webhook] No caregiver found for candidate ${candidate_id}`);
+        }
+
+        writeAuditLog({
+          action: cleared ? "checkr_cleared" : "checkr_flagged",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { reportId, candidateId: candidate_id, status, result },
+          severity: cleared ? "info" : "warning",
+        });
+        break;
+      }
+
+      // ─── Report updated (e.g., additional screening results came in) ───
+      case "report.updated": {
+        const report = data.object;
+        const { id: reportId, candidate_id, status } = report;
+        console.log(`[checkr-webhook] Report updated: ${reportId}, status: ${status}`);
+
+        const cleared = status === "clear";
+        await db.prepare(
+          `UPDATE caregiver_profiles SET
+            checkr_status = ?,
+            checkr_report_id = ?,
+            is_background_checked = ?,
+            updated_at = NOW()
+          WHERE checkr_candidate_id = ?`
+        ).run(status, reportId, cleared ? 1 : 0, candidate_id);
+        break;
+      }
+
+      // ─── Invitation expired — candidate didn't complete in time ───
+      case "invitation.expired": {
+        const { id: invitationId, candidate_id } = data.object;
+        console.log(`[checkr-webhook] Invitation expired: ${invitationId}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'invitation_expired', updated_at = NOW() WHERE checkr_invitation_id = ?"
+        ).run(invitationId);
+
+        writeAuditLog({
+          action: "checkr_invitation_expired",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { invitationId, candidateId: candidate_id },
+          severity: "warning",
+        });
+        break;
+      }
+
+      // ─── Candidate engaged with adverse action ───
+      case "report.pre_adverse_action": {
+        const { id: reportId, candidate_id } = data.object;
+        console.log(`[checkr-webhook] Pre-adverse action: ${reportId}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'adverse_action', updated_at = NOW() WHERE checkr_candidate_id = ?"
+        ).run(candidate_id);
+
+        writeAuditLog({
+          action: "checkr_adverse_action",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { reportId, candidateId: candidate_id },
+          severity: "critical",
+        });
+        break;
+      }
+
+      default:
+        console.log(`[checkr-webhook] Unhandled event type: ${type}`);
+    }
+
+    // Always return 200 so Checkr doesn't retry
+    res.json({ received: true });
+
+  } catch (err) {
+    console.error("[checkr-webhook] Processing error:", err);
+    // Still return 200 — we don't want Checkr retrying on our error
+    res.json({ received: true, error: "Processing error logged" });
+  }
+});
+
+// ─── GET /api/checkr/admin/candidates ───
+// Admin view of all Checkr-related caregiver statuses
+router.get("/admin/candidates", authenticate, async (req, res) => {
+  if (!req.user.is_admin) return res.status(403).json({ error: "Admin only" });
+
+  const db = await getDb();
+  try {
+    const candidates = await db.prepare(`
+      SELECT
+        cp.user_id, cp.legal_first_name, cp.legal_last_name,
+        cp.checkr_status, cp.checkr_candidate_id, cp.checkr_invitation_id, cp.checkr_report_id,
+        cp.is_background_checked, cp.background_check_paid, cp.background_check_consent,
+        cp.onboarding_complete,
+        u.email, u.first_name, u.last_name
+      FROM caregiver_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.background_check_consent = 1
+      ORDER BY cp.updated_at DESC
+    `).all();
+
+    res.json({ candidates });
+  } catch (err) {
+    console.error("[checkr] Admin candidates error:", err);
+    res.status(500).json({ error: "Failed to fetch candidates" });
+  }
+});
+
+module.exports = router;

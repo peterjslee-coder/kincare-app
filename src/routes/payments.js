@@ -934,7 +934,25 @@ router.post("/background-check/confirm", requireRole("caregiver"), requirePaymen
       "UPDATE caregiver_profiles SET background_check_paid = 1, updated_at = NOW() WHERE user_id = ?"
     ).run(req.user.id);
 
-    res.json({ success: true });
+    // Auto-initiate Checkr background check if configured (non-blocking)
+    let checkrInitiated = false;
+    if (process.env.CHECKR_API_KEY) {
+      try {
+        const checkrUrl = `${req.protocol}://${req.get("host")}/api/checkr/initiate`;
+        const token = req.headers.authorization;
+        const checkrRes = await fetch(checkrUrl, {
+          method: "POST",
+          headers: { "Authorization": token, "Content-Type": "application/json" },
+        });
+        const checkrData = await checkrRes.json();
+        checkrInitiated = checkrRes.ok;
+        console.log(`[bg-check] Auto-initiate Checkr: ${checkrRes.ok ? "success" : "failed"}`, checkrData);
+      } catch (err) {
+        console.error("[bg-check] Auto-initiate Checkr error (non-blocking):", err.message);
+      }
+    }
+
+    res.json({ success: true, checkrInitiated });
   } catch (err) {
     console.error("Background check confirm error:", err);
     res.status(500).json({ error: "Failed to confirm payment" });

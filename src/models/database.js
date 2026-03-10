@@ -274,6 +274,9 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS dl_number TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS dl_state TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS checkr_status TEXT DEFAULT 'pending'`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS checkr_candidate_id TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS checkr_invitation_id TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS checkr_report_id TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS background_check_consent INTEGER DEFAULT 0`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS background_check_consent_at TIMESTAMPTZ`,
     // v1.5.0 — Caregiver work location, stoplight, terms

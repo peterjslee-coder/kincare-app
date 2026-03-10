@@ -289,9 +289,10 @@ app.use("/api/reports", require("./routes/reports"));
 app.use("/api/video", require("./routes/videoCall"));
 app.use("/api/consent", require("./routes/consent"));
 app.use("/api/documents", require("./routes/documents"));
+app.use("/api/checkr", require("./routes/checkr"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.65";
+const APP_VERSION = "1.39.66";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
