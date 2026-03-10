@@ -379,6 +379,16 @@
 - [ ] **Google OAuth: Set up in Google Cloud Console.** Create OAuth 2.0 credentials (it's free). Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to Railway. This enables "Sign in with Google" (backend already built).
 - [ ] **Google Maps API key (optional, later).** When you want better residential geocoding than Nominatim/OpenStreetMap, get a Google Maps API key. Swap is a one-function change in `src/utils/geocode.js`.
 
+### Business Insurance & Compliance
+
+- [ ] **Hired & Non-Owned Auto (HNOA) policy.** Get an HNOA endorsement on your commercial general liability (CGL) policy. This covers InPlace when a 1099 caregiver causes an accident while driving for business (transporting a care recipient, driving to/from visits). It's your backstop when the caregiver's personal auto insurance is insufficient or denies the claim. Shop through a commercial insurance broker — expect $500–$2,000/yr depending on caregiver count and state.
+- [ ] **General Liability (CGL) insurance.** If you don't already have a Commercial General Liability policy, get one. This is the base policy that HNOA attaches to. Covers bodily injury, property damage, and personal injury claims related to InPlace's operations. Standard for any care coordination platform.
+- [ ] **Professional Liability / E&O insurance.** Errors & Omissions coverage for claims that InPlace's platform or matching algorithm caused harm — e.g., a family alleges negligent caregiver vetting, or a caregiver claims the platform misrepresented job terms. Important for a platform connecting vulnerable populations with care providers.
+- [ ] **Cyber Liability / Data Breach insurance.** Covers costs from a data breach — notification to affected users, credit monitoring, legal defense, regulatory fines. InPlace stores PII (names, addresses, SSN last 4, driver's license numbers) and PHI-adjacent data (care notes, health tags). Required by many state breach notification laws. Look for a policy that covers both first-party (your costs) and third-party (lawsuits/fines).
+- [ ] **Workers' Comp exemption documentation.** Since caregivers are 1099 independent contractors (not W-2 employees), you likely don't need workers' comp — but document this clearly. Some states require proof of IC status or a WC waiver. Keep the IC classification airtight (caregivers set own schedule, rates, clients) to avoid misclassification claims.
+- [ ] **MVR check integration with Checkr.** When Checkr is set up, confirm the background check package includes a Motor Vehicle Record (MVR) check. The onboarding disclosure (v1.39.63) now tells caregivers an MVR check will be conducted. Make sure the Checkr package actually includes it — their "Basic+" or "Standard" packages typically do.
+- [ ] **Caregiver auto insurance verification process.** Decide how to verify caregivers carry the required business use endorsement on their personal auto policy. Options: (a) require proof of insurance upload during onboarding (add a document upload step), (b) self-attestation checkbox (already added in v1.39.63) with spot-check audits, or (c) use a third-party insurance verification service. Option (a) is strongest but adds friction.
+
 
 ## Production Path — Beta on Phone
 
