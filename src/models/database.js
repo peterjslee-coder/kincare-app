@@ -648,6 +648,26 @@ async function initializeDatabase() {
     `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS admin_reviewed_at TIMESTAMPTZ`,
     // Auto-flag reviews < 3 stars as 'flagged' on insert is handled in application logic
 
+    // v1.39.65 — Audit logging for security monitoring
+    `CREATE TABLE IF NOT EXISTS audit_log (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT,
+      user_email TEXT,
+      user_role TEXT,
+      action TEXT NOT NULL,
+      endpoint TEXT,
+      method TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      details JSONB,
+      severity TEXT DEFAULT 'info',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_log_severity ON audit_log(severity)`,
+
     `CREATE TABLE IF NOT EXISTS time_proposals (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES care_sessions(id),

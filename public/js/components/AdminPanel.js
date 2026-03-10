@@ -75,6 +75,14 @@ const AdminPanel = window.AdminPanel = () => {
   const [csExpanded, setCsExpanded] = useState(null);
   const [csNotes, setCsNotes] = useState('');
   const [csActionLoading, setCsActionLoading] = useState(null);
+  // Security tab state
+  const [secDashboard, setSecDashboard] = useState(null);
+  const [secAuditLog, setSecAuditLog] = useState([]);
+  const [secAuditTotal, setSecAuditTotal] = useState(0);
+  const [secLoading, setSecLoading] = useState(false);
+  const [secLogFilter, setSecLogFilter] = useState({ severity: 'all', action: 'all' });
+  const [secLogPage, setSecLogPage] = useState(0);
+  const [secView, setSecView] = useState('dashboard'); // 'dashboard' or 'audit-log'
 
   useEffect(() => {
     loadStats();
@@ -92,6 +100,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'onboarding') loadOnboardingEvents();
     if (activeTab === 'authorizations') loadAuthorizations();
     if (activeTab === 'customerservice') loadCsReviews();
+    if (activeTab === 'security') { loadSecDashboard(); loadSecAuditLog(); }
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -268,6 +277,35 @@ const AdminPanel = window.AdminPanel = () => {
     } catch (err) { console.error('CS action error:', err); }
     setCsActionLoading(null);
   };
+
+  // ─── Security: load dashboard and audit log ───
+  const loadSecDashboard = async () => {
+    setSecLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/security/dashboard');
+      if (res?.ok) setSecDashboard(await res.json());
+    } catch (err) { console.error('Security dashboard error:', err); }
+    setSecLoading(false);
+  };
+
+  const loadSecAuditLog = async (page) => {
+    const p = page != null ? page : secLogPage;
+    try {
+      const params = new URLSearchParams({ limit: '30', offset: String(p * 30) });
+      if (secLogFilter.severity !== 'all') params.set('severity', secLogFilter.severity);
+      if (secLogFilter.action !== 'all') params.set('action', secLogFilter.action);
+      const res = await apiFetch(`/api/admin/security/audit-log?${params}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setSecAuditLog(data.entries || []);
+        setSecAuditTotal(data.total || 0);
+      }
+    } catch (err) { console.error('Audit log error:', err); }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'security') loadSecAuditLog();
+  }, [secLogFilter, secLogPage]);
 
   const handleDocPreview = async (docId) => {
     setDocPreviewLoading(true);
@@ -634,6 +672,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'help', label: 'Help/FAQ', icon: '❓' },
     { id: 'financials', label: 'Financials', icon: '💰' },
     { id: 'onboarding', label: 'Auth Events', icon: '🚦' },
+    { id: 'security', label: 'Security', icon: '🛡️' },
     { id: 'blocked', label: 'Blocked', icon: '🚫' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
@@ -2059,6 +2098,233 @@ const AdminPanel = window.AdminPanel = () => {
                 </div>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Security Tab ─── */}
+      {activeTab === 'security' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Security Monitor</h2>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['dashboard', 'audit-log'].map(v => (
+                <button key={v} onClick={() => setSecView(v)} style={{
+                  padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  background: secView === v ? '#1b6b5a' : '#f0f0f0', color: secView === v ? '#fff' : '#555',
+                  border: secView === v ? 'none' : '1px solid #ddd',
+                }}>{v === 'dashboard' ? 'Dashboard' : 'Audit Log'}</button>
+              ))}
+              <button onClick={() => { loadSecDashboard(); loadSecAuditLog(); }} style={{
+                padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a',
+              }}>Refresh</button>
+            </div>
+          </div>
+
+          {secLoading && !secDashboard ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>Loading security data...</div>
+          ) : secView === 'dashboard' && secDashboard ? (
+            <div>
+              {/* Active threats banner */}
+              {secDashboard.activeThreats?.length > 0 && (
+                <div style={{ padding: '12px 16px', background: '#ffebee', border: '2px solid #c62828', borderRadius: 12, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 700, color: '#c62828', fontSize: 14, marginBottom: 6 }}>Active Threats Detected</div>
+                  {secDashboard.activeThreats.map((t, i) => (
+                    <div key={i} style={{ fontSize: 13, color: '#b71c1c', marginBottom: 2 }}>
+                      IP {t.ip}: {t.failedCount} failed login attempts since {new Date(t.since).toLocaleTimeString()}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Severity summary cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
+                {[
+                  { key: 'critical', label: 'Critical', color: '#c62828', bg: '#ffebee' },
+                  { key: 'error', label: 'Errors', color: '#e65100', bg: '#fff3e0' },
+                  { key: 'warn', label: 'Warnings', color: '#f9a825', bg: '#fffde7' },
+                  { key: 'info', label: 'Info', color: '#1565c0', bg: '#e3f2fd' },
+                ].map(s => {
+                  const count = secDashboard.severityCounts?.find(c => c.severity === s.key)?.count || 0;
+                  return (
+                    <div key={s.key} style={{ padding: '14px 16px', borderRadius: 12, background: s.bg, textAlign: 'center' }}>
+                      <div style={{ fontSize: 28, fontWeight: 700, color: s.color }}>{count}</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: s.color, textTransform: 'uppercase' }}>{s.label} (24h)</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Failed logins */}
+              {secDashboard.failedLogins?.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#c62828', marginBottom: 8 }}>Failed Login Attempts (24h)</div>
+                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+                    {secDashboard.failedLogins.map((f, i) => (
+                      <div key={i} style={{ padding: '10px 14px', borderBottom: i < secDashboard.failedLogins.length - 1 ? '1px solid #f0f0f0' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: 13 }}>{f.user_email || 'Unknown'}</span>
+                          <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>from {f.ip_address}</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontWeight: 700, color: f.count >= 10 ? '#c62828' : '#e65100', fontSize: 14 }}>{f.count}x</span>
+                          <div style={{ fontSize: 11, color: '#999' }}>{new Date(f.last_attempt).toLocaleTimeString()}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Admin access */}
+              {secDashboard.adminAccess?.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#333', marginBottom: 8 }}>Admin Access (24h)</div>
+                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+                    {secDashboard.adminAccess.map((a, i) => (
+                      <div key={i} style={{ padding: '10px 14px', borderBottom: i < secDashboard.adminAccess.length - 1 ? '1px solid #f0f0f0' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: 13 }}>{a.user_email}</span>
+                          <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>from {a.ip_address}</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>{a.count} requests</span>
+                          <div style={{ fontSize: 11, color: '#999' }}>Last: {new Date(a.last_access).toLocaleTimeString()}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top actions */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#333', marginBottom: 8 }}>Activity by Action (24h)</div>
+                <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+                  {(secDashboard.topActions || []).map((a, i) => (
+                    <div key={i} style={{ padding: '8px 14px', borderBottom: i < (secDashboard.topActions || []).length - 1 ? '1px solid #f5f5f5' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>{a.action.replace(/_/g, ' ')}</span>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: '#888' }}>{a.unique_users} users \u00B7 {a.unique_ips} IPs</span>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: '#1b6b5a', minWidth: 30, textAlign: 'right' }}>{a.count}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {(!secDashboard.topActions || secDashboard.topActions.length === 0) && (
+                    <div style={{ padding: 20, textAlign: 'center', color: '#999', fontSize: 13 }}>No activity recorded yet</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Critical events */}
+              {secDashboard.criticalEvents?.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#c62828', marginBottom: 8 }}>Critical & Error Events (7 days)</div>
+                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+                    {secDashboard.criticalEvents.map((e, i) => {
+                      const det = typeof e.details === 'string' ? JSON.parse(e.details || '{}') : (e.details || {});
+                      return (
+                        <div key={i} style={{ padding: '10px 14px', borderBottom: i < secDashboard.criticalEvents.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                            <div>
+                              <span style={{
+                                padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, marginRight: 6,
+                                background: e.severity === 'critical' ? '#c62828' : '#e65100', color: '#fff',
+                              }}>{e.severity.toUpperCase()}</span>
+                              <span style={{ fontWeight: 600, fontSize: 13 }}>{e.action.replace(/_/g, ' ')}</span>
+                              <span style={{ fontSize: 12, color: '#888', marginLeft: 6 }}>{e.method} {e.endpoint}</span>
+                            </div>
+                            <span style={{ fontSize: 11, color: '#999', whiteSpace: 'nowrap' }}>{new Date(e.created_at).toLocaleString()}</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                            {e.user_email || 'Anonymous'} from {e.ip_address}
+                            {det.anomaly && <span style={{ color: '#c62828', fontWeight: 600, marginLeft: 8 }}>{det.anomaly.replace(/_/g, ' ')}</span>}
+                            {det.statusCode && <span style={{ marginLeft: 8 }}>HTTP {det.statusCode}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : secView === 'audit-log' ? (
+            <div>
+              {/* Filters */}
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                <select value={secLogFilter.severity} onChange={(e) => { setSecLogFilter({ ...secLogFilter, severity: e.target.value }); setSecLogPage(0); }}
+                  style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12 }}>
+                  <option value="all">All Severities</option>
+                  <option value="critical">Critical</option>
+                  <option value="error">Error</option>
+                  <option value="warn">Warning</option>
+                  <option value="info">Info</option>
+                </select>
+                <select value={secLogFilter.action} onChange={(e) => { setSecLogFilter({ ...secLogFilter, action: e.target.value }); setSecLogPage(0); }}
+                  style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12 }}>
+                  <option value="all">All Actions</option>
+                  <option value="admin_access">Admin Access</option>
+                  <option value="login_attempt">Login Attempts</option>
+                  <option value="registration">Registration</option>
+                  <option value="password_reset">Password Reset</option>
+                  <option value="session_action">Session Actions</option>
+                  <option value="document_access">Document Access</option>
+                  <option value="care_recipient_access">Care Recipient Access</option>
+                  <option value="caregiver_profile_access">Caregiver Profile</option>
+                  <option value="passkey_auth">Passkey Auth</option>
+                </select>
+                <span style={{ fontSize: 12, color: '#888', alignSelf: 'center' }}>{secAuditTotal} total entries</span>
+              </div>
+
+              {/* Log entries */}
+              <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+                {secAuditLog.length === 0 ? (
+                  <div style={{ padding: 30, textAlign: 'center', color: '#999', fontSize: 13 }}>No audit log entries found. Activity will appear here once the system logs requests.</div>
+                ) : secAuditLog.map((entry, i) => {
+                  const sevColors = { critical: '#c62828', error: '#e65100', warn: '#f9a825', info: '#90a4ae' };
+                  const det = typeof entry.details === 'string' ? JSON.parse(entry.details || '{}') : (entry.details || {});
+                  return (
+                    <div key={entry.id || i} style={{ padding: '8px 14px', borderBottom: i < secAuditLog.length - 1 ? '1px solid #f5f5f5' : 'none', fontSize: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, flexWrap: 'wrap' }}>
+                          <span style={{
+                            width: 8, height: 8, borderRadius: 4, display: 'inline-block',
+                            background: sevColors[entry.severity] || '#ccc',
+                          }} />
+                          <span style={{ fontWeight: 600 }}>{entry.action?.replace(/_/g, ' ')}</span>
+                          <span style={{ color: '#888' }}>{entry.method} {entry.endpoint}</span>
+                          {det.anomaly && <span style={{ color: '#c62828', fontWeight: 600, background: '#ffebee', padding: '1px 6px', borderRadius: 4, fontSize: 10 }}>{det.anomaly.replace(/_/g, ' ')}</span>}
+                        </div>
+                        <span style={{ color: '#999', whiteSpace: 'nowrap' }}>{new Date(entry.created_at).toLocaleString()}</span>
+                      </div>
+                      <div style={{ color: '#888', marginTop: 2 }}>
+                        {entry.user_email || 'anonymous'} \u00B7 {entry.ip_address} \u00B7 HTTP {det.statusCode || '?'} \u00B7 {det.durationMs || 0}ms
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Pagination */}
+              {secAuditTotal > 30 && (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 12 }}>
+                  <button disabled={secLogPage === 0} onClick={() => setSecLogPage(p => p - 1)}
+                    style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, cursor: secLogPage === 0 ? 'default' : 'pointer', opacity: secLogPage === 0 ? 0.5 : 1 }}>
+                    Previous
+                  </button>
+                  <span style={{ fontSize: 12, color: '#888', alignSelf: 'center' }}>
+                    Page {secLogPage + 1} of {Math.ceil(secAuditTotal / 30)}
+                  </span>
+                  <button disabled={(secLogPage + 1) * 30 >= secAuditTotal} onClick={() => setSecLogPage(p => p + 1)}
+                    style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, cursor: (secLogPage + 1) * 30 >= secAuditTotal ? 'default' : 'pointer', opacity: (secLogPage + 1) * 30 >= secAuditTotal ? 0.5 : 1 }}>
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>Loading...</div>
           )}
         </div>
       )}

@@ -798,6 +798,125 @@ router.put("/reviews/:id", requireAdmin, async (req, res) => {
   }
 });
 
+// ─── Security: Audit Log & Anomaly Detection ───
+
+// GET /api/admin/security/audit-log — Paginated audit log with filters
+router.get("/security/audit-log", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { severity, action, userId, limit: lim, offset: off, startDate, endDate } = req.query;
+    const limitN = Math.min(parseInt(lim) || 50, 200);
+    const offsetN = parseInt(off) || 0;
+
+    let where = "WHERE 1=1";
+    const params = [];
+    if (severity && severity !== 'all') { where += " AND severity = ?"; params.push(severity); }
+    if (action && action !== 'all') { where += " AND action = ?"; params.push(action); }
+    if (userId) { where += " AND user_id = ?"; params.push(userId); }
+    if (startDate) { where += " AND created_at >= ?"; params.push(startDate); }
+    if (endDate) { where += " AND created_at <= ?"; params.push(endDate); }
+
+    const rows = await db.prepare(`
+      SELECT * FROM audit_log ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?
+    `).all(...params, limitN, offsetN);
+
+    const countRow = await db.prepare(`SELECT COUNT(*) as total FROM audit_log ${where}`).get(...params);
+
+    res.json({ entries: rows, total: countRow?.total || 0 });
+  } catch (err) {
+    console.error("Audit log fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch audit log" });
+  }
+});
+
+// GET /api/admin/security/dashboard — Anomaly detection summary
+router.get("/security/dashboard", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+
+    // Counts by severity in last 24h
+    const severityCounts = await db.prepare(`
+      SELECT severity, COUNT(*) as count
+      FROM audit_log
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY severity
+      ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'error' THEN 2 WHEN 'warn' THEN 3 ELSE 4 END
+    `).all();
+
+    // Top actions in last 24h
+    const topActions = await db.prepare(`
+      SELECT action, COUNT(*) as count, COUNT(DISTINCT user_id) as unique_users, COUNT(DISTINCT ip_address) as unique_ips
+      FROM audit_log
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY action ORDER BY count DESC LIMIT 15
+    `).all();
+
+    // Failed logins in last 24h
+    const failedLogins24h = await db.prepare(`
+      SELECT ip_address, COUNT(*) as count, MAX(created_at) as last_attempt,
+        MIN(created_at) as first_attempt, user_email
+      FROM audit_log
+      WHERE action = 'login_attempt' AND severity IN ('warn', 'critical')
+        AND created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY ip_address, user_email
+      HAVING COUNT(*) >= 3
+      ORDER BY count DESC
+      LIMIT 20
+    `).all();
+
+    // Critical/error events in last 7 days
+    const criticalEvents = await db.prepare(`
+      SELECT * FROM audit_log
+      WHERE severity IN ('critical', 'error')
+        AND created_at > NOW() - INTERVAL '7 days'
+      ORDER BY created_at DESC
+      LIMIT 20
+    `).all();
+
+    // Admin access in last 24h
+    const adminAccess = await db.prepare(`
+      SELECT user_email, ip_address, COUNT(*) as count, MAX(created_at) as last_access,
+        MIN(created_at) as first_access
+      FROM audit_log
+      WHERE action = 'admin_access'
+        AND created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY user_email, ip_address
+      ORDER BY count DESC
+    `).all();
+
+    // Hourly activity for last 24h (for chart)
+    const hourlyActivity = await db.prepare(`
+      SELECT date_trunc('hour', created_at) as hour, COUNT(*) as count, severity
+      FROM audit_log
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY date_trunc('hour', created_at), severity
+      ORDER BY hour
+    `).all();
+
+    // Anomaly flags from in-memory tracker
+    const { failedLogins: failedLoginTracker } = require("../middleware/auditLog");
+    const activeThreats = [];
+    for (const [ip, data] of failedLoginTracker) {
+      if (data.count >= 5) {
+        activeThreats.push({ ip, failedCount: data.count, since: new Date(data.firstAt).toISOString() });
+      }
+    }
+
+    res.json({
+      severityCounts,
+      topActions,
+      failedLogins: failedLogins24h,
+      criticalEvents,
+      adminAccess,
+      hourlyActivity,
+      activeThreats,
+    });
+  } catch (err) {
+    console.error("Security dashboard error:", err);
+    res.status(500).json({ error: "Failed to load security dashboard" });
+  }
+});
+
 // ─── GET /api/admin/blocked-emails ─── List all blocked emails
 router.get("/blocked-emails", authenticate, checkAdmin, requireAdmin, async (req, res) => {
   try {

@@ -251,6 +251,10 @@ app.use((req, res, next) => {
 const { verifyCsrf } = require("./middleware/auth");
 app.use("/api", verifyCsrf);
 
+// ─── Audit Logging ───
+const { auditLogMiddleware } = require("./middleware/auditLog");
+app.use("/api", auditLogMiddleware);
+
 // ─── Routes ───
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/care-recipients", require("./routes/careRecipients"));
@@ -287,7 +291,7 @@ app.use("/api/consent", require("./routes/consent"));
 app.use("/api/documents", require("./routes/documents"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.64";
+const APP_VERSION = "1.39.65";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
