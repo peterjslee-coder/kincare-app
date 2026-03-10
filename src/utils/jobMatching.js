@@ -31,7 +31,13 @@ function computeJobConflicts(job, existingSessions) {
     if (!sTime) continue;
 
     const sStartMin = parseTimeToMinutes(sTime);
-    const sDuration = parseFloat(session.durationHours || session.duration_hours) || 2;
+    const rawDur = session.durationHours ?? session.duration_hours;
+    const sDuration = parseFloat(rawDur) || 2;
+    if (sDuration === 2 && !rawDur) {
+      console.warn(`[conflict] Session ${session.id || '?'} has no duration — defaulting to 2h. duration_hours=${session.duration_hours}, durationHours=${session.durationHours}`);
+    } else {
+      console.log(`[conflict] Session ${session.id?.slice(0,8) || '?'} duration=${sDuration}h, start=${sTime}, endWithBuffer=${sStartMin + sDuration * 60 + TRAVEL_BUFFER_MINUTES}min`);
+    }
     const sEndMin = sStartMin + sDuration * 60 + TRAVEL_BUFFER_MINUTES;
 
     // Check overlap: job starts before session+buffer ends AND job ends after session starts
