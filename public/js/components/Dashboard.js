@@ -27,6 +27,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // Review gating state
   const [pendingReviews, setPendingReviews] = useState([]);
   const [lateCheckInAlert, setLateCheckInAlert] = useState(null);
+  // Care team invite banner
+  const [pendingInvites, setPendingInvites] = useState([]);
+  const [acceptingInviteId, setAcceptingInviteId] = useState(null);
 
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
@@ -99,6 +102,33 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     } catch {}
   };
 
+  const fetchPendingInvites = async () => {
+    try {
+      const res = await apiFetch('/api/care-teams/my-pending-invites');
+      if (res?.ok) { const d = await res.json(); setPendingInvites(d.invites || []); }
+    } catch {}
+  };
+
+  const handleAcceptInvite = async (invite) => {
+    setAcceptingInviteId(invite.id);
+    try {
+      const res = await apiFetch('/api/care-teams/accept-invite', {
+        method: 'POST',
+        body: JSON.stringify({ token: invite.token }),
+      });
+      if (res?.ok) {
+        showToast(`Joined ${invite.recipient_first_name}'s care team!`, 'success');
+        setPendingInvites(prev => prev.filter(i => i.id !== invite.id));
+        fetchDashboard();
+        fetchCareTeams();
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        showToast(err?.error || 'Failed to accept invite', 'error');
+      }
+    } catch { showToast('Failed to accept invite', 'error'); }
+    setAcceptingInviteId(null);
+  };
+
   const handleCancel = async (sessionId) => {
     setCancelLoading(true);
     try {
@@ -162,7 +192,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   };
 
   useEffect(() => {
-    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews();
+    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews(); fetchPendingInvites();
     // Re-fetch when a new session is created (e.g. from RequestCareModal)
     const onSessionsUpdated = () => { fetchDashboard(); fetchPendingReviews(); };
     window.addEventListener('sessions-updated', onSessionsUpdated);
@@ -176,7 +206,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     const c2 = onSocketEvent('session_update', () => { fetchDashboard(); fetchPendingReviews(); });
     const c3 = onSocketEvent('visit_photos', () => fetchDashboard());
     const c4 = onSocketEvent('late_check_in', (data) => setLateCheckInAlert(data));
-    return () => { c1(); c2(); c3(); c4(); };
+    const c5 = onSocketEvent('care_team_invite', () => fetchPendingInvites());
+    return () => { c1(); c2(); c3(); c4(); c5(); };
   }, []);
 
   // Refresh dashboard when tab regains focus (catches missed socket events)
@@ -409,6 +440,26 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       <div className="page-header">
         <h1 className="greeting">{isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`}</h1>
       </div>
+
+      {/* Care team invite banners — show pending invites the user can accept */}
+      {pendingInvites.length > 0 && pendingInvites.map(invite => (
+        <div key={invite.id} style={{ background: '#E8F5E9', border: '2px solid #66BB6A', borderRadius: 12, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 2px 8px rgba(27,107,90,0.15)' }}>
+          <span style={{ fontSize: 32 }}>{'\uD83E\uDD1D'}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#1b6b5a' }}>
+              You're invited to {invite.recipient_first_name}'s Care Team!
+            </div>
+            <div style={{ fontSize: 13, color: '#555', marginTop: 3 }}>
+              {invite.inviter_first_name} {invite.inviter_last_name} invited you to help coordinate care for {invite.recipient_first_name} {invite.recipient_last_name}.
+            </div>
+          </div>
+          <button onClick={() => handleAcceptInvite(invite)}
+            disabled={acceptingInviteId === invite.id}
+            style={{ padding: '10px 24px', background: acceptingInviteId === invite.id ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: acceptingInviteId === invite.id ? 'wait' : 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
+            {acceptingInviteId === invite.id ? 'Joining...' : 'Accept'}
+          </button>
+        </div>
+      ))}
 
       {/* Consent warning banner — show if any care recipients have pending/rejected consent */}
       {data?.careRecipients && data.careRecipients.some(cr => cr.consent_status && cr.consent_status !== 'verified') && (

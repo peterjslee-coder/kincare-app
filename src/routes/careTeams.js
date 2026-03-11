@@ -45,6 +45,29 @@ router.get("/invite-info", async (req, res) => {
 // ─── All routes below require authentication ───
 router.use(authenticate);
 
+// ─── GET /api/care-teams/my-pending-invites ─── Check for pending invites matching logged-in user's email
+router.get("/my-pending-invites", async (req, res) => {
+  try {
+    const db = await getDb();
+    const invites = await db.prepare(`
+      SELECT cti.id, cti.token, cti.role, cti.expires_at,
+             ct.name AS team_name, ct.id AS care_team_id,
+             cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+             u.first_name AS inviter_first_name, u.last_name AS inviter_last_name
+      FROM care_team_invites cti
+      JOIN care_teams ct ON cti.care_team_id = ct.id
+      JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+      JOIN users u ON cti.invited_by = u.id
+      WHERE LOWER(cti.invited_email) = LOWER(?) AND cti.status = 'pending' AND cti.expires_at > NOW()
+      ORDER BY cti.created_at DESC
+    `).all(req.user.email);
+    res.json({ invites });
+  } catch (err) {
+    console.error("Pending invites error:", err);
+    res.status(500).json({ error: "Failed to check pending invites" });
+  }
+});
+
 // ─── GET /api/care-teams ─── List care teams the current user belongs to
 router.get("/", requireRole("family"), async (req, res) => {
   try {
@@ -251,6 +274,32 @@ router.post("/:id/invite", requireRole("family"), async (req, res) => {
       }),
     });
 
+    // If invitee already has an account, also send in-app notification
+    let inApp = false;
+    if (existingUser) {
+      try {
+        await db.prepare(
+          "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, 'care_team_invite', ?, ?, ?)"
+        ).run(uuid(), existingUser.id, `You're invited to ${recipientName}'s Care Team`,
+          `${inviterName} invited you to join ${recipientName}'s care team as a ${role}. Open the app to accept.`,
+          JSON.stringify({ inviteToken: token, careTeamId: req.params.id, recipientName })
+        );
+        // Real-time push so they see it immediately
+        const emitToUser = req.app.get("emitToUser");
+        if (emitToUser) emitToUser(existingUser.id, "care_team_invite", { token, teamName: team.name, recipientName });
+        // Push notification
+        const { sendPushToUser } = require("./push");
+        sendPushToUser(existingUser.id, {
+          title: "Care Team Invite",
+          body: `${inviterName} invited you to join ${recipientName}'s care team`,
+          data: { type: "care_team_invite", token },
+        }, "care_team_invite").catch(() => {});
+        inApp = true;
+      } catch (notifErr) {
+        console.warn("[invite] In-app notification failed (non-blocking):", notifErr.message);
+      }
+    }
+
     res.status(201).json({
       invite: {
         id: inviteId,
@@ -259,7 +308,7 @@ router.post("/:id/invite", requireRole("family"), async (req, res) => {
         status: "pending",
         expiresAt,
       },
-      message: `Invitation sent to ${email}`,
+      message: inApp ? `Invitation sent to ${email} (in-app + email)` : `Invitation sent to ${email} (email only — not yet registered)`,
     });
   } catch (err) {
     console.error("Invite to care team error:", err);
