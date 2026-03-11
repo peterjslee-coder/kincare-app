@@ -1810,11 +1810,6 @@
       to { opacity: 0; }
     }
 
-    /* ===== Floating Help Button (mobile only) ===== */
-    .mobile-help-fab {
-      display: none;
-    }
-
     /* ===== Bottom Nav (hidden on desktop) ===== */
     .bottom-nav {
       display: none;
@@ -1884,31 +1879,6 @@
         font-size: 10px;
         line-height: 1.2;
         white-space: nowrap;
-      }
-
-      /* Floating help button — above bottom nav */
-      .mobile-help-fab {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: fixed;
-        bottom: 74px;
-        right: 16px;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: #4a90d9;
-        color: #fff;
-        border: none;
-        font-size: 20px;
-        font-weight: 700;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        cursor: pointer;
-        z-index: 999;
-        transition: background 0.2s;
-      }
-      .mobile-help-fab:active {
-        background: #3a7bc0;
       }
 
       /* Main content padding for bottom nav */

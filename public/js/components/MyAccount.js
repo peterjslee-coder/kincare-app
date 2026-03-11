@@ -1777,6 +1777,21 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         </button>
       </div>
 
+      {/* Help & Support — always visible, especially important on mobile where sidebar is hidden */}
+      <button
+        onClick={() => onNavigate && onNavigate('help')}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+          padding: '14px 18px', marginTop: 20, background: '#f5f7fa',
+          border: '1px solid #e0e4ea', borderRadius: 12, cursor: 'pointer',
+          fontSize: 15, fontWeight: 500, color: '#4a90d9',
+        }}
+      >
+        <span style={{ fontSize: 20 }}>❓</span>
+        <span>Help & Support</span>
+        <span style={{ marginLeft: 'auto', color: '#aab', fontSize: 18 }}>›</span>
+      </button>
+
       {/* Delete Account — not for demo accounts */}
       {!isDemo && (
         <DeleteAccountSection onDeleted={handleLogoutFromAccount} />

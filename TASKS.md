@@ -168,6 +168,7 @@
 - [ ] **Cancellation policy acknowledgment for caregivers.** On accepting an appointment, caregiver must check a box: "I understand I must cancel 24+ hours before start, or the care team can leave a review." *(Feedback — Cary, Mar 6)* **P2**
 - [ ] **Family cancellation charge acknowledgment.** Families must click something acknowledging they'll be charged if cancelling inside 24 hours. *(Feedback — Cary, Mar 6)* **P2**
 - [x] ~~**2FA First Steps checklist doesn't clear properly.** Fixed v1.37.1 — 3-second timer + manual button fallback. *(Feedback — Cary, Mar 6)* **P1**~~
+- [ ] **Care preferences don't save (or don't show saved) in caregiver profile.** Saving care preferences in My Account → Care Preferences tab doesn't persist or doesn't visually confirm the save. *(Pete, Mar 10)* **P1**
 
 ## Features — Up Next
 
