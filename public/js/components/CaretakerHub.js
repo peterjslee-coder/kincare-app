@@ -1331,7 +1331,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           ${(s.caregiverPayout || parseFloat(s.estimatedCost) || 0).toFixed(2)}
                         </div>
                       )}
-                      {isActive && (
+                      {isActive && (<>
                         <button onClick={() => {
                           setCheckOutMood('');
                           setCheckOutTags([]);
@@ -1366,7 +1366,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                             borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>Nobody Home</button>
                         )}
-                      )}
+                      </>)}
                       {isReady && !isActive && (
                         <button onClick={async () => {
                           setCheckInMood('');
