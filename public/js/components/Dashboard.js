@@ -30,6 +30,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // Care team invite banner
   const [pendingInvites, setPendingInvites] = useState([]);
   const [acceptingInviteId, setAcceptingInviteId] = useState(null);
+  const [invitesChecked, setInvitesChecked] = useState(false);
 
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
@@ -107,6 +108,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       const res = await apiFetch('/api/care-teams/my-pending-invites');
       if (res?.ok) { const d = await res.json(); setPendingInvites(d.invites || []); }
     } catch {}
+    setInvitesChecked(true);
   };
 
   const handleAcceptInvite = async (invite) => {
@@ -242,11 +244,13 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
   // ─── Resume in-progress wizard or send new users into wizard ───
   // Must be before early returns to avoid breaking Rules of Hooks
+  // Wait for invites check before redirecting — user with pending invites should NOT be sent to wizard
   useEffect(() => {
-    if (loading || !data) return;
-    // Skip wizard redirect while an invite is being accepted — the invite flow
-    // will navigate to the care-team page once it resolves
+    if (loading || !data || !invitesChecked) return;
+    // Skip wizard redirect while an invite is being accepted
     if (acceptingInvite) return;
+    // If user has pending care team invites, DON'T redirect to wizard — show invites instead
+    if (pendingInvites.length > 0) return;
     // Check if there's a wizard in progress (saved in sessionStorage)
     try {
       const saved = sessionStorage.getItem('inplace_wizard');
@@ -261,7 +265,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     if (isNew && !hasRec && onNavigate) {
       onNavigate('recipients');
     }
-  }, [loading, data, user, acceptingInvite]);
+  }, [loading, data, user, acceptingInvite, invitesChecked, pendingInvites]);
 
   const formatActivityTime = (createdAt) => {
     if (!createdAt) return '';
@@ -377,9 +381,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     </div>
   );
 
-  // ─── Welcome screen for new users who HAVE completed the wizard ───
-  // This is now a casual "explore the app" ideas list, not a mandatory checklist
+  // ─── Welcome screen for new users ───
   if (isNewUser) {
+    const hasPendingInvites = pendingInvites.length > 0;
     const exploreIdeas = [
       { icon: '👥', label: 'Invite family to help coordinate care', action: () => onNavigate && onNavigate('care-team'), actionText: 'Care Team' },
       { icon: '🔍', label: 'Browse caregivers in your area', action: () => onNavigate && onNavigate('caregivers'), actionText: 'Find Caregivers' },
@@ -392,12 +396,49 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         {pwaGuide}
         {/* Welcome Hero */}
         <div style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #2a9d8f 100%)', borderRadius: 16, padding: '40px 32px', color: '#fff', marginBottom: 24, textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
-          <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 700 }}>You're off to a great start, {firstName}!</h1>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>{hasPendingInvites ? '\uD83E\uDD1D' : '\uD83C\uDF89'}</div>
+          <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 700 }}>
+            {hasPendingInvites ? `Welcome, ${firstName}!` : `You're off to a great start, ${firstName}!`}
+          </h1>
           <p style={{ margin: 0, fontSize: 16, opacity: 0.9, maxWidth: 480, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
-            Your loved one has been added and we're verifying everything. Here are some things you can explore while you wait.
+            {hasPendingInvites
+              ? `You have ${pendingInvites.length === 1 ? 'a care team invite' : pendingInvites.length + ' care team invites'} waiting for you!`
+              : hasRecipient
+                ? 'Your loved one has been added and we\'re verifying everything. Here are some things you can explore while you wait.'
+                : 'Welcome to InPlace! Get started by adding your loved one or accepting a care team invite.'}
           </p>
         </div>
+
+        {/* Pending care team invites — shown prominently for invited users */}
+        {hasPendingInvites && pendingInvites.map(invite => (
+          <div key={invite.id} style={{ background: '#E8F5E9', border: '2px solid #66BB6A', borderRadius: 14, padding: '20px 24px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 3px 12px rgba(27,107,90,0.18)' }}>
+            <span style={{ fontSize: 36 }}>{'\uD83D\uDC6A'}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: '#1b6b5a' }}>
+                Join {invite.recipient_first_name} {invite.recipient_last_name}'s Care Team
+              </div>
+              <div style={{ fontSize: 14, color: '#555', marginTop: 4 }}>
+                {invite.inviter_first_name} {invite.inviter_last_name} invited you to help coordinate care.
+              </div>
+            </div>
+            <button onClick={() => handleAcceptInvite(invite)}
+              disabled={acceptingInviteId === invite.id}
+              style={{ padding: '12px 28px', background: acceptingInviteId === invite.id ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: acceptingInviteId === invite.id ? 'wait' : 'pointer', whiteSpace: 'nowrap', boxShadow: '0 3px 8px rgba(0,0,0,0.18)' }}>
+              {acceptingInviteId === invite.id ? 'Joining...' : 'Accept Invite'}
+            </button>
+          </div>
+        ))}
+
+        {/* Hint for users expecting an invite but not seeing one */}
+        {!hasPendingInvites && !hasRecipient && (
+          <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: 12, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>{'\uD83D\uDCE8'}</span>
+            <div style={{ fontSize: 13, color: '#795548', lineHeight: 1.6 }}>
+              <strong>Expecting an invite?</strong> If someone invited you to join a care team, your invite will appear here.
+              If you don't see it, contact the person who invited you and ask them to resend the invite from their Care Team page.
+            </div>
+          </div>
+        )}
 
         {/* Explore ideas — casual, not a checklist */}
         {exploreIdeas.length > 0 && (
