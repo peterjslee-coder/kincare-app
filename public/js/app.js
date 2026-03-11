@@ -754,12 +754,18 @@ const App = () => {
   };
 
   const handleLogout = () => {
+    // Clear server-side session: revoke refresh token + clear httpOnly cookies
+    AUTH_TOKEN = null;
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+    // Clear client state
     setCurrentUser(null);
     setAuthToken(null);
     window.setActiveRole(null);
     setActiveRoleState(null);
     setCurrentPage('dashboard');
     setAppState('splash');
+    // Clear any pending invite token
+    localStorage.removeItem('pendingInviteToken');
     // Reset text size to default
     if (typeof applyTextSize === 'function') applyTextSize('default');
     // Disconnect WebSocket
