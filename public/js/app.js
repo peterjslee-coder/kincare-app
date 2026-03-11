@@ -479,9 +479,10 @@ const App = () => {
             } catch {}
             setAppState('app');
             // If returning user has a pending invite token, accept it now
-            // Note: must re-read URL here since replaceState may not have run yet at this point
+            // Check URL, __originalSearch, and localStorage (survives approval gate)
             const inviteParam = new URLSearchParams(window.location.search).get('invite')
-              || new URLSearchParams(window.__originalSearch || '').get('invite');
+              || new URLSearchParams(window.__originalSearch || '').get('invite')
+              || localStorage.getItem('pendingInviteToken');
             if (inviteParam) {
               setAcceptingInvite(true);
               apiFetch('/api/care-teams/accept-invite', {
@@ -500,8 +501,11 @@ const App = () => {
                     setVerifyMessage({ type: 'error', text: 'Could not accept this invite. It may have expired.' });
                   }
                 }
+                // Clear on any response (success or permanent error)
+                localStorage.removeItem('pendingInviteToken');
               }).catch(() => {
                 setVerifyMessage({ type: 'error', text: 'Could not accept this invite. Please check your connection and try again.' });
+                // Keep in localStorage on network errors so it retries next load
               }).finally(() => {
                 setAcceptingInvite(false);
               });
@@ -553,8 +557,9 @@ const App = () => {
         });
     }
 
-    // Check for care team invite token in URL
-    const inviteToken = params.get('invite');
+    // Check for care team invite token in URL or localStorage (survives approval gate)
+    const inviteToken = params.get('invite') || localStorage.getItem('pendingInviteToken');
+    if (params.get('invite')) localStorage.setItem('pendingInviteToken', params.get('invite'));
     if (inviteToken) {
       setPendingInviteToken(inviteToken);
       pendingInviteRef.current = inviteToken;
@@ -712,7 +717,7 @@ const App = () => {
       connectSocket(AUTH_TOKEN);
     }
     // Accept pending care team invite if one exists (use ref to avoid stale closure)
-    const inviteTokenNow = pendingInviteRef.current;
+    const inviteTokenNow = pendingInviteRef.current || localStorage.getItem('pendingInviteToken');
     if (inviteTokenNow) {
       setAcceptingInvite(true);
       apiFetch('/api/care-teams/accept-invite', {
@@ -723,6 +728,8 @@ const App = () => {
           const data = await r.json();
           setVerifyMessage({ type: 'success', text: data.message || 'You\'ve joined the care team!' });
           if (data.careTeamId) { setSelectedCareTeamId(data.careTeamId); setCurrentPage('care-team'); }
+          // Clear invite token on success
+          localStorage.removeItem('pendingInviteToken');
         } else {
           // Show error to user — expired token, wrong email, etc.
           try {
@@ -731,9 +738,12 @@ const App = () => {
           } catch {
             setVerifyMessage({ type: 'error', text: 'Could not accept this invite. It may have expired.' });
           }
+          // Clear on permanent failure (don't retry bad tokens forever)
+          localStorage.removeItem('pendingInviteToken');
         }
       }).catch(() => {
         setVerifyMessage({ type: 'error', text: 'Could not accept this invite. Please check your connection and try again.' });
+        // Keep in localStorage on network errors so it retries next load
       }).finally(() => {
         setAcceptingInvite(false);
       });

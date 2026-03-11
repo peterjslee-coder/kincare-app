@@ -50,7 +50,7 @@ async function familyDashboard(db, userId, res) {
 
     const feePercent = await getPlatformFeePercent(db);
 
-    // Get owned + shared recipients
+    // Get owned + shared + care-team recipients
     const ownedRecipients = await db.prepare(
       "SELECT * FROM care_recipients WHERE family_user_id = ?"
     ).all(userId);
@@ -59,8 +59,20 @@ async function familyDashboard(db, userId, res) {
       JOIN care_recipients cr ON crs.care_recipient_id = cr.id
       WHERE crs.shared_with_user_id = ?
     `).all(userId);
+    // Also find recipients via care team membership (in case care_recipient_shares wasn't created)
+    const teamRecipients = await db.prepare(`
+      SELECT cr.* FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+      WHERE ctm.user_id = ?
+    `).all(userId);
     const ownedIds = new Set(ownedRecipients.map(r => r.id));
-    const recipients = [...ownedRecipients, ...sharedRecipients.filter(r => !ownedIds.has(r.id))];
+    const sharedIds = new Set(sharedRecipients.map(r => r.id));
+    const recipients = [
+      ...ownedRecipients,
+      ...sharedRecipients.filter(r => !ownedIds.has(r.id)),
+      ...teamRecipients.filter(r => !ownedIds.has(r.id) && !sharedIds.has(r.id)),
+    ];
 
     const famEtNow = getNowInZone();
     const monthStart = new Date(famEtNow); monthStart.setDate(1);
