@@ -1974,4 +1974,98 @@ router.post("/caregivers/:id/approve-bgcheck", requireAdmin, async (req, res) =>
   }
 });
 
+// ─── Account Approval Gate ───
+
+// GET /api/admin/pending-approvals — list users awaiting approval
+router.get("/pending-approvals", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const pending = await db.prepare(`
+      SELECT id, email, first_name, last_name, role, roles, phone, created_at
+      FROM users
+      WHERE account_approved = 0
+        AND (is_demo IS NULL OR is_demo = 0)
+        AND is_active = 1
+      ORDER BY created_at DESC
+    `).all();
+    res.json({ pending: pending || [] });
+  } catch (err) {
+    console.error("Pending approvals error:", err);
+    res.status(500).json({ error: "Failed to fetch pending approvals" });
+  }
+});
+
+// PUT /api/admin/users/:id/approve — approve a user's account
+router.put("/users/:id/approve", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, first_name, last_name, email, role FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    await db.prepare(
+      "UPDATE users SET account_approved = 1, approved_by = ?, approved_at = NOW() WHERE id = ?"
+    ).run(req.user.id, req.params.id);
+
+    await logAdminAction(req, "account_approved", "user", req.params.id, {
+      userName: `${user.first_name} ${user.last_name}`.trim(),
+      email: user.email,
+    });
+
+    // Notify the user their account is approved
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      emitToUser(req.params.id, "account_approved", {
+        message: "Your account has been approved! You can now continue setting up your profile.",
+      });
+    }
+
+    // Push notification
+    try {
+      const sendPush = req.app.get("sendPush");
+      if (sendPush) {
+        await sendPush(req.params.id, {
+          title: "Account Approved!",
+          body: "Welcome to InPlace! Your account has been approved. You can now continue setting up your profile.",
+          data: { type: "account_approved" },
+        });
+      }
+    } catch {}
+
+    // Activity feed
+    try {
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, created_at) VALUES (?, ?, 'account_approved', 'Welcome to InPlace!', 'Your account has been approved. Continue setting up your profile to get started.', NOW())"
+      ).run(uuid(), req.params.id);
+    } catch {}
+
+    res.json({ success: true, message: `Approved ${user.first_name} ${user.last_name}` });
+  } catch (err) {
+    console.error("Account approve error:", err);
+    res.status(500).json({ error: "Failed to approve account" });
+  }
+});
+
+// PUT /api/admin/users/:id/reject — reject (deactivate) a user's account
+router.put("/users/:id/reject", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { reason } = req.body;
+    const user = await db.prepare("SELECT id, first_name, last_name, email FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    await db.prepare("UPDATE users SET is_active = 0 WHERE id = ?").run(req.params.id);
+
+    await logAdminAction(req, "account_rejected", "user", req.params.id, {
+      userName: `${user.first_name} ${user.last_name}`.trim(),
+      email: user.email,
+      reason: reason || "Not approved",
+    });
+
+    res.json({ success: true, message: `Rejected ${user.first_name} ${user.last_name}` });
+  } catch (err) {
+    console.error("Account reject error:", err);
+    res.status(500).json({ error: "Failed to reject account" });
+  }
+});
+
 module.exports = router;

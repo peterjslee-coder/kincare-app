@@ -83,9 +83,41 @@ const AdminPanel = window.AdminPanel = () => {
   const [secLogFilter, setSecLogFilter] = useState({ severity: 'all', action: 'all' });
   const [secLogPage, setSecLogPage] = useState(0);
   const [secView, setSecView] = useState('dashboard'); // 'dashboard' or 'audit-log'
+  // Account approvals state
+  const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [approvalLoading, setApprovalLoading] = useState(null);
+
+  const fetchPendingApprovals = async () => {
+    try {
+      const res = await apiFetch('/api/admin/pending-approvals');
+      if (res?.ok) { const d = await res.json(); setPendingApprovals(d.pending || []); }
+    } catch {}
+  };
+
+  const handleApprove = async (userId) => {
+    setApprovalLoading(userId);
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/approve`, { method: 'PUT' });
+      if (res?.ok) fetchPendingApprovals();
+    } catch {}
+    setApprovalLoading(null);
+  };
+
+  const handleReject = async (userId) => {
+    if (!confirm('Reject and deactivate this account? They will not be able to log in.')) return;
+    setApprovalLoading(userId);
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/reject`, {
+        method: 'PUT', body: JSON.stringify({ reason: 'Rejected by admin' }),
+      });
+      if (res?.ok) fetchPendingApprovals();
+    } catch {}
+    setApprovalLoading(null);
+  };
 
   useEffect(() => {
     loadStats();
+    fetchPendingApprovals();
     // Fetch current user for settings tab
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
   }, []);
@@ -723,6 +755,33 @@ const AdminPanel = window.AdminPanel = () => {
       {/* ─── Overview Tab ─── */}
       {activeTab === 'overview' && stats && (
         <div>
+          {/* Pending Account Approvals */}
+          {pendingApprovals.length > 0 && (
+            <div style={{ marginBottom: 20, padding: 16, background: '#fff3e0', border: '2px solid #ff9800', borderRadius: 14 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#e65100', marginBottom: 12 }}>
+                {'\u{1F514}'} {pendingApprovals.length} Account{pendingApprovals.length > 1 ? 's' : ''} Awaiting Approval
+              </div>
+              {pendingApprovals.map(u => (
+                <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', marginBottom: 6, background: '#fff', borderRadius: 10, border: '1px solid #ffe0b2' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{u.first_name} {u.last_name}</div>
+                    <div style={{ fontSize: 12, color: '#888' }}>{u.email} • {u.role} • {new Date(u.created_at).toLocaleDateString()}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => handleApprove(u.id)} disabled={approvalLoading === u.id}
+                      style={{ padding: '6px 16px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: approvalLoading === u.id ? 0.6 : 1 }}>
+                      {approvalLoading === u.id ? '...' : 'Approve'}
+                    </button>
+                    <button onClick={() => handleReject(u.id)} disabled={approvalLoading === u.id}
+                      style={{ padding: '6px 12px', background: '#f5f5f5', color: '#c62828', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Stat cards */}
           <div className="stats-grid">
             <div className="stat-card">

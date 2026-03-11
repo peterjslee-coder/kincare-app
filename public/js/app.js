@@ -342,6 +342,21 @@ const App = () => {
     return cleanup;
   }, []);
 
+  // ─── Account approved — refresh user data to unlock the app ───
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const cleanup = onSocketEvent('account_approved', () => {
+      // Re-fetch user to pick up account_approved = true
+      apiFetch('/api/auth/me').then(async res => {
+        if (res?.ok) {
+          const data = await res.json();
+          setCurrentUser(prev => ({ ...prev, ...data.user, account_approved: true }));
+        }
+      }).catch(() => {});
+    });
+    return cleanup;
+  }, []);
+
   // ─── Global incoming call notification (browser notification when not on Messages) ───
   useEffect(() => {
     if (typeof onSocketEvent !== 'function') return;
@@ -445,6 +460,7 @@ const App = () => {
               profilePhoto: data.user.profile_photo || null,
               emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
               isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
+              account_approved: !!data.user.account_approved,
               onboardingComplete: data.user.onboarding_complete,
             });
             // Sync active role: use saved preference if valid, else default to first role
@@ -452,8 +468,8 @@ const App = () => {
             const validRole = saved && userRoles.includes(saved) ? saved : userRoles[0];
             setActiveRoleState(validRole);
             window.setActiveRole(validRole);
-            // Check if disclaimer needs to be accepted
-            if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+            // Check if disclaimer needs to be accepted (skip if account not yet approved)
+            if (data.user.account_approved && (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0')) {
               setShowDisclaimer(true);
             }
             // Apply accessibility text size from user prefs
@@ -659,6 +675,7 @@ const App = () => {
             profilePhoto: data.user.profile_photo || null,
             emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
             isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
+            account_approved: !!data.user.account_approved,
             onboardingComplete: data.user.onboarding_complete,
           });
           // Sync activeRole to new user's primary role
@@ -666,8 +683,8 @@ const App = () => {
             window.setActiveRole(userRoles[0]);
             setActiveRoleState(userRoles[0]);
           }
-          // Check if disclaimer needs to be accepted
-          if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+          // Check if disclaimer needs to be accepted (skip if not yet approved)
+          if (data.user.account_approved && (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0')) {
             setShowDisclaimer(true);
           }
           // Apply accessibility text size
@@ -1188,7 +1205,24 @@ const App = () => {
         {currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && (
           <EmailVerificationBanner userId={currentUser.id} />
         )}
-        {renderPage()}
+        {/* Account approval gate — show pending message for unapproved non-demo users */}
+        {currentUser && !currentUser.account_approved && !currentUser.isDemo && !currentUser.is_admin ? (
+          <div style={{ maxWidth: 500, margin: '60px auto', textAlign: 'center', padding: 32 }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>{'\u23F3'}</div>
+            <h2 style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 700, color: '#333' }}>Account Pending Approval</h2>
+            <p style={{ fontSize: 15, color: '#666', lineHeight: 1.6, margin: '0 0 20px' }}>
+              Thank you for signing up for InPlace! Your account is being reviewed by our team.
+              You'll receive a notification once you've been approved to continue.
+            </p>
+            <p style={{ fontSize: 13, color: '#999' }}>
+              This usually takes less than 24 hours. If you have questions, contact us at support@yourinplace.com.
+            </p>
+            <button onClick={() => { AUTH_TOKEN = null; fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {}); window.location.reload(); }}
+              style={{ marginTop: 20, padding: '10px 24px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
+              Log Out
+            </button>
+          </div>
+        ) : renderPage()}
       </main>
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav">

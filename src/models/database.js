@@ -727,6 +727,13 @@ async function initializeDatabase() {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_disputes_session ON session_disputes(session_id)`,
     `CREATE INDEX IF NOT EXISTS idx_disputes_status ON session_disputes(status)`,
+
+    // ─── v1.39.76 — Admin Approval Gate for New Signups ───
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS account_approved INTEGER DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_by TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
+    // Auto-approve existing users and demo users
+    `UPDATE users SET account_approved = 1 WHERE is_demo = 1 OR is_admin = 1 OR created_at < NOW() - INTERVAL '1 minute'`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
