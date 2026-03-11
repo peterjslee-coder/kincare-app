@@ -683,6 +683,50 @@ async function initializeDatabase() {
       responded_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
+
+    // ─── v1.39.75 — Session Accountability System ───
+
+    // Payment authorization tracking (Stripe PaymentIntent with manual capture)
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS payment_authorized_at TIMESTAMPTZ`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS payment_captured_at TIMESTAMPTZ`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS payment_voided_at TIMESTAMPTZ`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS authorized_amount INTEGER`, // cents
+
+    // Late check-in tracking
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS late_check_in INTEGER DEFAULT 0`, // boolean
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS late_minutes INTEGER`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS late_resolution TEXT`, // 'extend' | 'truncate' | null (pending)
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS late_resolution_at TIMESTAMPTZ`,
+
+    // No-show tracking
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS caregiver_no_show INTEGER DEFAULT 0`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS caregiver_no_show_at TIMESTAMPTZ`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS family_no_show INTEGER DEFAULT 0`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS family_no_show_flagged_at TIMESTAMPTZ`,
+
+    // Review requirement tracking
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS review_required INTEGER DEFAULT 0`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS review_completed INTEGER DEFAULT 0`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS review_reminded_at TIMESTAMPTZ`,
+
+    // Session disputes
+    `CREATE TABLE IF NOT EXISTS session_disputes (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES care_sessions(id),
+      filed_by TEXT NOT NULL REFERENCES users(id),
+      filed_by_role TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      description TEXT,
+      evidence_notes TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      admin_notes TEXT,
+      resolved_by TEXT REFERENCES users(id),
+      resolved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_disputes_session ON session_disputes(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_disputes_status ON session_disputes(status)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

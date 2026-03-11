@@ -16,6 +16,16 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
   const [fbSubmitting, setFbSubmitting] = React.useState(false);
   const [fbSubmitted, setFbSubmitted] = React.useState(false);
   const [fbError, setFbError] = React.useState(null);
+  // Dispute state
+  const [showDispute, setShowDispute] = React.useState(false);
+  const [disputeSessionId, setDisputeSessionId] = React.useState('');
+  const [disputeReason, setDisputeReason] = React.useState('');
+  const [disputeDesc, setDisputeDesc] = React.useState('');
+  const [disputeSubmitting, setDisputeSubmitting] = React.useState(false);
+  const [disputeSubmitted, setDisputeSubmitted] = React.useState(false);
+  const [disputeError, setDisputeError] = React.useState(null);
+  const [recentSessions, setRecentSessions] = React.useState([]);
+  const [myDisputes, setMyDisputes] = React.useState([]);
 
   const categories = [
     { id: 'all', label: 'All' },
@@ -28,6 +38,20 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
 
   React.useEffect(() => {
     loadArticles();
+    // Load recent sessions for dispute picker and existing disputes
+    if (currentUser) {
+      apiFetch('/api/sessions').then(async r => {
+        if (r?.ok) {
+          const d = await r.json();
+          const sessions = d.sessions || d || [];
+          // Show last 10 completed/cancelled sessions
+          setRecentSessions(sessions.filter(s => ['completed', 'cancelled', 'in_progress'].includes(s.status)).slice(0, 10));
+        }
+      }).catch(() => {});
+      apiFetch('/api/accountability/disputes').then(async r => {
+        if (r?.ok) { const d = await r.json(); setMyDisputes(d.disputes || []); }
+      }).catch(() => {});
+    }
   }, []);
 
   const loadArticles = async () => {
@@ -141,6 +165,33 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
       setFbError('Something went wrong. Please try again.');
     }
     setFbSubmitting(false);
+  };
+
+  const handleDisputeSubmit = async () => {
+    if (!disputeSessionId || !disputeReason) return;
+    setDisputeSubmitting(true);
+    setDisputeError(null);
+    try {
+      const res = await apiFetch('/api/accountability/dispute', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: disputeSessionId, reason: disputeReason, description: disputeDesc || null }),
+      });
+      if (res?.ok) {
+        setDisputeSubmitted(true);
+        setTimeout(() => {
+          setDisputeSubmitted(false); setShowDispute(false);
+          setDisputeSessionId(''); setDisputeReason(''); setDisputeDesc('');
+          // Refresh disputes list
+          apiFetch('/api/accountability/disputes').then(async r => {
+            if (r?.ok) { const d = await r.json(); setMyDisputes(d.disputes || []); }
+          }).catch(() => {});
+        }, 2000);
+      } else {
+        const data = await res?.json().catch(() => ({}));
+        setDisputeError(data?.error || 'Failed to submit dispute');
+      }
+    } catch { setDisputeError('Something went wrong. Please try again.'); }
+    setDisputeSubmitting(false);
   };
 
   return React.createElement('div', { style: { maxWidth: '800px', margin: '0 auto' } },
@@ -447,6 +498,105 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
               }, fbSubmitting ? 'Sending...' : 'Send')
             )
           )
+      )
+    ),
+
+    // ─── Dispute a Session ───
+    currentUser && React.createElement('div', { style: { marginTop: 32, padding: 24, background: '#fff', borderRadius: 14, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e8e8e8' } },
+      React.createElement('h3', { style: { margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#333' } }, '\u2696\uFE0F Dispute a Session'),
+      React.createElement('p', { style: { fontSize: 14, color: '#666', margin: '0 0 16px', lineHeight: 1.5 } },
+        'If something went wrong during a care session, you can file a dispute for admin review. This includes issues with timing, service quality, billing, or safety concerns.'
+      ),
+
+      !showDispute
+        ? React.createElement('button', {
+            onClick: () => setShowDispute(true),
+            style: { padding: '10px 20px', background: '#f5f5f5', color: '#333', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
+          }, 'File a Dispute')
+        : React.createElement('div', { style: { marginTop: 8 } },
+            disputeSubmitted
+              ? React.createElement('div', { style: { padding: 16, background: '#e0f2e9', borderRadius: 10, textAlign: 'center', color: '#1b6b5a', fontWeight: 600 } }, '\u2705 Dispute filed. We\'ll review it shortly.')
+              : React.createElement(React.Fragment, null,
+                  // Session picker
+                  React.createElement('div', { style: { marginBottom: 12 } },
+                    React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 4 } }, 'Which session?'),
+                    React.createElement('select', {
+                      value: disputeSessionId, onChange: (e) => setDisputeSessionId(e.target.value),
+                      style: { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, background: '#fff', boxSizing: 'border-box' }
+                    },
+                      React.createElement('option', { value: '' }, 'Select a session...'),
+                      ...recentSessions.map(s => React.createElement('option', { key: s.id, value: s.id },
+                        `${s.scheduled_date || 'Unknown date'} — ${s.caregiver_name || s.recipient_name || 'Session'} (${s.status})`
+                      ))
+                    )
+                  ),
+                  // Reason
+                  React.createElement('div', { style: { marginBottom: 12 } },
+                    React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 4 } }, 'Reason'),
+                    React.createElement('select', {
+                      value: disputeReason, onChange: (e) => setDisputeReason(e.target.value),
+                      style: { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, background: '#fff', boxSizing: 'border-box' }
+                    },
+                      React.createElement('option', { value: '' }, 'Select a reason...'),
+                      React.createElement('option', { value: 'billing' }, 'Billing / Payment Issue'),
+                      React.createElement('option', { value: 'timing' }, 'Timing Dispute (late, early, wrong hours)'),
+                      React.createElement('option', { value: 'service_quality' }, 'Service Quality Concern'),
+                      React.createElement('option', { value: 'safety' }, 'Safety Concern'),
+                      React.createElement('option', { value: 'no_show' }, 'No-Show Dispute'),
+                      React.createElement('option', { value: 'other' }, 'Other')
+                    )
+                  ),
+                  // Description
+                  React.createElement('div', { style: { marginBottom: 12 } },
+                    React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 4 } }, 'Description (optional)'),
+                    React.createElement('textarea', {
+                      value: disputeDesc, onChange: (e) => setDisputeDesc(e.target.value),
+                      placeholder: 'Describe what happened...', rows: 3,
+                      style: { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }
+                    })
+                  ),
+                  disputeError && React.createElement('div', { style: { padding: '8px 12px', background: '#fce4ec', color: '#c62828', borderRadius: 8, fontSize: 13, marginBottom: 12 } }, disputeError),
+                  React.createElement('div', { style: { display: 'flex', gap: 10 } },
+                    React.createElement('button', {
+                      onClick: () => { setShowDispute(false); setDisputeError(null); },
+                      style: { padding: '10px 16px', background: '#f0f0f0', color: '#666', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer' }
+                    }, 'Cancel'),
+                    React.createElement('button', {
+                      onClick: handleDisputeSubmit,
+                      disabled: !disputeSessionId || !disputeReason || disputeSubmitting,
+                      style: {
+                        padding: '10px 20px',
+                        background: disputeSessionId && disputeReason && !disputeSubmitting ? '#c62828' : '#ccc',
+                        color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
+                        cursor: disputeSessionId && disputeReason && !disputeSubmitting ? 'pointer' : 'not-allowed',
+                      }
+                    }, disputeSubmitting ? 'Submitting...' : 'Submit Dispute')
+                  )
+                )
+          ),
+
+      // Existing disputes
+      myDisputes.length > 0 && React.createElement('div', { style: { marginTop: 20, borderTop: '1px solid #eee', paddingTop: 16 } },
+        React.createElement('h4', { style: { margin: '0 0 10px', fontSize: 15, fontWeight: 600, color: '#555' } }, 'Your Disputes'),
+        ...myDisputes.map(d => React.createElement('div', {
+          key: d.id,
+          style: { padding: 12, marginBottom: 8, background: '#f9f9f9', borderRadius: 10, border: '1px solid #eee' }
+        },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+            React.createElement('span', { style: { fontSize: 14, fontWeight: 600, color: '#333' } }, d.reason),
+            React.createElement('span', { style: {
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+              background: d.status === 'open' ? '#fff3e0' : d.status === 'resolved' ? '#e0f2e9' : '#f5f5f5',
+              color: d.status === 'open' ? '#e65100' : d.status === 'resolved' ? '#1b6b5a' : '#666',
+            } }, d.status.toUpperCase())
+          ),
+          React.createElement('div', { style: { fontSize: 12, color: '#888', marginTop: 4 } },
+            `Session on ${d.scheduled_date || 'N/A'} — filed ${new Date(d.created_at).toLocaleDateString()}`
+          ),
+          d.admin_notes && React.createElement('div', { style: { fontSize: 13, color: '#333', marginTop: 6, padding: '8px 10px', background: '#e3f2fd', borderRadius: 8 } },
+            React.createElement('strong', null, 'Admin: '), d.admin_notes
+          )
+        ))
       )
     )
   );

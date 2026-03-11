@@ -186,6 +186,21 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const handleSubmit = async () => {
     setSubmitError('');
     const isOpenRequest = !hasCaregiverData || !selectedCaregiver;
+
+    // Review gating: block booking if there's an outstanding review for this caregiver
+    if (selectedCaregiver?.caregiverId) {
+      try {
+        const checkRes = await apiFetch(`/api/accountability/can-book/${selectedCaregiver.caregiverId}`);
+        if (checkRes?.ok) {
+          const checkData = await checkRes.json();
+          if (!checkData.canBook) {
+            setSubmitError(`You have an outstanding review for ${selectedCaregiver.name}. Please leave a review for your previous session before booking again.`);
+            return;
+          }
+        }
+      } catch {} // If check fails, allow booking (graceful degradation)
+    }
+
     const recurrenceLabel = recurrence !== 'none' ? ` (${recurrence}, ${recurrenceWeeks} sessions)` : '';
     const recipientId = selectedRecipientId || (careRecipients.length > 0 ? careRecipients[0].id : '');
     if (!recipientId) { setSubmitError('No care recipient found. Please add a care recipient first.'); return; }

@@ -290,9 +290,10 @@ app.use("/api/video", require("./routes/videoCall"));
 app.use("/api/consent", require("./routes/consent"));
 app.use("/api/documents", require("./routes/documents"));
 app.use("/api/checkr", require("./routes/checkr"));
+app.use("/api/accountability", require("./routes/accountability"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.74";
+const APP_VERSION = "1.39.75";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -574,6 +575,29 @@ async function start() {
     }
   }, NOTIFICATION_POLL_INTERVAL);
   console.log(`  Session notification poller started (every ${NOTIFICATION_POLL_INTERVAL / 1000}s)`);
+
+  // ─── Session Accountability Poller ───
+  // Runs every 60s: payment authorizations (24hrs before), late check-ins, no-shows
+  const {
+    pollPaymentAuthorizations,
+    pollLateCheckIns,
+    pollCaregiverNoShows,
+    pollLateResolutionDefaults,
+  } = require("./routes/accountability");
+
+  setInterval(async () => {
+    try {
+      await pollPaymentAuthorizations();
+      await pollLateCheckIns();
+      await pollCaregiverNoShows();
+      await pollLateResolutionDefaults();
+    } catch (err) {
+      if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
+        console.error("  Accountability poller error:", err.message);
+      }
+    }
+  }, NOTIFICATION_POLL_INTERVAL);
+  console.log("  Accountability poller started (payment auth, late check-ins, no-shows)");
 
   // ─── Backfill missing caregiver coordinates from zip/city/state ───
   // One-time pass on startup: geocode caregivers who have zip but no lat/lng

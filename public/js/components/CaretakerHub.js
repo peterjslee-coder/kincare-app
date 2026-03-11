@@ -1346,6 +1346,26 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                           boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
                         }}>Check Out</button>
+                        {!s.family_no_show && (
+                          <button onClick={async () => {
+                            if (!confirm('Flag that nobody is home? You will need to wait 30 minutes before checking out for full pay.')) return;
+                            try {
+                              const r = await apiFetch(`/api/accountability/family-no-show/${s.id}`, { method: 'POST' });
+                              if (r?.ok) {
+                                const d = await r.json();
+                                showToast(d.message || 'Family no-show flagged. Wait 30 minutes.', 'info');
+                                // Refresh data
+                                try { const dr = await apiFetch('/api/dashboard/caregiver'); if (dr?.ok) setData(await dr.json()); } catch {}
+                              } else {
+                                const err = await r?.json().catch(() => ({}));
+                                showToast(err?.error || 'Failed to flag no-show', 'error');
+                              }
+                            } catch { showToast('Network error', 'error'); }
+                          }} style={{
+                            padding: '8px 14px', background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80',
+                            borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}>Nobody Home</button>
+                        )}
                       )}
                       {isReady && !isActive && (
                         <button onClick={async () => {

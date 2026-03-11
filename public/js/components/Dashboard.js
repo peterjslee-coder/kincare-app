@@ -24,6 +24,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [tick, setTick] = useState(0);
   const [imminentId, setImminentId] = useState(null); // track which session is the hero card
 
+  // Review gating state
+  const [pendingReviews, setPendingReviews] = useState([]);
+  const [lateCheckInAlert, setLateCheckInAlert] = useState(null);
+
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
   const [dismissedTiles, setDismissedTiles] = useState(() => {
@@ -85,6 +89,16 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     } catch {}
   };
 
+  const fetchPendingReviews = async () => {
+    try {
+      const res = await apiFetch('/api/accountability/pending-reviews');
+      if (res?.ok) {
+        const d = await res.json();
+        setPendingReviews(d.pendingReviews || []);
+      }
+    } catch {}
+  };
+
   const handleCancel = async (sessionId) => {
     setCancelLoading(true);
     try {
@@ -123,6 +137,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         setReviewComment('');
         if (typeof showToast === 'function') showToast('Review submitted! Thank you.', 'success');
         fetchDashboard();
+        fetchPendingReviews();
       } else {
         const err = await res?.json().catch(() => ({}));
         alert(err?.error || 'Failed to submit review');
@@ -147,9 +162,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   };
 
   useEffect(() => {
-    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics();
+    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews();
     // Re-fetch when a new session is created (e.g. from RequestCareModal)
-    const onSessionsUpdated = () => fetchDashboard();
+    const onSessionsUpdated = () => { fetchDashboard(); fetchPendingReviews(); };
     window.addEventListener('sessions-updated', onSessionsUpdated);
     return () => window.removeEventListener('sessions-updated', onSessionsUpdated);
   }, []);
@@ -158,9 +173,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   useEffect(() => {
     if (typeof onSocketEvent !== 'function') return;
     const c1 = onSocketEvent('activity_update', () => fetchDashboard());
-    const c2 = onSocketEvent('session_update', () => fetchDashboard());
+    const c2 = onSocketEvent('session_update', () => { fetchDashboard(); fetchPendingReviews(); });
     const c3 = onSocketEvent('visit_photos', () => fetchDashboard());
-    return () => { c1(); c2(); c3(); };
+    const c4 = onSocketEvent('late_check_in', (data) => setLateCheckInAlert(data));
+    return () => { c1(); c2(); c3(); c4(); };
   }, []);
 
   // Refresh dashboard when tab regains focus (catches missed socket events)
@@ -556,6 +572,69 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           </div>
         );
       })()}
+
+      {/* Late Check-In Alert — family needs to choose extend or truncate */}
+      {lateCheckInAlert && (
+        <div style={{ marginBottom: 16, padding: 16, background: '#fff3e0', border: '2px solid #ff9800', borderRadius: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#e65100', marginBottom: 8 }}>
+            {'\u26A0\uFE0F'} Late Check-In
+          </div>
+          <p style={{ fontSize: 14, color: '#333', margin: '0 0 12px', lineHeight: 1.5 }}>
+            {lateCheckInAlert.message}
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={async () => {
+              try {
+                await apiFetch(`/api/accountability/late-resolution/${lateCheckInAlert.sessionId}`, {
+                  method: 'POST', body: JSON.stringify({ resolution: 'extend' })
+                });
+                setLateCheckInAlert(null);
+              } catch {}
+            }} style={{ flex: 1, padding: '10px 16px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+              Extend Session
+            </button>
+            <button onClick={async () => {
+              try {
+                await apiFetch(`/api/accountability/late-resolution/${lateCheckInAlert.sessionId}`, {
+                  method: 'POST', body: JSON.stringify({ resolution: 'truncate' })
+                });
+                setLateCheckInAlert(null);
+              } catch {}
+            }} style={{ flex: 1, padding: '10px 16px', background: '#f5f5f5', color: '#333', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+              Keep Original End Time
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Reviews — stacked at top until completed */}
+      {pendingReviews.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          {pendingReviews.map(pr => (
+            <div key={pr.id} style={{ padding: 14, marginBottom: 8, background: '#fff8e1', border: '2px solid #ffc107', borderRadius: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f57f17' }}>
+                  {'\u2B50'} Please review {pr.caregiver_name}
+                </span>
+                <span style={{ fontSize: 12, color: '#999' }}>
+                  {pr.scheduled_date}
+                </span>
+              </div>
+              <p style={{ fontSize: 13, color: '#555', margin: '0 0 10px' }}>
+                Session with {pr.recipient_first_name} on {pr.scheduled_date}.
+                You cannot book {pr.caregiver_name?.split(' ')[0]} again until you leave a review.
+              </p>
+              <button onClick={() => {
+                setReviewSession(pr);
+                setReviewRating(0);
+                setReviewComment('');
+              }} style={{ padding: '8px 20px', background: '#ffc107', color: '#333', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                Leave Review
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Time Proposals — critical action item, above everything */}
       {(() => {
@@ -1345,11 +1424,11 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
               <div style={{ fontSize: 36, marginBottom: 8 }}>{'\u2B50'}</div>
               <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700, color: '#333' }}>
-                How was {reviewSession.caregiverName || 'your caregiver'}?
+                How was {reviewSession.caregiverName || reviewSession.caregiver_name || 'your caregiver'}?
               </h3>
               <p style={{ fontSize: 13, color: '#888', margin: 0 }}>
-                {reviewSession.recipientName ? `Care visit with ${reviewSession.recipientName}` : 'Your recent care visit'}
-                {reviewSession.date ? ` on ${reviewSession.date}` : ''}
+                {(reviewSession.recipientName || reviewSession.recipient_first_name) ? `Care visit with ${reviewSession.recipientName || reviewSession.recipient_first_name}` : 'Your recent care visit'}
+                {(reviewSession.date || reviewSession.scheduled_date) ? ` on ${reviewSession.date || reviewSession.scheduled_date}` : ''}
               </p>
             </div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, justifyContent: 'center' }}>

@@ -1028,10 +1028,24 @@ router.post("/:id/check-in", async (req, res) => {
       }
     }
 
-    // Transition to in_progress
+    // ─── Detect late check-in (10+ minutes after scheduled start) ───
+    let lateCheckIn = false;
+    let lateMinutes = 0;
+    if (session.scheduled_date && session.scheduled_time) {
+      try {
+        const scheduledStart = new Date(`${session.scheduled_date}T${session.scheduled_time.padStart(5, "0")}:00`);
+        lateMinutes = Math.floor((new Date() - scheduledStart) / 60000);
+        if (lateMinutes >= 10) {
+          lateCheckIn = true;
+          console.log(`[check-in] Late by ${lateMinutes} min — session ${req.params.id.slice(0, 8)}`);
+        }
+      } catch {}
+    }
+
+    // Transition to in_progress (with late check-in flag if applicable)
     await db.prepare(
-      "UPDATE care_sessions SET status = 'in_progress', updated_at = NOW() WHERE id = ?"
-    ).run(req.params.id);
+      "UPDATE care_sessions SET status = 'in_progress', late_check_in = ?, late_minutes = ?, updated_at = NOW() WHERE id = ?"
+    ).run(lateCheckIn ? 1 : 0, lateCheckIn ? lateMinutes : null, req.params.id);
 
     // Create visit_log with check-in data + location
     const visitId = require("uuid").v4();
@@ -1068,8 +1082,34 @@ router.post("/:id/check-in", async (req, res) => {
         status: "in_progress",
         checkIn: true,
         arrivalMood,
+        lateCheckIn,
+        lateMinutes: lateCheckIn ? lateMinutes : undefined,
       });
       emitToUser(session.family_user_id, "activity_update", {});
+
+      // If late, send a separate event so the family can choose extend/truncate
+      if (lateCheckIn) {
+        emitToUser(session.family_user_id, "late_check_in", {
+          sessionId: req.params.id,
+          lateMinutes,
+          caregiverName,
+          message: `${caregiverName} checked in ${lateMinutes} minutes late. Would you like to extend the session or keep the original end time?`,
+        });
+      }
+    }
+
+    // Push notification to family if late
+    if (lateCheckIn) {
+      try {
+        const sendPush = req.app.get("sendPush");
+        if (sendPush) {
+          await sendPush(session.family_user_id, {
+            title: `${caregiverName} Checked In Late`,
+            body: `${lateMinutes} minutes late. Open InPlace to choose: extend session or keep original end time.`,
+            data: { type: "late_check_in", sessionId: req.params.id },
+          });
+        }
+      } catch {}
     }
 
     res.json({
@@ -1082,6 +1122,8 @@ router.post("/:id/check-in", async (req, res) => {
       },
       specialInstructions: session.special_instructions,
       recentNotes: notes,
+      lateCheckIn,
+      lateMinutes: lateCheckIn ? lateMinutes : undefined,
     });
   } catch (err) {
     console.error("Check-in error:", err);
@@ -1143,10 +1185,26 @@ router.post("/:id/check-out", async (req, res) => {
       }
     }
 
-    // Transition to completed with adjusted cost and actual duration
+    // Transition to completed with adjusted cost, actual duration, and mark review required
     await db.prepare(
-      "UPDATE care_sessions SET status = 'completed', estimated_cost = ?, duration_hours = ?, updated_at = NOW() WHERE id = ?"
+      "UPDATE care_sessions SET status = 'completed', estimated_cost = ?, duration_hours = ?, review_required = 1, updated_at = NOW() WHERE id = ?"
     ).run(adjustedCost, actualDurationHours, req.params.id);
+
+    // ─── Capture payment (Stripe auth → charge) ───
+    // If payment was pre-authorized, capture the appropriate amount now
+    try {
+      const { captureSessionPayment } = require("./accountability");
+      const captureAmountCents = Math.round(adjustedCost * 100);
+      if (captureAmountCents > 0) {
+        const captureResult = await captureSessionPayment(req.params.id, captureAmountCents);
+        if (captureResult.error) {
+          console.warn(`[checkout] Payment capture skipped: ${captureResult.error}`);
+        }
+      }
+    } catch (captureErr) {
+      // Non-blocking — don't fail checkout if capture fails
+      console.error("[checkout] Payment capture error (non-blocking):", captureErr.message);
+    }
 
     if (visitLog) {
       await db.prepare(`
@@ -1358,11 +1416,14 @@ router.post("/:id/review", async (req, res) => {
     let reviewType = "completion";
     let caregiverId = session.caregiver_id;
 
-    if (session.cancelled_by === "caregiver" && session.late_cancel && session.cancelled_caregiver_id) {
+    if (session.caregiver_no_show) {
+      reviewType = "no_show";
+      caregiverId = session.caregiver_id;
+    } else if (session.cancelled_by === "caregiver" && session.late_cancel && session.cancelled_caregiver_id) {
       reviewType = "late_cancellation";
       caregiverId = session.cancelled_caregiver_id;
     } else if (session.status !== "completed") {
-      return res.status(400).json({ error: "Can only review completed sessions or late-cancelled sessions" });
+      return res.status(400).json({ error: "Can only review completed sessions, no-shows, or late-cancelled sessions" });
     }
 
     if (!caregiverId) {
@@ -1388,6 +1449,11 @@ router.post("/:id/review", async (req, res) => {
     await db.prepare(
       "UPDATE caregiver_profiles SET rating_avg = ?, rating_count = ? WHERE id = ?"
     ).run(Math.round(stats.avg_rating * 10) / 10, stats.count, caregiverId);
+
+    // Mark review as completed on the session (clears review gating)
+    await db.prepare(
+      "UPDATE care_sessions SET review_completed = 1 WHERE id = ?"
+    ).run(req.params.id);
 
     res.json({ review: { id: reviewId, rating, comment, reviewType } });
   } catch (err) {
