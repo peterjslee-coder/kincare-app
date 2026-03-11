@@ -293,7 +293,7 @@ app.use("/api/checkr", require("./routes/checkr"));
 app.use("/api/accountability", require("./routes/accountability"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.79";
+const APP_VERSION = "1.39.80";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -408,6 +408,19 @@ async function start() {
   } catch (seedErr) {
     console.error("  ⚠️  Seed failed — starting server anyway:", seedErr.message);
   }
+
+  // ─── Daily demo data refresh ───
+  // Re-seed demo data every 24 hours so relative dates stay fresh
+  setInterval(async () => {
+    try {
+      console.log("🔄 Daily demo data refresh starting...");
+      const { seed: dailySeed } = require("./seed");
+      await dailySeed({ demoOnly: true });
+      console.log("✅ Daily demo data refresh complete");
+    } catch (err) {
+      console.error("⚠️  Daily demo refresh failed:", err.message);
+    }
+  }, 24 * 60 * 60 * 1000); // 24 hours
 
   // ─── Demo data patch ───
   // Ensures key demo profile fields are correct even when full reseed is skipped

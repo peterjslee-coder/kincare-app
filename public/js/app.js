@@ -775,10 +775,24 @@ const App = () => {
   };
 
   const handleDemoSwitch = (user) => {
-    // Clear stale active role and sync to new user's role
-    window.setActiveRole(null);
-    setActiveRoleState(null);
-    setCurrentUser(user);
+    // Normalize user object to match expected camelCase shape
+    // (API returns snake_case: is_demo, first_name, etc.)
+    const roles = Array.isArray(user.roles) ? user.roles : [user.role];
+    const primaryRole = roles[0];
+    setCurrentUser({
+      id: user.id, email: user.email, role: user.role,
+      roles,
+      firstName: user.first_name || user.firstName,
+      lastName: user.last_name || user.lastName,
+      profilePhoto: user.profile_photo || user.profilePhoto || null,
+      emailVerified: true, isDemo: true,
+      isAdmin: false, is_tester: false,
+      account_approved: true,
+      onboardingComplete: true,
+    });
+    // Sync active role to new demo user's primary role
+    setActiveRoleState(primaryRole);
+    window.setActiveRole(primaryRole);
     setCurrentPage('dashboard');
   };
 
