@@ -35,9 +35,13 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
     setLoading(account.email);
     trackAuthEvent('demo', 'demo_login', { email: account.email, role: account.role, label: account.label, source: 'demo_picker' });
     try {
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : null;
+      const hdrs = { 'Content-Type': 'application/json' };
+      if (csrf) hdrs['X-CSRF-Token'] = csrf;
       const res = await fetch('/api/auth/demo-login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: hdrs,
+        credentials: 'same-origin',
         body: JSON.stringify({ email: account.email }),
       });
       const data = await res.json();
