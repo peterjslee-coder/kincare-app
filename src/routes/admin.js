@@ -260,6 +260,102 @@ router.get("/care-team-invites", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/care-team-add — Manually add a user to a care team by email ───
+router.post("/care-team-add", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { email, careTeamId, careRecipientName } = req.body;
+    if (!email) return res.status(400).json({ error: "email is required" });
+
+    // Find the user
+    const user = await db.prepare("SELECT id, email, first_name, last_name FROM users WHERE LOWER(email) = LOWER(?)").get(email);
+    if (!user) return res.status(404).json({ error: `No user found with email ${email}` });
+
+    // Find the care team — by ID or by care recipient name
+    let team;
+    if (careTeamId) {
+      team = await db.prepare("SELECT * FROM care_teams WHERE id = ?").get(careTeamId);
+    } else if (careRecipientName) {
+      team = await db.prepare(`
+        SELECT ct.* FROM care_teams ct
+        JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+        WHERE LOWER(cr.first_name) = LOWER(?)
+        LIMIT 1
+      `).get(careRecipientName);
+    } else {
+      return res.status(400).json({ error: "careTeamId or careRecipientName is required" });
+    }
+    if (!team) return res.status(404).json({ error: "Care team not found" });
+
+    // Check if already a member
+    const existing = await db.prepare(
+      "SELECT id FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
+    ).get(team.id, user.id);
+    if (existing) return res.json({ message: "Already a member", userId: user.id, teamId: team.id });
+
+    // Add as member
+    const { v4: uuid } = require("uuid");
+    await db.prepare(
+      "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'member', ?)"
+    ).run(uuid(), team.id, user.id, req.user.id);
+
+    // Also add care_recipient_shares
+    const shareExists = await db.prepare(
+      "SELECT id FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+    ).get(team.care_recipient_id, user.id);
+    if (!shareExists) {
+      await db.prepare(
+        "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, shared_by_user_id) VALUES (?, ?, ?, 'edit', ?)"
+      ).run(uuid(), team.care_recipient_id, user.id, req.user.id);
+    }
+
+    // Auto-connect for messaging
+    const members = await db.prepare(
+      "SELECT user_id FROM care_team_members WHERE care_team_id = ? AND user_id != ?"
+    ).all(team.id, user.id);
+    for (const m of members) {
+      const conn = await db.prepare(
+        "SELECT id FROM connections WHERE (requester_id = ? AND recipient_id = ?) OR (requester_id = ? AND recipient_id = ?)"
+      ).get(user.id, m.user_id, m.user_id, user.id);
+      if (!conn) {
+        await db.prepare(
+          "INSERT INTO connections (id, requester_id, recipient_id, status) VALUES (?, ?, ?, 'accepted')"
+        ).run(uuid(), user.id, m.user_id);
+      }
+    }
+
+    // Add to care team conversation
+    const conv = await db.prepare(
+      "SELECT id FROM conversations WHERE care_team_id = ? AND type = 'care_team'"
+    ).get(team.id);
+    if (conv) {
+      const inConv = await db.prepare(
+        "SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+      ).get(conv.id, user.id);
+      if (!inConv) {
+        await db.prepare(
+          "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')"
+        ).run(uuid(), conv.id, user.id);
+      }
+    }
+
+    // Mark any pending invites as accepted
+    await db.prepare(
+      "UPDATE care_team_invites SET status = 'accepted' WHERE care_team_id = ? AND LOWER(invited_email) = LOWER(?) AND status = 'pending'"
+    ).run(team.id, email);
+
+    console.log(`[admin] Manually added ${user.email} to care team ${team.name || team.id}`);
+    res.json({
+      ok: true,
+      message: `Added ${user.first_name} ${user.last_name} (${user.email}) to care team`,
+      userId: user.id, teamId: team.id,
+    });
+  } catch (err) {
+    console.error("Admin care-team-add error:", err);
+    res.status(500).json({ error: "Failed to add user to care team" });
+  }
+});
+
 // ─── GET /api/admin/search-email — Search across users, waitlist, and invites ───
 router.get("/search-email", async (req, res) => {
   try {
