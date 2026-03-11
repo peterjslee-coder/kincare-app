@@ -469,13 +469,20 @@ router.post("/accept-invite", authenticate, async (req, res) => {
       "SELECT user_id FROM care_team_members WHERE care_team_id = ? AND role = 'leader'"
     ).get(invite.care_team_id);
     if (leader) {
-      const teamInfo = await db.prepare(
-        "SELECT ct.name FROM care_teams ct WHERE ct.id = ?"
-      ).get(invite.care_team_id);
+      // Look up actual names from DB (JWT only has id/email/roles)
+      const memberUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+      const memberName = memberUser ? `${memberUser.first_name} ${memberUser.last_name}`.trim() : "Someone";
+      const teamInfo = await db.prepare(`
+        SELECT ct.name, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
+        FROM care_teams ct JOIN care_recipients cr ON ct.care_recipient_id = cr.id WHERE ct.id = ?
+      `).get(invite.care_team_id);
+      const recipientName = teamInfo ? `${teamInfo.recipient_first_name} ${teamInfo.recipient_last_name}`.trim() : null;
+      const teamLabel = recipientName ? `${recipientName}'s care team` : (teamInfo?.name || "your care team");
+
       await db.prepare(
         "INSERT INTO activity_feed (id, family_user_id, event_type, title, message) VALUES (?, ?, 'team_join', ?, ?)"
       ).run(uuid(), leader.user_id, "New team member",
-        `${req.user.firstName || ""} ${req.user.lastName || ""} joined ${teamInfo?.name || "the care team"}`
+        `${memberName} joined ${teamLabel}`
       );
 
       // Real-time notification
@@ -484,17 +491,16 @@ router.post("/accept-invite", authenticate, async (req, res) => {
 
       // Push notification to team leader
       const { sendPushToUser, notifyAdmins } = require("./push");
-      const memberName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "Someone";
       sendPushToUser(leader.user_id, {
         title: "New Team Member!",
-        body: `${memberName} joined ${teamInfo?.name || "your care team"}`,
+        body: `${memberName} joined ${teamLabel}`,
         data: { type: "team_join", careTeamId: invite.care_team_id },
       }, "team_join").catch(() => {});
 
-      // Admin notification for invite acceptance
+      // Admin notification
       notifyAdmins("invite_accepted", {
-        title: `${memberName} joined a care team`,
-        body: `${memberName} is now on ${teamInfo?.name || "a care team"}`,
+        title: `${memberName} joined ${teamLabel}`,
+        body: `${memberName} is now on ${teamLabel}`,
         data: { type: "invite_accepted", careTeamId: invite.care_team_id },
       });
     }
