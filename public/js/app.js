@@ -1210,6 +1210,15 @@ const App = () => {
       </nav>
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
       {(currentUser?.is_tester || currentUser?.isAdmin) && <FeedbackButton currentPage={currentPage} userRole={currentUser?.role} currentUser={currentUser} />}
+      {/* Floating help button — mobile only (hidden by CSS on desktop where sidebar has Help) */}
+      {currentPage !== 'help' && (
+        <button
+          className="mobile-help-fab"
+          onClick={() => handlePageChange('help')}
+          aria-label="Help"
+          title="Help & Support"
+        >?</button>
+      )}
       <PWAInstallBanner />
       <OfflineIndicator />
     </React.Fragment>
