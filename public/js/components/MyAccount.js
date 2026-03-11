@@ -739,7 +739,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         body: JSON.stringify({ care_preferences: JSON.stringify(preferences) })
       });
       if (res?.ok) {
+        // Refetch to confirm save persisted
+        const verify = await apiFetch('/api/caregivers/me');
+        if (verify?.ok) {
+          const d = await verify.json();
+          if (d.profile?.care_preferences) {
+            setPreferences(JSON.parse(d.profile.care_preferences));
+          }
+        }
         showToast('Care preferences saved', 'success');
+      } else {
+        showToast('Failed to save care preferences', 'error');
       }
     } catch (err) {
       showToast('Failed to save care preferences', 'error');

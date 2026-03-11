@@ -315,7 +315,15 @@ router.put("/me", requireRole("caregiver"), async (req, res) => {
 
   params.push(profile.id);
   await db.prepare(`UPDATE caregiver_profiles SET ${updates.join(', ')} WHERE id = ?`).run(...params);
-  res.json({ ok: true });
+
+  // Return updated profile so frontend can confirm save
+  const updated = await db.prepare(`
+    SELECT cp.*, u.first_name, u.last_name, u.email, u.phone, u.avatar_url
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE cp.user_id = ?
+  `).get(req.user.id);
+  res.json({ ok: true, profile: updated });
 });
 
 // ─── POST /api/caregivers/profile ───
@@ -547,7 +555,7 @@ router.put("/mark-onboarding-complete", async (req, res) => {
   const missing = [];
   if (!profile.bio || !profile.hourly_rate) missing.push("Profile (bio & hourly rate)");
   if (!availRules || availRules.length === 0) missing.push("Availability");
-  if (!profile.care_stoplight) missing.push("Care preferences");
+  if (!profile.care_stoplight && !profile.care_preferences) missing.push("Care preferences");
   if (!profile.avatar_url) missing.push("Profile photo");
 
   // Conditional gates: only required when the service is configured
