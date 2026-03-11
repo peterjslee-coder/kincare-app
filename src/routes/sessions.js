@@ -1228,6 +1228,19 @@ router.post("/:id/check-out", async (req, res) => {
       );
     }
 
+    // ─── Auto-create care note from checkout summary ───
+    // Bridge visit_logs → recipient_notes so checkout observations appear in Care Profile
+    if (summary && summary.trim() && session.care_recipient_id) {
+      try {
+        await db.prepare(`
+          INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type)
+          VALUES (?, ?, ?, ?, 'visit_summary')
+        `).run(require("uuid").v4(), session.care_recipient_id, req.user.id, summary.trim());
+      } catch (noteErr) {
+        console.warn("[checkout] Auto-note creation failed (non-blocking):", noteErr.message);
+      }
+    }
+
     // Notify family
     const emitToUser = req.app.get("emitToUser");
     const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
