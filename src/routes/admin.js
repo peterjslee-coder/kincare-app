@@ -2221,4 +2221,50 @@ router.post("/sessions/:id/restore", async (req, res) => {
   }
 });
 
+// ─── Backfill care notes from visit_logs care_feedback ───
+// One-time use: creates recipient_notes for completed sessions that had
+// care_feedback but no corresponding visit_summary note.
+router.post("/backfill-care-notes", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const since = req.body.since || '2026-02-26';
+
+    // Find completed sessions with care_feedback in visit_logs
+    // that don't already have a visit_summary note
+    const rows = await db.prepare(`
+      SELECT cs.id AS session_id, cs.care_recipient_id, cs.caregiver_user_id,
+             vl.care_feedback, vl.check_out_time
+      FROM care_sessions cs
+      JOIN visit_logs vl ON vl.session_id = cs.id
+      WHERE cs.status = 'completed'
+        AND cs.care_recipient_id IS NOT NULL
+        AND vl.care_feedback IS NOT NULL
+        AND TRIM(vl.care_feedback) != ''
+        AND vl.check_out_time >= ?
+        AND NOT EXISTS (
+          SELECT 1 FROM recipient_notes rn
+          WHERE rn.care_recipient_id = cs.care_recipient_id
+            AND rn.author_id = cs.caregiver_user_id
+            AND rn.note_type = 'visit_summary'
+            AND rn.created_at >= ?
+            AND rn.content = TRIM(vl.care_feedback)
+        )
+    `).all(since, since);
+
+    let created = 0;
+    for (const row of rows) {
+      await db.prepare(`
+        INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type, created_at)
+        VALUES (?, ?, ?, ?, 'visit_summary', ?)
+      `).run(uuid(), row.care_recipient_id, row.caregiver_user_id, row.care_feedback.trim(), row.check_out_time);
+      created++;
+    }
+
+    res.json({ success: true, found: rows.length, created, since });
+  } catch (err) {
+    console.error("Backfill care notes error:", err);
+    res.status(500).json({ error: "Failed to backfill care notes" });
+  }
+});
+
 module.exports = router;
