@@ -10658,7 +10658,7 @@ const ActivityFeed = window.ActivityFeed = () => {
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "activity-badge"
-  }, activity.event_type), ['care_request', 'session_update', 'session_booked', 'session_confirmed', 'session_cancelled', 'care_request_accepted'].includes(activity.event_type) && /*#__PURE__*/React.createElement("button", {
+  }, activity.event_type), ['care_request', 'session_update', 'session_booked', 'session_requested', 'session_confirmed', 'session_cancelled', 'care_request_accepted'].includes(activity.event_type) && /*#__PURE__*/React.createElement("button", {
     onClick: e => {
       e.stopPropagation();
       // Try to extract session date from metadata to navigate to the right week

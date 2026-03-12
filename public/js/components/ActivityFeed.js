@@ -166,7 +166,7 @@ const ActivityFeed = window.ActivityFeed = () => {
                   })()}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                     <div className="activity-badge">{activity.event_type}</div>
-                    {['care_request', 'session_update', 'session_booked', 'session_confirmed', 'session_cancelled', 'care_request_accepted'].includes(activity.event_type) && (
+                    {['care_request', 'session_update', 'session_booked', 'session_requested', 'session_confirmed', 'session_cancelled', 'care_request_accepted'].includes(activity.event_type) && (
                       <button onClick={(e) => {
                         e.stopPropagation();
                         // Try to extract session date from metadata to navigate to the right week

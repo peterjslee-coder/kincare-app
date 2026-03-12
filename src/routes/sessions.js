@@ -610,13 +610,13 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   const bookerName = booker ? `${booker.first_name} ${booker.last_name}` : "Someone";
   await db.prepare(`
     INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message)
-    VALUES (?, ?, ?, 'session_booked', ?, ?)
+    VALUES (?, ?, ?, 'session_requested', ?, ?)
   `).run(
     uuid(), req.user.id, careRecipientId,
     `${serviceLabels[serviceType] || serviceType} requested by ${bookerName}${recurrenceLabel}`,
     isRecurring
-      ? `${bookerName} booked recurring ${recurrenceRule} sessions starting ${scheduledDate} at ${scheduledTime} (${dates.length} sessions)`
-      : `${bookerName} booked a session for ${scheduledDate} at ${scheduledTime}`
+      ? `${bookerName} requested recurring ${recurrenceRule} sessions starting ${scheduledDate} at ${scheduledTime} (${dates.length} sessions)`
+      : `${bookerName} requested a session for ${scheduledDate} at ${scheduledTime}`
   );
 
   // Notify caregivers about new open/available jobs via WebSocket
