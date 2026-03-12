@@ -692,6 +692,7 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS payment_captured_at TIMESTAMPTZ`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS payment_voided_at TIMESTAMPTZ`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS authorized_amount INTEGER`, // cents
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS payment_status TEXT`, // 'authorized' | 'paid' | 'voided'
 
     // Late check-in tracking
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS late_check_in INTEGER DEFAULT 0`, // boolean
