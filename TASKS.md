@@ -366,6 +366,7 @@
 - **Wizard state persistence.** Wizard progress is stored in `sessionStorage('inplace_wizard')`. When restoring, only `wizardStep` and `savedRecipientId` are persisted — formData is NOT. Always re-fetch from the API when resuming a wizard. See the `useEffect` in CareRecipients.js that fetches `/api/care-recipients/:id` on resume.
 - **Guided discovery tiles.** For post-wizard or post-setup actions the user should explore, use the 2×2 grid pattern from the Dashboard "Get Started" section (v1.39.19). Each tile tracks clicks via `localStorage('inplace_discovered')` and disappears once clicked. Include a "Dismiss all" option.
 - **Version bumping.** Every push must bump version in three files: `index.html` (3 occurrences), `sw.js` (3 occurrences), `server.js` (1 occurrence). Use the format `1.X.Y`. This ensures cache-busting on Railway auto-deploy.
+- **Always tell Pete the version number when pushing.** After every `git push`, state the new version number and commit hash so Pete knows exactly what's deploying.
 
 
 ## Pete's Action Items (External Setup)
