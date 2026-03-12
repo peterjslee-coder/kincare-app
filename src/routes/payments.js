@@ -429,7 +429,6 @@ router.post("/connect/onboard", requireRole("caregiver"), requirePaymentsEnabled
         country: "US",
         email: user.email,
         capabilities: {
-          card_payments: { requested: true },
           transfers: { requested: true },
         },
         business_type: "individual",
@@ -449,8 +448,8 @@ router.post("/connect/onboard", requireRole("caregiver"), requirePaymentsEnabled
         "UPDATE caregiver_profiles SET stripe_account_id = ?, stripe_onboard_complete = 0, updated_at = NOW() WHERE user_id = ?"
       ).run(stripeAccountId, req.user.id);
     } catch (err) {
-      console.error("Stripe account creation error:", err);
-      return res.status(500).json({ error: "Failed to create Stripe account" });
+      console.error("Stripe account creation error:", err.message, err.type, err.code);
+      return res.status(500).json({ error: "Failed to create Stripe account", detail: err.message });
     }
   }
 
