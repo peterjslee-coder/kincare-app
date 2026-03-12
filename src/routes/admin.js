@@ -2164,4 +2164,61 @@ router.put("/users/:id/reject", requireAdmin, async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/sessions/no-show-cancelled — List sessions cancelled by no-show poller ───
+router.get("/sessions/no-show-cancelled", async (req, res) => {
+  try {
+    const db = await getDb();
+    const sessions = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.status, cs.cancelled_at,
+        cs.caregiver_no_show, cs.caregiver_no_show_at,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        fu.first_name || ' ' || fu.last_name AS family_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      WHERE cs.cancelled_by = 'system' AND cs.caregiver_no_show = 1
+      ORDER BY cs.cancelled_at DESC
+      LIMIT 50
+    `).all();
+    res.json({ sessions });
+  } catch (err) {
+    console.error("List no-show cancelled error:", err);
+    res.status(500).json({ error: "Failed to fetch cancelled sessions" });
+  }
+});
+
+// ─── POST /api/admin/sessions/:id/restore — Restore a wrongly-cancelled no-show session ───
+router.post("/sessions/:id/restore", async (req, res) => {
+  try {
+    const db = await getDb();
+    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.cancelled_by !== 'system' || !session.caregiver_no_show) {
+      return res.status(400).json({ error: "This session was not cancelled by the no-show system" });
+    }
+
+    await db.prepare(`
+      UPDATE care_sessions SET
+        status = 'confirmed',
+        caregiver_no_show = 0,
+        caregiver_no_show_at = NULL,
+        cancelled_at = NULL,
+        cancelled_by = NULL,
+        review_required = 0,
+        notifications_sent = REPLACE(COALESCE(notifications_sent, ''), ',no_show_flagged', ''),
+        updated_at = NOW()
+      WHERE id = ?
+    `).run(req.params.id);
+
+    console.log(`[admin] Restored no-show session ${req.params.id.slice(0, 8)} by ${req.user.email}`);
+    res.json({ success: true, message: "Session restored to confirmed status" });
+  } catch (err) {
+    console.error("Restore session error:", err);
+    res.status(500).json({ error: "Failed to restore session" });
+  }
+});
+
 module.exports = router;

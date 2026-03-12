@@ -87,6 +87,29 @@ const AdminPanel = window.AdminPanel = () => {
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(null);
 
+  // Sessions tab — no-show cancelled
+  const [noShowSessions, setNoShowSessions] = useState([]);
+  const [noShowLoading, setNoShowLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(null);
+
+  const loadNoShowSessions = async () => {
+    setNoShowLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/sessions/no-show-cancelled');
+      if (res?.ok) { const d = await res.json(); setNoShowSessions(d.sessions || []); }
+    } catch {}
+    setNoShowLoading(false);
+  };
+
+  const handleRestoreSession = async (sessionId) => {
+    setRestoreLoading(sessionId);
+    try {
+      const res = await apiFetch(`/api/admin/sessions/${sessionId}/restore`, { method: 'POST' });
+      if (res?.ok) loadNoShowSessions();
+    } catch {}
+    setRestoreLoading(null);
+  };
+
   const fetchPendingApprovals = async () => {
     try {
       const res = await apiFetch('/api/admin/pending-approvals');
@@ -133,6 +156,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'authorizations') loadAuthorizations();
     if (activeTab === 'customerservice') loadCsReviews();
     if (activeTab === 'security') { loadSecDashboard(); loadSecAuditLog(); }
+    if (activeTab === 'sessions') loadNoShowSessions();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -706,6 +730,7 @@ const AdminPanel = window.AdminPanel = () => {
     { id: 'onboarding', label: 'Auth Events', icon: '🚦' },
     { id: 'security', label: 'Security', icon: '🛡️' },
     { id: 'blocked', label: 'Blocked', icon: '🚫' },
+    { id: 'sessions', label: 'Sessions', icon: '📅' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 
@@ -2638,6 +2663,64 @@ const AdminPanel = window.AdminPanel = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Sessions Tab ─── */}
+      {activeTab === 'sessions' && (
+        <div>
+          <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 700, color: '#1b6b5a' }}>
+            No-Show Cancelled Sessions
+          </h3>
+          <p style={{ fontSize: '13px', color: '#666', marginBottom: '16px' }}>
+            Sessions auto-cancelled by the system when no check-in was recorded within 30 minutes. Use "Restore" to return a session to confirmed status if it was cancelled in error.
+          </p>
+          {noShowLoading ? (
+            <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>Loading...</div>
+          ) : noShowSessions.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '30px', color: '#999', background: '#f9f9f9', borderRadius: '12px' }}>
+              No system-cancelled no-show sessions found.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {noShowSessions.map(s => (
+                <div key={s.id} style={{
+                  background: s.status === 'cancelled' ? '#fff5f5' : '#f0faf7',
+                  border: `1px solid ${s.status === 'cancelled' ? '#ffcdd2' : '#c8e6c9'}`,
+                  borderRadius: '10px', padding: '14px 16px',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
+                }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: '#333' }}>
+                      {s.recipient_name || 'Unknown'} — {s.scheduled_date} at {s.scheduled_time}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#777', marginTop: '4px' }}>
+                      Caregiver: {s.caregiver_name || 'None'} · Family: {s.family_name || 'Unknown'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                      Cancelled: {s.cancelled_at ? new Date(s.cancelled_at).toLocaleString() : '—'} · Status: {s.status}
+                    </div>
+                  </div>
+                  {s.status === 'cancelled' && (
+                    <button
+                      onClick={() => handleRestoreSession(s.id)}
+                      disabled={restoreLoading === s.id}
+                      style={{
+                        padding: '8px 18px', background: '#1b6b5a', color: '#fff', border: 'none',
+                        borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                        opacity: restoreLoading === s.id ? 0.5 : 1,
+                      }}
+                    >
+                      {restoreLoading === s.id ? 'Restoring...' : 'Restore'}
+                    </button>
+                  )}
+                  {s.status !== 'cancelled' && (
+                    <span style={{ fontSize: '12px', color: '#1b6b5a', fontWeight: 600 }}>Restored ✓</span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
