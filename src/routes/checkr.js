@@ -114,7 +114,7 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
     console.log(`[checkr] Creating invitation for candidate ${candidate.id}`);
 
     // Use the configured package or default to basic+mvr
-    const packageSlug = process.env.CHECKR_PACKAGE || "driver_pro";
+    const packageSlug = process.env.CHECKR_PACKAGE || "essential_criminal";
 
     const invitation = await checkrRequest("POST", "/invitations", {
       candidate_id: candidate.id,
@@ -221,8 +221,10 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
 // Receives webhook events from Checkr when report/invitation status changes
 // This endpoint must be publicly accessible (no auth)
 // Configure in Checkr Dashboard → Developer Settings → New Webhook → URL: https://yourinplace.com/api/checkr/webhook
-router.post("/webhook", express.json(), async (req, res) => {
+// Body is parsed here (skipped in global middleware) so we can verify the signature against raw bytes.
+router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }), async (req, res) => {
   const db = await getDb();
+  const rawBody = req.body; // Buffer (raw bytes)
 
   // Verify webhook signature if secret is configured
   const webhookSecret = process.env.CHECKR_WEBHOOK_SECRET;
@@ -232,19 +234,28 @@ router.post("/webhook", express.json(), async (req, res) => {
       console.warn("[checkr-webhook] Missing signature header");
       return res.status(401).json({ error: "Missing signature" });
     }
-    // Checkr uses HMAC-SHA256
+    // Checkr uses HMAC-SHA256 on the raw body
     const crypto = require("crypto");
     const expectedSig = crypto
       .createHmac("sha256", webhookSecret)
-      .update(JSON.stringify(req.body))
+      .update(rawBody)
       .digest("hex");
-    if (signature !== expectedSig) {
+    if (signature !== expectedSig && signature !== `sha256=${expectedSig}`) {
       console.warn("[checkr-webhook] Invalid signature");
       return res.status(401).json({ error: "Invalid signature" });
     }
   }
 
-  const { type, data } = req.body;
+  // Parse the raw body into JSON
+  let body;
+  try {
+    body = JSON.parse(rawBody.toString());
+  } catch (err) {
+    console.error("[checkr-webhook] Invalid JSON body:", err.message);
+    return res.status(400).json({ error: "Invalid JSON" });
+  }
+
+  const { type, data } = body;
   console.log(`[checkr-webhook] Event: ${type}`);
 
   try {

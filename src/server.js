@@ -192,9 +192,9 @@ app.use(cors({
 app.use(require("cookie-parser")());
 app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
 app.use("/api/care-recipients", express.json({ limit: "5mb" }));
-// Skip JSON parsing for Stripe webhook — it needs the raw body for signature verification
+// Skip JSON parsing for webhooks that need raw body for signature verification
 app.use((req, res, next) => {
-  if (req.originalUrl === '/api/payments/webhook') return next();
+  if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/checkr/webhook') return next();
   express.json({ limit: "100kb" })(req, res, next);
 });
 app.use(limitBodySize(100000));
@@ -293,7 +293,7 @@ app.use("/api/checkr", require("./routes/checkr"));
 app.use("/api/accountability", require("./routes/accountability"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.87";
+const APP_VERSION = "1.39.88";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
