@@ -265,20 +265,55 @@ router.get("/family/status", requireRole("family"), async (req, res) => {
 
   try {
     const stripe = getStripe();
-    const paymentMethods = await stripe.paymentMethods.list({
+
+    // Check for card payment methods first
+    const cardMethods = await stripe.paymentMethods.list({
       customer: user.stripe_customer_id,
       type: "card",
       limit: 1,
     });
 
-    if (paymentMethods.data.length > 0) {
-      const pm = paymentMethods.data[0];
+    if (cardMethods.data.length > 0) {
+      const pm = cardMethods.data[0];
       return res.json({
         status: "complete",
         hasPaymentMethod: true,
         card: { brand: pm.card.brand, last4: pm.card.last4, expMonth: pm.card.exp_month, expYear: pm.card.exp_year },
       });
     }
+
+    // Check for Stripe Link payment methods
+    try {
+      const linkMethods = await stripe.paymentMethods.list({
+        customer: user.stripe_customer_id,
+        type: "link",
+        limit: 1,
+      });
+      if (linkMethods.data.length > 0) {
+        return res.json({
+          status: "complete",
+          hasPaymentMethod: true,
+          card: { brand: "Stripe Link", last4: "****", expMonth: null, expYear: null, isLink: true },
+        });
+      }
+    } catch { /* Link type may not be supported on all API versions */ }
+
+    // Check for US bank account (ACH)
+    try {
+      const bankMethods = await stripe.paymentMethods.list({
+        customer: user.stripe_customer_id,
+        type: "us_bank_account",
+        limit: 1,
+      });
+      if (bankMethods.data.length > 0) {
+        const pm = bankMethods.data[0];
+        return res.json({
+          status: "complete",
+          hasPaymentMethod: true,
+          card: { brand: pm.us_bank_account.bank_name || "Bank Account", last4: pm.us_bank_account.last4, expMonth: null, expYear: null, isBank: true },
+        });
+      }
+    } catch { /* bank type may not be available */ }
 
     return res.json({ status: "pending", hasPaymentMethod: false });
   } catch (err) {

@@ -43692,18 +43692,23 @@ const FamilyPayments = window.FamilyPayments = () => {
     style: {
       fontSize: 22
     }
-  }, "\uD83D\uDCB3"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, cardInfo.isBank ? '🏦' : '💳'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 14,
       fontWeight: 600,
       textTransform: 'capitalize'
     }
-  }, cardInfo.brand, " ending in ", cardInfo.last4), /*#__PURE__*/React.createElement("div", {
+  }, cardInfo.isLink ? 'Stripe Link (one-click checkout)' : cardInfo.isBank ? `${cardInfo.brand} ending in ${cardInfo.last4}` : `${cardInfo.brand} ending in ${cardInfo.last4}`), cardInfo.expMonth && cardInfo.expYear && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: '#888'
     }
-  }, "Expires ", cardInfo.expMonth, "/", cardInfo.expYear))), /*#__PURE__*/React.createElement("p", {
+  }, "Expires ", cardInfo.expMonth, "/", cardInfo.expYear), cardInfo.isLink && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#888'
+    }
+  }, "Your card is saved securely via Stripe Link"))), /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 10px',
       fontSize: 14,

@@ -100,10 +100,17 @@ const FamilyPayments = window.FamilyPayments = () => {
           <div>
             {cardInfo && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: '#f8f9fa', borderRadius: 8 }}>
-                <span style={{ fontSize: 22 }}>💳</span>
+                <span style={{ fontSize: 22 }}>{cardInfo.isBank ? '🏦' : '💳'}</span>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize' }}>{cardInfo.brand} ending in {cardInfo.last4}</div>
-                  <div style={{ fontSize: 12, color: '#888' }}>Expires {cardInfo.expMonth}/{cardInfo.expYear}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize' }}>
+                    {cardInfo.isLink ? 'Stripe Link (one-click checkout)' : cardInfo.isBank ? `${cardInfo.brand} ending in ${cardInfo.last4}` : `${cardInfo.brand} ending in ${cardInfo.last4}`}
+                  </div>
+                  {cardInfo.expMonth && cardInfo.expYear && (
+                    <div style={{ fontSize: 12, color: '#888' }}>Expires {cardInfo.expMonth}/{cardInfo.expYear}</div>
+                  )}
+                  {cardInfo.isLink && (
+                    <div style={{ fontSize: 12, color: '#888' }}>Your card is saved securely via Stripe Link</div>
+                  )}
                 </div>
               </div>
             )}
