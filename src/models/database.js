@@ -734,6 +734,8 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
     // Auto-approve existing users and demo users
     `UPDATE users SET account_approved = 1 WHERE is_demo = 1 OR is_admin = 1 OR created_at < NOW() - INTERVAL '1 minute'`,
+    // Backfill: rename session_booked → session_requested + fix message text
+    `UPDATE activity_feed SET event_type = 'session_requested', message = REPLACE(message, 'booked', 'requested') WHERE event_type = 'session_booked'`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
