@@ -2524,6 +2524,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                📝 Visit Summary (for Care Notes)
+              </label>
+              <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px' }}>
+                Summarize the visit — this will be saved as a care note for the family to see.
+              </p>
+              <textarea value={checkOutSummary} onChange={e => setCheckOutSummary(e.target.value)}
+                placeholder="e.g. Betty was in good spirits today. We did a puzzle together and she ate a full lunch. She mentioned some hip pain when standing."
+                style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
                 📸 Visit Photos (optional, up to 5)
               </label>
               <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px' }}>
@@ -2574,7 +2587,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
                       careFeedback: checkOutCareFeedback.trim() || null,
                       serviceFeedback: checkOutServiceFeedback.trim() || null,
-                      summary: null,
+                      summary: checkOutSummary.trim() || null,
                     }),
                   });
                   if (res?.ok) {
@@ -2598,6 +2611,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     checkOutPhotoUrls.forEach(u => URL.revokeObjectURL(u));
                     setCheckOutPhotos([]);
                     setCheckOutPhotoUrls([]);
+                    setCheckOutSummary('');
                     showToast('Checked out! Session complete.', 'success');
                     setCheckOutSession(null);
                     const refreshRes = await apiFetch('/api/dashboard');
