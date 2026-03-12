@@ -294,6 +294,29 @@ router.get("/me", requireRole("caregiver"), async (req, res) => {
   res.json({ profile });
 });
 
+// ─── GET /api/caregivers/me/reviews ───
+// Get the current caregiver's own reviews
+router.get("/me/reviews", requireRole("caregiver"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    if (!profile) return res.json({ reviews: [] });
+
+    const reviews = await db.prepare(`
+      SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
+      FROM reviews r
+      JOIN users u ON r.family_user_id = u.id
+      WHERE r.caregiver_id = ?
+      ORDER BY r.created_at DESC LIMIT 20
+    `).all(profile.id);
+
+    res.json({ reviews });
+  } catch (err) {
+    console.error("Fetch caregiver reviews error:", err);
+    res.status(500).json({ error: "Failed to fetch reviews" });
+  }
+});
+
 // ─── PUT /api/caregivers/me ───
 // Update caregiver's own profile fields (care preferences, rates, etc.)
 router.put("/me", requireRole("caregiver"), async (req, res) => {
