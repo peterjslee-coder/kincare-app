@@ -7,6 +7,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { calculateSessionCost, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
+const { getNowInZone, buildDateTimeInZone } = require("../utils/timezone");
 
 const router = express.Router();
 router.use(authenticate);
@@ -590,10 +591,11 @@ async function pollPaymentAuthorizations() {
 
     if (!sessions || sessions.length === 0) return;
 
-    const now = new Date();
+    const now = getNowInZone();
     for (const s of sessions) {
       try {
-        const sessionStart = new Date(`${s.scheduled_date}T${s.scheduled_time.padStart(5, "0")}:00`);
+        const dateStr = s.scheduled_date.split('T')[0];
+        const sessionStart = buildDateTimeInZone(dateStr, s.scheduled_time);
         const hoursUntil = (sessionStart - now) / 3600000;
 
         // Authorize if within 23-25 hour window (or if session is <24hrs out and not yet authorized)
@@ -645,7 +647,8 @@ async function pollLateCheckIns() {
 
     for (const s of sessions) {
       try {
-        const scheduledStart = new Date(`${s.scheduled_date}T${s.scheduled_time.padStart(5, "0")}:00`);
+        const dateStr = s.scheduled_date.split('T')[0];
+        const scheduledStart = buildDateTimeInZone(dateStr, s.scheduled_time);
         const checkInTime = new Date(s.check_in_time);
         const lateMinutes = Math.floor((checkInTime - scheduledStart) / 60000);
 
@@ -697,10 +700,11 @@ async function pollCaregiverNoShows() {
 
     if (!sessions || sessions.length === 0) return;
 
-    const now = new Date();
+    const now = getNowInZone();
     for (const s of sessions) {
       try {
-        const scheduledStart = new Date(`${s.scheduled_date}T${s.scheduled_time.padStart(5, "0")}:00`);
+        const dateStr = s.scheduled_date.split('T')[0];
+        const scheduledStart = buildDateTimeInZone(dateStr, s.scheduled_time);
         const minutesPastStart = (now - scheduledStart) / 60000;
 
         // After the session's FULL duration has passed (not just 10 min) — caregiver never showed
