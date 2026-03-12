@@ -508,7 +508,7 @@ router.post("/connect/link", requireRole("caregiver"), requirePaymentsEnabled, a
         type: "express",
         country: "US",
         email: user.email,
-        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+        capabilities: { transfers: { requested: true } },
         business_type: "individual",
         individual: {
           first_name: profile?.legal_first_name || user.first_name,

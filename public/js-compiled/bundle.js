@@ -23998,11 +23998,10 @@ const MyAccount = window.MyAccount = ({
     transition: 'all 0.15s'
   });
   const isDemo = (user === null || user === void 0 ? void 0 : user.is_demo) || (user === null || user === void 0 ? void 0 : user.isDemo);
-  const isCaregiver = (() => {
-    if (!user) return false;
-    const roles = user.roles ? typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles : [user.role];
-    return roles.includes('caregiver');
-  })();
+
+  // Use active viewing role (not just "has caregiver role") so the tab content matches the role toggle
+  const viewingRole = typeof getActiveRole === 'function' ? getActiveRole() : window.ACTIVE_ROLE || (user === null || user === void 0 ? void 0 : user.role) || 'family';
+  const isCaregiver = viewingRole === 'caregiver';
   const tabs = isDemo ? [{
     id: 'profile',
     label: 'Profile'
