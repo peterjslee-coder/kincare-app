@@ -830,7 +830,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     if (!sTime) return false;
     const sessionStartET = TimezoneHelper.buildDateTime(sessionDate, sTime, tz);
     const minsUntil = (sessionStartET - etNow) / 60000;
-    return minsUntil <= 60 || profile.earlyCheckInAllowed;
+    return minsUntil <= 15 || profile.earlyCheckInAllowed;
   });
 
   // Split sessions into <24hr ("up next") vs >24hr ("scheduled")
@@ -1263,7 +1263,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
               const noAddress = !s.hasAddress && s.status === 'confirmed';
 
-              // Countdown label
+              // Countdown label + upcoming check-in state (15-60 min window)
+              const isUpcoming = !isReady && !isActive && s.status === 'confirmed' && minsUntil > 0 && minsUntil <= 60;
               const countdownLabel = (() => {
                 if (isReady || isActive) return null;
                 if (minsUntil <= 0) return null;
@@ -1274,8 +1275,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               })();
 
               // Styling
-              const borderColor = isActive ? '#f57f17' : isReady ? '#e8724a' : noAddress ? '#dc2626' : '#1b6b5a';
-              const borderWidth = isActive || isReady ? 3 : 2;
+              const borderColor = isActive ? '#f57f17' : isReady ? '#e8724a' : isUpcoming ? '#e8724a' : noAddress ? '#dc2626' : '#1b6b5a';
+              const borderWidth = isActive || isReady ? 3 : isUpcoming ? 2 : 2;
               const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
               const shadow = (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
 
@@ -1403,7 +1404,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           boxShadow: '0 2px 8px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
                         }}>Check In Now</button>
                       )}
-                      {!isReady && !isActive && (
+                      {isUpcoming && (
+                        <button disabled style={{
+                          padding: '10px 22px', background: '#f5f5f5', color: '#999', border: '1px solid #ddd',
+                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'default',
+                          whiteSpace: 'nowrap',
+                        }}>Check in {Math.ceil(minsUntil)} min</button>
+                      )}
+                      {!isReady && !isActive && !isUpcoming && (
                         <span style={{
                           padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
                           background: s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
