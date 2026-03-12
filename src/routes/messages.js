@@ -235,7 +235,7 @@ router.get("/contacts", async (req, res) => {
   if (search) {
     users = await db.prepare(`
       SELECT id, first_name, last_name, role, email, profile_photo FROM users
-      WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ?
+      WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ? AND is_active = 1
         AND (LOWER(first_name || ' ' || last_name) LIKE ? OR LOWER(email) LIKE ?)
       ORDER BY first_name ASC
       LIMIT 20
@@ -243,7 +243,7 @@ router.get("/contacts", async (req, res) => {
   } else {
     users = await db.prepare(`
       SELECT id, first_name, last_name, role, email, profile_photo FROM users
-      WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ?
+      WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ? AND is_active = 1
       ORDER BY first_name ASC
     `).all(...idList, isDemo);
   }

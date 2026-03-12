@@ -26,7 +26,7 @@ router.get("/search", async (req, res) => {
     const users = await db.prepare(`
       SELECT id, first_name, last_name, email, role, profile_photo
       FROM users
-      WHERE id != ? AND is_demo = 0
+      WHERE id != ? AND is_demo = 0 AND is_active = 1
         AND (LOWER(first_name || ' ' || last_name) LIKE ? OR LOWER(email) LIKE ?)
       ORDER BY first_name ASC
       LIMIT 20
