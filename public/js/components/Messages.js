@@ -466,22 +466,6 @@ const Messages = window.Messages = () => {
     const otherMember = activeConv.members?.find(m => m.id !== currentUser?.id);
     const remoteName = otherMember ? (otherMember.name || `${otherMember.first_name || ''} ${otherMember.last_name || ''}`.trim()) || 'Unknown' : 'Unknown';
 
-    // Send a chat message about the call
-    const callIcon = callType === 'video' ? '📹' : '📞';
-    const typeLabel = callType === 'video' ? 'video' : 'voice';
-    const message = `${callIcon} Started a ${typeLabel} call`;
-
-    try {
-      await apiFetch(`/api/messages/conversations/${activeConvId}`, {
-        method: 'POST',
-        body: JSON.stringify({ content: message }),
-      });
-      fetchMessages(activeConvId);
-      fetchConversations();
-    } catch (err) {
-      console.error('Call message error:', err);
-    }
-
     // Signal the other user via Socket.io
     if (otherMember && window._socket) {
       window._socket.emit('call_invite', {
@@ -503,7 +487,7 @@ const Messages = window.Messages = () => {
     });
   };
 
-  const handleEndCall = () => {
+  const handleEndCall = async (durationSecs) => {
     // Signal hangup to remote
     if (callState.active && window._socket) {
       const otherMember = activeConv?.members?.find(m => m.id !== currentUser?.id);
@@ -513,6 +497,25 @@ const Messages = window.Messages = () => {
           roomName: callState.roomName,
         });
       }
+    }
+    // Post call summary message to chat
+    const ct = callState.callType || 'voice';
+    const icon = ct === 'video' ? '\uD83D\uDCF9' : '\uD83D\uDCDE';
+    const label = ct === 'video' ? 'Video call' : 'Audio call';
+    const dur = durationSecs || 0;
+    const durLabel = dur < 60 ? `${dur}s` : `${Math.floor(dur / 60)} min`;
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const summary = `${icon} ${label} \u00B7 ${durLabel} \u00B7 ${timeLabel}`;
+    if (activeConvId) {
+      try {
+        await apiFetch(`/api/messages/conversations/${activeConvId}`, {
+          method: 'POST',
+          body: JSON.stringify({ content: summary }),
+        });
+        fetchMessages(activeConvId);
+        fetchConversations();
+      } catch (err) { console.error('Call summary message error:', err); }
     }
     setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
   };
@@ -651,7 +654,36 @@ const Messages = window.Messages = () => {
   }, [incomingCall]);
 
   const renderMessageContent = (content) => {
-    // Detect call messages
+    // Detect call summary messages (new format: "📞 Audio call · 4 min · 10:14 AM")
+    const callSummaryMatch = content.match(/^(\uD83D\uDCF9|\uD83D\uDCDE) (Video call|Audio call) \u00B7 (.+?) \u00B7 (.+)$/);
+    if (callSummaryMatch) {
+      const isVideoCall = callSummaryMatch[2] === 'Video call';
+      return React.createElement('div', {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '6px 10px',
+          background: '#f0f8f5',
+          borderRadius: 8,
+          border: '1px solid #e0efe8',
+        }
+      },
+        React.createElement('span', {
+          style: { display: 'flex', alignItems: 'center', color: '#1b6b5a' },
+          dangerouslySetInnerHTML: { __html: isVideoCall
+            ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>'
+            : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'
+          }
+        }),
+        React.createElement('span', { style: { fontWeight: 600, color: '#333', fontSize: 13 } }, callSummaryMatch[2]),
+        React.createElement('span', { style: { color: '#888', fontSize: 12 } }, '\u00B7'),
+        React.createElement('span', { style: { color: '#666', fontSize: 13 } }, callSummaryMatch[3]),
+        React.createElement('span', { style: { color: '#888', fontSize: 12 } }, '\u00B7'),
+        React.createElement('span', { style: { color: '#999', fontSize: 12 } }, callSummaryMatch[4])
+      );
+    }
+    // Legacy call messages (old format: "📹 Started a video call")
     const callMatch = content.match(/^(📹|📞) Started a (video|voice) call$/);
     if (callMatch) {
       const isVideoCall = callMatch[2] === 'video';

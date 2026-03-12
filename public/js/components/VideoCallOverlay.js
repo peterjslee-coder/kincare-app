@@ -22,6 +22,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
   const remoteVideoRef = useRef(null);
   const roomRef = useRef(null);
   const timerRef = useRef(null);
+  const durationRef = useRef(0);
 
   // Connect to Twilio room on mount
   useEffect(() => {
@@ -177,7 +178,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
   function startTimer() {
     if (timerRef.current) return;
     timerRef.current = setInterval(() => {
-      setCallDuration(d => d + 1);
+      setCallDuration(d => { durationRef.current = d + 1; return d + 1; });
     }, 1000);
   }
 
@@ -197,7 +198,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     clearRemoteVideo();
     document.querySelectorAll('[data-twilio-remote-audio]').forEach(el => el.remove());
     setStatus('ended');
-    if (onEndCall) onEndCall();
+    if (onEndCall) onEndCall(durationRef.current || 0);
   }
 
   function toggleMute() {
