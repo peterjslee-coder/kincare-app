@@ -486,11 +486,23 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     }
   }, [activeTab]);
 
-  // Fetch caregiver documents + certifications for expiry warnings
+  // Fetch caregiver documents + certifications for expiry warnings, auto-load thumbnails
   useEffect(() => {
     if (activeTab === 'documents') {
       apiFetch('/api/caregiver-onboarding/documents').then(async r => {
-        if (r?.ok) { const d = await r.json(); setDocuments(d.documents || []); }
+        if (r?.ok) {
+          const d = await r.json();
+          const docs = d.documents || [];
+          setDocuments(docs);
+          // Auto-load thumbnails for all docs
+          docs.forEach(doc => {
+            if (!docPreviews[doc.id]) {
+              apiFetch(`/api/caregiver-onboarding/documents/${doc.id}/image`).then(async ir => {
+                if (ir?.ok) { const id = await ir.json(); setDocPreviews(p => ({...p, [doc.id]: id.fileData})); }
+              }).catch(() => {});
+            }
+          });
+        }
       }).catch(() => {});
       apiFetch('/api/caregivers/me').then(async r => {
         if (r?.ok) { const d = await r.json(); setCgCertifications(d.profile?.certifications || []); }
@@ -1600,22 +1612,26 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <span style={{ fontSize: 16 }}>{isUploaded ? '✅' : '⬜'}</span>
                 </div>
 
-                {isUploaded && uploaded.map(doc => (
-                  <div key={doc.id} style={{ marginBottom: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#666', marginBottom: 4 }}>
-                      <span>{doc.file_name || 'Document'}</span>
-                      <span>·</span>
-                      <span>Uploaded {new Date(doc.created_at).toLocaleDateString()}</span>
-                    </div>
-                    <button onClick={() => handleViewDocument(doc.id)}
-                      style={{ padding: '4px 12px', background: docPreviews[doc.id] ? '#e8724a' : '#f0f0f0', color: docPreviews[doc.id] ? '#fff' : '#333', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', marginRight: 8 }}>
-                      {docPreviews[doc.id] ? 'Hide' : 'View'}
-                    </button>
-                    {docPreviews[doc.id] && (
-                      <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid #ddd' }}>
-                        <img src={docPreviews[doc.id]} alt={docLabel} style={{ width: '100%', maxHeight: 300, objectFit: 'contain', background: '#f9f9f9' }} />
+                {isUploaded && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
+                    {uploaded.map(doc => (
+                      <div key={doc.id} style={{ position: 'relative', cursor: 'pointer' }} onClick={() => handleViewDocument(doc.id)}>
+                        <div style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', border: docPreviews[doc.id] ? '2px solid #1b6b5a' : '1px solid #ddd', background: '#f9f9f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {docPreviews[doc.id]
+                            ? <img src={docPreviews[doc.id]} alt={doc.file_name || docLabel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : <span style={{ fontSize: 28, opacity: 0.4 }}>📄</span>}
+                        </div>
+                        <div style={{ fontSize: 10, color: '#888', textAlign: 'center', marginTop: 2, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {new Date(doc.created_at).toLocaleDateString()}
+                        </div>
                       </div>
-                    )}
+                    ))}
+                  </div>
+                )}
+                {/* Full-size preview when a thumbnail is clicked */}
+                {isUploaded && uploaded.some(doc => docPreviews[doc.id]) && uploaded.filter(doc => docPreviews[doc.id]).map(doc => (
+                  <div key={`preview-${doc.id}`} style={{ marginBottom: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid #ddd' }}>
+                    <img src={docPreviews[doc.id]} alt={docLabel} style={{ width: '100%', maxHeight: 300, objectFit: 'contain', background: '#f9f9f9' }} />
                   </div>
                 ))}
 

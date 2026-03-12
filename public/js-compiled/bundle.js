@@ -23607,13 +23607,28 @@ const MyAccount = window.MyAccount = ({
     }
   }, [activeTab]);
 
-  // Fetch caregiver documents + certifications for expiry warnings
+  // Fetch caregiver documents + certifications for expiry warnings, auto-load thumbnails
   useEffect(() => {
     if (activeTab === 'documents') {
       apiFetch('/api/caregiver-onboarding/documents').then(async r => {
         if (r !== null && r !== void 0 && r.ok) {
           const d = await r.json();
-          setDocuments(d.documents || []);
+          const docs = d.documents || [];
+          setDocuments(docs);
+          // Auto-load thumbnails for all docs
+          docs.forEach(doc => {
+            if (!docPreviews[doc.id]) {
+              apiFetch(`/api/caregiver-onboarding/documents/${doc.id}/image`).then(async ir => {
+                if (ir !== null && ir !== void 0 && ir.ok) {
+                  const id = await ir.json();
+                  setDocPreviews(p => ({
+                    ...p,
+                    [doc.id]: id.fileData
+                  }));
+                }
+              }).catch(() => {});
+            }
+          });
         }
       }).catch(() => {});
       apiFetch('/api/caregivers/me').then(async r => {
@@ -25733,36 +25748,60 @@ const MyAccount = window.MyAccount = ({
       style: {
         fontSize: 16
       }
-    }, isUploaded ? '✅' : '⬜')), isUploaded && uploaded.map(doc => /*#__PURE__*/React.createElement("div", {
-      key: doc.id,
-      style: {
-        marginBottom: 8
-      }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, isUploaded ? '✅' : '⬜')), isUploaded && /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
+        flexWrap: 'wrap',
+        gap: 10,
+        marginBottom: 8
+      }
+    }, uploaded.map(doc => /*#__PURE__*/React.createElement("div", {
+      key: doc.id,
+      style: {
+        position: 'relative',
+        cursor: 'pointer'
+      },
+      onClick: () => handleViewDocument(doc.id)
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 80,
+        height: 80,
+        borderRadius: 8,
+        overflow: 'hidden',
+        border: docPreviews[doc.id] ? '2px solid #1b6b5a' : '1px solid #ddd',
+        background: '#f9f9f9',
+        display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        fontSize: 12,
-        color: '#666',
-        marginBottom: 4
+        justifyContent: 'center'
       }
-    }, /*#__PURE__*/React.createElement("span", null, doc.file_name || 'Document'), /*#__PURE__*/React.createElement("span", null, "\xB7"), /*#__PURE__*/React.createElement("span", null, "Uploaded ", new Date(doc.created_at).toLocaleDateString())), /*#__PURE__*/React.createElement("button", {
-      onClick: () => handleViewDocument(doc.id),
+    }, docPreviews[doc.id] ? /*#__PURE__*/React.createElement("img", {
+      src: docPreviews[doc.id],
+      alt: doc.file_name || docLabel,
       style: {
-        padding: '4px 12px',
-        background: docPreviews[doc.id] ? '#e8724a' : '#f0f0f0',
-        color: docPreviews[doc.id] ? '#fff' : '#333',
-        border: 'none',
-        borderRadius: 6,
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: 'pointer',
-        marginRight: 8
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover'
       }
-    }, docPreviews[doc.id] ? 'Hide' : 'View'), docPreviews[doc.id] && /*#__PURE__*/React.createElement("div", {
+    }) : /*#__PURE__*/React.createElement("span", {
       style: {
-        marginTop: 8,
+        fontSize: 28,
+        opacity: 0.4
+      }
+    }, "\uD83D\uDCC4")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: '#888',
+        textAlign: 'center',
+        marginTop: 2,
+        maxWidth: 80,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, new Date(doc.created_at).toLocaleDateString())))), isUploaded && uploaded.some(doc => docPreviews[doc.id]) && uploaded.filter(doc => docPreviews[doc.id]).map(doc => /*#__PURE__*/React.createElement("div", {
+      key: `preview-${doc.id}`,
+      style: {
+        marginBottom: 8,
         borderRadius: 8,
         overflow: 'hidden',
         border: '1px solid #ddd'
@@ -25776,7 +25815,7 @@ const MyAccount = window.MyAccount = ({
         objectFit: 'contain',
         background: '#f9f9f9'
       }
-    })))), /*#__PURE__*/React.createElement("button", {
+    }))), /*#__PURE__*/React.createElement("button", {
       onClick: () => {
         var _acctDocInputRef$curr2;
         setPendingAcctDocType(docType);
