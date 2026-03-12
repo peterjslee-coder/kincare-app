@@ -293,7 +293,7 @@ app.use("/api/checkr", require("./routes/checkr"));
 app.use("/api/accountability", require("./routes/accountability"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.39.93";
+const APP_VERSION = "1.39.94";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -519,10 +519,13 @@ async function start() {
         SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent
         FROM care_sessions cs
         LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
         WHERE cs.status = 'confirmed'
           AND cs.scheduled_date = ?
           AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%pre_check_in%')
           AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
       `).all(todayStr);
 
       for (const s of checkInCandidates) {
@@ -541,10 +544,13 @@ async function start() {
         SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.notifications_sent
         FROM care_sessions cs
         LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
         WHERE cs.status = 'in_progress'
           AND cs.scheduled_date = ?
           AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%pre_check_out%')
           AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
       `).all(todayStr);
 
       for (const s of checkOutCandidates) {
@@ -564,10 +570,13 @@ async function start() {
         SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent
         FROM care_sessions cs
         LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
         WHERE cs.status = 'confirmed'
           AND cs.scheduled_date = ?
           AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%overdue_check_in%')
           AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
       `).all(todayStr);
 
       for (const s of overdueCandidates) {

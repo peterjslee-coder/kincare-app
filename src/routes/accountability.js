@@ -577,10 +577,13 @@ async function pollPaymentAuthorizations() {
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.family_user_id
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users cu ON cp.user_id = cu.id
       WHERE cs.status = 'confirmed'
         AND cs.stripe_payment_intent_id IS NULL
         AND cs.payment_status IS NULL
         AND (u.is_demo IS NULL OR u.is_demo = 0)
+        AND (cu.is_demo IS NULL OR cu.is_demo = 0)
         AND cs.scheduled_date IS NOT NULL
         AND cs.scheduled_time IS NOT NULL
     `).all();
@@ -635,6 +638,7 @@ async function pollLateCheckIns() {
         AND cs.late_check_in = 0
         AND vl.check_in_time IS NOT NULL
         AND (fu.is_demo IS NULL OR fu.is_demo = 0)
+        AND (u.is_demo IS NULL OR u.is_demo = 0)
     `).all();
 
     if (!sessions || sessions.length === 0) return;
@@ -679,11 +683,13 @@ async function pollCaregiverNoShows() {
         cp.user_id AS caregiver_user_id
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users cu ON cp.user_id = cu.id
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'confirmed'
         AND cs.caregiver_no_show = 0
         AND cs.caregiver_id IS NOT NULL
         AND (u.is_demo IS NULL OR u.is_demo = 0)
+        AND (cu.is_demo IS NULL OR cu.is_demo = 0)
         AND cs.scheduled_date IS NOT NULL
         AND cs.scheduled_time IS NOT NULL
         AND cs.notifications_sent NOT LIKE '%no_show_flagged%'
