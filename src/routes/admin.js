@@ -2232,10 +2232,11 @@ router.post("/backfill-care-notes", authenticate, requireAdmin, async (req, res)
     // Find completed sessions with care_feedback in visit_logs
     // that don't already have a visit_summary note
     const rows = await db.prepare(`
-      SELECT cs.id AS session_id, cs.care_recipient_id, cs.caregiver_user_id,
+      SELECT cs.id AS session_id, cs.care_recipient_id, cp.user_id AS caregiver_user_id,
              vl.care_feedback, vl.check_out_time
       FROM care_sessions cs
       JOIN visit_logs vl ON vl.session_id = cs.id
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       WHERE cs.status = 'completed'
         AND cs.care_recipient_id IS NOT NULL
         AND vl.care_feedback IS NOT NULL
@@ -2244,7 +2245,7 @@ router.post("/backfill-care-notes", authenticate, requireAdmin, async (req, res)
         AND NOT EXISTS (
           SELECT 1 FROM recipient_notes rn
           WHERE rn.care_recipient_id = cs.care_recipient_id
-            AND rn.author_id = cs.caregiver_user_id
+            AND rn.author_id = cp.user_id
             AND rn.note_type = 'visit_summary'
             AND rn.created_at >= ?
             AND rn.content = TRIM(vl.care_feedback)
