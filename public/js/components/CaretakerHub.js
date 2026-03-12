@@ -110,13 +110,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       formData.append('types', JSON.stringify([docType]));
       formData.append('metadata', JSON.stringify([{}]));
       const token = window.AUTH_TOKEN;
-      const csrfHeaders = {};
+      const _hdrs = {};
+      if (token) _hdrs['Authorization'] = `Bearer ${token}`;
       const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
-      if (csrf) csrfHeaders['X-CSRF-Token'] = csrf;
+      if (csrf) _hdrs['X-CSRF-Token'] = csrf;
       const res = await fetch('/api/caregiver-onboarding/documents', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Authorization': `Bearer ${token}`, ...csrfHeaders },
+        headers: _hdrs,
         body: formData,
       });
       if (res.ok) {

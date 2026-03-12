@@ -685,11 +685,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       formData.append('metadata', JSON.stringify([{}]));
       const token = window.AUTH_TOKEN;
       const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
-      const _csrfH = _csrf ? { 'X-CSRF-Token': _csrf } : {};
+      const _hdrs = {};
+      if (token) _hdrs['Authorization'] = `Bearer ${token}`;
+      if (_csrf) _hdrs['X-CSRF-Token'] = _csrf;
       const res = await fetch('/api/caregiver-onboarding/documents', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Authorization': `Bearer ${token}`, ..._csrfH },
+        headers: _hdrs,
         body: formData,
       });
       if (res.ok) {
@@ -699,6 +701,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           const d = await updated.json();
           setDocuments(d.documents || []);
         }
+      } else {
+        const d = await res.json().catch(() => ({}));
+        showToast(d.error || 'Upload failed', 'error');
       }
     } catch (err) {
       showToast('Failed to upload document', 'error');

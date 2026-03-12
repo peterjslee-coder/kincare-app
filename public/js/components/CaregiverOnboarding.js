@@ -487,9 +487,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       formData.append('types', JSON.stringify(types));
       formData.append('metadata', JSON.stringify(metadata));
 
+      const _hdrs = {};
+      if (token) _hdrs['Authorization'] = `Bearer ${token}`;
       const res = await resilientFetch('/api/caregiver-onboarding/documents', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: _hdrs,
         body: formData,
       }, 1); // only 1 retry for uploads (they're larger)
       if (!res.ok) {
