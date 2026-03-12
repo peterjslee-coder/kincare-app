@@ -18,11 +18,15 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [error, setError] = useState(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomSupported, setZoomSupported] = useState(false);
+  const [zoomRange, setZoomRange] = useState({ min: 1, max: 5, step: 0.1 });
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const roomRef = useRef(null);
   const timerRef = useRef(null);
   const durationRef = useRef(0);
+  const localTrackRef = useRef(null);
 
   // Connect to Twilio room on mount
   useEffect(() => {
@@ -56,15 +60,39 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
 
         const Video = window.Twilio.Video;
 
-        // Connect to room
+        // Connect to room with wide-angle video constraints
         const connectOptions = {
           name: callState.roomName,
           audio: true,
-          video: callState.callType === 'video',
+          video: callState.callType === 'video' ? {
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          } : false,
           dominantSpeaker: true,
         };
 
         const twilioRoom = await Video.connect(token, connectOptions);
+
+        // Detect camera zoom capability for local video track
+        if (callState.callType === 'video') {
+          twilioRoom.localParticipant.videoTracks.forEach(publication => {
+            if (publication.track) {
+              localTrackRef.current = publication.track;
+              try {
+                const mediaTrack = publication.track.mediaStreamTrack;
+                const caps = mediaTrack.getCapabilities ? mediaTrack.getCapabilities() : {};
+                if (caps.zoom) {
+                  setZoomSupported(true);
+                  setZoomRange({ min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1 });
+                  // Reset to minimum zoom (widest angle)
+                  mediaTrack.applyConstraints({ advanced: [{ zoom: caps.zoom.min }] }).catch(() => {});
+                  setZoomLevel(caps.zoom.min);
+                }
+              } catch (e) { /* zoom not supported */ }
+            }
+          });
+        }
 
         if (cancelled) {
           twilioRoom.disconnect();
@@ -155,7 +183,12 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     const ref = type === 'local' ? localVideoRef : remoteVideoRef;
     if (ref.current && track.kind === 'video') {
       ref.current.innerHTML = '';
-      ref.current.appendChild(track.attach());
+      const videoEl = track.attach();
+      // Prevent zoomed-in cropping — fit entire frame in view
+      videoEl.style.width = '100%';
+      videoEl.style.height = '100%';
+      videoEl.style.objectFit = type === 'local' ? 'cover' : 'contain';
+      ref.current.appendChild(videoEl);
     }
     if (type === 'remote' && track.kind === 'audio') {
       const audioEl = track.attach();
@@ -225,6 +258,17 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     setIsCameraOff(!isCameraOff);
   }
 
+  function handleZoomChange(newZoom) {
+    const val = parseFloat(newZoom);
+    setZoomLevel(val);
+    if (localTrackRef.current) {
+      try {
+        const mediaTrack = localTrackRef.current.mediaStreamTrack;
+        mediaTrack.applyConstraints({ advanced: [{ zoom: val }] }).catch(() => {});
+      } catch (e) { /* zoom not supported */ }
+    }
+  }
+
   function formatDuration(secs) {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -257,6 +301,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
+        backgroundColor: '#000',
       }
     }),
 
@@ -353,6 +398,90 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         zIndex: 10001,
       }
     }, error),
+
+    // Zoom slider (above controls, video calls only)
+    isVideo && zoomSupported && status === 'connected' && React.createElement('div', {
+      style: {
+        position: 'absolute',
+        bottom: 115,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: '8px 16px',
+        borderRadius: 20,
+        zIndex: 10001,
+      }
+    },
+      React.createElement('span', {
+        style: { color: 'white', fontSize: 12, minWidth: 20 },
+      }, '🔍'),
+      React.createElement('input', {
+        type: 'range',
+        min: zoomRange.min,
+        max: zoomRange.max,
+        step: zoomRange.step,
+        value: zoomLevel,
+        onChange: (e) => handleZoomChange(e.target.value),
+        style: {
+          width: 140,
+          accentColor: '#1b6b5a',
+          cursor: 'pointer',
+        }
+      }),
+      React.createElement('span', {
+        style: { color: 'white', fontSize: 12, minWidth: 32 },
+      }, zoomLevel.toFixed(1) + 'x')
+    ),
+
+    // CSS-based zoom fallback for devices without native zoom
+    isVideo && !zoomSupported && status === 'connected' && React.createElement('div', {
+      style: {
+        position: 'absolute',
+        bottom: 115,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: '8px 16px',
+        borderRadius: 20,
+        zIndex: 10001,
+      }
+    },
+      React.createElement('span', {
+        style: { color: 'rgba(255,255,255,0.6)', fontSize: 11 }
+      }, 'Wide angle'),
+      ...[1, 1.5, 2].map(z =>
+        React.createElement('button', {
+          key: z,
+          onClick: () => {
+            setZoomLevel(z);
+            // Apply CSS transform zoom to local video
+            if (localVideoRef.current) {
+              const vid = localVideoRef.current.querySelector('video');
+              if (vid) vid.style.transform = `scale(${z})`;
+            }
+          },
+          style: {
+            padding: '4px 10px',
+            borderRadius: 12,
+            border: 'none',
+            backgroundColor: zoomLevel === z ? '#1b6b5a' : 'rgba(255,255,255,0.2)',
+            color: 'white',
+            fontSize: 12,
+            fontWeight: zoomLevel === z ? 700 : 400,
+            cursor: 'pointer',
+          }
+        }, z + 'x')
+      ),
+      React.createElement('span', {
+        style: { color: 'rgba(255,255,255,0.6)', fontSize: 11 }
+      }, 'Close up')
+    ),
 
     // Controls bar (bottom)
     React.createElement('div', {
