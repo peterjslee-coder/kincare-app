@@ -37,7 +37,7 @@ const Messages = window.Messages = () => {
   const [currentUser, setCurrentUser] = useState(null);
 
   // ─── In-app call state (Twilio Video) ───
-  const [callState, setCallState] = useState({ active: false, roomName: null, callType: null, remoteParticipantName: null, callDirection: null });
+  const [callState, setCallState] = useState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
   const [incomingCall, setIncomingCall] = useState(null); // { roomName, callType, callerId, callerName }
 
   // ─── Typing indicators ───
@@ -464,7 +464,7 @@ const Messages = window.Messages = () => {
     // Generate a unique room name
     const roomName = 'inplace-' + activeConvId.substring(0, 8) + '-' + Date.now();
     const otherMember = activeConv.members?.find(m => m.id !== currentUser?.id);
-    const remoteName = otherMember ? `${otherMember.first_name || ''} ${otherMember.last_name || ''}`.trim() : 'Unknown';
+    const remoteName = otherMember ? (otherMember.name || `${otherMember.first_name || ''} ${otherMember.last_name || ''}`.trim()) || 'Unknown' : 'Unknown';
 
     // Send a chat message about the call
     const callIcon = callType === 'video' ? '📹' : '📞';
@@ -498,6 +498,7 @@ const Messages = window.Messages = () => {
       roomName: roomName,
       callType: callType,
       remoteParticipantName: remoteName,
+      remoteParticipantPhoto: otherMember?.profilePhoto || null,
       callDirection: 'outgoing',
     });
   };
@@ -513,7 +514,7 @@ const Messages = window.Messages = () => {
         });
       }
     }
-    setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, callDirection: null });
+    setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
   };
 
   const handleAcceptIncoming = () => {
@@ -523,6 +524,7 @@ const Messages = window.Messages = () => {
       roomName: incomingCall.roomName,
       callType: incomingCall.callType,
       remoteParticipantName: incomingCall.callerName,
+      remoteParticipantPhoto: incomingCall.callerPhoto || null,
       callDirection: 'incoming',
     });
     if (window._socket) {
@@ -556,10 +558,10 @@ const Messages = window.Messages = () => {
       }
     });
     const cleanup2 = onSocketEvent('call_ended', () => {
-      setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, callDirection: null });
+      setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
     });
     const cleanup3 = onSocketEvent('call_declined', () => {
-      setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, callDirection: null });
+      setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
     });
     return () => { cleanup(); cleanup2(); cleanup3(); };
   }, [callState.active]);

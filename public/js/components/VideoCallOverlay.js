@@ -286,20 +286,30 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         zIndex: 10001,
       }
     },
-      React.createElement('div', {
-        style: {
-          width: 96,
-          height: 96,
-          borderRadius: '50%',
-          background: '#1b6b5a',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 40,
-          color: 'white',
-          fontWeight: 700,
-        }
-      }, (callState.remoteParticipantName || '?')[0]?.toUpperCase()),
+      callState.remoteParticipantPhoto
+        ? React.createElement('img', {
+            src: callState.remoteParticipantPhoto,
+            style: {
+              width: 96,
+              height: 96,
+              borderRadius: '50%',
+              objectFit: 'cover',
+            }
+          })
+        : React.createElement('div', {
+            style: {
+              width: 96,
+              height: 96,
+              borderRadius: '50%',
+              background: '#1b6b5a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 40,
+              color: 'white',
+              fontWeight: 700,
+            }
+          }, (callState.remoteParticipantName || '?')[0]?.toUpperCase()),
       React.createElement('div', {
         style: { color: 'white', fontSize: 22, fontWeight: 600 }
       }, callState.remoteParticipantName || 'Unknown'),

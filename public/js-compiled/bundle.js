@@ -17896,7 +17896,15 @@ const VideoCallOverlay = window.VideoCallOverlay = ({
       gap: 12,
       zIndex: 10001
     }
-  }, React.createElement('div', {
+  }, callState.remoteParticipantPhoto ? React.createElement('img', {
+    src: callState.remoteParticipantPhoto,
+    style: {
+      width: 96,
+      height: 96,
+      borderRadius: '50%',
+      objectFit: 'cover'
+    }
+  }) : React.createElement('div', {
     style: {
       width: 96,
       height: 96,
@@ -18104,6 +18112,7 @@ const Messages = window.Messages = () => {
     roomName: null,
     callType: null,
     remoteParticipantName: null,
+    remoteParticipantPhoto: null,
     callDirection: null
   });
   const [incomingCall, setIncomingCall] = useState(null); // { roomName, callType, callerId, callerName }
@@ -18565,7 +18574,7 @@ const Messages = window.Messages = () => {
     // Generate a unique room name
     const roomName = 'inplace-' + activeConvId.substring(0, 8) + '-' + Date.now();
     const otherMember = (_activeConv$members = activeConv.members) === null || _activeConv$members === void 0 ? void 0 : _activeConv$members.find(m => m.id !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.id));
-    const remoteName = otherMember ? `${otherMember.first_name || ''} ${otherMember.last_name || ''}`.trim() : 'Unknown';
+    const remoteName = otherMember ? otherMember.name || `${otherMember.first_name || ''} ${otherMember.last_name || ''}`.trim() || 'Unknown' : 'Unknown';
 
     // Send a chat message about the call
     const callIcon = callType === 'video' ? '📹' : '📞';
@@ -18600,6 +18609,7 @@ const Messages = window.Messages = () => {
       roomName: roomName,
       callType: callType,
       remoteParticipantName: remoteName,
+      remoteParticipantPhoto: (otherMember === null || otherMember === void 0 ? void 0 : otherMember.profilePhoto) || null,
       callDirection: 'outgoing'
     });
   };
@@ -18620,6 +18630,7 @@ const Messages = window.Messages = () => {
       roomName: null,
       callType: null,
       remoteParticipantName: null,
+      remoteParticipantPhoto: null,
       callDirection: null
     });
   };
@@ -18630,6 +18641,7 @@ const Messages = window.Messages = () => {
       roomName: incomingCall.roomName,
       callType: incomingCall.callType,
       remoteParticipantName: incomingCall.callerName,
+      remoteParticipantPhoto: incomingCall.callerPhoto || null,
       callDirection: 'incoming'
     });
     if (window._socket) {
@@ -18667,6 +18679,7 @@ const Messages = window.Messages = () => {
         roomName: null,
         callType: null,
         remoteParticipantName: null,
+        remoteParticipantPhoto: null,
         callDirection: null
       });
     });
@@ -18676,6 +18689,7 @@ const Messages = window.Messages = () => {
         roomName: null,
         callType: null,
         remoteParticipantName: null,
+        remoteParticipantPhoto: null,
         callDirection: null
       });
     });

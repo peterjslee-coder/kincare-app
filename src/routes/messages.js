@@ -63,6 +63,8 @@ router.get("/conversations", async (req, res) => {
       members: members.map(m => ({
         id: m.id,
         name: `${m.first_name} ${m.last_name}`,
+        first_name: m.first_name,
+        last_name: m.last_name,
         role: m.role,
         profilePhoto: m.profile_photo || null,
       })),
