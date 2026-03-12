@@ -8,6 +8,11 @@ const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { calculateSessionCost, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
 const { getNowInZone, buildDateTimeInZone } = require("../utils/timezone");
+const { sendPushToUser } = require("./push");
+
+// emitToUser injected from server.js at startup
+let _emitToUser = null;
+function setEmitToUser(fn) { _emitToUser = fn; }
 
 const router = express.Router();
 router.use(authenticate);
@@ -683,10 +688,13 @@ async function pollCaregiverNoShows() {
     const sessions = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.family_user_id,
         cs.caregiver_id, cs.caregiver_no_show,
-        cp.user_id AS caregiver_user_id
+        cp.user_id AS caregiver_user_id,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        cu.first_name AS caregiver_first_name
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users cu ON cp.user_id = cu.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'confirmed'
         AND cs.caregiver_no_show = 0
@@ -728,7 +736,41 @@ async function pollCaregiverNoShows() {
           // Void the payment authorization if it exists
           await voidSessionPayment(s.id);
 
-          console.log(`[accountability] Caregiver no-show: session ${s.id.slice(0, 8)}`);
+          // ─── Notify caregiver that session was marked no-show ───
+          const recipientName = s.recipient_name || 'your client';
+          if (s.caregiver_user_id) {
+            // Push notification
+            sendPushToUser(s.caregiver_user_id, {
+              title: "Session Cancelled — No Check-In",
+              body: `Your session for ${recipientName} on ${s.scheduled_date} was cancelled because no check-in was recorded within 30 minutes of the start time.`,
+              data: { type: "no_show_cancelled", sessionId: s.id },
+            }, "no_show_cancelled").catch(() => {});
+            // WebSocket
+            if (_emitToUser) {
+              _emitToUser(s.caregiver_user_id, "session_update", {
+                sessionId: s.id, status: "cancelled", reason: "no_show",
+                message: `Session for ${recipientName} cancelled — no check-in recorded.`,
+              });
+            }
+          }
+
+          // ─── Notify family that caregiver didn't show ───
+          if (s.family_user_id) {
+            const caregiverName = s.caregiver_first_name || 'Your caregiver';
+            sendPushToUser(s.family_user_id, {
+              title: "Caregiver No-Show",
+              body: `${caregiverName} did not check in for ${recipientName}'s session. The session has been cancelled and no payment will be charged.`,
+              data: { type: "caregiver_no_show", sessionId: s.id },
+            }, "caregiver_no_show").catch(() => {});
+            if (_emitToUser) {
+              _emitToUser(s.family_user_id, "session_update", {
+                sessionId: s.id, status: "cancelled", reason: "caregiver_no_show",
+                message: `${caregiverName} did not check in. Session cancelled — no charge.`,
+              });
+            }
+          }
+
+          console.log(`[accountability] Caregiver no-show: session ${s.id.slice(0, 8)} — notified caregiver + family`);
         }
       } catch (err) {
         console.error(`[accountability] No-show poll error for ${s.id.slice(0, 8)}:`, err.message);
@@ -782,3 +824,4 @@ module.exports.pollPaymentAuthorizations = pollPaymentAuthorizations;
 module.exports.pollLateCheckIns = pollLateCheckIns;
 module.exports.pollCaregiverNoShows = pollCaregiverNoShows;
 module.exports.pollLateResolutionDefaults = pollLateResolutionDefaults;
+module.exports.setEmitToUser = setEmitToUser;

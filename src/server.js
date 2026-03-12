@@ -605,7 +605,9 @@ async function start() {
     pollLateCheckIns,
     pollCaregiverNoShows,
     pollLateResolutionDefaults,
+    setEmitToUser: setAccountabilityEmit,
   } = require("./routes/accountability");
+  setAccountabilityEmit(emitToUser);
 
   setInterval(async () => {
     try {
