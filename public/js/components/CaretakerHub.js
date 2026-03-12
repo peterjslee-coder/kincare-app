@@ -1265,13 +1265,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
               // Countdown label + upcoming check-in state (15-60 min window)
               const isUpcoming = !isReady && !isActive && s.status === 'confirmed' && minsUntil > 0 && minsUntil <= 60;
+              const minsUntilCheckIn = Math.max(0, minsUntil - 15); // check-in opens 15 min before session
               const countdownLabel = (() => {
                 if (isReady || isActive) return null;
-                if (minsUntil <= 0) return null;
-                const hours = Math.floor(minsUntil / 60);
-                const mins = Math.round(minsUntil % 60);
+                if (minsUntilCheckIn <= 0) return null;
+                const hours = Math.floor(minsUntilCheckIn / 60);
+                const mins = Math.round(minsUntilCheckIn % 60);
                 if (hours > 0) return `${hours}h ${mins}m until check-in`;
-                return `${Math.ceil(minsUntil)} min until check-in`;
+                return `${Math.ceil(minsUntilCheckIn)} min until check-in`;
               })();
 
               // Styling
@@ -1409,7 +1410,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           padding: '10px 22px', background: '#f5f5f5', color: '#999', border: '1px solid #ddd',
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'default',
                           whiteSpace: 'nowrap',
-                        }}>Check in {Math.ceil(minsUntil)} min</button>
+                        }}>Check in {Math.ceil(minsUntilCheckIn)} min</button>
                       )}
                       {!isReady && !isActive && !isUpcoming && (
                         <span style={{

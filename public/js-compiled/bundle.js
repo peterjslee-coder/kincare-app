@@ -33277,13 +33277,14 @@ const CaretakerHub = window.CaretakerHub = ({
 
       // Countdown label + upcoming check-in state (15-60 min window)
       const isUpcoming = !isReady && !isActive && s.status === 'confirmed' && minsUntil > 0 && minsUntil <= 60;
+      const minsUntilCheckIn = Math.max(0, minsUntil - 15); // check-in opens 15 min before session
       const countdownLabel = (() => {
         if (isReady || isActive) return null;
-        if (minsUntil <= 0) return null;
-        const hours = Math.floor(minsUntil / 60);
-        const mins = Math.round(minsUntil % 60);
+        if (minsUntilCheckIn <= 0) return null;
+        const hours = Math.floor(minsUntilCheckIn / 60);
+        const mins = Math.round(minsUntilCheckIn % 60);
         if (hours > 0) return `${hours}h ${mins}m until check-in`;
-        return `${Math.ceil(minsUntil)} min until check-in`;
+        return `${Math.ceil(minsUntilCheckIn)} min until check-in`;
       })();
 
       // Styling
@@ -33542,7 +33543,7 @@ const CaretakerHub = window.CaretakerHub = ({
           cursor: 'default',
           whiteSpace: 'nowrap'
         }
-      }, "Check in ", Math.ceil(minsUntil), " min"), !isReady && !isActive && !isUpcoming && /*#__PURE__*/React.createElement("span", {
+      }, "Check in ", Math.ceil(minsUntilCheckIn), " min"), !isReady && !isActive && !isUpcoming && /*#__PURE__*/React.createElement("span", {
         style: {
           padding: '5px 12px',
           borderRadius: 10,
