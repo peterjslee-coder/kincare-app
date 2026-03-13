@@ -439,6 +439,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       // Step 3: Initialize Connect.js and mount onboarding component (after DOM renders)
       await new Promise(r => setTimeout(r, 200));
 
+      // Wait for Stripe Connect.js to load (async script)
+      const waitForStripeConnect = () => new Promise((resolve, reject) => {
+        if (window.StripeConnect) return resolve(window.StripeConnect);
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if (window.StripeConnect) { clearInterval(interval); resolve(window.StripeConnect); }
+          else if (attempts > 50) { clearInterval(interval); reject(new Error('Stripe Connect.js failed to load. Please check your internet connection and try again.')); }
+        }, 200);
+      });
+
+      const StripeConnect = await waitForStripeConnect();
+
       const publishableKey = window.STRIPE_PUBLISHABLE_KEY || (await (async () => {
         const configRes = await apiFetch('/api/payments/config');
         if (configRes?.ok) {
@@ -463,7 +476,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         throw new Error('Failed to create account session');
       };
 
-      const connectInstance = window.StripeConnect.init({
+      const connectInstance = StripeConnect.init({
         publishableKey,
         fetchClientSecret,
         appearance: {
