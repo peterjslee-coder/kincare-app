@@ -3,6 +3,13 @@ const PWAInstallBanner = window.PWAInstallBanner = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [dismissed, setDismissed] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+
+  // Detect browser
+  const ua = navigator.userAgent || '';
+  const isSafari = /Safari/i.test(ua) && !/Chrome|CriOS|Chromium/i.test(ua);
+  const isChrome = /Chrome|CriOS/i.test(ua) && !/Edge/i.test(ua);
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   useEffect(() => {
     // Check if already installed
@@ -25,29 +32,94 @@ const PWAInstallBanner = window.PWAInstallBanner = () => {
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') setDeferredPrompt(null);
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') setDeferredPrompt(null);
+    } else {
+      setShowInstructions(true);
+    }
   };
 
   const handleDismiss = () => {
     setDismissed(true);
     localStorage.setItem('pwa_dismissed', '1');
+    setShowInstructions(false);
   };
 
-  if (isStandalone || dismissed || !deferredPrompt) return null;
+  // Show for Safari/iOS even without deferredPrompt
+  const canShow = deferredPrompt || (isSafari || isIOS);
+  if (isStandalone || dismissed || !canShow) return null;
 
   return (
-    <div className="pwa-install-banner">
-      <img src="/icons/icon-192.png" alt="InPlace" className="pwa-install-banner-icon" />
-      <div className="pwa-install-banner-text">
-        <div className="pwa-install-banner-title">Add InPlace to Home Screen</div>
-        <div className="pwa-install-banner-subtitle">Quick access to care coordination</div>
+    <>
+      <div className="pwa-install-banner">
+        <img src="/icons/icon-192.png" alt="InPlace" className="pwa-install-banner-icon" />
+        <div className="pwa-install-banner-text">
+          <div className="pwa-install-banner-title">Add InPlace to Home Screen</div>
+          <div className="pwa-install-banner-subtitle">Quick access to care coordination</div>
+        </div>
+        <button className="pwa-install-btn" onClick={handleInstall}>Install</button>
+        <button className="pwa-install-dismiss" onClick={handleDismiss}>&times;</button>
       </div>
-      <button className="pwa-install-btn" onClick={handleInstall}>Install</button>
-      <button className="pwa-install-dismiss" onClick={handleDismiss}>&times;</button>
-    </div>
+
+      {showInstructions && (
+        <div className="pwa-instructions-overlay" onClick={() => setShowInstructions(false)}>
+          <div className="pwa-instructions-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="pwa-instructions-close" onClick={() => setShowInstructions(false)}>&times;</button>
+            <img src="/icons/icon-192.png" alt="InPlace" style={{ width: 56, height: 56, borderRadius: 12, marginBottom: 12 }} />
+            <h3 style={{ margin: '0 0 4px', fontSize: 18, color: '#1b6b5a' }}>Install InPlace</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#888' }}>Add to your home screen for the best experience</p>
+
+            {(isSafari || isIOS) && (
+              <div className="pwa-instructions-section">
+                <div className="pwa-instructions-browser-label">
+                  <span style={{ fontSize: 18 }}>&#127760;</span> Safari
+                </div>
+                <div className="pwa-instructions-steps">
+                  <div className="pwa-instructions-step">
+                    <span className="pwa-step-num">1</span>
+                    <span>Tap the <strong>Share</strong> button <span style={{ fontSize: 16 }}>&#xFE0E;&#x2B06;</span> at the bottom of your screen</span>
+                  </div>
+                  <div className="pwa-instructions-step">
+                    <span className="pwa-step-num">2</span>
+                    <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+                  </div>
+                  <div className="pwa-instructions-step">
+                    <span className="pwa-step-num">3</span>
+                    <span>Tap <strong>"Add"</strong> in the top right</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(isChrome || !isSafari) && (
+              <div className="pwa-instructions-section">
+                <div className="pwa-instructions-browser-label">
+                  <span style={{ fontSize: 18 }}>&#127760;</span> Chrome
+                </div>
+                <div className="pwa-instructions-steps">
+                  <div className="pwa-instructions-step">
+                    <span className="pwa-step-num">1</span>
+                    <span>Tap the <strong>three dots</strong> <strong>&#8942;</strong> menu in the top right</span>
+                  </div>
+                  <div className="pwa-instructions-step">
+                    <span className="pwa-step-num">2</span>
+                    <span>Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></span>
+                  </div>
+                  <div className="pwa-instructions-step">
+                    <span className="pwa-step-num">3</span>
+                    <span>Tap <strong>"Install"</strong> to confirm</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button className="pwa-instructions-got-it" onClick={() => setShowInstructions(false)}>Got it</button>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

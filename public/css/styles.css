@@ -2052,8 +2052,10 @@
     .pwa-install-banner {
       position: fixed;
       bottom: 72px;
-      left: 12px;
-      right: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 400px;
       background: #1b6b5a;
       color: #fff;
       border-radius: 14px;
@@ -2064,6 +2066,7 @@
       box-shadow: 0 4px 24px rgba(0,0,0,0.2);
       z-index: 1200;
       animation: slideUp 0.3s ease;
+      box-sizing: border-box;
     }
 
     .pwa-install-banner-icon {
@@ -2075,6 +2078,7 @@
 
     .pwa-install-banner-text {
       flex: 1;
+      min-width: 0;
     }
 
     .pwa-install-banner-title {
@@ -2110,6 +2114,102 @@
       padding: 0;
       line-height: 1;
       flex-shrink: 0;
+    }
+
+    /* PWA Install Instructions Modal */
+    .pwa-instructions-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1300;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .pwa-instructions-modal {
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px 24px;
+      max-width: 340px;
+      width: 100%;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+      animation: slideUp 0.25s ease;
+    }
+
+    .pwa-instructions-close {
+      position: absolute;
+      top: 12px;
+      right: 16px;
+      background: none;
+      border: none;
+      font-size: 22px;
+      color: #999;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .pwa-instructions-section {
+      text-align: left;
+      margin-bottom: 16px;
+    }
+
+    .pwa-instructions-browser-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .pwa-instructions-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .pwa-instructions-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 13px;
+      color: #444;
+      line-height: 1.4;
+    }
+
+    .pwa-step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #1b6b5a;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .pwa-instructions-got-it {
+      margin-top: 8px;
+      padding: 10px 32px;
+      background: #1b6b5a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
     }
 
     /* ===== Splash page mobile fixes ===== */
