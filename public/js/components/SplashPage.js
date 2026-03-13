@@ -51,95 +51,22 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         </div>
         <div className="splash-nav-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           {showInstallBtn && (
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => {
-                if (isIOS) {
-                  setShowInstallTip(!showInstallTip);
-                } else if (window.__pwaInstallPrompt) {
-                  window.__pwaInstallPrompt.prompt();
-                } else {
-                  setShowInstallTip(!showInstallTip);
-                }
-              }} style={{
-                background: 'transparent', color: '#1b6b5a', border: '1.5px solid #1b6b5a',
-                borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: 600,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-              }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Install
-              </button>
-              {showInstallTip && (
-                <div onClick={() => setShowInstallTip(false)} style={{
-                  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                  background: 'rgba(0,0,0,0.4)', zIndex: 999,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '20px', boxSizing: 'border-box',
-                }}>
-                  <div onClick={(e) => e.stopPropagation()} style={{
-                    background: 'white', borderRadius: '16px', padding: '28px 24px',
-                    boxShadow: '0 8px 40px rgba(0,0,0,0.2)', width: '100%', maxWidth: '340px',
-                    zIndex: 1000, fontSize: '14px', color: '#333', lineHeight: 1.6,
-                    textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px', color: '#1b6b5a' }}>
-                      Install InPlace
-                    </div>
-                    <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#888' }}>
-                      Add to your home screen for the best experience
-                    </p>
-
-                    {isIOS && (
-                      <div style={{ textAlign: 'left', marginBottom: '16px' }}>
-                        <div style={{ fontWeight: 700, fontSize: '14px', color: '#333', marginBottom: '10px', paddingBottom: '6px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '18px' }}>{'\uD83C\uDF10'}</span> Safari
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
-                            <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
-                            <span>Tap the <strong>Share</strong> button <span style={{ fontSize: 16 }}>{'\u2B06\uFE0E'}</span> at the bottom of your screen</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
-                            <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
-                            <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
-                            <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
-                            <span>Tap <strong>"Add"</strong> in the top right</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {!isIOS && (
-                      <div style={{ textAlign: 'left', marginBottom: '16px' }}>
-                        <div style={{ fontWeight: 700, fontSize: '14px', color: '#333', marginBottom: '10px', paddingBottom: '6px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '18px' }}>{'\uD83C\uDF10'}</span> Chrome
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
-                            <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
-                            <span>Tap the <strong>three dots</strong> <strong>{'\u22EE'}</strong> menu in the top right</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
-                            <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
-                            <span>Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
-                            <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
-                            <span>Tap <strong>"Install"</strong> to confirm</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <button onClick={(e) => { e.stopPropagation(); setShowInstallTip(false); }} style={{
-                      marginTop: '8px', padding: '10px 32px', background: '#1b6b5a', border: 'none',
-                      borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', color: '#fff',
-                    }}>Got it</button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <button onClick={() => {
+              if (isIOS) {
+                setShowInstallTip(!showInstallTip);
+              } else if (window.__pwaInstallPrompt) {
+                window.__pwaInstallPrompt.prompt();
+              } else {
+                setShowInstallTip(!showInstallTip);
+              }
+            }} style={{
+              background: 'transparent', color: '#1b6b5a', border: '1.5px solid #1b6b5a',
+              borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: 600,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Install
+            </button>
           )}
           <button className="splash-hide-mobile" onClick={() => setShowStory(true)} style={{
             background: 'none', color: '#1b6b5a', border: 'none', padding: '8px 16px',
@@ -606,6 +533,78 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 I built this app and this business because it's what my siblings and our families need to keep Mom at home — and because my community deserves a better way to give and receive care. I hope it helps you keep your loved ones where they want to be.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Install Instructions Modal (rendered at root to escape nav stacking context) ── */}
+      {showInstallTip && (
+        <div onClick={() => setShowInstallTip(false)} style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.4)', zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px', boxSizing: 'border-box',
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: 'white', borderRadius: '16px', padding: '28px 24px',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.2)', width: '100%', maxWidth: '340px',
+            fontSize: '14px', color: '#333', lineHeight: 1.6, textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px', color: '#1b6b5a' }}>
+              Install InPlace
+            </div>
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#888' }}>
+              Add to your home screen for the best experience
+            </p>
+
+            {isIOS && (
+              <div style={{ textAlign: 'left', marginBottom: '16px' }}>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: '#333', marginBottom: '10px', paddingBottom: '6px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '18px' }}>{'\uD83C\uDF10'}</span> Safari
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
+                    <span>Tap the <strong>Share</strong> button <span style={{ fontSize: 16 }}>{'\u2B06\uFE0E'}</span> at the bottom of your screen</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
+                    <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
+                    <span>Tap <strong>"Add"</strong> in the top right</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!isIOS && (
+              <div style={{ textAlign: 'left', marginBottom: '16px' }}>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: '#333', marginBottom: '10px', paddingBottom: '6px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '18px' }}>{'\uD83C\uDF10'}</span> Chrome
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
+                    <span>Tap the <strong>three dots</strong> <strong>{'\u22EE'}</strong> menu in the top right</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
+                    <span>Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#444' }}>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
+                    <span>Tap <strong>"Install"</strong> to confirm</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button onClick={(e) => { e.stopPropagation(); setShowInstallTip(false); }} style={{
+              marginTop: '8px', padding: '10px 32px', background: '#1b6b5a', border: 'none',
+              borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', color: '#fff',
+            }}>Got it</button>
           </div>
         </div>
       )}
