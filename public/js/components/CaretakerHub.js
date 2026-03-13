@@ -426,7 +426,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       const res = await apiFetch('/api/payments/connect/onboard', { method: 'POST' });
       if (!res?.ok) {
         const err = await res?.json().catch(() => ({}));
-        setStripeError(err?.error || 'Failed to start Stripe onboarding. Please try again later.');
+        const msg = err?.detail ? `${err.error}: ${err.detail}` : (err?.error || 'Failed to start Stripe onboarding. Please try again later.');
+        setStripeError(msg);
         setStripeLoading(false);
         return;
       }
