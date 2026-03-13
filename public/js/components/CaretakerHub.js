@@ -1045,8 +1045,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       desc: platformConfig.stripeConfigured ? 'Required before you can accept paid jobs — $30 for background check' : 'Payment setup and background checks will be available soon. You can browse families and set up your profile in the meantime.',
       done: platformConfig.stripeConfigured ? (stripeConnected && bgPaid) : true, // Mark done if not configured (non-blocking)
       missing: platformConfig.stripeConfigured ? (() => { const m = []; if (!stripeConnected) m.push('connect Stripe'); if (!bgPaid) m.push('pay for background check ($30)'); const d = []; if (stripeConnected) d.push('Stripe connected \u2713'); return (d.length > 0 ? d.join(', ') + ' \u2014 ' : '') + (m.length > 0 ? 'Still needed: ' + m.join(' and ') : ''); })() || null : null },
-    { id: 'identity', label: 'Verify your identity', desc: 'Required before you can receive payments — takes about 2 minutes with a government ID and selfie', done: idVerified,
-      missing: idVerified ? null : idVerification.status === 'processing' ? 'Verification in progress...' : idVerification.status === 'requires_input' ? 'Verification needs attention — please try again' : 'Complete identity verification to receive payments' },
     { id: 'preferences', label: 'Select your care preferences', desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
@@ -1194,74 +1192,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Identity Verification Card — shows when Stripe is connected but identity not yet verified */}
-      {stripeStatus?.status === 'active' && !idVerification.verified && (
-        <div className="card" style={{
-          marginBottom: 16, padding: '18px 20px',
-          borderLeft: idVerification.status === 'requires_input' ? '4px solid #dc2626' : '4px solid #3b82f6',
-          background: idVerification.status === 'processing' ? '#f0f9ff' : '#fff',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <span style={{ fontSize: 24, marginTop: 2 }}>
-              {idVerification.status === 'processing' ? '🔄' : idVerification.status === 'requires_input' ? '⚠️' : '🪪'}
-            </span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#333', marginBottom: 4 }}>Identity Verification</div>
-              {idVerification.status === 'none' || idVerification.status === 'pending' ? (
-                <div style={{ fontSize: 13, color: '#555' }}>
-                  Verify your identity to accept paid care sessions. This takes about 2 minutes — you'll need a government-issued ID and a selfie.
-                </div>
-              ) : idVerification.status === 'processing' ? (
-                <div style={{ fontSize: 13, color: '#555' }}>
-                  Your identity verification is being processed. This usually takes a few minutes. We'll update your status automatically.
-                </div>
-              ) : idVerification.status === 'requires_input' ? (
-                <div style={{ fontSize: 13, color: '#555' }}>
-                  Your verification needs attention{idVerification.lastErrorReason ? `: ${idVerification.lastErrorReason}` : ''}. Please try again.
-                </div>
-              ) : null}
-
-              {idVerError && (
-                <div style={{ fontSize: 12, color: '#dc2626', marginTop: 6, padding: '6px 10px', background: '#fef2f2', borderRadius: 6 }}>
-                  {idVerError}
-                </div>
-              )}
-
-              {idVerification.status !== 'processing' && (
-                <button
-                  onClick={handleIdentityVerify}
-                  disabled={idVerLoading}
-                  style={{
-                    marginTop: 10, padding: '8px 18px', borderRadius: 8,
-                    background: idVerLoading ? '#94a3b8' : '#3b82f6', color: '#fff',
-                    border: 'none', fontSize: 13, fontWeight: 600, cursor: idVerLoading ? 'wait' : 'pointer',
-                  }}
-                >
-                  {idVerLoading ? 'Opening...' : idVerification.status === 'requires_input' ? 'Try Again' : 'Verify My Identity'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Identity Verified Badge — brief confirmation */}
-      {idVerification.verified && (
-        <div className="card" style={{ marginBottom: 16, padding: '12px 18px', borderLeft: '4px solid #16a34a', background: '#f0fdf4' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>✅</span>
-            <div>
-              <span style={{ fontWeight: 600, fontSize: 14, color: '#16a34a' }}>Identity Verified</span>
-              {idVerification.verifiedAt && (
-                <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>
-                  {new Date(idVerification.verifiedAt).toLocaleDateString()}
-                </span>
-              )}
-            </div>
-          </div>
         </div>
       )}
 

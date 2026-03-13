@@ -672,13 +672,8 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     return res.status(400).json({ error: "Caregiver has not completed Stripe setup" });
   }
 
-  // Check caregiver identity verification
-  const caregiverProfile = await db.prepare(
-    "SELECT identity_verified FROM caregiver_profiles WHERE id = ?"
-  ).get(session.caregiver_id);
-  if (!caregiverProfile?.identity_verified) {
-    return res.status(400).json({ error: "Caregiver has not completed identity verification", identityRequired: true });
-  }
+  // Note: Caregiver identity is verified through Stripe Connect onboarding + Checkr background check.
+  // No separate Stripe Identity verification step required for caregivers.
 
   // Check if already paid
   const existingPayment = await db.prepare(
