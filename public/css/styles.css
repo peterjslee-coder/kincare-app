@@ -2216,14 +2216,18 @@
     @media (max-width: 768px) {
       /* Nav: tighter padding, smaller gap */
       .splash-nav-bar {
-        padding: 10px 16px !important;
+        padding: 10px 12px !important;
       }
       .splash-nav-actions {
-        gap: 6px !important;
+        gap: 4px !important;
+        flex-wrap: nowrap !important;
       }
       .splash-nav-actions button {
-        padding: 8px 12px !important;
-        font-size: 13px !important;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+      }
+      .splash-nav-actions .splash-hide-mobile {
+        display: none !important;
       }
 
       /* Hero: stack vertically — text on top, image below */

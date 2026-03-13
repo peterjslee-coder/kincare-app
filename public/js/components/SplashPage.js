@@ -141,11 +141,11 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               )}
             </div>
           )}
-          <button onClick={() => setShowStory(true)} style={{
+          <button className="splash-hide-mobile" onClick={() => setShowStory(true)} style={{
             background: 'none', color: '#1b6b5a', border: 'none', padding: '8px 16px',
             fontSize: '14px', fontWeight: 500, cursor: 'pointer',
           }}>Our Story</button>
-          <button onClick={() => onNavigate('login')} style={{
+          <button className="splash-hide-mobile" onClick={() => onNavigate('login')} style={{
             background: 'none', color: '#1b6b5a', border: 'none', padding: '8px 16px',
             fontSize: '14px', fontWeight: 600, cursor: 'pointer',
           }}>Sign In</button>
