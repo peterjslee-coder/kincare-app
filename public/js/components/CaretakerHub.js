@@ -439,66 +439,84 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       // Step 3: Initialize Connect.js and mount onboarding component (after DOM renders)
       await new Promise(r => setTimeout(r, 200));
 
-      // Wait for Stripe Connect.js to load (async script)
-      const waitForStripeConnect = () => new Promise((resolve, reject) => {
-        if (window.StripeConnect) return resolve(window.StripeConnect);
-        let attempts = 0;
-        const interval = setInterval(() => {
-          attempts++;
-          if (window.StripeConnect) { clearInterval(interval); resolve(window.StripeConnect); }
-          else if (attempts > 50) { clearInterval(interval); reject(new Error('Stripe Connect.js failed to load. Please check your internet connection and try again.')); }
-        }, 200);
-      });
+      // Try embedded onboarding first, fall back to redirect-based (Account Links)
+      let useEmbedded = false;
 
-      const StripeConnect = await waitForStripeConnect();
-
-      const publishableKey = window.STRIPE_PUBLISHABLE_KEY || (await (async () => {
-        const configRes = await apiFetch('/api/payments/config');
-        if (configRes?.ok) {
-          const config = await configRes.json();
-          window.STRIPE_PUBLISHABLE_KEY = config.publishableKey;
-          return config.publishableKey;
-        }
-        return null;
-      })());
-
-      if (!publishableKey) {
-        setStripeError('Payment system not configured yet.');
-        return;
+      // Wait for Stripe Connect.js to load (async script) — quick timeout
+      if (window.StripeConnect) {
+        useEmbedded = true;
+      } else {
+        useEmbedded = await new Promise((resolve) => {
+          let attempts = 0;
+          const interval = setInterval(() => {
+            attempts++;
+            if (window.StripeConnect) { clearInterval(interval); resolve(true); }
+            else if (attempts > 15) { clearInterval(interval); resolve(false); } // 3 seconds max
+          }, 200);
+        });
       }
 
-      const fetchClientSecret = async () => {
-        const sessionRes = await apiFetch('/api/payments/connect/account-session', { method: 'POST' });
-        if (sessionRes?.ok) {
-          const d = await sessionRes.json();
-          return d.clientSecret;
+      if (useEmbedded) {
+        const publishableKey = window.STRIPE_PUBLISHABLE_KEY || (await (async () => {
+          const configRes = await apiFetch('/api/payments/config');
+          if (configRes?.ok) {
+            const config = await configRes.json();
+            window.STRIPE_PUBLISHABLE_KEY = config.publishableKey;
+            return config.publishableKey;
+          }
+          return null;
+        })());
+
+        if (!publishableKey) {
+          setStripeError('Payment system not configured yet.');
+          return;
         }
-        throw new Error('Failed to create account session');
-      };
 
-      const connectInstance = StripeConnect.init({
-        publishableKey,
-        fetchClientSecret,
-        appearance: {
-          overlays: 'dialog',
-          variables: {
-            colorPrimary: '#1b6b5a',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        const fetchClientSecret = async () => {
+          const sessionRes = await apiFetch('/api/payments/connect/account-session', { method: 'POST' });
+          if (sessionRes?.ok) {
+            const d = await sessionRes.json();
+            return d.clientSecret;
+          }
+          throw new Error('Failed to create account session');
+        };
+
+        const connectInstance = window.StripeConnect.init({
+          publishableKey,
+          fetchClientSecret,
+          appearance: {
+            overlays: 'dialog',
+            variables: {
+              colorPrimary: '#1b6b5a',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            },
           },
-        },
-      });
+        });
 
-      stripeConnectInstanceRef.current = connectInstance;
-      const onboardingComponent = connectInstance.create('account-onboarding');
-      onboardingComponent.setOnExit(() => {
+        stripeConnectInstanceRef.current = connectInstance;
+        const onboardingComponent = connectInstance.create('account-onboarding');
+        onboardingComponent.setOnExit(() => {
+          setShowStripeOnboarding(false);
+          apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
+        });
+
+        if (stripeOnboardingRef.current) {
+          stripeOnboardingRef.current.innerHTML = '';
+          stripeOnboardingRef.current.appendChild(onboardingComponent);
+        }
+      } else {
+        // Fallback: redirect-based Stripe onboarding via Account Links
+        console.log('Connect.js not available, using redirect-based onboarding');
         setShowStripeOnboarding(false);
-        // Refresh Stripe Connect status after onboarding completes or closes
-        apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
-      });
-
-      if (stripeOnboardingRef.current) {
-        stripeOnboardingRef.current.innerHTML = '';
-        stripeOnboardingRef.current.appendChild(onboardingComponent);
+        const linkRes = await apiFetch('/api/payments/connect/link', { method: 'POST' });
+        if (linkRes?.ok) {
+          const linkData = await linkRes.json();
+          if (linkData.url) {
+            window.location.href = linkData.url;
+            return;
+          }
+        }
+        setStripeError('Could not start payment setup. Please try again.');
       }
     } catch (err) {
       console.error('Stripe onboarding error:', err);
