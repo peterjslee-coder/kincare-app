@@ -46940,6 +46940,8 @@ const AdminPanel = window.AdminPanel = () => {
   // Account approvals state
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(null);
+  // Consent alerts state (tier3 needing review or flagged responses)
+  const [consentAlerts, setConsentAlerts] = useState([]);
 
   // Sessions tab — no-show cancelled
   const [noShowSessions, setNoShowSessions] = useState([]);
@@ -46972,6 +46974,14 @@ const AdminPanel = window.AdminPanel = () => {
       if (res !== null && res !== void 0 && res.ok) {
         const d = await res.json();
         setPendingApprovals(d.pending || []);
+      }
+    } catch {}
+    // Also fetch consent alerts (tier3 pending review + flagged responses)
+    try {
+      const res = await apiFetch('/api/admin/consent/pending');
+      if (res !== null && res !== void 0 && res.ok) {
+        const d = await res.json();
+        setConsentAlerts(d.pending || []);
       }
     } catch {}
   };
@@ -47737,7 +47747,8 @@ const AdminPanel = window.AdminPanel = () => {
     tabs: [{
       id: 'authorizations',
       label: 'Auth',
-      icon: '\u{1F512}'
+      icon: '\u{1F512}',
+      badge: consentAlerts.length || null
     }, {
       id: 'customerservice',
       label: 'Support',
@@ -47827,7 +47838,7 @@ const AdminPanel = window.AdminPanel = () => {
       gap: '6px',
       whiteSpace: 'nowrap'
     }
-  }, "\u2699\uFE0F My Account")), pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "\u2699\uFE0F My Account")), (pendingApprovals.length > 0 || consentAlerts.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16,
       padding: 16,
@@ -47853,7 +47864,16 @@ const AdminPanel = window.AdminPanel = () => {
       padding: '2px 10px',
       fontSize: 13
     }
-  }, pendingApprovals.length)), pendingApprovals.map(u => /*#__PURE__*/React.createElement("div", {
+  }, pendingApprovals.length + consentAlerts.length)), pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#888',
+      marginBottom: 6,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }
+  }, "Account Approvals"), pendingApprovals.map(u => /*#__PURE__*/React.createElement("div", {
     key: u.id,
     style: {
       display: 'flex',
@@ -47914,7 +47934,92 @@ const AdminPanel = window.AdminPanel = () => {
       fontSize: 13,
       cursor: 'pointer'
     }
-  }, "Reject"))))), /*#__PURE__*/React.createElement("div", {
+  }, "Reject")))), consentAlerts.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#888',
+      marginBottom: 6,
+      marginTop: pendingApprovals.length > 0 ? 12 : 0,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }
+  }, "Care Verification"), consentAlerts.map(a => {
+    const isFlagged = a.outreach_response === 'did_not_authorize';
+    const hasQuestions = a.outreach_response === 'has_questions';
+    return /*#__PURE__*/React.createElement("div", {
+      key: a.id,
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '10px 14px',
+        marginBottom: 6,
+        background: '#fff',
+        borderRadius: 10,
+        border: isFlagged ? '2px solid #c62828' : '1px solid #ffe0b2',
+        flexWrap: 'wrap',
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: '1 1 200px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 14,
+        color: isFlagged ? '#c62828' : '#333'
+      }
+    }, isFlagged ? '\u{1F6A8} ' : hasQuestions ? '\u2753 ' : '\u{1F4DD} ', a.first_name, " ", a.last_name, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 400,
+        fontSize: 12,
+        color: '#888',
+        marginLeft: 6
+      }
+    }, "(care recipient)")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#888'
+      }
+    }, "Family: ", a.family_first_name, " ", a.family_last_name, " (", a.family_email, ")"), isFlagged && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#c62828',
+        fontWeight: 600,
+        marginTop: 2
+      }
+    }, "Recipient says they did NOT authorize care", a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''), hasQuestions && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#e65100',
+        fontWeight: 600,
+        marginTop: 2
+      }
+    }, "Recipient has questions", a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''), !a.outreach_response && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#888',
+        fontStyle: 'italic',
+        marginTop: 2
+      }
+    }, a.outreach_sent_to ? 'Outreach sent, awaiting response' : 'Attestation submitted, needs review')), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setActiveTab('authorizations');
+      },
+      style: {
+        padding: '6px 14px',
+        background: '#1b6b5a',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 8,
+        fontWeight: 600,
+        fontSize: 13,
+        cursor: 'pointer'
+      }
+    }, "Review"));
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       marginBottom: 16
@@ -48342,7 +48447,23 @@ const AdminPanel = window.AdminPanel = () => {
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, "Search"), /*#__PURE__*/React.createElement("span", {
+  }, "Search"), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      fontSize: '13px',
+      color: '#888',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: userDemoFilter === 'all',
+    onChange: e => setUserDemoFilter(e.target.checked ? 'all' : 'real'),
+    style: {
+      accentColor: '#1b6b5a'
+    }
+  }), "Show demo"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: '13px',
       color: '#888'

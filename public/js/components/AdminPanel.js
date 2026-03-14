@@ -86,6 +86,8 @@ const AdminPanel = window.AdminPanel = () => {
   // Account approvals state
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(null);
+  // Consent alerts state (tier3 needing review or flagged responses)
+  const [consentAlerts, setConsentAlerts] = useState([]);
 
   // Sessions tab — no-show cancelled
   const [noShowSessions, setNoShowSessions] = useState([]);
@@ -114,6 +116,11 @@ const AdminPanel = window.AdminPanel = () => {
     try {
       const res = await apiFetch('/api/admin/pending-approvals');
       if (res?.ok) { const d = await res.json(); setPendingApprovals(d.pending || []); }
+    } catch {}
+    // Also fetch consent alerts (tier3 pending review + flagged responses)
+    try {
+      const res = await apiFetch('/api/admin/consent/pending');
+      if (res?.ok) { const d = await res.json(); setConsentAlerts(d.pending || []); }
     } catch {}
   };
 
@@ -723,7 +730,7 @@ const AdminPanel = window.AdminPanel = () => {
       { id: 'sessions', label: 'Sessions', icon: '📅' },
     ]},
     { label: 'Trust & Safety', tabs: [
-      { id: 'authorizations', label: 'Auth', icon: '\u{1F512}' },
+      { id: 'authorizations', label: 'Auth', icon: '\u{1F512}', badge: consentAlerts.length || null },
       { id: 'customerservice', label: 'Support', icon: '🛎️' },
       { id: 'security', label: 'Security', icon: '🛡️' },
       { id: 'blocked', label: 'Blocked', icon: '🚫' },
@@ -762,14 +769,19 @@ const AdminPanel = window.AdminPanel = () => {
       </div>
 
       {/* ── ACTION REQUIRED BANNER — always visible when pending approvals exist ── */}
-      {pendingApprovals.length > 0 && (
+      {(pendingApprovals.length > 0 || consentAlerts.length > 0) && (
         <div style={{ marginBottom: 16, padding: 16, background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: '2px solid #ff9800', borderRadius: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#e65100', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             {'\u{1F514}'} Action Required
             <span style={{ background: '#e65100', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
-              {pendingApprovals.length}
+              {pendingApprovals.length + consentAlerts.length}
             </span>
           </div>
+
+          {/* Account approvals */}
+          {pendingApprovals.length > 0 && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Account Approvals</div>
+          )}
           {pendingApprovals.map(u => (
             <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10, border: '1px solid #ffe0b2', flexWrap: 'wrap', gap: 8 }}>
               <div style={{ flex: '1 1 200px' }}>
@@ -788,6 +800,53 @@ const AdminPanel = window.AdminPanel = () => {
               </div>
             </div>
           ))}
+
+          {/* Consent / verification alerts */}
+          {consentAlerts.length > 0 && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: pendingApprovals.length > 0 ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Care Verification</div>
+          )}
+          {consentAlerts.map(a => {
+            const isFlagged = a.outreach_response === 'did_not_authorize';
+            const hasQuestions = a.outreach_response === 'has_questions';
+            return (
+              <div key={a.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10,
+                border: isFlagged ? '2px solid #c62828' : '1px solid #ffe0b2', flexWrap: 'wrap', gap: 8,
+              }}>
+                <div style={{ flex: '1 1 200px' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: isFlagged ? '#c62828' : '#333' }}>
+                    {isFlagged ? '\u{1F6A8} ' : hasQuestions ? '\u2753 ' : '\u{1F4DD} '}
+                    {a.first_name} {a.last_name}
+                    <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                      (care recipient)
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#888' }}>
+                    Family: {a.family_first_name} {a.family_last_name} ({a.family_email})
+                  </div>
+                  {isFlagged && (
+                    <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600, marginTop: 2 }}>
+                      Recipient says they did NOT authorize care{a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''}
+                    </div>
+                  )}
+                  {hasQuestions && (
+                    <div style={{ fontSize: 12, color: '#e65100', fontWeight: 600, marginTop: 2 }}>
+                      Recipient has questions{a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''}
+                    </div>
+                  )}
+                  {!a.outreach_response && (
+                    <div style={{ fontSize: 12, color: '#888', fontStyle: 'italic', marginTop: 2 }}>
+                      {a.outreach_sent_to ? 'Outreach sent, awaiting response' : 'Attestation submitted, needs review'}
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => { setActiveTab('authorizations'); }}
+                  style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  Review
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1004,6 +1063,11 @@ const AdminPanel = window.AdminPanel = () => {
                   padding: '10px 20px', background: '#1b6b5a', color: 'white', border: 'none',
                   borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                 }}>Search</button>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#888', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={userDemoFilter === 'all'} onChange={(e) => setUserDemoFilter(e.target.checked ? 'all' : 'real')}
+                    style={{ accentColor: '#1b6b5a' }} />
+                  Show demo
+                </label>
                 <span style={{ fontSize: '13px', color: '#888' }}>{usersTotal} total</span>
               </div>
 

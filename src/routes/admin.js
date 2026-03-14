@@ -132,11 +132,13 @@ router.get("/users", async (req, res) => {
       params.push(role);
       sql += ` AND role = ?`;
     }
-    if (req.query.demo === 'true') {
+    if (req.query.demo === 'demo') {
       sql += ` AND COALESCE(is_demo, 0) = 1`;
-    } else if (req.query.demo === 'false') {
+    } else if (req.query.demo === 'real' || !req.query.demo) {
+      // Default: hide demo accounts unless explicitly requested
       sql += ` AND COALESCE(is_demo, 0) = 0`;
     }
+    // demo=all → no filter (shows everything)
 
     // Validate sort column to prevent SQL injection
     const validSorts = ["created_at", "email", "first_name", "role"];
@@ -160,9 +162,9 @@ router.get("/users", async (req, res) => {
       countParams.push(role);
       countSql += ` AND role = ?`;
     }
-    if (req.query.demo === 'true') {
+    if (req.query.demo === 'demo') {
       countSql += ` AND COALESCE(is_demo, 0) = 1`;
-    } else if (req.query.demo === 'false') {
+    } else if (req.query.demo === 'real' || !req.query.demo) {
       countSql += ` AND COALESCE(is_demo, 0) = 0`;
     }
     const total = await db.prepare(countSql).get(...countParams);
