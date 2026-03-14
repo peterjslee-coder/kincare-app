@@ -733,8 +733,8 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS account_approved INTEGER DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_by TEXT`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
-    // Auto-approve existing users and demo users
-    `UPDATE users SET account_approved = 1 WHERE is_demo = 1 OR is_admin = 1 OR created_at < NOW() - INTERVAL '1 minute'`,
+    // Auto-approve demo and admin users only (real signups require manual approval)
+    `UPDATE users SET account_approved = 1 WHERE account_approved = 0 AND (is_demo = 1 OR is_admin = 1)`,
     // Backfill: rename session_booked → session_requested + fix message text
     `UPDATE activity_feed SET event_type = 'session_requested', message = REPLACE(message, 'booked', 'requested') WHERE event_type = 'session_booked'`,
   ];
