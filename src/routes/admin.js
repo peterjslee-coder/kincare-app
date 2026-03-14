@@ -2141,6 +2141,18 @@ router.put("/users/:id/approve", requireAdmin, async (req, res) => {
   }
 });
 
+// PUT /api/admin/users/:id/unapprove — reset approval status (for re-review)
+router.put("/users/:id/unapprove", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    await db.prepare("UPDATE users SET account_approved = 0, approved_by = NULL, approved_at = NULL WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Unapprove error:", err);
+    res.status(500).json({ error: "Failed to unapprove" });
+  }
+});
+
 // PUT /api/admin/users/:id/reject — reject (deactivate) a user's account
 router.put("/users/:id/reject", requireAdmin, async (req, res) => {
   try {
