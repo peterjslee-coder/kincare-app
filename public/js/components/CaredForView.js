@@ -577,7 +577,7 @@ const CaredForView = window.CaredForView = () => {
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{careProfile.emergencyContactName}</div>
                   {careProfile.emergencyContactPhone && (
                     <a href={'tel:' + careProfile.emergencyContactPhone} style={{ fontSize: 13, color: '#1b6b5a', textDecoration: 'none' }}>
-                      📞 {careProfile.emergencyContactPhone}
+                      📞 {formatPhone(careProfile.emergencyContactPhone)}
                     </a>
                   )}
                 </div>

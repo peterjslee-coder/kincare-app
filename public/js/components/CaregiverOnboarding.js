@@ -1456,7 +1456,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               <h3 style={{ fontSize: '14px', color: '#1b6b5a', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Profile Summary</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px' }}>
                 <div><span style={{ color: '#888' }}>Name:</span> {form.firstName} {form.lastName}</div>
-                <div><span style={{ color: '#888' }}>Phone:</span> {form.phone}</div>
+                <div><span style={{ color: '#888' }}>Phone:</span> {formatPhone(form.phone)}</div>
                 <div><span style={{ color: '#888' }}>Location:</span> {form.city}, {form.state} {form.zip}</div>
                 <div><span style={{ color: '#888' }}>Rates:</span> Set from your dashboard</div>
                 <div><span style={{ color: '#888' }}>Experience:</span> {form.yearsExperience || 0} years</div>

@@ -266,6 +266,18 @@ const CareRecipients = window.CareRecipients = () => {
 
   const handleSaveRecipient = async () => {
     setSaveMsg('');
+    // Validate required fields
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      setSaveMsg('First and last name are required.');
+      showToast('First and last name are required.', 'error');
+      return;
+    }
+    // Email is required for new recipients (needed for consent verification)
+    if (!editingId && !formData.email.trim()) {
+      setSaveMsg('Email is required — it\'s used to verify your loved one\'s awareness of care arrangements.');
+      showToast('Email is required for care awareness verification.', 'error');
+      return;
+    }
     const payload = {
       firstName: formData.firstName,
       lastName: formData.lastName,
@@ -1166,6 +1178,14 @@ const CareRecipients = window.CareRecipients = () => {
           )}
 
           {selected && (selected.authorization_tier === 'tier3' || selected.authorization_tier === 'tier2') && selected.consent_status && selected.consent_status !== 'verified' && (
+            <div style={{ marginTop: 24 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#e65100', marginBottom: 12 }}>⏳ Verification Status</h3>
+              <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px', lineHeight: 1.5 }}>
+                We're verifying that {getName(selected)} is aware of and comfortable with care arrangements. This is a safety requirement before you can schedule care.
+              </p>
+            </div>
+          )}
+          {selected && (selected.authorization_tier === 'tier3' || selected.authorization_tier === 'tier2') && selected.consent_status && selected.consent_status !== 'verified' && (
             <ConsentVerification
               recipientId={selected.id}
               recipientName={getName(selected)}
@@ -1276,9 +1296,9 @@ const CareRecipients = window.CareRecipients = () => {
               {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
             </div>
             <div className="form-group">
-              <label style={{ display: 'flex', alignItems: 'center', height: 20, marginBottom: 6 }}>Email</label>
-              <input type="email" value={formData.email} onChange={(e) => fd('email', e.target.value)} placeholder="mom@email.com" />
-              <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>Used for care awareness verification</div>
+              <label style={{ display: 'flex', alignItems: 'center', height: 20, marginBottom: 6 }}>Email {!editingId && <span style={{ color: '#e8724a', marginLeft: 4 }}>*required</span>}</label>
+              <input type="email" value={formData.email} onChange={(e) => fd('email', e.target.value)} placeholder="mom@email.com" style={!editingId && !formData.email.trim() ? { borderColor: '#e8724a' } : {}} />
+              <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>Used for care awareness verification — we'll email them to confirm they're aware</div>
             </div>
           </div>
           <div className="form-group">

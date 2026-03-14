@@ -192,10 +192,11 @@ router.put("/:id", async (req, res) => {
       }
 
       // Notify requester
+      const accepterName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Someone';
       await db.prepare(
         "INSERT INTO activity_feed (id, family_user_id, event_type, title, message) VALUES (?, ?, 'connection_accepted', ?, ?)"
-      ).run(uuid(), conn.requester_id, "Connection accepted",
-        `${req.user.firstName || ''} ${req.user.lastName || ''} accepted your connection request`);
+      ).run(uuid(), conn.requester_id, `${accepterName} accepted your connection`,
+        `${accepterName} accepted your connection request`);
 
       const emitToUser = req.app.get("emitToUser");
       if (emitToUser) emitToUser(conn.requester_id, "activity_update", { type: "connection_accepted" });

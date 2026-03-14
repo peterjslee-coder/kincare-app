@@ -306,7 +306,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const isNewUser = data?.isNewUser && !isDemo;
 
   // Core status checks for new user flow
-  const hasProfile = !!(user?.first_name || user?.firstName) && !!(user?.phone);
+  const hasProfile = !!(user?.first_name || user?.firstName) && !!(user?.phone) && !!(user?.city || user?.zip);
   const hasRecipient = (data?.parent || stats.assignedCaregivers > 0);
 
   // ─── PWA Install Guide Modal ───
@@ -381,8 +381,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     </div>
   );
 
-  // ─── Welcome screen for new users ───
-  if (isNewUser) {
+  // ─── Welcome screen for new users who haven't added a loved one yet ───
+  // Once a care recipient exists, show the main dashboard with Get Started tiles instead
+  if (isNewUser && !hasRecipient) {
     const hasPendingInvites = pendingInvites.length > 0;
     const exploreIdeas = [
       { icon: '👥', label: 'Invite family to help coordinate care', action: () => onNavigate && onNavigate('care-team'), actionText: 'Care Team' },
@@ -512,8 +513,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             </div>
             <div style={{ fontSize: '13px', color: '#795548', marginTop: '2px' }}>
               {data.careRecipients.filter(cr => cr.consent_status && cr.consent_status !== 'verified').map(cr => {
-                const name = (cr.first_name || cr.firstName) + ' ' + (cr.last_name || cr.lastName);
-                return cr.consent_status === 'attested' ? name + ' \u2014 awaiting response from ' + (cr.first_name || name) : name + ' \u2014 complete verification to book care';
+                const name = ((cr.first_name || cr.firstName || '') + ' ' + (cr.last_name || cr.lastName || '')).trim() || 'Your loved one';
+                const firstName = cr.first_name || cr.firstName || name;
+                return cr.consent_status === 'attested' ? name + ' \u2014 awaiting response from ' + firstName : name + ' \u2014 complete verification to book care';
               }).join('. ')}.
             </div>
           </div>
@@ -548,7 +550,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         const latestFingerprint = `${upcomingCount}-${unreadCount}-${stats.assignedCaregivers}`;
         if (isTileDismissed('latest', latestFingerprint)) return null;
 
-        const latestClickTarget = upcomingCount > 0 ? 'schedule' : (unreadCount > 0 ? 'activity' : (stats.assignedCaregivers === 0 ? 'caregivers' : 'schedule'));
+        const latestClickTarget = upcomingCount > 0 ? 'schedule' : (unreadCount > 0 ? 'activity' : (!parent ? 'recipients' : (stats.assignedCaregivers === 0 ? 'caregivers' : 'schedule')));
         return (
           <div className="card" style={{ marginBottom: 16, borderLeft: `4px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 12, position: 'relative', cursor: 'pointer' }}
             onClick={() => onNavigate && onNavigate(latestClickTarget)}>
@@ -612,6 +614,21 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               }}>✕</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Prominent "Add a Loved One" CTA for users without care recipients */}
+      {!isDemo && !parent && (
+        <div onClick={() => onNavigate && onNavigate('recipients')}
+          style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #2a9d8f 100%)', borderRadius: 14, padding: '24px 20px', marginBottom: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 4px 16px rgba(27,107,90,0.2)' }}>
+          <span style={{ fontSize: 36 }}>{'\uD83C\uDF37'}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 17 }}>Add your loved one</div>
+            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4, lineHeight: 1.4 }}>
+              Set up a care profile so you can find caregivers and coordinate care.
+            </div>
+          </div>
+          <div style={{ color: '#fff', fontSize: 24, fontWeight: 300 }}>{'\u203A'}</div>
         </div>
       )}
 

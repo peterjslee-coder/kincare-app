@@ -995,7 +995,6 @@ const App = () => {
   if (preAuthPages[appState]) {
     return <>
       {preAuthPages[appState]}
-      <FeedbackButton currentPage={appState} userRole="anonymous" currentUser={null} />
     </>;
   }
 

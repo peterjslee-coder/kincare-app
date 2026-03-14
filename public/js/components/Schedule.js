@@ -234,7 +234,7 @@ const Schedule = window.Schedule = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
           {/* Day headers — row 1 */}
           {dayNames.map(d => (
-            <div key={d} style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#999', textTransform: 'uppercase', background: '#fafafa', borderBottom: '1px solid #eee' }}>{d}</div>
+            <div key={d} style={{ padding: '10px 0', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#999', textTransform: 'uppercase', background: '#fafafa', borderBottom: '1px solid #eee' }}>{d}</div>
           ))}
           {/* Day cells */}
           {cells.map((day, idx) => {
@@ -259,7 +259,7 @@ const Schedule = window.Schedule = () => {
               }}>
                 <div style={{
                   fontSize: 14, fontWeight: isToday ? 800 : 500,
-                  display: 'flex', alignItems: 'center', gap: 4,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 }}>
                   {isToday && <span style={{
                     width: 6, height: 6, borderRadius: '50%',
