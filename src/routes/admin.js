@@ -2000,13 +2000,14 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
 // ─── CONSENT REVIEW — Tier 3 pending attestations quick-view ───
 // ═══════════════════════════════════════════════════════════════════════
 
-// GET /api/admin/consent/pending — list tier3 attestations awaiting admin review
+// GET /api/admin/consent/pending — list consent items needing admin attention
+// Catches: (1) pending attestation reviews, (2) unanswered outreach emails, (3) flagged responses
 router.get("/consent/pending", requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const rows = await db.prepare(`
       SELECT cr.id, cr.first_name, cr.last_name, cr.consent_status, cr.email AS recipient_email,
-             cr.sms_phone AS recipient_phone, cr.bookings_paused,
+             cr.sms_phone AS recipient_phone, cr.bookings_paused, cr.bookings_paused_reason,
              u.first_name AS family_first_name, u.last_name AS family_last_name, u.email AS family_email,
              att.signature_name, att.relationship_to_recipient, att.signed_at, att.admin_status,
              co.sent_to_email AS outreach_sent_to, co.outreach_type, co.recipient_response,
@@ -2015,10 +2016,24 @@ router.get("/consent/pending", requireAdmin, async (req, res) => {
       JOIN users u ON u.id = cr.family_user_id
       LEFT JOIN attestations att ON att.care_recipient_id = cr.id
       LEFT JOIN consent_outreach co ON co.care_recipient_id = cr.id
-      WHERE cr.authorization_tier = 'tier3'
-        AND cr.consent_status IN ('attested', 'pending')
-        AND COALESCE(att.admin_status, 'pending') = 'pending'
-      ORDER BY att.signed_at DESC NULLS LAST
+        AND co.created_at = (SELECT MAX(co2.created_at) FROM consent_outreach co2 WHERE co2.care_recipient_id = cr.id)
+      WHERE (
+        -- Pending attestation review (original logic)
+        (cr.authorization_tier = 'tier3'
+          AND cr.consent_status IN ('attested', 'pending')
+          AND COALESCE(att.admin_status, 'pending') = 'pending')
+        OR
+        -- Outreach sent but no response yet
+        (co.id IS NOT NULL AND co.recipient_response IS NULL AND co.responded_at IS NULL)
+        OR
+        -- Bookings currently paused (needs admin resolution)
+        (cr.bookings_paused = 1)
+      )
+      ORDER BY
+        CASE WHEN cr.bookings_paused = 1 THEN 0
+             WHEN co.id IS NOT NULL AND co.recipient_response IS NULL THEN 1
+             ELSE 2 END,
+        att.signed_at DESC NULLS LAST
     `).all();
     res.json({ pending: rows });
   } catch (err) {

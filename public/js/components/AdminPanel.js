@@ -808,14 +808,17 @@ const AdminPanel = window.AdminPanel = () => {
           {consentAlerts.map(a => {
             const isFlagged = a.outreach_response === 'did_not_authorize';
             const hasQuestions = a.outreach_response === 'has_questions';
+            const isPaused = a.bookings_paused === 1;
+            const isAwaitingResponse = !a.outreach_response && a.outreach_sent_to;
+            const isPendingAttestation = !a.outreach_response && !a.outreach_sent_to;
             return (
               <div key={a.id} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10,
-                border: isFlagged ? '2px solid #c62828' : '1px solid #ffe0b2', flexWrap: 'wrap', gap: 8,
+                border: isFlagged || isPaused ? '2px solid #c62828' : isAwaitingResponse ? '1px solid #ffcc80' : '1px solid #ffe0b2', flexWrap: 'wrap', gap: 8,
               }}>
                 <div style={{ flex: '1 1 200px' }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: isFlagged ? '#c62828' : '#333' }}>
-                    {isFlagged ? '\u{1F6A8} ' : hasQuestions ? '\u2753 ' : '\u{1F4DD} '}
+                  <div style={{ fontWeight: 600, fontSize: 14, color: isFlagged || isPaused ? '#c62828' : '#333' }}>
+                    {isFlagged || isPaused ? '\u{1F6A8} ' : hasQuestions ? '\u2753 ' : isAwaitingResponse ? '\u{1F4E8} ' : '\u{1F4DD} '}
                     {a.first_name} {a.last_name}
                     <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
                       (care recipient)
@@ -824,6 +827,11 @@ const AdminPanel = window.AdminPanel = () => {
                   <div style={{ fontSize: 12, color: '#888' }}>
                     Family: {a.family_first_name} {a.family_last_name} ({a.family_email})
                   </div>
+                  {isPaused && (
+                    <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600, marginTop: 2 }}>
+                      {'\u{1F6D1}'} Bookings paused{a.bookings_paused_reason ? ` \u2014 ${a.bookings_paused_reason}` : ''}
+                    </div>
+                  )}
                   {isFlagged && (
                     <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600, marginTop: 2 }}>
                       Recipient says they did NOT authorize care{a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''}
@@ -834,14 +842,19 @@ const AdminPanel = window.AdminPanel = () => {
                       Recipient has questions{a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''}
                     </div>
                   )}
-                  {!a.outreach_response && (
+                  {isAwaitingResponse && !isFlagged && !hasQuestions && (
+                    <div style={{ fontSize: 12, color: '#e65100', fontWeight: 600, marginTop: 2 }}>
+                      {'\u{1F4E7}'} Outreach email sent to {a.outreach_sent_to} \u2014 no response yet
+                    </div>
+                  )}
+                  {isPendingAttestation && (
                     <div style={{ fontSize: 12, color: '#888', fontStyle: 'italic', marginTop: 2 }}>
-                      {a.outreach_sent_to ? 'Outreach sent, awaiting response' : 'Attestation submitted, needs review'}
+                      Attestation submitted, needs review
                     </div>
                   )}
                 </div>
                 <button onClick={() => { setActiveTab('authorizations'); }}
-                  style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  style={{ padding: '6px 14px', background: isPaused || isFlagged ? '#c62828' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                   Review
                 </button>
               </div>

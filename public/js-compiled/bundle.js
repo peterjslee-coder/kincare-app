@@ -48040,6 +48040,9 @@ const AdminPanel = window.AdminPanel = () => {
   }, "Care Verification"), consentAlerts.map(a => {
     const isFlagged = a.outreach_response === 'did_not_authorize';
     const hasQuestions = a.outreach_response === 'has_questions';
+    const isPaused = a.bookings_paused === 1;
+    const isAwaitingResponse = !a.outreach_response && a.outreach_sent_to;
+    const isPendingAttestation = !a.outreach_response && !a.outreach_sent_to;
     return /*#__PURE__*/React.createElement("div", {
       key: a.id,
       style: {
@@ -48050,7 +48053,7 @@ const AdminPanel = window.AdminPanel = () => {
         marginBottom: 6,
         background: '#fff',
         borderRadius: 10,
-        border: isFlagged ? '2px solid #c62828' : '1px solid #ffe0b2',
+        border: isFlagged || isPaused ? '2px solid #c62828' : isAwaitingResponse ? '1px solid #ffcc80' : '1px solid #ffe0b2',
         flexWrap: 'wrap',
         gap: 8
       }
@@ -48062,9 +48065,9 @@ const AdminPanel = window.AdminPanel = () => {
       style: {
         fontWeight: 600,
         fontSize: 14,
-        color: isFlagged ? '#c62828' : '#333'
+        color: isFlagged || isPaused ? '#c62828' : '#333'
       }
-    }, isFlagged ? '\u{1F6A8} ' : hasQuestions ? '\u2753 ' : '\u{1F4DD} ', a.first_name, " ", a.last_name, /*#__PURE__*/React.createElement("span", {
+    }, isFlagged || isPaused ? '\u{1F6A8} ' : hasQuestions ? '\u2753 ' : isAwaitingResponse ? '\u{1F4E8} ' : '\u{1F4DD} ', a.first_name, " ", a.last_name, /*#__PURE__*/React.createElement("span", {
       style: {
         fontWeight: 400,
         fontSize: 12,
@@ -48076,7 +48079,14 @@ const AdminPanel = window.AdminPanel = () => {
         fontSize: 12,
         color: '#888'
       }
-    }, "Family: ", a.family_first_name, " ", a.family_last_name, " (", a.family_email, ")"), isFlagged && /*#__PURE__*/React.createElement("div", {
+    }, "Family: ", a.family_first_name, " ", a.family_last_name, " (", a.family_email, ")"), isPaused && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#c62828',
+        fontWeight: 600,
+        marginTop: 2
+      }
+    }, '\u{1F6D1}', " Bookings paused", a.bookings_paused_reason ? ` \u2014 ${a.bookings_paused_reason}` : ''), isFlagged && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
         color: '#c62828',
@@ -48090,20 +48100,27 @@ const AdminPanel = window.AdminPanel = () => {
         fontWeight: 600,
         marginTop: 2
       }
-    }, "Recipient has questions", a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''), !a.outreach_response && /*#__PURE__*/React.createElement("div", {
+    }, "Recipient has questions", a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''), isAwaitingResponse && !isFlagged && !hasQuestions && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#e65100',
+        fontWeight: 600,
+        marginTop: 2
+      }
+    }, '\u{1F4E7}', " Outreach email sent to ", a.outreach_sent_to, " \\u2014 no response yet"), isPendingAttestation && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
         color: '#888',
         fontStyle: 'italic',
         marginTop: 2
       }
-    }, a.outreach_sent_to ? 'Outreach sent, awaiting response' : 'Attestation submitted, needs review')), /*#__PURE__*/React.createElement("button", {
+    }, "Attestation submitted, needs review")), /*#__PURE__*/React.createElement("button", {
       onClick: () => {
         setActiveTab('authorizations');
       },
       style: {
         padding: '6px 14px',
-        background: '#1b6b5a',
+        background: isPaused || isFlagged ? '#c62828' : '#1b6b5a',
         color: '#fff',
         border: 'none',
         borderRadius: 8,
