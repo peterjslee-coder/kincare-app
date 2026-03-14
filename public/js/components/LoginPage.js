@@ -228,7 +228,10 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email || null }),
       });
-      if (!optRes.ok) throw new Error('Failed to start passkey login');
+      if (!optRes.ok) {
+        const errBody = await optRes.json().catch(() => ({}));
+        throw new Error(errBody?.error || `Passkey login failed (${optRes.status})`);
+      }
       const options = await optRes.json();
       const challengeKey = options._challengeKey;
 
