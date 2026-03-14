@@ -436,6 +436,15 @@
 
 ## Done
 
+### Admin Panel Redesign + UX Fixes (v1.41.1–v1.41.4)
+- [x] **Our Story photo:** Converted mom-and-pete.heic to JPG, added to Our Story modal with caption.
+- [x] **Our Story mobile button:** Added blue "Our Story" button visible on mobile hero next to "Sign Up Free".
+- [x] **Mobile hero button overflow:** Fixed waterfalling buttons on mobile with reduced padding/font/gap via splash-hero-buttons class.
+- [x] **Auto-login on hard refresh:** Added sessionStorage session-alive flag. Hard refresh (new tab/session) now requires login/passkey instead of silently restoring via refresh token.
+- [x] **Passkey error handling:** LoginPage now shows specific server error messages instead of generic "Failed to start passkey login".
+- [x] **Admin panel redesign (v1.41.4):** Replaced 14 flat tabs with 3 grouped sections (Core, Trust & Safety, Content & Config). Added always-visible "Action Required" banner for pending approvals. Unified People tab with Users/Waitlist/Invites sub-tabs — pending users highlighted with orange border and inline Approve/Reject buttons. Added universal search bar. Removed dead standalone Users tab.
+- [x] **TASKS.md audit:** Cross-referenced 6 open bugs against codebase, found all already fixed. Marked as done to prevent duplicate work.
+
 ### Bug Fixes — P0/P1/P2 Sweep (v1.41.0)
 - [x] **Feedback button tester-only:** Removed pre-auth FAB that was showing to all anonymous users. Post-auth FAB already gated behind `is_tester || isAdmin`.
 - [x] **Care recipient email required:** Email now required for new care recipients with validation, orange border, and explanatory toast.

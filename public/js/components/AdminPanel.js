@@ -57,7 +57,7 @@ const AdminPanel = window.AdminPanel = () => {
   const [obEventFilter, setObEventFilter] = useState('all'); // 'all', 'errors', 'completions'
   const [resetPwLoading, setResetPwLoading] = useState(null); // user id being reset
   const [resetPwMsg, setResetPwMsg] = useState(null); // { id, type, text }
-  const [peopleSubTab, setPeopleSubTab] = useState('all'); // 'all', 'waitlist', 'invites'
+  const [peopleSubTab, setPeopleSubTab] = useState('users'); // 'users', 'waitlist', 'invites'
   // Authorizations tab state
   const [authzList, setAuthzList] = useState([]);
   const [authzLoading, setAuthzLoading] = useState(false);
@@ -146,8 +146,7 @@ const AdminPanel = window.AdminPanel = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'users') loadUsers();
-    if (activeTab === 'people') { loadWaitlist(); loadInvites(); loadCareTeamInvites(); }
+    if (activeTab === 'people') { loadUsers(); loadWaitlist(); loadInvites(); loadCareTeamInvites(); }
     if (activeTab === 'activity') loadActivity();
     if (activeTab === 'feedback') loadFeedback();
     if (activeTab === 'blocked') loadBlockedEmails();
@@ -161,7 +160,7 @@ const AdminPanel = window.AdminPanel = () => {
 
   // Auto-reload users when filters change
   useEffect(() => {
-    if (activeTab === 'users') loadUsers();
+    if (activeTab === 'people') loadUsers();
   }, [userRoleFilter, userDemoFilter]);
 
   // Auto-trigger search when switching to people tab with pre-filled email (e.g. from waitlist Invite button)
@@ -717,27 +716,32 @@ const AdminPanel = window.AdminPanel = () => {
 
   if (loading) return <LoadingSpinner text="Loading admin dashboard..." />;
 
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: '📊' },
-    { id: 'users', label: 'Users', icon: '👥' },
-    { id: 'people', label: 'People', icon: '📋' },
-    { id: 'activity', label: 'Activity', icon: '⚡' },
-    { id: 'authorizations', label: 'Auth', icon: '\u{1F512}' },
-    { id: 'customerservice', label: 'Customer Svc', icon: '🛎️' },
-    { id: 'feedback', label: 'Feedback', icon: '💬' },
-    { id: 'help', label: 'Help/FAQ', icon: '❓' },
-    { id: 'financials', label: 'Financials', icon: '💰' },
-    { id: 'onboarding', label: 'Auth Events', icon: '🚦' },
-    { id: 'security', label: 'Security', icon: '🛡️' },
-    { id: 'blocked', label: 'Blocked', icon: '🚫' },
-    { id: 'sessions', label: 'Sessions', icon: '📅' },
-    { id: 'settings', label: 'Settings', icon: '⚙️' },
+  const tabGroups = [
+    { label: 'Core', tabs: [
+      { id: 'overview', label: 'Overview', icon: '📊' },
+      { id: 'people', label: 'People', icon: '👥', badge: pendingApprovals.length || null },
+      { id: 'sessions', label: 'Sessions', icon: '📅' },
+    ]},
+    { label: 'Trust & Safety', tabs: [
+      { id: 'authorizations', label: 'Auth', icon: '\u{1F512}' },
+      { id: 'customerservice', label: 'Support', icon: '🛎️' },
+      { id: 'security', label: 'Security', icon: '🛡️' },
+      { id: 'blocked', label: 'Blocked', icon: '🚫' },
+    ]},
+    { label: 'Content & Config', tabs: [
+      { id: 'feedback', label: 'Feedback', icon: '💬' },
+      { id: 'help', label: 'Help/FAQ', icon: '❓' },
+      { id: 'financials', label: 'Financials', icon: '💰' },
+      { id: 'activity', label: 'Activity', icon: '⚡' },
+      { id: 'onboarding', label: 'Events', icon: '🚦' },
+      { id: 'settings', label: 'Settings', icon: '⚙️' },
+    ]},
   ];
 
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
           <h1 className="greeting" style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{
@@ -747,7 +751,7 @@ const AdminPanel = window.AdminPanel = () => {
             Platform Dashboard
           </h1>
           <div style={{ color: '#666', fontSize: '14px' }}>
-            Manage users, waitlist, and platform metrics
+            Manage users, approvals, and platform operations
           </div>
         </div>
         <button onClick={() => { if (window.__navigateTo) window.__navigateTo('account'); }} style={{
@@ -757,56 +761,99 @@ const AdminPanel = window.AdminPanel = () => {
         }}>⚙️ My Account</button>
       </div>
 
-      {/* Tab Navigation — Card Grid */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-        gap: '8px', marginBottom: '20px',
-      }}>
-        {tabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: '4px', padding: '14px 8px', border: 'none', borderRadius: '12px', cursor: 'pointer',
-            background: activeTab === tab.id ? '#1b6b5a' : '#f5f5f5',
-            color: activeTab === tab.id ? '#fff' : '#555',
-            transition: 'all 0.15s', minHeight: '72px',
-            boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
-          }}>
-            <span style={{ fontSize: '24px', lineHeight: 1 }}>{tab.icon}</span>
-            <span style={{ fontSize: '11px', fontWeight: activeTab === tab.id ? 700 : 600, letterSpacing: '0.3px' }}>{tab.label}</span>
-          </button>
+      {/* ── ACTION REQUIRED BANNER — always visible when pending approvals exist ── */}
+      {pendingApprovals.length > 0 && (
+        <div style={{ marginBottom: 16, padding: 16, background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: '2px solid #ff9800', borderRadius: 14 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#e65100', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {'\u{1F514}'} Action Required
+            <span style={{ background: '#e65100', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
+              {pendingApprovals.length}
+            </span>
+          </div>
+          {pendingApprovals.map(u => (
+            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10, border: '1px solid #ffe0b2', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ flex: '1 1 200px' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{u.first_name} {u.last_name}</div>
+                <div style={{ fontSize: 12, color: '#888' }}>{u.email} {'\u00B7'} {u.role} {'\u00B7'} signed up {new Date(u.created_at).toLocaleDateString()}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => handleApprove(u.id)} disabled={approvalLoading === u.id}
+                  style={{ padding: '6px 16px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: approvalLoading === u.id ? 0.6 : 1 }}>
+                  {approvalLoading === u.id ? '...' : '\u2713 Approve'}
+                </button>
+                <button onClick={() => handleReject(u.id)} disabled={approvalLoading === u.id}
+                  style={{ padding: '6px 12px', background: '#f5f5f5', color: '#c62828', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── UNIVERSAL SEARCH BAR ── */}
+      <div style={{ position: 'relative', marginBottom: 16 }}>
+        <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, color: '#999' }}>{'\u{1F50D}'}</span>
+        <input
+          type="text" placeholder="Search people by name or email..."
+          value={userSearch}
+          onChange={(e) => setUserSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              if (activeTab !== 'people') setActiveTab('people');
+              setPeopleSubTab('users');
+              loadUsers();
+            }
+          }}
+          style={{
+            width: '100%', padding: '14px 16px 14px 44px', border: '2px solid #e0e0e0',
+            borderRadius: 12, fontSize: 15, background: '#fff', outline: 'none',
+            transition: 'border-color 0.2s', boxSizing: 'border-box',
+          }}
+          onFocus={(e) => { e.target.style.borderColor = '#1b6b5a'; }}
+          onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; }}
+        />
+        <span style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#bbb' }}>
+          searches users, waitlist & invites
+        </span>
+      </div>
+
+      {/* ── Tab Navigation — Grouped ── */}
+      <div style={{ marginBottom: 20 }}>
+        {tabGroups.map(group => (
+          <div key={group.label} style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#999', marginBottom: 6, paddingLeft: 4 }}>
+              {group.label}
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {group.tabs.map(tab => (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px',
+                  border: 'none', borderRadius: 10, cursor: 'pointer',
+                  background: activeTab === tab.id ? '#1b6b5a' : '#f0f0f0',
+                  color: activeTab === tab.id ? '#fff' : '#555',
+                  fontSize: 13, fontWeight: 600, transition: 'all 0.15s', position: 'relative',
+                  boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
+                }}>
+                  <span style={{ fontSize: 16 }}>{tab.icon}</span>
+                  {tab.label}
+                  {tab.badge ? (
+                    <span style={{
+                      position: 'absolute', top: -4, right: -4,
+                      background: '#e65100', color: '#fff', fontSize: 10, fontWeight: 700,
+                      borderRadius: 10, padding: '1px 6px', minWidth: 18, textAlign: 'center',
+                    }}>{tab.badge}</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 
       {/* ─── Overview Tab ─── */}
       {activeTab === 'overview' && stats && (
         <div>
-          {/* Pending Account Approvals */}
-          {pendingApprovals.length > 0 && (
-            <div style={{ marginBottom: 20, padding: 16, background: '#fff3e0', border: '2px solid #ff9800', borderRadius: 14 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#e65100', marginBottom: 12 }}>
-                {'\u{1F514}'} {pendingApprovals.length} Account{pendingApprovals.length > 1 ? 's' : ''} Awaiting Approval
-              </div>
-              {pendingApprovals.map(u => (
-                <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', marginBottom: 6, background: '#fff', borderRadius: 10, border: '1px solid #ffe0b2' }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{u.first_name} {u.last_name}</div>
-                    <div style={{ fontSize: 12, color: '#888' }}>{u.email} • {u.role} • {new Date(u.created_at).toLocaleDateString()}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => handleApprove(u.id)} disabled={approvalLoading === u.id}
-                      style={{ padding: '6px 16px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: approvalLoading === u.id ? 0.6 : 1 }}>
-                      {approvalLoading === u.id ? '...' : 'Approve'}
-                    </button>
-                    <button onClick={() => handleReject(u.id)} disabled={approvalLoading === u.id}
-                      style={{ padding: '6px 12px', background: '#f5f5f5', color: '#c62828', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Stat cards */}
           <div className="stats-grid">
             <div className="stat-card">
@@ -921,247 +968,203 @@ const AdminPanel = window.AdminPanel = () => {
         </div>
       )}
 
-      {/* ─── Users Tab ─── */}
-      {activeTab === 'users' && (
-        <div>
-          {/* Search and filter */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <input
-              type="text" placeholder="Search by name or email..." value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && loadUsers()}
-              style={{
-                flex: '1 1 250px', padding: '10px 14px', borderRadius: '8px',
-                border: '1px solid #ddd', fontSize: '14px',
-              }}
-            />
-            <select value={userRoleFilter} onChange={(e) => { setUserRoleFilter(e.target.value); }}
-              style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}>
-              <option value="">All Roles</option>
-              <option value="family">Family</option>
-              <option value="caregiver">Caregiver</option>
-              <option value="care_for">Care Recipient</option>
-            </select>
-            {/* Demo filter hidden — defaults to 'real' */}
-            <button onClick={loadUsers} style={{
-              padding: '10px 20px', background: '#1b6b5a', color: 'white', border: 'none',
-              borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-            }}>Search</button>
-            <span style={{ fontSize: '13px', color: '#888' }}>{usersTotal} total</span>
-          </div>
-
-          {/* Users table */}
-          <div className="card" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Name</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Verified</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Tester</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Joined</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 500 }}>
-                      {u.first_name} {u.last_name}
-                      {u.is_admin ? <span style={{ marginLeft: '6px', fontSize: '10px', background: '#1b6b5a', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>ADMIN</span> : ''}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#555' }}>{u.email}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <span style={{
-                        padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
-                        background: u.role === 'family' ? '#e0f2e9' : u.role === 'caregiver' ? '#e3f2fd' : '#fff3e0',
-                        color: u.role === 'family' ? '#1b6b5a' : u.role === 'caregiver' ? '#1565c0' : '#e65100',
-                        textTransform: 'capitalize',
-                      }}>{u.role === 'care_for' ? 'Care Recipient' : u.role}</span>
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      <button onClick={async () => {
-                        try {
-                          const res = await apiFetch(`/api/admin/users/${u.id}/verify-email`, { method: 'PUT' });
-                          if (res?.ok) {
-                            const data = await res.json();
-                            setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, email_verified: data.email_verified ? 1 : 0 } : usr));
-                          }
-                        } catch (err) { console.error('Toggle verify error:', err); }
-                      }} style={{
-                        padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                        border: 'none',
-                        background: u.email_verified ? '#e8f5e9' : '#fff3e0',
-                        color: u.email_verified ? '#1b6b5a' : '#e65100',
-                      }} title={u.email_verified ? 'Click to revoke email verification' : 'Click to manually verify email'}>
-                        {u.email_verified ? '✅ Verified' : '⚠ Unverified'}
-                      </button>
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      <button onClick={async () => {
-                        try {
-                          const res = await apiFetch(`/api/admin/users/${u.id}/tester`, { method: 'PUT' });
-                          if (res?.ok) {
-                            const data = await res.json();
-                            setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, is_tester: data.is_tester ? 1 : 0 } : usr));
-                          }
-                        } catch (err) { console.error('Toggle tester error:', err); }
-                      }} style={{
-                        padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                        border: 'none',
-                        background: u.is_tester ? '#e8f5e9' : '#f5f5f5',
-                        color: u.is_tester ? '#1b6b5a' : '#999',
-                      }} title={u.is_tester ? 'Click to remove tester access' : 'Click to grant tester access'}>
-                        {u.is_tester ? '✓ Yes' : 'No'}
-                      </button>
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>
-                      {formatDate(u.created_at)}
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      {u.is_admin ? (
-                        <span style={{ fontSize: '11px', color: '#999' }}>—</span>
-                      ) : u.role === 'caregiver' ? (
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                          <button onClick={() => openOnboardingModal(u.id)}
-                            style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
-                            Manage
-                          </button>
-                          <button onClick={() => handleForcePasswordReset(u.id, u.email)} disabled={resetPwLoading === u.id}
-                            style={{ padding: '4px 8px', background: '#fff', color: '#d97706', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
-                            title="Send password reset email">
-                            {resetPwLoading === u.id ? '…' : resetPwMsg?.id === u.id ? (resetPwMsg.type === 'success' ? '✓' : '✕') : '🔑'}
-                          </button>
-                          {deleteConfirm === u.id ? (
-                            <>
-                              <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={deleteLoading}
-                                style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
-                                {deleteLoading ? '...' : 'Confirm'}
-                              </button>
-                              <button onClick={() => setDeleteConfirm(null)}
-                                style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
-                                ✕
-                              </button>
-                            </>
-                          ) : (
-                            <button onClick={() => handleDeleteUser(u.id, u.email)}
-                              style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
-                              Delete
-                            </button>
-                          )}
-                          {nukeConfirm === u.id ? (
-                            <>
-                              <button onClick={() => handleNukeUser(u.id, u.email)} disabled={nukeLoading}
-                                style={{ padding: '4px 10px', background: '#1a1a1a', color: '#ff6b35', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                                title="Confirm nuke — requires passkey">
-                                {nukeLoading ? '⏳' : '☢️ Confirm'}
-                              </button>
-                              <button onClick={() => { setNukeConfirm(null); setNukeError(null); }}
-                                style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
-                                ✕
-                              </button>
-                            </>
-                          ) : (
-                            <button onClick={() => handleNukeUser(u.id, u.email)}
-                              style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
-                              title="Permanently delete all data (requires passkey)">
-                              🍄☁️
-                            </button>
-                          )}
-                        </div>
-                      ) : nukeConfirm === u.id ? (
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                          <button onClick={() => handleNukeUser(u.id, u.email)} disabled={nukeLoading}
-                            style={{ padding: '4px 10px', background: '#1a1a1a', color: '#ff6b35', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                            title="Confirm nuke — requires passkey">
-                            {nukeLoading ? '⏳' : '☢️ Confirm Nuke'}
-                          </button>
-                          <button onClick={() => { setNukeConfirm(null); setNukeError(null); }}
-                            style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
-                            ✕
-                          </button>
-                          {nukeError && <div style={{ fontSize: '10px', color: '#c62828', width: '100%', textAlign: 'center' }}>{nukeError}</div>}
-                        </div>
-                      ) : deleteConfirm === u.id ? (
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                          <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={deleteLoading}
-                            style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
-                            {deleteLoading ? '...' : 'Confirm'}
-                          </button>
-                          <button onClick={() => setDeleteConfirm(null)}
-                            style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
-                            ✕
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                          <button onClick={() => handleForcePasswordReset(u.id, u.email)} disabled={resetPwLoading === u.id}
-                            style={{ padding: '4px 8px', background: '#fff', color: '#d97706', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
-                            title="Send password reset email">
-                            {resetPwLoading === u.id ? '…' : resetPwMsg?.id === u.id ? (resetPwMsg.type === 'success' ? '✓' : '✕') : '🔑'}
-                          </button>
-                          <button onClick={() => handleDeleteUser(u.id, u.email)}
-                            style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
-                            Delete
-                          </button>
-                          {nukeConfirm === u.id ? (
-                            <>
-                              <button onClick={() => handleNukeUser(u.id, u.email)} disabled={nukeLoading}
-                                style={{ padding: '4px 10px', background: '#1a1a1a', color: '#ff6b35', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                                title="Confirm nuke — requires passkey">
-                                {nukeLoading ? '⏳' : '☢️ Confirm'}
-                              </button>
-                              <button onClick={() => { setNukeConfirm(null); setNukeError(null); }}
-                                style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
-                                ✕
-                              </button>
-                            </>
-                          ) : (
-                            <button onClick={() => handleNukeUser(u.id, u.email)}
-                              style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
-                              title="Permanently delete all data (requires passkey)">
-                              🍄☁️
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {nukeError && nukeConfirm === u.id && (
-                        <div style={{ fontSize: '10px', color: '#c62828', marginTop: 4, textAlign: 'center' }}>{nukeError}</div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {users.length === 0 && (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No users found</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ─── People Tab (Waitlist + Invites unified) ─── */}
+      {/* ─── People Tab (Users + Waitlist + Invites unified) ─── */}
       {activeTab === 'people' && (
         <div>
           {/* Sub-tabs */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#f5f5f5', borderRadius: 8, padding: 3 }}>
             {[
-              { id: 'all', label: `All (${waitlistTotal + invitesTotal})` },
+              { id: 'users', label: `Users (${usersTotal})`, badge: pendingApprovals.length || null },
               { id: 'waitlist', label: `Waitlist (${waitlistTotal})` },
               { id: 'invites', label: `Invites (${invitesTotal})` },
             ].map(st => (
               <button key={st.id} onClick={() => setPeopleSubTab(st.id)}
                 style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: peopleSubTab === st.id ? 700 : 500,
                   background: peopleSubTab === st.id ? '#fff' : 'transparent', color: peopleSubTab === st.id ? '#1b6b5a' : '#888',
-                  cursor: 'pointer', boxShadow: peopleSubTab === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s' }}>
+                  cursor: 'pointer', boxShadow: peopleSubTab === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s', position: 'relative' }}>
                 {st.label}
+                {st.badge ? <span style={{ background: '#e65100', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700, marginLeft: 4 }}>{st.badge} new</span> : null}
               </button>
             ))}
           </div>
 
+          {/* ── Users sub-tab ── */}
+          {peopleSubTab === 'users' && (
+            <div>
+              {/* Filters */}
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <select value={userRoleFilter} onChange={(e) => { setUserRoleFilter(e.target.value); }}
+                  style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}>
+                  <option value="">All Roles</option>
+                  <option value="family">Family</option>
+                  <option value="caregiver">Caregiver</option>
+                  <option value="care_for">Care Recipient</option>
+                </select>
+                <button onClick={loadUsers} style={{
+                  padding: '10px 20px', background: '#1b6b5a', color: 'white', border: 'none',
+                  borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                }}>Search</button>
+                <span style={{ fontSize: '13px', color: '#888' }}>{usersTotal} total</span>
+              </div>
+
+              {/* Users table */}
+              <div className="card" style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Name</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Status</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Tester</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Joined</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => {
+                      const isPending = pendingApprovals.some(p => p.id === u.id);
+                      return (
+                      <tr key={u.id} style={{ borderBottom: '1px solid #f0f0f0', background: isPending ? '#fffbf5' : 'transparent', borderLeft: isPending ? '4px solid #ff9800' : 'none' }}>
+                        <td style={{ padding: '10px 12px', fontWeight: 500 }}>
+                          {u.first_name} {u.last_name}
+                          {u.is_admin ? <span style={{ marginLeft: '6px', fontSize: '10px', background: '#1b6b5a', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>ADMIN</span> : ''}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#555' }}>{u.email}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                            background: u.role === 'family' ? '#e0f2e9' : u.role === 'caregiver' ? '#e3f2fd' : '#fff3e0',
+                            color: u.role === 'family' ? '#1b6b5a' : u.role === 'caregiver' ? '#1565c0' : '#e65100',
+                            textTransform: 'capitalize',
+                          }}>{u.role === 'care_for' ? 'Care Recipient' : u.role}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          {isPending ? (
+                            <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#fff3e0', color: '#e65100' }}>
+                              {'\u23F3'} Pending
+                            </span>
+                          ) : (
+                            <button onClick={async () => {
+                              try {
+                                const res = await apiFetch(`/api/admin/users/${u.id}/verify-email`, { method: 'PUT' });
+                                if (res?.ok) {
+                                  const data = await res.json();
+                                  setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, email_verified: data.email_verified ? 1 : 0 } : usr));
+                                }
+                              } catch (err) { console.error('Toggle verify error:', err); }
+                            }} style={{
+                              padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: 'none',
+                              background: u.email_verified ? '#e8f5e9' : '#fff3e0',
+                              color: u.email_verified ? '#1b6b5a' : '#e65100',
+                            }} title={u.email_verified ? 'Click to revoke email verification' : 'Click to manually verify email'}>
+                              {u.email_verified ? '\u2705 Verified' : '\u26A0 Unverified'}
+                            </button>
+                          )}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <button onClick={async () => {
+                            try {
+                              const res = await apiFetch(`/api/admin/users/${u.id}/tester`, { method: 'PUT' });
+                              if (res?.ok) {
+                                const data = await res.json();
+                                setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, is_tester: data.is_tester ? 1 : 0 } : usr));
+                              }
+                            } catch (err) { console.error('Toggle tester error:', err); }
+                          }} style={{
+                            padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: 'none',
+                            background: u.is_tester ? '#e8f5e9' : '#f5f5f5',
+                            color: u.is_tester ? '#1b6b5a' : '#999',
+                          }} title={u.is_tester ? 'Click to remove tester access' : 'Click to grant tester access'}>
+                            {u.is_tester ? '\u2713 Yes' : 'No'}
+                          </button>
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>
+                          {formatDate(u.created_at)}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          {isPending ? (
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                              <button onClick={() => handleApprove(u.id)} disabled={approvalLoading === u.id}
+                                style={{ padding: '4px 12px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                                {approvalLoading === u.id ? '...' : 'Approve'}
+                              </button>
+                              <button onClick={() => handleReject(u.id)}
+                                style={{ padding: '4px 10px', background: '#f5f5f5', color: '#c62828', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                                Reject
+                              </button>
+                            </div>
+                          ) : u.is_admin ? (
+                            <span style={{ fontSize: '11px', color: '#999' }}>{'\u2014'}</span>
+                          ) : u.role === 'caregiver' ? (
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                              <button onClick={() => openOnboardingModal(u.id)}
+                                style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                                Manage
+                              </button>
+                              <button onClick={() => handleForcePasswordReset(u.id, u.email)} disabled={resetPwLoading === u.id}
+                                style={{ padding: '4px 8px', background: '#fff', color: '#d97706', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
+                                title="Send password reset email">
+                                {resetPwLoading === u.id ? '\u2026' : resetPwMsg?.id === u.id ? (resetPwMsg.type === 'success' ? '\u2713' : '\u2715') : '\u{1F511}'}
+                              </button>
+                              {deleteConfirm === u.id ? (
+                                <>
+                                  <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={deleteLoading}
+                                    style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                                    {deleteLoading ? '...' : 'Confirm'}
+                                  </button>
+                                  <button onClick={() => setDeleteConfirm(null)}
+                                    style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                                    {'\u2715'}
+                                  </button>
+                                </>
+                              ) : (
+                                <button onClick={() => handleDeleteUser(u.id, u.email)}
+                                  style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                                  Delete
+                                </button>
+                              )}
+                              <button onClick={() => handleNukeUser(u.id, u.email)}
+                                style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                title="Permanently delete all data (requires passkey)">
+                                {'\u{1F344}\u2601\uFE0F'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                              <button onClick={() => handleForcePasswordReset(u.id, u.email)} disabled={resetPwLoading === u.id}
+                                style={{ padding: '4px 8px', background: '#fff', color: '#d97706', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
+                                title="Send password reset email">
+                                {resetPwLoading === u.id ? '\u2026' : resetPwMsg?.id === u.id ? (resetPwMsg.type === 'success' ? '\u2713' : '\u2715') : '\u{1F511}'}
+                              </button>
+                              <button onClick={() => handleDeleteUser(u.id, u.email)}
+                                style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                                Delete
+                              </button>
+                              <button onClick={() => handleNukeUser(u.id, u.email)}
+                                style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                title="Permanently delete all data (requires passkey)">
+                                {'\u{1F344}\u2601\uFE0F'}
+                              </button>
+                            </div>
+                          )}
+                          {nukeError && nukeConfirm === u.id && (
+                            <div style={{ fontSize: '10px', color: '#c62828', marginTop: 4, textAlign: 'center' }}>{nukeError}</div>
+                          )}
+                        </td>
+                      </tr>
+                    );})}
+                  </tbody>
+                </table>
+                {users.length === 0 && (
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No users found</div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Export CSV */}
-          {(peopleSubTab === 'all' || peopleSubTab === 'waitlist') && waitlist.length > 0 && (
+          {(peopleSubTab === 'waitlist') && waitlist.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
               <button onClick={exportWaitlistCSV} style={{
                 padding: '6px 16px', background: '#1b6b5a', color: 'white', border: 'none',
@@ -1174,7 +1177,7 @@ const AdminPanel = window.AdminPanel = () => {
           )}
 
           {/* Waitlist section */}
-          {(peopleSubTab === 'all' || peopleSubTab === 'waitlist') && (
+          {(peopleSubTab === 'waitlist') && (
             <div className="card" style={{ marginBottom: 20 }}>
               <div className="card-header"><span className="card-icon">📋</span>Waitlist ({waitlistTotal})</div>
               <div style={{ overflowX: 'auto' }}>
@@ -1223,7 +1226,7 @@ const AdminPanel = window.AdminPanel = () => {
           )}
 
           {/* Search & Send (invites section) */}
-          {(peopleSubTab === 'all' || peopleSubTab === 'invites') && (<React.Fragment>
+          {(peopleSubTab === 'invites') && (<React.Fragment>
           <div className="card" style={{ marginBottom: '20px' }}>
             <div className="card-header"><span className="card-icon">🔍</span>Search & Invite</div>
             <div style={{ padding: '16px' }}>

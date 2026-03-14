@@ -1072,6 +1072,7 @@ const SplashPage = window.SplashPage = ({
       fontSize: '15px'
     }
   }, '\u{1F4CD}'), " Launching Spring 2026 in Virginia"), /*#__PURE__*/React.createElement("div", {
+    className: "splash-hero-buttons",
     style: {
       display: 'flex',
       gap: '12px',
@@ -3021,7 +3022,10 @@ const LoginPage = window.LoginPage = ({
           email: email || null
         })
       });
-      if (!optRes.ok) throw new Error('Failed to start passkey login');
+      if (!optRes.ok) {
+        const errBody = await optRes.json().catch(() => ({}));
+        throw new Error((errBody === null || errBody === void 0 ? void 0 : errBody.error) || `Passkey login failed (${optRes.status})`);
+      }
       const options = await optRes.json();
       const challengeKey = options._challengeKey;
 
@@ -46784,7 +46788,7 @@ const AdminPanel = window.AdminPanel = () => {
   const [obEventFilter, setObEventFilter] = useState('all'); // 'all', 'errors', 'completions'
   const [resetPwLoading, setResetPwLoading] = useState(null); // user id being reset
   const [resetPwMsg, setResetPwMsg] = useState(null); // { id, type, text }
-  const [peopleSubTab, setPeopleSubTab] = useState('all'); // 'all', 'waitlist', 'invites'
+  const [peopleSubTab, setPeopleSubTab] = useState('users'); // 'users', 'waitlist', 'invites'
   // Authorizations tab state
   const [authzList, setAuthzList] = useState([]);
   const [authzLoading, setAuthzLoading] = useState(false);
@@ -46882,8 +46886,8 @@ const AdminPanel = window.AdminPanel = () => {
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
   }, []);
   useEffect(() => {
-    if (activeTab === 'users') loadUsers();
     if (activeTab === 'people') {
+      loadUsers();
       loadWaitlist();
       loadInvites();
       loadCareTeamInvites();
@@ -46904,7 +46908,7 @@ const AdminPanel = window.AdminPanel = () => {
 
   // Auto-reload users when filters change
   useEffect(() => {
-    if (activeTab === 'users') loadUsers();
+    if (activeTab === 'people') loadUsers();
   }, [userRoleFilter, userDemoFilter]);
 
   // Auto-trigger search when switching to people tab with pre-filled email (e.g. from waitlist Invite button)
@@ -47592,69 +47596,75 @@ const AdminPanel = window.AdminPanel = () => {
   if (loading) return /*#__PURE__*/React.createElement(LoadingSpinner, {
     text: "Loading admin dashboard..."
   });
-  const tabs = [{
-    id: 'overview',
-    label: 'Overview',
-    icon: '📊'
+  const tabGroups = [{
+    label: 'Core',
+    tabs: [{
+      id: 'overview',
+      label: 'Overview',
+      icon: '📊'
+    }, {
+      id: 'people',
+      label: 'People',
+      icon: '👥',
+      badge: pendingApprovals.length || null
+    }, {
+      id: 'sessions',
+      label: 'Sessions',
+      icon: '📅'
+    }]
   }, {
-    id: 'users',
-    label: 'Users',
-    icon: '👥'
+    label: 'Trust & Safety',
+    tabs: [{
+      id: 'authorizations',
+      label: 'Auth',
+      icon: '\u{1F512}'
+    }, {
+      id: 'customerservice',
+      label: 'Support',
+      icon: '🛎️'
+    }, {
+      id: 'security',
+      label: 'Security',
+      icon: '🛡️'
+    }, {
+      id: 'blocked',
+      label: 'Blocked',
+      icon: '🚫'
+    }]
   }, {
-    id: 'people',
-    label: 'People',
-    icon: '📋'
-  }, {
-    id: 'activity',
-    label: 'Activity',
-    icon: '⚡'
-  }, {
-    id: 'authorizations',
-    label: 'Auth',
-    icon: '\u{1F512}'
-  }, {
-    id: 'customerservice',
-    label: 'Customer Svc',
-    icon: '🛎️'
-  }, {
-    id: 'feedback',
-    label: 'Feedback',
-    icon: '💬'
-  }, {
-    id: 'help',
-    label: 'Help/FAQ',
-    icon: '❓'
-  }, {
-    id: 'financials',
-    label: 'Financials',
-    icon: '💰'
-  }, {
-    id: 'onboarding',
-    label: 'Auth Events',
-    icon: '🚦'
-  }, {
-    id: 'security',
-    label: 'Security',
-    icon: '🛡️'
-  }, {
-    id: 'blocked',
-    label: 'Blocked',
-    icon: '🚫'
-  }, {
-    id: 'sessions',
-    label: 'Sessions',
-    icon: '📅'
-  }, {
-    id: 'settings',
-    label: 'Settings',
-    icon: '⚙️'
+    label: 'Content & Config',
+    tabs: [{
+      id: 'feedback',
+      label: 'Feedback',
+      icon: '💬'
+    }, {
+      id: 'help',
+      label: 'Help/FAQ',
+      icon: '❓'
+    }, {
+      id: 'financials',
+      label: 'Financials',
+      icon: '💰'
+    }, {
+      id: 'activity',
+      label: 'Activity',
+      icon: '⚡'
+    }, {
+      id: 'onboarding',
+      label: 'Events',
+      icon: '🚦'
+    }, {
+      id: 'settings',
+      label: 'Settings',
+      icon: '⚙️'
+    }]
   }];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: '20px'
+      marginBottom: '16px'
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", {
     className: "greeting",
@@ -47679,7 +47689,7 @@ const AdminPanel = window.AdminPanel = () => {
       color: '#666',
       fontSize: '14px'
     }
-  }, "Manage users, waitlist, and platform metrics")), /*#__PURE__*/React.createElement("button", {
+  }, "Manage users, approvals, and platform operations")), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (window.__navigateTo) window.__navigateTo('account');
     },
@@ -47697,48 +47707,11 @@ const AdminPanel = window.AdminPanel = () => {
       gap: '6px',
       whiteSpace: 'nowrap'
     }
-  }, "\u2699\uFE0F My Account")), /*#__PURE__*/React.createElement("div", {
+  }, "\u2699\uFE0F My Account")), pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-      gap: '8px',
-      marginBottom: '20px'
-    }
-  }, tabs.map(tab => /*#__PURE__*/React.createElement("button", {
-    key: tab.id,
-    onClick: () => setActiveTab(tab.id),
-    style: {
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '4px',
-      padding: '14px 8px',
-      border: 'none',
-      borderRadius: '12px',
-      cursor: 'pointer',
-      background: activeTab === tab.id ? '#1b6b5a' : '#f5f5f5',
-      color: activeTab === tab.id ? '#fff' : '#555',
-      transition: 'all 0.15s',
-      minHeight: '72px',
-      boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '24px',
-      lineHeight: 1
-    }
-  }, tab.icon), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '11px',
-      fontWeight: activeTab === tab.id ? 700 : 600,
-      letterSpacing: '0.3px'
-    }
-  }, tab.label)))), activeTab === 'overview' && stats && /*#__PURE__*/React.createElement("div", null, pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 20,
+      marginBottom: 16,
       padding: 16,
-      background: '#fff3e0',
+      background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)',
       border: '2px solid #ff9800',
       borderRadius: 14
     }
@@ -47747,21 +47720,38 @@ const AdminPanel = window.AdminPanel = () => {
       fontSize: 15,
       fontWeight: 700,
       color: '#e65100',
-      marginBottom: 12
+      marginBottom: 12,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
     }
-  }, '\u{1F514}', " ", pendingApprovals.length, " Account", pendingApprovals.length > 1 ? 's' : '', " Awaiting Approval"), pendingApprovals.map(u => /*#__PURE__*/React.createElement("div", {
+  }, '\u{1F514}', " Action Required", /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: '#e65100',
+      color: '#fff',
+      borderRadius: 20,
+      padding: '2px 10px',
+      fontSize: 13
+    }
+  }, pendingApprovals.length)), pendingApprovals.map(u => /*#__PURE__*/React.createElement("div", {
     key: u.id,
     style: {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: '10px 12px',
+      padding: '10px 14px',
       marginBottom: 6,
       background: '#fff',
       borderRadius: 10,
-      border: '1px solid #ffe0b2'
+      border: '1px solid #ffe0b2',
+      flexWrap: 'wrap',
+      gap: 8
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: '1 1 200px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontWeight: 600,
       fontSize: 14,
@@ -47772,7 +47762,7 @@ const AdminPanel = window.AdminPanel = () => {
       fontSize: 12,
       color: '#888'
     }
-  }, u.email, " \u2022 ", u.role, " \u2022 ", new Date(u.created_at).toLocaleDateString())), /*#__PURE__*/React.createElement("div", {
+  }, u.email, " ", '\u00B7', " ", u.role, " ", '\u00B7', " signed up ", new Date(u.created_at).toLocaleDateString())), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8
@@ -47791,7 +47781,7 @@ const AdminPanel = window.AdminPanel = () => {
       cursor: 'pointer',
       opacity: approvalLoading === u.id ? 0.6 : 1
     }
-  }, approvalLoading === u.id ? '...' : 'Approve'), /*#__PURE__*/React.createElement("button", {
+  }, approvalLoading === u.id ? '...' : '\u2713 Approve'), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleReject(u.id),
     disabled: approvalLoading === u.id,
     style: {
@@ -47805,6 +47795,120 @@ const AdminPanel = window.AdminPanel = () => {
       cursor: 'pointer'
     }
   }, "Reject"))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative',
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: 'absolute',
+      left: 16,
+      top: '50%',
+      transform: 'translateY(-50%)',
+      fontSize: 18,
+      color: '#999'
+    }
+  }, '\u{1F50D}'), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    placeholder: "Search people by name or email...",
+    value: userSearch,
+    onChange: e => setUserSearch(e.target.value),
+    onKeyDown: e => {
+      if (e.key === 'Enter') {
+        if (activeTab !== 'people') setActiveTab('people');
+        setPeopleSubTab('users');
+        loadUsers();
+      }
+    },
+    style: {
+      width: '100%',
+      padding: '14px 16px 14px 44px',
+      border: '2px solid #e0e0e0',
+      borderRadius: 12,
+      fontSize: 15,
+      background: '#fff',
+      outline: 'none',
+      transition: 'border-color 0.2s',
+      boxSizing: 'border-box'
+    },
+    onFocus: e => {
+      e.target.style.borderColor = '#1b6b5a';
+    },
+    onBlur: e => {
+      e.target.style.borderColor = '#e0e0e0';
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: 'absolute',
+      right: 16,
+      top: '50%',
+      transform: 'translateY(-50%)',
+      fontSize: 12,
+      color: '#bbb'
+    }
+  }, "searches users, waitlist & invites")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 20
+    }
+  }, tabGroups.map(group => /*#__PURE__*/React.createElement("div", {
+    key: group.label,
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '1px',
+      color: '#999',
+      marginBottom: 6,
+      paddingLeft: 4
+    }
+  }, group.label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      flexWrap: 'wrap'
+    }
+  }, group.tabs.map(tab => /*#__PURE__*/React.createElement("button", {
+    key: tab.id,
+    onClick: () => setActiveTab(tab.id),
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      padding: '10px 16px',
+      border: 'none',
+      borderRadius: 10,
+      cursor: 'pointer',
+      background: activeTab === tab.id ? '#1b6b5a' : '#f0f0f0',
+      color: activeTab === tab.id ? '#fff' : '#555',
+      fontSize: 13,
+      fontWeight: 600,
+      transition: 'all 0.15s',
+      position: 'relative',
+      boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16
+    }
+  }, tab.icon), tab.label, tab.badge ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: 'absolute',
+      top: -4,
+      right: -4,
+      background: '#e65100',
+      color: '#fff',
+      fontSize: 10,
+      fontWeight: 700,
+      borderRadius: 10,
+      padding: '1px 6px',
+      minWidth: 18,
+      textAlign: 'center'
+    }
+  }, tab.badge) : null)))))), activeTab === 'overview' && stats && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "stats-grid"
   }, /*#__PURE__*/React.createElement("div", {
     className: "stat-card"
@@ -48033,7 +48137,53 @@ const AdminPanel = window.AdminPanel = () => {
     y1: "14",
     x2: "21",
     y2: "3"
-  })), "Open Plausible Dashboard")))), activeTab === 'users' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  })), "Open Plausible Dashboard")))), activeTab === 'people' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 4,
+      marginBottom: 16,
+      background: '#f5f5f5',
+      borderRadius: 8,
+      padding: 3
+    }
+  }, [{
+    id: 'users',
+    label: `Users (${usersTotal})`,
+    badge: pendingApprovals.length || null
+  }, {
+    id: 'waitlist',
+    label: `Waitlist (${waitlistTotal})`
+  }, {
+    id: 'invites',
+    label: `Invites (${invitesTotal})`
+  }].map(st => /*#__PURE__*/React.createElement("button", {
+    key: st.id,
+    onClick: () => setPeopleSubTab(st.id),
+    style: {
+      flex: 1,
+      padding: '8px 12px',
+      borderRadius: 6,
+      border: 'none',
+      fontSize: 13,
+      fontWeight: peopleSubTab === st.id ? 700 : 500,
+      background: peopleSubTab === st.id ? '#fff' : 'transparent',
+      color: peopleSubTab === st.id ? '#1b6b5a' : '#888',
+      cursor: 'pointer',
+      boxShadow: peopleSubTab === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+      transition: 'all 0.15s',
+      position: 'relative'
+    }
+  }, st.label, st.badge ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: '#e65100',
+      color: '#fff',
+      borderRadius: 10,
+      padding: '1px 6px',
+      fontSize: 10,
+      fontWeight: 700,
+      marginLeft: 4
+    }
+  }, st.badge, " new") : null))), peopleSubTab === 'users' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: '12px',
@@ -48041,20 +48191,7 @@ const AdminPanel = window.AdminPanel = () => {
       flexWrap: 'wrap',
       alignItems: 'center'
     }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "text",
-    placeholder: "Search by name or email...",
-    value: userSearch,
-    onChange: e => setUserSearch(e.target.value),
-    onKeyDown: e => e.key === 'Enter' && loadUsers(),
-    style: {
-      flex: '1 1 250px',
-      padding: '10px 14px',
-      borderRadius: '8px',
-      border: '1px solid #ddd',
-      fontSize: '14px'
-    }
-  }), /*#__PURE__*/React.createElement("select", {
+  }, /*#__PURE__*/React.createElement("select", {
     value: userRoleFilter,
     onChange: e => {
       setUserRoleFilter(e.target.value);
@@ -48133,7 +48270,7 @@ const AdminPanel = window.AdminPanel = () => {
       color: '#666',
       fontWeight: 600
     }
-  }, "Verified"), /*#__PURE__*/React.createElement("th", {
+  }, "Status"), /*#__PURE__*/React.createElement("th", {
     style: {
       padding: '10px 12px',
       textAlign: 'center',
@@ -48154,420 +48291,306 @@ const AdminPanel = window.AdminPanel = () => {
       color: '#666',
       fontWeight: 600
     }
-  }, "Actions"))), /*#__PURE__*/React.createElement("tbody", null, users.map(u => /*#__PURE__*/React.createElement("tr", {
-    key: u.id,
-    style: {
-      borderBottom: '1px solid #f0f0f0'
-    }
-  }, /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '10px 12px',
-      fontWeight: 500
-    }
-  }, u.first_name, " ", u.last_name, u.is_admin ? /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: '6px',
-      fontSize: '10px',
-      background: '#1b6b5a',
-      color: 'white',
-      padding: '2px 6px',
-      borderRadius: '4px'
-    }
-  }, "ADMIN") : ''), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '10px 12px',
-      color: '#555'
-    }
-  }, u.email), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '10px 12px'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      padding: '3px 8px',
-      borderRadius: '12px',
-      fontSize: '11px',
-      fontWeight: 600,
-      background: u.role === 'family' ? '#e0f2e9' : u.role === 'caregiver' ? '#e3f2fd' : '#fff3e0',
-      color: u.role === 'family' ? '#1b6b5a' : u.role === 'caregiver' ? '#1565c0' : '#e65100',
-      textTransform: 'capitalize'
-    }
-  }, u.role === 'care_for' ? 'Care Recipient' : u.role)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '10px 12px',
-      textAlign: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: async () => {
-      try {
-        const res = await apiFetch(`/api/admin/users/${u.id}/verify-email`, {
-          method: 'PUT'
-        });
-        if (res !== null && res !== void 0 && res.ok) {
-          const data = await res.json();
-          setUsers(prev => prev.map(usr => usr.id === u.id ? {
-            ...usr,
-            email_verified: data.email_verified ? 1 : 0
-          } : usr));
-        }
-      } catch (err) {
-        console.error('Toggle verify error:', err);
+  }, "Actions"))), /*#__PURE__*/React.createElement("tbody", null, users.map(u => {
+    const isPending = pendingApprovals.some(p => p.id === u.id);
+    return /*#__PURE__*/React.createElement("tr", {
+      key: u.id,
+      style: {
+        borderBottom: '1px solid #f0f0f0',
+        background: isPending ? '#fffbf5' : 'transparent',
+        borderLeft: isPending ? '4px solid #ff9800' : 'none'
       }
-    },
-    style: {
-      padding: '3px 8px',
-      borderRadius: '12px',
-      fontSize: '11px',
-      fontWeight: 600,
-      cursor: 'pointer',
-      border: 'none',
-      background: u.email_verified ? '#e8f5e9' : '#fff3e0',
-      color: u.email_verified ? '#1b6b5a' : '#e65100'
-    },
-    title: u.email_verified ? 'Click to revoke email verification' : 'Click to manually verify email'
-  }, u.email_verified ? '✅ Verified' : '⚠ Unverified')), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '10px 12px',
-      textAlign: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: async () => {
-      try {
-        const res = await apiFetch(`/api/admin/users/${u.id}/tester`, {
-          method: 'PUT'
-        });
-        if (res !== null && res !== void 0 && res.ok) {
-          const data = await res.json();
-          setUsers(prev => prev.map(usr => usr.id === u.id ? {
-            ...usr,
-            is_tester: data.is_tester ? 1 : 0
-          } : usr));
-        }
-      } catch (err) {
-        console.error('Toggle tester error:', err);
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 12px',
+        fontWeight: 500
       }
-    },
-    style: {
-      padding: '3px 8px',
-      borderRadius: '12px',
-      fontSize: '11px',
-      fontWeight: 600,
-      cursor: 'pointer',
-      border: 'none',
-      background: u.is_tester ? '#e8f5e9' : '#f5f5f5',
-      color: u.is_tester ? '#1b6b5a' : '#999'
-    },
-    title: u.is_tester ? 'Click to remove tester access' : 'Click to grant tester access'
-  }, u.is_tester ? '✓ Yes' : 'No')), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '10px 12px',
-      color: '#888',
-      fontSize: '12px'
-    }
-  }, formatDate(u.created_at)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '10px 12px',
-      textAlign: 'center'
-    }
-  }, u.is_admin ? /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '11px',
-      color: '#999'
-    }
-  }, "\u2014") : u.role === 'caregiver' ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: '4px',
-      justifyContent: 'center',
-      flexWrap: 'wrap'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => openOnboardingModal(u.id),
-    style: {
-      padding: '4px 10px',
-      background: '#1b6b5a',
-      color: '#fff',
-      border: 'none',
-      borderRadius: '4px',
-      fontSize: '11px',
-      fontWeight: 600,
-      cursor: 'pointer'
-    }
-  }, "Manage"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleForcePasswordReset(u.id, u.email),
-    disabled: resetPwLoading === u.id,
-    style: {
-      padding: '4px 8px',
-      background: '#fff',
-      color: '#d97706',
-      border: '1px solid #e0e0e0',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer',
-      opacity: resetPwLoading === u.id ? 0.5 : 1
-    },
-    title: "Send password reset email"
-  }, resetPwLoading === u.id ? '…' : (resetPwMsg === null || resetPwMsg === void 0 ? void 0 : resetPwMsg.id) === u.id ? resetPwMsg.type === 'success' ? '✓' : '✕' : '🔑'), deleteConfirm === u.id ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleDeleteUser(u.id, u.email),
-    disabled: deleteLoading,
-    style: {
-      padding: '4px 10px',
-      background: '#c62828',
-      color: '#fff',
-      border: 'none',
-      borderRadius: '4px',
-      fontSize: '11px',
-      fontWeight: 700,
-      cursor: 'pointer'
-    }
-  }, deleteLoading ? '...' : 'Confirm'), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setDeleteConfirm(null),
-    style: {
-      padding: '4px 8px',
-      background: '#f0f0f0',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer'
-    }
-  }, "\u2715")) : /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleDeleteUser(u.id, u.email),
-    style: {
-      padding: '4px 10px',
-      background: '#fff',
-      color: '#c62828',
-      border: '1px solid #e0e0e0',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer'
-    }
-  }, "Delete"), nukeConfirm === u.id ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleNukeUser(u.id, u.email),
-    disabled: nukeLoading,
-    style: {
-      padding: '4px 10px',
-      background: '#1a1a1a',
-      color: '#ff6b35',
-      border: 'none',
-      borderRadius: '4px',
-      fontSize: '11px',
-      fontWeight: 700,
-      cursor: 'pointer'
-    },
-    title: "Confirm nuke \u2014 requires passkey"
-  }, nukeLoading ? '⏳' : '☢️ Confirm'), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setNukeConfirm(null);
-      setNukeError(null);
-    },
-    style: {
-      padding: '4px 8px',
-      background: '#f0f0f0',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer'
-    }
-  }, "\u2715")) : /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleNukeUser(u.id, u.email),
-    style: {
-      padding: '4px 8px',
-      background: '#fff',
-      color: '#555',
-      border: '1px solid #e0e0e0',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer'
-    },
-    title: "Permanently delete all data (requires passkey)"
-  }, "\uD83C\uDF44\u2601\uFE0F")) : nukeConfirm === u.id ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: '4px',
-      justifyContent: 'center',
-      flexWrap: 'wrap'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleNukeUser(u.id, u.email),
-    disabled: nukeLoading,
-    style: {
-      padding: '4px 10px',
-      background: '#1a1a1a',
-      color: '#ff6b35',
-      border: 'none',
-      borderRadius: '4px',
-      fontSize: '11px',
-      fontWeight: 700,
-      cursor: 'pointer'
-    },
-    title: "Confirm nuke \u2014 requires passkey"
-  }, nukeLoading ? '⏳' : '☢️ Confirm Nuke'), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setNukeConfirm(null);
-      setNukeError(null);
-    },
-    style: {
-      padding: '4px 8px',
-      background: '#f0f0f0',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer'
-    }
-  }, "\u2715"), nukeError && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '10px',
-      color: '#c62828',
-      width: '100%',
-      textAlign: 'center'
-    }
-  }, nukeError)) : deleteConfirm === u.id ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: '4px',
-      justifyContent: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleDeleteUser(u.id, u.email),
-    disabled: deleteLoading,
-    style: {
-      padding: '4px 10px',
-      background: '#c62828',
-      color: '#fff',
-      border: 'none',
-      borderRadius: '4px',
-      fontSize: '11px',
-      fontWeight: 700,
-      cursor: 'pointer'
-    }
-  }, deleteLoading ? '...' : 'Confirm'), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setDeleteConfirm(null),
-    style: {
-      padding: '4px 8px',
-      background: '#f0f0f0',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer'
-    }
-  }, "\u2715")) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: '4px',
-      justifyContent: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleForcePasswordReset(u.id, u.email),
-    disabled: resetPwLoading === u.id,
-    style: {
-      padding: '4px 8px',
-      background: '#fff',
-      color: '#d97706',
-      border: '1px solid #e0e0e0',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer',
-      opacity: resetPwLoading === u.id ? 0.5 : 1
-    },
-    title: "Send password reset email"
-  }, resetPwLoading === u.id ? '…' : (resetPwMsg === null || resetPwMsg === void 0 ? void 0 : resetPwMsg.id) === u.id ? resetPwMsg.type === 'success' ? '✓' : '✕' : '🔑'), /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleDeleteUser(u.id, u.email),
-    style: {
-      padding: '4px 10px',
-      background: '#fff',
-      color: '#c62828',
-      border: '1px solid #e0e0e0',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer'
-    }
-  }, "Delete"), nukeConfirm === u.id ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleNukeUser(u.id, u.email),
-    disabled: nukeLoading,
-    style: {
-      padding: '4px 10px',
-      background: '#1a1a1a',
-      color: '#ff6b35',
-      border: 'none',
-      borderRadius: '4px',
-      fontSize: '11px',
-      fontWeight: 700,
-      cursor: 'pointer'
-    },
-    title: "Confirm nuke \u2014 requires passkey"
-  }, nukeLoading ? '⏳' : '☢️ Confirm'), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setNukeConfirm(null);
-      setNukeError(null);
-    },
-    style: {
-      padding: '4px 8px',
-      background: '#f0f0f0',
-      border: '1px solid #ddd',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer'
-    }
-  }, "\u2715")) : /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleNukeUser(u.id, u.email),
-    style: {
-      padding: '4px 8px',
-      background: '#fff',
-      color: '#555',
-      border: '1px solid #e0e0e0',
-      borderRadius: '4px',
-      fontSize: '11px',
-      cursor: 'pointer'
-    },
-    title: "Permanently delete all data (requires passkey)"
-  }, "\uD83C\uDF44\u2601\uFE0F")), nukeError && nukeConfirm === u.id && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '10px',
-      color: '#c62828',
-      marginTop: 4,
-      textAlign: 'center'
-    }
-  }, nukeError)))))), users.length === 0 && /*#__PURE__*/React.createElement("div", {
+    }, u.first_name, " ", u.last_name, u.is_admin ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        marginLeft: '6px',
+        fontSize: '10px',
+        background: '#1b6b5a',
+        color: 'white',
+        padding: '2px 6px',
+        borderRadius: '4px'
+      }
+    }, "ADMIN") : ''), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 12px',
+        color: '#555'
+      }
+    }, u.email), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 12px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '3px 8px',
+        borderRadius: '12px',
+        fontSize: '11px',
+        fontWeight: 600,
+        background: u.role === 'family' ? '#e0f2e9' : u.role === 'caregiver' ? '#e3f2fd' : '#fff3e0',
+        color: u.role === 'family' ? '#1b6b5a' : u.role === 'caregiver' ? '#1565c0' : '#e65100',
+        textTransform: 'capitalize'
+      }
+    }, u.role === 'care_for' ? 'Care Recipient' : u.role)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 12px',
+        textAlign: 'center'
+      }
+    }, isPending ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '3px 8px',
+        borderRadius: 12,
+        fontSize: 11,
+        fontWeight: 600,
+        background: '#fff3e0',
+        color: '#e65100'
+      }
+    }, '\u23F3', " Pending") : /*#__PURE__*/React.createElement("button", {
+      onClick: async () => {
+        try {
+          const res = await apiFetch(`/api/admin/users/${u.id}/verify-email`, {
+            method: 'PUT'
+          });
+          if (res !== null && res !== void 0 && res.ok) {
+            const data = await res.json();
+            setUsers(prev => prev.map(usr => usr.id === u.id ? {
+              ...usr,
+              email_verified: data.email_verified ? 1 : 0
+            } : usr));
+          }
+        } catch (err) {
+          console.error('Toggle verify error:', err);
+        }
+      },
+      style: {
+        padding: '3px 8px',
+        borderRadius: '12px',
+        fontSize: '11px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        border: 'none',
+        background: u.email_verified ? '#e8f5e9' : '#fff3e0',
+        color: u.email_verified ? '#1b6b5a' : '#e65100'
+      },
+      title: u.email_verified ? 'Click to revoke email verification' : 'Click to manually verify email'
+    }, u.email_verified ? '\u2705 Verified' : '\u26A0 Unverified')), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 12px',
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: async () => {
+        try {
+          const res = await apiFetch(`/api/admin/users/${u.id}/tester`, {
+            method: 'PUT'
+          });
+          if (res !== null && res !== void 0 && res.ok) {
+            const data = await res.json();
+            setUsers(prev => prev.map(usr => usr.id === u.id ? {
+              ...usr,
+              is_tester: data.is_tester ? 1 : 0
+            } : usr));
+          }
+        } catch (err) {
+          console.error('Toggle tester error:', err);
+        }
+      },
+      style: {
+        padding: '3px 8px',
+        borderRadius: '12px',
+        fontSize: '11px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        border: 'none',
+        background: u.is_tester ? '#e8f5e9' : '#f5f5f5',
+        color: u.is_tester ? '#1b6b5a' : '#999'
+      },
+      title: u.is_tester ? 'Click to remove tester access' : 'Click to grant tester access'
+    }, u.is_tester ? '\u2713 Yes' : 'No')), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 12px',
+        color: '#888',
+        fontSize: '12px'
+      }
+    }, formatDate(u.created_at)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 12px',
+        textAlign: 'center'
+      }
+    }, isPending ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 6,
+        justifyContent: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleApprove(u.id),
+      disabled: approvalLoading === u.id,
+      style: {
+        padding: '4px 12px',
+        background: '#4caf50',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, approvalLoading === u.id ? '...' : 'Approve'), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleReject(u.id),
+      style: {
+        padding: '4px 10px',
+        background: '#f5f5f5',
+        color: '#c62828',
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Reject")) : u.is_admin ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '11px',
+        color: '#999'
+      }
+    }, '\u2014') : u.role === 'caregiver' ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: '4px',
+        justifyContent: 'center',
+        flexWrap: 'wrap'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => openOnboardingModal(u.id),
+      style: {
+        padding: '4px 10px',
+        background: '#1b6b5a',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '4px',
+        fontSize: '11px',
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Manage"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleForcePasswordReset(u.id, u.email),
+      disabled: resetPwLoading === u.id,
+      style: {
+        padding: '4px 8px',
+        background: '#fff',
+        color: '#d97706',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer',
+        opacity: resetPwLoading === u.id ? 0.5 : 1
+      },
+      title: "Send password reset email"
+    }, resetPwLoading === u.id ? '\u2026' : (resetPwMsg === null || resetPwMsg === void 0 ? void 0 : resetPwMsg.id) === u.id ? resetPwMsg.type === 'success' ? '\u2713' : '\u2715' : '\u{1F511}'), deleteConfirm === u.id ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleDeleteUser(u.id, u.email),
+      disabled: deleteLoading,
+      style: {
+        padding: '4px 10px',
+        background: '#c62828',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '4px',
+        fontSize: '11px',
+        fontWeight: 700,
+        cursor: 'pointer'
+      }
+    }, deleteLoading ? '...' : 'Confirm'), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setDeleteConfirm(null),
+      style: {
+        padding: '4px 8px',
+        background: '#f0f0f0',
+        border: '1px solid #ddd',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer'
+      }
+    }, '\u2715')) : /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleDeleteUser(u.id, u.email),
+      style: {
+        padding: '4px 10px',
+        background: '#fff',
+        color: '#c62828',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer'
+      }
+    }, "Delete"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleNukeUser(u.id, u.email),
+      style: {
+        padding: '4px 8px',
+        background: '#fff',
+        color: '#555',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer'
+      },
+      title: "Permanently delete all data (requires passkey)"
+    }, '\u{1F344}\u2601\uFE0F')) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: '4px',
+        justifyContent: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleForcePasswordReset(u.id, u.email),
+      disabled: resetPwLoading === u.id,
+      style: {
+        padding: '4px 8px',
+        background: '#fff',
+        color: '#d97706',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer',
+        opacity: resetPwLoading === u.id ? 0.5 : 1
+      },
+      title: "Send password reset email"
+    }, resetPwLoading === u.id ? '\u2026' : (resetPwMsg === null || resetPwMsg === void 0 ? void 0 : resetPwMsg.id) === u.id ? resetPwMsg.type === 'success' ? '\u2713' : '\u2715' : '\u{1F511}'), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleDeleteUser(u.id, u.email),
+      style: {
+        padding: '4px 10px',
+        background: '#fff',
+        color: '#c62828',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer'
+      }
+    }, "Delete"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleNukeUser(u.id, u.email),
+      style: {
+        padding: '4px 8px',
+        background: '#fff',
+        color: '#555',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer'
+      },
+      title: "Permanently delete all data (requires passkey)"
+    }, '\u{1F344}\u2601\uFE0F')), nukeError && nukeConfirm === u.id && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '10px',
+        color: '#c62828',
+        marginTop: 4,
+        textAlign: 'center'
+      }
+    }, nukeError)));
+  }))), users.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '24px',
       textAlign: 'center',
       color: '#999'
     }
-  }, "No users found"))), activeTab === 'people' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 4,
-      marginBottom: 16,
-      background: '#f5f5f5',
-      borderRadius: 8,
-      padding: 3
-    }
-  }, [{
-    id: 'all',
-    label: `All (${waitlistTotal + invitesTotal})`
-  }, {
-    id: 'waitlist',
-    label: `Waitlist (${waitlistTotal})`
-  }, {
-    id: 'invites',
-    label: `Invites (${invitesTotal})`
-  }].map(st => /*#__PURE__*/React.createElement("button", {
-    key: st.id,
-    onClick: () => setPeopleSubTab(st.id),
-    style: {
-      flex: 1,
-      padding: '8px 12px',
-      borderRadius: 6,
-      border: 'none',
-      fontSize: 13,
-      fontWeight: peopleSubTab === st.id ? 700 : 500,
-      background: peopleSubTab === st.id ? '#fff' : 'transparent',
-      color: peopleSubTab === st.id ? '#1b6b5a' : '#888',
-      cursor: 'pointer',
-      boxShadow: peopleSubTab === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-      transition: 'all 0.15s'
-    }
-  }, st.label))), (peopleSubTab === 'all' || peopleSubTab === 'waitlist') && waitlist.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "No users found"))), peopleSubTab === 'waitlist' && waitlist.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'flex-end',
@@ -48588,7 +48611,7 @@ const AdminPanel = window.AdminPanel = () => {
       alignItems: 'center',
       gap: '6px'
     }
-  }, "Export Waitlist CSV")), (peopleSubTab === 'all' || peopleSubTab === 'waitlist') && /*#__PURE__*/React.createElement("div", {
+  }, "Export Waitlist CSV")), peopleSubTab === 'waitlist' && /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: 20
@@ -48732,7 +48755,7 @@ const AdminPanel = window.AdminPanel = () => {
       textAlign: 'center',
       color: '#999'
     }
-  }, "No waitlist entries yet"))), (peopleSubTab === 'all' || peopleSubTab === 'invites') && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "No waitlist entries yet"))), peopleSubTab === 'invites' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: '20px'
@@ -53048,6 +53071,14 @@ const App = () => {
     // If we're in a pre-auth URL mode (reset-password, consent-response), skip auto-login
     if (appState === 'reset-password' || appState === 'consent-response') return;
 
+    // Only auto-restore if this tab has an active session (set at login).
+    // Closing the browser/tab clears sessionStorage, so the user must
+    // re-authenticate on next visit instead of silently auto-logging in.
+    // Invite links bypass this check so the accept-invite flow still works.
+    const hasActiveSession = sessionStorage.getItem('inplace_session_active');
+    const hasInviteToken = new URLSearchParams(window.location.search).get('invite') || new URLSearchParams(window.__originalSearch || '').get('invite') || localStorage.getItem('pendingInviteToken');
+    if (!hasActiveSession && !hasInviteToken) return;
+
     // Restore session from httpOnly cookie (server reads cookie automatically)
     apiFetch('/api/auth/me').then(async r => {
       if (r !== null && r !== void 0 && r.ok) {
@@ -53094,6 +53125,8 @@ const App = () => {
             const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
             if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
           } catch {}
+          // Session successfully restored — keep flag active for this tab
+          sessionStorage.setItem('inplace_session_active', '1');
           setAppState('app');
           // If returning user has a pending invite token, accept it now
           // Check URL, __originalSearch, and localStorage (survives approval gate)
@@ -53326,6 +53359,9 @@ const App = () => {
     }
   }, []);
   const handleLogin = user => {
+    // Mark this tab as having an active session so refreshes auto-restore,
+    // but closing the browser requires re-authentication.
+    sessionStorage.setItem('inplace_session_active', '1');
     // Clear stale active role from any previous session
     window.setActiveRole(null);
     setActiveRoleState(null);
@@ -53442,6 +53478,8 @@ const App = () => {
     }
   };
   const handleLogout = () => {
+    // Clear session-active flag so next page load requires re-authentication
+    sessionStorage.removeItem('inplace_session_active');
     // Clear server-side session: revoke refresh token + clear httpOnly cookies
     AUTH_TOKEN = null;
     fetch('/api/auth/logout', {
