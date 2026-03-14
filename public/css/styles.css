@@ -2212,6 +2212,11 @@
       cursor: pointer;
     }
 
+    /* Hidden on desktop, shown on mobile */
+    .splash-show-mobile-only {
+      display: none !important;
+    }
+
     /* ===== Splash page mobile fixes ===== */
     @media (max-width: 768px) {
       /* Nav: tighter padding, smaller gap */
@@ -2228,6 +2233,9 @@
       }
       .splash-nav-actions .splash-hide-mobile {
         display: none !important;
+      }
+      .splash-show-mobile-only {
+        display: inline-flex !important;
       }
 
       /* Hero: stack vertically — text on top, image below */

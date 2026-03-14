@@ -103,6 +103,10 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               padding: '14px 32px', fontSize: '16px', fontWeight: 600,
               background: '#e8724a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer',
             }}>Sign Up Free</button>
+            <button className="splash-show-mobile-only" onClick={() => setShowStory(true)} style={{
+              padding: '14px 24px', fontSize: '16px', fontWeight: 600,
+              background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer',
+            }}>Our Story</button>
             <button onClick={() => onNavigate('demo')} style={{
               padding: '14px 32px', fontSize: '16px', fontWeight: 600,
               background: 'none', color: '#1b6b5a', border: '1.5px solid #1b6b5a', borderRadius: '8px', cursor: 'pointer',
@@ -498,6 +502,15 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               }}>{'\u2715'}</button>
               <h2 style={{ fontSize: '24px', color: '#1a1a1a', marginBottom: '2px', fontWeight: 700 }}>Why I Built inPlace</h2>
               <div style={{ fontSize: '14px', color: '#888', marginBottom: '24px' }}>Pete Lee, Founder</div>
+            </div>
+
+            {/* Photo */}
+            <div style={{ padding: '0 40px 24px', textAlign: 'center' }}>
+              <img src="/images/mom-and-pete.jpg" alt="Pete and his mom" style={{
+                width: '100%', maxWidth: '480px', borderRadius: '12px',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+              }} />
+              <div style={{ fontSize: '13px', color: '#999', marginTop: '8px', fontStyle: 'italic' }}>Pete and his mom</div>
             </div>
 
             {/* Story content */}
