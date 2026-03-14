@@ -164,6 +164,54 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         ))}
       </div>
 
+      {/* ── Why inPlace ── */}
+      <section style={{ padding: '56px 24px', background: '#fff' }}>
+        <div style={{ maxWidth: '780px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '28px', color: '#1b6b5a', textAlign: 'center', marginBottom: '12px' }}>Why Start Now?</h2>
+          <p style={{ fontSize: '16px', color: '#555', textAlign: 'center', lineHeight: 1.7, maxWidth: '640px', margin: '0 auto 36px' }}>
+            Most families wait until a crisis to look for help. By then, you're making rushed decisions under stress. inPlace is built around a different idea.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+            {[
+              {
+                step: '1',
+                title: 'Start Small',
+                desc: 'A few hours of companionship a week. A ride to an appointment. Enough to build a real relationship with a caregiver your family trusts.',
+                color: '#e8f5f2',
+              },
+              {
+                step: '2',
+                title: 'Build the Relationship',
+                desc: 'Your caregiver learns the routine, the preferences, the little things that matter. Your loved one gets comfortable with someone who genuinely knows them.',
+                color: '#e3f2fd',
+              },
+              {
+                step: '3',
+                title: 'Scale When You Need To',
+                desc: 'When care needs grow, the support system is already there. No scrambling, no strangers. Just more hours with people who already feel like family.',
+                color: '#fff3e0',
+              },
+            ].map((item, i) => (
+              <div key={i} style={{
+                padding: '28px 24px', borderRadius: '14px', background: item.color,
+                border: '1px solid rgba(0,0,0,0.06)',
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', background: '#1b6b5a', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '16px', fontWeight: 700, marginBottom: '14px',
+                }}>{item.step}</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>{item.title}</div>
+                <div style={{ fontSize: '14px', color: '#555', lineHeight: 1.65 }}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+          <p style={{ fontSize: '15px', color: '#666', textAlign: 'center', lineHeight: 1.7, marginTop: '32px', maxWidth: '580px', margin: '32px auto 0', fontStyle: 'italic' }}>
+            The best time to find a caregiver isn't when you're desperate for one. It's before that.
+          </p>
+        </div>
+      </section>
+
       {/* ── Get Started CTA ── */}
       <section id="splash-signup" style={{ padding: '48px 32px', background: '#fff', textAlign: 'center' }}>
         <div style={{ maxWidth: '520px', margin: '0 auto' }}>
