@@ -480,6 +480,30 @@ async function caregiverDashboard(db, userId, res) {
     LIMIT 5
   `).all(profile.id, sevenDaysAgoCgStr);
 
+  // Caregiver's own sent proposals — so they can track what they proposed
+  let myProposals = [];
+  try {
+    myProposals = await db.prepare(`
+      SELECT tp.*,
+        cs.scheduled_date AS original_date,
+        cs.scheduled_time AS original_time,
+        cs.service_type,
+        cs.duration_hours,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        fu.first_name || ' ' || fu.last_name AS family_name
+      FROM time_proposals tp
+      JOIN care_sessions cs ON tp.session_id = cs.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      WHERE tp.caregiver_user_id = ?
+        AND tp.created_at > NOW() - INTERVAL '30 days'
+      ORDER BY tp.created_at DESC
+      LIMIT 20
+    `).all(userId);
+  } catch (e) {
+    console.log('My proposals query skipped:', e.message);
+  }
+
   const feePercentCg = await getPlatformFeePercent(db);
 
   res.json({
@@ -660,6 +684,22 @@ async function caregiverDashboard(db, userId, res) {
       pendingEarnings: Math.round(((pending.pending_earnings || 0) - (pending.pending_surcharges || 0) * 0.25) * 100) / 100,
       assignedFamilies: assignments.length,
     },
+    myProposals: myProposals.map(p => ({
+      id: p.id,
+      sessionId: p.session_id,
+      proposedDate: p.proposed_date,
+      proposedTime: p.proposed_time,
+      originalDate: p.original_date,
+      originalTime: p.original_time,
+      message: p.message,
+      status: p.status,
+      recipientName: p.recipient_name,
+      familyName: p.family_name,
+      serviceType: p.service_type,
+      durationHours: p.duration_hours,
+      createdAt: p.created_at,
+      respondedAt: p.responded_at,
+    })),
   });
 }
 

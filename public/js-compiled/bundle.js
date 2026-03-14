@@ -34928,6 +34928,135 @@ const CaretakerHub = window.CaretakerHub = ({
       }
     }, "View all ", sorted.length, " sessions ", '\u2192')));
   })(), (() => {
+    const proposals = data.myProposals || [];
+    if (proposals.length === 0) return null;
+    const pending = proposals.filter(p => p.status === 'pending');
+    const resolved = proposals.filter(p => p.status !== 'pending').slice(0, 3);
+    if (pending.length === 0 && resolved.length === 0) return null;
+    const formatT = t => {
+      if (!t) return '';
+      const [h, min] = t.split(':').map(Number);
+      const ap = h >= 12 ? 'PM' : 'AM';
+      const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+      return `${dh}:${String(min || 0).padStart(2, '0')} ${ap}`;
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#7b61ff',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        marginBottom: 10
+      }
+    }, '\u{1F4E8}', " My Proposals ", pending.length > 0 ? `(${pending.length} waiting)` : ''), pending.map(p => {
+      const tz = TimezoneHelper.DEFAULT_TZ;
+      const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
+      const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
+      return /*#__PURE__*/React.createElement("div", {
+        key: p.id,
+        className: "card",
+        style: {
+          marginBottom: 10,
+          padding: '14px 16px',
+          border: '2px solid #7b61ff',
+          borderRadius: 12,
+          background: '#f5f0ff'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontWeight: 600,
+          fontSize: 14,
+          color: '#333',
+          marginBottom: 4
+        }
+      }, p.recipientName || 'Care Visit', /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 400,
+          fontSize: 12,
+          color: '#888',
+          marginLeft: 6
+        }
+      }, p.familyName ? `(${p.familyName})` : '')), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 16,
+          flexWrap: 'wrap',
+          marginBottom: 4
+        }
+      }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: '#999',
+          fontWeight: 600,
+          textTransform: 'uppercase'
+        }
+      }, "Original"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: '#888',
+          textDecoration: 'line-through'
+        }
+      }, origDay, " at ", formatT(p.originalTime))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: '#7b61ff',
+          fontWeight: 600,
+          textTransform: 'uppercase'
+        }
+      }, "You Proposed"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 14,
+          color: '#7b61ff',
+          fontWeight: 600
+        }
+      }, propDay, " at ", formatT(p.proposedTime)))), p.message && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#555',
+          fontStyle: 'italic',
+          background: '#ede7f6',
+          padding: '4px 8px',
+          borderRadius: 6
+        }
+      }, "\"", p.message, "\""), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#7b61ff',
+          fontWeight: 600,
+          marginTop: 6
+        }
+      }, '\u23F3', " Waiting for family to respond"));
+    }), resolved.map(p => {
+      const isAccepted = p.status === 'accepted';
+      return /*#__PURE__*/React.createElement("div", {
+        key: p.id,
+        className: "card",
+        style: {
+          marginBottom: 8,
+          padding: '10px 14px',
+          borderRadius: 10,
+          opacity: 0.8,
+          border: isAccepted ? '1px solid #c8e6c9' : '1px solid #e0e0e0',
+          background: isAccepted ? '#f1f8e9' : '#fafafa'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: '#555'
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 600,
+          color: isAccepted ? '#2e7d32' : '#999'
+        }
+      }, isAccepted ? '\u2705 Accepted' : '\u274C Declined'), ' \u2014 ', p.recipientName || 'Visit', " on ", TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], TimezoneHelper.DEFAULT_TZ), " at ", formatT(p.proposedTime)));
+    }));
+  })(), (() => {
     const completed = data.recentlyCompleted || [];
     if (completed.length === 0) return null;
     return /*#__PURE__*/React.createElement("div", {

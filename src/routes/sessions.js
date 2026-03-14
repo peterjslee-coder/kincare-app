@@ -1759,6 +1759,41 @@ router.post("/:id/propose-time", async (req, res) => {
       sendPushToUser(session.family_user_id, { title, body, data: { type: "time_proposal", sessionId: req.params.id } }, "time_proposal").catch(() => {});
     }
 
+    // Email notification to family
+    try {
+      const { sendEmail, brandedHtml } = require("../utils/email");
+      const familyUser = await db.prepare("SELECT email, first_name FROM users WHERE id = ?").get(session.family_user_id);
+      if (familyUser?.email) {
+        const origTime = (() => { const [h2, m2] = (session.scheduled_time || '').split(':'); const hr = parseInt(h2); return `${hr === 0 ? 12 : hr > 12 ? hr - 12 : hr}:${m2} ${hr >= 12 ? 'PM' : 'AM'}`; })();
+        const appUrl = process.env.APP_URL || 'https://inplace.care';
+        await sendEmail({
+          to: familyUser.email,
+          subject: `${caregiverName} proposed a different time for ${session.recipient_first_name}'s care`,
+          html: brandedHtml({
+            heading: 'New Time Proposal',
+            body: `<p>Hi ${familyUser.first_name},</p>
+              <p><strong>${caregiverName}</strong> would like to care for <strong>${session.recipient_first_name}</strong> but proposed a different time:</p>
+              <table style="margin: 16px 0; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 8px 16px 8px 0; color: #888; font-size: 14px;">Original:</td>
+                  <td style="padding: 8px 0; text-decoration: line-through; color: #999;">${proposedDate === (session.scheduled_date || '').split('T')[0] ? '' : session.scheduled_date + ' at '}${origTime}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 16px 8px 0; color: #7b61ff; font-weight: 600; font-size: 14px;">Proposed:</td>
+                  <td style="padding: 8px 0; color: #7b61ff; font-weight: 600; font-size: 16px;">${proposedDate} at ${timeStr}</td>
+                </tr>
+              </table>
+              ${message ? `<p style="background: #f5f0ff; padding: 10px 14px; border-radius: 8px; font-style: italic; color: #555;">"${message}"</p>` : ''}
+              <p>Log in to accept or decline this proposal.</p>`,
+            ctaText: 'Review Proposal',
+            ctaUrl: `${appUrl}/dashboard`,
+          }),
+        }).catch(err => console.error('Proposal email error:', err));
+      }
+    } catch (emailErr) {
+      console.error('Proposal email notification error:', emailErr);
+    }
+
     res.json({ proposal: { id: proposalId, status: "pending" } });
   } catch (err) {
     console.error("Propose-time error:", err);
