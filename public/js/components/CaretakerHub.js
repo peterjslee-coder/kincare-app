@@ -1195,10 +1195,96 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       )}
 
+      {/* My Proposals — caregiver's sent time proposals, ABOVE sessions */}
+      {(() => {
+        const proposals = data.myProposals || [];
+        if (proposals.length === 0) return null;
+        const pendingProps = proposals.filter(p => p.status === 'pending');
+        const resolvedProps = proposals.filter(p => p.status !== 'pending').slice(0, 3);
+        if (pendingProps.length === 0 && resolvedProps.length === 0) return null;
+        const formatT = (t) => {
+          if (!t) return '';
+          const [h, min] = t.split(':').map(Number);
+          const ap = h >= 12 ? 'PM' : 'AM';
+          const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+          return `${dh}:${String(min || 0).padStart(2, '0')} ${ap}`;
+        };
+        return (
+          <div style={{ marginBottom: 16 }}>
+            {pendingProps.length > 0 && (
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#7b61ff', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+                {'\u{1F4E8}'} My Proposals ({pendingProps.length} waiting)
+              </div>
+            )}
+            {pendingProps.map(p => {
+              const tz = TimezoneHelper.DEFAULT_TZ;
+              const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
+              const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
+              return (
+                <div key={p.id} className="card" style={{
+                  marginBottom: 10, padding: '14px 16px', border: '2px solid #7b61ff', borderRadius: 12, background: '#f5f0ff',
+                }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#333', marginBottom: 4 }}>
+                    {p.recipientName || 'Care Visit'}
+                    <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                      {p.familyName ? `(${p.familyName})` : ''}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 4 }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
+                      <div style={{ fontSize: 13, color: '#888', textDecoration: 'line-through' }}>{origDay} at {formatT(p.originalTime)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#7b61ff', fontWeight: 600, textTransform: 'uppercase' }}>You Proposed</div>
+                      <div style={{ fontSize: 14, color: '#7b61ff', fontWeight: 600 }}>{propDay} at {formatT(p.proposedTime)}</div>
+                    </div>
+                  </div>
+                  {p.message && (
+                    <div style={{ fontSize: 12, color: '#555', fontStyle: 'italic', background: '#ede7f6', padding: '4px 8px', borderRadius: 6 }}>
+                      "{p.message}"
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: '#7b61ff', fontWeight: 600, marginTop: 6 }}>
+                    {'\u23F3'} Waiting for family to respond
+                  </div>
+                </div>
+              );
+            })}
+            {resolvedProps.length > 0 && pendingProps.length === 0 && (
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+                Recent Proposals
+              </div>
+            )}
+            {resolvedProps.map(p => {
+              const isAccepted = p.status === 'accepted';
+              return (
+                <div key={p.id} className="card" style={{
+                  marginBottom: 8, padding: '10px 14px', borderRadius: 10, opacity: 0.8,
+                  border: isAccepted ? '1px solid #c8e6c9' : '1px solid #e0e0e0',
+                  background: isAccepted ? '#f1f8e9' : '#fafafa',
+                }}>
+                  <div style={{ fontSize: 13, color: '#555' }}>
+                    <span style={{ fontWeight: 600, color: isAccepted ? '#2e7d32' : '#999' }}>
+                      {isAccepted ? '\u2705 Accepted' : '\u274C Declined'}
+                    </span>
+                    {' \u2014 '}{p.recipientName || 'Visit'} on {TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], TimezoneHelper.DEFAULT_TZ)} at {formatT(p.proposedTime)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {/* UP NEXT — any session <24 hours away + in_progress, with check-in/out */}
-      {upNextSessions.length > 0 && (() => {
+      {/* Filter out sessions that have a pending counter-proposal (shown in purple above) */}
+      {(() => {
+        const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
+        const filteredUpNext = upNextSessions.filter(s => !pendingProposalSessionIds.has(s.id));
+        if (filteredUpNext.length === 0) return null;
         const readySet = new Set(readyToCheckIn.map(s => s.id));
-        const sorted = [...upNextSessions].sort((a, b) => {
+        const sorted = [...filteredUpNext].sort((a, b) => {
           if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
           if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
           const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
@@ -1622,13 +1708,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* Scheduled — sessions >24hr away, no check-in logic */}
       {(() => {
-        const sorted = [...scheduledSessions].sort((a, b) => {
+        const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
+        const sorted = [...scheduledSessions].filter(s => !pendingProposalSessionIds.has(s.id)).sort((a, b) => {
           const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
           const bKey = (b.date || b.scheduled_date || '') + (b.time || b.scheduled_time || '');
           return aKey.localeCompare(bKey);
         });
 
-        if (sorted.length === 0 && upNextSessions.length === 0) return (
+        const filteredUpNext = upNextSessions.filter(s => !pendingProposalSessionIds.has(s.id));
+        if (sorted.length === 0 && filteredUpNext.length === 0) return (
           <div className="card" style={{ marginBottom: 16, padding: '24px', textAlign: 'center', borderLeft: '4px solid #1b6b5a' }}>
             <div style={{ fontSize: 20, marginBottom: 8 }}>{'\uD83D\uDCCB'}</div>
             <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 4 }}>No upcoming sessions</div>
@@ -1709,81 +1797,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 </span>
               </div>
             )}
-          </div>
-        );
-      })()}
-
-      {/* My Proposals — caregiver's sent time proposals with status */}
-      {(() => {
-        const proposals = data.myProposals || [];
-        if (proposals.length === 0) return null;
-        const pending = proposals.filter(p => p.status === 'pending');
-        const resolved = proposals.filter(p => p.status !== 'pending').slice(0, 3);
-        if (pending.length === 0 && resolved.length === 0) return null;
-        const formatT = (t) => {
-          if (!t) return '';
-          const [h, min] = t.split(':').map(Number);
-          const ap = h >= 12 ? 'PM' : 'AM';
-          const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
-          return `${dh}:${String(min || 0).padStart(2, '0')} ${ap}`;
-        };
-        return (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#7b61ff', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              {'\u{1F4E8}'} My Proposals {pending.length > 0 ? `(${pending.length} waiting)` : ''}
-            </div>
-            {pending.map(p => {
-              const tz = TimezoneHelper.DEFAULT_TZ;
-              const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
-              const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
-              return (
-                <div key={p.id} className="card" style={{
-                  marginBottom: 10, padding: '14px 16px', border: '2px solid #7b61ff', borderRadius: 12, background: '#f5f0ff',
-                }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#333', marginBottom: 4 }}>
-                    {p.recipientName || 'Care Visit'}
-                    <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
-                      {p.familyName ? `(${p.familyName})` : ''}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 4 }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
-                      <div style={{ fontSize: 13, color: '#888', textDecoration: 'line-through' }}>{origDay} at {formatT(p.originalTime)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 11, color: '#7b61ff', fontWeight: 600, textTransform: 'uppercase' }}>You Proposed</div>
-                      <div style={{ fontSize: 14, color: '#7b61ff', fontWeight: 600 }}>{propDay} at {formatT(p.proposedTime)}</div>
-                    </div>
-                  </div>
-                  {p.message && (
-                    <div style={{ fontSize: 12, color: '#555', fontStyle: 'italic', background: '#ede7f6', padding: '4px 8px', borderRadius: 6 }}>
-                      "{p.message}"
-                    </div>
-                  )}
-                  <div style={{ fontSize: 12, color: '#7b61ff', fontWeight: 600, marginTop: 6 }}>
-                    {'\u23F3'} Waiting for family to respond
-                  </div>
-                </div>
-              );
-            })}
-            {resolved.map(p => {
-              const isAccepted = p.status === 'accepted';
-              return (
-                <div key={p.id} className="card" style={{
-                  marginBottom: 8, padding: '10px 14px', borderRadius: 10, opacity: 0.8,
-                  border: isAccepted ? '1px solid #c8e6c9' : '1px solid #e0e0e0',
-                  background: isAccepted ? '#f1f8e9' : '#fafafa',
-                }}>
-                  <div style={{ fontSize: 13, color: '#555' }}>
-                    <span style={{ fontWeight: 600, color: isAccepted ? '#2e7d32' : '#999' }}>
-                      {isAccepted ? '\u2705 Accepted' : '\u274C Declined'}
-                    </span>
-                    {' \u2014 '}{p.recipientName || 'Visit'} on {TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], TimezoneHelper.DEFAULT_TZ)} at {formatT(p.proposedTime)}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         );
       })()}

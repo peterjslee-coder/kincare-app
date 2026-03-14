@@ -135,15 +135,15 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
                       const isOff = daySlots.length === 0;
                       const isSelected = selectedDay?.date === day.date;
                       return (
-                        <button key={day.date} onClick={() => { if (!isOff) { setSelectedDay(day); setSelectedSlot(null); }}}
+                        <button key={day.date} onClick={() => { setSelectedDay(day); setSelectedSlot(null); }}
                           style={{
-                            flex: '1 1 0', minWidth: 70, padding: '10px 4px', border: isSelected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                            borderRadius: 10, background: isOff ? '#f5f5f5' : isSelected ? '#e8f5e9' : '#fff',
-                            cursor: isOff ? 'not-allowed' : 'pointer', opacity: isOff ? 0.5 : 1, textAlign: 'center',
+                            flex: '1 1 0', minWidth: 70, padding: '10px 4px', border: isSelected ? '2px solid #1b6b5a' : isOff && isSelected ? '2px solid #e8724a' : '1px solid #e0e0e0',
+                            borderRadius: 10, background: isSelected ? (isOff ? '#fff8f0' : '#e8f5e9') : isOff ? '#fafafa' : '#fff',
+                            cursor: 'pointer', opacity: isOff ? 0.75 : 1, textAlign: 'center',
                           }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>{day.label}</div>
                           <div style={{ fontSize: 11, color: '#999' }}>{day.shortDate}</div>
-                          <div style={{ fontSize: 11, color: isOff ? '#ccc' : '#1b6b5a', fontWeight: 600, marginTop: 4 }}>
+                          <div style={{ fontSize: 11, color: isOff ? '#e8724a' : '#1b6b5a', fontWeight: 600, marginTop: 4 }}>
                             {isOff ? 'Off' : `${daySlots.length} slots`}
                           </div>
                         </button>
@@ -155,11 +155,20 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
                 {selectedDay && (
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e', marginBottom: 10 }}>
-                      Available times — {selectedDay.label} {selectedDay.shortDate}
+                      {selectedDaySlots.length > 0 ? `Available times — ${selectedDay.label} ${selectedDay.shortDate}` : `${selectedDay.label} ${selectedDay.shortDate}`}
                     </div>
                     {selectedDaySlots.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: 20, color: '#999', fontSize: 14 }}>
-                        No available slots this day
+                      <div style={{ padding: 16, borderRadius: 10, background: '#fff8f0', border: '1px solid #ffe0b2' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: '#e65100', marginBottom: 6 }}>
+                          {displayName.split(' ')[0]} is off this day
+                        </div>
+                        <div style={{ fontSize: 13, color: '#795548', marginBottom: 12 }}>
+                          You can still send a care request — they can accept or propose a different time that works for them.
+                        </div>
+                        <button className="btn btn-primary" style={{ background: '#e8724a' }}
+                          onClick={() => { setSelectedSlot({ start: '09:00', offDay: true }); setBookingStep('details'); }}>
+                          Request Anyway
+                        </button>
                       </div>
                     ) : (
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -231,21 +240,30 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
 
         {bookingStep === 'confirm' && (
           <>
-            <div style={{ background: '#f8f9fa', padding: 16, borderRadius: 10, marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: '#1b6b5a' }}>Booking Summary</div>
+            <div style={{ background: selectedSlot?.offDay ? '#fff8f0' : '#f8f9fa', padding: 16, borderRadius: 10, marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: selectedSlot?.offDay ? '#e8724a' : '#1b6b5a' }}>
+                {selectedSlot?.offDay ? 'Care Request (Off Day)' : 'Booking Summary'}
+              </div>
+              {selectedSlot?.offDay && (
+                <div style={{ fontSize: 13, color: '#795548', marginBottom: 12, padding: '8px 10px', background: '#ffe0b2', borderRadius: 6 }}>
+                  {displayName.split(' ')[0]} is off this day. This sends a request they can accept, decline, or propose a different time.
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px 12px', fontSize: 14 }}>
                 <div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{displayName}</div>
                 <div style={{ color: '#666' }}>Date</div><div>{selectedDay.label} {selectedDay.shortDate}</div>
                 <div style={{ color: '#666' }}>Time</div><div>{formatTime(selectedSlot.start)}</div>
                 <div style={{ color: '#666' }}>Duration</div><div>{duration} hour(s)</div>
                 <div style={{ color: '#666' }}>Service</div><div>{formatServiceType(serviceType)}</div>
-                <div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: '#1b6b5a' }}>${hourlyRate * parseInt(duration)}</div>
+                <div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: selectedSlot?.offDay ? '#e8724a' : '#1b6b5a' }}>${hourlyRate * parseInt(duration)}</div>
                 {instructions && <><div style={{ color: '#666' }}>Notes</div><div>{instructions}</div></>}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
               <button className="btn btn-outline" onClick={() => setBookingStep('details')}>Back</button>
-              <button className="btn btn-primary" onClick={handleBook}>Confirm Booking</button>
+              <button className="btn btn-primary" style={selectedSlot?.offDay ? { background: '#e8724a' } : {}} onClick={handleBook}>
+                {selectedSlot?.offDay ? 'Send Request' : 'Confirm Booking'}
+              </button>
             </div>
           </>
         )}

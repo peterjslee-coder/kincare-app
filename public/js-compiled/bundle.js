@@ -11283,20 +11283,18 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
     return /*#__PURE__*/React.createElement("button", {
       key: day.date,
       onClick: () => {
-        if (!isOff) {
-          setSelectedDay(day);
-          setSelectedSlot(null);
-        }
+        setSelectedDay(day);
+        setSelectedSlot(null);
       },
       style: {
         flex: '1 1 0',
         minWidth: 70,
         padding: '10px 4px',
-        border: isSelected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+        border: isSelected ? '2px solid #1b6b5a' : isOff && isSelected ? '2px solid #e8724a' : '1px solid #e0e0e0',
         borderRadius: 10,
-        background: isOff ? '#f5f5f5' : isSelected ? '#e8f5e9' : '#fff',
-        cursor: isOff ? 'not-allowed' : 'pointer',
-        opacity: isOff ? 0.5 : 1,
+        background: isSelected ? isOff ? '#fff8f0' : '#e8f5e9' : isOff ? '#fafafa' : '#fff',
+        cursor: 'pointer',
+        opacity: isOff ? 0.75 : 1,
         textAlign: 'center'
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -11313,7 +11311,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
     }, day.shortDate), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
-        color: isOff ? '#ccc' : '#1b6b5a',
+        color: isOff ? '#e8724a' : '#1b6b5a',
         fontWeight: 600,
         marginTop: 4
       }
@@ -11329,14 +11327,39 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
       color: '#1a1a2e',
       marginBottom: 10
     }
-  }, "Available times \u2014 ", selectedDay.label, " ", selectedDay.shortDate), selectedDaySlots.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, selectedDaySlots.length > 0 ? `Available times — ${selectedDay.label} ${selectedDay.shortDate}` : `${selectedDay.label} ${selectedDay.shortDate}`), selectedDaySlots.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
-      textAlign: 'center',
-      padding: 20,
-      color: '#999',
-      fontSize: 14
+      padding: 16,
+      borderRadius: 10,
+      background: '#fff8f0',
+      border: '1px solid #ffe0b2'
     }
-  }, "No available slots this day") : /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      fontSize: 14,
+      color: '#e65100',
+      marginBottom: 6
+    }
+  }, displayName.split(' ')[0], " is off this day"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#795548',
+      marginBottom: 12
+    }
+  }, "You can still send a care request \u2014 they can accept or propose a different time that works for them."), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-primary",
+    style: {
+      background: '#e8724a'
+    },
+    onClick: () => {
+      setSelectedSlot({
+        start: '09:00',
+        offDay: true
+      });
+      setBookingStep('details');
+    }
+  }, "Request Anyway")) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(3, 1fr)',
@@ -11441,7 +11464,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
     onClick: () => setBookingStep('confirm')
   }, "Review Booking"))), bookingStep === 'confirm' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: '#f8f9fa',
+      background: selectedSlot !== null && selectedSlot !== void 0 && selectedSlot.offDay ? '#fff8f0' : '#f8f9fa',
       padding: 16,
       borderRadius: 10,
       marginBottom: 16
@@ -11451,9 +11474,18 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
       fontSize: 15,
       fontWeight: 600,
       marginBottom: 12,
-      color: '#1b6b5a'
+      color: selectedSlot !== null && selectedSlot !== void 0 && selectedSlot.offDay ? '#e8724a' : '#1b6b5a'
     }
-  }, "Booking Summary"), /*#__PURE__*/React.createElement("div", {
+  }, selectedSlot !== null && selectedSlot !== void 0 && selectedSlot.offDay ? 'Care Request (Off Day)' : 'Booking Summary'), (selectedSlot === null || selectedSlot === void 0 ? void 0 : selectedSlot.offDay) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#795548',
+      marginBottom: 12,
+      padding: '8px 10px',
+      background: '#ffe0b2',
+      borderRadius: 6
+    }
+  }, displayName.split(' ')[0], " is off this day. This sends a request they can accept, decline, or propose a different time."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: '120px 1fr',
@@ -11491,7 +11523,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
   }, "Est. Cost"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontWeight: 600,
-      color: '#1b6b5a'
+      color: selectedSlot !== null && selectedSlot !== void 0 && selectedSlot.offDay ? '#e8724a' : '#1b6b5a'
     }
   }, "$", hourlyRate * parseInt(duration)), instructions && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -11508,8 +11540,11 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
     onClick: () => setBookingStep('details')
   }, "Back"), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-primary",
+    style: selectedSlot !== null && selectedSlot !== void 0 && selectedSlot.offDay ? {
+      background: '#e8724a'
+    } : {},
     onClick: handleBook
-  }, "Confirm Booking")))));
+  }, selectedSlot !== null && selectedSlot !== void 0 && selectedSlot.offDay ? 'Send Request' : 'Confirm Booking')))));
 };
 ;
 const Caregivers = window.Caregivers = () => {
@@ -22298,13 +22333,14 @@ const RequestCareModal = window.RequestCareModal = ({
       fontSize: 11,
       fontWeight: 600
     }
-  }, "Not Scheduled"))), !cg.available && /*#__PURE__*/React.createElement("div", {
+  }, "Off This Day"))), !cg.available && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
-      color: '#888',
-      marginTop: 3
+      color: '#1b6b5a',
+      marginTop: 3,
+      fontWeight: 500
     }
-  }, cg.reason || 'Can still accept if available'), cg.openToInterview && /*#__PURE__*/React.createElement("div", {
+  }, '\u{1F44B}', " You can still request \\u2014 they can accept or propose a different time"), cg.openToInterview && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: '#1b6b5a',
@@ -33928,9 +33964,150 @@ const CaretakerHub = window.CaretakerHub = ({
       padding: '40px 20px',
       color: '#888'
     }
-  }, "Loading Stripe onboarding...")))), upNextSessions.length > 0 && (() => {
+  }, "Loading Stripe onboarding...")))), (() => {
+    const proposals = data.myProposals || [];
+    if (proposals.length === 0) return null;
+    const pendingProps = proposals.filter(p => p.status === 'pending');
+    const resolvedProps = proposals.filter(p => p.status !== 'pending').slice(0, 3);
+    if (pendingProps.length === 0 && resolvedProps.length === 0) return null;
+    const formatT = t => {
+      if (!t) return '';
+      const [h, min] = t.split(':').map(Number);
+      const ap = h >= 12 ? 'PM' : 'AM';
+      const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+      return `${dh}:${String(min || 0).padStart(2, '0')} ${ap}`;
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 16
+      }
+    }, pendingProps.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#7b61ff',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        marginBottom: 10
+      }
+    }, '\u{1F4E8}', " My Proposals (", pendingProps.length, " waiting)"), pendingProps.map(p => {
+      const tz = TimezoneHelper.DEFAULT_TZ;
+      const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
+      const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
+      return /*#__PURE__*/React.createElement("div", {
+        key: p.id,
+        className: "card",
+        style: {
+          marginBottom: 10,
+          padding: '14px 16px',
+          border: '2px solid #7b61ff',
+          borderRadius: 12,
+          background: '#f5f0ff'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontWeight: 600,
+          fontSize: 14,
+          color: '#333',
+          marginBottom: 4
+        }
+      }, p.recipientName || 'Care Visit', /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 400,
+          fontSize: 12,
+          color: '#888',
+          marginLeft: 6
+        }
+      }, p.familyName ? `(${p.familyName})` : '')), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 16,
+          flexWrap: 'wrap',
+          marginBottom: 4
+        }
+      }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: '#999',
+          fontWeight: 600,
+          textTransform: 'uppercase'
+        }
+      }, "Original"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: '#888',
+          textDecoration: 'line-through'
+        }
+      }, origDay, " at ", formatT(p.originalTime))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: '#7b61ff',
+          fontWeight: 600,
+          textTransform: 'uppercase'
+        }
+      }, "You Proposed"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 14,
+          color: '#7b61ff',
+          fontWeight: 600
+        }
+      }, propDay, " at ", formatT(p.proposedTime)))), p.message && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#555',
+          fontStyle: 'italic',
+          background: '#ede7f6',
+          padding: '4px 8px',
+          borderRadius: 6
+        }
+      }, "\"", p.message, "\""), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#7b61ff',
+          fontWeight: 600,
+          marginTop: 6
+        }
+      }, '\u23F3', " Waiting for family to respond"));
+    }), resolvedProps.length > 0 && pendingProps.length === 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#999',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        marginBottom: 10
+      }
+    }, "Recent Proposals"), resolvedProps.map(p => {
+      const isAccepted = p.status === 'accepted';
+      return /*#__PURE__*/React.createElement("div", {
+        key: p.id,
+        className: "card",
+        style: {
+          marginBottom: 8,
+          padding: '10px 14px',
+          borderRadius: 10,
+          opacity: 0.8,
+          border: isAccepted ? '1px solid #c8e6c9' : '1px solid #e0e0e0',
+          background: isAccepted ? '#f1f8e9' : '#fafafa'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: '#555'
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 600,
+          color: isAccepted ? '#2e7d32' : '#999'
+        }
+      }, isAccepted ? '\u2705 Accepted' : '\u274C Declined'), ' \u2014 ', p.recipientName || 'Visit', " on ", TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], TimezoneHelper.DEFAULT_TZ), " at ", formatT(p.proposedTime)));
+    }));
+  })(), (() => {
+    const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
+    const filteredUpNext = upNextSessions.filter(s => !pendingProposalSessionIds.has(s.id));
+    if (filteredUpNext.length === 0) return null;
     const readySet = new Set(readyToCheckIn.map(s => s.id));
-    const sorted = [...upNextSessions].sort((a, b) => {
+    const sorted = [...filteredUpNext].sort((a, b) => {
       if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
       if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
       const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
@@ -34761,12 +34938,14 @@ const CaretakerHub = window.CaretakerHub = ({
       }
     }, "View all jobs, map & availability \u2192")));
   })(), (() => {
-    const sorted = [...scheduledSessions].sort((a, b) => {
+    const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
+    const sorted = [...scheduledSessions].filter(s => !pendingProposalSessionIds.has(s.id)).sort((a, b) => {
       const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
       const bKey = (b.date || b.scheduled_date || '') + (b.time || b.scheduled_time || '');
       return aKey.localeCompare(bKey);
     });
-    if (sorted.length === 0 && upNextSessions.length === 0) return /*#__PURE__*/React.createElement("div", {
+    const filteredUpNext = upNextSessions.filter(s => !pendingProposalSessionIds.has(s.id));
+    if (sorted.length === 0 && filteredUpNext.length === 0) return /*#__PURE__*/React.createElement("div", {
       className: "card",
       style: {
         marginBottom: 16,
@@ -34927,135 +35106,6 @@ const CaretakerHub = window.CaretakerHub = ({
         cursor: 'pointer'
       }
     }, "View all ", sorted.length, " sessions ", '\u2192')));
-  })(), (() => {
-    const proposals = data.myProposals || [];
-    if (proposals.length === 0) return null;
-    const pending = proposals.filter(p => p.status === 'pending');
-    const resolved = proposals.filter(p => p.status !== 'pending').slice(0, 3);
-    if (pending.length === 0 && resolved.length === 0) return null;
-    const formatT = t => {
-      if (!t) return '';
-      const [h, min] = t.split(':').map(Number);
-      const ap = h >= 12 ? 'PM' : 'AM';
-      const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
-      return `${dh}:${String(min || 0).padStart(2, '0')} ${ap}`;
-    };
-    return /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginBottom: 16
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 12,
-        fontWeight: 700,
-        color: '#7b61ff',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-        marginBottom: 10
-      }
-    }, '\u{1F4E8}', " My Proposals ", pending.length > 0 ? `(${pending.length} waiting)` : ''), pending.map(p => {
-      const tz = TimezoneHelper.DEFAULT_TZ;
-      const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
-      const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
-      return /*#__PURE__*/React.createElement("div", {
-        key: p.id,
-        className: "card",
-        style: {
-          marginBottom: 10,
-          padding: '14px 16px',
-          border: '2px solid #7b61ff',
-          borderRadius: 12,
-          background: '#f5f0ff'
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontWeight: 600,
-          fontSize: 14,
-          color: '#333',
-          marginBottom: 4
-        }
-      }, p.recipientName || 'Care Visit', /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontWeight: 400,
-          fontSize: 12,
-          color: '#888',
-          marginLeft: 6
-        }
-      }, p.familyName ? `(${p.familyName})` : '')), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          gap: 16,
-          flexWrap: 'wrap',
-          marginBottom: 4
-        }
-      }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 11,
-          color: '#999',
-          fontWeight: 600,
-          textTransform: 'uppercase'
-        }
-      }, "Original"), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 13,
-          color: '#888',
-          textDecoration: 'line-through'
-        }
-      }, origDay, " at ", formatT(p.originalTime))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 11,
-          color: '#7b61ff',
-          fontWeight: 600,
-          textTransform: 'uppercase'
-        }
-      }, "You Proposed"), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 14,
-          color: '#7b61ff',
-          fontWeight: 600
-        }
-      }, propDay, " at ", formatT(p.proposedTime)))), p.message && /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 12,
-          color: '#555',
-          fontStyle: 'italic',
-          background: '#ede7f6',
-          padding: '4px 8px',
-          borderRadius: 6
-        }
-      }, "\"", p.message, "\""), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 12,
-          color: '#7b61ff',
-          fontWeight: 600,
-          marginTop: 6
-        }
-      }, '\u23F3', " Waiting for family to respond"));
-    }), resolved.map(p => {
-      const isAccepted = p.status === 'accepted';
-      return /*#__PURE__*/React.createElement("div", {
-        key: p.id,
-        className: "card",
-        style: {
-          marginBottom: 8,
-          padding: '10px 14px',
-          borderRadius: 10,
-          opacity: 0.8,
-          border: isAccepted ? '1px solid #c8e6c9' : '1px solid #e0e0e0',
-          background: isAccepted ? '#f1f8e9' : '#fafafa'
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 13,
-          color: '#555'
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontWeight: 600,
-          color: isAccepted ? '#2e7d32' : '#999'
-        }
-      }, isAccepted ? '\u2705 Accepted' : '\u274C Declined'), ' \u2014 ', p.recipientName || 'Visit', " on ", TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], TimezoneHelper.DEFAULT_TZ), " at ", formatT(p.proposedTime)));
-    }));
   })(), (() => {
     const completed = data.recentlyCompleted || [];
     if (completed.length === 0) return null;
@@ -40998,6 +41048,10 @@ const FeedbackButton = window.FeedbackButton = ({
 // NotificationPrompt — In-app prompt to enable push notifications
 // Shows a dismissible banner when notifications aren't enabled yet.
 // Requires user click (gesture) to trigger browser permission prompt.
+
+// Detect iOS/iPadOS and whether running as installed PWA
+const _isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+const _isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 const NotificationPrompt = window.NotificationPrompt = ({
   onSubscribed
 }) => {
@@ -41006,7 +41060,21 @@ const NotificationPrompt = window.NotificationPrompt = ({
   const [subscribing, setSubscribing] = useState(false);
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [iosNotInstalled, setIosNotInstalled] = useState(false);
   useEffect(() => {
+    // On iOS/iPadOS, push only works when installed as home screen app
+    if (_isIOS() && !_isStandalone()) {
+      setIosNotInstalled(true);
+      // Still show prompt — but with install instructions
+      const dismissed = localStorage.getItem('push_prompt_dismissed');
+      if (dismissed) {
+        const dismissedAt = parseInt(dismissed, 10);
+        if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return;
+      }
+      setVisible(true);
+      return;
+    }
+
     // Check if push is supported and permission state
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       return; // Push not supported on this browser
@@ -41089,6 +41157,84 @@ const NotificationPrompt = window.NotificationPrompt = ({
     setTestSending(false);
   };
   if (!visible) return null;
+
+  // iOS not installed as PWA — show install instructions
+  if (iosNotInstalled) {
+    return React.createElement('div', {
+      style: {
+        background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)',
+        color: '#fff',
+        padding: '16px 20px',
+        borderRadius: '12px',
+        marginBottom: '16px',
+        boxShadow: '0 2px 8px rgba(27,107,90,0.25)'
+      }
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '14px',
+        marginBottom: '10px'
+      }
+    }, React.createElement('span', {
+      style: {
+        fontSize: '28px',
+        flexShrink: 0
+      }
+    }, '\uD83D\uDD14'), React.createElement('div', {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, React.createElement('div', {
+      style: {
+        fontWeight: 600,
+        fontSize: '14px',
+        marginBottom: '2px'
+      }
+    }, 'Add to Home Screen for Notifications'), React.createElement('div', {
+      style: {
+        fontSize: '12px',
+        opacity: 0.9
+      }
+    }, 'Push notifications on iPad & iPhone require installing the app to your home screen.')), React.createElement('button', {
+      onClick: handleDismiss,
+      style: {
+        background: 'transparent',
+        color: 'rgba(255,255,255,0.7)',
+        border: 'none',
+        fontSize: '18px',
+        cursor: 'pointer',
+        padding: '4px',
+        lineHeight: 1,
+        flexShrink: 0
+      },
+      title: 'Dismiss'
+    }, '\u00D7')), React.createElement('div', {
+      style: {
+        background: 'rgba(255,255,255,0.15)',
+        borderRadius: '8px',
+        padding: '12px 14px',
+        fontSize: '13px',
+        lineHeight: 1.6
+      }
+    }, React.createElement('div', {
+      style: {
+        fontWeight: 600,
+        marginBottom: '6px'
+      }
+    }, 'How to install:'), React.createElement('div', null, '1. Tap the Share button ', React.createElement('span', {
+      style: {
+        fontSize: '16px'
+      }
+    }, '\u{1F4E4}'), ' at the bottom of Safari'), React.createElement('div', null, '2. Scroll down and tap "Add to Home Screen"'), React.createElement('div', null, '3. Tap "Add" in the top right'), React.createElement('div', {
+      style: {
+        marginTop: '6px',
+        opacity: 0.85,
+        fontStyle: 'italic'
+      }
+    }, 'Then open inPlace from your home screen and notifications will work!')));
+  }
   return React.createElement('div', {
     style: {
       background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)',
@@ -41108,7 +41254,7 @@ const NotificationPrompt = window.NotificationPrompt = ({
       fontSize: '28px',
       flexShrink: 0
     }
-  }, '🔔'),
+  }, '\uD83D\uDD14'),
   // Text
   React.createElement('div', {
     style: {
@@ -41159,7 +41305,7 @@ const NotificationPrompt = window.NotificationPrompt = ({
       flexShrink: 0
     },
     title: 'Dismiss'
-  }, '×'));
+  }, '\u00D7'));
 };
 
 // Notification settings section for MyAccount page
@@ -41170,9 +41316,13 @@ const NotificationSettings = window.NotificationSettings = () => {
   const [subscribing, setSubscribing] = useState(false);
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [iosNeedInstall, setIosNeedInstall] = useState(false);
   useEffect(() => {
-    // Check browser permission
-    if ('Notification' in window) {
+    // iOS/iPadOS: push only works in standalone PWA mode
+    if (_isIOS() && !_isStandalone()) {
+      setIosNeedInstall(true);
+      setPermState('unsupported');
+    } else if ('Notification' in window) {
       setPermState(Notification.permission);
     } else {
       setPermState('unsupported');
@@ -41235,7 +41385,7 @@ const NotificationSettings = window.NotificationSettings = () => {
     setTestSending(false);
   };
   const statusColor = permState === 'granted' ? '#22c55e' : permState === 'denied' ? '#ef4444' : '#f59e0b';
-  const statusText = permState === 'granted' ? 'Enabled' : permState === 'denied' ? 'Blocked' : permState === 'unsupported' ? 'Not Supported' : 'Not Enabled';
+  const statusText = permState === 'granted' ? 'Enabled' : permState === 'denied' ? 'Blocked' : iosNeedInstall ? 'Requires Home Screen Install' : permState === 'unsupported' ? 'Not Supported' : 'Not Enabled';
   return React.createElement('div', {
     style: {
       background: '#fff',
@@ -41308,7 +41458,28 @@ const NotificationSettings = window.NotificationSettings = () => {
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, testSending ? 'Sending...' : 'Send Test Notification'), permState === 'denied' && React.createElement('p', {
+  }, testSending ? 'Sending...' : 'Send Test Notification'), iosNeedInstall && React.createElement('div', {
+    style: {
+      marginTop: '12px',
+      padding: '14px 16px',
+      borderRadius: '10px',
+      background: '#fffbeb',
+      border: '1px solid #fbbf24'
+    }
+  }, React.createElement('div', {
+    style: {
+      fontWeight: 600,
+      fontSize: '14px',
+      color: '#92400e',
+      marginBottom: '8px'
+    }
+  }, 'Add to Home Screen to enable notifications'), React.createElement('div', {
+    style: {
+      fontSize: '13px',
+      color: '#78350f',
+      lineHeight: 1.6
+    }
+  }, 'Push notifications on iPad & iPhone only work when inPlace is installed to your home screen. ', 'Tap the Share button \uD83D\uDCE4 in Safari, then "Add to Home Screen," and open inPlace from there.')), permState === 'denied' && !iosNeedInstall && React.createElement('p', {
     style: {
       fontSize: '13px',
       color: '#666',

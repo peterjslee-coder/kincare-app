@@ -1,14 +1,33 @@
 // NotificationPrompt — In-app prompt to enable push notifications
 // Shows a dismissible banner when notifications aren't enabled yet.
 // Requires user click (gesture) to trigger browser permission prompt.
+
+// Detect iOS/iPadOS and whether running as installed PWA
+const _isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const _isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+
 const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
   const [visible, setVisible] = useState(false);
   const [permState, setPermState] = useState('default'); // 'default' | 'granted' | 'denied'
   const [subscribing, setSubscribing] = useState(false);
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [iosNotInstalled, setIosNotInstalled] = useState(false);
 
   useEffect(() => {
+    // On iOS/iPadOS, push only works when installed as home screen app
+    if (_isIOS() && !_isStandalone()) {
+      setIosNotInstalled(true);
+      // Still show prompt — but with install instructions
+      const dismissed = localStorage.getItem('push_prompt_dismissed');
+      if (dismissed) {
+        const dismissedAt = parseInt(dismissed, 10);
+        if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return;
+      }
+      setVisible(true);
+      return;
+    }
+
     // Check if push is supported and permission state
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       return; // Push not supported on this browser
@@ -88,6 +107,57 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
 
   if (!visible) return null;
 
+  // iOS not installed as PWA — show install instructions
+  if (iosNotInstalled) {
+    return React.createElement('div', {
+      style: {
+        background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)',
+        color: '#fff',
+        padding: '16px 20px',
+        borderRadius: '12px',
+        marginBottom: '16px',
+        boxShadow: '0 2px 8px rgba(27,107,90,0.25)',
+      },
+    },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '10px' } },
+        React.createElement('span', { style: { fontSize: '28px', flexShrink: 0 } }, '\uD83D\uDD14'),
+        React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+          React.createElement('div', { style: { fontWeight: 600, fontSize: '14px', marginBottom: '2px' } },
+            'Add to Home Screen for Notifications'
+          ),
+          React.createElement('div', { style: { fontSize: '12px', opacity: 0.9 } },
+            'Push notifications on iPad & iPhone require installing the app to your home screen.'
+          ),
+        ),
+        React.createElement('button', {
+          onClick: handleDismiss,
+          style: {
+            background: 'transparent', color: 'rgba(255,255,255,0.7)',
+            border: 'none', fontSize: '18px', cursor: 'pointer', padding: '4px', lineHeight: 1, flexShrink: 0,
+          },
+          title: 'Dismiss',
+        }, '\u00D7'),
+      ),
+      React.createElement('div', {
+        style: {
+          background: 'rgba(255,255,255,0.15)',
+          borderRadius: '8px',
+          padding: '12px 14px',
+          fontSize: '13px',
+          lineHeight: 1.6,
+        },
+      },
+        React.createElement('div', { style: { fontWeight: 600, marginBottom: '6px' } }, 'How to install:'),
+        React.createElement('div', null, '1. Tap the Share button ', React.createElement('span', { style: { fontSize: '16px' } }, '\u{1F4E4}'), ' at the bottom of Safari'),
+        React.createElement('div', null, '2. Scroll down and tap "Add to Home Screen"'),
+        React.createElement('div', null, '3. Tap "Add" in the top right'),
+        React.createElement('div', { style: { marginTop: '6px', opacity: 0.85, fontStyle: 'italic' } },
+          'Then open inPlace from your home screen and notifications will work!'
+        ),
+      ),
+    );
+  }
+
   return React.createElement('div', {
     style: {
       background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)',
@@ -102,7 +172,7 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
     },
   },
     // Bell icon
-    React.createElement('span', { style: { fontSize: '28px', flexShrink: 0 } }, '🔔'),
+    React.createElement('span', { style: { fontSize: '28px', flexShrink: 0 } }, '\uD83D\uDD14'),
     // Text
     React.createElement('div', { style: { flex: 1, minWidth: 0 } },
       React.createElement('div', { style: { fontWeight: 600, fontSize: '14px', marginBottom: '2px' } },
@@ -144,7 +214,7 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
         flexShrink: 0,
       },
       title: 'Dismiss',
-    }, '×'),
+    }, '\u00D7'),
   );
 };
 
@@ -157,9 +227,14 @@ const NotificationSettings = window.NotificationSettings = () => {
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
+  const [iosNeedInstall, setIosNeedInstall] = useState(false);
+
   useEffect(() => {
-    // Check browser permission
-    if ('Notification' in window) {
+    // iOS/iPadOS: push only works in standalone PWA mode
+    if (_isIOS() && !_isStandalone()) {
+      setIosNeedInstall(true);
+      setPermState('unsupported');
+    } else if ('Notification' in window) {
       setPermState(Notification.permission);
     } else {
       setPermState('unsupported');
@@ -216,6 +291,7 @@ const NotificationSettings = window.NotificationSettings = () => {
   const statusColor = permState === 'granted' ? '#22c55e' : permState === 'denied' ? '#ef4444' : '#f59e0b';
   const statusText = permState === 'granted' ? 'Enabled' :
                      permState === 'denied' ? 'Blocked' :
+                     iosNeedInstall ? 'Requires Home Screen Install' :
                      permState === 'unsupported' ? 'Not Supported' : 'Not Enabled';
 
   return React.createElement('div', {
@@ -267,7 +343,19 @@ const NotificationSettings = window.NotificationSettings = () => {
       },
     }, testSending ? 'Sending...' : 'Send Test Notification'),
 
-    permState === 'denied' && React.createElement('p', {
+    iosNeedInstall && React.createElement('div', {
+      style: { marginTop: '12px', padding: '14px 16px', borderRadius: '10px', background: '#fffbeb', border: '1px solid #fbbf24' },
+    },
+      React.createElement('div', { style: { fontWeight: 600, fontSize: '14px', color: '#92400e', marginBottom: '8px' } },
+        'Add to Home Screen to enable notifications'
+      ),
+      React.createElement('div', { style: { fontSize: '13px', color: '#78350f', lineHeight: 1.6 } },
+        'Push notifications on iPad & iPhone only work when inPlace is installed to your home screen. ',
+        'Tap the Share button \uD83D\uDCE4 in Safari, then "Add to Home Screen," and open inPlace from there.'
+      ),
+    ),
+
+    permState === 'denied' && !iosNeedInstall && React.createElement('p', {
       style: { fontSize: '13px', color: '#666', margin: '8px 0 0 0' },
     },
       'Notifications are blocked by your browser. To enable them, open your browser settings and allow notifications for this site, then refresh the page.'

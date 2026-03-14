@@ -616,10 +616,10 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                           <div>
                             {cg.available && cg.skillMatch && <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Best Match</span>}
                             {cg.available && !cg.skillMatch && <span style={{ background: '#fff8e1', color: '#f57f17', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Available</span>}
-                            {!cg.available && <span style={{ background: '#fff8e1', color: '#e65100', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Not Scheduled</span>}
+                            {!cg.available && <span style={{ background: '#fff8e1', color: '#e65100', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Off This Day</span>}
                           </div>
                         </div>
-                        {!cg.available && <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>{cg.reason || 'Can still accept if available'}</div>}
+                        {!cg.available && <div style={{ fontSize: 11, color: '#1b6b5a', marginTop: 3, fontWeight: 500 }}>{'\u{1F44B}'} You can still request \u2014 they can accept or propose a different time</div>}
                         {cg.openToInterview && <div style={{ fontSize: 11, color: '#1b6b5a', marginTop: 3 }}>🤝 Open to intro call</div>}
                       </button>
                     ))}
