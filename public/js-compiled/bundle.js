@@ -21141,6 +21141,7 @@ const RequestCareModal = window.RequestCareModal = ({
   const [careRecipients, setCareRecipients] = useState([]);
   const [selectedRecipientId, setSelectedRecipientId] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [confirmationData, setConfirmationData] = useState(null); // { title, details[] }
   const [existingSessions, setExistingSessions] = useState([]);
 
   // Short-notice detection
@@ -21385,13 +21386,21 @@ const RequestCareModal = window.RequestCareModal = ({
         body: JSON.stringify(body)
       });
       if (response !== null && response !== void 0 && response.ok) {
-        if (isOpenRequest) {
-          alert(`Care request posted!${recurrenceLabel}\n\nStatus: Open \u2014 waiting for caregiver match\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
-        } else {
-          alert(`Care request submitted!${recurrenceLabel}\n\n${selectedCaregiver ? selectedCaregiver.name + ' assigned' : 'Best available caregiver will be assigned'}\n${date} at ${time}\n${duration} hour(s) of ${serviceType.replace('_', ' ')}${proposedRate ? `\nOffered rate: $${proposedRate}/hr` : ''}`);
-        }
         window.dispatchEvent(new CustomEvent('sessions-updated'));
-        onClose();
+        const details = [];
+        if (isOpenRequest) {
+          details.push('Open \u2014 waiting for caregiver match');
+        } else {
+          details.push(selectedCaregiver ? `${selectedCaregiver.name} assigned` : 'Best available caregiver will be assigned');
+        }
+        details.push(`${date} at ${formatTime12(time)}`);
+        details.push(`${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
+        if (proposedRate) details.push(`Offered rate: $${proposedRate}/hr`);
+        if (recurrence !== 'none') details.push(`${recurrence}, ${recurrenceWeeks} sessions`);
+        setConfirmationData({
+          title: isOpenRequest ? 'Care request posted!' : 'Care request sent!',
+          details
+        });
       } else {
         const err = await response.json().catch(() => ({}));
         setSubmitError(err.error || 'Failed to submit care request. Please try again.');
@@ -21536,6 +21545,120 @@ const RequestCareModal = window.RequestCareModal = ({
     }, "Loading...")));
   }
   const step1Complete = serviceType && date && time && duration && (careRecipients.length <= 1 || selectedRecipientId);
+
+  // ── Confirmation overlay with paper airplane animation ──
+  if (confirmationData) {
+    return /*#__PURE__*/React.createElement("div", {
+      className: "modal-overlay",
+      onClick: onClose
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "modal-content",
+      onClick: e => e.stopPropagation(),
+      style: {
+        maxWidth: 420,
+        textAlign: 'center',
+        padding: '48px 32px 36px',
+        position: 'relative',
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'relative',
+        height: 100,
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      viewBox: "0 0 64 64",
+      style: {
+        width: 56,
+        height: 56,
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
+        transform: 'translate(-50%, -50%)',
+        animation: 'planeFloat 2s ease-in-out infinite, planeFadeIn 0.6s ease-out'
+      }
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M8 32 L56 8 L36 56 L28 36 Z",
+      fill: "#1b6b5a",
+      opacity: "0.9"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M28 36 L56 8",
+      stroke: "#145c4e",
+      strokeWidth: "1.5",
+      fill: "none"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M28 36 L36 56 L56 8",
+      fill: "#2a8f7a",
+      opacity: "0.7"
+    })), [0, 1, 2].map(i => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        position: 'absolute',
+        width: 6,
+        height: 6,
+        borderRadius: '50%',
+        background: i === 0 ? '#1b6b5a' : i === 1 ? '#2a8f7a' : '#a8dcd1',
+        left: `${28 + i * 10}%`,
+        top: `${55 + i * 5}%`,
+        opacity: 0,
+        animation: `sparkle 1.5s ease-out ${0.3 + i * 0.2}s infinite`
+      }
+    }))), /*#__PURE__*/React.createElement("h2", {
+      style: {
+        fontSize: 22,
+        fontWeight: 700,
+        color: '#1b6b5a',
+        margin: '0 0 8px'
+      }
+    }, confirmationData.title), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        margin: '16px 0 24px'
+      }
+    }, confirmationData.details.map((d, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        fontSize: 14,
+        color: i === 0 ? '#1a1a1a' : '#555',
+        fontWeight: i === 0 ? 600 : 400,
+        animation: `slideUp 0.4s ease-out ${0.2 + i * 0.08}s both`
+      }
+    }, d))), /*#__PURE__*/React.createElement("button", {
+      onClick: onClose,
+      style: {
+        padding: '12px 36px',
+        background: '#1b6b5a',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 10,
+        fontSize: 15,
+        fontWeight: 600,
+        cursor: 'pointer',
+        animation: 'slideUp 0.4s ease-out 0.5s both'
+      }
+    }, "Done"), /*#__PURE__*/React.createElement("style", null, `
+            @keyframes planeFloat {
+              0%, 100% { transform: translate(-50%, -50%) rotate(-8deg); }
+              50% { transform: translate(-50%, -60%) rotate(-4deg); }
+            }
+            @keyframes planeFadeIn {
+              0% { opacity: 0; transform: translate(-20%, 20%) rotate(-20deg) scale(0.5); }
+              100% { opacity: 1; transform: translate(-50%, -50%) rotate(-8deg) scale(1); }
+            }
+            @keyframes sparkle {
+              0% { opacity: 0; transform: scale(0); }
+              30% { opacity: 0.8; transform: scale(1.2); }
+              100% { opacity: 0; transform: scale(0) translateX(-20px); }
+            }
+            @keyframes slideUp {
+              0% { opacity: 0; transform: translateY(12px); }
+              100% { opacity: 1; transform: translateY(0); }
+            }
+          `)));
+  }
   return /*#__PURE__*/React.createElement("div", {
     className: "modal-overlay",
     onClick: onClose
