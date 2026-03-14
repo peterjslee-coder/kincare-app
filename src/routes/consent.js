@@ -602,6 +602,80 @@ router.post("/respond/:token", async (req, res) => {
           WHERE id = ?
         `).run(outreach.care_recipient_id);
       }
+
+      // ── Notify the FAMILY MEMBER who set up this care recipient ──
+      const careRecipient = await db.prepare(
+        "SELECT family_user_id, first_name, last_name FROM care_recipients WHERE id = ?"
+      ).get(outreach.care_recipient_id);
+      if (careRecipient?.family_user_id) {
+        const familyUser = await db.prepare(
+          "SELECT id, email, first_name FROM users WHERE id = ?"
+        ).get(careRecipient.family_user_id);
+        const crName = `${careRecipient.first_name} ${careRecipient.last_name}`.trim();
+
+        if (familyUser) {
+          // Activity feed notification
+          const familyTitles = {
+            yes_aware: `${crName} confirmed awareness`,
+            have_questions: `${crName} has questions about their care`,
+            did_not_authorize: `${crName} did not authorize care`,
+          };
+          const familyMessages = {
+            yes_aware: `${crName} responded to the care verification email and confirmed they are aware of the care arrangement. Verification is progressing.`,
+            have_questions: `${crName} has questions about their care arrangement. Our team will follow up, but you may want to talk with ${careRecipient.first_name} directly.${notes ? ` Their message: "${notes}"` : ""}`,
+            did_not_authorize: `${crName} responded that they did not authorize this care arrangement. Bookings have been automatically paused. Please contact our team or speak with ${careRecipient.first_name} to resolve this.${notes ? ` Their message: "${notes}"` : ""}`,
+          };
+          await db.prepare(`
+            INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
+            VALUES (?, ?, 'consent_response_family', ?, ?, ?, NOW())
+          `).run(
+            uuid(), familyUser.id,
+            familyTitles[response] || "Care verification update",
+            familyMessages[response] || `${crName} responded to the care verification outreach.`,
+            JSON.stringify({ recipientId: outreach.care_recipient_id, response })
+          );
+
+          // Email notification to family member
+          try {
+            const { sendEmail, brandedHtml } = require("../utils/email");
+            const emailSubjects = {
+              yes_aware: `${crName} confirmed — care verification progressing`,
+              have_questions: `${crName} has questions about their care`,
+              did_not_authorize: `Action needed: ${crName} did not authorize care`,
+            };
+            const emailBodies = {
+              yes_aware: `
+                <p>Good news! <strong>${crName}</strong> responded to the care verification email and confirmed they are aware of the care arrangement you set up through inPlace.</p>
+                <p>Our team will complete the review process. You'll be notified when everything is approved and you can begin scheduling care.</p>
+              `,
+              have_questions: `
+                <p><strong>${crName}</strong> received the care verification email and has some questions before confirming.</p>
+                ${notes ? `<p>Their message: <em>"${notes}"</em></p>` : ""}
+                <p>Our team will reach out to ${careRecipient.first_name}, but it may help if you speak with them directly to explain how inPlace works and answer any concerns.</p>
+              `,
+              did_not_authorize: `
+                <p><strong>${crName}</strong> responded to the care verification email and indicated they <strong>did not authorize</strong> this care arrangement.</p>
+                ${notes ? `<p>Their message: <em>"${notes}"</em></p>` : ""}
+                <p>As a safety measure, all bookings for ${careRecipient.first_name} have been automatically paused. No caregiver will be sent.</p>
+                <p>If this is a misunderstanding, please speak with ${careRecipient.first_name} directly. You can also contact our team for help resolving this.</p>
+              `,
+            };
+            await sendEmail({
+              to: familyUser.email,
+              subject: emailSubjects[response],
+              html: brandedHtml(`
+                <h2 style="color: ${response === "did_not_authorize" ? "#c62828" : response === "have_questions" ? "#e65100" : "#1b6b5a"};">
+                  Care Verification Update
+                </h2>
+                ${emailBodies[response]}
+                <p style="margin-top: 24px; font-size: 14px; color: #888;">
+                  — The inPlace Team
+                </p>
+              `),
+            });
+          } catch (emailErr) { console.error("Family consent email error:", emailErr.message); }
+        }
+      }
     } catch (notifyErr) { console.error("Outreach response notification error:", notifyErr.message); }
 
     const responseMessages = {
