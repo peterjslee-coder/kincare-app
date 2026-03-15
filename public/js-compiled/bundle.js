@@ -32898,6 +32898,7 @@ const CaretakerHub = window.CaretakerHub = ({
     setPendingDocType(null);
   };
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
+  const [expandedScheduledId, setExpandedScheduledId] = useState(null);
 
   // Availability state
   const [availRules, setAvailRules] = useState([]);
@@ -35540,12 +35541,13 @@ const CaretakerHub = window.CaretakerHub = ({
       const minsUntil = (sessionDT - now) / 60000;
       const daysUntil = Math.floor(minsUntil / 60 / 24);
       const dayCountLabel = daysUntil >= 2 ? `in ${daysUntil} days` : 'tomorrow';
+      const isSchedExpanded = expandedScheduledId === s.id;
       return /*#__PURE__*/React.createElement("div", {
         key: s.id,
         className: "card",
         onClick: e => {
           if (e.target.tagName === 'BUTTON') return;
-          if (s.id) setVisitDetailSessionId(s.id);
+          setExpandedScheduledId(isSchedExpanded ? null : s.id);
         },
         style: {
           marginBottom: 10,
@@ -35582,7 +35584,13 @@ const CaretakerHub = window.CaretakerHub = ({
           fontWeight: 600,
           color: '#333'
         }
-      }, recipName), /*#__PURE__*/React.createElement("div", {
+      }, recipName, s.interviewStatus && /*#__PURE__*/React.createElement("span", {
+        style: {
+          marginLeft: 6,
+          fontSize: 10,
+          color: s.interviewStatus === 'accepted' ? '#2e7d32' : '#7b1fa2'
+        }
+      }, '\uD83C\uDFA5')), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 13,
           color: '#666',
@@ -35624,7 +35632,32 @@ const CaretakerHub = window.CaretakerHub = ({
           color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
           textTransform: 'capitalize'
         }
-      }, s.status), s.status === 'confirmed' && !s.interviewStatus && /*#__PURE__*/React.createElement("button", {
+      }, s.status))), isSchedExpanded && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: 12,
+          paddingTop: 10,
+          borderTop: '1px solid #f0f0f0',
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+          alignItems: 'center'
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          setVisitDetailSessionId(s.id);
+        },
+        style: {
+          padding: '6px 12px',
+          background: '#f5f5f5',
+          color: '#555',
+          border: '1px solid #e0e0e0',
+          borderRadius: 8,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "View Details"), s.status === 'confirmed' && !s.interviewStatus && /*#__PURE__*/React.createElement("button", {
         onClick: async e => {
           e.stopPropagation();
           try {
@@ -35647,34 +35680,34 @@ const CaretakerHub = window.CaretakerHub = ({
           }
         },
         style: {
-          padding: '5px 10px',
-          background: '#f3e5f5',
+          padding: '6px 12px',
+          background: '#faf5ff',
           color: '#7b1fa2',
-          border: '1px solid #ce93d8',
+          border: '1px solid #e1bee7',
           borderRadius: 8,
-          fontSize: 11,
-          fontWeight: 600,
+          fontSize: 12,
+          fontWeight: 500,
           cursor: 'pointer'
         }
       }, '\uD83C\uDFA5', " Request Interview"), s.interviewStatus === 'pending' && /*#__PURE__*/React.createElement("span", {
         style: {
-          padding: '5px 10px',
-          background: '#f3e5f5',
+          padding: '6px 12px',
+          background: '#faf5ff',
           color: '#7b1fa2',
           borderRadius: 8,
-          fontSize: 11,
-          fontWeight: 600
+          fontSize: 12,
+          fontWeight: 500
         }
       }, '\uD83C\uDFA5', " Interview pending"), s.interviewStatus === 'accepted' && /*#__PURE__*/React.createElement("span", {
         style: {
-          padding: '5px 10px',
+          padding: '6px 12px',
           background: '#e8f5e9',
           color: '#2e7d32',
           borderRadius: 8,
-          fontSize: 11,
-          fontWeight: 600
+          fontSize: 12,
+          fontWeight: 500
         }
-      }, '\u2713', " Interview scheduled"))));
+      }, '\u2713', " Interview set")));
     }), sorted.length > 5 && /*#__PURE__*/React.createElement("div", {
       style: {
         textAlign: 'center',

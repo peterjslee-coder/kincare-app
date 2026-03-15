@@ -135,6 +135,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setPendingDocType(null);
   };
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
+  const [expandedScheduledId, setExpandedScheduledId] = useState(null);
 
   // Availability state
   const [availRules, setAvailRules] = useState([]);
@@ -1866,10 +1867,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const daysUntil = Math.floor(minsUntil / 60 / 24);
               const dayCountLabel = daysUntil >= 2 ? `in ${daysUntil} days` : 'tomorrow';
 
+              const isSchedExpanded = expandedScheduledId === s.id;
               return (
                 <div key={s.id} className="card" onClick={(e) => {
                   if (e.target.tagName === 'BUTTON') return;
-                  if (s.id) setVisitDetailSessionId(s.id);
+                  setExpandedScheduledId(isSchedExpanded ? null : s.id);
                 }} style={{
                   marginBottom: 10, padding: '16px 18px', cursor: 'pointer',
                   border: `2px solid ${noAddress ? '#dc2626' : '#1b6b5a'}`,
@@ -1880,7 +1882,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '180px' }}>
                       <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 3 }}>{dayCountLabel}</div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>
+                        {recipName}
+                        {s.interviewStatus && (
+                          <span style={{ marginLeft: 6, fontSize: 10, color: s.interviewStatus === 'accepted' ? '#2e7d32' : '#7b1fa2' }}>{'\uD83C\uDFA5'}</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
                         {svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
@@ -1903,6 +1910,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
                         textTransform: 'capitalize',
                       }}>{s.status}</span>
+                    </div>
+                  </div>
+                  {/* Expanded details */}
+                  {isSchedExpanded && (
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #f0f0f0', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
+                        style={{ padding: '6px 12px', background: '#f5f5f5', color: '#555', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        View Details
+                      </button>
                       {s.status === 'confirmed' && !s.interviewStatus && (
                         <button onClick={async (e) => {
                           e.stopPropagation();
@@ -1916,18 +1932,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                               showToast && showToast(err.error || 'Could not request interview', 'error');
                             }
                           } catch (err) { console.error('Interview request error:', err); }
-                        }} style={{ padding: '5px 10px', background: '#f3e5f5', color: '#7b1fa2', border: '1px solid #ce93d8', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        }} style={{ padding: '6px 12px', background: '#faf5ff', color: '#7b1fa2', border: '1px solid #e1bee7', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                           {'\uD83C\uDFA5'} Request Interview
                         </button>
                       )}
                       {s.interviewStatus === 'pending' && (
-                        <span style={{ padding: '5px 10px', background: '#f3e5f5', color: '#7b1fa2', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>{'\uD83C\uDFA5'} Interview pending</span>
+                        <span style={{ padding: '6px 12px', background: '#faf5ff', color: '#7b1fa2', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>{'\uD83C\uDFA5'} Interview pending</span>
                       )}
                       {s.interviewStatus === 'accepted' && (
-                        <span style={{ padding: '5px 10px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>{'\u2713'} Interview scheduled</span>
+                        <span style={{ padding: '6px 12px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>{'\u2713'} Interview set</span>
                       )}
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
