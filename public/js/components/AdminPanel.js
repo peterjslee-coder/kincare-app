@@ -94,6 +94,11 @@ const AdminPanel = window.AdminPanel = () => {
   const [noShowLoading, setNoShowLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(null);
 
+  // Sessions tab — paused caregivers
+  const [pausedCaregivers, setPausedCaregivers] = useState([]);
+  const [pausedLoading, setPausedLoading] = useState(false);
+  const [reinstateLoading, setReinstateLoading] = useState(null);
+
   const loadNoShowSessions = async () => {
     setNoShowLoading(true);
     try {
@@ -107,9 +112,31 @@ const AdminPanel = window.AdminPanel = () => {
     setRestoreLoading(sessionId);
     try {
       const res = await apiFetch(`/api/admin/sessions/${sessionId}/restore`, { method: 'POST' });
-      if (res?.ok) loadNoShowSessions();
+      if (res?.ok) { loadNoShowSessions(); loadPausedCaregivers(); }
     } catch {}
     setRestoreLoading(null);
+  };
+
+  const loadPausedCaregivers = async () => {
+    setPausedLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/caregivers/paused');
+      if (res?.ok) {
+        const data = await res.json();
+        setPausedCaregivers(data.paused || []);
+      }
+    } catch (err) { console.error('Paused caregivers load error:', err); }
+    setPausedLoading(false);
+  };
+
+  const handleReinstate = async (userId) => {
+    if (!confirm('Reinstate this caregiver? They will be set to Available and can accept jobs again.')) return;
+    setReinstateLoading(userId);
+    try {
+      const res = await apiFetch(`/api/admin/caregivers/${userId}/reinstate`, { method: 'POST' });
+      if (res?.ok) loadPausedCaregivers();
+    } catch {}
+    setReinstateLoading(null);
   };
 
   const fetchPendingApprovals = async () => {
@@ -162,7 +189,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'authorizations') loadAuthorizations();
     if (activeTab === 'customerservice') loadCsReviews();
     if (activeTab === 'security') { loadSecDashboard(); loadSecAuditLog(); }
-    if (activeTab === 'sessions') loadNoShowSessions();
+    if (activeTab === 'sessions') { loadNoShowSessions(); loadPausedCaregivers(); }
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -2803,6 +2830,58 @@ const AdminPanel = window.AdminPanel = () => {
               ))}
             </div>
           )}
+
+          {/* Paused Caregivers — accounts paused after no-show */}
+          <div className="card" style={{ marginTop: '20px' }}>
+            <div className="card-header"><span className="card-icon">{'\u{1F6D1}'}</span>Paused Caregiver Accounts</div>
+            <p style={{ fontSize: '13px', color: '#666', marginBottom: '16px' }}>
+              Caregivers whose accounts were automatically paused after a no-show. Use "Reinstate" to restore their account and make them available for jobs again.
+            </p>
+            {pausedLoading ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>Loading...</div>
+            ) : pausedCaregivers.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: '#999', background: '#f9f9f9', borderRadius: '12px' }}>
+                No paused caregiver accounts.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {pausedCaregivers.map(cg => (
+                  <div key={cg.user_id} style={{
+                    background: '#fff5f5', border: '1px solid #ffcdd2',
+                    borderRadius: '10px', padding: '14px 16px',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
+                  }}>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                      <div style={{ fontWeight: 600, fontSize: '14px', color: '#333' }}>
+                        {cg.first_name} {cg.last_name}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#777', marginTop: '2px' }}>
+                        {cg.email} {'\u00B7'} {'\u2B50'} {cg.rating_avg || '—'} ({cg.rating_count || 0} reviews)
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#c62828', marginTop: '4px', fontWeight: 600 }}>
+                        {cg.account_paused_reason || 'No reason recorded'}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                        Paused: {cg.account_paused_at ? new Date(cg.account_paused_at).toLocaleString() : '—'}
+                        {' \u00B7 '} No-shows: {cg.no_show_count || 0} {' \u00B7 '} Completed: {cg.completed_count || 0}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleReinstate(cg.user_id)}
+                      disabled={reinstateLoading === cg.user_id}
+                      style={{
+                        padding: '8px 18px', background: '#1b6b5a', color: '#fff', border: 'none',
+                        borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                        opacity: reinstateLoading === cg.user_id ? 0.5 : 1,
+                      }}
+                    >
+                      {reinstateLoading === cg.user_id ? 'Reinstating...' : 'Reinstate'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

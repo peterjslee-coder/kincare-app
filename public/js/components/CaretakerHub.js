@@ -1145,6 +1145,33 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         return null;
       })()}
 
+      {/* Account Paused Banner — shown when caregiver account is paused (e.g., after no-show) */}
+      {profile.accountPaused && (
+        <div className="card" style={{
+          marginBottom: 16, padding: '16px 18px',
+          background: '#fff5f5', border: '2px solid #ef5350', borderRadius: 12,
+          boxShadow: '0 2px 12px rgba(239,83,80,0.15)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span style={{ fontSize: 24 }}>{'\u{1F6D1}'}</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#c62828' }}>Account Paused</div>
+              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>
+                Your account has been temporarily paused and you won't appear in job listings.
+              </div>
+            </div>
+          </div>
+          {profile.accountPausedReason && (
+            <div style={{ fontSize: 13, color: '#c62828', fontWeight: 600, padding: '6px 10px', background: '#ffebee', borderRadius: 8, marginBottom: 6 }}>
+              Reason: {profile.accountPausedReason}
+            </div>
+          )}
+          <div style={{ fontSize: 12, color: '#888' }}>
+            An admin will review your account. If you believe this is an error, please contact support.
+          </div>
+        </div>
+      )}
+
       {/* Stripe Connect Onboarding — shows when not yet connected OR when embedded onboarding is open */}
       {(!stripeStatus || stripeStatus.status === 'not_started' || stripeStatus.status === 'pending' || showStripeOnboarding) && (
         <div className="card" style={{ marginBottom: 16, padding: '18px 20px', borderLeft: '4px solid #6366f1' }}>
@@ -1193,6 +1220,37 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* NO-SHOW ALERTS — prominent banner when caregiver missed appointments */}
+      {(data.noShowAlerts || []).length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          {data.noShowAlerts.map(alert => {
+            const dateLabel = TimezoneHelper.getDateLabel((alert.scheduledDate || '').split('T')[0], TimezoneHelper.DEFAULT_TZ);
+            const timeLabel = TimezoneHelper.formatTime(alert.scheduledTime);
+            return (
+              <div key={alert.id} style={{
+                padding: '14px 16px', marginBottom: 8,
+                background: '#fff5f5', border: '2px solid #ef5350', borderRadius: 12,
+                boxShadow: '0 2px 8px rgba(239,83,80,0.15)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 20 }}>{'\u{1F6A8}'}</span>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: '#c62828' }}>Missed Session</span>
+                </div>
+                <div style={{ fontSize: 13, color: '#333', marginBottom: 4 }}>
+                  You did not check in for <strong>{alert.recipientName || 'a care visit'}</strong> on <strong>{dateLabel}</strong> at <strong>{timeLabel}</strong>.
+                </div>
+                <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600 }}>
+                  This session was automatically cancelled and no payment was processed. {alert.reviewRequired && !alert.reviewCompleted ? 'A review from the family is pending.' : ''}
+                </div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                  If this was an error, please contact the family or reach out to support.
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1311,7 +1369,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         const proposals = data.myProposals || [];
         if (proposals.length === 0) return null;
         const pendingProps = proposals.filter(p => p.status === 'pending');
-        if (pendingProps.length === 0) return null;
+        const expiredProps = proposals.filter(p => p.status === 'expired');
+        if (pendingProps.length === 0 && expiredProps.length === 0) return null;
         const formatT = (t) => {
           if (!t) return '';
           const [h, min] = t.split(':').map(Number);
@@ -1321,11 +1380,53 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         };
         return (
           <div style={{ marginBottom: 16 }}>
-            {pendingProps.length > 0 && (
+            {(pendingProps.length > 0 || expiredProps.length > 0) && (
               <div style={{ fontSize: 12, fontWeight: 700, color: '#7b61ff', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-                {'\u{1F4E8}'} My Proposals ({pendingProps.length} waiting)
+                {'\u{1F4E8}'} My Proposals ({pendingProps.length + expiredProps.length})
               </div>
             )}
+            {/* Expired proposals — family never responded */}
+            {expiredProps.map(p => {
+              const tz = TimezoneHelper.DEFAULT_TZ;
+              const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
+              const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
+              return (
+                <div key={p.id} className="card" style={{
+                  marginBottom: 10, padding: '14px 16px', border: '2px solid #e0a030', borderRadius: 12, background: '#fff8e1',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
+                        {p.recipientName || 'Care Visit'}
+                      </span>
+                      <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                        {p.familyName ? `(${p.familyName})` : ''}
+                      </span>
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
+                      background: '#e0a030', color: '#fff',
+                    }}>
+                      {'\u23F0'} Expired
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 4 }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
+                      <div style={{ fontSize: 13, color: '#888', textDecoration: 'line-through' }}>{origDay} at {formatT(p.originalTime)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#b07800', fontWeight: 600, textTransform: 'uppercase' }}>You Proposed</div>
+                      <div style={{ fontSize: 14, color: '#b07800', fontWeight: 600 }}>{propDay} at {formatT(p.proposedTime)}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#b07800', fontWeight: 600, marginTop: 6 }}>
+                    {'\u{26A0}\u{FE0F}'} Family didn't respond in time. This session is on hold — contact the family or wait for them to rebook.
+                  </div>
+                </div>
+              );
+            })}
+            {/* Pending proposals — still waiting */}
             {pendingProps.map(p => {
               const tz = TimezoneHelper.DEFAULT_TZ;
               const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
@@ -1387,10 +1488,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       })()}
 
       {/* UP NEXT — any session <24 hours away + in_progress, with check-in/out */}
-      {/* Filter out sessions that have a pending counter-proposal (shown in purple above) */}
+      {/* Filter out sessions that have a pending OR expired counter-proposal — family never accepted the time change */}
       {(() => {
-        const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
-        const filteredUpNext = upNextSessions.filter(s => !pendingProposalSessionIds.has(s.id));
+        const proposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending' || p.status === 'expired').map(p => p.sessionId));
+        const filteredUpNext = upNextSessions.filter(s => !proposalSessionIds.has(s.id));
         if (filteredUpNext.length === 0) return null;
         const readySet = new Set(readyToCheckIn.map(s => s.id));
         const sorted = [...filteredUpNext].sort((a, b) => {

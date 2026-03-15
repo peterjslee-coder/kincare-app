@@ -512,6 +512,26 @@ async function caregiverDashboard(db, userId, res) {
     console.log('My proposals query skipped:', e.message);
   }
 
+  // Fetch recent no-show cancelled sessions for this caregiver (alert banner)
+  let noShowAlerts = [];
+  try {
+    noShowAlerts = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.caregiver_no_show_at,
+        cs.review_required, cs.review_completed,
+        cr.first_name || ' ' || cr.last_name AS recipient_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.caregiver_id = ?
+        AND cs.caregiver_no_show = 1
+        AND cs.cancelled_by = 'system'
+        AND cs.scheduled_date >= NOW() - INTERVAL '30 days'
+      ORDER BY cs.caregiver_no_show_at DESC
+      LIMIT 5
+    `).all(profile.id);
+  } catch (e) {
+    console.log('No-show alerts query skipped:', e.message);
+  }
+
   const feePercentCg = await getPlatformFeePercent(db);
 
   res.json({
@@ -530,6 +550,9 @@ async function caregiverDashboard(db, userId, res) {
       specialties: JSON.parse(profile.specialties || "[]"),
       certifications: JSON.parse(profile.certifications || "[]"),
       isAvailable: !!profile.is_available,
+      accountPaused: !!profile.account_paused,
+      accountPausedReason: profile.account_paused_reason || null,
+      accountPausedAt: profile.account_paused_at || null,
       city: profile.location_city,
       state: profile.location_state,
       zip: profile.zip,
@@ -715,6 +738,15 @@ async function caregiverDashboard(db, userId, res) {
       createdAt: p.created_at,
       respondedAt: p.responded_at,
       expiresAt: p.expires_at,
+    })),
+    noShowAlerts: noShowAlerts.map(s => ({
+      id: s.id,
+      scheduledDate: s.scheduled_date,
+      scheduledTime: s.scheduled_time,
+      noShowAt: s.caregiver_no_show_at,
+      recipientName: s.recipient_name,
+      reviewRequired: !!s.review_required,
+      reviewCompleted: !!s.review_completed,
     })),
   });
 }

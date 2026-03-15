@@ -2297,4 +2297,58 @@ router.post("/backfill-care-notes", authenticate, requireAdmin, async (req, res)
   }
 });
 
+// ─── GET /api/admin/caregivers/paused — List all paused caregiver accounts ───
+router.get("/caregivers/paused", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(`
+      SELECT cp.id, cp.user_id, cp.account_paused_reason, cp.account_paused_at,
+        cp.rating_avg, cp.rating_count, cp.is_available,
+        u.first_name, u.last_name, u.email, u.avatar_url,
+        (SELECT COUNT(*) FROM care_sessions cs WHERE cs.caregiver_id = cp.id AND cs.caregiver_no_show = 1) AS no_show_count,
+        (SELECT COUNT(*) FROM care_sessions cs WHERE cs.caregiver_id = cp.id AND cs.status = 'completed') AS completed_count
+      FROM caregiver_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.account_paused = 1
+      ORDER BY cp.account_paused_at DESC
+    `).all();
+    res.json({ paused: rows });
+  } catch (err) {
+    console.error("Paused caregivers error:", err);
+    res.status(500).json({ error: "Failed to fetch paused caregivers" });
+  }
+});
+
+// ─── POST /api/admin/caregivers/:userId/reinstate — Reinstate a paused caregiver ───
+router.post("/caregivers/:userId/reinstate", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.params.userId);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+    if (!profile.account_paused) return res.status(400).json({ error: "Account is not paused" });
+
+    await db.prepare(`
+      UPDATE caregiver_profiles SET
+        account_paused = 0,
+        account_paused_reason = NULL,
+        account_paused_at = NULL,
+        account_reinstated_at = NOW(),
+        account_reinstated_by = ?,
+        is_available = 1
+      WHERE user_id = ?
+    `).run(req.user.id, req.params.userId);
+
+    await logAdminAction(req, "reinstate_caregiver", "caregiver", req.params.userId, {
+      previousReason: profile.account_paused_reason,
+      notes: req.body.notes || null,
+    });
+
+    console.log(`[admin] Reinstated caregiver ${req.params.userId} by ${req.user.email}`);
+    res.json({ success: true, message: "Caregiver account reinstated" });
+  } catch (err) {
+    console.error("Reinstate caregiver error:", err);
+    res.status(500).json({ error: "Failed to reinstate caregiver" });
+  }
+});
+
 module.exports = router;

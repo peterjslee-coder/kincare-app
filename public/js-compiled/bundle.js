@@ -6599,17 +6599,40 @@ const Dashboard = window.Dashboard = ({
       marginBottom: 16
     }
   }, pendingReviews.map(pr => {
-    var _pr$caregiver_name;
+    var _pr$caregiver_name, _pr$caregiver_name2, _pr$caregiver_name3;
+    const isNoShow = !!pr.caregiver_no_show;
+    const borderColor = isNoShow ? '#ef5350' : '#ffc107';
+    const bgColor = isNoShow ? '#fff5f5' : '#fff8e1';
     return /*#__PURE__*/React.createElement("div", {
       key: pr.id,
       style: {
         padding: 14,
         marginBottom: 8,
-        background: '#fff8e1',
-        border: '2px solid #ffc107',
+        background: bgColor,
+        border: `2px solid ${borderColor}`,
         borderRadius: 12
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, isNoShow && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 8,
+        padding: '6px 10px',
+        background: '#ffebee',
+        borderRadius: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16
+      }
+    }, '\u{1F6A8}'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: '#c62828'
+      }
+    }, "Caregiver No-Show \u2014 ", (_pr$caregiver_name = pr.caregiver_name) === null || _pr$caregiver_name === void 0 ? void 0 : _pr$caregiver_name.split(' ')[0], " did not check in")), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
@@ -6620,9 +6643,9 @@ const Dashboard = window.Dashboard = ({
       style: {
         fontSize: 14,
         fontWeight: 700,
-        color: '#f57f17'
+        color: isNoShow ? '#c62828' : '#f57f17'
       }
-    }, '\u2B50', " Please review ", pr.caregiver_name), /*#__PURE__*/React.createElement("span", {
+    }, isNoShow ? '\u{26A0}\u{FE0F}' : '\u2B50', " Please review ", pr.caregiver_name), /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 12,
         color: '#999'
@@ -6631,9 +6654,15 @@ const Dashboard = window.Dashboard = ({
       style: {
         fontSize: 13,
         color: '#555',
-        margin: '0 0 10px'
+        margin: '0 0 4px'
       }
-    }, "Session with ", pr.recipient_first_name, " on ", pr.scheduled_date, ". You cannot book ", (_pr$caregiver_name = pr.caregiver_name) === null || _pr$caregiver_name === void 0 ? void 0 : _pr$caregiver_name.split(' ')[0], " again until you leave a review."), /*#__PURE__*/React.createElement("button", {
+    }, "Session with ", pr.recipient_first_name, " on ", pr.scheduled_date, ".", isNoShow ? ` ${(_pr$caregiver_name2 = pr.caregiver_name) === null || _pr$caregiver_name2 === void 0 ? void 0 : _pr$caregiver_name2.split(' ')[0]} did not check in. The session was cancelled and no payment was charged.` : ` You cannot book ${(_pr$caregiver_name3 = pr.caregiver_name) === null || _pr$caregiver_name3 === void 0 ? void 0 : _pr$caregiver_name3.split(' ')[0]} again until you leave a review.`), !isNoShow && pr.checked_in_at && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#2e7d32',
+        marginBottom: 6
+      }
+    }, '\u2705', " Caregiver checked in", pr.checked_out_at ? ' and checked out' : ''), /*#__PURE__*/React.createElement("button", {
       onClick: () => {
         setReviewSession(pr);
         setReviewRating(0);
@@ -6641,8 +6670,8 @@ const Dashboard = window.Dashboard = ({
       },
       style: {
         padding: '8px 20px',
-        background: '#ffc107',
-        color: '#333',
+        background: isNoShow ? '#ef5350' : '#ffc107',
+        color: isNoShow ? '#fff' : '#333',
         border: 'none',
         borderRadius: 8,
         fontWeight: 600,
@@ -34187,7 +34216,55 @@ const CaretakerHub = window.CaretakerHub = ({
       }
     }, "Your background check is in progress. You'll be notified once it clears.")));
     return null;
-  })(), (!stripeStatus || stripeStatus.status === 'not_started' || stripeStatus.status === 'pending' || showStripeOnboarding) && /*#__PURE__*/React.createElement("div", {
+  })(), profile.accountPaused && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 16,
+      padding: '16px 18px',
+      background: '#fff5f5',
+      border: '2px solid #ef5350',
+      borderRadius: 12,
+      boxShadow: '0 2px 12px rgba(239,83,80,0.15)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 24
+    }
+  }, '\u{1F6D1}'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 15,
+      color: '#c62828'
+    }
+  }, "Account Paused"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#555',
+      marginTop: 2
+    }
+  }, "Your account has been temporarily paused and you won't appear in job listings."))), profile.accountPausedReason && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#c62828',
+      fontWeight: 600,
+      padding: '6px 10px',
+      background: '#ffebee',
+      borderRadius: 8,
+      marginBottom: 6
+    }
+  }, "Reason: ", profile.accountPausedReason), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#888'
+    }
+  }, "An admin will review your account. If you believe this is an error, please contact support.")), (!stripeStatus || stripeStatus.status === 'not_started' || stripeStatus.status === 'pending' || showStripeOnboarding) && /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: 16,
@@ -34282,7 +34359,60 @@ const CaretakerHub = window.CaretakerHub = ({
       padding: '40px 20px',
       color: '#888'
     }
-  }, "Loading Stripe onboarding...")))), bgCheckPaid && (() => {
+  }, "Loading Stripe onboarding...")))), (data.noShowAlerts || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, data.noShowAlerts.map(alert => {
+    const dateLabel = TimezoneHelper.getDateLabel((alert.scheduledDate || '').split('T')[0], TimezoneHelper.DEFAULT_TZ);
+    const timeLabel = TimezoneHelper.formatTime(alert.scheduledTime);
+    return /*#__PURE__*/React.createElement("div", {
+      key: alert.id,
+      style: {
+        padding: '14px 16px',
+        marginBottom: 8,
+        background: '#fff5f5',
+        border: '2px solid #ef5350',
+        borderRadius: 12,
+        boxShadow: '0 2px 8px rgba(239,83,80,0.15)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 20
+      }
+    }, '\u{1F6A8}'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 700,
+        fontSize: 14,
+        color: '#c62828'
+      }
+    }, "Missed Session")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#333',
+        marginBottom: 4
+      }
+    }, "You did not check in for ", /*#__PURE__*/React.createElement("strong", null, alert.recipientName || 'a care visit'), " on ", /*#__PURE__*/React.createElement("strong", null, dateLabel), " at ", /*#__PURE__*/React.createElement("strong", null, timeLabel), "."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#c62828',
+        fontWeight: 600
+      }
+    }, "This session was automatically cancelled and no payment was processed. ", alert.reviewRequired && !alert.reviewCompleted ? 'A review from the family is pending.' : ''), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#888',
+        marginTop: 4
+      }
+    }, "If this was an error, please contact the family or reach out to support."));
+  })), bgCheckPaid && (() => {
     const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
     const exclusiveOffers = openJobs.filter(job => {
       if (pendingProposalSessionIds.has(job.id)) return false; // already proposed
@@ -34503,7 +34633,8 @@ const CaretakerHub = window.CaretakerHub = ({
     const proposals = data.myProposals || [];
     if (proposals.length === 0) return null;
     const pendingProps = proposals.filter(p => p.status === 'pending');
-    if (pendingProps.length === 0) return null;
+    const expiredProps = proposals.filter(p => p.status === 'expired');
+    if (pendingProps.length === 0 && expiredProps.length === 0) return null;
     const formatT = t => {
       if (!t) return '';
       const [h, min] = t.split(':').map(Number);
@@ -34515,7 +34646,7 @@ const CaretakerHub = window.CaretakerHub = ({
       style: {
         marginBottom: 16
       }
-    }, pendingProps.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, (pendingProps.length > 0 || expiredProps.length > 0) && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
         fontWeight: 700,
@@ -34524,7 +34655,92 @@ const CaretakerHub = window.CaretakerHub = ({
         letterSpacing: '0.5px',
         marginBottom: 10
       }
-    }, '\u{1F4E8}', " My Proposals (", pendingProps.length, " waiting)"), pendingProps.map(p => {
+    }, '\u{1F4E8}', " My Proposals (", pendingProps.length + expiredProps.length, ")"), expiredProps.map(p => {
+      const tz = TimezoneHelper.DEFAULT_TZ;
+      const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
+      const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
+      return /*#__PURE__*/React.createElement("div", {
+        key: p.id,
+        className: "card",
+        style: {
+          marginBottom: 10,
+          padding: '14px 16px',
+          border: '2px solid #e0a030',
+          borderRadius: 12,
+          background: '#fff8e1'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: 4
+        }
+      }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 600,
+          fontSize: 14,
+          color: '#333'
+        }
+      }, p.recipientName || 'Care Visit'), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 400,
+          fontSize: 12,
+          color: '#888',
+          marginLeft: 6
+        }
+      }, p.familyName ? `(${p.familyName})` : '')), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          padding: '2px 8px',
+          borderRadius: 10,
+          whiteSpace: 'nowrap',
+          background: '#e0a030',
+          color: '#fff'
+        }
+      }, '\u23F0', " Expired")), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 16,
+          flexWrap: 'wrap',
+          marginBottom: 4
+        }
+      }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: '#999',
+          fontWeight: 600,
+          textTransform: 'uppercase'
+        }
+      }, "Original"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: '#888',
+          textDecoration: 'line-through'
+        }
+      }, origDay, " at ", formatT(p.originalTime))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: '#b07800',
+          fontWeight: 600,
+          textTransform: 'uppercase'
+        }
+      }, "You Proposed"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 14,
+          color: '#b07800',
+          fontWeight: 600
+        }
+      }, propDay, " at ", formatT(p.proposedTime)))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#b07800',
+          fontWeight: 600,
+          marginTop: 6
+        }
+      }, '\u{26A0}\u{FE0F}', " Family didn't respond in time. This session is on hold \u2014 contact the family or wait for them to rebook."));
+    }), pendingProps.map(p => {
       const tz = TimezoneHelper.DEFAULT_TZ;
       const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
       const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
@@ -34627,8 +34843,8 @@ const CaretakerHub = window.CaretakerHub = ({
       }, minsLeft !== null ? isUrgent ? `\u23F1 Family has ${timeLeftLabel} to respond` : `\u23F3 Waiting for family \u2022 ${timeLeftLabel} left` : '\u23F3 Waiting for family to respond'));
     }));
   })(), (() => {
-    const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
-    const filteredUpNext = upNextSessions.filter(s => !pendingProposalSessionIds.has(s.id));
+    const proposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending' || p.status === 'expired').map(p => p.sessionId));
+    const filteredUpNext = upNextSessions.filter(s => !proposalSessionIds.has(s.id));
     if (filteredUpNext.length === 0) return null;
     const readySet = new Set(readyToCheckIn.map(s => s.id));
     const sorted = [...filteredUpNext].sort((a, b) => {
@@ -47998,6 +48214,11 @@ const AdminPanel = window.AdminPanel = () => {
   const [noShowSessions, setNoShowSessions] = useState([]);
   const [noShowLoading, setNoShowLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(null);
+
+  // Sessions tab — paused caregivers
+  const [pausedCaregivers, setPausedCaregivers] = useState([]);
+  const [pausedLoading, setPausedLoading] = useState(false);
+  const [reinstateLoading, setReinstateLoading] = useState(null);
   const loadNoShowSessions = async () => {
     setNoShowLoading(true);
     try {
@@ -48015,9 +48236,36 @@ const AdminPanel = window.AdminPanel = () => {
       const res = await apiFetch(`/api/admin/sessions/${sessionId}/restore`, {
         method: 'POST'
       });
-      if (res !== null && res !== void 0 && res.ok) loadNoShowSessions();
+      if (res !== null && res !== void 0 && res.ok) {
+        loadNoShowSessions();
+        loadPausedCaregivers();
+      }
     } catch {}
     setRestoreLoading(null);
+  };
+  const loadPausedCaregivers = async () => {
+    setPausedLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/caregivers/paused');
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setPausedCaregivers(data.paused || []);
+      }
+    } catch (err) {
+      console.error('Paused caregivers load error:', err);
+    }
+    setPausedLoading(false);
+  };
+  const handleReinstate = async userId => {
+    if (!confirm('Reinstate this caregiver? They will be set to Available and can accept jobs again.')) return;
+    setReinstateLoading(userId);
+    try {
+      const res = await apiFetch(`/api/admin/caregivers/${userId}/reinstate`, {
+        method: 'POST'
+      });
+      if (res !== null && res !== void 0 && res.ok) loadPausedCaregivers();
+    } catch {}
+    setReinstateLoading(null);
   };
   const fetchPendingApprovals = async () => {
     try {
@@ -48084,7 +48332,10 @@ const AdminPanel = window.AdminPanel = () => {
       loadSecDashboard();
       loadSecAuditLog();
     }
-    if (activeTab === 'sessions') loadNoShowSessions();
+    if (activeTab === 'sessions') {
+      loadNoShowSessions();
+      loadPausedCaregivers();
+    }
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -53444,7 +53695,99 @@ const AdminPanel = window.AdminPanel = () => {
       color: '#1b6b5a',
       fontWeight: 600
     }
-  }, "Restored \u2713"))))), activeTab === 'settings' && (() => {
+  }, "Restored \u2713")))), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginTop: '20px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "card-icon"
+  }, '\u{1F6D1}'), "Paused Caregiver Accounts"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: '13px',
+      color: '#666',
+      marginBottom: '16px'
+    }
+  }, "Caregivers whose accounts were automatically paused after a no-show. Use \"Reinstate\" to restore their account and make them available for jobs again."), pausedLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: '30px',
+      color: '#999'
+    }
+  }, "Loading...") : pausedCaregivers.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: '30px',
+      color: '#999',
+      background: '#f9f9f9',
+      borderRadius: '12px'
+    }
+  }, "No paused caregiver accounts.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px'
+    }
+  }, pausedCaregivers.map(cg => /*#__PURE__*/React.createElement("div", {
+    key: cg.user_id,
+    style: {
+      background: '#fff5f5',
+      border: '1px solid #ffcdd2',
+      borderRadius: '10px',
+      padding: '14px 16px',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: '8px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: '200px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      fontSize: '14px',
+      color: '#333'
+    }
+  }, cg.first_name, " ", cg.last_name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      color: '#777',
+      marginTop: '2px'
+    }
+  }, cg.email, " ", '\u00B7', " ", '\u2B50', " ", cg.rating_avg || '—', " (", cg.rating_count || 0, " reviews)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      color: '#c62828',
+      marginTop: '4px',
+      fontWeight: 600
+    }
+  }, cg.account_paused_reason || 'No reason recorded'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      color: '#999',
+      marginTop: '2px'
+    }
+  }, "Paused: ", cg.account_paused_at ? new Date(cg.account_paused_at).toLocaleString() : '—', ' \u00B7 ', " No-shows: ", cg.no_show_count || 0, " ", ' \u00B7 ', " Completed: ", cg.completed_count || 0)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleReinstate(cg.user_id),
+    disabled: reinstateLoading === cg.user_id,
+    style: {
+      padding: '8px 18px',
+      background: '#1b6b5a',
+      color: '#fff',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '13px',
+      fontWeight: 600,
+      cursor: 'pointer',
+      opacity: reinstateLoading === cg.user_id ? 0.5 : 1
+    }
+  }, reinstateLoading === cg.user_id ? 'Reinstating...' : 'Reinstate')))))), activeTab === 'settings' && (() => {
     const prefs = user !== null && user !== void 0 && user.notification_prefs ? typeof user.notification_prefs === 'string' ? JSON.parse(user.notification_prefs) : user.notification_prefs : {};
     const togglePref = async (key, value) => {
       const newPrefs = {

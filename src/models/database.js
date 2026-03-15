@@ -770,6 +770,13 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS interview_required INTEGER DEFAULT 0`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS interview_type TEXT`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS interview_status TEXT`,
+
+    // v1.46.0 — Caregiver account pause on no-show
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_paused INTEGER DEFAULT 0`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_paused_reason TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_paused_at TIMESTAMPTZ`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_reinstated_at TIMESTAMPTZ`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_reinstated_by TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

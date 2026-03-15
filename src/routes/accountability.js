@@ -374,7 +374,8 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
     const db = await getDb();
     const pending = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
-        cs.caregiver_id, cs.status,
+        cs.caregiver_id, cs.status, cs.caregiver_no_show,
+        cs.checked_in_at, cs.checked_out_at,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         cr.first_name AS recipient_first_name,
         cs.review_reminded_at
@@ -770,7 +771,24 @@ async function pollCaregiverNoShows() {
             }
           }
 
-          console.log(`[accountability] Caregiver no-show: session ${s.id.slice(0, 8)} — notified caregiver + family`);
+          // ─── Pause caregiver's account pending admin review ───
+          try {
+            const cgProfile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(s.caregiver_user_id);
+            if (cgProfile) {
+              await db.prepare(`
+                UPDATE caregiver_profiles SET
+                  is_available = 0,
+                  account_paused = 1,
+                  account_paused_reason = 'No-show: missed session on ' || ?,
+                  account_paused_at = NOW()
+                WHERE id = ?
+              `).run(s.scheduled_date, cgProfile.id);
+            }
+          } catch (pauseErr) {
+            console.error(`[accountability] Failed to pause caregiver account:`, pauseErr.message);
+          }
+
+          console.log(`[accountability] Caregiver no-show: session ${s.id.slice(0, 8)} — notified caregiver + family, account paused`);
         }
       } catch (err) {
         console.error(`[accountability] No-show poll error for ${s.id.slice(0, 8)}:`, err.message);

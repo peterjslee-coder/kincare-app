@@ -719,29 +719,52 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {/* Pending Reviews — stacked at top until completed */}
       {pendingReviews.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          {pendingReviews.map(pr => (
-            <div key={pr.id} style={{ padding: 14, marginBottom: 8, background: '#fff8e1', border: '2px solid #ffc107', borderRadius: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#f57f17' }}>
-                  {'\u2B50'} Please review {pr.caregiver_name}
-                </span>
-                <span style={{ fontSize: 12, color: '#999' }}>
-                  {pr.scheduled_date}
-                </span>
+          {pendingReviews.map(pr => {
+            const isNoShow = !!pr.caregiver_no_show;
+            const borderColor = isNoShow ? '#ef5350' : '#ffc107';
+            const bgColor = isNoShow ? '#fff5f5' : '#fff8e1';
+            return (
+              <div key={pr.id} style={{ padding: 14, marginBottom: 8, background: bgColor, border: `2px solid ${borderColor}`, borderRadius: 12 }}>
+                {isNoShow && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                    padding: '6px 10px', background: '#ffebee', borderRadius: 8,
+                  }}>
+                    <span style={{ fontSize: 16 }}>{'\u{1F6A8}'}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#c62828' }}>
+                      Caregiver No-Show — {pr.caregiver_name?.split(' ')[0]} did not check in
+                    </span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: isNoShow ? '#c62828' : '#f57f17' }}>
+                    {isNoShow ? '\u{26A0}\u{FE0F}' : '\u2B50'} Please review {pr.caregiver_name}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#999' }}>
+                    {pr.scheduled_date}
+                  </span>
+                </div>
+                <p style={{ fontSize: 13, color: '#555', margin: '0 0 4px' }}>
+                  Session with {pr.recipient_first_name} on {pr.scheduled_date}.
+                  {isNoShow
+                    ? ` ${pr.caregiver_name?.split(' ')[0]} did not check in. The session was cancelled and no payment was charged.`
+                    : ` You cannot book ${pr.caregiver_name?.split(' ')[0]} again until you leave a review.`}
+                </p>
+                {!isNoShow && pr.checked_in_at && (
+                  <div style={{ fontSize: 12, color: '#2e7d32', marginBottom: 6 }}>
+                    {'\u2705'} Caregiver checked in{pr.checked_out_at ? ' and checked out' : ''}
+                  </div>
+                )}
+                <button onClick={() => {
+                  setReviewSession(pr);
+                  setReviewRating(0);
+                  setReviewComment('');
+                }} style={{ padding: '8px 20px', background: isNoShow ? '#ef5350' : '#ffc107', color: isNoShow ? '#fff' : '#333', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                  Leave Review
+                </button>
               </div>
-              <p style={{ fontSize: 13, color: '#555', margin: '0 0 10px' }}>
-                Session with {pr.recipient_first_name} on {pr.scheduled_date}.
-                You cannot book {pr.caregiver_name?.split(' ')[0]} again until you leave a review.
-              </p>
-              <button onClick={() => {
-                setReviewSession(pr);
-                setReviewRating(0);
-                setReviewComment('');
-              }} style={{ padding: '8px 20px', background: '#ffc107', color: '#333', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
-                Leave Review
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
