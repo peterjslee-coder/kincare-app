@@ -30675,6 +30675,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [claimingId, setClaimingId] = useState(null);
   const [offeringOnId, setOfferingOnId] = useState(null); // session id where offer UI is open
+  const [pendingProposals, setPendingProposals] = useState([]);
 
   // Pick up pending schedule date from activity feed deep-link
   useEffect(() => {
@@ -30762,6 +30763,20 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
       } catch {/* ignore */}
     };
     fetchRequests();
+  }, [weekOffset]);
+
+  // Fetch pending proposals for purple calendar blocks
+  useEffect(() => {
+    const fetchProposals = async () => {
+      try {
+        const res = await apiFetch('/api/dashboard');
+        if (res !== null && res !== void 0 && res.ok) {
+          const d = await res.json();
+          setPendingProposals((d.myProposals || []).filter(p => p.status === 'pending'));
+        }
+      } catch {/* ignore */}
+    };
+    fetchProposals();
   }, [weekOffset]);
 
   // Claim a care request
@@ -30945,6 +30960,12 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
       border: '#f0f0f0',
       label: '',
       overlay: ''
+    },
+    proposal: {
+      bg: '#f3e5f5',
+      border: '#ce93d8',
+      label: '?',
+      overlay: '#9c27b0'
     }
   };
 
@@ -31180,7 +31201,101 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
       border: '1px solid #e57373',
       display: 'inline-block'
     }
-  }), " Blocked")), /*#__PURE__*/React.createElement("div", {
+  }), " Blocked"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 14,
+      height: 14,
+      borderRadius: 3,
+      background: '#9c27b0',
+      display: 'inline-block'
+    }
+  }), " Proposal")), (() => {
+    // Compute dayBlocks outside JSX so tbody can reference it
+    window.__calDayBlocks = weekDates.map(d => {
+      const dateStr = toLocalDateStr(d);
+      const daySessions = getSessionsForDate(dateStr);
+      const dayRequests = getRequestsForDate(dateStr);
+      const blocks = {};
+
+      // Sessions (highest priority — blue)
+      for (const s of daySessions) {
+        const sTime = s.scheduled_time || s.time || '';
+        const sHour = parseInt(sTime.split(':')[0]);
+        const sDuration = Math.max(1, Math.ceil(parseFloat(s.duration_hours || s.durationHours || 1)));
+        const startH = Math.max(sHour, hourStart);
+        const endH = Math.min(sHour + sDuration, hourEnd);
+        const visibleSpan = endH - startH;
+        if (visibleSpan <= 0) continue;
+        const name = (s.recipientName || s.recipient_name || '').split(' ')[0] || '\u25CF';
+        blocks[startH] = {
+          type: 'booked',
+          session: s,
+          span: visibleSpan,
+          name
+        };
+        for (let h = startH + 1; h < endH; h++) blocks[h] = {
+          skip: true
+        };
+      }
+
+      // Care requests (orange)
+      for (const s of dayRequests) {
+        const sTime = s.scheduled_time || s.time || '';
+        const sHour = parseInt(sTime.split(':')[0]);
+        const sDuration = Math.max(1, Math.ceil(parseFloat(s.duration_hours || s.durationHours || 1)));
+        const startH = Math.max(sHour, hourStart);
+        const endH = Math.min(sHour + sDuration, hourEnd);
+        const visibleSpan = endH - startH;
+        if (visibleSpan <= 0) continue;
+        if (!blocks[startH]) {
+          blocks[startH] = {
+            type: 'request',
+            session: s,
+            span: visibleSpan,
+            name: 'NEW'
+          };
+          for (let h = startH + 1; h < endH; h++) {
+            if (!blocks[h]) blocks[h] = {
+              skip: true
+            };
+          }
+        }
+      }
+
+      // Pending proposals (purple)
+      for (const p of pendingProposals) {
+        if (p.proposedDate !== dateStr) continue;
+        const pHour = parseInt((p.proposedTime || '0').split(':')[0]);
+        const pDuration = Math.max(1, Math.ceil(parseFloat(p.durationHours || 1)));
+        const startH = Math.max(pHour, hourStart);
+        const endH = Math.min(pHour + pDuration, hourEnd);
+        const visibleSpan = endH - startH;
+        if (visibleSpan <= 0) continue;
+        if (!blocks[startH]) {
+          const name = (p.recipientName || '').split(' ')[0] || '?';
+          blocks[startH] = {
+            type: 'proposal',
+            proposal: p,
+            span: visibleSpan,
+            name
+          };
+          for (let h = startH + 1; h < endH; h++) {
+            if (!blocks[h]) blocks[h] = {
+              skip: true
+            };
+          }
+        }
+      }
+      return blocks;
+    });
+    return null; // Don't render anything, just compute
+  })(), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       padding: 0,
@@ -31281,6 +31396,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
     length: hourEnd - hourStart
   }, (_, hi) => {
     const hour = hourStart + hi;
+    const dayBlocks = window.__calDayBlocks || [];
     return /*#__PURE__*/React.createElement("tr", {
       key: hour
     }, /*#__PURE__*/React.createElement("td", {
@@ -31298,58 +31414,85 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
       }
     }, hour <= 12 ? hour : hour - 12, hour < 12 ? 'a' : 'p'), weekDates.map((d, di) => {
       const dateStr = toLocalDateStr(d);
+      const block = (dayBlocks[di] || {})[hour];
+
+      // Skip — covered by a rowSpan from above
+      if (block && block.skip) return null;
+
+      // Merged session/request/proposal block
+      if (block && block.span) {
+        const isProposal = block.type === 'proposal';
+        const isRequest = block.type === 'request';
+        const borderColor = isProposal ? '#9c27b0' : isRequest ? '#fb8c00' : '#1e88e5';
+        const textColor = isProposal ? '#7b1fa2' : isRequest ? '#e65100' : '#1565c0';
+        const bgGradient = isProposal ? 'linear-gradient(180deg, rgba(156,39,176,0.28) 0%, rgba(156,39,176,0.12) 100%)' : isRequest ? 'linear-gradient(180deg, rgba(251,140,0,0.28) 0%, rgba(251,140,0,0.12) 100%)' : 'linear-gradient(180deg, rgba(30,136,229,0.32) 0%, rgba(30,136,229,0.10) 100%)';
+        const sTime = block.session ? block.session.scheduled_time || block.session.time || '' : block.proposal ? block.proposal.proposedTime || '' : '';
+        const tParts = sTime.split(':').map(Number);
+        const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}${tParts[1] ? ':' + String(tParts[1]).padStart(2, '0') : ''}${tParts[0] >= 12 ? 'p' : 'a'}` : '';
+        return /*#__PURE__*/React.createElement("td", {
+          key: di,
+          rowSpan: block.span,
+          onClick: () => setSelectedDay(d),
+          title: block.type === 'booked' ? `${block.name} · ${block.session.serviceType || block.session.service_type || ''}` : block.type === 'request' ? 'Care request' : `Proposal: ${block.name}`,
+          style: {
+            background: bgGradient,
+            borderLeft: `3px solid ${borderColor}`,
+            borderBottom: '1px solid #f0f0f0',
+            borderRight: '1px solid #f5f5f5',
+            cursor: 'pointer',
+            padding: 0,
+            verticalAlign: 'middle',
+            textAlign: 'center'
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            padding: '2px 1px',
+            overflow: 'hidden'
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: block.span >= 2 ? 10 : 8,
+            fontWeight: 700,
+            color: textColor,
+            lineHeight: 1.2,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: '100%'
+          }
+        }, block.name), block.span >= 2 && /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 7,
+            color: textColor,
+            opacity: 0.7,
+            marginTop: 1
+          }
+        }, timeLabel)));
+      }
+
+      // Regular cell (available, blocked, off)
       const cell = getCellType(dateStr, d.getDay(), hour);
       const colors = cellColors[cell.type];
       return /*#__PURE__*/React.createElement("td", {
         key: di,
         onClick: () => setSelectedDay(d),
-        title: cell.type === 'booked' ? `${cell.session.recipientName || cell.session.recipient_name || ''} · ${cell.session.serviceType || cell.session.service_type || ''}${cell.session.total_cost ? ' · $' + cell.session.total_cost : ''}` : cell.type === 'request' ? `Care request: ${cell.session.service_type || cell.session.serviceType || ''}` : cell.type === 'blocked' ? `Blocked${cell.note ? ': ' + cell.note : ''}` : cell.type,
+        title: cell.type === 'blocked' ? `Blocked${cell.note ? ': ' + cell.note : ''}` : cell.type,
         style: {
           background: cell.type === 'blocked' ? 'repeating-linear-gradient(-45deg, #fce4ec, #fce4ec 3px, #f8bbd0 3px, #f8bbd0 6px)' : colors.bg,
           borderBottom: '1px solid #f0f0f0',
           borderRight: '1px solid #f5f5f5',
-          borderLeft: cell.type === 'booked' ? '3px solid #1e88e5' : cell.type === 'request' ? '3px solid #fb8c00' : cell.type === 'blocked' ? '3px solid #e57373' : 'none',
+          borderLeft: cell.type === 'blocked' ? '3px solid #e57373' : 'none',
           cursor: 'pointer',
           height: 28,
           position: 'relative',
           transition: 'opacity 0.1s'
         }
-      }, cell.type === 'booked' && /*#__PURE__*/React.createElement("div", {
-        style: {
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(90deg, rgba(30,136,229,0.35) 0%, rgba(30,136,229,0.12) 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 8,
-          fontWeight: 700,
-          color: '#1565c0',
-          letterSpacing: -0.5
-        }
-      }, (() => {
-        const s = cell.session;
-        const n = s.recipientName || s.recipient_name || '';
-        return n ? n.split(' ')[0] : '\u25CF';
-      })())), cell.type === 'request' && /*#__PURE__*/React.createElement("div", {
-        style: {
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(90deg, rgba(251,140,0,0.3) 0%, rgba(251,140,0,0.1) 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 8,
-          fontWeight: 700,
-          color: '#e65100'
-        }
-      }, "NEW")), cell.type === 'blocked' && /*#__PURE__*/React.createElement("div", {
+      }, cell.type === 'blocked' && /*#__PURE__*/React.createElement("div", {
         style: {
           position: 'absolute',
           inset: 0,
