@@ -33964,7 +33964,222 @@ const CaretakerHub = window.CaretakerHub = ({
       padding: '40px 20px',
       color: '#888'
     }
-  }, "Loading Stripe onboarding...")))), (() => {
+  }, "Loading Stripe onboarding...")))), bgCheckPaid && (() => {
+    const exclusiveOffers = openJobs.filter(job => {
+      if (!job.offeredToCaregiverId) return false;
+      const exUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
+      const expired = exUntil && Math.max(0, Math.floor((exUntil - new Date()) / 60000)) <= 0;
+      return !expired; // only show non-expired exclusive offers
+    });
+    if (exclusiveOffers.length === 0) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#7c3aed',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        marginBottom: 10
+      }
+    }, '\u2728', " Just for You"), exclusiveOffers.map(job => {
+      const sDate = (job.date || '').split('T')[0];
+      const dateParts = sDate ? sDate.split('-').map(Number) : [];
+      const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
+      const now = new Date();
+      const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
+      const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      }) : '';
+      const tParts = (job.time || '').split(':').map(Number);
+      const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
+      const surcharge = parseFloat(job.shortNoticeSurcharge) || 0;
+      const proposedRate = parseFloat(job.proposedRate) || 0;
+      const hours = parseFloat(job.durationHours) || 1;
+      const baseCost = parseFloat(job.estimatedCost) || 0;
+      const basePerHour = proposedRate > 0 ? proposedRate : hours > 0 ? Math.round(baseCost / hours) : 0;
+      const effectiveTotal = proposedRate > 0 ? proposedRate * hours + surcharge : baseCost;
+      const effectivePerHour = hours > 0 ? Math.round(effectiveTotal / hours * 100) / 100 : 0;
+      const hasBonus = surcharge > 0;
+      const exclusiveUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
+      const exclusiveRemaining = exclusiveUntil ? Math.max(0, Math.floor((exclusiveUntil - new Date()) / 60000)) : null;
+      const exclusiveUrgent = exclusiveRemaining !== null && exclusiveRemaining <= 10;
+      return /*#__PURE__*/React.createElement("div", {
+        key: job.id,
+        className: "card",
+        style: {
+          marginBottom: 10,
+          padding: '16px 18px',
+          border: '2px solid #7c3aed',
+          borderRadius: 12,
+          background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+          boxShadow: '0 2px 8px rgba(124,58,237,0.15)'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1,
+          minWidth: '180px'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          marginBottom: 6,
+          flexWrap: 'wrap'
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        className: exclusiveUrgent ? 'exclusive-urgent' : '',
+        style: {
+          background: exclusiveUrgent ? '#e8724a' : '#7c3aed',
+          color: '#fff',
+          padding: '3px 10px',
+          borderRadius: 12,
+          fontSize: 12,
+          fontWeight: 700
+        }
+      }, exclusiveRemaining !== null ? exclusiveUrgent ? `\u23F1 ${exclusiveRemaining} min left!` : `\u2728 JUST FOR YOU \u00B7 ${exclusiveRemaining} min left` : '\u2728 JUST FOR YOU'), hasBonus && /*#__PURE__*/React.createElement("span", {
+        style: {
+          background: '#e8724a',
+          color: '#fff',
+          padding: '2px 8px',
+          borderRadius: 12,
+          fontSize: 11,
+          fontWeight: 700
+        }
+      }, "BONUS PAY")), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 16,
+          fontWeight: 700,
+          color: '#333'
+        }
+      }, formatServiceType(job.serviceType)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 14,
+          color: '#555',
+          marginTop: 3
+        }
+      }, dayLabel, timeLabel ? ` at ${timeLabel}` : '', job.durationHours ? ` \u2022 ${job.durationHours}hr` : '', effectiveTotal > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", null, " ", '\u2022', " "), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 800,
+          color: '#1b6b5a',
+          fontSize: 22
+        }
+      }, "$", effectiveTotal.toFixed(0)))), job.recipientCity && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#888',
+          marginTop: 2
+        }
+      }, '\uD83D\uDCCD', " ", job.recipientCity), job.familyName && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#888',
+          marginTop: 1
+        }
+      }, "Requested by ", job.familyName), hasBonus && basePerHour > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          marginTop: 4
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          textDecoration: 'line-through',
+          color: '#999',
+          fontSize: 12
+        }
+      }, "$", basePerHour, "/hr"), /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: '#1b6b5a',
+          fontWeight: 700,
+          fontSize: 14
+        }
+      }, "$", effectivePerHour, "/hr")), job.healthTags && job.healthTags.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 4,
+          flexWrap: 'wrap',
+          marginTop: 6
+        }
+      }, job.healthTags.map((tag, idx) => /*#__PURE__*/React.createElement("span", {
+        key: idx,
+        style: {
+          fontSize: 10,
+          background: '#fff3e0',
+          color: '#e65100',
+          padding: '2px 7px',
+          borderRadius: 10,
+          fontWeight: 600
+        }
+      }, tag))), job.careSummary && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: 6,
+          padding: '6px 8px',
+          background: 'rgba(255,255,255,0.7)',
+          borderLeft: '3px solid #7c3aed',
+          borderRadius: 4,
+          fontSize: 11,
+          color: '#555',
+          lineHeight: 1.4
+        }
+      }, '\uD83D\uDCCB', " ", job.careSummary.length > 150 ? job.careSummary.substring(0, 150) + '...' : job.careSummary)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          alignItems: 'flex-end'
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: e => handleClaimJob(job.id, e, effectiveTotal),
+        disabled: claimingJobId === job.id,
+        style: {
+          padding: '12px 24px',
+          background: claimingJobId === job.id ? '#ccc' : '#7c3aed',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '12px',
+          fontSize: '15px',
+          fontWeight: 700,
+          cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
+          boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
+          whiteSpace: 'nowrap'
+        }
+      }, claimingJobId === job.id ? 'Accepting...' : 'Accept Job'), job.hasConflict && /*#__PURE__*/React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          openProposalModal(job);
+        },
+        style: {
+          padding: '7px 14px',
+          background: '#fff',
+          color: '#7c3aed',
+          border: '2px solid #7c3aed',
+          borderRadius: '10px',
+          fontSize: '12px',
+          fontWeight: 600,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap'
+        }
+      }, "Propose Different Time"))));
+    }));
+  })(), (() => {
     const proposals = data.myProposals || [];
     if (proposals.length === 0) return null;
     const pendingProps = proposals.filter(p => p.status === 'pending');
@@ -34587,8 +34802,15 @@ const CaretakerHub = window.CaretakerHub = ({
       cursor: 'pointer'
     }
   }, "Go to Payments \u2192 Pay for Background Check"))), bgCheckPaid && (() => {
-    const sortedJobs = [...openJobs].sort((a, b) => {
-      // Direct offers always on top
+    // Filter out exclusive (non-expired) direct offers — they're shown in the "Just for You" section above
+    const nonExclusiveJobs = openJobs.filter(job => {
+      if (!job.offeredToCaregiverId) return true; // regular jobs stay
+      const exUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
+      const expired = exUntil && Math.max(0, Math.floor((exUntil - new Date()) / 60000)) <= 0;
+      return expired; // expired exclusive offers fall back to Find Work
+    });
+    const sortedJobs = [...nonExclusiveJobs].sort((a, b) => {
+      // Direct offers (expired exclusive) on top
       const aOffer = a.offeredToCaregiverId ? 1 : 0;
       const bOffer = b.offeredToCaregiverId ? 1 : 0;
       if (aOffer !== bOffer) return bOffer - aOffer;
@@ -34636,7 +34858,7 @@ const CaretakerHub = window.CaretakerHub = ({
         opacity: 0.9,
         marginTop: 2
       }
-    }, openJobs.length, " open job", openJobs.length !== 1 ? 's' : '', " near you")), /*#__PURE__*/React.createElement("div", {
+    }, nonExclusiveJobs.length, " open job", nonExclusiveJobs.length !== 1 ? 's' : '', " near you")), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
