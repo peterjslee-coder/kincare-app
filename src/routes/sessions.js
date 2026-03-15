@@ -42,7 +42,23 @@ async function expireStaleProposals(db, emitToUser, sendPushToUserFn) {
         }, "proposal_expired").catch(() => {});
       }
     }
-    return expired.length;
+    // Also clean up proposals whose sessions are already confirmed with the proposing caregiver
+    // (e.g. family accepted via a different path, or proposal accept partially succeeded)
+    const orphaned = await db.prepare(`
+      SELECT tp.id, tp.session_id, tp.caregiver_user_id
+      FROM time_proposals tp
+      JOIN care_sessions cs ON tp.session_id = cs.id
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id AND cp.user_id = tp.caregiver_user_id
+      WHERE tp.status = 'pending'
+        AND cs.status IN ('confirmed', 'in_progress', 'completed')
+      LIMIT 20
+    `).all();
+
+    for (const p of orphaned) {
+      await db.prepare("UPDATE time_proposals SET status = 'accepted', responded_at = NOW() WHERE id = ?").run(p.id);
+    }
+
+    return expired.length + orphaned.length;
   } catch (e) {
     console.log("expireStaleProposals skipped:", e.message);
     return 0;
