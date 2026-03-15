@@ -33927,7 +33927,9 @@ const CaretakerHub = window.CaretakerHub = ({
       color: '#888'
     }
   }, "Loading Stripe onboarding...")))), bgCheckPaid && (() => {
+    const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
     const exclusiveOffers = openJobs.filter(job => {
+      if (pendingProposalSessionIds.has(job.id)) return false; // already proposed
       if (!job.offeredToCaregiverId) return false;
       const exUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
       const expired = exUntil && Math.max(0, Math.floor((exUntil - new Date()) / 60000)) <= 0;
@@ -34764,8 +34766,11 @@ const CaretakerHub = window.CaretakerHub = ({
       cursor: 'pointer'
     }
   }, "Go to Payments \u2192 Pay for Background Check"))), bgCheckPaid && (() => {
+    // Filter out jobs caregiver already has a pending proposal on (shown in My Proposals)
+    const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
     // Filter out exclusive (non-expired) direct offers — they're shown in the "Just for You" section above
     const nonExclusiveJobs = openJobs.filter(job => {
+      if (pendingProposalSessionIds.has(job.id)) return false; // already proposed on this job
       if (!job.offeredToCaregiverId) return true; // regular jobs stay
       const exUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
       const expired = exUntil && Math.max(0, Math.floor((exUntil - new Date()) / 60000)) <= 0;
