@@ -878,9 +878,11 @@ const FindWork = window.FindWork = () => {
                       {s.interviewRequired && (
                         <span style={{ background: '#f3e5f5', color: '#7b1fa2', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\uD83C\uDFA5'} Interview</span>
                       )}
-                      {visitCounts[s.careRecipientId || s.care_recipient_id] > 0 && (
-                        <span style={{ background: '#e8eaf6', color: '#3f51b5', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\uD83D\uDD01'} {visitCounts[s.careRecipientId || s.care_recipient_id]}x</span>
-                      )}
+                      {visitCounts[s.careRecipientId || s.care_recipient_id] > 0 && (() => {
+                        const vc = visitCounts[s.careRecipientId || s.care_recipient_id];
+                        const rName = (s.recipientName || '').split(' ')[0] || 'this person';
+                        return <span title={`You have cared for ${rName} ${vc} time${vc > 1 ? 's' : ''}`} style={{ background: '#e8eaf6', color: '#3f51b5', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'default' }}>{'\uD83D\uDD01'} {vc}x</span>;
+                      })()}
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

@@ -39608,16 +39608,22 @@ const FindWork = window.FindWork = () => {
         fontSize: 11,
         fontWeight: 700
       }
-    }, '\uD83C\uDFA5', " Interview"), visitCounts[s.careRecipientId || s.care_recipient_id] > 0 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        background: '#e8eaf6',
-        color: '#3f51b5',
-        padding: '2px 8px',
-        borderRadius: 12,
-        fontSize: 11,
-        fontWeight: 600
-      }
-    }, '\uD83D\uDD01', " ", visitCounts[s.careRecipientId || s.care_recipient_id], "x")), /*#__PURE__*/React.createElement("div", {
+    }, '\uD83C\uDFA5', " Interview"), visitCounts[s.careRecipientId || s.care_recipient_id] > 0 && (() => {
+      const vc = visitCounts[s.careRecipientId || s.care_recipient_id];
+      const rName = (s.recipientName || '').split(' ')[0] || 'this person';
+      return /*#__PURE__*/React.createElement("span", {
+        title: `You have cared for ${rName} ${vc} time${vc > 1 ? 's' : ''}`,
+        style: {
+          background: '#e8eaf6',
+          color: '#3f51b5',
+          padding: '2px 8px',
+          borderRadius: 12,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'default'
+        }
+      }, '\uD83D\uDD01', " ", vc, "x");
+    })()), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
