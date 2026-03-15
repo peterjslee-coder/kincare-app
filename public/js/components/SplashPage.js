@@ -376,24 +376,6 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         )}
       </section>
 
-      {/* ── How It Works ── */}
-      <section style={{ background: '#f8f9fa', padding: '64px 24px' }}>
-        <h2 style={{ textAlign: 'center', fontSize: '28px', color: '#1b6b5a', marginBottom: '40px' }}>Getting Started Is Simple</h2>
-        <div className="step-grid" style={{ maxWidth: '900px' }}>
-          {[
-            { num: '1', title: 'Post Your Need', desc: 'Tell us what care is needed and when.' },
-            { num: '2', title: 'Get Matched Fast', desc: 'Vetted caregivers ranked by experience and proximity.' },
-            { num: '3', title: 'Care with Confidence', desc: 'Real-time updates, summaries, and photos after every visit.' },
-          ].map((s, i) => (
-            <div key={i} className="step-card">
-              <div className="step-number">{s.num}</div>
-              <h3 className="step-title">{s.title}</h3>
-              <p className="step-description">{s.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ── AI-Powered Care ── */}
       <section style={{ padding: '64px 32px', background: '#fff' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>

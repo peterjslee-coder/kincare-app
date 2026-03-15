@@ -1765,44 +1765,6 @@ const SplashPage = window.SplashPage = ({
     }
   }, c.desc)))))), /*#__PURE__*/React.createElement("section", {
     style: {
-      background: '#f8f9fa',
-      padding: '64px 24px'
-    }
-  }, /*#__PURE__*/React.createElement("h2", {
-    style: {
-      textAlign: 'center',
-      fontSize: '28px',
-      color: '#1b6b5a',
-      marginBottom: '40px'
-    }
-  }, "Getting Started Is Simple"), /*#__PURE__*/React.createElement("div", {
-    className: "step-grid",
-    style: {
-      maxWidth: '900px'
-    }
-  }, [{
-    num: '1',
-    title: 'Post Your Need',
-    desc: 'Tell us what care is needed and when.'
-  }, {
-    num: '2',
-    title: 'Get Matched Fast',
-    desc: 'Vetted caregivers ranked by experience and proximity.'
-  }, {
-    num: '3',
-    title: 'Care with Confidence',
-    desc: 'Real-time updates, summaries, and photos after every visit.'
-  }].map((s, i) => /*#__PURE__*/React.createElement("div", {
-    key: i,
-    className: "step-card"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "step-number"
-  }, s.num), /*#__PURE__*/React.createElement("h3", {
-    className: "step-title"
-  }, s.title), /*#__PURE__*/React.createElement("p", {
-    className: "step-description"
-  }, s.desc))))), /*#__PURE__*/React.createElement("section", {
-    style: {
       padding: '64px 32px',
       background: '#fff'
     }
