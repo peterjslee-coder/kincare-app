@@ -6672,14 +6672,21 @@ const Dashboard = window.Dashboard = ({
       const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
       const propTime = TimezoneHelper.formatTime(p.proposedTime);
       const isLoading = proposalActionLoading === p.id;
+      // Countdown timer for 2-hour response window
+      const expiresAt = p.expiresAt ? new Date(p.expiresAt) : null;
+      const minsLeft = expiresAt ? Math.max(0, Math.floor((expiresAt - new Date()) / 60000)) : null;
+      const hrsLeft = minsLeft !== null ? Math.floor(minsLeft / 60) : null;
+      const minsRemainder = minsLeft !== null ? minsLeft % 60 : null;
+      const isUrgent = minsLeft !== null && minsLeft <= 30;
+      const timeLeftLabel = minsLeft !== null ? hrsLeft > 0 ? `${hrsLeft}h ${minsRemainder}m left to respond` : `${minsLeft}m left to respond` : null;
       return /*#__PURE__*/React.createElement("div", {
         key: p.id,
         style: {
           marginBottom: 10,
           padding: '14px 16px',
           borderRadius: 12,
-          border: '2px solid #7b61ff',
-          background: '#f5f0ff'
+          border: isUrgent ? '2px solid #e8724a' : '2px solid #7b61ff',
+          background: isUrgent ? '#fff8f5' : '#f5f0ff'
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
@@ -6694,12 +6701,28 @@ const Dashboard = window.Dashboard = ({
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 2,
+          flexWrap: 'wrap'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
           fontWeight: 600,
           fontSize: 15,
-          color: '#333',
-          marginBottom: 2
+          color: '#333'
         }
-      }, p.caregiverName, " proposed a different time"), /*#__PURE__*/React.createElement("div", {
+      }, p.caregiverName, " proposed a different time"), timeLeftLabel && /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          padding: '2px 8px',
+          borderRadius: 10,
+          background: isUrgent ? '#e8724a' : '#7b61ff',
+          color: '#fff'
+        }
+      }, isUrgent ? '\u23F1' : '\u23F3', " ", timeLeftLabel)), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 13,
           color: '#666',
@@ -34172,6 +34195,13 @@ const CaretakerHub = window.CaretakerHub = ({
       const tz = TimezoneHelper.DEFAULT_TZ;
       const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
       const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
+      // Countdown for 2-hour response window
+      const expiresAt = p.expiresAt ? new Date(p.expiresAt) : null;
+      const minsLeft = expiresAt ? Math.max(0, Math.floor((expiresAt - new Date()) / 60000)) : null;
+      const hrsLeft = minsLeft !== null ? Math.floor(minsLeft / 60) : null;
+      const minsRemainder = minsLeft !== null ? minsLeft % 60 : null;
+      const isUrgent = minsLeft !== null && minsLeft <= 30;
+      const timeLeftLabel = minsLeft !== null ? hrsLeft > 0 ? `${hrsLeft}h ${minsRemainder}m` : `${minsLeft}m` : null;
       return /*#__PURE__*/React.createElement("div", {
         key: p.id,
         className: "card",
@@ -34184,19 +34214,35 @@ const CaretakerHub = window.CaretakerHub = ({
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
-          fontWeight: 600,
-          fontSize: 14,
-          color: '#333',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
           marginBottom: 4
         }
-      }, p.recipientName || 'Care Visit', /*#__PURE__*/React.createElement("span", {
+      }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 600,
+          fontSize: 14,
+          color: '#333'
+        }
+      }, p.recipientName || 'Care Visit'), /*#__PURE__*/React.createElement("span", {
         style: {
           fontWeight: 400,
           fontSize: 12,
           color: '#888',
           marginLeft: 6
         }
-      }, p.familyName ? `(${p.familyName})` : '')), /*#__PURE__*/React.createElement("div", {
+      }, p.familyName ? `(${p.familyName})` : '')), timeLeftLabel && /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          padding: '2px 8px',
+          borderRadius: 10,
+          whiteSpace: 'nowrap',
+          background: isUrgent ? '#e8724a' : '#7b61ff',
+          color: '#fff'
+        }
+      }, isUrgent ? '\u23F1' : '\u23F3', " ", timeLeftLabel)), /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           gap: 16,
@@ -34241,11 +34287,11 @@ const CaretakerHub = window.CaretakerHub = ({
       }, "\"", p.message, "\""), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
-          color: '#7b61ff',
+          color: isUrgent ? '#e8724a' : '#7b61ff',
           fontWeight: 600,
           marginTop: 6
         }
-      }, '\u23F3', " Waiting for family to respond"));
+      }, minsLeft !== null ? isUrgent ? `\u23F1 Family has ${timeLeftLabel} to respond` : `\u23F3 Waiting for family \u2022 ${timeLeftLabel} left` : '\u23F3 Waiting for family to respond'));
     }));
   })(), (() => {
     const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));

@@ -5,6 +5,7 @@ const { getNowInZone, getTodayStringInZone } = require("../utils/timezone");
 const { haversineDistance } = require("../utils/geocode");
 const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching");
 const { calculateSessionCost } = require("../utils/rateCalculator");
+const { expireStaleProposals } = require("./sessions");
 
 const router = express.Router();
 router.use(authenticate);
@@ -38,6 +39,9 @@ router.get("/", async (req, res) => {
 // ─── Family Dashboard (Pete's view) ───
 async function familyDashboard(db, userId, res) {
   try {
+    // Expire time proposals that have passed their 2-hour response window
+    await expireStaleProposals(db, null, null).catch(() => {});
+
     // Expire exclusive direct offers that have passed their 1-hour window
     await db.exec(`
       UPDATE care_sessions
@@ -296,6 +300,7 @@ async function familyDashboard(db, userId, res) {
         durationHours: p.duration_hours,
         recipientName: p.recipient_name,
         createdAt: p.created_at,
+        expiresAt: p.expires_at,
       })),
       recentlyCompleted: await Promise.all(recentCompleted.map(async (s) => {
         let condTags = [];
@@ -338,6 +343,9 @@ async function familyDashboard(db, userId, res) {
 
 // ─── Caregiver Dashboard (Maria's view) ───
 async function caregiverDashboard(db, userId, res) {
+  // Expire time proposals that have passed their 2-hour response window
+  await expireStaleProposals(db, null, null).catch(() => {});
+
   // Expire exclusive direct offers that have passed their 1-hour window
   await db.exec(`
     UPDATE care_sessions
@@ -699,6 +707,7 @@ async function caregiverDashboard(db, userId, res) {
       durationHours: p.duration_hours,
       createdAt: p.created_at,
       respondedAt: p.responded_at,
+      expiresAt: p.expires_at,
     })),
   });
 }

@@ -680,6 +680,7 @@ async function initializeDatabase() {
       proposed_time TEXT NOT NULL,
       message TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
+      expires_at TIMESTAMPTZ,
       responded_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
@@ -737,6 +738,8 @@ async function initializeDatabase() {
     `UPDATE users SET account_approved = 1 WHERE account_approved = 0 AND (is_demo = 1 OR is_admin = 1)`,
     // Backfill: rename session_booked → session_requested + fix message text
     `UPDATE activity_feed SET event_type = 'session_requested', message = REPLACE(message, 'booked', 'requested') WHERE event_type = 'session_booked'`,
+    // v1.43.0 — 2hr response window for time proposals
+    `ALTER TABLE time_proposals ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

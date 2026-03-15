@@ -11,6 +11,44 @@ const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("../
 const router = express.Router();
 router.use(authenticate);
 
+// ─── Auto-expire stale time proposals (2-hour window) ───
+async function expireStaleProposals(db, emitToUser, sendPushToUserFn) {
+  try {
+    const expired = await db.prepare(`
+      SELECT tp.id, tp.session_id, tp.caregiver_user_id, tp.proposed_date, tp.proposed_time,
+        cs.family_user_id, cr.first_name AS recipient_first_name,
+        u.first_name AS cg_first_name, u.last_name AS cg_last_name
+      FROM time_proposals tp
+      JOIN care_sessions cs ON tp.session_id = cs.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users u ON tp.caregiver_user_id = u.id
+      WHERE tp.status = 'pending' AND tp.expires_at IS NOT NULL AND tp.expires_at < NOW()
+      LIMIT 20
+    `).all();
+
+    for (const p of expired) {
+      await db.prepare("UPDATE time_proposals SET status = 'expired', responded_at = NOW() WHERE id = ?").run(p.id);
+
+      // Notify caregiver that their proposal expired
+      const caregiverName = `${p.cg_first_name} ${p.cg_last_name}`;
+      if (emitToUser) {
+        emitToUser(p.caregiver_user_id, "proposal_expired", { sessionId: p.session_id, proposalId: p.id });
+      }
+      if (sendPushToUserFn) {
+        sendPushToUserFn(p.caregiver_user_id, {
+          title: "Time proposal expired",
+          body: `Your proposal for ${p.recipient_first_name || 'a care visit'} wasn't responded to in time. The job is back in the open pool.`,
+          data: { type: "proposal_expired", sessionId: p.session_id },
+        }, "proposal_expired").catch(() => {});
+      }
+    }
+    return expired.length;
+  } catch (e) {
+    console.log("expireStaleProposals skipped:", e.message);
+    return 0;
+  }
+}
+
 // ─── GET /api/sessions ───
 // List sessions for the current user (family or caregiver)
 router.get("/", async (req, res) => {
@@ -1725,10 +1763,11 @@ router.post("/:id/propose-time", async (req, res) => {
     }
 
     const proposalId = require("uuid").v4();
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2-hour response window
     await db.prepare(`
-      INSERT INTO time_proposals (id, session_id, caregiver_profile_id, caregiver_user_id, proposed_date, proposed_time, message, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).run(proposalId, req.params.id, profile.id, userId, proposedDate, proposedTime, message || null);
+      INSERT INTO time_proposals (id, session_id, caregiver_profile_id, caregiver_user_id, proposed_date, proposed_time, message, status, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(proposalId, req.params.id, profile.id, userId, proposedDate, proposedTime, message || null, expiresAt);
 
     // Notify family
     const emitToUser = req.app.get("emitToUser");
@@ -1744,7 +1783,7 @@ router.post("/:id/propose-time", async (req, res) => {
     const timeStr = `${hour12}:${m} ${ampm}`;
 
     const title = `${caregiverName} proposed a different time`;
-    const body = `${caregiverName} would like to care for ${session.recipient_first_name} on ${proposedDate} at ${timeStr} instead. Tap to review.`;
+    const body = `${caregiverName} would like to care for ${session.recipient_first_name} on ${proposedDate} at ${timeStr} instead. You have 2 hours to respond.`;
 
     await db.prepare(
       "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'time_proposal', ?, ?, ?)"
@@ -1784,7 +1823,7 @@ router.post("/:id/propose-time", async (req, res) => {
                 </tr>
               </table>
               ${message ? `<p style="background: #f5f0ff; padding: 10px 14px; border-radius: 8px; font-style: italic; color: #555;">"${message}"</p>` : ''}
-              <p>Log in to accept or decline this proposal.</p>`,
+              <p style="background: #fff3e0; padding: 10px 14px; border-radius: 8px; color: #e65100; font-weight: 600;">\u23F1 You have 2 hours to accept or decline this proposal.</p>`,
             ctaText: 'Review Proposal',
             ctaUrl: `${appUrl}/dashboard`,
           }),
@@ -1825,6 +1864,11 @@ router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
     }
     if (proposal.status !== "pending") {
       return res.status(400).json({ error: `Proposal is already ${proposal.status}` });
+    }
+    // Check if proposal has expired
+    if (proposal.expires_at && new Date(proposal.expires_at) < new Date()) {
+      await db.prepare("UPDATE time_proposals SET status = 'expired', responded_at = NOW() WHERE id = ?").run(req.params.proposalId);
+      return res.status(400).json({ error: "This proposal has expired. The 2-hour response window has passed." });
     }
     if (!["open", "requested", "pending"].includes(proposal.session_status)) {
       return res.status(400).json({ error: "This session is no longer available" });
@@ -1914,3 +1958,4 @@ router.put("/:id/proposals/:proposalId/decline", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.expireStaleProposals = expireStaleProposals;

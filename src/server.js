@@ -293,7 +293,7 @@ app.use("/api/checkr", require("./routes/checkr"));
 app.use("/api/accountability", require("./routes/accountability"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.42.9";
+const APP_VERSION = "1.43.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

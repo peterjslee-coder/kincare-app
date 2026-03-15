@@ -1329,15 +1329,34 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const tz = TimezoneHelper.DEFAULT_TZ;
               const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
               const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
+              // Countdown for 2-hour response window
+              const expiresAt = p.expiresAt ? new Date(p.expiresAt) : null;
+              const minsLeft = expiresAt ? Math.max(0, Math.floor((expiresAt - new Date()) / 60000)) : null;
+              const hrsLeft = minsLeft !== null ? Math.floor(minsLeft / 60) : null;
+              const minsRemainder = minsLeft !== null ? minsLeft % 60 : null;
+              const isUrgent = minsLeft !== null && minsLeft <= 30;
+              const timeLeftLabel = minsLeft !== null ? (hrsLeft > 0 ? `${hrsLeft}h ${minsRemainder}m` : `${minsLeft}m`) : null;
               return (
                 <div key={p.id} className="card" style={{
                   marginBottom: 10, padding: '14px 16px', border: '2px solid #7b61ff', borderRadius: 12, background: '#f5f0ff',
                 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#333', marginBottom: 4 }}>
-                    {p.recipientName || 'Care Visit'}
-                    <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
-                      {p.familyName ? `(${p.familyName})` : ''}
-                    </span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
+                        {p.recipientName || 'Care Visit'}
+                      </span>
+                      <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                        {p.familyName ? `(${p.familyName})` : ''}
+                      </span>
+                    </div>
+                    {timeLeftLabel && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
+                        background: isUrgent ? '#e8724a' : '#7b61ff', color: '#fff',
+                      }}>
+                        {isUrgent ? '\u23F1' : '\u23F3'} {timeLeftLabel}
+                      </span>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 4 }}>
                     <div>
@@ -1354,8 +1373,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       "{p.message}"
                     </div>
                   )}
-                  <div style={{ fontSize: 12, color: '#7b61ff', fontWeight: 600, marginTop: 6 }}>
-                    {'\u23F3'} Waiting for family to respond
+                  <div style={{ fontSize: 12, color: isUrgent ? '#e8724a' : '#7b61ff', fontWeight: 600, marginTop: 6 }}>
+                    {minsLeft !== null
+                      ? (isUrgent ? `\u23F1 Family has ${timeLeftLabel} to respond` : `\u23F3 Waiting for family \u2022 ${timeLeftLabel} left`)
+                      : '\u23F3 Waiting for family to respond'}
                   </div>
                 </div>
               );

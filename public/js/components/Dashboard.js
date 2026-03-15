@@ -761,15 +761,32 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
               const propTime = TimezoneHelper.formatTime(p.proposedTime);
               const isLoading = proposalActionLoading === p.id;
+              // Countdown timer for 2-hour response window
+              const expiresAt = p.expiresAt ? new Date(p.expiresAt) : null;
+              const minsLeft = expiresAt ? Math.max(0, Math.floor((expiresAt - new Date()) / 60000)) : null;
+              const hrsLeft = minsLeft !== null ? Math.floor(minsLeft / 60) : null;
+              const minsRemainder = minsLeft !== null ? minsLeft % 60 : null;
+              const isUrgent = minsLeft !== null && minsLeft <= 30;
+              const timeLeftLabel = minsLeft !== null ? (hrsLeft > 0 ? `${hrsLeft}h ${minsRemainder}m left to respond` : `${minsLeft}m left to respond`) : null;
               return (
                 <div key={p.id} style={{
                   marginBottom: 10, padding: '14px 16px', borderRadius: 12,
-                  border: '2px solid #7b61ff', background: '#f5f0ff',
+                  border: isUrgent ? '2px solid #e8724a' : '2px solid #7b61ff', background: isUrgent ? '#fff8f5' : '#f5f0ff',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 2 }}>
-                        {p.caregiverName} proposed a different time
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, color: '#333' }}>
+                          {p.caregiverName} proposed a different time
+                        </div>
+                        {timeLeftLabel && (
+                          <span style={{
+                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                            background: isUrgent ? '#e8724a' : '#7b61ff', color: '#fff',
+                          }}>
+                            {isUrgent ? '\u23F1' : '\u23F3'} {timeLeftLabel}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
                         For {p.recipientName || 'Care Visit'}{p.serviceType ? ` \u2022 ${formatServiceType(p.serviceType)}` : ''}{p.durationHours ? ` \u2022 ${p.durationHours}hr` : ''}
