@@ -2812,11 +2812,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                About {(checkOutSession.recipientName || checkOutSession.recipient_name || '').split(' ')[0] || 'the care recipient'}
+                {'\u{1F4DD}'} Care Notes
               </label>
-              <textarea value={checkOutCareFeedback} onChange={e => setCheckOutCareFeedback(e.target.value)}
-                placeholder="How was the visit? Anything the family should know about their condition, mood, or behavior?"
-                style={{ width: '100%', minHeight: 70, padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+              <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px' }}>
+                How was the visit? This will be saved as a care note for the family to see.
+              </p>
+              <textarea value={checkOutSummary} onChange={e => setCheckOutSummary(e.target.value)}
+                placeholder="e.g. Betty was in good spirits today. We did a puzzle together and she ate a full lunch. She mentioned some hip pain when standing."
+                style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -2827,19 +2830,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               <textarea value={checkOutServiceFeedback} onChange={e => setCheckOutServiceFeedback(e.target.value)}
                 placeholder="Issues with the location, supplies, instructions, or our service? e.g. 'Door code was wrong', 'Driveway icy'"
                 style={{ width: '100%', minHeight: 50, padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                📝 Visit Summary (for Care Notes)
-              </label>
-              <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px' }}>
-                Summarize the visit — this will be saved as a care note for the family to see.
-              </p>
-              <textarea value={checkOutSummary} onChange={e => setCheckOutSummary(e.target.value)}
-                placeholder="e.g. Betty was in good spirits today. We did a puzzle together and she ate a full lunch. She mentioned some hip pain when standing."
-                style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
 
