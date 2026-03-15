@@ -333,9 +333,55 @@ router.put("/:id/claim", async (req, res) => {
     return res.status(400).json({ error: "This session is not available for claiming (status: " + session.status + ")" });
   }
 
+  // If interview is required by the family, claim the job but mark as pending interview
+  const newStatus = session.interview_required ? 'confirmed' : 'confirmed';
+  const interviewStatus = session.interview_required ? 'pending' : null;
+
   await db.prepare(`
-    UPDATE care_sessions SET caregiver_id = ?, status = 'confirmed', updated_at = NOW() WHERE id = ?
-  `).run(profile.id, req.params.id);
+    UPDATE care_sessions SET caregiver_id = ?, status = 'confirmed',
+      interview_status = COALESCE(?, interview_status),
+      updated_at = NOW()
+    WHERE id = ?
+  `).run(profile.id, interviewStatus, req.params.id);
+
+  // If interview is required, auto-create the interview record + chat connection
+  if (session.interview_required) {
+    try {
+      const { v4: _uuid } = require('uuid');
+      const interviewId = _uuid();
+      // Create or find conversation
+      let conversationId;
+      const existingConv = await db.prepare(`
+        SELECT c.id FROM conversations c
+        JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
+        JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
+        WHERE c.type = 'direct'
+      `).get(session.family_user_id, req.user.id);
+      if (existingConv) {
+        conversationId = existingConv.id;
+      } else {
+        conversationId = _uuid();
+        await db.prepare("INSERT INTO conversations (id, type, created_by) VALUES (?, 'direct', ?)").run(conversationId, session.family_user_id);
+        await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(_uuid(), conversationId, session.family_user_id);
+        await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(_uuid(), conversationId, req.user.id);
+      }
+      // Get recipient name for the system message
+      const recip = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+      const recipName = recip?.first_name || 'your loved one';
+      const iType = session.interview_type || 'video';
+      await db.prepare(`
+        INSERT INTO interviews (id, session_id, requested_by, requested_of, interview_type, status, conversation_id)
+        VALUES (?, ?, ?, ?, ?, 'accepted', ?)
+      `).run(interviewId, req.params.id, session.family_user_id, req.user.id, iType, conversationId);
+      // System message
+      const cgName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Your caregiver';
+      const sysMsg = `📹 Interview scheduled — ${cgName} accepted the care request for ${recipName} on ${session.scheduled_date}. An interview was requested. Use this chat to coordinate a time, then tap the call button when ready. Video calls are limited to 5 minutes.`;
+      await db.prepare(`
+        INSERT INTO messages (id, sender_id, content, conversation_id, message_type, metadata)
+        VALUES (?, ?, ?, ?, 'system', ?)
+      `).run(_uuid(), session.family_user_id, sysMsg, conversationId, JSON.stringify({ type: 'interview_request', interviewId, sessionId: req.params.id }));
+    } catch (ivErr) { console.error('Auto-create interview on claim error:', ivErr); }
+  }
 
   const updated = await db.prepare(`
     SELECT cs.*, cr.first_name || ' ' || cr.last_name AS recipient_name
@@ -445,6 +491,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     recurrenceRule, recurrenceWeeks,
     status: requestedStatus,
     proposedRate,
+    interviewRequired,
+    interviewType,
   } = req.body;
 
   if (!careRecipientId || !serviceType || !scheduledDate || !scheduledTime) {
@@ -623,8 +671,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
          scheduled_date, scheduled_time, duration_hours,
          special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
          short_notice_surcharge, rate_tier, proposed_rate, offered_to_caregiver_id,
-         exclusive_until)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isExclusive ? "NOW() + INTERVAL '1 hour'" : 'NULL'})
+         exclusive_until, interview_required, interview_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isExclusive ? "NOW() + INTERVAL '1 hour'" : 'NULL'}, ?, ?)
       `).run(
         id, careRecipientId, req.user.id, serviceType, sessionStatus,
         sessionDate, scheduledTime, durationHours,
@@ -634,7 +682,9 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
         costResult.surcharge || 0,
         JSON.stringify(costResult.tierBreakdown),
         proposedRate ? parseFloat(proposedRate) : null,
-        isExclusive ? bookCaregiverId : null
+        isExclusive ? bookCaregiverId : null,
+        interviewRequired ? 1 : 0,
+        interviewRequired ? (interviewType || 'video') : null
       );
       createdSessions.push(id);
     }

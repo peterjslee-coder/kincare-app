@@ -740,6 +740,36 @@ async function initializeDatabase() {
     `UPDATE activity_feed SET event_type = 'session_requested', message = REPLACE(message, 'booked', 'requested') WHERE event_type = 'session_booked'`,
     // v1.43.0 — 2hr response window for time proposals
     `ALTER TABLE time_proposals ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
+
+    // v1.45.0 — Interview Flow System
+    // Interviews table: tracks interview requests between family and caregiver
+    `CREATE TABLE IF NOT EXISTS interviews (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES care_sessions(id),
+      requested_by TEXT NOT NULL REFERENCES users(id),
+      requested_of TEXT NOT NULL REFERENCES users(id),
+      interview_type TEXT NOT NULL DEFAULT 'video',
+      status TEXT NOT NULL DEFAULT 'pending',
+      conversation_id TEXT REFERENCES conversations(id),
+      call_started_at TIMESTAMPTZ,
+      call_ended_at TIMESTAMPTZ,
+      call_duration_seconds INTEGER,
+      cancelled_by TEXT,
+      cancel_reason TEXT,
+      reminder_48h_sent INTEGER DEFAULT 0,
+      reminder_24h_sent INTEGER DEFAULT 0,
+      reminder_2h_sent INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_interviews_session ON interviews(session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_interviews_requested_by ON interviews(requested_by)`,
+    `CREATE INDEX IF NOT EXISTS idx_interviews_requested_of ON interviews(requested_of)`,
+    `CREATE INDEX IF NOT EXISTS idx_interviews_status ON interviews(status)`,
+    // Interview columns on care_sessions
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS interview_required INTEGER DEFAULT 0`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS interview_type TEXT`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS interview_status TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

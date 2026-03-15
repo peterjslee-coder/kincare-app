@@ -26,6 +26,11 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [submitError, setSubmitError] = useState('');
   const [confirmationData, setConfirmationData] = useState(null); // { title, details[] }
   const [existingSessions, setExistingSessions] = useState([]);
+  const [interviewRequired, setInterviewRequired] = useState(false);
+  const [interviewType, setInterviewType] = useState('video');
+  const [visitCounts, setVisitCounts] = useState({}); // caregiverId → { count, caregiverName }
+  const [careHistory, setCareHistory] = useState(null); // { visits, totalCount } for selected caregiver
+  const [showCareHistory, setShowCareHistory] = useState(false);
 
   // Short-notice detection
   const shortNotice = (() => {
@@ -88,6 +93,35 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     };
     fetchData();
   }, []);
+
+  // Fetch visit counts for the selected care recipient (for repeat caregiver nudge)
+  useEffect(() => {
+    if (!selectedRecipientId) return;
+    const fetchCounts = async () => {
+      try {
+        const res = await apiFetch(`/api/interviews/family-visit-counts/${selectedRecipientId}`);
+        if (res?.ok) {
+          const data = await res.json();
+          setVisitCounts(data.counts || {});
+        }
+      } catch (err) { console.error('Visit counts fetch error:', err); }
+    };
+    fetchCounts();
+  }, [selectedRecipientId]);
+
+  // Fetch care history when a caregiver with past visits is selected
+  useEffect(() => {
+    if (!selectedCaregiver || !selectedRecipientId) { setCareHistory(null); return; }
+    const cgEntry = visitCounts[selectedCaregiver.caregiverId];
+    if (!cgEntry || cgEntry.count === 0) { setCareHistory(null); return; }
+    const fetchHistory = async () => {
+      try {
+        const res = await apiFetch(`/api/interviews/care-history/${selectedCaregiver.userId}/${selectedRecipientId}?limit=5`);
+        if (res?.ok) setCareHistory(await res.json());
+      } catch (err) { console.error('Care history error:', err); }
+    };
+    fetchHistory();
+  }, [selectedCaregiver, selectedRecipientId, visitCounts]);
 
   // Build sessions-by-date map for calendar indicators
   const sessionsByDate = {};
@@ -215,6 +249,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       directOffer: selectedCaregiver ? true : undefined,
     };
     if (proposedRate && parseFloat(proposedRate) > 0) body.proposedRate = parseFloat(proposedRate);
+    if (interviewRequired) { body.interviewRequired = true; body.interviewType = interviewType; }
     try {
       const response = await apiFetch('/api/sessions', { method: 'POST', body: JSON.stringify(body) });
       if (response?.ok) {
@@ -637,6 +672,71 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               </div>
             )}
 
+            {/* Repeat caregiver nudge with expandable care history */}
+            {selectedCaregiver && visitCounts[selectedCaregiver.caregiverId] && visitCounts[selectedCaregiver.caregiverId].count > 0 && (() => {
+              const vc = visitCounts[selectedCaregiver.caregiverId];
+              const cgFirst = selectedCaregiver.name.split(' ')[0];
+              const recipientFirst = (careRecipients.find(r => r.id === selectedRecipientId) || {}).first_name || 'your loved one';
+              const moodDot = (mood) => {
+                const colors = { great: '#4caf50', good: '#8bc34a', okay: '#ffeb3b', low: '#ff9800', difficult: '#f44336' };
+                return React.createElement('span', { title: mood || 'unknown', style: { display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colors[mood] || '#ccc', marginRight: 2 } });
+              };
+              return React.createElement('div', { style: { background: '#f3e5f5', border: '1px solid #ce93d8', borderRadius: 8, padding: '8px 12px', marginBottom: 12 } },
+                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                  React.createElement('span', { style: { fontSize: 12, color: '#6a1b9a', fontWeight: 600 } },
+                    `\uD83D\uDD01 ${cgFirst} has cared for ${recipientFirst} ${vc.count} time${vc.count > 1 ? 's' : ''}`
+                  ),
+                  careHistory && careHistory.visits.length > 0 && React.createElement('button', {
+                    type: 'button',
+                    onClick: () => setShowCareHistory(!showCareHistory),
+                    style: { background: 'none', border: 'none', color: '#7b1fa2', fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', padding: 0 }
+                  }, showCareHistory ? 'Hide history' : 'View history')
+                ),
+                interviewRequired && React.createElement('div', { style: { fontSize: 11, color: '#7b1fa2', marginTop: 4 } },
+                  `An interview may not be needed \u2014 ${cgFirst} is a repeat caregiver.`
+                ),
+                showCareHistory && careHistory && React.createElement('div', { style: { marginTop: 8, borderTop: '1px solid #ce93d8', paddingTop: 8 } },
+                  careHistory.visits.map((v, i) => React.createElement('div', { key: i, style: { fontSize: 11, padding: '4px 0', borderBottom: i < careHistory.visits.length - 1 ? '1px solid #e1bee7' : 'none' } },
+                    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                      React.createElement('span', { style: { fontWeight: 600, color: '#4a148c' } }, v.scheduled_date),
+                      React.createElement('span', { style: { display: 'flex', alignItems: 'center', gap: 2 } },
+                        moodDot(v.arrival_mood), '\u2192 ', moodDot(v.departure_mood),
+                        v.actual_cost && React.createElement('span', { style: { marginLeft: 6, color: '#666' } }, `$${Math.round(v.actual_cost || v.estimated_cost)}`)
+                      )
+                    ),
+                    v.summary && React.createElement('div', { style: { color: '#666', marginTop: 2, lineHeight: 1.3 } }, v.summary.slice(0, 120) + (v.summary.length > 120 ? '...' : ''))
+                  ))
+                )
+              );
+            })()}
+
+            {/* Interview toggle */}
+            <div style={{ marginBottom: 12, padding: '10px 12px', background: '#fafafa', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{'\uD83C\uDFA5'} Request Interview</div>
+                  <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>Quick video or audio call before the appointment</div>
+                </div>
+                <button type="button" onClick={() => setInterviewRequired(!interviewRequired)} style={{
+                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                  background: interviewRequired ? '#1b6b5a' : '#ccc', position: 'relative',
+                }}>
+                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3,
+                    left: interviewRequired ? 23 : 3, transition: 'left 0.2s' }} />
+                </button>
+              </div>
+              {interviewRequired && (
+                <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                  {[{ v: 'video', l: '\uD83D\uDCF9 Video' }, { v: 'audio', l: '\uD83D\uDD0A Audio' }].map(opt => (
+                    <button key={opt.v} type="button" onClick={() => setInterviewType(opt.v)} style={pill(interviewType === opt.v)}>
+                      {opt.l}
+                    </button>
+                  ))}
+                  <div style={{ fontSize: 11, color: '#888', alignSelf: 'center', marginLeft: 4 }}>5 min max</div>
+                </div>
+              )}
+            </div>
+
             {/* Rate nudge for off-schedule caregiver */}
             {selectedCaregiver && !selectedCaregiver.available && (
               <div style={{ background: '#fff3e0', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#795548', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -730,23 +830,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 </div>
               )}
             </div>
-          )}
-          {step === 2 && selectedCaregiver?.openToInterview && (
-            <button type="button" onClick={async () => {
-              try {
-                const msg = `Hi ${selectedCaregiver.name.split(' ')[0]}, I'm interested in booking care on ${date} at ${time}. Would you be available for a quick intro call before we confirm? Looking forward to meeting you!`;
-                const convRes = await apiFetch('/api/messages/conversations', { method: 'POST', body: JSON.stringify({ memberIds: [selectedCaregiver.userId], name: null }) });
-                if (convRes?.ok) {
-                  const convData = await convRes.json();
-                  const cid = convData.conversationId || convData.conversation?.id || convData.id;
-                  await apiFetch(`/api/messages/conversations/${cid}`, { method: 'POST', body: JSON.stringify({ content: msg }) });
-                  alert('Intro call request sent! Check Messages to coordinate.');
-                }
-              } catch (err) { console.error('Interview request error:', err); }
-            }}
-              style={{ padding: '10px 16px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              🤝 Request Intro Call
-            </button>
           )}
           {step === 2 && (
             <button className="btn btn-primary" onClick={handleSubmit}>

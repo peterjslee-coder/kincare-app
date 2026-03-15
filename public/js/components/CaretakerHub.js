@@ -1903,6 +1903,29 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
                         textTransform: 'capitalize',
                       }}>{s.status}</span>
+                      {s.status === 'confirmed' && !s.interviewStatus && (
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const res = await apiFetch('/api/interviews', { method: 'POST', body: JSON.stringify({ sessionId: s.id, interviewType: 'video' }) });
+                            if (res?.ok) {
+                              showToast && showToast('Interview request sent! Check Messages.', 'success');
+                              apiFetch('/api/dashboard').then(r2 => r2?.ok && r2.json().then(d => setData(d))).catch(() => {});
+                            } else {
+                              const err = await res.json().catch(() => ({}));
+                              showToast && showToast(err.error || 'Could not request interview', 'error');
+                            }
+                          } catch (err) { console.error('Interview request error:', err); }
+                        }} style={{ padding: '5px 10px', background: '#f3e5f5', color: '#7b1fa2', border: '1px solid #ce93d8', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                          {'\uD83C\uDFA5'} Request Interview
+                        </button>
+                      )}
+                      {s.interviewStatus === 'pending' && (
+                        <span style={{ padding: '5px 10px', background: '#f3e5f5', color: '#7b1fa2', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>{'\uD83C\uDFA5'} Interview pending</span>
+                      )}
+                      {s.interviewStatus === 'accepted' && (
+                        <span style={{ padding: '5px 10px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>{'\u2713'} Interview scheduled</span>
+                      )}
                     </div>
                   </div>
                 </div>

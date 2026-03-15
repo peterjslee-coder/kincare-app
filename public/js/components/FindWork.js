@@ -24,6 +24,8 @@ const FindWork = window.FindWork = () => {
   const [proposalTime, setProposalTime] = useState('');
   const [proposalMsg, setProposalMsg] = useState('');
   const [proposalLoading, setProposalLoading] = useState(false);
+  const [visitCounts, setVisitCounts] = useState({}); // recipientId → count
+  const [pendingInterviews, setPendingInterviews] = useState([]); // interviews needing attention
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
   const markersRef = useRef([]);
@@ -208,6 +210,16 @@ const FindWork = window.FindWork = () => {
         // upcomingSessions from dashboard has location, payout, health info
         setUpcomingSessions(d.upcomingSessions || []);
       }
+      // Fetch visit counts for repeat caregiver badges
+      try {
+        const vcRes = await apiFetch('/api/interviews/visit-counts');
+        if (vcRes?.ok) { const vcData = await vcRes.json(); setVisitCounts(vcData.counts || {}); }
+      } catch {}
+      // Fetch pending interviews
+      try {
+        const ivRes = await apiFetch('/api/interviews/pending');
+        if (ivRes?.ok) { const ivData = await ivRes.json(); setPendingInterviews(ivData.interviews || []); }
+      } catch {}
       setLastFetched(new Date());
     } catch (err) {
       console.error('FindWork fetch error:', err);
@@ -863,6 +875,12 @@ const FindWork = window.FindWork = () => {
                       {basePerHour > 0 && (
                         <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
                       )}
+                      {s.interviewRequired && (
+                        <span style={{ background: '#f3e5f5', color: '#7b1fa2', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\uD83C\uDFA5'} Interview</span>
+                      )}
+                      {visitCounts[s.careRecipientId || s.care_recipient_id] > 0 && (
+                        <span style={{ background: '#e8eaf6', color: '#3f51b5', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\uD83D\uDD01'} {visitCounts[s.careRecipientId || s.care_recipient_id]}x</span>
+                      )}
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -927,7 +945,7 @@ const FindWork = window.FindWork = () => {
                             cursor: 'pointer', opacity: claimingId === s.id ? 0.6 : 1,
                             boxShadow: '0 2px 6px rgba(232,114,74,0.3)',
                           }}>
-                          {claimingId === s.id ? 'Accepting...' : '\u2713 Accept This Job'}
+                          {claimingId === s.id ? 'Accepting...' : s.interviewRequired ? '\uD83C\uDFA5 Accept & Interview' : '\u2713 Accept This Job'}
                         </button>
                         {hasConflict && (
                           <button onClick={(e) => { e.stopPropagation(); openProposalModal(s); }}

@@ -291,9 +291,10 @@ app.use("/api/consent", require("./routes/consent"));
 app.use("/api/documents", require("./routes/documents"));
 app.use("/api/checkr", require("./routes/checkr"));
 app.use("/api/accountability", require("./routes/accountability"));
+app.use("/api/interviews", require("./routes/interviews"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.44.1";
+const APP_VERSION = "1.45.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -587,6 +588,59 @@ async function start() {
         // Send if we're past grace period but within the overdue window
         if (etNow >= overdueTime && etNow <= maxWindow) {
           await sendSessionReminders(s.id, "overdue_check_in");
+        }
+      }
+      // ─── Interview reminders (48h, 24h, 2h before session) ───
+      try {
+        const pendingInterviews = await pollDb.prepare(`
+          SELECT i.id, i.session_id, i.requested_by, i.requested_of,
+            i.reminder_48h_sent, i.reminder_24h_sent, i.reminder_2h_sent,
+            cs.scheduled_date, cs.scheduled_time
+          FROM interviews i
+          JOIN care_sessions cs ON i.session_id = cs.id
+          LEFT JOIN users u ON cs.family_user_id = u.id
+          LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+          LEFT JOIN users cu ON cp.user_id = cu.id
+          WHERE i.status IN ('pending', 'accepted')
+            AND cs.status = 'confirmed'
+            AND (u.is_demo IS NULL OR u.is_demo = 0)
+            AND (cu.is_demo IS NULL OR cu.is_demo = 0)
+        `).all();
+
+        for (const iv of pendingInterviews) {
+          if (!iv.scheduled_date || !iv.scheduled_time) continue;
+          const sessionStart = buildDateTimeInZone(iv.scheduled_date, iv.scheduled_time);
+          const hoursUntil = (sessionStart - etNow) / (60 * 60000);
+
+          // 48-hour reminder
+          if (hoursUntil <= 48 && hoursUntil > 24 && !iv.reminder_48h_sent) {
+            const { sendPushToUser: pushFn } = require("./routes/push");
+            for (const uid of [iv.requested_by, iv.requested_of]) {
+              pushFn(uid, { title: 'Interview reminder', body: `Your interview for the appointment on ${iv.scheduled_date} is coming up. Coordinate a time in chat.`, data: { type: 'interview_reminder', interviewId: iv.id, page: 'messages' } }, 'interview_reminder').catch(() => {});
+            }
+            await pollDb.prepare("UPDATE interviews SET reminder_48h_sent = 1 WHERE id = ?").run(iv.id);
+          }
+          // 24-hour reminder (also cancellation deadline)
+          if (hoursUntil <= 24 && hoursUntil > 2 && !iv.reminder_24h_sent) {
+            const { sendPushToUser: pushFn } = require("./routes/push");
+            for (const uid of [iv.requested_by, iv.requested_of]) {
+              pushFn(uid, { title: 'Interview — 24h deadline', body: `Last chance to cancel the interview without penalty. Appointment is on ${iv.scheduled_date}.`, data: { type: 'interview_reminder_24h', interviewId: iv.id, page: 'messages' } }, 'interview_reminder').catch(() => {});
+            }
+            await pollDb.prepare("UPDATE interviews SET reminder_24h_sent = 1 WHERE id = ?").run(iv.id);
+          }
+          // 2-hour final reminder
+          if (hoursUntil <= 2 && hoursUntil > 0 && !iv.reminder_2h_sent) {
+            const { sendPushToUser: pushFn } = require("./routes/push");
+            for (const uid of [iv.requested_by, iv.requested_of]) {
+              pushFn(uid, { title: 'Interview starting soon!', body: `The appointment is in 2 hours. If you haven't done the interview yet, connect now in chat.`, data: { type: 'interview_reminder_2h', interviewId: iv.id, page: 'messages' } }, 'interview_reminder').catch(() => {});
+            }
+            await pollDb.prepare("UPDATE interviews SET reminder_2h_sent = 1 WHERE id = ?").run(iv.id);
+          }
+        }
+      } catch (ivErr) {
+        // Don't crash — interview reminders are non-critical
+        if (ivErr.message && !ivErr.message.includes("relation")) {
+          console.error("  Interview reminder error:", ivErr.message);
         }
       }
     } catch (err) {

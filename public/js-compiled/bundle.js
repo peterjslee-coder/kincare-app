@@ -21256,6 +21256,11 @@ const RequestCareModal = window.RequestCareModal = ({
   const [submitError, setSubmitError] = useState('');
   const [confirmationData, setConfirmationData] = useState(null); // { title, details[] }
   const [existingSessions, setExistingSessions] = useState([]);
+  const [interviewRequired, setInterviewRequired] = useState(false);
+  const [interviewType, setInterviewType] = useState('video');
+  const [visitCounts, setVisitCounts] = useState({}); // caregiverId → { count, caregiverName }
+  const [careHistory, setCareHistory] = useState(null); // { visits, totalCount } for selected caregiver
+  const [showCareHistory, setShowCareHistory] = useState(false);
 
   // Short-notice detection
   const shortNotice = (() => {
@@ -21328,6 +21333,45 @@ const RequestCareModal = window.RequestCareModal = ({
     };
     fetchData();
   }, []);
+
+  // Fetch visit counts for the selected care recipient (for repeat caregiver nudge)
+  useEffect(() => {
+    if (!selectedRecipientId) return;
+    const fetchCounts = async () => {
+      try {
+        const res = await apiFetch(`/api/interviews/family-visit-counts/${selectedRecipientId}`);
+        if (res !== null && res !== void 0 && res.ok) {
+          const data = await res.json();
+          setVisitCounts(data.counts || {});
+        }
+      } catch (err) {
+        console.error('Visit counts fetch error:', err);
+      }
+    };
+    fetchCounts();
+  }, [selectedRecipientId]);
+
+  // Fetch care history when a caregiver with past visits is selected
+  useEffect(() => {
+    if (!selectedCaregiver || !selectedRecipientId) {
+      setCareHistory(null);
+      return;
+    }
+    const cgEntry = visitCounts[selectedCaregiver.caregiverId];
+    if (!cgEntry || cgEntry.count === 0) {
+      setCareHistory(null);
+      return;
+    }
+    const fetchHistory = async () => {
+      try {
+        const res = await apiFetch(`/api/interviews/care-history/${selectedCaregiver.userId}/${selectedRecipientId}?limit=5`);
+        if (res !== null && res !== void 0 && res.ok) setCareHistory(await res.json());
+      } catch (err) {
+        console.error('Care history error:', err);
+      }
+    };
+    fetchHistory();
+  }, [selectedCaregiver, selectedRecipientId, visitCounts]);
 
   // Build sessions-by-date map for calendar indicators
   const sessionsByDate = {};
@@ -21493,6 +21537,10 @@ const RequestCareModal = window.RequestCareModal = ({
       directOffer: selectedCaregiver ? true : undefined
     };
     if (proposedRate && parseFloat(proposedRate) > 0) body.proposedRate = parseFloat(proposedRate);
+    if (interviewRequired) {
+      body.interviewRequired = true;
+      body.interviewType = interviewType;
+    }
     try {
       const response = await apiFetch('/api/sessions', {
         method: 'POST',
@@ -22352,7 +22400,186 @@ const RequestCareModal = window.RequestCareModal = ({
       color: '#999',
       marginTop: 1
     }
-  }, "Any caregiver can respond")))), selectedCaregiver && !selectedCaregiver.available && /*#__PURE__*/React.createElement("div", {
+  }, "Any caregiver can respond")))), selectedCaregiver && visitCounts[selectedCaregiver.caregiverId] && visitCounts[selectedCaregiver.caregiverId].count > 0 && (() => {
+    const vc = visitCounts[selectedCaregiver.caregiverId];
+    const cgFirst = selectedCaregiver.name.split(' ')[0];
+    const recipientFirst = (careRecipients.find(r => r.id === selectedRecipientId) || {}).first_name || 'your loved one';
+    const moodDot = mood => {
+      const colors = {
+        great: '#4caf50',
+        good: '#8bc34a',
+        okay: '#ffeb3b',
+        low: '#ff9800',
+        difficult: '#f44336'
+      };
+      return React.createElement('span', {
+        title: mood || 'unknown',
+        style: {
+          display: 'inline-block',
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: colors[mood] || '#ccc',
+          marginRight: 2
+        }
+      });
+    };
+    return React.createElement('div', {
+      style: {
+        background: '#f3e5f5',
+        border: '1px solid #ce93d8',
+        borderRadius: 8,
+        padding: '8px 12px',
+        marginBottom: 12
+      }
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }
+    }, React.createElement('span', {
+      style: {
+        fontSize: 12,
+        color: '#6a1b9a',
+        fontWeight: 600
+      }
+    }, `\uD83D\uDD01 ${cgFirst} has cared for ${recipientFirst} ${vc.count} time${vc.count > 1 ? 's' : ''}`), careHistory && careHistory.visits.length > 0 && React.createElement('button', {
+      type: 'button',
+      onClick: () => setShowCareHistory(!showCareHistory),
+      style: {
+        background: 'none',
+        border: 'none',
+        color: '#7b1fa2',
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer',
+        textDecoration: 'underline',
+        padding: 0
+      }
+    }, showCareHistory ? 'Hide history' : 'View history')), interviewRequired && React.createElement('div', {
+      style: {
+        fontSize: 11,
+        color: '#7b1fa2',
+        marginTop: 4
+      }
+    }, `An interview may not be needed \u2014 ${cgFirst} is a repeat caregiver.`), showCareHistory && careHistory && React.createElement('div', {
+      style: {
+        marginTop: 8,
+        borderTop: '1px solid #ce93d8',
+        paddingTop: 8
+      }
+    }, careHistory.visits.map((v, i) => React.createElement('div', {
+      key: i,
+      style: {
+        fontSize: 11,
+        padding: '4px 0',
+        borderBottom: i < careHistory.visits.length - 1 ? '1px solid #e1bee7' : 'none'
+      }
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }
+    }, React.createElement('span', {
+      style: {
+        fontWeight: 600,
+        color: '#4a148c'
+      }
+    }, v.scheduled_date), React.createElement('span', {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2
+      }
+    }, moodDot(v.arrival_mood), '\u2192 ', moodDot(v.departure_mood), v.actual_cost && React.createElement('span', {
+      style: {
+        marginLeft: 6,
+        color: '#666'
+      }
+    }, `$${Math.round(v.actual_cost || v.estimated_cost)}`))), v.summary && React.createElement('div', {
+      style: {
+        color: '#666',
+        marginTop: 2,
+        lineHeight: 1.3
+      }
+    }, v.summary.slice(0, 120) + (v.summary.length > 120 ? '...' : ''))))));
+  })(), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12,
+      padding: '10px 12px',
+      background: '#fafafa',
+      borderRadius: 8,
+      border: '1px solid #e0e0e0'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: '#333'
+    }
+  }, '\uD83C\uDFA5', " Request Interview"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#888',
+      marginTop: 2
+    }
+  }, "Quick video or audio call before the appointment")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setInterviewRequired(!interviewRequired),
+    style: {
+      width: 44,
+      height: 24,
+      borderRadius: 12,
+      border: 'none',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      background: interviewRequired ? '#1b6b5a' : '#ccc',
+      position: 'relative'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 18,
+      height: 18,
+      borderRadius: '50%',
+      background: '#fff',
+      position: 'absolute',
+      top: 3,
+      left: interviewRequired ? 23 : 3,
+      transition: 'left 0.2s'
+    }
+  }))), interviewRequired && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      display: 'flex',
+      gap: 6
+    }
+  }, [{
+    v: 'video',
+    l: '\uD83D\uDCF9 Video'
+  }, {
+    v: 'audio',
+    l: '\uD83D\uDD0A Audio'
+  }].map(opt => /*#__PURE__*/React.createElement("button", {
+    key: opt.v,
+    type: "button",
+    onClick: () => setInterviewType(opt.v),
+    style: pill(interviewType === opt.v)
+  }, opt.l)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#888',
+      alignSelf: 'center',
+      marginLeft: 4
+    }
+  }, "5 min max"))), selectedCaregiver && !selectedCaregiver.available && /*#__PURE__*/React.createElement("div", {
     style: {
       background: '#fff3e0',
       borderRadius: 8,
@@ -22564,45 +22791,7 @@ const RequestCareModal = window.RequestCareModal = ({
       textAlign: 'center',
       marginTop: 6
     }
-  }, !serviceType ? 'Select a care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration')), step === 2 && (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.openToInterview) && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: async () => {
-      try {
-        const msg = `Hi ${selectedCaregiver.name.split(' ')[0]}, I'm interested in booking care on ${date} at ${time}. Would you be available for a quick intro call before we confirm? Looking forward to meeting you!`;
-        const convRes = await apiFetch('/api/messages/conversations', {
-          method: 'POST',
-          body: JSON.stringify({
-            memberIds: [selectedCaregiver.userId],
-            name: null
-          })
-        });
-        if (convRes !== null && convRes !== void 0 && convRes.ok) {
-          var _convData$conversatio;
-          const convData = await convRes.json();
-          const cid = convData.conversationId || ((_convData$conversatio = convData.conversation) === null || _convData$conversatio === void 0 ? void 0 : _convData$conversatio.id) || convData.id;
-          await apiFetch(`/api/messages/conversations/${cid}`, {
-            method: 'POST',
-            body: JSON.stringify({
-              content: msg
-            })
-          });
-          alert('Intro call request sent! Check Messages to coordinate.');
-        }
-      } catch (err) {
-        console.error('Interview request error:', err);
-      }
-    },
-    style: {
-      padding: '10px 16px',
-      background: '#fff',
-      color: '#1b6b5a',
-      border: '2px solid #1b6b5a',
-      borderRadius: 8,
-      fontSize: 13,
-      fontWeight: 600,
-      cursor: 'pointer'
-    }
-  }, "\uD83E\uDD1D Request Intro Call"), step === 2 && /*#__PURE__*/React.createElement("button", {
+  }, !serviceType ? 'Select a care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration')), step === 2 && /*#__PURE__*/React.createElement("button", {
     className: "btn btn-primary",
     onClick: handleSubmit
   }, selectedCaregiver ? selectedCaregiver.available ? 'Confirm Booking' : 'Send Offer' : 'Post Care Request'))));
@@ -35435,7 +35624,57 @@ const CaretakerHub = window.CaretakerHub = ({
           color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
           textTransform: 'capitalize'
         }
-      }, s.status))));
+      }, s.status), s.status === 'confirmed' && !s.interviewStatus && /*#__PURE__*/React.createElement("button", {
+        onClick: async e => {
+          e.stopPropagation();
+          try {
+            const res = await apiFetch('/api/interviews', {
+              method: 'POST',
+              body: JSON.stringify({
+                sessionId: s.id,
+                interviewType: 'video'
+              })
+            });
+            if (res !== null && res !== void 0 && res.ok) {
+              showToast && showToast('Interview request sent! Check Messages.', 'success');
+              apiFetch('/api/dashboard').then(r2 => (r2 === null || r2 === void 0 ? void 0 : r2.ok) && r2.json().then(d => setData(d))).catch(() => {});
+            } else {
+              const err = await res.json().catch(() => ({}));
+              showToast && showToast(err.error || 'Could not request interview', 'error');
+            }
+          } catch (err) {
+            console.error('Interview request error:', err);
+          }
+        },
+        style: {
+          padding: '5px 10px',
+          background: '#f3e5f5',
+          color: '#7b1fa2',
+          border: '1px solid #ce93d8',
+          borderRadius: 8,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, '\uD83C\uDFA5', " Request Interview"), s.interviewStatus === 'pending' && /*#__PURE__*/React.createElement("span", {
+        style: {
+          padding: '5px 10px',
+          background: '#f3e5f5',
+          color: '#7b1fa2',
+          borderRadius: 8,
+          fontSize: 11,
+          fontWeight: 600
+        }
+      }, '\uD83C\uDFA5', " Interview pending"), s.interviewStatus === 'accepted' && /*#__PURE__*/React.createElement("span", {
+        style: {
+          padding: '5px 10px',
+          background: '#e8f5e9',
+          color: '#2e7d32',
+          borderRadius: 8,
+          fontSize: 11,
+          fontWeight: 600
+        }
+      }, '\u2713', " Interview scheduled"))));
     }), sorted.length > 5 && /*#__PURE__*/React.createElement("div", {
       style: {
         textAlign: 'center',
@@ -37956,6 +38195,8 @@ const FindWork = window.FindWork = () => {
   const [proposalTime, setProposalTime] = useState('');
   const [proposalMsg, setProposalMsg] = useState('');
   const [proposalLoading, setProposalLoading] = useState(false);
+  const [visitCounts, setVisitCounts] = useState({}); // recipientId → count
+  const [pendingInterviews, setPendingInterviews] = useState([]); // interviews needing attention
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
   const markersRef = useRef([]);
@@ -38218,6 +38459,22 @@ const FindWork = window.FindWork = () => {
         // upcomingSessions from dashboard has location, payout, health info
         setUpcomingSessions(d.upcomingSessions || []);
       }
+      // Fetch visit counts for repeat caregiver badges
+      try {
+        const vcRes = await apiFetch('/api/interviews/visit-counts');
+        if (vcRes !== null && vcRes !== void 0 && vcRes.ok) {
+          const vcData = await vcRes.json();
+          setVisitCounts(vcData.counts || {});
+        }
+      } catch {}
+      // Fetch pending interviews
+      try {
+        const ivRes = await apiFetch('/api/interviews/pending');
+        if (ivRes !== null && ivRes !== void 0 && ivRes.ok) {
+          const ivData = await ivRes.json();
+          setPendingInterviews(ivData.interviews || []);
+        }
+      } catch {}
       setLastFetched(new Date());
     } catch (err) {
       console.error('FindWork fetch error:', err);
@@ -39309,7 +39566,25 @@ const FindWork = window.FindWork = () => {
         fontSize: 12,
         fontWeight: 700
       }
-    }, "$", basePerHour, "/hr")), /*#__PURE__*/React.createElement("div", {
+    }, "$", basePerHour, "/hr"), s.interviewRequired && /*#__PURE__*/React.createElement("span", {
+      style: {
+        background: '#f3e5f5',
+        color: '#7b1fa2',
+        padding: '2px 8px',
+        borderRadius: 12,
+        fontSize: 11,
+        fontWeight: 700
+      }
+    }, '\uD83C\uDFA5', " Interview"), visitCounts[s.careRecipientId || s.care_recipient_id] > 0 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        background: '#e8eaf6',
+        color: '#3f51b5',
+        padding: '2px 8px',
+        borderRadius: 12,
+        fontSize: 11,
+        fontWeight: 600
+      }
+    }, '\uD83D\uDD01', " ", visitCounts[s.careRecipientId || s.care_recipient_id], "x")), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
@@ -39438,7 +39713,7 @@ const FindWork = window.FindWork = () => {
         opacity: claimingId === s.id ? 0.6 : 1,
         boxShadow: '0 2px 6px rgba(232,114,74,0.3)'
       }
-    }, claimingId === s.id ? 'Accepting...' : '\u2713 Accept This Job'), hasConflict && /*#__PURE__*/React.createElement("button", {
+    }, claimingId === s.id ? 'Accepting...' : s.interviewRequired ? '\uD83C\uDFA5 Accept & Interview' : '\u2713 Accept This Job'), hasConflict && /*#__PURE__*/React.createElement("button", {
       onClick: e => {
         e.stopPropagation();
         openProposalModal(s);

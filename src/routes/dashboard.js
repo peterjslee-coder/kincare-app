@@ -597,6 +597,9 @@ async function caregiverDashboard(db, userId, res) {
         recipientCity: s.location_city || null,
         recipientLat: s.recipient_lat || null,
         recipientLng: s.recipient_lng || null,
+        interviewRequired: !!s.interview_required,
+        interviewType: s.interview_type || null,
+        interviewStatus: s.interview_status || null,
       };
     }),
     reviews: reviews.map(r => ({
@@ -649,6 +652,10 @@ async function caregiverDashboard(db, userId, res) {
           healthTags: bgCleared ? (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })() : [],
           recipientLat: bgCleared ? (s.recipient_lat || null) : null,
           recipientLng: bgCleared ? (s.recipient_lng || null) : null,
+          interviewRequired: !!s.interview_required,
+          interviewType: s.interview_type || null,
+          interviewStatus: s.interview_status || null,
+          careRecipientId: s.care_recipient_id,
         };
       });
     })(),
@@ -711,6 +718,8 @@ async function caregiverDashboard(db, userId, res) {
     })),
   });
 }
+
+// (interview data is fetched client-side via /api/interviews/* endpoints)
 
 // ─── Cared-For Dashboard (Betty's view) ───
 async function careForDashboard(db, userId, res) {
