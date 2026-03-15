@@ -1310,8 +1310,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         const proposals = data.myProposals || [];
         if (proposals.length === 0) return null;
         const pendingProps = proposals.filter(p => p.status === 'pending');
-        const resolvedProps = proposals.filter(p => p.status !== 'pending').slice(0, 3);
-        if (pendingProps.length === 0 && resolvedProps.length === 0) return null;
+        if (pendingProps.length === 0) return null;
         const formatT = (t) => {
           if (!t) return '';
           const [h, min] = t.split(':').map(Number);
@@ -1357,28 +1356,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   )}
                   <div style={{ fontSize: 12, color: '#7b61ff', fontWeight: 600, marginTop: 6 }}>
                     {'\u23F3'} Waiting for family to respond
-                  </div>
-                </div>
-              );
-            })}
-            {resolvedProps.length > 0 && pendingProps.length === 0 && (
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-                Recent Proposals
-              </div>
-            )}
-            {resolvedProps.map(p => {
-              const isAccepted = p.status === 'accepted';
-              return (
-                <div key={p.id} className="card" style={{
-                  marginBottom: 8, padding: '10px 14px', borderRadius: 10, opacity: 0.8,
-                  border: isAccepted ? '1px solid #c8e6c9' : '1px solid #e0e0e0',
-                  background: isAccepted ? '#f1f8e9' : '#fafafa',
-                }}>
-                  <div style={{ fontSize: 13, color: '#555' }}>
-                    <span style={{ fontWeight: 600, color: isAccepted ? '#2e7d32' : '#999' }}>
-                      {isAccepted ? '\u2705 Accepted' : '\u274C Declined'}
-                    </span>
-                    {' \u2014 '}{p.recipientName || 'Visit'} on {TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], TimezoneHelper.DEFAULT_TZ)} at {formatT(p.proposedTime)}
                   </div>
                 </div>
               );
