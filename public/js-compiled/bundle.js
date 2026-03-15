@@ -1359,7 +1359,7 @@ const SplashPage = window.SplashPage = ({
       color: '#666',
       marginBottom: '24px'
     }
-  }, "Create your free account in under a minute. No credit card required."), /*#__PURE__*/React.createElement("button", {
+  }, "In a few minutes, you can be on your way to finding work or a helping hand."), /*#__PURE__*/React.createElement("button", {
     onClick: () => onNavigate('register'),
     style: {
       padding: '16px 48px',

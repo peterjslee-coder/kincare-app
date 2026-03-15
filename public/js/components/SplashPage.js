@@ -217,7 +217,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         <div style={{ maxWidth: '520px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '26px', color: '#1b6b5a', marginBottom: '8px' }}>Get Started</h2>
           <p style={{ fontSize: '15px', color: '#666', marginBottom: '24px' }}>
-            Create your free account in under a minute. No credit card required.
+            In a few minutes, you can be on your way to finding work or a helping hand.
           </p>
           <button onClick={() => onNavigate('register')} style={{
             padding: '16px 48px', fontSize: '17px', fontWeight: 600,
