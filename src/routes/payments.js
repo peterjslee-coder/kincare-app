@@ -473,6 +473,10 @@ router.post("/connect/onboard", requireRole("caregiver"), requirePaymentsEnabled
           last_name: profile.legal_last_name || user.last_name,
           email: user.email,
         },
+        business_profile: {
+          mcc: "8099",
+          url: "https://inplace.care",
+        },
         metadata: {
           inplace_user_id: req.user.id,
           inplace_profile_id: profile.id,
@@ -550,6 +554,10 @@ router.post("/connect/link", requireRole("caregiver"), requirePaymentsEnabled, a
           first_name: profile?.legal_first_name || user.first_name,
           last_name: profile?.legal_last_name || user.last_name,
           email: user.email,
+        },
+        business_profile: {
+          mcc: "8099",
+          url: "https://inplace.care",
         },
         metadata: { inplace_user_id: req.user.id },
       });
