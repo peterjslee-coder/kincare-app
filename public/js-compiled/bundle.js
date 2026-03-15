@@ -48489,6 +48489,14 @@ const AdminPanel = window.AdminPanel = () => {
       });
       if (res !== null && res !== void 0 && res.ok) {
         loadAuthorizations();
+        // Also refresh consent alerts banner (in case we unpaused bookings)
+        try {
+          const alertRes = await apiFetch('/api/admin/consent/pending');
+          if (alertRes !== null && alertRes !== void 0 && alertRes.ok) {
+            const d = await alertRes.json();
+            setConsentAlerts(d.pending || []);
+          }
+        } catch {}
       }
     } catch (err) {
       console.error('Authorization action error:', err);
@@ -49323,13 +49331,36 @@ const AdminPanel = window.AdminPanel = () => {
         fontStyle: 'italic',
         marginTop: 2
       }
-    }, "Attestation submitted, needs review")), /*#__PURE__*/React.createElement("button", {
+    }, "Attestation submitted, needs review")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 6,
+        flexShrink: 0
+      }
+    }, isPaused && /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        if (!confirm(`Unpause bookings for ${a.first_name} ${a.last_name}? This will restore their account.`)) return;
+        handleAuthzAction(a.id, 'unpause');
+      },
+      disabled: authzActionLoading === a.id,
+      style: {
+        padding: '6px 14px',
+        background: '#1b6b5a',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 8,
+        fontWeight: 600,
+        fontSize: 13,
+        cursor: 'pointer',
+        opacity: authzActionLoading === a.id ? 0.6 : 1
+      }
+    }, authzActionLoading === a.id ? '...' : '\u2705 Restore'), /*#__PURE__*/React.createElement("button", {
       onClick: () => {
         setActiveTab('authorizations');
       },
       style: {
         padding: '6px 14px',
-        background: isPaused || isFlagged ? '#c62828' : '#1b6b5a',
+        background: isPaused || isFlagged ? '#c62828' : '#e8724a',
         color: '#fff',
         border: 'none',
         borderRadius: 8,
@@ -49337,7 +49368,7 @@ const AdminPanel = window.AdminPanel = () => {
         fontSize: 13,
         cursor: 'pointer'
       }
-    }, "Review"));
+    }, "Details")));
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
@@ -53443,7 +53474,23 @@ const AdminPanel = window.AdminPanel = () => {
         background: '#fce4ec',
         color: '#c62828'
       }
-    }, "Reject"), a.consent_status === 'verified' && /*#__PURE__*/React.createElement("button", {
+    }, "Reject"), a.bookings_paused === 1 && /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        if (!confirm(`Unpause bookings for ${a.first_name} ${a.last_name}? This will allow new sessions to be scheduled.`)) return;
+        handleAuthzAction(a.id, 'unpause');
+      },
+      disabled: authzActionLoading === a.id,
+      style: {
+        padding: '4px 10px',
+        borderRadius: '4px',
+        border: 'none',
+        fontSize: '11px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        background: '#1b6b5a',
+        color: '#fff'
+      }
+    }, '\u2705', " Unpause Bookings"), a.consent_status === 'verified' && /*#__PURE__*/React.createElement("button", {
       onClick: () => handleAuthzAction(a.id, 'revoke'),
       disabled: authzActionLoading === a.id,
       style: {

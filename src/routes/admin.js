@@ -1849,9 +1849,41 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
     const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);
     if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
 
-    const validActions = ['approve', 'reject', 'revoke'];
+    const validActions = ['approve', 'reject', 'revoke', 'unpause'];
     if (!validActions.includes(action)) {
-      return res.status(400).json({ error: "Action must be 'approve', 'reject', or 'revoke'" });
+      return res.status(400).json({ error: "Action must be 'approve', 'reject', 'revoke', or 'unpause'" });
+    }
+
+    // ── Unpause bookings (standalone action, doesn't change consent status) ──
+    if (action === 'unpause') {
+      await db.prepare(`
+        UPDATE care_recipients SET bookings_paused = 0, bookings_paused_reason = NULL, updated_at = NOW() WHERE id = ?
+      `).run(id);
+
+      await logAdminAction(req, "unpause_bookings", "care_recipient", id, {
+        previousReason: recipient.bookings_paused_reason,
+        notes,
+      });
+
+      // Notify family
+      const recipientName = `${recipient.first_name} ${recipient.last_name}`.trim();
+      try {
+        await db.prepare(`
+          INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message)
+          VALUES (?, ?, ?, 'bookings_resumed', ?, ?)
+        `).run(uuid(), recipient.family_user_id, id,
+          `Bookings resumed for ${recipientName}`,
+          `Bookings for ${recipientName} have been restored by an administrator.${notes ? ' Note: ' + notes : ''}`
+        );
+        const emitToUser = req.app.get("emitToUser");
+        if (emitToUser) emitToUser(recipient.family_user_id, "activity_update", {
+          title: `Bookings resumed for ${recipientName}`,
+          message: `Bookings for ${recipientName} have been restored. You can now schedule care sessions.`,
+        });
+      } catch (e) { console.error("Unpause notification error:", e.message); }
+
+      const updated = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(id);
+      return res.json({ success: true, careRecipient: updated });
     }
 
     const statusMap = { approve: 'verified', reject: 'rejected', revoke: 'revoked' };
