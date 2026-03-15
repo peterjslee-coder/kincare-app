@@ -176,13 +176,15 @@ Key files: `src/routes/consent.js` (auth per-route, not global — respond/:toke
 
 The consent_outreach table tracks emails sent + recipient responses. Attestations have admin_status (pending/approved/rejected). First-visit confirmation by caregivers is BLOCKING — "no"/"unable" pauses future bookings.
 
-## Payment System (v1.39.4 — Stripe Connect + Identity)
+## Payment System (v1.40.9 — Stripe Connect)
 
 **Money flow:** Family pays → Stripe processes → Stripe splits (80% caregiver, 20% platform) → Platform balance settles to Mercury bank account.
 
-**Admin kill switch:** Payments are OFF by default. An admin must enable them via the Financials tab toggle in AdminPanel. The `payments_enabled` key in `platform_settings` gates all Stripe-touching endpoints (`/connect/onboard`, `/checkout`, `/background-check`, `/identity/create-session`). When disabled, these endpoints return 503 with `paymentsDisabled: true`.
+**Admin kill switch:** Payments are OFF by default. An admin must enable them via the Financials tab toggle in AdminPanel. The `payments_enabled` key in `platform_settings` gates all Stripe-touching endpoints (`/connect/onboard`, `/checkout`, `/background-check`). When disabled, these endpoints return 503 with `paymentsDisabled: true`.
 
-**Identity Verification (v1.39.4):** Caregivers must verify their identity via Stripe Identity before receiving payments. Flow: caregiver clicks "Verify My Identity" → backend creates a VerificationSession (document + selfie) → Stripe modal opens in-browser → caregiver submits government ID + selfie → Stripe processes → webhook updates status. Checkout endpoint gates on `identity_verified = 1`. Status tracked in `caregiver_profiles`: `stripe_verification_session_id`, `identity_verified`, `identity_verification_status` (none/pending/processing/verified/requires_input/canceled), `identity_verified_at`.
+**Stripe Connect (v1.40.6–v1.40.8):** Caregiver onboarding creates Express accounts with `card_payments` + `transfers` capabilities. Frontend tries embedded Connect.js component first (3s timeout), falls back to redirect-based onboarding via Account Links if Connect.js unavailable (e.g., Stripe CDN 503).
+
+**Identity Verification — REMOVED for caregivers (v1.40.9):** Separate Stripe Identity verification was redundant — caregivers are already ID-verified through Stripe Connect onboarding (legal name, DOB, SSN, bank account) AND Checkr background check (full SSN, DOB, identity verification). The `identity_verified` gate was removed from the checkout flow. Family identity verification in MyAccount.js and CareRecipients.js attestation flow is preserved.
 
 **Webhook:** `POST /api/payments/webhook` receives Stripe events (checkout completed/expired, payment succeeded/failed, account updated, identity.verification_session.verified, identity.verification_session.requires_input). Uses raw body parsing for signature verification. Must be registered in Stripe Dashboard → Developers → Webhooks pointing at `https://yourinplace.com/api/payments/webhook`. Requires `STRIPE_WEBHOOK_SECRET` env var on Railway.
 

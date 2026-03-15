@@ -668,6 +668,23 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     }
   };
 
+  const handleStripeDashboard = async () => {
+    try {
+      const res = await apiFetch('/api/payments/connect/dashboard');
+      if (res?.ok) {
+        const data = await res.json();
+        if (data.url) {
+          window.open(data.url, '_blank');
+        }
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        showToast(err?.error || 'Failed to open Stripe dashboard', 'error');
+      }
+    } catch (err) {
+      showToast('Failed to open Stripe dashboard', 'error');
+    }
+  };
+
   const handleSavePayoutPref = async () => {
     setSavingPayout(true);
     try {
@@ -1473,10 +1490,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               </span>
             </div>
             {stripeStatus?.connected ? (
-              <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer"
-                style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'inline-block', textDecoration: 'none' }}>
+              <button onClick={handleStripeDashboard}
+                style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 View Stripe Dashboard
-              </a>
+              </button>
             ) : (
               <button onClick={handleConnectStripe}
                 style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>

@@ -439,11 +439,11 @@
 
 ### Pete's Action Items — App Store
 
-- [ ] **Apple Developer Program** — Enroll at developer.apple.com ($99/year). Need Apple ID, payment method. If registering as org, need D-U-N-S number first (free from Dun & Bradstreet, takes 1-2 weeks).
+- [x] ~~**D-U-N-S number** — 106784345. Registering as "InPlace" (organization).~~
+- [ ] **Apple Developer Program** — Enrollment submitted, under review. D-U-N-S 106784345, registering as organization. Apple review typically takes 1-2 business days; may request a phone call to verify.
 - [ ] **Google Play Console** — Register at play.google.com/console ($25 one-time).
 - [ ] **Privacy policy page** — Can be a Google Doc or hosted page for now. Both stores need the URL during submission. Must cover: what data is collected, how it's used, third-party sharing (Stripe, Checkr, Resend), data retention, deletion rights.
 - [ ] **App Store screenshots** — Need iPhone 6.7" (Pro Max), 6.1" (Pro), and iPad if supporting tablet. Google needs phone screenshots. Can use simulator captures or a tool like Fastlane snapshot.
-- [ ] **D-U-N-S number** — If submitting as "InPlace" (organization) rather than "Peter Lee" (individual). Recommended for credibility on a care platform. Free from DNB, but takes 1-2 weeks to process.
 
 ### Dev Guidelines — What Not to Do
 

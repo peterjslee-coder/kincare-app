@@ -24819,6 +24819,22 @@ const MyAccount = window.MyAccount = ({
       showToast('Failed to start Stripe setup', 'error');
     }
   };
+  const handleStripeDashboard = async () => {
+    try {
+      const res = await apiFetch('/api/payments/connect/dashboard');
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          window.open(data.url, '_blank');
+        }
+      } else {
+        const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+        showToast((err === null || err === void 0 ? void 0 : err.error) || 'Failed to open Stripe dashboard', 'error');
+      }
+    } catch (err) {
+      showToast('Failed to open Stripe dashboard', 'error');
+    }
+  };
   const handleSavePayoutPref = async () => {
     setSavingPayout(true);
     try {
@@ -26451,10 +26467,8 @@ const MyAccount = window.MyAccount = ({
       fontSize: 14,
       fontWeight: 500
     }
-  }, stripeStatus !== null && stripeStatus !== void 0 && stripeStatus.connected ? 'Connected' : 'Not connected')), stripeStatus !== null && stripeStatus !== void 0 && stripeStatus.connected ? /*#__PURE__*/React.createElement("a", {
-    href: "https://dashboard.stripe.com",
-    target: "_blank",
-    rel: "noopener noreferrer",
+  }, stripeStatus !== null && stripeStatus !== void 0 && stripeStatus.connected ? 'Connected' : 'Not connected')), stripeStatus !== null && stripeStatus !== void 0 && stripeStatus.connected ? /*#__PURE__*/React.createElement("button", {
+    onClick: handleStripeDashboard,
     style: {
       padding: '8px 20px',
       background: '#1b6b5a',
@@ -26463,9 +26477,7 @@ const MyAccount = window.MyAccount = ({
       borderRadius: 8,
       fontSize: 14,
       fontWeight: 600,
-      cursor: 'pointer',
-      display: 'inline-block',
-      textDecoration: 'none'
+      cursor: 'pointer'
     }
   }, "View Stripe Dashboard") : /*#__PURE__*/React.createElement("button", {
     onClick: handleConnectStripe,
