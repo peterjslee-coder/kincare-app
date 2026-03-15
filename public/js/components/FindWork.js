@@ -203,7 +203,17 @@ const FindWork = window.FindWork = () => {
       if (res?.ok) {
         const d = await res.json();
         // openJobs from dashboard already has matchQuality, distanceMiles, healthTags, careSummary, etc.
-        const jobs = d.openJobs || [];
+        // Client-side safety: filter out jobs whose start time has already passed
+        const now = new Date();
+        const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+        const nowTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+        const jobs = (d.openJobs || []).filter(s => {
+          const sDate = (s.date || s.scheduledDate || '').split('T')[0];
+          const sTime = s.time || s.scheduledTime || '00:00';
+          if (sDate < todayStr) return false;
+          if (sDate === todayStr && sTime <= nowTimeStr) return false;
+          return true;
+        });
         // Sort direct offers (Just For You) to the top
         jobs.sort((a, b) => (b.offeredToCaregiverId ? 1 : 0) - (a.offeredToCaregiverId ? 1 : 0));
         setOpenRequests(jobs);

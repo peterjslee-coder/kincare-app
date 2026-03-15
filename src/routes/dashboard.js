@@ -429,6 +429,9 @@ async function caregiverDashboard(db, userId, res) {
   const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(userId);
   const isDemo = me && me.is_demo ? 1 : 0;
 
+  // Build a cutoff: for today's date, exclude sessions whose start time has already passed
+  const nowTimeStr = String(cgEtNow.getHours()).padStart(2, '0') + ':' + String(cgEtNow.getMinutes()).padStart(2, '0');
+
   const openJobs = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -450,9 +453,18 @@ async function caregiverDashboard(db, userId, res) {
       AND cs.scheduled_date >= ?
       AND cs.scheduled_date <= ?
       AND COALESCE(fu.is_demo, 0) = ?
+      /* Exclude today's sessions whose start time has already passed */
+      AND NOT (cs.scheduled_date = ? AND cs.scheduled_time <= ?)
+      /* Exclude sessions that have a pending or expired time proposal from this caregiver */
+      AND NOT EXISTS (
+        SELECT 1 FROM time_proposals tp
+        WHERE tp.session_id = cs.id
+          AND tp.caregiver_user_id = ?
+          AND tp.status IN ('pending', 'expired')
+      )
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 30
-  `).all(profile.id, profile.id, today, fiveDayStr, isDemo);
+  `).all(profile.id, profile.id, today, fiveDayStr, isDemo, today, nowTimeStr, userId);
 
   // Recent reviews
   const reviews = await db.prepare(`
