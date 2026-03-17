@@ -784,6 +784,20 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
       day: "numeric"
     });
   }
+
+  /**
+   * Get the number of calendar days from today to a given date string.
+   * Returns 0 for today, 1 for tomorrow, etc.
+   */
+  function getDaysUntil(dateStr, tz) {
+    const today = getToday(tz);
+    const todayParts = today.split("-").map(Number);
+    const todayDate = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]);
+    const clean = (dateStr || "").split("T")[0];
+    const [y, mo, d] = clean.split("-").map(Number);
+    const targetDate = new Date(y, mo - 1, d);
+    return Math.round((targetDate - todayDate) / 86400000);
+  }
   return {
     DEFAULT_TZ,
     getNow,
@@ -791,7 +805,8 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
     buildDateTime,
     parseDate,
     formatTime,
-    getDateLabel
+    getDateLabel,
+    getDaysUntil
   };
 })();
 ;
@@ -35765,10 +35780,8 @@ const CaretakerHub = window.CaretakerHub = ({
       const recipName = s.recipientName || s.recipient_name || 'Session';
       const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
       const noAddress = !s.hasAddress && s.status === 'confirmed';
-      const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
-      const minsUntil = (sessionDT - now) / 60000;
-      const daysUntil = Math.floor(minsUntil / 60 / 24);
-      const dayCountLabel = daysUntil >= 2 ? `in ${daysUntil} days` : 'tomorrow';
+      const calendarDays = TimezoneHelper.getDaysUntil(sDate, tz);
+      const dayCountLabel = calendarDays === 0 ? 'today' : calendarDays === 1 ? 'tomorrow' : `in ${calendarDays} days`;
       const isSchedExpanded = expandedScheduledId === s.id;
       return /*#__PURE__*/React.createElement("div", {
         key: s.id,

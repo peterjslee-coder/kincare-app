@@ -1963,10 +1963,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
               const noAddress = !s.hasAddress && s.status === 'confirmed';
 
-              const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
-              const minsUntil = (sessionDT - now) / 60000;
-              const daysUntil = Math.floor(minsUntil / 60 / 24);
-              const dayCountLabel = daysUntil >= 2 ? `in ${daysUntil} days` : 'tomorrow';
+              const calendarDays = TimezoneHelper.getDaysUntil(sDate, tz);
+              const dayCountLabel = calendarDays === 0 ? 'today' : calendarDays === 1 ? 'tomorrow' : `in ${calendarDays} days`;
 
               const isSchedExpanded = expandedScheduledId === s.id;
               return (

@@ -99,6 +99,20 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
     });
   }
 
+  /**
+   * Get the number of calendar days from today to a given date string.
+   * Returns 0 for today, 1 for tomorrow, etc.
+   */
+  function getDaysUntil(dateStr, tz) {
+    const today = getToday(tz);
+    const todayParts = today.split("-").map(Number);
+    const todayDate = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]);
+    const clean = (dateStr || "").split("T")[0];
+    const [y, mo, d] = clean.split("-").map(Number);
+    const targetDate = new Date(y, mo - 1, d);
+    return Math.round((targetDate - todayDate) / 86400000);
+  }
+
   return {
     DEFAULT_TZ,
     getNow,
@@ -107,5 +121,6 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
     parseDate,
     formatTime,
     getDateLabel,
+    getDaysUntil,
   };
 })();
