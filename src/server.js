@@ -294,7 +294,7 @@ app.use("/api/accountability", require("./routes/accountability"));
 app.use("/api/interviews", require("./routes/interviews"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.46.6";
+const APP_VERSION = "1.46.7";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

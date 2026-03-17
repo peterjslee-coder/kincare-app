@@ -192,6 +192,35 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 **Env vars (Railway):** `stripe_secret_key` (live), `stripe_publishable_key` (live), `STRIPE_WEBHOOK_SECRET` (from Stripe webhook config).
 
+## Last Session Handoff (updated each session)
+
+**Date:** March 17, 2026 | **Version:** v1.46.6 | **Session type:** Bug fixes + infrastructure
+
+### What was done this session:
+- **v1.46.3** — Fixed Tony's duplicate proposal bug (expired proposals now filtered from Up Next), no-show visibility (red banner for caregivers, indicator for families), admin review flow for paused accounts (both caregiver and care recipient), consolidated checkout care notes (removed redundant "About Tony" field), fixed stale past-time open jobs in Find Work
+- **v1.46.4** — Fixed Stripe dashboard link in MyAccount.js (was hardcoded to platform dashboard, now uses Express login link API)
+- **v1.46.5** — Pre-filled Stripe business_profile (mcc + url) on account creation to skip webpage/industry questions during caregiver onboarding
+- **v1.46.6** — Fixed schedule day count (was using raw minutes → Math.floor, now uses calendar date diff via TimezoneHelper.getDaysUntil())
+- **Infrastructure** — Regenerated expiring GitHub PAT (kincare-deploy), updated git remote URL with new token (expires Apr 15, 2026). Token is embedded in git remote origin URL — NOT in Railway env vars. Railway uses its own GitHub App for deploys.
+- **TASKS.md cleanup** — Archived all completed items to TASKS_ARCHIVE.md, TASKS.md now contains only open items sorted by priority
+- **Created CHANGELOG.md** — Version history from v1.46.0+
+
+### What was discovered / still open:
+- Cary's account is paused (no-show system working) — needs admin reinstate via Admin Panel
+- Cary shows "Set Up Payments" card despite prior Stripe connection — may need to re-onboard after account changes
+- Cary can still see "Accept Job" button while paused — paused caregivers should not be able to accept work
+- Checkr background checks: Pete emailed Faraz about Checkr Embeds (WebSDK) as alternative to full API integration. Waiting for reply on credentialing path and candidate-pay support.
+- DUNS number (106784345) has wrong business name — blocking Google Play Console verification. D&B requires 8-day verification before name change. Alternative: Google Play's manual verification via business documents.
+- Feedback-loop scheduled task runs but output isn't visible to Pete — needs to write to FEEDBACK_NEW.md
+
+### Key decisions made:
+- Background checks: Required for all caregivers (not optional). Using Checkr Embeds (WebSDK) to keep flow in-app. Exploring candidate-pay so InPlace doesn't handle the $30.
+- Stripe onboarding: business_profile pre-filled with mcc "8099" (health services) and url "https://inplace.care"
+
+### New bugs found this session (not yet in TASKS.md):
+- Paused caregiver can still accept jobs — need to gate "Accept Job" behind account_paused check
+- "Set Up Payments" card showing for previously-connected caregiver
+
 ## Local Development
 
 ```bash
