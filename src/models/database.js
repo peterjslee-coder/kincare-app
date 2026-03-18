@@ -779,6 +779,17 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_reinstated_by TEXT`,
     // v1.46.10 — Admin service messaging
     `ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_label TEXT`,
+    // v1.46.12 — Cost tracking
+    `CREATE TABLE IF NOT EXISTS platform_costs (
+      id TEXT PRIMARY KEY,
+      category TEXT NOT NULL,
+      description TEXT,
+      amount NUMERIC(10,2) NOT NULL,
+      period_month TEXT NOT NULL,
+      source TEXT DEFAULT 'manual',
+      created_by TEXT REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

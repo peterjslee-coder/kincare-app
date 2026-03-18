@@ -99,6 +99,53 @@ const AdminPanel = window.AdminPanel = () => {
   const [pausedLoading, setPausedLoading] = useState(false);
   const [reinstateLoading, setReinstateLoading] = useState(null);
 
+  // Costs tab
+  const [costSummary, setCostSummary] = useState([]);
+  const [costEntries, setCostEntries] = useState([]);
+  const [costLoading, setCostLoading] = useState(false);
+  const [newCost, setNewCost] = useState({ category: '', description: '', amount: '', period_month: new Date().toISOString().substring(0, 7) });
+  const [costSaving, setCostSaving] = useState(false);
+
+  const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
+
+  const loadCosts = async () => {
+    setCostLoading(true);
+    try {
+      const [summaryRes, entriesRes] = await Promise.all([
+        apiFetch('/api/costs/summary?months=6'),
+        apiFetch('/api/costs'),
+      ]);
+      if (summaryRes?.ok) { const d = await summaryRes.json(); setCostSummary(d.summary || []); }
+      if (entriesRes?.ok) { const d = await entriesRes.json(); setCostEntries(d.costs || []); }
+    } catch {}
+    setCostLoading(false);
+  };
+
+  const handleAddCost = async () => {
+    if (!newCost.category || !newCost.amount || !newCost.period_month) return;
+    setCostSaving(true);
+    try {
+      const res = await apiFetch('/api/costs', {
+        method: 'POST',
+        body: JSON.stringify(newCost),
+      });
+      if (res?.ok) {
+        showToast('Cost entry added', 'success');
+        setNewCost({ category: '', description: '', amount: '', period_month: new Date().toISOString().substring(0, 7) });
+        loadCosts();
+      }
+    } catch {}
+    setCostSaving(false);
+  };
+
+  const handleDeleteCost = async (id) => {
+    if (!confirm('Delete this cost entry?')) return;
+    try {
+      const res = await apiFetch(`/api/costs/${id}`, { method: 'DELETE' });
+      if (res?.ok) loadCosts();
+    } catch {}
+  };
+
   // Admin freeze modal
   const [freezeTarget, setFreezeTarget] = useState(null); // { userId, name }
   const [freezeReason, setFreezeReason] = useState('');
@@ -247,6 +294,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'customerservice') loadCsReviews();
     if (activeTab === 'security') { loadSecDashboard(); loadSecAuditLog(); }
     if (activeTab === 'sessions') { loadNoShowSessions(); loadPausedCaregivers(); }
+    if (activeTab === 'costs') loadCosts();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -816,7 +864,7 @@ const AdminPanel = window.AdminPanel = () => {
     { label: 'Core', tabs: [
       { id: 'overview', label: 'Overview', icon: '📊' },
       { id: 'people', label: 'People', icon: '👥', badge: pendingApprovals.length || null },
-      { id: 'sessions', label: 'Sessions', icon: '📅' },
+      { id: 'sessions', label: 'Sessions', icon: '📅', badge: pausedCaregivers.length || null },
     ]},
     { label: 'Trust & Safety', tabs: [
       { id: 'authorizations', label: 'Auth', icon: '\u{1F512}', badge: consentAlerts.length || null },
@@ -828,6 +876,7 @@ const AdminPanel = window.AdminPanel = () => {
       { id: 'feedback', label: 'Feedback', icon: '💬' },
       { id: 'help', label: 'Help/FAQ', icon: '❓' },
       { id: 'financials', label: 'Financials', icon: '💰' },
+      { id: 'costs', label: 'Costs', icon: '💵' },
       { id: 'activity', label: 'Activity', icon: '⚡' },
       { id: 'onboarding', label: 'Events', icon: '🚦' },
       { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -3189,6 +3238,97 @@ const AdminPanel = window.AdminPanel = () => {
           </div>
         </div>
       )}
+      {/* ── COSTS TAB ── */}
+      {activeTab === 'costs' && (
+        <div>
+          <div className="card">
+            <div className="card-header">Add Cost Entry</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <select value={newCost.category} onChange={e => setNewCost({ ...newCost, category: e.target.value })}
+                style={{ padding: 10, border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }}>
+                <option value="">Select category...</option>
+                {costCategories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input type="month" value={newCost.period_month} onChange={e => setNewCost({ ...newCost, period_month: e.target.value })}
+                style={{ padding: 10, border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
+              <input type="number" step="0.01" placeholder="Amount ($)" value={newCost.amount}
+                onChange={e => setNewCost({ ...newCost, amount: e.target.value })}
+                style={{ padding: 10, border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
+              <input type="text" placeholder="Description (optional)" value={newCost.description}
+                onChange={e => setNewCost({ ...newCost, description: e.target.value })}
+                style={{ padding: 10, border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
+            </div>
+            <button onClick={handleAddCost} disabled={costSaving || !newCost.category || !newCost.amount}
+              style={{ padding: '8px 20px', background: !newCost.category || !newCost.amount ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              {costSaving ? 'Saving...' : 'Add Entry'}
+            </button>
+          </div>
+
+          {/* Monthly Summary */}
+          {costLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Loading costs...</div>
+          ) : costSummary.length === 0 && costEntries.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', color: '#888', padding: 40 }}>
+              No cost entries yet. Add your first one above, or auto-pulled Twilio/Stripe data will appear here.
+            </div>
+          ) : (
+            <>
+              {costSummary.map(month => (
+                <div key={month.month} className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>
+                      {new Date(month.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#c62828' }}>
+                      ${month.total.toFixed(2)}
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {Object.entries(month.categories).sort((a, b) => b[1].amount - a[1].amount).map(([cat, data]) => (
+                      <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8f9fa', borderRadius: 8 }}>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: 14 }}>{cat}</span>
+                          {data.source === 'auto' && (
+                            <span style={{ marginLeft: 6, fontSize: 10, background: '#e3f2fd', color: '#1565c0', padding: '1px 6px', borderRadius: 4 }}>auto</span>
+                          )}
+                          {data.count > 0 && <span style={{ marginLeft: 6, fontSize: 11, color: '#888' }}>({data.count} items)</span>}
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: '#333' }}>${data.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Individual entries */}
+              {costEntries.length > 0 && (
+                <div className="card">
+                  <div className="card-header">All Manual Entries</div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {costEntries.map(c => (
+                      <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8f9fa', borderRadius: 8 }}>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: 13 }}>{c.category}</span>
+                          <span style={{ marginLeft: 8, fontSize: 12, color: '#888' }}>{c.period_month}</span>
+                          {c.description && <span style={{ marginLeft: 8, fontSize: 12, color: '#aaa' }}>{c.description}</span>}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 700, fontSize: 13 }}>${parseFloat(c.amount).toFixed(2)}</span>
+                          <button onClick={() => handleDeleteCost(c.id)}
+                            style={{ padding: '2px 6px', background: '#fff', color: '#c62828', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                            {'\u2715'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── FREEZE CAREGIVER MODAL ── */}
       {freezeTarget && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}

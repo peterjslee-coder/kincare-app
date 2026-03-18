@@ -1266,7 +1266,12 @@ const App = () => {
                       }}>{unreadMsgCount > 99 ? '99+' : unreadMsgCount}</span>
                     )}
                     {item.id === 'admin' && adminAlertCount > 0 && (
-                      <span style={{
+                      <span title={adminAlertDetails ? [
+                        adminAlertDetails.pendingUsers && `${adminAlertDetails.pendingUsers} pending users`,
+                        adminAlertDetails.pausedCaregivers && `${adminAlertDetails.pausedCaregivers} paused caregivers`,
+                        adminAlertDetails.pendingConsent && `${adminAlertDetails.pendingConsent} pending consent`,
+                        adminAlertDetails.newFeedback && `${adminAlertDetails.newFeedback} new feedback`,
+                      ].filter(Boolean).join(', ') : ''} style={{
                         marginLeft: 'auto', background: '#dc2626', color: '#fff', borderRadius: 10,
                         padding: '1px 6px', fontSize: 10, fontWeight: 700,
                         minWidth: 18, textAlign: 'center', lineHeight: '16px',

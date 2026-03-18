@@ -48230,6 +48230,64 @@ const AdminPanel = window.AdminPanel = () => {
   const [pausedLoading, setPausedLoading] = useState(false);
   const [reinstateLoading, setReinstateLoading] = useState(null);
 
+  // Costs tab
+  const [costSummary, setCostSummary] = useState([]);
+  const [costEntries, setCostEntries] = useState([]);
+  const [costLoading, setCostLoading] = useState(false);
+  const [newCost, setNewCost] = useState({
+    category: '',
+    description: '',
+    amount: '',
+    period_month: new Date().toISOString().substring(0, 7)
+  });
+  const [costSaving, setCostSaving] = useState(false);
+  const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
+  const loadCosts = async () => {
+    setCostLoading(true);
+    try {
+      const [summaryRes, entriesRes] = await Promise.all([apiFetch('/api/costs/summary?months=6'), apiFetch('/api/costs')]);
+      if (summaryRes !== null && summaryRes !== void 0 && summaryRes.ok) {
+        const d = await summaryRes.json();
+        setCostSummary(d.summary || []);
+      }
+      if (entriesRes !== null && entriesRes !== void 0 && entriesRes.ok) {
+        const d = await entriesRes.json();
+        setCostEntries(d.costs || []);
+      }
+    } catch {}
+    setCostLoading(false);
+  };
+  const handleAddCost = async () => {
+    if (!newCost.category || !newCost.amount || !newCost.period_month) return;
+    setCostSaving(true);
+    try {
+      const res = await apiFetch('/api/costs', {
+        method: 'POST',
+        body: JSON.stringify(newCost)
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast('Cost entry added', 'success');
+        setNewCost({
+          category: '',
+          description: '',
+          amount: '',
+          period_month: new Date().toISOString().substring(0, 7)
+        });
+        loadCosts();
+      }
+    } catch {}
+    setCostSaving(false);
+  };
+  const handleDeleteCost = async id => {
+    if (!confirm('Delete this cost entry?')) return;
+    try {
+      const res = await apiFetch(`/api/costs/${id}`, {
+        method: 'DELETE'
+      });
+      if (res !== null && res !== void 0 && res.ok) loadCosts();
+    } catch {}
+  };
+
   // Admin freeze modal
   const [freezeTarget, setFreezeTarget] = useState(null); // { userId, name }
   const [freezeReason, setFreezeReason] = useState('');
@@ -48405,6 +48463,7 @@ const AdminPanel = window.AdminPanel = () => {
       loadNoShowSessions();
       loadPausedCaregivers();
     }
+    if (activeTab === 'costs') loadCosts();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -49119,7 +49178,8 @@ const AdminPanel = window.AdminPanel = () => {
     }, {
       id: 'sessions',
       label: 'Sessions',
-      icon: '📅'
+      icon: '📅',
+      badge: pausedCaregivers.length || null
     }]
   }, {
     label: 'Trust & Safety',
@@ -49155,6 +49215,10 @@ const AdminPanel = window.AdminPanel = () => {
       id: 'financials',
       label: 'Financials',
       icon: '💰'
+    }, {
+      id: 'costs',
+      label: 'Costs',
+      icon: '💵'
     }, {
       id: 'activity',
       label: 'Activity',
@@ -54375,7 +54439,230 @@ const AdminPanel = window.AdminPanel = () => {
       textAlign: 'center',
       color: '#999'
     }
-  }, "No caregiver profile found for this user."))), freezeTarget && /*#__PURE__*/React.createElement("div", {
+  }, "No caregiver profile found for this user."))), activeTab === 'costs' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header"
+  }, "Add Cost Entry"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 10,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("select", {
+    value: newCost.category,
+    onChange: e => setNewCost({
+      ...newCost,
+      category: e.target.value
+    }),
+    style: {
+      padding: 10,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 14
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "Select category..."), costCategories.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c,
+    value: c
+  }, c))), /*#__PURE__*/React.createElement("input", {
+    type: "month",
+    value: newCost.period_month,
+    onChange: e => setNewCost({
+      ...newCost,
+      period_month: e.target.value
+    }),
+    style: {
+      padding: 10,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 14
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    step: "0.01",
+    placeholder: "Amount ($)",
+    value: newCost.amount,
+    onChange: e => setNewCost({
+      ...newCost,
+      amount: e.target.value
+    }),
+    style: {
+      padding: 10,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 14
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    placeholder: "Description (optional)",
+    value: newCost.description,
+    onChange: e => setNewCost({
+      ...newCost,
+      description: e.target.value
+    }),
+    style: {
+      padding: 10,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 14
+    }
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: handleAddCost,
+    disabled: costSaving || !newCost.category || !newCost.amount,
+    style: {
+      padding: '8px 20px',
+      background: !newCost.category || !newCost.amount ? '#999' : '#1b6b5a',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, costSaving ? 'Saving...' : 'Add Entry')), costLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: 40,
+      color: '#888'
+    }
+  }, "Loading costs...") : costSummary.length === 0 && costEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      textAlign: 'center',
+      color: '#888',
+      padding: 40
+    }
+  }, "No cost entries yet. Add your first one above, or auto-pulled Twilio/Stripe data will appear here.") : /*#__PURE__*/React.createElement(React.Fragment, null, costSummary.map(month => /*#__PURE__*/React.createElement("div", {
+    key: month.month,
+    className: "card",
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: '#333'
+    }
+  }, new Date(month.month + '-01').toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric'
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 20,
+      fontWeight: 800,
+      color: '#c62828'
+    }
+  }, "$", month.total.toFixed(2))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: 6
+    }
+  }, Object.entries(month.categories).sort((a, b) => b[1].amount - a[1].amount).map(([cat, data]) => /*#__PURE__*/React.createElement("div", {
+    key: cat,
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '8px 12px',
+      background: '#f8f9fa',
+      borderRadius: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600,
+      fontSize: 14
+    }
+  }, cat), data.source === 'auto' && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 6,
+      fontSize: 10,
+      background: '#e3f2fd',
+      color: '#1565c0',
+      padding: '1px 6px',
+      borderRadius: 4
+    }
+  }, "auto"), data.count > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 6,
+      fontSize: 11,
+      color: '#888'
+    }
+  }, "(", data.count, " items)")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      fontSize: 14,
+      color: '#333'
+    }
+  }, "$", data.amount.toFixed(2))))))), costEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header"
+  }, "All Manual Entries"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: 6
+    }
+  }, costEntries.map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.id,
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '8px 12px',
+      background: '#f8f9fa',
+      borderRadius: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, c.category), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      fontSize: 12,
+      color: '#888'
+    }
+  }, c.period_month), c.description && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      fontSize: 12,
+      color: '#aaa'
+    }
+  }, c.description)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      fontSize: 13
+    }
+  }, "$", parseFloat(c.amount).toFixed(2)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleDeleteCost(c.id),
+    style: {
+      padding: '2px 6px',
+      background: '#fff',
+      color: '#c62828',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 11,
+      cursor: 'pointer'
+    }
+  }, '\u2715')))))))), freezeTarget && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
       top: 0,
@@ -56315,6 +56602,7 @@ const App = () => {
         lineHeight: '16px'
       }
     }, unreadMsgCount > 99 ? '99+' : unreadMsgCount), item.id === 'admin' && adminAlertCount > 0 && /*#__PURE__*/React.createElement("span", {
+      title: adminAlertDetails ? [adminAlertDetails.pendingUsers && `${adminAlertDetails.pendingUsers} pending users`, adminAlertDetails.pausedCaregivers && `${adminAlertDetails.pausedCaregivers} paused caregivers`, adminAlertDetails.pendingConsent && `${adminAlertDetails.pendingConsent} pending consent`, adminAlertDetails.newFeedback && `${adminAlertDetails.newFeedback} new feedback`].filter(Boolean).join(', ') : '',
       style: {
         marginLeft: 'auto',
         background: '#dc2626',

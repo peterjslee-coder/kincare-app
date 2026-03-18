@@ -278,6 +278,7 @@ app.use("/api/password-reset", require("./routes/passwordReset"));
 app.use("/api/availability", require("./routes/availability"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/admin/financials", require("./routes/financials"));
+app.use("/api/costs", require("./routes/costs"));
 app.use("/api/platform-invites", require("./routes/platformInvites"));
 app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
 app.use("/api/onboarding-events", require("./routes/onboardingEvents"));
@@ -294,7 +295,7 @@ app.use("/api/accountability", require("./routes/accountability"));
 app.use("/api/interviews", require("./routes/interviews"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.46.11";
+const APP_VERSION = "1.46.12";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
