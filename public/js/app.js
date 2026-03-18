@@ -255,6 +255,9 @@ const App = () => {
   const [activeRole, setActiveRoleState] = useState(getActiveRole());
   // Unread message count for nav badge
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+  // Admin alert count for nav badge
+  const [adminAlertCount, setAdminAlertCount] = useState(0);
+  const [adminAlertDetails, setAdminAlertDetails] = useState(null);
 
   // ─── In-app navigation history (prevents PWA back-swipe from closing app) ───
   const navHistoryRef = useRef(['dashboard']);
@@ -360,6 +363,24 @@ const App = () => {
     const interval = setInterval(fetchUnread, 30000); // refresh every 30s
     return () => clearInterval(interval);
   }, [appState, currentUser?.id]);
+
+  // ─── Admin alert count polling (admin users only) ───
+  useEffect(() => {
+    if (appState !== 'app' || !currentUser?.isAdmin) return;
+    const fetchAlerts = async () => {
+      try {
+        const res = await apiFetch('/api/admin/alerts');
+        if (res?.ok) {
+          const data = await res.json();
+          setAdminAlertCount(data.total || 0);
+          setAdminAlertDetails(data);
+        }
+      } catch {}
+    };
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 60000); // refresh every 60s
+    return () => clearInterval(interval);
+  }, [appState, currentUser?.id, currentUser?.isAdmin]);
 
   // ─── Version heartbeat — auto-reload when a new deploy lands ───
   useEffect(() => {
@@ -1244,6 +1265,13 @@ const App = () => {
                         minWidth: 18, textAlign: 'center', lineHeight: '16px',
                       }}>{unreadMsgCount > 99 ? '99+' : unreadMsgCount}</span>
                     )}
+                    {item.id === 'admin' && adminAlertCount > 0 && (
+                      <span style={{
+                        marginLeft: 'auto', background: '#dc2626', color: '#fff', borderRadius: 10,
+                        padding: '1px 6px', fontSize: 10, fontWeight: 700,
+                        minWidth: 18, textAlign: 'center', lineHeight: '16px',
+                      }}>{adminAlertCount > 99 ? '99+' : adminAlertCount}</span>
+                    )}
                   </button>
                   {item.children && isParentActive && (
                     <ul style={{ listStyle: 'none', margin: 0, padding: '2px 0 2px 20px' }}>
@@ -1359,6 +1387,15 @@ const App = () => {
                 minWidth: 16, textAlign: 'center', lineHeight: '14px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
               }}>{unreadMsgCount > 99 ? '99+' : unreadMsgCount}</span>
+            )}
+            {item.id === 'admin' && adminAlertCount > 0 && (
+              <span style={{
+                position: 'absolute', top: 2, right: '50%', marginRight: -18,
+                background: '#dc2626', color: '#fff', borderRadius: 10,
+                padding: '1px 5px', fontSize: 9, fontWeight: 700,
+                minWidth: 16, textAlign: 'center', lineHeight: '14px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              }}>{adminAlertCount > 99 ? '99+' : adminAlertCount}</span>
             )}
             <span className="bottom-nav-label">{item.label}</span>
           </button>

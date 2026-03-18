@@ -60,6 +60,39 @@ async function checkAdmin(req, res, next) {
 // All admin routes require auth + admin check + admin flag
 router.use(authenticate, checkAdmin, requireAdmin);
 
+// ─── GET /api/admin/alerts — Lightweight count of items needing admin attention ───
+router.get("/alerts", async (req, res) => {
+  try {
+    const db = await getDb();
+    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback] = await Promise.all([
+      // Users awaiting account approval (non-demo, not yet approved)
+      db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1`).get(),
+      // Paused caregiver accounts needing review
+      db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1`).get(),
+      // Consent/authorization requests pending admin review
+      db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
+      // New feedback not yet reviewed
+      db.prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'new'`).get(),
+    ]);
+
+    const total = (parseInt(pendingUsers.count) || 0) +
+      (parseInt(pausedCaregivers.count) || 0) +
+      (parseInt(pendingConsent.count) || 0) +
+      (parseInt(newFeedback.count) || 0);
+
+    res.json({
+      total,
+      pendingUsers: parseInt(pendingUsers.count) || 0,
+      pausedCaregivers: parseInt(pausedCaregivers.count) || 0,
+      pendingConsent: parseInt(pendingConsent.count) || 0,
+      newFeedback: parseInt(newFeedback.count) || 0,
+    });
+  } catch (err) {
+    console.error("Admin alerts error:", err);
+    res.status(500).json({ error: "Failed to load admin alerts" });
+  }
+});
+
 // ─── GET /api/admin/stats — Platform overview metrics ───
 router.get("/stats", async (req, res) => {
   try {

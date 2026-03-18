@@ -48321,6 +48321,7 @@ const AdminPanel = window.AdminPanel = () => {
   useEffect(() => {
     loadStats();
     fetchPendingApprovals();
+    loadPausedCaregivers();
     // Fetch current user for settings tab
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
   }, []);
@@ -49158,7 +49159,7 @@ const AdminPanel = window.AdminPanel = () => {
       gap: '6px',
       whiteSpace: 'nowrap'
     }
-  }, "\u2699\uFE0F My Account")), (pendingApprovals.length > 0 || consentAlerts.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "\u2699\uFE0F My Account")), (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16,
       padding: 16,
@@ -49184,7 +49185,7 @@ const AdminPanel = window.AdminPanel = () => {
       padding: '2px 10px',
       fontSize: 13
     }
-  }, pendingApprovals.length + consentAlerts.length)), pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, pendingApprovals.length + consentAlerts.length + pausedCaregivers.length)), pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       fontWeight: 600,
@@ -49379,7 +49380,73 @@ const AdminPanel = window.AdminPanel = () => {
         cursor: 'pointer'
       }
     }, "Details")));
-  })), /*#__PURE__*/React.createElement("div", {
+  }), pausedCaregivers.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#888',
+      marginBottom: 6,
+      marginTop: pendingApprovals.length > 0 || consentAlerts.length > 0 ? 12 : 0,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }
+  }, "Paused Caregivers"), pausedCaregivers.map(cg => /*#__PURE__*/React.createElement("div", {
+    key: cg.user_id,
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '10px 14px',
+      marginBottom: 6,
+      background: '#fff',
+      borderRadius: 10,
+      border: '2px solid #dc2626',
+      flexWrap: 'wrap',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: '1 1 200px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      fontSize: 14,
+      color: '#c62828'
+    }
+  }, '\u{1F6D1}', " ", cg.first_name, " ", cg.last_name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#888'
+    }
+  }, cg.email), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#c62828',
+      fontWeight: 600,
+      marginTop: 2
+    }
+  }, cg.account_paused_reason || 'Account paused')), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleReinstate(cg.user_id),
+    disabled: reinstateLoading === cg.user_id,
+    style: {
+      padding: '6px 14px',
+      background: '#1b6b5a',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: 'pointer',
+      opacity: reinstateLoading === cg.user_id ? 0.6 : 1
+    }
+  }, reinstateLoading === cg.user_id ? '...' : '\u2705 Reinstate'))))), /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       marginBottom: 16
@@ -54501,6 +54568,9 @@ const App = () => {
   const [activeRole, setActiveRoleState] = useState(getActiveRole());
   // Unread message count for nav badge
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+  // Admin alert count for nav badge
+  const [adminAlertCount, setAdminAlertCount] = useState(0);
+  const [adminAlertDetails, setAdminAlertDetails] = useState(null);
 
   // ─── In-app navigation history (prevents PWA back-swipe from closing app) ───
   const navHistoryRef = useRef(['dashboard']);
@@ -54611,6 +54681,24 @@ const App = () => {
     const interval = setInterval(fetchUnread, 30000); // refresh every 30s
     return () => clearInterval(interval);
   }, [appState, currentUser === null || currentUser === void 0 ? void 0 : currentUser.id]);
+
+  // ─── Admin alert count polling (admin users only) ───
+  useEffect(() => {
+    if (appState !== 'app' || !(currentUser !== null && currentUser !== void 0 && currentUser.isAdmin)) return;
+    const fetchAlerts = async () => {
+      try {
+        const res = await apiFetch('/api/admin/alerts');
+        if (res !== null && res !== void 0 && res.ok) {
+          const data = await res.json();
+          setAdminAlertCount(data.total || 0);
+          setAdminAlertDetails(data);
+        }
+      } catch {}
+    };
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 60000); // refresh every 60s
+    return () => clearInterval(interval);
+  }, [appState, currentUser === null || currentUser === void 0 ? void 0 : currentUser.id, currentUser === null || currentUser === void 0 ? void 0 : currentUser.isAdmin]);
 
   // ─── Version heartbeat — auto-reload when a new deploy lands ───
   useEffect(() => {
@@ -55905,7 +55993,20 @@ const App = () => {
         textAlign: 'center',
         lineHeight: '16px'
       }
-    }, unreadMsgCount > 99 ? '99+' : unreadMsgCount)), item.children && isParentActive && /*#__PURE__*/React.createElement("ul", {
+    }, unreadMsgCount > 99 ? '99+' : unreadMsgCount), item.id === 'admin' && adminAlertCount > 0 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        marginLeft: 'auto',
+        background: '#dc2626',
+        color: '#fff',
+        borderRadius: 10,
+        padding: '1px 6px',
+        fontSize: 10,
+        fontWeight: 700,
+        minWidth: 18,
+        textAlign: 'center',
+        lineHeight: '16px'
+      }
+    }, adminAlertCount > 99 ? '99+' : adminAlertCount)), item.children && isParentActive && /*#__PURE__*/React.createElement("ul", {
       style: {
         listStyle: 'none',
         margin: 0,
@@ -56120,7 +56221,24 @@ const App = () => {
       lineHeight: '14px',
       boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
     }
-  }, unreadMsgCount > 99 ? '99+' : unreadMsgCount), /*#__PURE__*/React.createElement("span", {
+  }, unreadMsgCount > 99 ? '99+' : unreadMsgCount), item.id === 'admin' && adminAlertCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: 'absolute',
+      top: 2,
+      right: '50%',
+      marginRight: -18,
+      background: '#dc2626',
+      color: '#fff',
+      borderRadius: 10,
+      padding: '1px 5px',
+      fontSize: 9,
+      fontWeight: 700,
+      minWidth: 16,
+      textAlign: 'center',
+      lineHeight: '14px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+    }
+  }, adminAlertCount > 99 ? '99+' : adminAlertCount), /*#__PURE__*/React.createElement("span", {
     className: "bottom-nav-label"
   }, item.label)))), showRequestCareModal && /*#__PURE__*/React.createElement(RequestCareModal, {
     onClose: () => setShowRequestCareModal(false)

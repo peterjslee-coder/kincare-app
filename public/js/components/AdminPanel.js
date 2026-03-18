@@ -175,6 +175,7 @@ const AdminPanel = window.AdminPanel = () => {
   useEffect(() => {
     loadStats();
     fetchPendingApprovals();
+    loadPausedCaregivers();
     // Fetch current user for settings tab
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
   }, []);
@@ -801,12 +802,12 @@ const AdminPanel = window.AdminPanel = () => {
       </div>
 
       {/* ── ACTION REQUIRED BANNER — always visible when pending approvals exist ── */}
-      {(pendingApprovals.length > 0 || consentAlerts.length > 0) && (
+      {(pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0) && (
         <div style={{ marginBottom: 16, padding: 16, background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: '2px solid #ff9800', borderRadius: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#e65100', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             {'\u{1F514}'} Action Required
             <span style={{ background: '#e65100', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
-              {pendingApprovals.length + consentAlerts.length}
+              {pendingApprovals.length + consentAlerts.length + pausedCaregivers.length}
             </span>
           </div>
 
@@ -903,6 +904,33 @@ const AdminPanel = window.AdminPanel = () => {
               </div>
             );
           })}
+
+          {/* Paused caregivers */}
+          {pausedCaregivers.length > 0 && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Paused Caregivers</div>
+          )}
+          {pausedCaregivers.map(cg => (
+            <div key={cg.user_id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10,
+              border: '2px solid #dc2626', flexWrap: 'wrap', gap: 8,
+            }}>
+              <div style={{ flex: '1 1 200px' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#c62828' }}>
+                  {'\u{1F6D1}'} {cg.first_name} {cg.last_name}
+                </div>
+                <div style={{ fontSize: 12, color: '#888' }}>{cg.email}</div>
+                <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600, marginTop: 2 }}>
+                  {cg.account_paused_reason || 'Account paused'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button onClick={() => handleReinstate(cg.user_id)} disabled={reinstateLoading === cg.user_id}
+                  style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: reinstateLoading === cg.user_id ? 0.6 : 1 }}>
+                  {reinstateLoading === cg.user_id ? '...' : '\u2705 Reinstate'}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
