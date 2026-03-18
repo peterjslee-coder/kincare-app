@@ -55179,48 +55179,23 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
       marginBottom: 12,
       whiteSpace: 'pre-wrap'
     }
-  }, existingSummary, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginTop: 6
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: '#999'
-    }
-  }, recipientName, "'s care profile"), /*#__PURE__*/React.createElement("button", {
-    onClick: async () => {
-      try {
-        const res = await apiFetch(`/api/care-recipients/${recipientId}/generate-summary`, {
-          method: 'POST'
-        });
-        if (res !== null && res !== void 0 && res.ok) {
-          if (typeof showToast === 'function') showToast('Profile regenerated with cleaner formatting', 'success');
-          setTimeout(() => window.location.reload(), 1000);
-        }
-      } catch {}
-    },
-    style: {
-      fontSize: 11,
-      color: '#1b6b5a',
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      fontWeight: 600,
-      textDecoration: 'underline'
-    }
-  }, "Regenerate profile"))), /*#__PURE__*/React.createElement("p", {
+  }, existingSummary), /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 13,
       color: '#666',
       margin: '0 0 12px',
       lineHeight: 1.5
     }
-  }, existingSummary ? `Ready to enhance ${recipientName}'s care profile. iPAi will combine your notes, visit observations, and care knowledge to create personalized guidance — the more details you share, the better ${recipientName}'s caregivers can serve your family.` : `iPAi learns about ${recipientName} from every visit — tracking patterns, moods, and what works best. The more your family shares, the smarter the guidance becomes for everyone on ${recipientName}'s care team.`), /*#__PURE__*/React.createElement("button", {
-    onClick: generate,
+  }, `iPAi learns about ${recipientName} from every visit — tracking patterns, moods, and what works best. The more your family shares, the smarter the guidance becomes for everyone on ${recipientName}'s care team.`), /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      // Regenerate profile summary AND generate intelligence in one click
+      try {
+        await apiFetch(`/api/care-recipients/${recipientId}/generate-summary`, {
+          method: 'POST'
+        });
+      } catch {}
+      generate();
+    },
     disabled: loading,
     style: {
       padding: '10px 20px',
@@ -55241,7 +55216,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
       background: 'rgba(255,255,255,0.2)',
       color: '#fff'
     }
-  }), "Generate Care Intelligence"), error && /*#__PURE__*/React.createElement("div", {
+  }), existingSummary ? `Update ${recipientName}'s Care Profile` : `Generate ${recipientName}'s Care Profile`), error && /*#__PURE__*/React.createElement("div", {
     style: {
       color: '#c62828',
       fontSize: 13,
