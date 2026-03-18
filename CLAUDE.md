@@ -194,7 +194,7 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** March 17, 2026 | **Version:** v1.47.3 | **Session type:** Bug fixes + admin tools + iPAi AI platform
+**Date:** March 17, 2026 | **Version:** v1.49.7 | **Session type:** Bug fixes + admin tools + iPAi AI platform
 
 ### What was done this session:
 
@@ -225,17 +225,23 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 - Session continuity system: TASKS_ARCHIVE.md, CHANGELOG.md, CLAUDE.md handoff, feedback-loop task rewrite
 - Paused caregiver gated from accepting jobs (server 403 + client disabled buttons)
 
+### PRIORITY FOR NEXT SESSION — two bugs to fix first:
+1. **Care Intelligence "failed to generate" error.** The AI test endpoint works (`/api/care-intelligence/test/ai` returns success). The issue is somewhere in the data pipeline — a SQL query or data format problem. Diagnostic endpoint deployed at `/api/care-intelligence/test/data/:recipientId` — Pete should hit this URL logged in and share the output. It tests each step: DB, recipient, visits, notes, gatherVisitData, AI call.
+2. **iPAi chatbot in Messages — duplicate entries + routing.** The pinned iPAi card shows at the top of Messages, but the actual iPAi conversation from the seed data shows separately as "iPAi Assistant." Need to merge them and ensure messages route through `/api/ipai/chat`. The detection logic checks name/email but might not match. Also need to filter the duplicate from the conversation list.
+
 ### What was discovered / still open:
 - Cary's "Set Up Payments" card showing despite prior Stripe connection — needs investigation
 - Checkr: Guilherme confirmed Embeds require same webinar/checklist process as API. Pete emailed asking about Embeds + candidate-pay. Waiting on reply.
 - DUNS number (106784345) has wrong business name — blocking Google Play. D&B requires 8-day verification. Alternative: Google Play manual verification via business docs.
 - Anthropic Admin API key not available on Individual org plan — Claude API cost ($0.01/mo) entered manually for now. At scale, upgrade to Team plan for auto-pull.
+- Care summary still has markdown formatting for Betty — needs regeneration after v1.48.3 prompt fix
 
 ### Key decisions made:
 - Background checks: Required for all caregivers. Checkr Embeds route. Candidate-pay if possible.
 - iPAi brand: Teal checkmark pill badge. Replaces "GREAT MATCH" only. Other pills (No Conflicts, Bonus Pay) stay.
-- AI strategy: Matching engine (algorithmic + Haiku for explanations), Care Intelligence (Sonnet for deep insights), post-session summaries (Haiku), caregiver coaching (Haiku). All non-blocking, all marked with iPAi badge.
+- AI strategy: All models use Haiku for now (Sonnet wasn't accessible on Pete's API key plan). Matching (algorithmic + Haiku explanations), Care Intelligence (Haiku), post-session summaries (Haiku), caregiver coaching (Haiku), iPAi chatbot (Haiku). All non-blocking, all marked with iPAi badge.
 - Cost tracking: Recurring + one-time + auto-pulled. $200/mo Claude subscription tracked as recurring. Railway, Twilio, Stripe auto-pulled.
+- iPAi chatbot: Lives in Messages as a pinned conversation. Classifies intent (scheduling, care question, availability, help, etc.) and routes to appropriate handler. 30 msg/day rate limit per user.
 
 ### New tables/columns this session:
 - `messages.sender_label` — custom display name for admin service messages
@@ -243,7 +249,11 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 - `visit_logs.ai_coaching` — AI-generated caregiver coaching tips (JSON)
 - `platform_costs` table — one-time cost entries
 - `recurring_expenses` table — monthly/yearly subscriptions
+- `care_recipients.family_ai_notes` — family additions for iPAi to incorporate
+- `care_recipients.ai_care_plan` — living care plan (JSON)
+- `care_recipients.ai_care_plan_updated_at`
 - `caregiver_profiles.account_paused` (added previous session, used extensively this session)
+- iPAi system user: `ipai@yourinplace.com` (auto-created by chatbot or seed)
 
 ## Local Development
 
