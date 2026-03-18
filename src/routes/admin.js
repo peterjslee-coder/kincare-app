@@ -65,14 +65,15 @@ router.get("/alerts", async (req, res) => {
   try {
     const db = await getDb();
     const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback] = await Promise.all([
-      // Users awaiting account approval (non-demo, not yet approved)
-      db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1`).get(),
+      // Users awaiting account approval — only those who signed up AFTER approval system existed
+      // and haven't been approved yet (excludes legacy accounts)
+      db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1 AND created_at > '2026-02-20'`).get(),
       // Paused caregiver accounts needing review
       db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1`).get(),
       // Consent/authorization requests pending admin review
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
-      // New feedback not yet reviewed
-      db.prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'new'`).get(),
+      // New feedback from last 30 days not yet reviewed
+      db.prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'new' AND created_at > NOW() - INTERVAL '30 days'`).get(),
     ]);
 
     const total = (parseInt(pendingUsers.count) || 0) +
