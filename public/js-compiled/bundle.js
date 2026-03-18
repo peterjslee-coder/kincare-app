@@ -55181,11 +55181,38 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
     }
   }, existingSummary, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 11,
-      color: '#999',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       marginTop: 6
     }
-  }, "Existing care summary \u2014 generate iPAi intelligence to enhance with visit data analysis")), /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: '#999'
+    }
+  }, recipientName, "'s care profile"), /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      try {
+        const res = await apiFetch(`/api/care-recipients/${recipientId}/generate-summary`, {
+          method: 'POST'
+        });
+        if (res !== null && res !== void 0 && res.ok) {
+          if (typeof showToast === 'function') showToast('Profile regenerated with cleaner formatting', 'success');
+          setTimeout(() => window.location.reload(), 1000);
+        }
+      } catch {}
+    },
+    style: {
+      fontSize: 11,
+      color: '#1b6b5a',
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      fontWeight: 600,
+      textDecoration: 'underline'
+    }
+  }, "Regenerate profile"))), /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 13,
       color: '#666',

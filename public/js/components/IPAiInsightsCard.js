@@ -66,7 +66,20 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
           {existingSummary && (
             <div style={{ fontSize: 13, lineHeight: 1.7, color: '#333', padding: '10px 12px', background: '#f8f9fa', borderRadius: 8, marginBottom: 12, whiteSpace: 'pre-wrap' }}>
               {existingSummary}
-              <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}>Existing care summary — generate iPAi intelligence to enhance with visit data analysis</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>{recipientName}'s care profile</span>
+                <button onClick={async () => {
+                  try {
+                    const res = await apiFetch(`/api/care-recipients/${recipientId}/generate-summary`, { method: 'POST' });
+                    if (res?.ok) {
+                      if (typeof showToast === 'function') showToast('Profile regenerated with cleaner formatting', 'success');
+                      setTimeout(() => window.location.reload(), 1000);
+                    }
+                  } catch {}
+                }} style={{ fontSize: 11, color: '#1b6b5a', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>
+                  Regenerate profile
+                </button>
+              </div>
             </div>
           )}
           <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px', lineHeight: 1.5 }}>
