@@ -463,4 +463,61 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
   }
 });
 
+// ─── POST /api/checkr/test-candidate — Admin: test with mock candidate data ───
+// For Checkr certification testing only. Creates candidate + invitation with mock data.
+router.post("/test-candidate", authenticate, async (req, res) => {
+  // Admin only
+  const db = await getDb();
+  const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+  if (!user?.is_admin) return res.status(403).json({ error: "Admin only" });
+
+  try {
+    getCheckrKey();
+  } catch {
+    return res.status(503).json({ error: "CHECKR_API_KEY not configured" });
+  }
+
+  const { first_name, last_name, email, ssn, dob, zipcode, driver_license_number, driver_license_state } = req.body;
+
+  if (!first_name || !last_name || !email) {
+    return res.status(400).json({ error: "first_name, last_name, and email are required" });
+  }
+
+  try {
+    // Step 1: Create candidate
+    console.log(`[checkr-test] Creating candidate: ${first_name} ${last_name}`);
+    const candidate = await checkrRequest("POST", "/candidates", {
+      first_name,
+      last_name,
+      email,
+      ssn: ssn || undefined,
+      dob: dob || undefined,
+      zipcode: zipcode || undefined,
+      driver_license_number: driver_license_number || undefined,
+      driver_license_state: driver_license_state || undefined,
+    });
+    console.log(`[checkr-test] Candidate created: ${candidate.id}`);
+
+    // Step 2: Create invitation
+    const packageSlug = process.env.CHECKR_PACKAGE || "essential_criminal";
+    const invitation = await checkrRequest("POST", "/invitations", {
+      candidate_id: candidate.id,
+      package: packageSlug,
+    });
+    console.log(`[checkr-test] Invitation created: ${invitation.id}, url: ${invitation.invitation_url}`);
+
+    res.json({
+      success: true,
+      candidateId: candidate.id,
+      invitationId: invitation.id,
+      invitationUrl: invitation.invitation_url,
+      package: packageSlug,
+      message: `Check your email at ${email} for the Checkr invitation link. Use the mock data exactly as provided.`,
+    });
+  } catch (err) {
+    console.error("[checkr-test] Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

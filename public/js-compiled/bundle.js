@@ -45656,14 +45656,52 @@ const CheckrEmbed = window.CheckrEmbed = ({
     return /*#__PURE__*/React.createElement("div", {
       style: {
         padding: 16,
-        background: '#fef2f2',
-        border: '1px solid #fca5a5',
+        background: '#fff8f0',
+        border: '1px solid #ffcc80',
         borderRadius: 10,
-        color: '#dc2626',
         fontSize: 13,
         lineHeight: 1.5
       }
-    }, error);
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: '#e65100',
+        fontWeight: 600,
+        marginBottom: 8
+      }
+    }, "Background check form unavailable in staging"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: '#666',
+        marginBottom: 12
+      }
+    }, "The in-app form is available in production. For staging testing, use the email invitation flow \u2014 Checkr will send you a link to complete the check."), /*#__PURE__*/React.createElement("button", {
+      onClick: async () => {
+        try {
+          const res = await apiFetch('/api/checkr/initiate', {
+            method: 'POST'
+          });
+          const data = await res.json();
+          if (data.invitationUrl) {
+            window.open(data.invitationUrl, '_blank');
+          } else if (data.status === 'already_initiated') {
+            if (typeof showToast === 'function') showToast('Background check already in progress', 'info');
+          } else {
+            if (typeof showToast === 'function') showToast(data.error || data.message || 'Check your email for the Checkr invitation', 'info');
+          }
+        } catch (err) {
+          if (typeof showToast === 'function') showToast('Failed to initiate. Contact support.', 'error');
+        }
+      },
+      style: {
+        padding: '8px 16px',
+        background: '#1b6b5a',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Start Background Check via Email"));
   }
   if (loading) {
     return /*#__PURE__*/React.createElement("div", {
