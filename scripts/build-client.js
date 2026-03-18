@@ -62,6 +62,7 @@ const scripts = [
   "js/components/HelpPage.js",
   "js/components/AdminPanel.js",
   "js/components/IPAiBadge.js",
+  "js/components/IPAiInsightsCard.js",
   "js/app.js",
 ];
 

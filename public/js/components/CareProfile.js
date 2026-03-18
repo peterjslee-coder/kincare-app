@@ -544,6 +544,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         )}
       </div>
 
+      {/* ─── 2b. iPAi Care Intelligence (deep insights) ─── */}
+      {profile && (
+        <IPAiInsightsCard recipientId={profile.id} recipientName={profile.first_name} />
+      )}
+
       {/* ─── 3. Health Conditions & Medications (combined, compact) ─── */}
       <div className="card">
         <div className="card-header"><span className="card-icon">{'\u2695\uFE0F'}</span>Health & Medications</div>

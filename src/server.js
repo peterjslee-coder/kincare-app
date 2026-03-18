@@ -294,9 +294,10 @@ app.use("/api/checkr", require("./routes/checkr"));
 app.use("/api/accountability", require("./routes/accountability"));
 app.use("/api/interviews", require("./routes/interviews"));
 app.use("/api/matching", require("./routes/matching"));
+app.use("/api/care-intelligence", require("./routes/careIntelligence"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.47.0";
+const APP_VERSION = "1.47.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

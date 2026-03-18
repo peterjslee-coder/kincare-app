@@ -1377,6 +1377,34 @@ router.post("/:id/check-out", async (req, res) => {
       emitToUser(session.family_user_id, "activity_update", {});
     }
 
+    // ─── iPAi: Generate AI session summary (non-blocking) ───
+    try {
+      const { generateSessionSummary } = require("../utils/careIntelligence");
+      generateSessionSummary(req.params.id).then(async (aiSummary) => {
+        if (aiSummary && aiSummary.summary) {
+          // Store the AI summary on the visit log
+          try {
+            await db.prepare("UPDATE visit_logs SET ai_summary = ? WHERE session_id = ?").run(
+              JSON.stringify(aiSummary), req.params.id
+            );
+            // Send to family via websocket
+            if (emitToUser) {
+              emitToUser(session.family_user_id, "ipai_session_summary", {
+                sessionId: req.params.id,
+                recipientName: session.recipient_first_name,
+                caregiverName,
+                summary: aiSummary.summary,
+                suggestions: aiSummary.suggestions,
+                moodChange: aiSummary.moodChange,
+              });
+            }
+          } catch (storeErr) {
+            console.warn("[iPAi] Failed to store session summary:", storeErr.message);
+          }
+        }
+      }).catch(err => console.warn("[iPAi] Session summary generation failed (non-blocking):", err.message));
+    } catch {}
+
     res.json({
       session: { id: req.params.id, status: "completed", actualDurationHours: actualDurationHours, adjustedCost: adjustedCost },
       visitLog: visitLog ? { id: visitLog.id } : null,
