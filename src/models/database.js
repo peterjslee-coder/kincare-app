@@ -808,6 +808,9 @@ async function initializeDatabase() {
       created_by TEXT REFERENCES users(id),
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
+    // v1.48.0 — AI Care Plan Generation
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_plan TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_plan_updated_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

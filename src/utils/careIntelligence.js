@@ -367,6 +367,166 @@ Return ONLY the JSON, no markdown.`;
 }
 
 /**
+ * Generate a living care plan document based on visit data, health conditions, and caregiver feedback
+ * Creates a structured, evolving guide for caregivers and family
+ */
+async function generateCarePlan(careRecipientId) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return { error: "AI not configured", carePlan: null };
+  }
+
+  const data = await gatherVisitData(careRecipientId);
+  if (!data) return { error: "Care recipient not found", carePlan: null };
+
+  const { recipient, visits, careNotes } = data;
+  const analysis = analyzePatterns(visits);
+
+  const healthConditions = (() => {
+    try { return JSON.parse(recipient.health_conditions || "[]"); } catch { return []; }
+  })();
+  const medications = (() => {
+    try { return JSON.parse(recipient.medications || "[]"); } catch { return []; }
+  })();
+
+  const recipientName = recipient.first_name || "the care recipient";
+
+  // Compile visit summaries focusing on what works and what doesn't
+  const visitSummaries = visits.slice(0, 20).map(v => {
+    const tags = (() => { try { return JSON.parse(v.condition_tags || "[]"); } catch { return []; } })();
+    return `${v.scheduled_date} with ${v.caregiver_first}: ` +
+      `arrival mood=${v.arrival_mood || "?"}, departure mood=${v.departure_mood || "?"}, ` +
+      `tags=[${tags.join(", ")}], ` +
+      `notes: "${(v.care_feedback || v.summary || "").substring(0, 150)}"`;
+  }).join("\n");
+
+  // Extract caregiver effectiveness patterns
+  const caregiverStats = {};
+  for (const v of visits) {
+    const cg = v.caregiver_first || "Unknown";
+    if (!caregiverStats[cg]) caregiverStats[cg] = { visits: 0, tags: [], moods: [] };
+    caregiverStats[cg].visits++;
+    const mood = v.departure_mood || v.mood_rating;
+    if (mood) caregiverStats[cg].moods.push(typeof mood === "number" ? mood : 3);
+    try {
+      const tags = JSON.parse(v.condition_tags || "[]");
+      caregiverStats[cg].tags.push(...tags);
+    } catch {}
+  }
+
+  const caregiverSummary = Object.entries(caregiverStats)
+    .map(([name, stats]) => {
+      const avgMood = stats.moods.length ? (stats.moods.reduce((a, b) => a + b, 0) / stats.moods.length).toFixed(1) : "?";
+      return `${name}: ${stats.visits} visits, avg departure mood ${avgMood}/5`;
+    })
+    .join("; ");
+
+  const prompt = `You are creating a LIVING CARE PLAN for ${recipientName}, a guide that evolves with every visit. This is not a static document — it captures the current best understanding of how to care for this person.
+
+CARE RECIPIENT: ${recipientName}
+Age: ${recipient.age || "unknown"}
+Health conditions: ${healthConditions.join(", ") || "none listed"}
+Medications: ${medications.join(", ") || "none listed"}
+Mobility: ${recipient.mobility || "unknown"}
+
+VISIT DATA (${analysis.stats.totalVisits} visits):
+${visitSummaries || "No visits yet."}
+
+CAREGIVER PATTERNS:
+${caregiverSummary}
+
+FREQUENT PATTERNS:
+- Tags: ${analysis.frequentTags.slice(0, 5).map(t => `${t.tag} (${t.pct}% of visits)`).join(", ") || "none"}
+- Time mood trends: ${analysis.patterns.filter(p => p.type === "mood_by_time").map(p => `${p.period}: ${p.avgMood.toFixed(1)}/5`).join(", ") || "insufficient data"}
+
+YOUR TASK: Generate a structured CARE PLAN JSON that captures the living wisdom about caring for ${recipientName}. This should be:
+- SPECIFIC to this person's needs, not generic advice
+- ACTIONABLE for caregivers (things to do and avoid)
+- EVOLVING (references visit count and dates for staleness awareness)
+- HONEST about gaps (if data is insufficient, say so)
+
+Structure as JSON:
+{
+  "planTitle": "Care Plan for ${recipientName}",
+  "lastUpdated": "2026-03-17",
+  "visitsSinceLastUpdate": ${analysis.stats.totalVisits},
+  "dailyRoutine": {
+    "morning": "Brief description of what works well in mornings based on mood/pattern data",
+    "afternoon": "What to expect and how to support in afternoons",
+    "evening": "Evening patterns and best practices"
+  },
+  "carePreferences": [
+    { "category": "Communication", "guideline": "Specific guidance based on observed patterns", "source": "Pattern from X visits" },
+    { "category": "Medication", "guideline": "What caregivers need to know", "source": "Visit logs" }
+  ],
+  "medicationNotes": "Critical info about how this person takes medications, what to watch for",
+  "safetyConsiderations": ["Specific risk factors observed or documented"],
+  "whatWorksWell": ["Techniques/approaches that improve mood or cooperation based on visit data"],
+  "whatToAvoid": ["Approaches that typically don't work or worsen mood"],
+  "emergencyProtocol": "What to do if [specific scenario]. Based on conditions and patterns.",
+  "familyNotes": "Additional context from family notes that caregivers should know"
+}
+
+CRITICAL: Return ONLY the JSON object, no markdown formatting or code blocks. Be specific to this person's actual visit history.`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5-20250514",
+        max_tokens: 2500,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[iPAi] Claude API error:", response.status, errText);
+      return { error: "AI service unavailable", carePlan: null };
+    }
+
+    const result = await response.json();
+    const text = result.content?.[0]?.text || "";
+
+    let carePlan;
+    try {
+      const cleaned = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
+      carePlan = JSON.parse(cleaned);
+    } catch (parseErr) {
+      console.error("[iPAi] Failed to parse care plan:", parseErr.message);
+      carePlan = {
+        planTitle: `Care Plan for ${recipientName}`,
+        lastUpdated: new Date().toISOString().split("T")[0],
+        visitsSinceLastUpdate: analysis.stats.totalVisits,
+        dailyRoutine: { morning: "", afternoon: "", evening: "" },
+        carePreferences: [],
+        medicationNotes: text,
+        safetyConsiderations: [],
+        whatWorksWell: [],
+        whatToAvoid: [],
+        emergencyProtocol: "",
+        familyNotes: "",
+      };
+    }
+
+    return {
+      carePlan,
+      generatedAt: new Date().toISOString(),
+      recipientName,
+      visitCount: analysis.stats.totalVisits,
+    };
+  } catch (err) {
+    console.error("[iPAi] Care plan generation error:", err);
+    return { error: err.message, carePlan: null };
+  }
+}
+
+/**
  * Generate private caregiver coaching tips after a session
  * Only the caregiver sees these — specific to THIS care recipient
  */
@@ -493,4 +653,5 @@ module.exports = {
   generateCareIntelligence,
   generateSessionSummary,
   generateCaregiverCoaching,
+  generateCarePlan,
 };

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/auth");
 const { getDb } = require("../models/database");
-const { generateCareIntelligence, generateSessionSummary, analyzePatterns, gatherVisitData } = require("../utils/careIntelligence");
+const { generateCareIntelligence, generateSessionSummary, analyzePatterns, gatherVisitData, generateCarePlan } = require("../utils/careIntelligence");
 
 // ─── GET /api/care-intelligence/:recipientId — Generate full care intelligence report ───
 router.get("/:recipientId", authenticate, async (req, res) => {
@@ -83,6 +83,90 @@ router.get("/coaching/:sessionId", authenticate, async (req, res) => {
   } catch (err) {
     console.error("[iPAi] Coaching route error:", err);
     res.status(500).json({ error: "Failed to generate coaching" });
+  }
+});
+
+// ─── POST /api/care-intelligence/:recipientId/care-plan — Generate or regenerate the care plan ───
+router.post("/:recipientId/care-plan", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+
+    // Verify user has access to this care recipient
+    const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.recipientId);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+
+    // Check access: owner, care team member, assigned caregiver, or admin
+    const isOwner = recipient.family_id === req.user.id;
+    const isTeamMember = await db.prepare(
+      "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
+    ).get(req.params.recipientId, req.user.id);
+    const isCaregiver = await db.prepare(
+      "SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'"
+    ).get(req.params.recipientId, req.user.id);
+    const isAdmin = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+
+    if (!isOwner && !isTeamMember && !isCaregiver && !isAdmin?.is_admin) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const result = await generateCarePlan(req.params.recipientId);
+
+    if (result.carePlan) {
+      // Store the care plan
+      await db.prepare(
+        "UPDATE care_recipients SET ai_care_plan = ?, ai_care_plan_updated_at = NOW() WHERE id = ?"
+      ).run(JSON.stringify(result.carePlan), req.params.recipientId);
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error("[iPAi] Care plan generation error:", err);
+    res.status(500).json({ error: "Failed to generate care plan" });
+  }
+});
+
+// ─── GET /api/care-intelligence/:recipientId/care-plan — Retrieve the stored care plan ───
+router.get("/:recipientId/care-plan", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+
+    // Verify user has access
+    const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.recipientId);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+
+    // Check access: owner, care team member, assigned caregiver, or admin
+    const isOwner = recipient.family_id === req.user.id;
+    const isTeamMember = await db.prepare(
+      "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
+    ).get(req.params.recipientId, req.user.id);
+    const isCaregiver = await db.prepare(
+      "SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'"
+    ).get(req.params.recipientId, req.user.id);
+    const isAdmin = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+
+    if (!isOwner && !isTeamMember && !isCaregiver && !isAdmin?.is_admin) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (!recipient.ai_care_plan) {
+      return res.status(404).json({ error: "Care plan not yet generated. Call POST to generate." });
+    }
+
+    let carePlan;
+    try {
+      carePlan = JSON.parse(recipient.ai_care_plan);
+    } catch {
+      carePlan = null;
+    }
+
+    res.json({
+      carePlan,
+      lastUpdated: recipient.ai_care_plan_updated_at,
+      recipientName: recipient.first_name,
+    });
+  } catch (err) {
+    console.error("[iPAi] Care plan retrieval error:", err);
+    res.status(500).json({ error: "Failed to retrieve care plan" });
   }
 });
 
