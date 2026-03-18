@@ -11,6 +11,7 @@ const FindWork = window.FindWork = () => {
   const [rangeDays, setRangeDays] = useState(14);
   const [lastFetched, setLastFetched] = useState(null);
   const [bgCheckPaid, setBgCheckPaid] = useState(null);
+  const [accountPaused, setAccountPaused] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
   const [zipFilter, setZipFilter] = useState('');
   const [profileCenter, setProfileCenter] = useState(null);
@@ -172,8 +173,10 @@ const FindWork = window.FindWork = () => {
         if (dashRes?.ok) {
           const data = await dashRes.json();
           setBgCheckPaid(!!data?.profile?.background_check_paid || !!data?.profile?.isBackgroundChecked);
+          setAccountPaused(!!data?.profile?.accountPaused);
         } else {
           setBgCheckPaid(false);
+          setAccountPaused(false);
         }
         if (profileRes?.ok) {
           const data = await profileRes.json();
@@ -203,6 +206,7 @@ const FindWork = window.FindWork = () => {
       const res = await apiFetch('/api/dashboard');
       if (res?.ok) {
         const d = await res.json();
+        setAccountPaused(!!d?.profile?.accountPaused);
         // openJobs from dashboard already has matchQuality, distanceMiles, healthTags, careSummary, etc.
         // Client-side safety: filter out jobs whose start time has already passed
         const now = new Date();
@@ -419,10 +423,11 @@ const FindWork = window.FindWork = () => {
           <div style="font-size:12px;color:#666;margin-bottom:2px">${service}</div>
           <div style="font-size:12px;color:#666;margin-bottom:2px">📅 ${dateStr} 🕐 ${time || ''}</div>
           ${cost ? '<div style="font-size:14px;font-weight:700;color:#1b6b5a;margin-top:4px">$' + Math.round(parseFloat(s.caregiverPayout || s.caregiver_payout || cost)) + ' <span style=\\"font-size:10px;font-weight:600;color:#1b6b5a\\">your earnings</span></div>' : ''}
-          <button onclick="document.dispatchEvent(new CustomEvent('findwork-claim',{detail:'${s.id}'}))" style="
-            margin-top:8px;width:100%;padding:8px;background:#1b6b5a;color:#fff;border:none;border-radius:6px;
-            font-size:13px;font-weight:600;cursor:pointer;
-          ">Accept Request</button>
+          <button onclick="${accountPaused ? '' : "document.dispatchEvent(new CustomEvent('findwork-claim',{detail:'" + s.id + "'}));"}" style="
+            margin-top:8px;width:100%;padding:8px;background:${accountPaused ? '#ccc' : '#1b6b5a'};color:#fff;border:none;border-radius:6px;
+            font-size:13px;font-weight:600;cursor:${accountPaused ? 'not-allowed' : 'pointer'};opacity:${accountPaused ? 0.6 : 1};
+          " ${accountPaused ? 'disabled title="Your account is paused. Contact support for assistance."' : ''}>${accountPaused ? '❌ Account Paused' : 'Accept Request'}</button>
+          ${accountPaused ? '<div style="margin-top:6px;font-size:11px;color:#c62828;font-weight:600;text-align:center;">Your account is paused. Contact support.</div>' : ''}
         </div>
       `);
       markersRef.current.push(marker);
@@ -987,16 +992,22 @@ const FindWork = window.FindWork = () => {
 
                     {isExpanded && (
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
-                        <button onClick={(e) => { e.stopPropagation(); handleClaim(s.id); }}
-                          disabled={claimingId === s.id}
+                        <button onClick={(e) => { if (!accountPaused) { e.stopPropagation(); handleClaim(s.id); } }}
+                          disabled={claimingId === s.id || accountPaused}
+                          title={accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                           style={{
-                            width: '100%', padding: 14, background: '#e8724a', color: '#fff',
+                            width: '100%', padding: 14, background: accountPaused ? '#ccc' : '#e8724a', color: '#fff',
                             border: 'none', borderRadius: 10, fontSize: 16, fontWeight: 700,
-                            cursor: 'pointer', opacity: claimingId === s.id ? 0.6 : 1,
+                            cursor: claimingId === s.id || accountPaused ? 'not-allowed' : 'pointer', opacity: claimingId === s.id || accountPaused ? 0.6 : 1,
                             boxShadow: '0 2px 6px rgba(232,114,74,0.3)',
                           }}>
-                          {claimingId === s.id ? 'Accepting...' : s.interviewRequired ? '\uD83C\uDFA5 Accept & Interview' : '\u2713 Accept This Job'}
+                          {accountPaused ? '❌ Account Paused' : claimingId === s.id ? 'Accepting...' : s.interviewRequired ? '\uD83C\uDFA5 Accept & Interview' : '\u2713 Accept This Job'}
                         </button>
+                        {accountPaused && (
+                          <div style={{ marginTop: 8, padding: '8px 12px', background: '#fff5f5', border: '1px solid #ef5350', borderRadius: 8, fontSize: 12, color: '#c62828', fontWeight: 600, textAlign: 'center' }}>
+                            Your account is paused. Contact support for assistance.
+                          </div>
+                        )}
                         {hasConflict && (
                           <button onClick={(e) => { e.stopPropagation(); openProposalModal(s); }}
                             style={{

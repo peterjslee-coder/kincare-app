@@ -314,8 +314,13 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   const db = await getDb();
-  const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked, care_stoplight, care_preferences FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked, care_stoplight, care_preferences, account_paused FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  // Gate: account must not be paused
+  if (profile.account_paused) {
+    return res.status(403).json({ error: "Your account is paused. Contact support for assistance." });
+  }
 
   // Gate: must have completed background check payment OR been cleared by admin
   if (!profile.background_check_paid && !profile.is_background_checked) {

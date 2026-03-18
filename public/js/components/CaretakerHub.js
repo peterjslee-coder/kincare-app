@@ -1342,12 +1342,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                      <button onClick={(e) => handleClaimJob(job.id, e, effectiveTotal)} disabled={claimingJobId === job.id}
+                      <button onClick={(e) => { if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal); }} disabled={claimingJobId === job.id || profile.accountPaused}
+                        title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                         style={{
-                          padding: '12px 24px', background: claimingJobId === job.id ? '#ccc' : '#7c3aed', color: '#fff', border: 'none',
-                          borderRadius: '12px', fontSize: '15px', fontWeight: 700, cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
+                          padding: '12px 24px', background: claimingJobId === job.id || profile.accountPaused ? '#ccc' : '#7c3aed', color: '#fff', border: 'none',
+                          borderRadius: '12px', fontSize: '15px', fontWeight: 700, cursor: claimingJobId === job.id || profile.accountPaused ? 'not-allowed' : 'pointer',
                           boxShadow: '0 2px 8px rgba(124,58,237,0.3)', whiteSpace: 'nowrap',
-                        }}>{claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
+                        }}>{profile.accountPaused ? '❌ Account Paused' : claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
                       {job.hasConflict && (
                         <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
                           style={{
@@ -1897,12 +1898,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         )}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                        <button onClick={(e) => handleClaimJob(job.id, e, effectiveTotal)} disabled={claimingJobId === job.id}
+                        <button onClick={(e) => { if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal); }} disabled={claimingJobId === job.id || profile.accountPaused}
+                          title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                           style={{
-                            padding: '10px 20px', background: claimingJobId === job.id ? '#ccc' : '#e8724a', color: '#fff', border: 'none',
-                            borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
+                            padding: '10px 20px', background: claimingJobId === job.id || profile.accountPaused ? '#ccc' : '#e8724a', color: '#fff', border: 'none',
+                            borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: claimingJobId === job.id || profile.accountPaused ? 'not-allowed' : 'pointer',
                             boxShadow: '0 2px 6px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
-                          }}>{claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
+                          }}>{profile.accountPaused ? '❌ Account Paused' : claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
                         {job.hasConflict && (
                           <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
                             style={{

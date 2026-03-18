@@ -34627,21 +34627,24 @@ const CaretakerHub = window.CaretakerHub = ({
           alignItems: 'flex-end'
         }
       }, /*#__PURE__*/React.createElement("button", {
-        onClick: e => handleClaimJob(job.id, e, effectiveTotal),
-        disabled: claimingJobId === job.id,
+        onClick: e => {
+          if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal);
+        },
+        disabled: claimingJobId === job.id || profile.accountPaused,
+        title: profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : '',
         style: {
           padding: '12px 24px',
-          background: claimingJobId === job.id ? '#ccc' : '#7c3aed',
+          background: claimingJobId === job.id || profile.accountPaused ? '#ccc' : '#7c3aed',
           color: '#fff',
           border: 'none',
           borderRadius: '12px',
           fontSize: '15px',
           fontWeight: 700,
-          cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
+          cursor: claimingJobId === job.id || profile.accountPaused ? 'not-allowed' : 'pointer',
           boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
           whiteSpace: 'nowrap'
         }
-      }, claimingJobId === job.id ? 'Accepting...' : 'Accept Job'), job.hasConflict && /*#__PURE__*/React.createElement("button", {
+      }, profile.accountPaused ? '❌ Account Paused' : claimingJobId === job.id ? 'Accepting...' : 'Accept Job'), job.hasConflict && /*#__PURE__*/React.createElement("button", {
         onClick: e => {
           e.stopPropagation();
           openProposalModal(job);
@@ -35664,21 +35667,24 @@ const CaretakerHub = window.CaretakerHub = ({
           alignItems: 'flex-end'
         }
       }, /*#__PURE__*/React.createElement("button", {
-        onClick: e => handleClaimJob(job.id, e, effectiveTotal),
-        disabled: claimingJobId === job.id,
+        onClick: e => {
+          if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal);
+        },
+        disabled: claimingJobId === job.id || profile.accountPaused,
+        title: profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : '',
         style: {
           padding: '10px 20px',
-          background: claimingJobId === job.id ? '#ccc' : '#e8724a',
+          background: claimingJobId === job.id || profile.accountPaused ? '#ccc' : '#e8724a',
           color: '#fff',
           border: 'none',
           borderRadius: '10px',
           fontSize: '14px',
           fontWeight: 700,
-          cursor: claimingJobId === job.id ? 'not-allowed' : 'pointer',
+          cursor: claimingJobId === job.id || profile.accountPaused ? 'not-allowed' : 'pointer',
           boxShadow: '0 2px 6px rgba(232,114,74,0.3)',
           whiteSpace: 'nowrap'
         }
-      }, claimingJobId === job.id ? 'Accepting...' : 'Accept Job'), job.hasConflict && /*#__PURE__*/React.createElement("button", {
+      }, profile.accountPaused ? '❌ Account Paused' : claimingJobId === job.id ? 'Accepting...' : 'Accept Job'), job.hasConflict && /*#__PURE__*/React.createElement("button", {
         onClick: e => {
           e.stopPropagation();
           openProposalModal(job);
@@ -38427,6 +38433,7 @@ const FindWork = window.FindWork = () => {
   const [rangeDays, setRangeDays] = useState(14);
   const [lastFetched, setLastFetched] = useState(null);
   const [bgCheckPaid, setBgCheckPaid] = useState(null);
+  const [accountPaused, setAccountPaused] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
   const [zipFilter, setZipFilter] = useState('');
   const [profileCenter, setProfileCenter] = useState(null);
@@ -38662,11 +38669,13 @@ const FindWork = window.FindWork = () => {
       try {
         const [dashRes, profileRes] = await Promise.all([apiFetch('/api/dashboard'), apiFetch('/api/caregivers/me')]);
         if (dashRes !== null && dashRes !== void 0 && dashRes.ok) {
-          var _data$profile10, _data$profile11;
+          var _data$profile10, _data$profile11, _data$profile12;
           const data = await dashRes.json();
           setBgCheckPaid(!!(data !== null && data !== void 0 && (_data$profile10 = data.profile) !== null && _data$profile10 !== void 0 && _data$profile10.background_check_paid) || !!(data !== null && data !== void 0 && (_data$profile11 = data.profile) !== null && _data$profile11 !== void 0 && _data$profile11.isBackgroundChecked));
+          setAccountPaused(!!(data !== null && data !== void 0 && (_data$profile12 = data.profile) !== null && _data$profile12 !== void 0 && _data$profile12.accountPaused));
         } else {
           setBgCheckPaid(false);
+          setAccountPaused(false);
         }
         if (profileRes !== null && profileRes !== void 0 && profileRes.ok) {
           const data = await profileRes.json();
@@ -38696,7 +38705,9 @@ const FindWork = window.FindWork = () => {
       // Use dashboard API for enriched data (match quality, distance, health tags, care summary)
       const res = await apiFetch('/api/dashboard');
       if (res !== null && res !== void 0 && res.ok) {
+        var _d$profile6;
         const d = await res.json();
+        setAccountPaused(!!(d !== null && d !== void 0 && (_d$profile6 = d.profile) !== null && _d$profile6 !== void 0 && _d$profile6.accountPaused));
         // openJobs from dashboard already has matchQuality, distanceMiles, healthTags, careSummary, etc.
         // Client-side safety: filter out jobs whose start time has already passed
         const now = new Date();
@@ -38940,10 +38951,11 @@ const FindWork = window.FindWork = () => {
           <div style="font-size:12px;color:#666;margin-bottom:2px">${service}</div>
           <div style="font-size:12px;color:#666;margin-bottom:2px">📅 ${dateStr} 🕐 ${time || ''}</div>
           ${cost ? '<div style="font-size:14px;font-weight:700;color:#1b6b5a;margin-top:4px">$' + Math.round(parseFloat(s.caregiverPayout || s.caregiver_payout || cost)) + ' <span style=\\"font-size:10px;font-weight:600;color:#1b6b5a\\">your earnings</span></div>' : ''}
-          <button onclick="document.dispatchEvent(new CustomEvent('findwork-claim',{detail:'${s.id}'}))" style="
-            margin-top:8px;width:100%;padding:8px;background:#1b6b5a;color:#fff;border:none;border-radius:6px;
-            font-size:13px;font-weight:600;cursor:pointer;
-          ">Accept Request</button>
+          <button onclick="${accountPaused ? '' : "document.dispatchEvent(new CustomEvent('findwork-claim',{detail:'" + s.id + "'}));"}" style="
+            margin-top:8px;width:100%;padding:8px;background:${accountPaused ? '#ccc' : '#1b6b5a'};color:#fff;border:none;border-radius:6px;
+            font-size:13px;font-weight:600;cursor:${accountPaused ? 'not-allowed' : 'pointer'};opacity:${accountPaused ? 0.6 : 1};
+          " ${accountPaused ? 'disabled title="Your account is paused. Contact support for assistance."' : ''}>${accountPaused ? '❌ Account Paused' : 'Accept Request'}</button>
+          ${accountPaused ? '<div style="margin-top:6px;font-size:11px;color:#c62828;font-weight:600;text-align:center;">Your account is paused. Contact support.</div>' : ''}
         </div>
       `);
       markersRef.current.push(marker);
@@ -39999,24 +40011,39 @@ const FindWork = window.FindWork = () => {
       }
     }, /*#__PURE__*/React.createElement("button", {
       onClick: e => {
-        e.stopPropagation();
-        handleClaim(s.id);
+        if (!accountPaused) {
+          e.stopPropagation();
+          handleClaim(s.id);
+        }
       },
-      disabled: claimingId === s.id,
+      disabled: claimingId === s.id || accountPaused,
+      title: accountPaused ? 'Your account is paused. Contact support for assistance.' : '',
       style: {
         width: '100%',
         padding: 14,
-        background: '#e8724a',
+        background: accountPaused ? '#ccc' : '#e8724a',
         color: '#fff',
         border: 'none',
         borderRadius: 10,
         fontSize: 16,
         fontWeight: 700,
-        cursor: 'pointer',
-        opacity: claimingId === s.id ? 0.6 : 1,
+        cursor: claimingId === s.id || accountPaused ? 'not-allowed' : 'pointer',
+        opacity: claimingId === s.id || accountPaused ? 0.6 : 1,
         boxShadow: '0 2px 6px rgba(232,114,74,0.3)'
       }
-    }, claimingId === s.id ? 'Accepting...' : s.interviewRequired ? '\uD83C\uDFA5 Accept & Interview' : '\u2713 Accept This Job'), hasConflict && /*#__PURE__*/React.createElement("button", {
+    }, accountPaused ? '❌ Account Paused' : claimingId === s.id ? 'Accepting...' : s.interviewRequired ? '\uD83C\uDFA5 Accept & Interview' : '\u2713 Accept This Job'), accountPaused && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 8,
+        padding: '8px 12px',
+        background: '#fff5f5',
+        border: '1px solid #ef5350',
+        borderRadius: 8,
+        fontSize: 12,
+        color: '#c62828',
+        fontWeight: 600,
+        textAlign: 'center'
+      }
+    }, "Your account is paused. Contact support for assistance."), hasConflict && /*#__PURE__*/React.createElement("button", {
       onClick: e => {
         e.stopPropagation();
         openProposalModal(s);
@@ -43377,7 +43404,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     if (!validateStep(3)) return;
     setSaving(true);
     try {
-      var _data$profile12;
+      var _data$profile13;
       const token = authToken || window.AUTH_TOKEN;
       const res = await resilientFetch('/api/caregivers/profile', {
         method: 'POST',
@@ -43420,7 +43447,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
         setSaving(false);
         return;
       }
-      setProfileId((_data$profile12 = data.profile) === null || _data$profile12 === void 0 ? void 0 : _data$profile12.id);
+      setProfileId((_data$profile13 = data.profile) === null || _data$profile13 === void 0 ? void 0 : _data$profile13.id);
 
       // Also update user phone + pets/allergies/medical (non-blocking)
       const normalizedPhone = form.phone ? intlPhone ? form.phone.replace(/[^\d\+]/g, '') : form.phone.replace(/\D/g, '') : null;
