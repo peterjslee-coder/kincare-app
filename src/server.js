@@ -296,9 +296,10 @@ app.use("/api/interviews", require("./routes/interviews"));
 app.use("/api/matching", require("./routes/matching"));
 app.use("/api/care-intelligence", require("./routes/careIntelligence"));
 app.use("/api/scheduling", require("./routes/nlScheduling"));
+app.use("/api/ipai", require("./routes/ipaiChat"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.48.3";
+const APP_VERSION = "1.49.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
