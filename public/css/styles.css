@@ -734,6 +734,7 @@
       background: #fafafa;
       display: flex;
       flex-direction: column;
+      justify-content: flex-end;
     }
 
     .msg-input-area {

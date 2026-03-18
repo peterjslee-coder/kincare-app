@@ -37507,7 +37507,7 @@ const CaretakerHub = window.CaretakerHub = ({
           showToast('Checked in! Session started.', 'success');
           setCheckInSession(null);
           try {
-            const refreshRes = await apiFetch('/api/dashboard');
+            const refreshRes = await apiFetch('/api/dashboard/caregiver');
             if (refreshRes !== null && refreshRes !== void 0 && refreshRes.ok) setData(await refreshRes.json());
           } catch (e) {/* refresh is best-effort */}
         } else {
