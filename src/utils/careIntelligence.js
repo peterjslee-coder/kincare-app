@@ -14,6 +14,18 @@
 const { getDb } = require("../models/database");
 
 /**
+ * Helper: call Claude API using the Anthropic SDK (same as working careRecipients.js)
+ */
+async function callClaude(apiKey, model, maxTokens, messages, system) {
+  const Anthropic = require("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey });
+  const params = { model, max_tokens: maxTokens, messages };
+  if (system) params.system = system;
+  const result = await client.messages.create(params);
+  return result.content?.[0]?.text || "";
+}
+
+/**
  * Gather all visit data for a care recipient
  */
 async function gatherVisitData(careRecipientId) {
@@ -232,33 +244,11 @@ Be specific to ${recipientName}. Reference actual observations from the visit da
 IMPORTANT: Return ONLY the JSON object, no markdown formatting or code blocks.`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 2500,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("[iPAi] Claude API error:", response.status, errText);
-      return { error: "AI service unavailable", insights: null, analysis };
-    }
-
-    const result = await response.json();
-    const text = result.content?.[0]?.text || "";
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 2500, [{ role: "user", content: prompt }]);
 
     // Parse JSON response
     let intelligence;
     try {
-      // Strip any markdown code block wrapper if present
       const cleaned = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
       intelligence = JSON.parse(cleaned);
     } catch (parseErr) {
@@ -343,24 +333,7 @@ Return JSON:
 Return ONLY the JSON, no markdown.`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 500,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) return null;
-
-    const result = await response.json();
-    const text = result.content?.[0]?.text || "";
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 500, [{ role: "user", content: prompt }]);
     const cleaned = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
     return JSON.parse(cleaned);
   } catch (err) {
@@ -473,28 +446,7 @@ Structure as JSON:
 CRITICAL: Return ONLY the JSON object, no markdown formatting or code blocks. Be specific to this person's actual visit history.`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 2500,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("[iPAi] Claude API error:", response.status, errText);
-      return { error: "AI service unavailable", carePlan: null };
-    }
-
-    const result = await response.json();
-    const text = result.content?.[0]?.text || "";
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 2500, [{ role: "user", content: prompt }]);
 
     let carePlan;
     try {
@@ -624,24 +576,7 @@ Return JSON:
 Return ONLY JSON, no markdown.`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 500,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) return null;
-
-    const result = await response.json();
-    const text = result.content?.[0]?.text || "";
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 500, [{ role: "user", content: prompt }]);
     const cleaned = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
     return JSON.parse(cleaned);
   } catch (err) {

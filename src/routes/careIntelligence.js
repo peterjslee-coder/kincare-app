@@ -9,33 +9,47 @@ router.get("/:recipientId", authenticate, async (req, res) => {
   try {
     const db = await getDb();
 
-    // Verify user has access to this care recipient (family member, care team, or admin)
+    // Verify care recipient exists
     const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.recipientId);
-    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found", recipientId: req.params.recipientId });
 
-    // Check access: owner, care team member, assigned caregiver, or admin
+    // Check access: owner, care team, caregiver, or admin
     const isOwner = recipient.family_id === req.user.id;
-    const isTeamMember = await db.prepare(
-      "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
-    ).get(req.params.recipientId, req.user.id);
-    const isCaregiver = await db.prepare(
-      "SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'"
-    ).get(req.params.recipientId, req.user.id);
     const isAdmin = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    let hasAccess = isOwner || !!isAdmin?.is_admin;
 
-    if (!isOwner && !isTeamMember && !isCaregiver && !isAdmin?.is_admin) {
+    if (!hasAccess) {
+      try {
+        const isTeamMember = await db.prepare(
+          "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
+        ).get(req.params.recipientId, req.user.id);
+        if (isTeamMember) hasAccess = true;
+      } catch {}
+    }
+    if (!hasAccess) {
+      try {
+        const isCaregiver = await db.prepare(
+          "SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'"
+        ).get(req.params.recipientId, req.user.id);
+        if (isCaregiver) hasAccess = true;
+      } catch {}
+    }
+
+    if (!hasAccess) {
       return res.status(403).json({ error: "Access denied" });
     }
 
+    console.log(`[iPAi] Generating care intelligence for recipient ${req.params.recipientId} by user ${req.user.id}`);
     const result = await generateCareIntelligence(req.params.recipientId);
+
     if (result.error) {
-      console.error("[iPAi] Care intelligence error:", result.error);
-      // Still return the result — it may have partial data (analysis without AI)
-      return res.status(result.error === "AI not configured" ? 503 : 200).json(result);
+      console.error("[iPAi] Care intelligence returned error:", result.error);
     }
+
+    // Always return 200 with whatever we got — partial data is better than nothing
     res.json(result);
   } catch (err) {
-    console.error("[iPAi] Care intelligence route error:", err.message, err.stack);
+    console.error("[iPAi] Care intelligence route CRASH:", err.message, err.stack);
     res.status(500).json({ error: "Failed to generate care intelligence", detail: err.message });
   }
 });

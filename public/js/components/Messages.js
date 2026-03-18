@@ -436,21 +436,47 @@ const Messages = window.Messages = () => {
     if (!inputText.trim() || !activeConvId) return;
     setSending(true);
     try {
-      const res = await apiFetch(`/api/messages/conversations/${activeConvId}`, {
-        method: 'POST',
-        body: JSON.stringify({ content: inputText, replyToId: replyTo?.id || null }),
-      });
-      if (res?.ok) {
-        const data = await res.json();
-        setInputText('');
-        setReplyTo(null);
-        delete draftsRef.current[activeConvId];
-        // If conversation ID changed (legacy migration), update it
-        if (data.conversationId && data.conversationId !== activeConvId) {
-          setActiveConvId(data.conversationId);
+      // Check if this is an iPAi conversation
+      const isIPAiConv = activeConvId === '__ipai__' ||
+        conversations.find(c => c.id === activeConvId)?.members?.some(m => m.email === 'ipai@yourinplace.com');
+
+      if (isIPAiConv) {
+        // Route through iPAi chat endpoint
+        const res = await apiFetch('/api/ipai/chat', {
+          method: 'POST',
+          body: JSON.stringify({ message: inputText }),
+        });
+        if (res?.ok) {
+          const data = await res.json();
+          setInputText('');
+          setReplyTo(null);
+          // Update conversation ID if this was the first message
+          if (data.conversationId && data.conversationId !== activeConvId) {
+            setActiveConvId(data.conversationId);
+          }
+          await fetchMessages(data.conversationId || activeConvId);
+          await fetchConversations();
+        } else {
+          const err = await res?.json().catch(() => ({}));
+          if (typeof showToast === 'function') showToast(err?.error || 'iPAi is temporarily unavailable', 'error');
         }
-        await fetchMessages(data.conversationId || activeConvId);
-        await fetchConversations();
+      } else {
+        // Regular message send
+        const res = await apiFetch(`/api/messages/conversations/${activeConvId}`, {
+          method: 'POST',
+          body: JSON.stringify({ content: inputText, replyToId: replyTo?.id || null }),
+        });
+        if (res?.ok) {
+          const data = await res.json();
+          setInputText('');
+          setReplyTo(null);
+          delete draftsRef.current[activeConvId];
+          if (data.conversationId && data.conversationId !== activeConvId) {
+            setActiveConvId(data.conversationId);
+          }
+          await fetchMessages(data.conversationId || activeConvId);
+          await fetchConversations();
+        }
       }
     } catch (err) {
       console.error('Send message error:', err);
@@ -1045,6 +1071,35 @@ const Messages = window.Messages = () => {
             ))}
           </div>
         )}
+
+        {/* iPAi — pinned at top */}
+        <div
+          className={`msg-conv-item ${activeConvId === '__ipai__' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveConvId('__ipai__');
+            setActiveConvName('iPAi');
+            setActiveConvType('ipai');
+            // Load iPAi conversation messages if they exist
+            const ipaiConv = conversations.find(c => c.members?.some(m => m.email === 'ipai@yourinplace.com'));
+            if (ipaiConv) {
+              setActiveConvId(ipaiConv.id);
+              handleSelectConversation(ipaiConv);
+            }
+          }}
+          style={{ borderBottom: '2px solid #e6f5f0', background: activeConvId === '__ipai__' ? '#f0fdf4' : '#f8fffe' }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <span style={{ color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: '-0.5px' }}>iPAi</span>
+          </div>
+          <div style={{ flex: 1, minWidth: 0, marginLeft: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontWeight: 700, fontSize: 15, color: '#1b6b5a' }}>iPAi</span>
+              {React.createElement(window.IPAiBadge || 'span', { size: 'sm' })}
+            </div>
+            <div style={{ fontSize: 12, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Your AI care assistant — ask me anything
+            </div>
+          </div>
+        </div>
 
         {conversations.filter(c => !archivedIds.includes(c.id)).length > 0 ? conversations.filter(c => !archivedIds.includes(c.id)).sort((a, b) => {
           const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;

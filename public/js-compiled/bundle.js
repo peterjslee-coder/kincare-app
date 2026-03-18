@@ -18960,24 +18960,51 @@ const Messages = window.Messages = () => {
     if (!inputText.trim() || !activeConvId) return;
     setSending(true);
     try {
-      const res = await apiFetch(`/api/messages/conversations/${activeConvId}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          content: inputText,
-          replyToId: (replyTo === null || replyTo === void 0 ? void 0 : replyTo.id) || null
-        })
-      });
-      if (res !== null && res !== void 0 && res.ok) {
-        const data = await res.json();
-        setInputText('');
-        setReplyTo(null);
-        delete draftsRef.current[activeConvId];
-        // If conversation ID changed (legacy migration), update it
-        if (data.conversationId && data.conversationId !== activeConvId) {
-          setActiveConvId(data.conversationId);
+      var _conversations$find;
+      // Check if this is an iPAi conversation
+      const isIPAiConv = activeConvId === '__ipai__' || ((_conversations$find = conversations.find(c => c.id === activeConvId)) === null || _conversations$find === void 0 || (_conversations$find = _conversations$find.members) === null || _conversations$find === void 0 ? void 0 : _conversations$find.some(m => m.email === 'ipai@yourinplace.com'));
+      if (isIPAiConv) {
+        // Route through iPAi chat endpoint
+        const res = await apiFetch('/api/ipai/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            message: inputText
+          })
+        });
+        if (res !== null && res !== void 0 && res.ok) {
+          const data = await res.json();
+          setInputText('');
+          setReplyTo(null);
+          // Update conversation ID if this was the first message
+          if (data.conversationId && data.conversationId !== activeConvId) {
+            setActiveConvId(data.conversationId);
+          }
+          await fetchMessages(data.conversationId || activeConvId);
+          await fetchConversations();
+        } else {
+          const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+          if (typeof showToast === 'function') showToast((err === null || err === void 0 ? void 0 : err.error) || 'iPAi is temporarily unavailable', 'error');
         }
-        await fetchMessages(data.conversationId || activeConvId);
-        await fetchConversations();
+      } else {
+        // Regular message send
+        const res = await apiFetch(`/api/messages/conversations/${activeConvId}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            content: inputText,
+            replyToId: (replyTo === null || replyTo === void 0 ? void 0 : replyTo.id) || null
+          })
+        });
+        if (res !== null && res !== void 0 && res.ok) {
+          const data = await res.json();
+          setInputText('');
+          setReplyTo(null);
+          delete draftsRef.current[activeConvId];
+          if (data.conversationId && data.conversationId !== activeConvId) {
+            setActiveConvId(data.conversationId);
+          }
+          await fetchMessages(data.conversationId || activeConvId);
+          await fetchConversations();
+        }
       }
     } catch (err) {
       console.error('Send message error:', err);
@@ -20050,7 +20077,73 @@ const Messages = window.Messages = () => {
         cursor: 'pointer'
       }
     }, "Decline")));
-  })), conversations.filter(c => !archivedIds.includes(c.id)).length > 0 ? conversations.filter(c => !archivedIds.includes(c.id)).sort((a, b) => {
+  })), /*#__PURE__*/React.createElement("div", {
+    className: `msg-conv-item ${activeConvId === '__ipai__' ? 'active' : ''}`,
+    onClick: () => {
+      setActiveConvId('__ipai__');
+      setActiveConvName('iPAi');
+      setActiveConvType('ipai');
+      // Load iPAi conversation messages if they exist
+      const ipaiConv = conversations.find(c => {
+        var _c$members;
+        return (_c$members = c.members) === null || _c$members === void 0 ? void 0 : _c$members.some(m => m.email === 'ipai@yourinplace.com');
+      });
+      if (ipaiConv) {
+        setActiveConvId(ipaiConv.id);
+        handleSelectConversation(ipaiConv);
+      }
+    },
+    style: {
+      borderBottom: '2px solid #e6f5f0',
+      background: activeConvId === '__ipai__' ? '#f0fdf4' : '#f8fffe'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 44,
+      height: 44,
+      borderRadius: '50%',
+      background: '#1b6b5a',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: '#fff',
+      fontSize: 11,
+      fontWeight: 800,
+      letterSpacing: '-0.5px'
+    }
+  }, "iPAi")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      marginLeft: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      fontSize: 15,
+      color: '#1b6b5a'
+    }
+  }, "iPAi"), React.createElement(window.IPAiBadge || 'span', {
+    size: 'sm'
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#888',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, "Your AI care assistant \u2014 ask me anything"))), conversations.filter(c => !archivedIds.includes(c.id)).length > 0 ? conversations.filter(c => !archivedIds.includes(c.id)).sort((a, b) => {
     const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
     const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
     return bTime - aTime;
