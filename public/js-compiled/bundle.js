@@ -48230,6 +48230,36 @@ const AdminPanel = window.AdminPanel = () => {
   const [pausedLoading, setPausedLoading] = useState(false);
   const [reinstateLoading, setReinstateLoading] = useState(null);
 
+  // Admin freeze modal
+  const [freezeTarget, setFreezeTarget] = useState(null); // { userId, name }
+  const [freezeReason, setFreezeReason] = useState('');
+  const [freezeSending, setFreezeSending] = useState(false);
+  const handleFreezeCaregiver = async () => {
+    if (!freezeReason.trim() || !freezeTarget) return;
+    setFreezeSending(true);
+    try {
+      const res = await apiFetch(`/api/admin/caregivers/${freezeTarget.userId}/freeze`, {
+        method: 'POST',
+        body: JSON.stringify({
+          reason: freezeReason.trim()
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast(`${freezeTarget.name}'s account has been frozen`, 'success');
+        setFreezeTarget(null);
+        setFreezeReason('');
+        loadPausedCaregivers();
+        if (activeTab === 'people') loadUsers();
+      } else {
+        const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+        showToast((err === null || err === void 0 ? void 0 : err.error) || 'Failed to freeze account', 'error');
+      }
+    } catch {
+      showToast('Failed to freeze account', 'error');
+    }
+    setFreezeSending(false);
+  };
+
   // Admin service message modal
   const [adminMsgTarget, setAdminMsgTarget] = useState(null); // { userId, name }
   const [adminMsgText, setAdminMsgText] = useState('');
@@ -50219,6 +50249,42 @@ const AdminPanel = window.AdminPanel = () => {
         cursor: 'pointer'
       }
     }, "Manage"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setFreezeTarget({
+          userId: u.id,
+          name: `${u.first_name} ${u.last_name}`
+        });
+        setFreezeReason('');
+      },
+      style: {
+        padding: '4px 8px',
+        background: '#fff',
+        color: '#dc2626',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer'
+      },
+      title: "Freeze caregiver account"
+    }, '\u{1F6D1}'), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setAdminMsgTarget({
+          userId: u.id,
+          name: `${u.first_name} ${u.last_name}`
+        });
+        setAdminMsgText('');
+      },
+      style: {
+        padding: '4px 8px',
+        background: '#fff',
+        color: '#1b6b5a',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer'
+      },
+      title: "Message as InPlace Support"
+    }, '\u{1F4AC}'), /*#__PURE__*/React.createElement("button", {
       onClick: () => handleForcePasswordReset(u.id, u.email),
       disabled: resetPwLoading === u.id,
       style: {
@@ -54309,7 +54375,98 @@ const AdminPanel = window.AdminPanel = () => {
       textAlign: 'center',
       color: '#999'
     }
-  }, "No caregiver profile found for this user."))), adminMsgTarget && /*#__PURE__*/React.createElement("div", {
+  }, "No caregiver profile found for this user."))), freezeTarget && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.5)',
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20
+    },
+    onClick: e => {
+      if (e.target === e.currentTarget) setFreezeTarget(null);
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#fff',
+      borderRadius: 16,
+      padding: 24,
+      maxWidth: 480,
+      width: '100%',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: '#c62828',
+      marginBottom: 4
+    }
+  }, '\u{1F6D1}', " Freeze ", freezeTarget.name, "'s Account"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#888',
+      marginBottom: 16
+    }
+  }, "This will pause their account, hide them from job listings, and prevent them from accepting work. They'll see a \"Account Paused\" banner when they log in."), /*#__PURE__*/React.createElement("input", {
+    value: freezeReason,
+    onChange: e => setFreezeReason(e.target.value),
+    placeholder: "Reason for freezing (required)...",
+    style: {
+      width: '100%',
+      padding: 12,
+      border: '2px solid #e5e7eb',
+      borderRadius: 10,
+      fontSize: 14,
+      fontFamily: 'inherit',
+      boxSizing: 'border-box',
+      marginBottom: 8
+    },
+    autoFocus: true
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#999',
+      marginBottom: 14
+    }
+  }, "This reason will be visible to the caregiver on their dashboard."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10,
+      justifyContent: 'flex-end'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setFreezeTarget(null),
+    style: {
+      padding: '8px 20px',
+      background: '#f5f5f5',
+      color: '#666',
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleFreezeCaregiver,
+    disabled: freezeSending || !freezeReason.trim(),
+    style: {
+      padding: '8px 20px',
+      background: freezeSending || !freezeReason.trim() ? '#999' : '#dc2626',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, freezeSending ? 'Freezing...' : 'Freeze Account')))), adminMsgTarget && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
       top: 0,

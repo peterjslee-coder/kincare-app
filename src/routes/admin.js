@@ -2491,4 +2491,33 @@ router.post("/message/:userId", authenticate, checkAdmin, requireAdmin, async (r
   }
 });
 
+// ─── POST /api/admin/caregivers/:userId/freeze — Manually freeze a caregiver account ───
+router.post("/caregivers/:userId/freeze", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) return res.status(400).json({ error: "Reason is required" });
+
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.params.userId);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+    if (profile.account_paused) return res.status(400).json({ error: "Account is already paused" });
+
+    await db.prepare(`
+      UPDATE caregiver_profiles SET
+        is_available = 0, account_paused = 1,
+        account_paused_reason = ?,
+        account_paused_at = NOW()
+      WHERE user_id = ?
+    `).run(reason.trim(), req.params.userId);
+
+    await logAdminAction(req, "freeze_caregiver", "caregiver", req.params.userId, { reason: reason.trim() });
+
+    console.log(`[admin] Froze caregiver ${req.params.userId} by ${req.user.email}: ${reason.trim()}`);
+    res.json({ success: true, message: "Caregiver account frozen" });
+  } catch (err) {
+    console.error("Freeze caregiver error:", err);
+    res.status(500).json({ error: "Failed to freeze caregiver" });
+  }
+});
+
 module.exports = router;
