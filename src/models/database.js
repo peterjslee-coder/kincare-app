@@ -786,6 +786,20 @@ async function initializeDatabase() {
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS family_ai_notes TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_plan TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_plan_updated_at TIMESTAMPTZ`,
+    // v1.49.10 — Safety flags table
+    `CREATE TABLE IF NOT EXISTS safety_flags (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      flag_type TEXT NOT NULL,
+      user_message TEXT,
+      conversation_id TEXT,
+      ipai_response TEXT,
+      status TEXT DEFAULT 'pending',
+      reviewed_by TEXT REFERENCES users(id),
+      reviewed_at TIMESTAMPTZ,
+      admin_notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
     // v1.46.12 — Cost tracking
     `CREATE TABLE IF NOT EXISTS platform_costs (
       id TEXT PRIMARY KEY,

@@ -99,6 +99,45 @@ router.post("/chat", async (req, res) => {
     // Get iPAi user for message creation
     const ipaiUser = await getOrCreateIPAiUser(db);
 
+    // Pre-screen user's message for safety signals BEFORE sending to AI
+    const msgLC = message.toLowerCase();
+    const abuseSignals = ["hit me", "hits me", "won't let me leave", "locked me", "takes my money", "bruises", "threatens me", "threatened me", "don't feed", "scared of", "hurts me", "forced me", "steal", "stealing"];
+    const circumventSignals = ["phone number", "give me their number", "pay cash", "pay them directly", "outside the app", "don't need the app", "contact info", "personal email", "text them directly", "meet outside", "skip the app"];
+
+    const hasAbuseSignal = abuseSignals.some(s => msgLC.includes(s));
+    const hasCircumventSignal = circumventSignals.some(s => msgLC.includes(s));
+
+    if (hasAbuseSignal || hasCircumventSignal) {
+      // Log to safety_flags table immediately — before AI even responds
+      try {
+        const user = await db.prepare("SELECT first_name, last_name, email FROM users WHERE id = ?").get(userId);
+        const flagType = hasAbuseSignal ? "abuse_signal" : "circumvention_signal";
+        await db.prepare(`
+          INSERT INTO safety_flags (id, user_id, flag_type, user_message, conversation_id, status, created_at)
+          VALUES (?, ?, ?, ?, ?, 'pending', NOW())
+        `).run(uuid(), userId, flagType, message.substring(0, 1000), conversationId, );
+
+        // Alert admins immediately
+        const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+        const flagTitle = hasAbuseSignal ? "🚨 SAFETY: Possible abuse reported" : "⚠️ Off-platform attempt detected";
+        const flagMsg = `${user?.first_name} ${user?.last_name} (${user?.email}): "${message.substring(0, 200)}"`;
+        for (const admin of admins) {
+          await db.prepare(
+            "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+          ).run(uuid(), admin.id, "ipai_safety_flag", flagTitle, flagMsg, JSON.stringify({ flagType, userId, conversationId }));
+        }
+        try {
+          const { sendPushToUser } = require("../utils/push");
+          if (sendPushToUser) {
+            for (const admin of admins) { await sendPushToUser(db, admin.id, flagTitle, flagMsg.substring(0, 100)); }
+          }
+        } catch {}
+        console.warn(`[iPAi SAFETY] Pre-screen ${flagType} for user ${userId}: "${message.substring(0, 100)}"`);
+      } catch (flagErr) {
+        console.error("[iPAi] Pre-screen flag error:", flagErr.message);
+      }
+    }
+
     // Store user's message in conversation
     const userMessageId = uuid();
     await db

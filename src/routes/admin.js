@@ -64,22 +64,19 @@ router.use(authenticate, checkAdmin, requireAdmin);
 router.get("/alerts", async (req, res) => {
   try {
     const db = await getDb();
-    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback] = await Promise.all([
-      // Users awaiting account approval — only those who signed up AFTER approval system existed
-      // and haven't been approved yet (excludes legacy accounts)
+    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags] = await Promise.all([
       db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1 AND created_at > '2026-02-20'`).get(),
-      // Paused caregiver accounts needing review
       db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1`).get(),
-      // Consent/authorization requests pending admin review
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
-      // New feedback from last 30 days not yet reviewed
       db.prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'new' AND created_at > NOW() - INTERVAL '30 days'`).get(),
+      db.prepare(`SELECT COUNT(*) as count FROM safety_flags WHERE status = 'pending'`).get().catch(() => ({ count: 0 })),
     ]);
 
     const total = (parseInt(pendingUsers.count) || 0) +
       (parseInt(pausedCaregivers.count) || 0) +
       (parseInt(pendingConsent.count) || 0) +
-      (parseInt(newFeedback.count) || 0);
+      (parseInt(newFeedback.count) || 0) +
+      (parseInt(safetyFlags.count) || 0);
 
     res.json({
       total,
@@ -87,6 +84,7 @@ router.get("/alerts", async (req, res) => {
       pausedCaregivers: parseInt(pausedCaregivers.count) || 0,
       pendingConsent: parseInt(pendingConsent.count) || 0,
       newFeedback: parseInt(newFeedback.count) || 0,
+      safetyFlags: parseInt(safetyFlags.count) || 0,
     });
   } catch (err) {
     console.error("Admin alerts error:", err);
@@ -2517,6 +2515,44 @@ router.post("/caregivers/:userId/freeze", authenticate, checkAdmin, requireAdmin
   } catch (err) {
     console.error("Freeze caregiver error:", err);
     res.status(500).json({ error: "Failed to freeze caregiver" });
+  }
+});
+
+// ─── GET /api/admin/safety-flags — List all safety flags for review ───
+router.get("/safety-flags", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const flags = await db.prepare(`
+      SELECT sf.*, u.first_name, u.last_name, u.email,
+        ru.first_name AS reviewer_first, ru.last_name AS reviewer_last
+      FROM safety_flags sf
+      JOIN users u ON sf.user_id = u.id
+      LEFT JOIN users ru ON sf.reviewed_by = ru.id
+      ORDER BY sf.created_at DESC
+      LIMIT 50
+    `).all();
+    res.json({ flags });
+  } catch (err) {
+    console.error("Safety flags error:", err);
+    res.status(500).json({ error: "Failed to load safety flags" });
+  }
+});
+
+// ─── PUT /api/admin/safety-flags/:id — Review a safety flag ───
+router.put("/safety-flags/:id", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { status, admin_notes } = req.body;
+    if (!status) return res.status(400).json({ error: "Status is required" });
+
+    await db.prepare(`
+      UPDATE safety_flags SET status = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW()
+      WHERE id = ?
+    `).run(status, admin_notes || null, req.user.id, req.params.id);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update safety flag" });
   }
 });
 
