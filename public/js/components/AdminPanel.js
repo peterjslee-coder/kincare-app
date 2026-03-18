@@ -26,6 +26,7 @@ const AdminPanel = window.AdminPanel = () => {
   const [careTeamInvites, setCareTeamInvites] = useState([]);
   // Feedback tab state
   const [feedbackItems, setFeedbackItems] = useState([]);
+  const [newFeedbackCount, setNewFeedbackCount] = useState(0);
   const [feedbackTotal, setFeedbackTotal] = useState(0);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackFilter, setFeedbackFilter] = useState({ category: '', status: '' });
@@ -279,6 +280,10 @@ const AdminPanel = window.AdminPanel = () => {
     loadStats();
     fetchPendingApprovals();
     loadPausedCaregivers();
+    // Fetch new feedback count for tab badge
+    apiFetch('/api/admin/alerts').then(r => r?.ok ? r.json() : null).then(d => {
+      if (d) setNewFeedbackCount(d.newFeedback || 0);
+    }).catch(() => {});
     // Fetch current user for settings tab
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
   }, []);
@@ -873,7 +878,7 @@ const AdminPanel = window.AdminPanel = () => {
       { id: 'blocked', label: 'Blocked', icon: '🚫' },
     ]},
     { label: 'Content & Config', tabs: [
-      { id: 'feedback', label: 'Feedback', icon: '💬' },
+      { id: 'feedback', label: 'Feedback', icon: '💬', badge: newFeedbackCount || null },
       { id: 'help', label: 'Help/FAQ', icon: '❓' },
       { id: 'financials', label: 'Financials', icon: '💰' },
       { id: 'costs', label: 'Costs', icon: '💵' },
