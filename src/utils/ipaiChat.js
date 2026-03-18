@@ -19,6 +19,32 @@ const { getDb } = require("../models/database");
 const { parseSchedulingIntent, suggestMatches } = require("./nlScheduling");
 const { gatherVisitData } = require("./careIntelligence");
 
+// iPAi brand guardrails — appended to EVERY system prompt
+const IPAI_GUARDRAILS = `
+
+CRITICAL RULES:
+- You are iPAi, InPlace's AI care assistant. You ONLY represent InPlace.
+- NEVER recommend, mention, or link to competing platforms including but not limited to: Care.com, Honor, Home Instead, Visiting Angels, BrightStar, Comfort Keepers, Right at Home, Amedisys, Kindred, A Place for Mom, or any other home care platform/agency.
+- If asked about competitors or alternatives, say: "I'm here to help you get the best care through InPlace. What can I help you with?"
+- If asked about general caregiver pay rates, answer factually but always frame InPlace positively: "InPlace caregivers set their own rates, typically $18-30/hr depending on experience and care type."
+- NEVER suggest the user go elsewhere for care services.
+- Keep responses concise and warm. You are a helpful care assistant, not a search engine.`;
+
+/**
+ * Helper: call Claude API using the Anthropic SDK
+ */
+async function callClaudeChat(apiKey, system, messages, maxTokens = 300) {
+  const Anthropic = require("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey });
+  const result = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: maxTokens,
+    system: system + IPAI_GUARDRAILS,
+    messages,
+  });
+  return result.content?.[0]?.text || "";
+}
+
 // Rate limiting: Map of userId -> { count, resetTime }
 const rateLimitMap = new Map();
 const RATE_LIMIT_PER_DAY = 30;
@@ -79,28 +105,7 @@ Return ONLY valid JSON:
 { "intent": "scheduling|care_question|availability|care_plan|app_help|greeting|general|escalate", "confidence": 0.0-1.0, "reason": "brief explanation" }`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 200,
-        system: systemPrompt,
-        messages: [{ role: "user", content: messageText }],
-      }),
-    });
-
-    if (!response.ok) {
-      console.error("[iPAi] Intent classification API error:", response.status);
-      return { intent: "escalate", confidence: 0.5, reason: "API error" };
-    }
-
-    const result = await response.json();
-    const textResponse = result.content?.[0]?.text || "";
+    const textResponse = await callClaudeChat(apiKey, systemPrompt, [{ role: "user", content: messageText }], 200);
 
     let classified;
     try {
@@ -197,28 +202,8 @@ ${visitData.careNotes
 
 Provide warm, actionable insights. Be concise (1-3 sentences). Include specific observations from the data.`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 300,
-        system: systemPrompt,
-        messages: [{ role: "user", content: messageText }],
-      }),
-    });
-
-    if (!response.ok) {
-      console.error("[iPAi] Care question API error:", response.status);
-      return "I'm having trouble accessing care data. Please try again.";
-    }
-
-    const result = await response.json();
-    return result.content?.[0]?.text || "I couldn't generate a response.";
+    const text = await callClaudeChat(apiKey, systemPrompt, [{ role: "user", content: messageText }], 300);
+    return text || "I couldn't generate a response about care data.";
   } catch (err) {
     console.error("[iPAi] Care question error:", err.message);
     return "I encountered an error while looking up care information.";
@@ -296,27 +281,8 @@ async function handleAppHelp(messageText, userId, userContext) {
 HELP ARTICLES:
 ${helpContext}`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 300,
-        system: systemPrompt,
-        messages: [{ role: "user", content: messageText }],
-      }),
-    });
-
-    if (!response.ok) {
-      return "I'm having trouble accessing help information. Contact support at support@yourinplace.com.";
-    }
-
-    const result = await response.json();
-    return result.content?.[0]?.text || "I couldn't generate a response.";
+    const text = await callClaudeChat(apiKey, systemPrompt, [{ role: "user", content: messageText }], 300);
+    return text || "I couldn't find an answer. Contact support at support@yourinplace.com.";
   } catch (err) {
     console.error("[iPAi] App help error:", err.message);
     return "I had trouble accessing help articles. Please contact support@yourinplace.com.";
@@ -345,27 +311,8 @@ async function handleGeneral(messageText) {
   try {
     const systemPrompt = `You are iPAi, InPlace's AI care assistant. You're knowledgeable about caregiving, aging, health, and family dynamics. Answer general questions warmly and helpfully. Keep responses concise (1-3 sentences for simple questions, up to a paragraph for complex ones).`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 300,
-        system: systemPrompt,
-        messages: [{ role: "user", content: messageText }],
-      }),
-    });
-
-    if (!response.ok) {
-      return "I'm having trouble processing that. Can you rephrase your question?";
-    }
-
-    const result = await response.json();
-    return result.content?.[0]?.text || "I couldn't generate a response.";
+    const text = await callClaudeChat(apiKey, systemPrompt, [{ role: "user", content: messageText }], 300);
+    return text || "I couldn't generate a response.";
   } catch (err) {
     console.error("[iPAi] General question error:", err.message);
     return "I encountered an error. Please try again.";

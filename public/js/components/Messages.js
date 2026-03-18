@@ -1370,8 +1370,30 @@ const Messages = window.Messages = () => {
 
         <div className="msg-messages-area">
           {messages.length === 0 ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999', fontSize: '14px' }}>
-              {isGroup ? 'No messages yet in this group' : 'Send a message to start the conversation'}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 24 }}>
+              {(activeConvId === '__ipai__' || activeConv?.name === 'iPAi' || activeConv?.otherName === 'iPAi Assistant') ? (
+                <div style={{ textAlign: 'center', maxWidth: 320 }}>
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                    <span style={{ color: '#fff', fontSize: 18, fontWeight: 800 }}>iPAi</span>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#333', marginBottom: 6 }}>Hi! I'm iPAi</div>
+                  <div style={{ fontSize: 13, color: '#666', lineHeight: 1.5, marginBottom: 16 }}>
+                    Your care assistant. I know your loved ones, their caregivers, and their visit history. Ask me anything.
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {['When is Cary available this week?', 'How is Betty doing?', 'Find someone for Thursday morning'].map(q => (
+                      <button key={q} onClick={() => { setInputText(q); }} style={{
+                        padding: '8px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8,
+                        fontSize: 13, color: '#1b6b5a', cursor: 'pointer', textAlign: 'left',
+                      }}>{q}</button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ color: '#999', fontSize: 14 }}>
+                  {isGroup ? 'No messages yet in this group' : 'Send a message to start the conversation'}
+                </div>
+              )}
             </div>
           ) : (
             messages.map((m, i) => {

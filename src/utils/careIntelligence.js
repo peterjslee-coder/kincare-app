@@ -41,40 +41,47 @@ async function gatherVisitData(careRecipientId) {
 
   if (!recipient) return null;
 
-  // Get all visit logs with caregiver info
-  const visits = await db.prepare(`
-    SELECT vl.*, cs.scheduled_date, cs.scheduled_time, cs.service_type,
-      cs.duration_hours, cs.caregiver_id,
-      u.first_name AS caregiver_first, u.last_name AS caregiver_last
-    FROM visit_logs vl
-    JOIN care_sessions cs ON vl.session_id = cs.id
-    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-    JOIN users u ON cp.user_id = u.id
-    WHERE cs.care_recipient_id = ?
-    ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
-  `).all(careRecipientId);
+  // Each query wrapped in try/catch — partial data is better than crashing
+  let visits = [];
+  try {
+    visits = await db.prepare(`
+      SELECT vl.*, cs.scheduled_date, cs.scheduled_time, cs.service_type,
+        cs.duration_hours, cs.caregiver_id,
+        u.first_name AS caregiver_first, u.last_name AS caregiver_last
+      FROM visit_logs vl
+      JOIN care_sessions cs ON vl.session_id = cs.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ?
+      ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
+    `).all(careRecipientId);
+  } catch (e) { console.error("[iPAi] visits query failed:", e.message); }
 
-  // Get care notes from recipient_notes
-  const careNotes = await db.prepare(`
-    SELECT rn.*, u.first_name AS author_first, u.last_name AS author_last
-    FROM recipient_notes rn
-    LEFT JOIN users u ON rn.author_id = u.id
-    WHERE rn.care_recipient_id = ?
-    ORDER BY rn.created_at DESC
-    LIMIT 30
-  `).all(careRecipientId);
+  let careNotes = [];
+  try {
+    careNotes = await db.prepare(`
+      SELECT rn.*, u.first_name AS author_first, u.last_name AS author_last
+      FROM recipient_notes rn
+      LEFT JOIN users u ON rn.author_id = u.id
+      WHERE rn.care_recipient_id = ?
+      ORDER BY rn.created_at DESC
+      LIMIT 30
+    `).all(careRecipientId);
+  } catch (e) { console.error("[iPAi] notes query failed:", e.message); }
 
-  // Get reviews related to sessions with this recipient
-  const reviews = await db.prepare(`
-    SELECT r.rating, r.comment, r.created_at,
-      u.first_name AS reviewer_first
-    FROM reviews r
-    JOIN care_sessions cs ON r.session_id = cs.id
-    JOIN users u ON r.reviewer_id = u.id
-    WHERE cs.care_recipient_id = ?
-    ORDER BY r.created_at DESC
-    LIMIT 20
-  `).all(careRecipientId);
+  let reviews = [];
+  try {
+    reviews = await db.prepare(`
+      SELECT r.rating, r.comment, r.created_at,
+        u.first_name AS reviewer_first
+      FROM reviews r
+      JOIN care_sessions cs ON r.session_id = cs.id
+      LEFT JOIN users u ON r.reviewer_id = u.id
+      WHERE cs.care_recipient_id = ?
+      ORDER BY r.created_at DESC
+      LIMIT 20
+    `).all(careRecipientId);
+  } catch (e) { console.error("[iPAi] reviews query failed:", e.message); }
 
   return { recipient, visits, careNotes, reviews };
 }

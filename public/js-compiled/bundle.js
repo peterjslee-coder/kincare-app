@@ -20602,10 +20602,71 @@ const Messages = window.Messages = () => {
         alignItems: 'center',
         justifyContent: 'center',
         height: '100%',
-        color: '#999',
-        fontSize: '14px'
+        padding: 24
       }
-    }, isGroup ? 'No messages yet in this group' : 'Send a message to start the conversation') : messages.map((m, i) => {
+    }, activeConvId === '__ipai__' || (activeConv === null || activeConv === void 0 ? void 0 : activeConv.name) === 'iPAi' || (activeConv === null || activeConv === void 0 ? void 0 : activeConv.otherName) === 'iPAi Assistant' ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center',
+        maxWidth: 320
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 64,
+        height: 64,
+        borderRadius: '50%',
+        background: '#1b6b5a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        margin: '0 auto 12px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 800
+      }
+    }, "iPAi")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 700,
+        color: '#333',
+        marginBottom: 6
+      }
+    }, "Hi! I'm iPAi"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#666',
+        lineHeight: 1.5,
+        marginBottom: 16
+      }
+    }, "Your care assistant. I know your loved ones, their caregivers, and their visit history. Ask me anything."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6
+      }
+    }, ['When is Cary available this week?', 'How is Betty doing?', 'Find someone for Thursday morning'].map(q => /*#__PURE__*/React.createElement("button", {
+      key: q,
+      onClick: () => {
+        setInputText(q);
+      },
+      style: {
+        padding: '8px 14px',
+        background: '#f0fdf4',
+        border: '1px solid #bbf7d0',
+        borderRadius: 8,
+        fontSize: 13,
+        color: '#1b6b5a',
+        cursor: 'pointer',
+        textAlign: 'left'
+      }
+    }, q)))) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: '#999',
+        fontSize: 14
+      }
+    }, isGroup ? 'No messages yet in this group' : 'Send a message to start the conversation')) : messages.map((m, i) => {
       const isSent = m.type === 'sent';
       const showSenderName = isGroup && !isSent;
       const prevMsg = i > 0 ? messages[i - 1] : null;
