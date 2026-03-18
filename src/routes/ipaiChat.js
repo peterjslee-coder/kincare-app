@@ -121,6 +121,46 @@ router.post("/chat", async (req, res) => {
     // Update conversation's updated_at timestamp
     await db.prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?").run(conversationId);
 
+    // Check for safety flags in the response
+    const responseLC = (chatResult.response || "").toLowerCase();
+    const hasAbuseConcern = responseLC.includes("adult protective services") || responseLC.includes("flagged this for our team") || responseLC.includes("everyone is safe");
+    const hasCircumventionConcern = responseLC.includes("off-platform") || responseLC.includes("protections only apply");
+
+    if (hasAbuseConcern || hasCircumventionConcern) {
+      // Create an admin activity alert
+      try {
+        const user = await db.prepare("SELECT first_name, last_name, email FROM users WHERE id = ?").get(userId);
+        const flagType = hasAbuseConcern ? "ABUSE/SAFETY CONCERN" : "OFF-PLATFORM ATTEMPT";
+        const alertTitle = `🚨 iPAi ${flagType} — ${user?.first_name} ${user?.last_name}`;
+        const alertMsg = `iPAi detected a ${flagType.toLowerCase()} in a chat message from ${user?.first_name} ${user?.last_name} (${user?.email}). User said: "${message.substring(0, 200)}". Review the conversation immediately.`;
+
+        // Find admin users and create activity feed entries for them
+        const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+        for (const admin of admins) {
+          await db.prepare(
+            "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+          ).run(uuid(), admin.id, "ipai_safety_flag", alertTitle, alertMsg, JSON.stringify({
+            flagType: hasAbuseConcern ? "abuse_concern" : "circumvention",
+            userId, conversationId, userMessage: message.substring(0, 500),
+          }));
+        }
+
+        // Send push notification to admin
+        try {
+          const { sendPushToUser } = require("../utils/push");
+          if (sendPushToUser) {
+            for (const admin of admins) {
+              await sendPushToUser(db, admin.id, alertTitle, alertMsg.substring(0, 100));
+            }
+          }
+        } catch {}
+
+        console.warn(`[iPAi SAFETY] ${flagType} flagged for user ${userId}: "${message.substring(0, 100)}"`);
+      } catch (alertErr) {
+        console.error("[iPAi] Failed to create safety alert:", alertErr.message);
+      }
+    }
+
     // Return response
     return res.json({
       response: chatResult.response,
@@ -128,6 +168,7 @@ router.post("/chat", async (req, res) => {
       actions: chatResult.actions,
       conversationId,
       messageId: ipaiMessageId,
+      flags: hasAbuseConcern ? ["abuse_concern"] : hasCircumventionConcern ? ["circumvention"] : [],
     });
   } catch (err) {
     console.error("[iPAi Route] Error:", err.message);
