@@ -1063,7 +1063,57 @@ async function seed({ force = false, demoOnly = false } = {}) {
     `).run(id, senderId, recipientId, conversationId, content, timeOffset);
   }
 
-  console.log("✅ Messages created (48 across 5 conversations)");
+  // ─── iPAi Demo Conversation ───
+  // Create iPAi system user for demo
+  const ipaiUserId = uuid();
+  await db.prepare(`
+    INSERT INTO users (id, email, first_name, last_name, role, is_demo, is_active, password_hash)
+    VALUES (?, 'ipai@yourinplace.com', 'iPAi', 'Assistant', 'system', 0, 1, 'nologin')
+  `).run(ipaiUserId);
+
+  // Paul ↔ iPAi conversation
+  const convPaulIPAi = uuid();
+  await db.prepare("INSERT INTO conversations (id, type, name, created_by) VALUES (?, 'direct', 'iPAi', ?)").run(convPaulIPAi, peteId);
+  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convPaulIPAi, peteId);
+  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convPaulIPAi, ipaiUserId);
+
+  const ipaiMsgs = [
+    [uuid(), peteId, ipaiUserId, convPaulIPAi, "Hey iPAi, when is Maria available this week?", null, "-3 days"],
+    [uuid(), ipaiUserId, peteId, convPaulIPAi, "Maria has availability on Wednesday 9am-3pm and Friday 10am-2pm this week. She's been with Barbara 14 times and has a 4.8 rating. Would you like me to schedule a visit?", "iPAi", "-3 days"],
+    [uuid(), peteId, ipaiUserId, convPaulIPAi, "Barbara seemed really confused yesterday. Should I be worried?", null, "-2 days"],
+    [uuid(), ipaiUserId, peteId, convPaulIPAi, "Based on Barbara's recent visits, I've noticed her confusion tends to increase in the afternoons — this is consistent with sundowning, which is common in early-stage dementia. Her morning visits show much better mood scores (4.2/5 vs 3.1/5 in the afternoon). I'd recommend scheduling care visits before noon when possible. Maria's notes from last Tuesday also mentioned Barbara was asking about her garden — engaging her with familiar activities she loves can help ground her during confused moments.", "iPAi", "-2 days"],
+    [uuid(), peteId, ipaiUserId, convPaulIPAi, "That's really helpful. Can you find someone for Thursday morning who's good with dementia?", null, "-1 day"],
+    [uuid(), ipaiUserId, peteId, convPaulIPAi, "I found 2 great matches for Thursday morning:\n\n1. Maria Santos — 94% match. 14 visits with Barbara, dementia experience, available 9am-1pm. Barbara's mood consistently improves during her sessions.\n\n2. James Wilson — 82% match. Certified dementia care, 3.2 miles away, available 8am-12pm. New to Barbara but highly rated by other families.\n\nWould you like me to book Maria for Thursday 9am-12pm?", "iPAi", "-1 day"],
+    [uuid(), peteId, ipaiUserId, convPaulIPAi, "Yes, book Maria for Thursday morning please.", null, "-1 day"],
+    [uuid(), ipaiUserId, peteId, convPaulIPAi, "Done! I've requested Maria for Thursday 9am-12pm, companionship care for Barbara. Maria will confirm shortly. I've also noted in the session instructions that Barbara does best with morning visits and responds well to garden conversations. Is there anything else you'd like me to help with?", "iPAi", "-1 day"],
+  ];
+
+  for (const [id, senderId, recipientId, conversationId, content, senderLabel, timeOffset] of ipaiMsgs) {
+    await db.prepare(`
+      INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, sender_label, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, NOW() + ?::interval)
+    `).run(id, senderId, recipientId, conversationId, content, senderLabel, timeOffset);
+  }
+
+  // Maria ↔ iPAi conversation (caregiver perspective)
+  const convMariaIPAi = uuid();
+  await db.prepare("INSERT INTO conversations (id, type, name, created_by) VALUES (?, 'direct', 'iPAi', ?)").run(convMariaIPAi, mariaUserId);
+  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convMariaIPAi, mariaUserId);
+  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convMariaIPAi, ipaiUserId);
+
+  const ipaiMariaMsgs = [
+    [uuid(), mariaUserId, ipaiUserId, convMariaIPAi, "Any tips for my visit with Barbara tomorrow?", null, "-1 day"],
+    [uuid(), ipaiUserId, mariaUserId, convMariaIPAi, "Great question! Based on your last 3 visits with Barbara:\n\nShe's been in good spirits during your morning sessions. Her family mentioned she loves talking about her garden — try bringing that up during meal prep. Also, Paul noted she's been a bit confused about her medication schedule recently, so the whiteboard reminder by her chair might need updating.\n\nOne thing to watch for: her appetite has been slightly lower on your last two visits. If she skips lunch again, mention it in your checkout notes so her family can follow up with Dr. Patel.", "iPAi", "-1 day"],
+  ];
+
+  for (const [id, senderId, recipientId, conversationId, content, senderLabel, timeOffset] of ipaiMariaMsgs) {
+    await db.prepare(`
+      INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, sender_label, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, NOW() + ?::interval)
+    `).run(id, senderId, recipientId, conversationId, content, senderLabel, timeOffset);
+  }
+
+  console.log("✅ Messages created (48 across 5 conversations + iPAi demo conversations)");
 
   // ─── Recipient Notes ───
   const notes = [
