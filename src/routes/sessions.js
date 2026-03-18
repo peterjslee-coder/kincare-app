@@ -1410,6 +1410,29 @@ router.post("/:id/check-out", async (req, res) => {
       }).catch(err => console.warn("[iPAi] Session summary generation failed (non-blocking):", err.message));
     } catch {}
 
+    // ─── iPAi: Generate caregiver coaching tips (non-blocking) ───
+    try {
+      const { generateCaregiverCoaching } = require("../utils/careIntelligence");
+      generateCaregiverCoaching(req.params.id).then(async (coaching) => {
+        if (coaching) {
+          try {
+            await db.prepare("UPDATE visit_logs SET ai_coaching = ? WHERE session_id = ?").run(
+              JSON.stringify(coaching), req.params.id
+            );
+            if (emitToUser) {
+              emitToUser(req.user.id, "ipai_coaching", {
+                sessionId: req.params.id,
+                recipientName: session.recipient_first_name,
+                coaching,
+              });
+            }
+          } catch (storeErr) {
+            console.warn("[iPAi] Failed to store coaching:", storeErr.message);
+          }
+        }
+      }).catch(err => console.warn("[iPAi] Coaching generation failed (non-blocking):", err.message));
+    } catch {}
+
     res.json({
       session: { id: req.params.id, status: "completed", actualDurationHours: actualDurationHours, adjustedCost: adjustedCost },
       visitLog: visitLog ? { id: visitLog.id } : null,

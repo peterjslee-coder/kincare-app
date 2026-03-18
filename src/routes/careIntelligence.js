@@ -60,4 +60,30 @@ router.post("/session-summary/:sessionId", authenticate, async (req, res) => {
   }
 });
 
+// ─── GET /api/care-intelligence/coaching/:sessionId — Get coaching tips for a completed session ───
+router.get("/coaching/:sessionId", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    // Check if coaching already exists
+    const vl = await db.prepare("SELECT ai_coaching FROM visit_logs WHERE session_id = ?").get(req.params.sessionId);
+    if (vl?.ai_coaching) {
+      try { return res.json(JSON.parse(vl.ai_coaching)); } catch {}
+    }
+    // Generate on demand
+    const { generateCaregiverCoaching } = require("../utils/careIntelligence");
+    const coaching = await generateCaregiverCoaching(req.params.sessionId);
+    if (!coaching) return res.status(404).json({ error: "Could not generate coaching — missing visit data" });
+    // Store for next time
+    try {
+      await db.prepare("UPDATE visit_logs SET ai_coaching = ? WHERE session_id = ?").run(
+        JSON.stringify(coaching), req.params.sessionId
+      );
+    } catch {}
+    res.json(coaching);
+  } catch (err) {
+    console.error("[iPAi] Coaching route error:", err);
+    res.status(500).json({ error: "Failed to generate coaching" });
+  }
+});
+
 module.exports = router;

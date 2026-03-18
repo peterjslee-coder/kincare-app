@@ -9165,18 +9165,21 @@ const CareProfile = window.CareProfile = ({
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header",
     style: {
-      margin: 0
+      margin: 0,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
     }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "card-icon"
-  }, '\u2728'), aiSummary ? `${profile.first_name}'s Care Summary` : 'AI Care Summary', aiSummary && /*#__PURE__*/React.createElement("span", {
+  }, React.createElement(window.IPAiBadge || 'span', {
+    size: 'md'
+  }), aiSummary ? `${profile.first_name}'s Care Summary` : 'Care Summary', aiSummary && /*#__PURE__*/React.createElement("span", {
     style: {
       marginLeft: 8,
       fontSize: 11,
       fontWeight: 400,
       color: '#888'
     }
-  }, "by inPlace's AI tool")), generatingAI ? /*#__PURE__*/React.createElement("div", {
+  })), generatingAI ? /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '16px 0'
     }
@@ -9195,7 +9198,7 @@ const CareProfile = window.CareProfile = ({
       animation: 'spin 1s linear infinite',
       fontSize: 18
     }
-  }, '\u2B50'), "inPlace's AI tool is generating ", profile.first_name, "'s care summary..."), /*#__PURE__*/React.createElement("style", null, '{@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }}')) : aiSummary ? /*#__PURE__*/React.createElement("div", null, editingSummary ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("textarea", {
+  }, '\u2B50'), "iPAi is generating ", profile.first_name, "'s care summary..."), /*#__PURE__*/React.createElement("style", null, '{@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }}')) : aiSummary ? /*#__PURE__*/React.createElement("div", null, editingSummary ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("textarea", {
     value: editedSummary,
     onChange: e => setEditedSummary(e.target.value),
     style: {
@@ -9350,7 +9353,7 @@ const CareProfile = window.CareProfile = ({
       margin: '0 0 12px',
       lineHeight: 1.5
     }
-  }, "Rate care preferences below, then generate a summary that caregivers can review before visiting ", profile.first_name, ". Powered by inPlace's AI tool."), /*#__PURE__*/React.createElement("button", {
+  }, "Rate care preferences below, then generate a summary that caregivers can review before visiting ", profile.first_name, ". Powered by iPAi."), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setPrefsExpanded(true);
     },

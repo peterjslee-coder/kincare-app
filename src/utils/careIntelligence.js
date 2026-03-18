@@ -366,9 +366,131 @@ Return ONLY the JSON, no markdown.`;
   }
 }
 
+/**
+ * Generate private caregiver coaching tips after a session
+ * Only the caregiver sees these — specific to THIS care recipient
+ */
+async function generateCaregiverCoaching(sessionId) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  const db = await getDb();
+
+  const session = await db.prepare(`
+    SELECT cs.*, cr.first_name AS recipient_name, cr.health_conditions,
+      cr.medications, cr.age, cr.mobility,
+      u.first_name AS caregiver_name,
+      vl.arrival_mood, vl.departure_mood, vl.condition_tags,
+      vl.care_feedback, vl.service_feedback
+    FROM care_sessions cs
+    JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    JOIN users u ON cp.user_id = u.id
+    LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+    WHERE cs.id = ?
+  `).get(sessionId);
+
+  if (!session || !session.care_feedback) return null;
+
+  // Get care notes from family for context
+  const familyNotes = await db.prepare(`
+    SELECT content FROM recipient_notes
+    WHERE care_recipient_id = ? AND note_type != 'visit_summary'
+    ORDER BY created_at DESC LIMIT 5
+  `).all(session.care_recipient_id);
+
+  // Get past visit data for trend context
+  const pastVisits = await db.prepare(`
+    SELECT vl.departure_mood, vl.condition_tags, vl.care_feedback,
+      cs.scheduled_date
+    FROM visit_logs vl
+    JOIN care_sessions cs ON vl.session_id = cs.id
+    WHERE cs.care_recipient_id = ? AND cs.caregiver_id = ?
+      AND cs.id != ?
+    ORDER BY cs.scheduled_date DESC LIMIT 5
+  `).all(session.care_recipient_id, session.caregiver_id, sessionId);
+
+  const conditions = (() => { try { return JSON.parse(session.health_conditions || "[]"); } catch { return []; } })();
+  const tags = (() => { try { return JSON.parse(session.condition_tags || "[]"); } catch { return []; } })();
+  const meds = (() => { try { return JSON.parse(session.medications || "[]"); } catch { return []; } })();
+
+  const pastContext = pastVisits.map(v => {
+    const t = (() => { try { return JSON.parse(v.condition_tags || "[]"); } catch { return []; } })();
+    return `${v.scheduled_date}: mood=${v.departure_mood || "?"}, tags=[${t.join(",")}], notes="${(v.care_feedback || "").substring(0, 100)}"`;
+  }).join("\n");
+
+  const familyContext = familyNotes.map(n => `- "${(n.content || "").substring(0, 150)}"`).join("\n");
+
+  const prompt = `You are iPAi, a private coaching assistant for caregivers on InPlace. Generate brief, actionable coaching tips for ${session.caregiver_name} about caring for ${session.recipient_name}.
+
+CARE RECIPIENT:
+- Name: ${session.recipient_name}, Age: ${session.age || "unknown"}
+- Conditions: ${conditions.join(", ") || "none listed"}
+- Medications: ${meds.join(", ") || "none listed"}
+- Mobility: ${session.mobility || "unknown"}
+
+TODAY'S SESSION:
+- Arrival mood: ${session.arrival_mood || "not recorded"}
+- Departure mood: ${session.departure_mood || "not recorded"}
+- Condition tags: ${tags.join(", ") || "none"}
+- ${session.caregiver_name}'s notes: "${session.care_feedback || ""}"
+
+PAST SESSIONS WITH ${session.recipient_name}:
+${pastContext || "This was the first session"}
+
+FAMILY NOTES:
+${familyContext || "No family notes"}
+
+Generate 2-3 brief, specific coaching tips for ${session.caregiver_name}. These should be:
+- Specific to ${session.recipient_name} (not generic care advice)
+- Based on what happened today or patterns from past visits
+- Practical and actionable (something to try next visit)
+- Warm and supportive in tone (this is coaching, not criticism)
+
+If you notice something the family mentioned that the caregiver should know about, include it.
+
+Return JSON:
+{
+  "greeting": "Brief warm opening (e.g. 'Great session today!')",
+  "tips": [
+    { "tip": "The actionable advice", "context": "Why this matters for ${session.recipient_name}" }
+  ],
+  "nextVisitNote": "One thing to try or watch for next time"
+}
+
+Return ONLY JSON, no markdown.`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 500,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const result = await response.json();
+    const text = result.content?.[0]?.text || "";
+    const cleaned = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
+    return JSON.parse(cleaned);
+  } catch (err) {
+    console.error("[iPAi] Caregiver coaching error:", err);
+    return null;
+  }
+}
+
 module.exports = {
   gatherVisitData,
   analyzePatterns,
   generateCareIntelligence,
   generateSessionSummary,
+  generateCaregiverCoaching,
 };

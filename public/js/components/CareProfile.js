@@ -460,12 +460,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
       {/* ─── 2. AI Care Summary (most useful info first) ─── */}
       <div className="card" style={{ border: aiSummary ? '2px solid #1b6b5a' : '1px solid #e0e0e0', background: aiSummary ? '#f8fffe' : '#fff' }}>
-        <div className="card-header" style={{ margin: 0 }}>
-          <span className="card-icon">{'\u2728'}</span>
-          {aiSummary ? `${profile.first_name}'s Care Summary` : 'AI Care Summary'}
+        <div className="card-header" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {React.createElement(window.IPAiBadge || 'span', { size: 'md' })}
+          {aiSummary ? `${profile.first_name}'s Care Summary` : 'Care Summary'}
           {aiSummary && (
             <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#888' }}>
-              by inPlace's AI tool
+
             </span>
           )}
         </div>
@@ -473,7 +473,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           <div style={{ padding: '16px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1b6b5a', fontSize: 14, fontWeight: 600 }}>
               <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: 18 }}>{'\u2B50'}</span>
-              inPlace's AI tool is generating {profile.first_name}'s care summary...
+              iPAi is generating {profile.first_name}'s care summary...
             </div>
             <style>{'{@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }}'}</style>
           </div>
@@ -534,7 +534,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         ) : (
           <div style={{ padding: '12px 0' }}>
             <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>
-              Rate care preferences below, then generate a summary that caregivers can review before visiting {profile.first_name}. Powered by inPlace's AI tool.
+              Rate care preferences below, then generate a summary that caregivers can review before visiting {profile.first_name}. Powered by iPAi.
             </p>
             <button onClick={() => { setPrefsExpanded(true); }} style={{
               padding: '8px 16px', borderRadius: 8, border: 'none',

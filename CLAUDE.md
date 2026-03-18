@@ -194,32 +194,56 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** March 17, 2026 | **Version:** v1.46.6 | **Session type:** Bug fixes + infrastructure
+**Date:** March 17, 2026 | **Version:** v1.47.3 | **Session type:** Bug fixes + admin tools + iPAi AI platform
 
 ### What was done this session:
-- **v1.46.3** — Fixed Tony's duplicate proposal bug (expired proposals now filtered from Up Next), no-show visibility (red banner for caregivers, indicator for families), admin review flow for paused accounts (both caregiver and care recipient), consolidated checkout care notes (removed redundant "About Tony" field), fixed stale past-time open jobs in Find Work
-- **v1.46.4** — Fixed Stripe dashboard link in MyAccount.js (was hardcoded to platform dashboard, now uses Express login link API)
-- **v1.46.5** — Pre-filled Stripe business_profile (mcc + url) on account creation to skip webpage/industry questions during caregiver onboarding
-- **v1.46.6** — Fixed schedule day count (was using raw minutes → Math.floor, now uses calendar date diff via TimezoneHelper.getDaysUntil())
-- **Infrastructure** — Regenerated expiring GitHub PAT (kincare-deploy), updated git remote URL with new token (expires Apr 15, 2026). Token is embedded in git remote origin URL — NOT in Railway env vars. Railway uses its own GitHub App for deploys.
-- **TASKS.md cleanup** — Archived all completed items to TASKS_ARCHIVE.md, TASKS.md now contains only open items sorted by priority
-- **Created CHANGELOG.md** — Version history from v1.46.0+
+
+**Bug fixes (v1.46.3–v1.46.6):**
+- Fixed Tony's duplicate proposal bug, no-show visibility, admin review flow, checkout care notes consolidation, stale past-time open jobs
+- Fixed Stripe dashboard link (was hardcoded to platform dashboard)
+- Pre-filled Stripe business_profile to skip webpage/industry during onboarding
+- Fixed schedule day count off-by-one (calendar dates instead of raw minutes)
+
+**Admin tools (v1.46.8–v1.46.14):**
+- Admin alert badge on sidebar/bottom nav with per-tab breakdown (People, Sessions, Auth, Feedback)
+- Admin service messaging — send messages as "InPlace Support" from admin panel
+- Manual caregiver freeze/pause with reason from People tab
+- Paused caregivers in Action Required banner with Message + Reinstate + Call buttons
+- Costs tracking tab — recurring expenses, one-time entries, auto-pull from Twilio/Stripe, Claude API ready
+- Fixed FAQ admin access bug (help.js checking req.isAdmin wrong)
+
+**iPAi AI platform (v1.47.0–v1.47.3):**
+- iPAi checkmark badge component (IPAiBadge.js) — tiny teal pill, deployed on matching + care profile
+- AI matching engine (src/utils/aiMatching.js) — 6-factor weighted scoring, sorts caregivers by match quality
+- Care Intelligence engine (src/utils/careIntelligence.js) — deep behavioral + medical insights from visit data
+- Post-session AI summaries — auto-generated warm family summaries after caregiver checkout
+- Caregiver coaching — private AI tips for caregivers specific to each care recipient
+- IPAiInsightsCard component on Care Profile page
+
+**Infrastructure:**
+- Regenerated GitHub PAT, updated git remote (expires Apr 15, 2026)
+- Session continuity system: TASKS_ARCHIVE.md, CHANGELOG.md, CLAUDE.md handoff, feedback-loop task rewrite
+- Paused caregiver gated from accepting jobs (server 403 + client disabled buttons)
 
 ### What was discovered / still open:
-- Cary's account is paused (no-show system working) — needs admin reinstate via Admin Panel
-- Cary shows "Set Up Payments" card despite prior Stripe connection — may need to re-onboard after account changes
-- Cary can still see "Accept Job" button while paused — paused caregivers should not be able to accept work
-- Checkr background checks: Pete emailed Faraz about Checkr Embeds (WebSDK) as alternative to full API integration. Waiting for reply on credentialing path and candidate-pay support.
-- DUNS number (106784345) has wrong business name — blocking Google Play Console verification. D&B requires 8-day verification before name change. Alternative: Google Play's manual verification via business documents.
-- Feedback-loop scheduled task runs but output isn't visible to Pete — needs to write to FEEDBACK_NEW.md
+- Cary's "Set Up Payments" card showing despite prior Stripe connection — needs investigation
+- Checkr: Guilherme confirmed Embeds require same webinar/checklist process as API. Pete emailed asking about Embeds + candidate-pay. Waiting on reply.
+- DUNS number (106784345) has wrong business name — blocking Google Play. D&B requires 8-day verification. Alternative: Google Play manual verification via business docs.
+- Anthropic Admin API key not available on Individual org plan — Claude API cost ($0.01/mo) entered manually for now. At scale, upgrade to Team plan for auto-pull.
 
 ### Key decisions made:
-- Background checks: Required for all caregivers (not optional). Using Checkr Embeds (WebSDK) to keep flow in-app. Exploring candidate-pay so InPlace doesn't handle the $30.
-- Stripe onboarding: business_profile pre-filled with mcc "8099" (health services) and url "https://inplace.care"
+- Background checks: Required for all caregivers. Checkr Embeds route. Candidate-pay if possible.
+- iPAi brand: Teal checkmark pill badge. Replaces "GREAT MATCH" only. Other pills (No Conflicts, Bonus Pay) stay.
+- AI strategy: Matching engine (algorithmic + Haiku for explanations), Care Intelligence (Sonnet for deep insights), post-session summaries (Haiku), caregiver coaching (Haiku). All non-blocking, all marked with iPAi badge.
+- Cost tracking: Recurring + one-time + auto-pulled. $200/mo Claude subscription tracked as recurring. Railway, Twilio, Stripe auto-pulled.
 
-### New bugs found this session (not yet in TASKS.md):
-- Paused caregiver can still accept jobs — need to gate "Accept Job" behind account_paused check
-- "Set Up Payments" card showing for previously-connected caregiver
+### New tables/columns this session:
+- `messages.sender_label` — custom display name for admin service messages
+- `visit_logs.ai_summary` — AI-generated post-session summary (JSON)
+- `visit_logs.ai_coaching` — AI-generated caregiver coaching tips (JSON)
+- `platform_costs` table — one-time cost entries
+- `recurring_expenses` table — monthly/yearly subscriptions
+- `caregiver_profiles.account_paused` (added previous session, used extensively this session)
 
 ## Local Development
 

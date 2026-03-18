@@ -779,8 +779,9 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_reinstated_by TEXT`,
     // v1.46.10 — Admin service messaging
     `ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_label TEXT`,
-    // v1.47.1 — iPAi session summaries
+    // v1.47.1 — iPAi session summaries + coaching
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS ai_summary TEXT`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS ai_coaching TEXT`,
     // v1.46.12 — Cost tracking
     `CREATE TABLE IF NOT EXISTS platform_costs (
       id TEXT PRIMARY KEY,
