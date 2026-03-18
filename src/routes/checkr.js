@@ -6,7 +6,10 @@ const { writeAuditLog } = require("../middleware/auditLog");
 const router = express.Router();
 
 // ─── Checkr API helpers ───
-const CHECKR_API_BASE = "https://api.checkr.com/v1";
+// Use staging URL when CHECKR_STAGING=true (set in Railway env for testing)
+const CHECKR_API_BASE = process.env.CHECKR_STAGING === "true"
+  ? "https://api.checkr-staging.com/v1"
+  : "https://api.checkr.com/v1";
 
 function getCheckrKey() {
   const key = process.env.CHECKR_API_KEY;
@@ -33,6 +36,55 @@ async function checkrRequest(method, path, body = null) {
   }
   return data;
 }
+
+// ─── POST /api/checkr/session-token ───
+// Generates a Checkr Embed session token for the WebSDK
+// The frontend calls this via sessionTokenPath prop on the NewInvitation embed
+router.post("/session-token", authenticate, requireRole("caregiver"), async (req, res) => {
+  try {
+    getCheckrKey();
+  } catch {
+    return res.status(503).json({ error: "Background check service is not configured" });
+  }
+
+  try {
+    const db = await getDb();
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    // Use the configured package or default
+    const packageSlug = process.env.CHECKR_PACKAGE || "essential_criminal";
+
+    // Request a session token from Checkr — this is what the Embed uses
+    const tokenData = await checkrRequest("POST", "/embed_sessions", {
+      package: packageSlug,
+    });
+
+    console.log(`[checkr] Session token created for embed, user: ${req.user.id}`);
+
+    // Return the token — the WebSDK uses this to render the invitation form
+    res.json({
+      sessionToken: tokenData.token || tokenData.session_token,
+      expiresAt: tokenData.expires_at,
+    });
+  } catch (err) {
+    console.error("[checkr] Session token error:", err);
+    res.status(500).json({ error: "Failed to create background check session" });
+  }
+});
+
+// ─── GET /api/checkr/config ───
+// Returns frontend configuration for Checkr Embeds (no secrets exposed)
+router.get("/config", authenticate, async (req, res) => {
+  const isStaging = process.env.CHECKR_STAGING === "true";
+  res.json({
+    configured: !!process.env.CHECKR_API_KEY,
+    staging: isStaging,
+    embedUrl: isStaging
+      ? "https://embed.checkr-staging.com"
+      : "https://embed.checkr.com",
+  });
+});
 
 // ─── POST /api/checkr/initiate ───
 // Called after background check payment succeeds.
