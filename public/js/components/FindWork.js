@@ -26,6 +26,7 @@ const FindWork = window.FindWork = () => {
   const [proposalLoading, setProposalLoading] = useState(false);
   const [visitCounts, setVisitCounts] = useState({}); // recipientId → count
   const [pendingInterviews, setPendingInterviews] = useState([]); // interviews needing attention
+  const [sortBy, setSortBy] = useState('date'); // 'date', 'match', 'distance', 'rate'
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
   const markersRef = useRef([]);
@@ -317,6 +318,25 @@ const FindWork = window.FindWork = () => {
       return city.includes(z);
     });
   }
+
+  // Apply sorting
+  const sortedRequests = [...filteredRequests].sort((a, b) => {
+    if (sortBy === 'match') {
+      return (b.matchScore || 0) - (a.matchScore || 0); // Higher match score first
+    } else if (sortBy === 'distance') {
+      const distA = a.distanceMiles || 999;
+      const distB = b.distanceMiles || 999;
+      return distA - distB; // Closer first
+    } else if (sortBy === 'rate') {
+      const rateA = parseFloat(a.proposedRate || a.estimated_cost / (a.duration_hours || 2)) || 0;
+      const rateB = parseFloat(b.proposedRate || b.estimated_cost / (b.duration_hours || 2)) || 0;
+      return rateB - rateA; // Higher rate first
+    } else {
+      // 'date' - default
+      return 0; // Already sorted by date from server
+    }
+  });
+  filteredRequests = sortedRequests;
 
   // ─── Map markers for open requests ───
   useEffect(() => {
@@ -682,7 +702,7 @@ const FindWork = window.FindWork = () => {
       )}
 
       {bgCheckPaid && <>
-      {/* Controls bar: view toggle, zip, date range, service filter, refresh */}
+      {/* Controls bar: view toggle, zip, date range, service filter, sort, refresh */}
       <div style={{
         display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center',
       }}>
@@ -736,6 +756,19 @@ const FindWork = window.FindWork = () => {
             {serviceTypes.map(t => (
               <option key={t} value={t}>{(t || '').replace(/_/g, ' ')}</option>
             ))}
+          </select>
+        )}
+
+        {/* Sort by (list view only) */}
+        {viewMode === 'list' && (
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
+            padding: '5px 10px', borderRadius: 8, border: '1px solid #d0d0d0',
+            fontSize: 12, color: '#555', background: '#fff', cursor: 'pointer',
+          }}>
+            <option value="date">Soonest first</option>
+            <option value="match">Best match</option>
+            <option value="distance">Closest</option>
+            <option value="rate">Highest pay</option>
           </select>
         )}
 
@@ -829,6 +862,7 @@ const FindWork = window.FindWork = () => {
                 const activeOffer = isDirectOffer && !exExpired;
 
                 // Match quality & distance (from dashboard enrichment)
+                const matchScore = s.matchScore || 0;
                 const matchQuality = s.matchQuality;
                 const hasConflict = s.hasConflict;
                 const distMiles = s.distanceMiles;
@@ -871,8 +905,12 @@ const FindWork = window.FindWork = () => {
                       {hasBonus && (
                         <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
                       )}
-                      {matchQuality === 'great' && !hasConflict && !activeOffer && (
-                        <span style={{ background: '#1b6b5a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>GREAT MATCH</span>
+                      {matchScore > 0 && (
+                        <span title="AI-powered match score" style={{
+                          background: matchScore >= 80 ? '#c8e6c9' : matchScore >= 60 ? '#fff9c4' : '#ffccbc',
+                          color: matchScore >= 80 ? '#2e7d32' : matchScore >= 60 ? '#f57f17' : '#d84315',
+                          padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                        }}>✓ {matchScore}%</span>
                       )}
                       {hasConflict ? (
                         <span style={{ background: '#ffd89b', color: '#c86b1f', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\u26A0'} Conflict</span>

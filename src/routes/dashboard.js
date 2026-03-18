@@ -5,6 +5,7 @@ const { getNowInZone, getTodayStringInZone } = require("../utils/timezone");
 const { haversineDistance } = require("../utils/geocode");
 const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching");
 const { calculateSessionCost } = require("../utils/rateCalculator");
+const { scoreMatch } = require("../utils/aiMatching");
 const { expireStaleProposals } = require("./sessions");
 
 const router = express.Router();
@@ -644,9 +645,11 @@ async function caregiverDashboard(db, userId, res) {
       reviewerName: r.reviewer_name,
       createdAt: r.created_at,
     })),
-    openJobs: (() => {
+    openJobs: await (async () => {
       const bgCleared = !!profile.background_check_paid || !!profile.is_background_checked;
-      return openJobs.map(s => {
+      const results = [];
+
+      for (const s of openJobs) {
         // Conflict detection: check against caregiver's upcoming sessions
         const conflict = computeJobConflicts(s, upcoming);
         // Distance from caregiver's location
@@ -655,10 +658,27 @@ async function caregiverDashboard(db, userId, res) {
         const dist = (cgLat && cgLng && s.recipient_lat && s.recipient_lng)
           ? Math.round(haversineDistance(cgLat, cgLng, s.recipient_lat, s.recipient_lng) * 10) / 10
           : null;
-        // Match score
+        // Legacy match score (kept for backward compatibility)
         const match = computeMatchScore(s, profile, conflict.hasConflict, dist);
+
+        // Compute AI-powered match score (without insights for list view)
+        let aiScore = match.score; // fallback to legacy score
+        try {
+          const recipient = await db.prepare(`
+            SELECT * FROM care_recipients WHERE id = ?
+          `).get(s.care_recipient_id);
+
+          if (recipient) {
+            const aiMatchData = await scoreMatch(s, s, recipient, {}, null); // null = no DB/insights
+            aiScore = aiMatchData.score;
+          }
+        } catch (err) {
+          console.error(`AI matching error for session ${s.id}:`, err.message);
+          // Fall back to legacy score on error
+        }
+
         // If background check not cleared, strip sensitive care recipient info
-        return {
+        results.push({
           id: s.id,
           date: s.scheduled_date,
           time: s.scheduled_time,
@@ -678,8 +698,8 @@ async function caregiverDashboard(db, userId, res) {
           conflictWith: conflict.conflictWith,
           conflictEndTime: conflict.conflictEndTime || null,
           distanceMiles: dist,
-          matchScore: match.score,
-          matchQuality: match.quality,
+          matchScore: aiScore,
+          matchQuality: aiScore >= 75 ? 'great' : aiScore >= 50 ? 'good' : null,
           offeredToCaregiverId: s.offered_to_caregiver_id || null,
           exclusiveUntil: s.exclusive_until || null,
           recipientAge: bgCleared ? (s.recipient_age || null) : null,
@@ -691,8 +711,10 @@ async function caregiverDashboard(db, userId, res) {
           interviewType: s.interview_type || null,
           interviewStatus: s.interview_status || null,
           careRecipientId: s.care_recipient_id,
-        };
-      });
+        });
+      }
+
+      return results;
     })(),
     recentlyCompleted: recentCompletedCg.map(s => {
       // 75/25 split: recompute from caregiver's actual rates (matches session detail endpoint)

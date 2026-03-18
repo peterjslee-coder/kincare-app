@@ -1855,7 +1855,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                             <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
                           )}
                           {job.matchQuality === 'great' && !job.hasConflict && !isDirectOffer && (
-                            <span style={{ background: '#1b6b5a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>GREAT MATCH</span>
+                            React.createElement(window.IPAiBadge, { size: 'sm' })
                           )}
                           {job.hasConflict ? (
                             <span style={{ background: '#ffd89b', color: '#c86b1f', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\u26A0'} Overlaps {job.conflictWith}</span>

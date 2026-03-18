@@ -35534,16 +35534,9 @@ const CaretakerHub = window.CaretakerHub = ({
           fontSize: 11,
           fontWeight: 700
         }
-      }, "BONUS PAY"), job.matchQuality === 'great' && !job.hasConflict && !isDirectOffer && /*#__PURE__*/React.createElement("span", {
-        style: {
-          background: '#1b6b5a',
-          color: '#fff',
-          padding: '2px 8px',
-          borderRadius: 12,
-          fontSize: 11,
-          fontWeight: 700
-        }
-      }, "GREAT MATCH"), job.hasConflict ? /*#__PURE__*/React.createElement("span", {
+      }, "BONUS PAY"), job.matchQuality === 'great' && !job.hasConflict && !isDirectOffer && React.createElement(window.IPAiBadge, {
+        size: 'sm'
+      }), job.hasConflict ? /*#__PURE__*/React.createElement("span", {
         style: {
           background: '#ffd89b',
           color: '#c86b1f',
@@ -38446,6 +38439,7 @@ const FindWork = window.FindWork = () => {
   const [proposalLoading, setProposalLoading] = useState(false);
   const [visitCounts, setVisitCounts] = useState({}); // recipientId → count
   const [pendingInterviews, setPendingInterviews] = useState([]); // interviews needing attention
+  const [sortBy, setSortBy] = useState('date'); // 'date', 'match', 'distance', 'rate'
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
   const markersRef = useRef([]);
@@ -38833,6 +38827,25 @@ const FindWork = window.FindWork = () => {
       return city.includes(z);
     });
   }
+
+  // Apply sorting
+  const sortedRequests = [...filteredRequests].sort((a, b) => {
+    if (sortBy === 'match') {
+      return (b.matchScore || 0) - (a.matchScore || 0); // Higher match score first
+    } else if (sortBy === 'distance') {
+      const distA = a.distanceMiles || 999;
+      const distB = b.distanceMiles || 999;
+      return distA - distB; // Closer first
+    } else if (sortBy === 'rate') {
+      const rateA = parseFloat(a.proposedRate || a.estimated_cost / (a.duration_hours || 2)) || 0;
+      const rateB = parseFloat(b.proposedRate || b.estimated_cost / (b.duration_hours || 2)) || 0;
+      return rateB - rateA; // Higher rate first
+    } else {
+      // 'date' - default
+      return 0; // Already sorted by date from server
+    }
+  });
+  filteredRequests = sortedRequests;
 
   // ─── Map markers for open requests ───
   useEffect(() => {
@@ -39557,7 +39570,27 @@ const FindWork = window.FindWork = () => {
   }, "All types"), serviceTypes.map(t => /*#__PURE__*/React.createElement("option", {
     key: t,
     value: t
-  }, (t || '').replace(/_/g, ' ')))), /*#__PURE__*/React.createElement("button", {
+  }, (t || '').replace(/_/g, ' ')))), viewMode === 'list' && /*#__PURE__*/React.createElement("select", {
+    value: sortBy,
+    onChange: e => setSortBy(e.target.value),
+    style: {
+      padding: '5px 10px',
+      borderRadius: 8,
+      border: '1px solid #d0d0d0',
+      fontSize: 12,
+      color: '#555',
+      background: '#fff',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "date"
+  }, "Soonest first"), /*#__PURE__*/React.createElement("option", {
+    value: "match"
+  }, "Best match"), /*#__PURE__*/React.createElement("option", {
+    value: "distance"
+  }, "Closest"), /*#__PURE__*/React.createElement("option", {
+    value: "rate"
+  }, "Highest pay")), /*#__PURE__*/React.createElement("button", {
     onClick: fetchData,
     style: {
       padding: '5px 12px',
@@ -39721,6 +39754,7 @@ const FindWork = window.FindWork = () => {
     const activeOffer = isDirectOffer && !exExpired;
 
     // Match quality & distance (from dashboard enrichment)
+    const matchScore = s.matchScore || 0;
     const matchQuality = s.matchQuality;
     const hasConflict = s.hasConflict;
     const distMiles = s.distanceMiles;
@@ -39784,16 +39818,17 @@ const FindWork = window.FindWork = () => {
         fontSize: 11,
         fontWeight: 700
       }
-    }, "BONUS PAY"), matchQuality === 'great' && !hasConflict && !activeOffer && /*#__PURE__*/React.createElement("span", {
+    }, "BONUS PAY"), matchScore > 0 && /*#__PURE__*/React.createElement("span", {
+      title: "AI-powered match score",
       style: {
-        background: '#1b6b5a',
-        color: '#fff',
+        background: matchScore >= 80 ? '#c8e6c9' : matchScore >= 60 ? '#fff9c4' : '#ffccbc',
+        color: matchScore >= 80 ? '#2e7d32' : matchScore >= 60 ? '#f57f17' : '#d84315',
         padding: '2px 8px',
         borderRadius: 12,
         fontSize: 11,
         fontWeight: 700
       }
-    }, "GREAT MATCH"), hasConflict ? /*#__PURE__*/React.createElement("span", {
+    }, "\u2713 ", matchScore, "%"), hasConflict ? /*#__PURE__*/React.createElement("span", {
       style: {
         background: '#ffd89b',
         color: '#c86b1f',
@@ -48251,6 +48286,9 @@ const AdminPanel = window.AdminPanel = () => {
     start_month: new Date().toISOString().substring(0, 7)
   });
   const [recurSaving, setRecurSaving] = useState(false);
+  const [editingRecurring, setEditingRecurring] = useState(null); // holds id of expense being edited
+  const [editRecurringData, setEditRecurringData] = useState({}); // holds edited values for the expense
+
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
   const loadCosts = async () => {
     setCostLoading(true);
@@ -48285,6 +48323,48 @@ const AdminPanel = window.AdminPanel = () => {
           recurrence: 'monthly',
           start_month: new Date().toISOString().substring(0, 7)
         });
+        loadCosts();
+      }
+    } catch {}
+    setRecurSaving(false);
+  };
+  const handleSaveRecurring = async id => {
+    if (!editRecurringData.amount || editRecurringData.amount <= 0) {
+      showToast('Amount must be greater than 0', 'error');
+      return;
+    }
+    setRecurSaving(true);
+    try {
+      const res = await apiFetch(`/api/costs/recurring/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          amount: editRecurringData.amount,
+          description: editRecurringData.description
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast('Recurring expense updated', 'success');
+        setEditingRecurring(null);
+        setEditRecurringData({});
+        loadCosts();
+      }
+    } catch {}
+    setRecurSaving(false);
+  };
+  const handleDeactivateRecurring = async id => {
+    if (!confirm('Deactivate this recurring expense?')) return;
+    setRecurSaving(true);
+    try {
+      const res = await apiFetch(`/api/costs/recurring/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          active: false
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast('Recurring expense deactivated', 'success');
+        setEditingRecurring(null);
+        setEditRecurringData({});
         loadCosts();
       }
     } catch {}
@@ -54487,8 +54567,126 @@ const AdminPanel = window.AdminPanel = () => {
       gap: 6,
       marginBottom: 12
     }
-  }, costRecurring.map(r => /*#__PURE__*/React.createElement("div", {
+  }, costRecurring.map(r => editingRecurring === r.id ?
+  /*#__PURE__*/
+  // Edit mode - inline form
+  React.createElement("div", {
     key: r.id,
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      padding: '8px 12px',
+      background: '#f0fdf4',
+      borderRadius: 8,
+      border: '1px solid #bbf7d0'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, r.category), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 6,
+      fontSize: 10,
+      background: '#e8f5e9',
+      color: '#2e7d32',
+      padding: '1px 6px',
+      borderRadius: 4
+    }
+  }, r.recurrence === 'monthly' ? '/mo' : '/yr', " since ", r.start_month)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    step: "0.01",
+    placeholder: "Amount",
+    value: editRecurringData.amount !== undefined ? editRecurringData.amount : r.amount,
+    onChange: e => setEditRecurringData({
+      ...editRecurringData,
+      amount: parseFloat(e.target.value) || ''
+    }),
+    style: {
+      padding: '6px 8px',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 12
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    placeholder: "Description",
+    value: editRecurringData.description !== undefined ? editRecurringData.description : r.description || '',
+    onChange: e => setEditRecurringData({
+      ...editRecurringData,
+      description: e.target.value
+    }),
+    style: {
+      padding: '6px 8px',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 12
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      justifyContent: 'flex-end'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setEditingRecurring(null);
+      setEditRecurringData({});
+    },
+    style: {
+      padding: '4px 12px',
+      background: '#f5f5f5',
+      color: '#666',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 11,
+      cursor: 'pointer'
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleDeactivateRecurring(r.id),
+    disabled: recurSaving,
+    style: {
+      padding: '4px 12px',
+      background: recurSaving ? '#ccc' : '#fff3cd',
+      color: '#856404',
+      border: '1px solid #ffc107',
+      borderRadius: 4,
+      fontSize: 11,
+      cursor: recurSaving ? 'not-allowed' : 'pointer'
+    }
+  }, "Deactivate"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleSaveRecurring(r.id),
+    disabled: recurSaving,
+    style: {
+      padding: '4px 12px',
+      background: recurSaving ? '#999' : '#1b6b5a',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 4,
+      fontSize: 11,
+      fontWeight: 600,
+      cursor: recurSaving ? 'not-allowed' : 'pointer'
+    }
+  }, recurSaving ? 'Saving...' : 'Save'))) :
+  /*#__PURE__*/
+  // View mode - regular display
+  React.createElement("div", {
+    key: r.id,
+    onClick: () => {
+      setEditingRecurring(r.id);
+      setEditRecurringData({
+        amount: r.amount,
+        description: r.description
+      });
+    },
     style: {
       display: 'flex',
       justifyContent: 'space-between',
@@ -54496,7 +54694,8 @@ const AdminPanel = window.AdminPanel = () => {
       padding: '8px 12px',
       background: '#f0fdf4',
       borderRadius: 8,
-      border: '1px solid #bbf7d0'
+      border: '1px solid #bbf7d0',
+      cursor: 'pointer'
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -54530,7 +54729,8 @@ const AdminPanel = window.AdminPanel = () => {
       fontSize: 13
     }
   }, "$", parseFloat(r.amount).toFixed(2)), /*#__PURE__*/React.createElement("button", {
-    onClick: async () => {
+    onClick: async e => {
+      e.stopPropagation();
       if (!confirm(`Remove ${r.category} recurring expense?`)) return;
       try {
         const res = await apiFetch(`/api/costs/recurring/${r.id}`, {
@@ -55010,6 +55210,58 @@ const AdminPanel = window.AdminPanel = () => {
       cursor: 'pointer'
     }
   }, adminMsgSending ? 'Sending...' : 'Send as InPlace Support')))));
+};
+;
+const IPAiBadge = window.IPAiBadge = ({
+  size = 'sm',
+  style: customStyle
+}) => {
+  const specs = {
+    sm: {
+      fontSize: '9px',
+      padding: '1px 5px 1px 3px',
+      borderRadius: '6px',
+      checkmarkSize: 9
+    },
+    md: {
+      fontSize: '11px',
+      padding: '2px 7px 2px 4px',
+      borderRadius: '8px',
+      checkmarkSize: 11
+    }
+  };
+  const config = specs[size] || specs.sm;
+  const tealColor = '#1b6b5a';
+  const badgeStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '2px',
+    background: '#e6f5f0',
+    color: tealColor,
+    padding: config.padding,
+    borderRadius: config.borderRadius,
+    fontSize: config.fontSize,
+    fontWeight: 700,
+    letterSpacing: '0.3px',
+    ...customStyle
+  };
+  return /*#__PURE__*/React.createElement("span", {
+    style: badgeStyle
+  }, /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 16 16",
+    width: config.checkmarkSize,
+    height: config.checkmarkSize,
+    style: {
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M13.5 4.5L6.5 11.5L2.5 7.5",
+    stroke: tealColor,
+    strokeWidth: "2.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    fill: "none"
+  })), /*#__PURE__*/React.createElement("span", null, "iPAi"));
 };
 ;
 // ─── PWA Install Prompt ───

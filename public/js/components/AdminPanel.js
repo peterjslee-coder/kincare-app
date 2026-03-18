@@ -109,6 +109,8 @@ const AdminPanel = window.AdminPanel = () => {
   const [costRecurring, setCostRecurring] = useState([]);
   const [newRecurring, setNewRecurring] = useState({ category: '', description: '', amount: '', recurrence: 'monthly', start_month: new Date().toISOString().substring(0, 7) });
   const [recurSaving, setRecurSaving] = useState(false);
+  const [editingRecurring, setEditingRecurring] = useState(null); // holds id of expense being edited
+  const [editRecurringData, setEditRecurringData] = useState({}); // holds edited values for the expense
 
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
 
@@ -136,6 +138,48 @@ const AdminPanel = window.AdminPanel = () => {
       if (res?.ok) {
         showToast('Recurring expense added', 'success');
         setNewRecurring({ category: '', description: '', amount: '', recurrence: 'monthly', start_month: new Date().toISOString().substring(0, 7) });
+        loadCosts();
+      }
+    } catch {}
+    setRecurSaving(false);
+  };
+
+  const handleSaveRecurring = async (id) => {
+    if (!editRecurringData.amount || editRecurringData.amount <= 0) {
+      showToast('Amount must be greater than 0', 'error');
+      return;
+    }
+    setRecurSaving(true);
+    try {
+      const res = await apiFetch(`/api/costs/recurring/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          amount: editRecurringData.amount,
+          description: editRecurringData.description,
+        }),
+      });
+      if (res?.ok) {
+        showToast('Recurring expense updated', 'success');
+        setEditingRecurring(null);
+        setEditRecurringData({});
+        loadCosts();
+      }
+    } catch {}
+    setRecurSaving(false);
+  };
+
+  const handleDeactivateRecurring = async (id) => {
+    if (!confirm('Deactivate this recurring expense?')) return;
+    setRecurSaving(true);
+    try {
+      const res = await apiFetch(`/api/costs/recurring/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ active: false }),
+      });
+      if (res?.ok) {
+        showToast('Recurring expense deactivated', 'success');
+        setEditingRecurring(null);
+        setEditRecurringData({});
         loadCosts();
       }
     } catch {}
@@ -3272,22 +3316,71 @@ const AdminPanel = window.AdminPanel = () => {
             {(costSummary.length > 0 && costRecurring.length > 0) ? (
               <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
                 {costRecurring.map(r => (
-                  <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
-                    <div>
-                      <span style={{ fontWeight: 600, fontSize: 13 }}>{r.category}</span>
-                      <span style={{ marginLeft: 6, fontSize: 11, color: '#888' }}>{r.description || ''}</span>
-                      <span style={{ marginLeft: 6, fontSize: 10, background: '#e8f5e9', color: '#2e7d32', padding: '1px 6px', borderRadius: 4 }}>
-                        {r.recurrence === 'monthly' ? '/mo' : '/yr'} since {r.start_month}
-                      </span>
+                  editingRecurring === r.id ? (
+                    // Edit mode - inline form
+                    <div key={r.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>{r.category}</span>
+                        <span style={{ marginLeft: 6, fontSize: 10, background: '#e8f5e9', color: '#2e7d32', padding: '1px 6px', borderRadius: 4 }}>
+                          {r.recurrence === 'monthly' ? '/mo' : '/yr'} since {r.start_month}
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="Amount"
+                          value={editRecurringData.amount !== undefined ? editRecurringData.amount : r.amount}
+                          onChange={e => setEditRecurringData({ ...editRecurringData, amount: parseFloat(e.target.value) || '' })}
+                          style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12 }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Description"
+                          value={editRecurringData.description !== undefined ? editRecurringData.description : (r.description || '')}
+                          onChange={e => setEditRecurringData({ ...editRecurringData, description: e.target.value })}
+                          style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12 }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => { setEditingRecurring(null); setEditRecurringData({}); }}
+                          style={{ padding: '4px 12px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleDeactivateRecurring(r.id)}
+                          disabled={recurSaving}
+                          style={{ padding: '4px 12px', background: recurSaving ? '#ccc' : '#fff3cd', color: '#856404', border: '1px solid #ffc107', borderRadius: 4, fontSize: 11, cursor: recurSaving ? 'not-allowed' : 'pointer' }}>
+                          Deactivate
+                        </button>
+                        <button
+                          onClick={() => handleSaveRecurring(r.id)}
+                          disabled={recurSaving}
+                          style={{ padding: '4px 12px', background: recurSaving ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: recurSaving ? 'not-allowed' : 'pointer' }}>
+                          {recurSaving ? 'Saving...' : 'Save'}
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13 }}>${parseFloat(r.amount).toFixed(2)}</span>
-                      <button onClick={async () => { if (!confirm(`Remove ${r.category} recurring expense?`)) return; try { const res = await apiFetch(`/api/costs/recurring/${r.id}`, { method: 'DELETE' }); if (res?.ok) loadCosts(); } catch {} }}
-                        style={{ padding: '2px 6px', background: '#fff', color: '#c62828', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
-                        {'\u2715'}
-                      </button>
+                  ) : (
+                    // View mode - regular display
+                    <div key={r.id} onClick={() => { setEditingRecurring(r.id); setEditRecurringData({ amount: r.amount, description: r.description }); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', cursor: 'pointer' }}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>{r.category}</span>
+                        <span style={{ marginLeft: 6, fontSize: 11, color: '#888' }}>{r.description || ''}</span>
+                        <span style={{ marginLeft: 6, fontSize: 10, background: '#e8f5e9', color: '#2e7d32', padding: '1px 6px', borderRadius: 4 }}>
+                          {r.recurrence === 'monthly' ? '/mo' : '/yr'} since {r.start_month}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13 }}>${parseFloat(r.amount).toFixed(2)}</span>
+                        <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`Remove ${r.category} recurring expense?`)) return; try { const res = await apiFetch(`/api/costs/recurring/${r.id}`, { method: 'DELETE' }); if (res?.ok) loadCosts(); } catch {} }}
+                          style={{ padding: '2px 6px', background: '#fff', color: '#c62828', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                          {'\u2715'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )
                 ))}
               </div>
             ) : (

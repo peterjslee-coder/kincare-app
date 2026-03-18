@@ -61,6 +61,7 @@ const scripts = [
   "js/components/AdminFinancials.js",
   "js/components/HelpPage.js",
   "js/components/AdminPanel.js",
+  "js/components/IPAiBadge.js",
   "js/app.js",
 ];
 
