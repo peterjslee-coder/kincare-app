@@ -74,6 +74,74 @@ router.get("/test/ai", authenticate, async (req, res) => {
   }
 });
 
+// ─── GET /api/care-intelligence/test/data/:recipientId — Diagnose data pipeline ───
+router.get("/test/data/:recipientId", authenticate, async (req, res) => {
+  const steps = {};
+  try {
+    const db = await getDb();
+    steps.dbConnected = true;
+
+    const recipient = await db.prepare("SELECT id, first_name, health_conditions, family_id FROM care_recipients WHERE id = ?").get(req.params.recipientId);
+    steps.recipient = recipient ? { id: recipient.id, name: recipient.first_name, familyId: recipient.family_id } : null;
+    if (!recipient) return res.json({ steps, error: "Recipient not found" });
+
+    try {
+      const visits = await db.prepare(`
+        SELECT COUNT(*) as count FROM visit_logs vl
+        JOIN care_sessions cs ON vl.session_id = cs.id
+        WHERE cs.care_recipient_id = ?
+      `).get(req.params.recipientId);
+      steps.visitLogCount = parseInt(visits.count);
+    } catch (e) { steps.visitLogError = e.message; }
+
+    try {
+      const sessions = await db.prepare(`
+        SELECT COUNT(*) as count FROM care_sessions WHERE care_recipient_id = ?
+      `).get(req.params.recipientId);
+      steps.sessionCount = parseInt(sessions.count);
+    } catch (e) { steps.sessionError = e.message; }
+
+    try {
+      const notes = await db.prepare(`
+        SELECT COUNT(*) as count FROM recipient_notes WHERE care_recipient_id = ?
+      `).get(req.params.recipientId);
+      steps.noteCount = parseInt(notes.count);
+    } catch (e) { steps.noteError = e.message; }
+
+    // Test the full gatherVisitData
+    try {
+      const data = await gatherVisitData(req.params.recipientId);
+      steps.gatherVisitData = data ? {
+        hasRecipient: !!data.recipient,
+        visitCount: data.visits?.length || 0,
+        noteCount: data.careNotes?.length || 0,
+        reviewCount: data.reviews?.length || 0,
+      } : null;
+    } catch (e) { steps.gatherError = e.message; }
+
+    // Test a minimal AI call with the data
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (apiKey) {
+        const Anthropic = require("@anthropic-ai/sdk");
+        const client = new Anthropic({ apiKey });
+        const result = await client.messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 100,
+          messages: [{ role: "user", content: `Say "Ready to analyze ${recipient.first_name}'s care data" and nothing else.` }],
+        });
+        steps.aiCall = { success: true, response: result.content?.[0]?.text };
+      } else {
+        steps.aiCall = { error: "No API key" };
+      }
+    } catch (e) { steps.aiCall = { error: e.message }; }
+
+    res.json({ steps, allGood: !Object.values(steps).some(v => v?.error) });
+  } catch (err) {
+    res.json({ steps, error: err.message });
+  }
+});
+
 // ─── GET /api/care-intelligence/:recipientId/patterns — Quick patterns (no AI call) ───
 router.get("/:recipientId/patterns", authenticate, async (req, res) => {
   try {
