@@ -99,6 +99,33 @@ const AdminPanel = window.AdminPanel = () => {
   const [pausedLoading, setPausedLoading] = useState(false);
   const [reinstateLoading, setReinstateLoading] = useState(null);
 
+  // Admin service message modal
+  const [adminMsgTarget, setAdminMsgTarget] = useState(null); // { userId, name }
+  const [adminMsgText, setAdminMsgText] = useState('');
+  const [adminMsgSending, setAdminMsgSending] = useState(false);
+
+  const handleAdminMessage = async () => {
+    if (!adminMsgText.trim() || !adminMsgTarget) return;
+    setAdminMsgSending(true);
+    try {
+      const res = await apiFetch(`/api/admin/message/${adminMsgTarget.userId}`, {
+        method: 'POST',
+        body: JSON.stringify({ message: adminMsgText.trim() }),
+      });
+      if (res?.ok) {
+        showToast(`Message sent to ${adminMsgTarget.name}`, 'success');
+        setAdminMsgTarget(null);
+        setAdminMsgText('');
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        showToast(err?.error || 'Failed to send message', 'error');
+      }
+    } catch {
+      showToast('Failed to send message', 'error');
+    }
+    setAdminMsgSending(false);
+  };
+
   const loadNoShowSessions = async () => {
     setNoShowLoading(true);
     try {
@@ -911,23 +938,43 @@ const AdminPanel = window.AdminPanel = () => {
           )}
           {pausedCaregivers.map(cg => (
             <div key={cg.user_id} style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10,
-              border: '2px solid #dc2626', flexWrap: 'wrap', gap: 8,
+              padding: '12px 14px', marginBottom: 6, background: '#fff', borderRadius: 10,
+              border: '2px solid #dc2626',
             }}>
-              <div style={{ flex: '1 1 200px' }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#c62828' }}>
-                  {'\u{1F6D1}'} {cg.first_name} {cg.last_name}
-                </div>
-                <div style={{ fontSize: 12, color: '#888' }}>{cg.email}</div>
-                <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600, marginTop: 2 }}>
-                  {cg.account_paused_reason || 'Account paused'}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ flex: '1 1 200px' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#c62828' }}>
+                    {'\u{1F6D1}'} {cg.first_name} {cg.last_name}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#888' }}>{cg.email}{cg.phone ? ` \u00B7 ${cg.phone}` : ''}</div>
+                  <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600, marginTop: 2 }}>
+                    {cg.account_paused_reason || 'Account paused'}
+                  </div>
+                  {cg.no_show_session_id && (
+                    <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                      Missed session: {cg.no_show_recipient_name || 'Unknown'} on {cg.no_show_date}{cg.no_show_time ? ` at ${cg.no_show_time}` : ''}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>
+                    {cg.completed_count || 0} completed sessions \u00B7 {cg.no_show_count || 0} no-shows \u00B7 Rating: {cg.rating_avg ? Number(cg.rating_avg).toFixed(1) : 'n/a'}
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                <button onClick={() => { setAdminMsgTarget({ userId: cg.user_id, name: cg.first_name + ' ' + cg.last_name }); setAdminMsgText(''); }}
+                  style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  {'\u{1F4AC}'} Message {cg.first_name}
+                </button>
                 <button onClick={() => handleReinstate(cg.user_id)} disabled={reinstateLoading === cg.user_id}
-                  style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: reinstateLoading === cg.user_id ? 0.6 : 1 }}>
+                  style={{ padding: '6px 14px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: reinstateLoading === cg.user_id ? 0.6 : 1 }}>
                   {reinstateLoading === cg.user_id ? '...' : '\u2705 Reinstate'}
                 </button>
+                {cg.phone && (
+                  <a href={`tel:${cg.phone}`}
+                    style={{ padding: '6px 14px', background: '#f5f5f5', color: '#333', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                    {'\u{1F4DE}'} Call
+                  </a>
+                )}
               </div>
             </div>
           ))}
@@ -3100,6 +3147,37 @@ const AdminPanel = window.AdminPanel = () => {
                 No caregiver profile found for this user.
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* ── ADMIN SERVICE MESSAGE MODAL ── */}
+      {adminMsgTarget && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setAdminMsgTarget(null); }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 480, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#333', marginBottom: 4 }}>
+              {'\u{1F4AC}'} Message {adminMsgTarget.name}
+            </div>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
+              Sent as <strong>InPlace Support</strong> — {adminMsgTarget.name} will see this in their Messages
+            </div>
+            <textarea
+              value={adminMsgText}
+              onChange={(e) => setAdminMsgText(e.target.value)}
+              placeholder={`Hi ${adminMsgTarget.name.split(' ')[0]}, we noticed you missed your session...`}
+              style={{ width: '100%', minHeight: 120, padding: 12, border: '2px solid #e5e7eb', borderRadius: 10, fontSize: 14, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 14, justifyContent: 'flex-end' }}>
+              <button onClick={() => setAdminMsgTarget(null)}
+                style={{ padding: '8px 20px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={handleAdminMessage} disabled={adminMsgSending || !adminMsgText.trim()}
+                style={{ padding: '8px 20px', background: adminMsgSending || !adminMsgText.trim() ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                {adminMsgSending ? 'Sending...' : 'Send as InPlace Support'}
+              </button>
+            </div>
           </div>
         </div>
       )}

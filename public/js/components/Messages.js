@@ -1363,8 +1363,8 @@ const Messages = window.Messages = () => {
                           if (showEmojiFor === m.id) setShowEmojiFor(null);
                         }}>
                         {showName && (
-                          <div style={{ fontSize: 11, color: getAvatarColor(m.senderName || ''), fontWeight: 600, marginBottom: 2, marginLeft: 4 }}>
-                            {m.senderName}
+                          <div style={{ fontSize: 11, color: m.senderLabel ? '#1b6b5a' : getAvatarColor(m.senderName || ''), fontWeight: 600, marginBottom: 2, marginLeft: 4 }}>
+                            {m.senderLabel ? `\u{1F6E1}\uFE0F ${m.senderLabel}` : m.senderName}
                           </div>
                         )}
                         {/* Reply quote */}

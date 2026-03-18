@@ -2370,11 +2370,16 @@ router.get("/caregivers/paused", authenticate, checkAdmin, requireAdmin, async (
     const rows = await db.prepare(`
       SELECT cp.id, cp.user_id, cp.account_paused_reason, cp.account_paused_at,
         cp.rating_avg, cp.rating_count, cp.is_available,
-        u.first_name, u.last_name, u.email, u.avatar_url,
+        u.first_name, u.last_name, u.email, u.avatar_url, u.phone,
         (SELECT COUNT(*) FROM care_sessions cs WHERE cs.caregiver_id = cp.id AND cs.caregiver_no_show = 1) AS no_show_count,
-        (SELECT COUNT(*) FROM care_sessions cs WHERE cs.caregiver_id = cp.id AND cs.status = 'completed') AS completed_count
+        (SELECT COUNT(*) FROM care_sessions cs WHERE cs.caregiver_id = cp.id AND cs.status = 'completed') AS completed_count,
+        ns.id AS no_show_session_id, ns.scheduled_date AS no_show_date, ns.scheduled_time AS no_show_time,
+        cr_ns.first_name AS no_show_recipient_name
       FROM caregiver_profiles cp
       JOIN users u ON cp.user_id = u.id
+      LEFT JOIN care_sessions ns ON ns.caregiver_id = cp.id AND ns.caregiver_no_show = 1
+        AND ns.cancelled_by = 'system'
+      LEFT JOIN care_recipients cr_ns ON ns.care_recipient_id = cr_ns.id
       WHERE cp.account_paused = 1
       ORDER BY cp.account_paused_at DESC
     `).all();
@@ -2414,6 +2419,75 @@ router.post("/caregivers/:userId/reinstate", authenticate, checkAdmin, requireAd
   } catch (err) {
     console.error("Reinstate caregiver error:", err);
     res.status(500).json({ error: "Failed to reinstate caregiver" });
+  }
+});
+
+// ─── POST /api/admin/message/:userId — Send message as "InPlace Support" ───
+router.post("/message/:userId", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { message } = req.body;
+    if (!message || !message.trim()) return res.status(400).json({ error: "Message is required" });
+
+    const targetUser = await db.prepare("SELECT id, first_name, last_name FROM users WHERE id = ?").get(req.params.userId);
+    if (!targetUser) return res.status(404).json({ error: "User not found" });
+
+    // Find or create a direct conversation between admin and target user
+    let convId;
+    const existing = await db.prepare(`
+      SELECT c.id FROM conversations c
+      JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
+      JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
+      WHERE c.type = 'direct'
+    `).get(req.user.id, req.params.userId);
+
+    if (existing) {
+      convId = existing.id;
+    } else {
+      convId = uuid();
+      await db.prepare("INSERT INTO conversations (id, type, name, created_by) VALUES (?, ?, ?, ?)").run(convId, "direct", "InPlace Support", req.user.id);
+      await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, ?)").run(uuid(), convId, req.user.id, "member");
+      await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, ?)").run(uuid(), convId, req.params.userId, "member");
+    }
+
+    // Send the message with sender_label for display
+    const msgId = uuid();
+    await db.prepare(
+      "INSERT INTO messages (id, sender_id, recipient_id, content, conversation_id, sender_label) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(msgId, req.user.id, req.params.userId, message.trim(), convId, "InPlace Support");
+
+    // Update conversation timestamp
+    await db.prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?").run(convId);
+
+    // Push notification + websocket
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      emitToUser(req.params.userId, "new_message", {
+        messageId: msgId,
+        conversationId: convId,
+        senderId: req.user.id,
+        senderName: "InPlace Support",
+        content: message.trim(),
+      });
+    }
+
+    // Send push notification
+    try {
+      const { sendPushToUser } = require("../utils/push");
+      if (sendPushToUser) {
+        await sendPushToUser(db, req.params.userId, "InPlace Support", message.trim().substring(0, 100), { conversationId: convId });
+      }
+    } catch {}
+
+    await logAdminAction(req, "admin_message", "user", req.params.userId, {
+      conversationId: convId,
+      messagePreview: message.trim().substring(0, 50),
+    });
+
+    res.json({ success: true, conversationId: convId, messageId: msgId });
+  } catch (err) {
+    console.error("Admin message error:", err);
+    res.status(500).json({ error: "Failed to send message" });
   }
 });
 

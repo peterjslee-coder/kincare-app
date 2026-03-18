@@ -777,6 +777,8 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_paused_at TIMESTAMPTZ`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_reinstated_at TIMESTAMPTZ`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS account_reinstated_by TEXT`,
+    // v1.46.10 — Admin service messaging
+    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_label TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

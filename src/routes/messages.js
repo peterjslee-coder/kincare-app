@@ -288,7 +288,8 @@ router.get("/conversations/:id", async (req, res) => {
     const enriched = messages.map(m => ({
       ...m,
       type: m.sender_id === userId ? 'sent' : 'received',
-      senderName: `${m.sender_first_name} ${m.sender_last_name}`,
+      senderName: m.sender_label || `${m.sender_first_name} ${m.sender_last_name}`,
+      senderLabel: m.sender_label || null,
     }));
 
     return res.json({ messages: enriched, conversationType: "direct" });
@@ -347,7 +348,8 @@ router.get("/conversations/:id", async (req, res) => {
   const enriched = messages.map(m => ({
     ...m,
     type: m.sender_id === userId ? 'sent' : 'received',
-    senderName: `${m.sender_first_name} ${m.sender_last_name}`,
+    senderName: m.sender_label || `${m.sender_first_name} ${m.sender_last_name}`,
+    senderLabel: m.sender_label || null,
     replyTo: m.reply_to_id ? {
       id: m.reply_to_id,
       content: m.reply_content,
