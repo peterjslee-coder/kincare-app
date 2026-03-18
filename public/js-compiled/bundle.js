@@ -35124,7 +35124,7 @@ const CaretakerHub = window.CaretakerHub = ({
           boxShadow: '0 2px 8px rgba(198,40,40,0.3)',
           whiteSpace: 'nowrap'
         }
-      }, "Check Out"), !s.family_no_show && /*#__PURE__*/React.createElement("button", {
+      }, "Check Out")), isReady && !isActive && !s.family_no_show && /*#__PURE__*/React.createElement("button", {
         onClick: async () => {
           if (!confirm('Flag that nobody is home? You will need to wait 30 minutes before checking out for full pay.')) return;
           try {
@@ -35158,7 +35158,7 @@ const CaretakerHub = window.CaretakerHub = ({
           cursor: 'pointer',
           whiteSpace: 'nowrap'
         }
-      }, "Nobody Home")), isReady && !isActive && /*#__PURE__*/React.createElement("button", {
+      }, "Nobody Home"), isReady && !isActive && /*#__PURE__*/React.createElement("button", {
         onClick: async () => {
           setCheckInMood('');
           setCheckInNotes(null);

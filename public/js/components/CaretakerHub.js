@@ -1608,7 +1608,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                           boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
                         }}>Check Out</button>
-                        {!s.family_no_show && (
+                        {/* Nobody Home removed from post-check-in — moved to pre-check-in block below */}
+                      </>)}
+                      {isReady && !isActive && !s.family_no_show && (
                           <button onClick={async () => {
                             if (!confirm('Flag that nobody is home? You will need to wait 30 minutes before checking out for full pay.')) return;
                             try {
@@ -1627,8 +1629,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                             padding: '8px 14px', background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80',
                             borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>Nobody Home</button>
-                        )}
-                      </>)}
+                      )}
                       {isReady && !isActive && (
                         <button onClick={async () => {
                           setCheckInMood('');
