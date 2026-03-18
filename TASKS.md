@@ -33,6 +33,8 @@
 
 - [ ] **Paused caregiver can still see and accept jobs.** Cary's account is paused (no-show) but the Find Work section still shows "Accept Job" buttons. A paused caregiver should not be able to accept new work. Need to gate job acceptance behind `account_paused` check on both client and server. *(Found — Mar 17, v1.46.6)* **P1**
 - [ ] **"Set Up Payments" card showing for previously-connected caregiver.** Cary was connected to Stripe but her dashboard still shows the "Set Up Payments" onboarding card. May be caused by Stripe account reset during testing, or the status check is broken. *(Found — Mar 17, v1.46.6)* **P1**
+- [ ] **"Nobody home" option persists after caregiver checks in.** After Cary checks in with Betty, the "Nobody home" button should disappear since she's confirmed on-site. Currently it stays visible post-check-in. *(Found — Mar 18, v1.49.11)* **P1**
+- [ ] **iPAi chatbot text entry not visible — blank page on open.** When opening the iPAi conversation in Messages, the text input is below the scroll area so it looks like a blank page. User has to scroll down to find it. Welcome card with suggestions was added (v1.49.8) but may not render if the conversation already has messages. *(Found — Mar 18, v1.49.11)* **P1**
 
 ### P2
 

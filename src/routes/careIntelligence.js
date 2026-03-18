@@ -14,7 +14,7 @@ router.get("/:recipientId", authenticate, async (req, res) => {
     if (!recipient) return res.status(404).json({ error: "Care recipient not found", recipientId: req.params.recipientId });
 
     // Check access: owner, care team, caregiver, or admin
-    const isOwner = recipient.family_id === req.user.id;
+    const isOwner = recipient.family_user_id === req.user.id;
     const isAdmin = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
     let hasAccess = isOwner || !!isAdmin?.is_admin;
 
@@ -82,7 +82,7 @@ router.get("/test/data/:recipientId", authenticate, async (req, res) => {
     steps.dbConnected = true;
 
     const recipient = await db.prepare("SELECT id, first_name, health_conditions, family_id FROM care_recipients WHERE id = ?").get(req.params.recipientId);
-    steps.recipient = recipient ? { id: recipient.id, name: recipient.first_name, familyId: recipient.family_id } : null;
+    steps.recipient = recipient ? { id: recipient.id, name: recipient.first_name, familyId: recipient.family_user_id } : null;
     if (!recipient) return res.json({ steps, error: "Recipient not found" });
 
     try {
@@ -203,7 +203,7 @@ router.post("/:recipientId/care-plan", authenticate, async (req, res) => {
     if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
 
     // Check access: owner, care team member, assigned caregiver, or admin
-    const isOwner = recipient.family_id === req.user.id;
+    const isOwner = recipient.family_user_id === req.user.id;
     const isTeamMember = await db.prepare(
       "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
     ).get(req.params.recipientId, req.user.id);
@@ -242,7 +242,7 @@ router.get("/:recipientId/care-plan", authenticate, async (req, res) => {
     if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
 
     // Check access: owner, care team member, assigned caregiver, or admin
-    const isOwner = recipient.family_id === req.user.id;
+    const isOwner = recipient.family_user_id === req.user.id;
     const isTeamMember = await db.prepare(
       "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
     ).get(req.params.recipientId, req.user.id);
