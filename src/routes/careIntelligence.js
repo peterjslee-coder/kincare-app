@@ -54,6 +54,26 @@ router.get("/:recipientId", authenticate, async (req, res) => {
   }
 });
 
+// ─── GET /api/care-intelligence/test — Test AI connectivity ───
+router.get("/test/ai", authenticate, async (req, res) => {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return res.json({ error: "ANTHROPIC_API_KEY not set", hasKey: false });
+
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+    const result = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 50,
+      messages: [{ role: "user", content: "Say 'iPAi is working' and nothing else." }],
+    });
+    const text = result.content?.[0]?.text || "";
+    res.json({ success: true, response: text, model: "claude-haiku-4-5-20251001" });
+  } catch (err) {
+    res.json({ error: err.message, type: err.constructor.name, stack: err.stack?.split("\n").slice(0, 3) });
+  }
+});
+
 // ─── GET /api/care-intelligence/:recipientId/patterns — Quick patterns (no AI call) ───
 router.get("/:recipientId/patterns", authenticate, async (req, res) => {
   try {

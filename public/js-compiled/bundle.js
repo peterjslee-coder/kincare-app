@@ -18960,9 +18960,10 @@ const Messages = window.Messages = () => {
     if (!inputText.trim() || !activeConvId) return;
     setSending(true);
     try {
-      var _conversations$find;
+      var _activeConv$members;
       // Check if this is an iPAi conversation
-      const isIPAiConv = activeConvId === '__ipai__' || ((_conversations$find = conversations.find(c => c.id === activeConvId)) === null || _conversations$find === void 0 || (_conversations$find = _conversations$find.members) === null || _conversations$find === void 0 ? void 0 : _conversations$find.some(m => m.email === 'ipai@yourinplace.com'));
+      const activeConv = conversations.find(c => c.id === activeConvId);
+      const isIPAiConv = activeConvId === '__ipai__' || (activeConv === null || activeConv === void 0 ? void 0 : activeConv.name) === 'iPAi' || (activeConv === null || activeConv === void 0 ? void 0 : activeConv.otherName) === 'iPAi Assistant' || (activeConv === null || activeConv === void 0 ? void 0 : activeConv.otherName) === 'iPAi' || (activeConv === null || activeConv === void 0 || (_activeConv$members = activeConv.members) === null || _activeConv$members === void 0 ? void 0 : _activeConv$members.some(m => m.name === 'iPAi Assistant' || m.email === 'ipai@yourinplace.com'));
       if (isIPAiConv) {
         // Route through iPAi chat endpoint
         const res = await apiFetch('/api/ipai/chat', {
@@ -19012,12 +19013,12 @@ const Messages = window.Messages = () => {
     setSending(false);
   };
   const handleStartCall = async callType => {
-    var _activeConv$members;
+    var _activeConv$members2;
     if (!activeConvId || !activeConv) return;
 
     // Generate a unique room name
     const roomName = 'inplace-' + activeConvId.substring(0, 8) + '-' + Date.now();
-    const otherMember = (_activeConv$members = activeConv.members) === null || _activeConv$members === void 0 ? void 0 : _activeConv$members.find(m => m.id !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.id));
+    const otherMember = (_activeConv$members2 = activeConv.members) === null || _activeConv$members2 === void 0 ? void 0 : _activeConv$members2.find(m => m.id !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.id));
     const remoteName = otherMember ? otherMember.name || `${otherMember.first_name || ''} ${otherMember.last_name || ''}`.trim() || 'Unknown' : 'Unknown';
 
     // Signal the other user via Socket.io
@@ -19043,8 +19044,8 @@ const Messages = window.Messages = () => {
   const handleEndCall = async durationSecs => {
     // Signal hangup to remote
     if (callState.active && window._socket) {
-      var _activeConv$members2;
-      const otherMember = activeConv === null || activeConv === void 0 || (_activeConv$members2 = activeConv.members) === null || _activeConv$members2 === void 0 ? void 0 : _activeConv$members2.find(m => m.id !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.id));
+      var _activeConv$members3;
+      const otherMember = activeConv === null || activeConv === void 0 || (_activeConv$members3 = activeConv.members) === null || _activeConv$members3 === void 0 ? void 0 : _activeConv$members3.find(m => m.id !== (currentUser === null || currentUser === void 0 ? void 0 : currentUser.id));
       if (otherMember) {
         window._socket.emit('call_hangup', {
           targetUserId: otherMember.id,
@@ -20077,73 +20078,81 @@ const Messages = window.Messages = () => {
         cursor: 'pointer'
       }
     }, "Decline")));
-  })), /*#__PURE__*/React.createElement("div", {
-    className: `msg-conv-item ${activeConvId === '__ipai__' ? 'active' : ''}`,
-    onClick: () => {
-      setActiveConvId('__ipai__');
-      setActiveConvName('iPAi');
-      setActiveConvType('ipai');
-      // Load iPAi conversation messages if they exist
-      const ipaiConv = conversations.find(c => {
-        var _c$members;
-        return (_c$members = c.members) === null || _c$members === void 0 ? void 0 : _c$members.some(m => m.email === 'ipai@yourinplace.com');
-      });
-      if (ipaiConv) {
-        setActiveConvId(ipaiConv.id);
-        handleSelectConversation(ipaiConv);
+  })), (() => {
+    const ipaiConv = conversations.find(c => {
+      var _c$members;
+      return c.name === 'iPAi' || c.otherName === 'iPAi Assistant' || c.otherName === 'iPAi' || ((_c$members = c.members) === null || _c$members === void 0 ? void 0 : _c$members.some(m => m.name === 'iPAi Assistant' || m.email === 'ipai@yourinplace.com'));
+    });
+    const isActive = activeConvId === '__ipai__' || ipaiConv && activeConvId === ipaiConv.id;
+    return /*#__PURE__*/React.createElement("div", {
+      className: `msg-conv-item ${isActive ? 'active' : ''}`,
+      onClick: () => {
+        if (ipaiConv) {
+          handleSelectConversation(ipaiConv);
+        } else {
+          // No existing conversation — set placeholder, first message will create it
+          setActiveConvId('__ipai__');
+          setActiveConvName('iPAi');
+        }
+      },
+      style: {
+        borderBottom: '2px solid #e6f5f0',
+        background: isActive ? '#f0fdf4' : '#f8fffe'
       }
-    },
-    style: {
-      borderBottom: '2px solid #e6f5f0',
-      background: activeConvId === '__ipai__' ? '#f0fdf4' : '#f8fffe'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 44,
-      height: 44,
-      borderRadius: '50%',
-      background: '#1b6b5a',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: '#fff',
-      fontSize: 11,
-      fontWeight: 800,
-      letterSpacing: '-0.5px'
-    }
-  }, "iPAi")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      minWidth: 0,
-      marginLeft: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 700,
-      fontSize: 15,
-      color: '#1b6b5a'
-    }
-  }, "iPAi"), React.createElement(window.IPAiBadge || 'span', {
-    size: 'sm'
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: '#888',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap'
-    }
-  }, "Your AI care assistant \u2014 ask me anything"))), conversations.filter(c => !archivedIds.includes(c.id)).length > 0 ? conversations.filter(c => !archivedIds.includes(c.id)).sort((a, b) => {
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 44,
+        height: 44,
+        borderRadius: '50%',
+        background: '#1b6b5a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: 800,
+        letterSpacing: '-0.5px'
+      }
+    }, "iPAi")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0,
+        marginLeft: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 700,
+        fontSize: 15,
+        color: '#1b6b5a'
+      }
+    }, "iPAi"), React.createElement(window.IPAiBadge || 'span', {
+      size: 'sm'
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#888',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, ipaiConv !== null && ipaiConv !== void 0 && ipaiConv.lastMessage ? ipaiConv.lastMessage.substring(0, 50) : 'Your AI care assistant — ask me anything')));
+  })(), conversations.filter(c => {
+    var _c$members2;
+    return !archivedIds.includes(c.id) && c.name !== 'iPAi' && c.otherName !== 'iPAi Assistant' && c.otherName !== 'iPAi' && !((_c$members2 = c.members) !== null && _c$members2 !== void 0 && _c$members2.some(m => m.email === 'ipai@yourinplace.com'));
+  }).length > 0 ? conversations.filter(c => {
+    var _c$members3;
+    return !archivedIds.includes(c.id) && c.name !== 'iPAi' && c.otherName !== 'iPAi Assistant' && c.otherName !== 'iPAi' && !((_c$members3 = c.members) !== null && _c$members3 !== void 0 && _c$members3.some(m => m.email === 'ipai@yourinplace.com'));
+  }).sort((a, b) => {
     const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
     const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
     return bTime - aTime;
@@ -20434,7 +20443,7 @@ const Messages = window.Messages = () => {
 
   // ─── Chat View ───
   const renderChatView = () => {
-    var _activeConv$members3, _activeConv$members4;
+    var _activeConv$members4, _activeConv$members5;
     const isGroup = isGroupConv(activeConv);
     return /*#__PURE__*/React.createElement("div", {
       className: "msg-panel",
@@ -20499,10 +20508,10 @@ const Messages = window.Messages = () => {
         fontSize: '11px',
         color: '#999'
       }
-    }, isGroup ? `${((_activeConv$members3 = activeConv.members) === null || _activeConv$members3 === void 0 ? void 0 : _activeConv$members3.length) || 0} members` : roleLabel((_activeConv$members4 = activeConv.members) === null || _activeConv$members4 === void 0 || (_activeConv$members4 = _activeConv$members4.find(m => {
-      var _activeConv$members5;
-      return m.id !== ((_activeConv$members5 = activeConv.members) === null || _activeConv$members5 === void 0 || (_activeConv$members5 = _activeConv$members5[0]) === null || _activeConv$members5 === void 0 ? void 0 : _activeConv$members5.id);
-    })) === null || _activeConv$members4 === void 0 ? void 0 : _activeConv$members4.role)))), /*#__PURE__*/React.createElement("button", {
+    }, isGroup ? `${((_activeConv$members4 = activeConv.members) === null || _activeConv$members4 === void 0 ? void 0 : _activeConv$members4.length) || 0} members` : roleLabel((_activeConv$members5 = activeConv.members) === null || _activeConv$members5 === void 0 || (_activeConv$members5 = _activeConv$members5.find(m => {
+      var _activeConv$members6;
+      return m.id !== ((_activeConv$members6 = activeConv.members) === null || _activeConv$members6 === void 0 || (_activeConv$members6 = _activeConv$members6[0]) === null || _activeConv$members6 === void 0 ? void 0 : _activeConv$members6.id);
+    })) === null || _activeConv$members5 === void 0 ? void 0 : _activeConv$members5.role)))), /*#__PURE__*/React.createElement("button", {
       className: "msg-voice-call-btn",
       onClick: () => handleStartCall('voice'),
       title: "Start voice call",
@@ -20647,8 +20656,8 @@ const Messages = window.Messages = () => {
           transform: isMsgSwiping ? 'translateX(' + msgSwipeOffset + 'px)' : 'none',
           transition: isMsgSwiping ? 'none' : 'transform 0.2s'
         }
-      }, showSenderName && !isSent && (_activeConv$members6 => {
-        const senderMember = activeConv === null || activeConv === void 0 || (_activeConv$members6 = activeConv.members) === null || _activeConv$members6 === void 0 ? void 0 : _activeConv$members6.find(mb => mb.id === m.sender_id);
+      }, showSenderName && !isSent && (_activeConv$members7 => {
+        const senderMember = activeConv === null || activeConv === void 0 || (_activeConv$members7 = activeConv.members) === null || _activeConv$members7 === void 0 ? void 0 : _activeConv$members7.find(mb => mb.id === m.sender_id);
         const senderPhoto = (senderMember === null || senderMember === void 0 ? void 0 : senderMember.profilePhoto) || null;
         return senderPhoto ? /*#__PURE__*/React.createElement("img", {
           src: senderPhoto,
