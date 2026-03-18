@@ -147,12 +147,11 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
       first_name: profile.legal_first_name,
       last_name: profile.legal_last_name,
       email: user.email,
-      dob: profile.date_of_birth, // YYYY-MM-DD
-      ssn: profile.ssn_last4, // Checkr accepts last 4 for invitation flow
+      dob: profile.date_of_birth,
+      ssn: profile.ssn_last4,
       zipcode: profile.zip || undefined,
       driver_license_number: profile.dl_number || undefined,
       driver_license_state: profile.dl_state || undefined,
-      work_locations: [{ city: profile.work_city || "Radford", state: profile.work_state || "VA", country: "US" }],
     });
 
     console.log(`[checkr] Candidate created: ${candidate.id}`);
@@ -172,6 +171,7 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
     const invitation = await checkrRequest("POST", "/invitations", {
       candidate_id: candidate.id,
       package: packageSlug,
+      work_locations: [{ city: profile.work_city || "Radford", state: profile.work_state || "VA", country: "US" }],
     });
 
     console.log(`[checkr] Invitation created: ${invitation.id}, status: ${invitation.status}`);
@@ -488,9 +488,9 @@ router.post("/test-candidate", authenticate, async (req, res) => {
   const locations = work_locations || [{ city: city || "Radford", state: state || "VA", country: "US" }];
 
   try {
-    // Step 1: Create candidate
+    // Step 1: Create candidate (without work_locations — goes on invitation)
     console.log(`[checkr-test] Creating candidate: ${first_name} ${last_name}`);
-    const candidate = await checkrRequest("POST", "/candidates", {
+    const candidateBody = {
       first_name,
       last_name,
       email,
@@ -499,15 +499,17 @@ router.post("/test-candidate", authenticate, async (req, res) => {
       zipcode: zipcode || undefined,
       driver_license_number: driver_license_number || undefined,
       driver_license_state: driver_license_state || undefined,
-      work_locations: locations,
-    });
+    };
+    console.log(`[checkr-test] Candidate body:`, JSON.stringify(candidateBody));
+    const candidate = await checkrRequest("POST", "/candidates", candidateBody);
     console.log(`[checkr-test] Candidate created: ${candidate.id}`);
 
-    // Step 2: Create invitation
+    // Step 2: Create invitation WITH work_locations
     const packageSlug = process.env.CHECKR_PACKAGE || "essential_criminal";
     const invitation = await checkrRequest("POST", "/invitations", {
       candidate_id: candidate.id,
       package: packageSlug,
+      work_locations: locations,
     });
     console.log(`[checkr-test] Invitation created: ${invitation.id}, url: ${invitation.invitation_url}`);
 
