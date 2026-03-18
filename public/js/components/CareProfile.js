@@ -458,96 +458,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* ─── 2. AI Care Summary (most useful info first) ─── */}
-      <div className="card" style={{ border: aiSummary ? '2px solid #1b6b5a' : '1px solid #e0e0e0', background: aiSummary ? '#f8fffe' : '#fff' }}>
-        <div className="card-header" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {React.createElement(window.IPAiBadge || 'span', { size: 'md' })}
-          {aiSummary ? `${profile.first_name}'s Care Summary` : 'Care Summary'}
-          {aiSummary && (
-            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#888' }}>
-
-            </span>
-          )}
-        </div>
-        {generatingAI ? (
-          <div style={{ padding: '16px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1b6b5a', fontSize: 14, fontWeight: 600 }}>
-              <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: 18 }}>{'\u2B50'}</span>
-              iPAi is generating {profile.first_name}'s care summary...
-            </div>
-            <style>{'{@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }}'}</style>
-          </div>
-        ) : aiSummary ? (
-          <div>
-            {editingSummary ? (
-              <div>
-                <textarea value={editedSummary} onChange={(e) => setEditedSummary(e.target.value)}
-                  style={{ width: '100%', minHeight: 200, padding: '12px', border: '1px solid #ccc', borderRadius: 8, fontSize: 13, lineHeight: 1.7, color: '#333', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginTop: 12 }} />
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button onClick={saveSummaryEdit} disabled={savingSummary} style={{
-                    padding: '8px 16px', borderRadius: 8, border: 'none',
-                    background: savingSummary ? '#999' : '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 12, cursor: savingSummary ? 'wait' : 'pointer',
-                  }}>{savingSummary ? 'Saving...' : 'Save Changes'}</button>
-                  <button onClick={() => setEditingSummary(false)} style={{
-                    padding: '8px 16px', borderRadius: 8, border: '1px solid #d0d0d0',
-                    background: '#fff', color: '#666', fontWeight: 600, fontSize: 12, cursor: 'pointer',
-                  }}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.7, color: '#333', padding: '12px 0', fontFamily: 'inherit' }}>{aiSummary}</div>
-                {aiSummaryDate && (
-                  <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>
-                    Generated {new Date(aiSummaryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => { setEditedSummary(aiSummary); setEditingSummary(true); }} style={{
-                    padding: '8px 16px', borderRadius: 8, border: '1px solid #1b6b5a',
-                    background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 12, cursor: 'pointer',
-                  }}>{'\u270F\uFE0F'} Edit Summary</button>
-                  <button onClick={generateAISummary} disabled={generatingAI} style={{
-                    padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc',
-                    background: '#fff', color: generatingAI ? '#999' : '#666', fontWeight: 600, fontSize: 12, cursor: generatingAI ? 'wait' : 'pointer',
-                  }}>{'\u2728'} Regenerate</button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : Object.values(carePrefs).filter(v => v > 0).length >= 3 ? (
-          <div style={{ padding: '12px 0' }}>
-            <p style={{ fontSize: 13, color: '#555', margin: '0 0 12px', lineHeight: 1.5 }}>
-              Care preferences saved. Generate a summary that caregivers can review before visiting {profile.first_name}.
-            </p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={generateAISummary} disabled={generatingAI} style={{
-                padding: '8px 16px', borderRadius: 8, border: 'none',
-                background: '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 13, cursor: generatingAI ? 'wait' : 'pointer',
-              }}>{'\u2728'} Generate Care Summary</button>
-              <button onClick={() => { setPrefsExpanded(true); }} style={{
-                padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc',
-                background: '#fff', color: '#666', fontWeight: 600, fontSize: 13, cursor: 'pointer',
-              }}>Edit Preferences</button>
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: '12px 0' }}>
-            <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>
-              Rate care preferences below, then generate a summary that caregivers can review before visiting {profile.first_name}. Powered by iPAi.
-            </p>
-            <button onClick={() => { setPrefsExpanded(true); }} style={{
-              padding: '8px 16px', borderRadius: 8, border: 'none',
-              background: '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer',
-            }}>Set Up Care Preferences</button>
-          </div>
-        )}
-      </div>
-
-      {/* ─── 2b. iPAi Care Intelligence (deep insights) ─── */}
+      {/* ─── 2. iPAi Care Intelligence (replaces old Care Summary) ─── */}
       {profile && (
-        <IPAiInsightsCard recipientId={profile.id} recipientName={profile.first_name} />
+        <IPAiInsightsCard recipientId={profile.id} recipientName={profile.first_name} existingSummary={aiSummary} />
       )}
+
+      {/* Old Care Summary section removed — replaced by iPAi Intelligence (section 2 above) */}
 
       {/* ─── 3. Health Conditions & Medications (combined, compact) ─── */}
       <div className="card">

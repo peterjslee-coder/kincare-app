@@ -9156,220 +9156,10 @@ const CareProfile = window.CareProfile = ({
     value: editData.emergency_contact_phone,
     onChange: e => ed('emergency_contact_phone', formatPhone(e.target.value)),
     placeholder: "(555) 123-4567"
-  })))), /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      border: aiSummary ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-      background: aiSummary ? '#f8fffe' : '#fff'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "card-header",
-    style: {
-      margin: 0,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8
-    }
-  }, React.createElement(window.IPAiBadge || 'span', {
-    size: 'md'
-  }), aiSummary ? `${profile.first_name}'s Care Summary` : 'Care Summary', aiSummary && /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: 8,
-      fontSize: 11,
-      fontWeight: 400,
-      color: '#888'
-    }
-  })), generatingAI ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '16px 0'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      color: '#1b6b5a',
-      fontSize: 14,
-      fontWeight: 600
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'inline-block',
-      animation: 'spin 1s linear infinite',
-      fontSize: 18
-    }
-  }, '\u2B50'), "iPAi is generating ", profile.first_name, "'s care summary..."), /*#__PURE__*/React.createElement("style", null, '{@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }}')) : aiSummary ? /*#__PURE__*/React.createElement("div", null, editingSummary ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("textarea", {
-    value: editedSummary,
-    onChange: e => setEditedSummary(e.target.value),
-    style: {
-      width: '100%',
-      minHeight: 200,
-      padding: '12px',
-      border: '1px solid #ccc',
-      borderRadius: 8,
-      fontSize: 13,
-      lineHeight: 1.7,
-      color: '#333',
-      fontFamily: 'inherit',
-      resize: 'vertical',
-      boxSizing: 'border-box',
-      marginTop: 12
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8,
-      marginTop: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: saveSummaryEdit,
-    disabled: savingSummary,
-    style: {
-      padding: '8px 16px',
-      borderRadius: 8,
-      border: 'none',
-      background: savingSummary ? '#999' : '#1b6b5a',
-      color: '#fff',
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: savingSummary ? 'wait' : 'pointer'
-    }
-  }, savingSummary ? 'Saving...' : 'Save Changes'), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setEditingSummary(false),
-    style: {
-      padding: '8px 16px',
-      borderRadius: 8,
-      border: '1px solid #d0d0d0',
-      background: '#fff',
-      color: '#666',
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: 'pointer'
-    }
-  }, "Cancel"))) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      whiteSpace: 'pre-wrap',
-      fontSize: 13,
-      lineHeight: 1.7,
-      color: '#333',
-      padding: '12px 0',
-      fontFamily: 'inherit'
-    }
-  }, aiSummary), aiSummaryDate && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: '#999',
-      marginBottom: 8
-    }
-  }, "Generated ", new Date(aiSummaryDate).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setEditedSummary(aiSummary);
-      setEditingSummary(true);
-    },
-    style: {
-      padding: '8px 16px',
-      borderRadius: 8,
-      border: '1px solid #1b6b5a',
-      background: '#fff',
-      color: '#1b6b5a',
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: 'pointer'
-    }
-  }, '\u270F\uFE0F', " Edit Summary"), /*#__PURE__*/React.createElement("button", {
-    onClick: generateAISummary,
-    disabled: generatingAI,
-    style: {
-      padding: '8px 16px',
-      borderRadius: 8,
-      border: '1px solid #ccc',
-      background: '#fff',
-      color: generatingAI ? '#999' : '#666',
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: generatingAI ? 'wait' : 'pointer'
-    }
-  }, '\u2728', " Regenerate")))) : Object.values(carePrefs).filter(v => v > 0).length >= 3 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '12px 0'
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      color: '#555',
-      margin: '0 0 12px',
-      lineHeight: 1.5
-    }
-  }, "Care preferences saved. Generate a summary that caregivers can review before visiting ", profile.first_name, "."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8,
-      flexWrap: 'wrap'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: generateAISummary,
-    disabled: generatingAI,
-    style: {
-      padding: '8px 16px',
-      borderRadius: 8,
-      border: 'none',
-      background: '#1b6b5a',
-      color: '#fff',
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: generatingAI ? 'wait' : 'pointer'
-    }
-  }, '\u2728', " Generate Care Summary"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setPrefsExpanded(true);
-    },
-    style: {
-      padding: '8px 16px',
-      borderRadius: 8,
-      border: '1px solid #ccc',
-      background: '#fff',
-      color: '#666',
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: 'pointer'
-    }
-  }, "Edit Preferences"))) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '12px 0'
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      color: '#888',
-      margin: '0 0 12px',
-      lineHeight: 1.5
-    }
-  }, "Rate care preferences below, then generate a summary that caregivers can review before visiting ", profile.first_name, ". Powered by iPAi."), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setPrefsExpanded(true);
-    },
-    style: {
-      padding: '8px 16px',
-      borderRadius: 8,
-      border: 'none',
-      background: '#1b6b5a',
-      color: '#fff',
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: 'pointer'
-    }
-  }, "Set Up Care Preferences"))), profile && /*#__PURE__*/React.createElement(IPAiInsightsCard, {
+  })))), profile && /*#__PURE__*/React.createElement(IPAiInsightsCard, {
     recipientId: profile.id,
-    recipientName: profile.first_name
+    recipientName: profile.first_name,
+    existingSummary: aiSummary
   }), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
@@ -55305,13 +55095,24 @@ const IPAiBadge = window.IPAiBadge = ({
  */
 const IPAiInsightsCard = window.IPAiInsightsCard = ({
   recipientId,
-  recipientName
+  recipientName,
+  existingSummary
 }) => {
   const [intelligence, setIntelligence] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(!!existingSummary);
   const [showGuidance, setShowGuidance] = useState(false);
+  const [editingFamilyNote, setEditingFamilyNote] = useState(false);
+  const [familyNoteText, setFamilyNoteText] = useState('');
+
+  // Load family AI notes on mount
+  useEffect(() => {
+    if (!recipientId) return;
+    apiFetch(`/api/care-recipients/${recipientId}`).then(r => r !== null && r !== void 0 && r.ok ? r.json() : null).then(data => {
+      if (data !== null && data !== void 0 && data.family_ai_notes) setFamilyNoteText(data.family_ai_notes);
+    }).catch(() => {});
+  }, [recipientId]);
   const generate = async () => {
     setLoading(true);
     setError(null);
@@ -55319,11 +55120,13 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
       const res = await apiFetch(`/api/care-intelligence/${recipientId}`);
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
-        if (data.error) {
-          setError(data.error);
+        if (data.error && !data.intelligence && !data.analysis) {
+          setError(data.error + (data.detail ? ': ' + data.detail : ''));
         } else {
+          // May have error but also partial data (analysis without AI)
           setIntelligence(data);
           setExpanded(true);
+          if (data.error) setError(data.error);
         }
       } else {
         const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
@@ -55365,14 +55168,31 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
     style: {
       padding: '12px 0'
     }
-  }, /*#__PURE__*/React.createElement("p", {
+  }, existingSummary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      lineHeight: 1.7,
+      color: '#333',
+      padding: '10px 12px',
+      background: '#f8f9fa',
+      borderRadius: 8,
+      marginBottom: 12,
+      whiteSpace: 'pre-wrap'
+    }
+  }, existingSummary, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#999',
+      marginTop: 6
+    }
+  }, "Existing care summary \u2014 generate iPAi intelligence to enhance with visit data analysis")), /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 13,
       color: '#666',
       margin: '0 0 12px',
       lineHeight: 1.5
     }
-  }, "Analyze ", recipientName, "'s visit history, behavioral patterns, and health conditions to generate deep care insights powered by AI. Connects observations with medical knowledge to suggest optimal care strategies."), /*#__PURE__*/React.createElement("button", {
+  }, existingSummary ? `Ready to enhance ${recipientName}'s care profile. iPAi will combine your notes, visit observations, and care knowledge to create personalized guidance — the more details you share, the better ${recipientName}'s caregivers can serve your family.` : `iPAi learns about ${recipientName} from every visit — tracking patterns, moods, and what works best. The more your family shares, the smarter the guidance becomes for everyone on ${recipientName}'s care team.`), /*#__PURE__*/React.createElement("button", {
     onClick: generate,
     disabled: loading,
     style: {
@@ -55573,6 +55393,108 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
         whiteSpace: 'pre-wrap'
       }
     }, intel.caregiverGuidance))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12,
+        padding: '10px 12px',
+        background: '#f0f4ff',
+        borderRadius: 8,
+        border: '1px solid #c5cae9'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: '#3949ab',
+        marginBottom: 6,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6
+      }
+    }, '\u{1F4D6}', " Your Family's Notes", /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 400,
+        color: '#7986cb'
+      }
+    }, " \u2014 everything you share helps iPAi give better care guidance")), editingFamilyNote ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("textarea", {
+      value: familyNoteText,
+      onChange: e => setFamilyNoteText(e.target.value),
+      placeholder: `Share anything that helps ${recipientName}'s caregivers...\n\nThings like:\n• "She takes her pills better with applesauce"\n• "She gets upset if you mention her late husband"\n• "Frank Sinatra during meal prep always makes her smile"\n• "She's a morning person — best before noon"\n\nThe more you share, the better iPAi can guide ${recipientName}'s care team.`,
+      style: {
+        width: '100%',
+        minHeight: 80,
+        padding: 10,
+        border: '1px solid #c5cae9',
+        borderRadius: 8,
+        fontSize: 13,
+        fontFamily: 'inherit',
+        color: '#1a237e',
+        resize: 'vertical',
+        boxSizing: 'border-box'
+      },
+      autoFocus: true
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        marginTop: 8
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: async () => {
+        try {
+          await apiFetch(`/api/care-recipients/${recipientId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              family_ai_notes: familyNoteText.trim()
+            })
+          });
+          setEditingFamilyNote(false);
+          if (typeof showToast === 'function') showToast('Notes saved — iPAi will incorporate these on next regeneration', 'success');
+        } catch {
+          if (typeof showToast === 'function') showToast('Failed to save notes', 'error');
+        }
+      },
+      style: {
+        padding: '6px 14px',
+        background: '#3949ab',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Save Notes"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setEditingFamilyNote(false),
+      style: {
+        padding: '6px 14px',
+        background: '#fff',
+        color: '#666',
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Cancel"))) : /*#__PURE__*/React.createElement("div", null, familyNoteText ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#1a237e',
+        lineHeight: 1.5,
+        whiteSpace: 'pre-wrap',
+        marginBottom: 6
+      }
+    }, familyNoteText) : null, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setEditingFamilyNote(true),
+      style: {
+        padding: '4px 10px',
+        background: '#fff',
+        color: '#3949ab',
+        border: '1px solid #c5cae9',
+        borderRadius: 6,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, familyNoteText ? 'Edit Notes' : `+ Add notes about ${recipientName}`))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',

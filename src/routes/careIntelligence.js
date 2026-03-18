@@ -28,10 +28,15 @@ router.get("/:recipientId", authenticate, async (req, res) => {
     }
 
     const result = await generateCareIntelligence(req.params.recipientId);
+    if (result.error) {
+      console.error("[iPAi] Care intelligence error:", result.error);
+      // Still return the result — it may have partial data (analysis without AI)
+      return res.status(result.error === "AI not configured" ? 503 : 200).json(result);
+    }
     res.json(result);
   } catch (err) {
-    console.error("[iPAi] Care intelligence route error:", err);
-    res.status(500).json({ error: "Failed to generate care intelligence" });
+    console.error("[iPAi] Care intelligence route error:", err.message, err.stack);
+    res.status(500).json({ error: "Failed to generate care intelligence", detail: err.message });
   }
 });
 

@@ -782,6 +782,10 @@ async function initializeDatabase() {
     // v1.47.1 — iPAi session summaries + coaching
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS ai_summary TEXT`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS ai_coaching TEXT`,
+    // v1.48.1 — Family AI notes + care plan
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS family_ai_notes TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_plan TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_plan_updated_at TIMESTAMPTZ`,
     // v1.46.12 — Cost tracking
     `CREATE TABLE IF NOT EXISTS platform_costs (
       id TEXT PRIMARY KEY,

@@ -200,6 +200,9 @@ ${visitSummaries || "No visits recorded yet."}
 CARE NOTES:
 ${notesSummary || "No care notes yet."}
 
+FAMILY ADDITIONS (direct input from the family — treat these as high-priority context):
+${recipient.family_ai_notes || "None yet."}
+
 BEHAVIORAL PATTERNS DETECTED:
 - Frequent condition tags: ${analysis.frequentTags.map(t => `${t.tag} (${t.pct}% of visits)`).join(", ") || "none yet"}
 - Mood by time: ${analysis.patterns.filter(p => p.type === "mood_by_time").map(p => `${p.period}: avg ${p.avgMood.toFixed(1)}/5 (${p.count} visits)`).join(", ") || "insufficient data"}
@@ -237,8 +240,8 @@ IMPORTANT: Return ONLY the JSON object, no markdown formatting or code blocks.`;
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5-20250514",
-        max_tokens: 2000,
+        model: "claude-sonnet-4-5-20250929",
+        max_tokens: 2500,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -275,7 +278,7 @@ IMPORTANT: Return ONLY the JSON object, no markdown formatting or code blocks.`;
       analysis,
       generatedAt: new Date().toISOString(),
       recipientName,
-      model: "claude-sonnet-4-5-20250514",
+      model: "claude-sonnet-4-5-20250929",
     };
   } catch (err) {
     console.error("[iPAi] Care intelligence error:", err);
@@ -478,7 +481,7 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or code blocks. Be
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5-20250514",
+        model: "claude-sonnet-4-5-20250929",
         max_tokens: 2500,
         messages: [{ role: "user", content: prompt }],
       }),
