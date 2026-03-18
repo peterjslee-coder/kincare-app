@@ -152,6 +152,7 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
       zipcode: profile.zip || undefined,
       driver_license_number: profile.dl_number || undefined,
       driver_license_state: profile.dl_state || undefined,
+      work_locations: [{ city: profile.work_city || "Radford", state: profile.work_state || "VA", country: "US" }],
     });
 
     console.log(`[checkr] Candidate created: ${candidate.id}`);
@@ -477,11 +478,14 @@ router.post("/test-candidate", authenticate, async (req, res) => {
     return res.status(503).json({ error: "CHECKR_API_KEY not configured" });
   }
 
-  const { first_name, last_name, email, ssn, dob, zipcode, driver_license_number, driver_license_state } = req.body;
+  const { first_name, last_name, email, ssn, dob, zipcode, driver_license_number, driver_license_state, work_locations, city, state } = req.body;
 
   if (!first_name || !last_name || !email) {
     return res.status(400).json({ error: "first_name, last_name, and email are required" });
   }
+
+  // Build work_locations — Checkr staging requires this
+  const locations = work_locations || [{ city: city || "Radford", state: state || "VA", country: "US" }];
 
   try {
     // Step 1: Create candidate
@@ -495,6 +499,7 @@ router.post("/test-candidate", authenticate, async (req, res) => {
       zipcode: zipcode || undefined,
       driver_license_number: driver_license_number || undefined,
       driver_license_state: driver_license_state || undefined,
+      work_locations: locations,
     });
     console.log(`[checkr-test] Candidate created: ${candidate.id}`);
 
