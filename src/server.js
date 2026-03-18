@@ -298,7 +298,7 @@ app.use("/api/care-intelligence", require("./routes/careIntelligence"));
 app.use("/api/scheduling", require("./routes/nlScheduling"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.48.1";
+const APP_VERSION = "1.48.2";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
