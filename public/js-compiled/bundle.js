@@ -48173,6 +48173,40 @@ const AdminPanel = window.AdminPanel = () => {
   });
   const [expandedFeedback, setExpandedFeedback] = useState(null);
   const [feedbackEditNotes, setFeedbackEditNotes] = useState('');
+  // Safety flags
+  const [safetyFlags, setSafetyFlags] = useState([]);
+  const [safetyFlagCount, setSafetyFlagCount] = useState(0);
+  const [safetyLoading, setSafetyLoading] = useState(false);
+  const [safetyReviewNotes, setSafetyReviewNotes] = useState('');
+  const loadSafetyFlags = async () => {
+    setSafetyLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/safety-flags');
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setSafetyFlags(data.flags || []);
+        setSafetyFlagCount((data.flags || []).filter(f => f.status === 'pending').length);
+      }
+    } catch {}
+    setSafetyLoading(false);
+  };
+  const handleReviewFlag = async (flagId, status) => {
+    try {
+      const res = await apiFetch(`/api/admin/safety-flags/${flagId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          status,
+          admin_notes: safetyReviewNotes
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast('Flag updated', 'success');
+        setSafetyReviewNotes('');
+        loadSafetyFlags();
+      }
+    } catch {}
+  };
+
   // Blocked emails state
   const [blockedEmails, setBlockedEmails] = useState([]);
   const [blockEmailInput, setBlockEmailInput] = useState('');
@@ -48537,9 +48571,13 @@ const AdminPanel = window.AdminPanel = () => {
     loadStats();
     fetchPendingApprovals();
     loadPausedCaregivers();
+    loadSafetyFlags();
     // Fetch new feedback count for tab badge
     apiFetch('/api/admin/alerts').then(r => r !== null && r !== void 0 && r.ok ? r.json() : null).then(d => {
-      if (d) setNewFeedbackCount(d.newFeedback || 0);
+      if (d) {
+        setNewFeedbackCount(d.newFeedback || 0);
+        setSafetyFlagCount(d.safetyFlags || 0);
+      }
     }).catch(() => {});
     // Fetch current user for settings tab
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
@@ -48566,6 +48604,7 @@ const AdminPanel = window.AdminPanel = () => {
       loadNoShowSessions();
       loadPausedCaregivers();
     }
+    if (activeTab === 'safety') loadSafetyFlags();
     if (activeTab === 'costs') loadCosts();
   }, [activeTab]);
 
@@ -49291,6 +49330,11 @@ const AdminPanel = window.AdminPanel = () => {
       label: 'Auth',
       icon: '\u{1F512}',
       badge: consentAlerts.length || null
+    }, {
+      id: 'safety',
+      label: 'Safety Flags',
+      icon: '🚨',
+      badge: safetyFlagCount || null
     }, {
       id: 'customerservice',
       label: 'Support',
@@ -54543,7 +54587,185 @@ const AdminPanel = window.AdminPanel = () => {
       textAlign: 'center',
       color: '#999'
     }
-  }, "No caregiver profile found for this user."))), activeTab === 'costs' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "No caregiver profile found for this user."))), activeTab === 'safety' && /*#__PURE__*/React.createElement("div", null, safetyLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: 40,
+      color: '#888'
+    }
+  }, "Loading safety flags...") : safetyFlags.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      textAlign: 'center',
+      color: '#888',
+      padding: 40
+    }
+  }, "No safety flags. iPAi monitors all conversations for abuse, exploitation, and off-platform circumvention attempts.") : /*#__PURE__*/React.createElement("div", null, safetyFlags.map(f => {
+    const isAbuse = f.flag_type === 'abuse_signal' || f.flag_type === 'abuse_concern';
+    const isPending = f.status === 'pending';
+    return /*#__PURE__*/React.createElement("div", {
+      key: f.id,
+      className: "card",
+      style: {
+        marginBottom: 10,
+        border: isPending ? `2px solid ${isAbuse ? '#dc2626' : '#ff9800'}` : '1px solid #e5e7eb',
+        background: isPending ? isAbuse ? '#fef2f2' : '#fff8f0' : '#fff'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: 12,
+        flexWrap: 'wrap'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16
+      }
+    }, isAbuse ? '\u{1F6A8}' : '\u26A0\uFE0F'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 700,
+        fontSize: 14,
+        color: isAbuse ? '#dc2626' : '#e65100'
+      }
+    }, isAbuse ? 'Abuse / Safety Concern' : 'Off-Platform Attempt'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        padding: '2px 8px',
+        borderRadius: 4,
+        fontWeight: 600,
+        background: isPending ? '#ffebee' : f.status === 'resolved' ? '#e8f5e9' : '#f5f5f5',
+        color: isPending ? '#c62828' : f.status === 'resolved' ? '#2e7d32' : '#888'
+      }
+    }, f.status)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 13
+      }
+    }, f.first_name, " ", f.last_name, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 400,
+        color: '#888',
+        marginLeft: 6
+      }
+    }, f.email)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#888',
+        marginTop: 2
+      }
+    }, new Date(f.created_at).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 8,
+        padding: 10,
+        background: '#f8f9fa',
+        borderRadius: 8,
+        fontSize: 13,
+        color: '#333',
+        lineHeight: 1.5,
+        borderLeft: `3px solid ${isAbuse ? '#dc2626' : '#ff9800'}`
+      }
+    }, "\"", f.user_message, "\""), f.admin_notes && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 6,
+        fontSize: 12,
+        color: '#1b6b5a',
+        fontStyle: 'italic'
+      }
+    }, "Admin notes: ", f.admin_notes, " \u2014 ", f.reviewer_first, " ", f.reviewer_last))), isPending && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 10,
+        display: 'flex',
+        gap: 8,
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "text",
+      placeholder: "Add notes...",
+      value: safetyReviewNotes,
+      onChange: e => setSafetyReviewNotes(e.target.value),
+      style: {
+        flex: 1,
+        minWidth: 150,
+        padding: 8,
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        fontSize: 13
+      }
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleReviewFlag(f.id, 'resolved'),
+      style: {
+        padding: '6px 14px',
+        background: '#1b6b5a',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, '\u2705', " Resolved"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleReviewFlag(f.id, 'escalated'),
+      style: {
+        padding: '6px 14px',
+        background: '#dc2626',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, '\u{1F6A8}', " Escalate"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleReviewFlag(f.id, 'dismissed'),
+      style: {
+        padding: '6px 14px',
+        background: '#f5f5f5',
+        color: '#888',
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Dismiss"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setAdminMsgTarget({
+          userId: f.user_id,
+          name: `${f.first_name} ${f.last_name}`
+        });
+        setAdminMsgText('');
+      },
+      style: {
+        padding: '6px 14px',
+        background: '#fff',
+        color: '#1b6b5a',
+        border: '1px solid #1b6b5a',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, '\u{1F4AC}', " Message")));
+  }))), activeTab === 'costs' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"

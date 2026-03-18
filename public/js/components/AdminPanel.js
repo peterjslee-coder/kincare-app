@@ -32,6 +32,39 @@ const AdminPanel = window.AdminPanel = () => {
   const [feedbackFilter, setFeedbackFilter] = useState({ category: '', status: '' });
   const [expandedFeedback, setExpandedFeedback] = useState(null);
   const [feedbackEditNotes, setFeedbackEditNotes] = useState('');
+  // Safety flags
+  const [safetyFlags, setSafetyFlags] = useState([]);
+  const [safetyFlagCount, setSafetyFlagCount] = useState(0);
+  const [safetyLoading, setSafetyLoading] = useState(false);
+  const [safetyReviewNotes, setSafetyReviewNotes] = useState('');
+
+  const loadSafetyFlags = async () => {
+    setSafetyLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/safety-flags');
+      if (res?.ok) {
+        const data = await res.json();
+        setSafetyFlags(data.flags || []);
+        setSafetyFlagCount((data.flags || []).filter(f => f.status === 'pending').length);
+      }
+    } catch {}
+    setSafetyLoading(false);
+  };
+
+  const handleReviewFlag = async (flagId, status) => {
+    try {
+      const res = await apiFetch(`/api/admin/safety-flags/${flagId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status, admin_notes: safetyReviewNotes }),
+      });
+      if (res?.ok) {
+        showToast('Flag updated', 'success');
+        setSafetyReviewNotes('');
+        loadSafetyFlags();
+      }
+    } catch {}
+  };
+
   // Blocked emails state
   const [blockedEmails, setBlockedEmails] = useState([]);
   const [blockEmailInput, setBlockEmailInput] = useState('');
@@ -344,9 +377,13 @@ const AdminPanel = window.AdminPanel = () => {
     loadStats();
     fetchPendingApprovals();
     loadPausedCaregivers();
+    loadSafetyFlags();
     // Fetch new feedback count for tab badge
     apiFetch('/api/admin/alerts').then(r => r?.ok ? r.json() : null).then(d => {
-      if (d) setNewFeedbackCount(d.newFeedback || 0);
+      if (d) {
+        setNewFeedbackCount(d.newFeedback || 0);
+        setSafetyFlagCount(d.safetyFlags || 0);
+      }
     }).catch(() => {});
     // Fetch current user for settings tab
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
@@ -363,6 +400,7 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'customerservice') loadCsReviews();
     if (activeTab === 'security') { loadSecDashboard(); loadSecAuditLog(); }
     if (activeTab === 'sessions') { loadNoShowSessions(); loadPausedCaregivers(); }
+    if (activeTab === 'safety') loadSafetyFlags();
     if (activeTab === 'costs') loadCosts();
   }, [activeTab]);
 
@@ -937,6 +975,7 @@ const AdminPanel = window.AdminPanel = () => {
     ]},
     { label: 'Trust & Safety', tabs: [
       { id: 'authorizations', label: 'Auth', icon: '\u{1F512}', badge: consentAlerts.length || null },
+      { id: 'safety', label: 'Safety Flags', icon: '🚨', badge: safetyFlagCount || null },
       { id: 'customerservice', label: 'Support', icon: '🛎️' },
       { id: 'security', label: 'Security', icon: '🛡️' },
       { id: 'blocked', label: 'Blocked', icon: '🚫' },
@@ -3307,6 +3346,86 @@ const AdminPanel = window.AdminPanel = () => {
           </div>
         </div>
       )}
+      {/* ── SAFETY FLAGS TAB ── */}
+      {activeTab === 'safety' && (
+        <div>
+          {safetyLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Loading safety flags...</div>
+          ) : safetyFlags.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', color: '#888', padding: 40 }}>
+              No safety flags. iPAi monitors all conversations for abuse, exploitation, and off-platform circumvention attempts.
+            </div>
+          ) : (
+            <div>
+              {safetyFlags.map(f => {
+                const isAbuse = f.flag_type === 'abuse_signal' || f.flag_type === 'abuse_concern';
+                const isPending = f.status === 'pending';
+                return (
+                  <div key={f.id} className="card" style={{
+                    marginBottom: 10, border: isPending ? `2px solid ${isAbuse ? '#dc2626' : '#ff9800'}` : '1px solid #e5e7eb',
+                    background: isPending ? (isAbuse ? '#fef2f2' : '#fff8f0') : '#fff',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 16 }}>{isAbuse ? '\u{1F6A8}' : '\u26A0\uFE0F'}</span>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: isAbuse ? '#dc2626' : '#e65100' }}>
+                            {isAbuse ? 'Abuse / Safety Concern' : 'Off-Platform Attempt'}
+                          </span>
+                          <span style={{
+                            fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
+                            background: isPending ? '#ffebee' : f.status === 'resolved' ? '#e8f5e9' : '#f5f5f5',
+                            color: isPending ? '#c62828' : f.status === 'resolved' ? '#2e7d32' : '#888',
+                          }}>{f.status}</span>
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>
+                          {f.first_name} {f.last_name}
+                          <span style={{ fontWeight: 400, color: '#888', marginLeft: 6 }}>{f.email}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                          {new Date(f.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </div>
+                        <div style={{ marginTop: 8, padding: 10, background: '#f8f9fa', borderRadius: 8, fontSize: 13, color: '#333', lineHeight: 1.5, borderLeft: `3px solid ${isAbuse ? '#dc2626' : '#ff9800'}` }}>
+                          "{f.user_message}"
+                        </div>
+                        {f.admin_notes && (
+                          <div style={{ marginTop: 6, fontSize: 12, color: '#1b6b5a', fontStyle: 'italic' }}>
+                            Admin notes: {f.admin_notes} — {f.reviewer_first} {f.reviewer_last}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {isPending && (
+                      <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input type="text" placeholder="Add notes..." value={safetyReviewNotes}
+                          onChange={e => setSafetyReviewNotes(e.target.value)}
+                          style={{ flex: 1, minWidth: 150, padding: 8, border: '1px solid #ddd', borderRadius: 6, fontSize: 13 }} />
+                        <button onClick={() => handleReviewFlag(f.id, 'resolved')}
+                          style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                          {'\u2705'} Resolved
+                        </button>
+                        <button onClick={() => handleReviewFlag(f.id, 'escalated')}
+                          style={{ padding: '6px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                          {'\u{1F6A8}'} Escalate
+                        </button>
+                        <button onClick={() => handleReviewFlag(f.id, 'dismissed')}
+                          style={{ padding: '6px 14px', background: '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                          Dismiss
+                        </button>
+                        <button onClick={() => { setAdminMsgTarget({ userId: f.user_id, name: `${f.first_name} ${f.last_name}` }); setAdminMsgText(''); }}
+                          style={{ padding: '6px 14px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                          {'\u{1F4AC}'} Message
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── COSTS TAB ── */}
       {activeTab === 'costs' && (
         <div>
