@@ -78,7 +78,10 @@ router.get("/", async (req, res) => {
 // ─── POST /api/help — Admin: create article ───
 router.post("/", authenticate, async (req, res) => {
   try {
-    if (!req.isAdmin) return res.status(403).json({ error: "Admin access required" });
+    if (!req.isAdmin) {
+      const adminCheck = await getDb().then(db => db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id));
+      if (!adminCheck?.is_admin) return res.status(403).json({ error: "Admin access required" });
+    }
     const db = await getDb();
     const { category, question, answer, link_page, link_label, role_visibility, sort_order, related_feedback_ids } = req.body;
 
@@ -106,7 +109,10 @@ router.post("/", authenticate, async (req, res) => {
 // ─── PUT /api/help/:id — Admin: update article ───
 router.put("/:id", authenticate, async (req, res) => {
   try {
-    if (!req.isAdmin) return res.status(403).json({ error: "Admin access required" });
+    if (!req.isAdmin) {
+      const adminCheck = await getDb().then(db => db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id));
+      if (!adminCheck?.is_admin) return res.status(403).json({ error: "Admin access required" });
+    }
     const db = await getDb();
     const existing = await db.prepare("SELECT * FROM help_articles WHERE id = ?").get(req.params.id);
     if (!existing) return res.status(404).json({ error: "Article not found" });
@@ -143,7 +149,10 @@ router.put("/:id", authenticate, async (req, res) => {
 // ─── DELETE /api/help/:id — Admin: soft-delete (unpublish) article ───
 router.delete("/:id", authenticate, async (req, res) => {
   try {
-    if (!req.isAdmin) return res.status(403).json({ error: "Admin access required" });
+    if (!req.isAdmin) {
+      const adminCheck = await getDb().then(db => db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id));
+      if (!adminCheck?.is_admin) return res.status(403).json({ error: "Admin access required" });
+    }
     const db = await getDb();
     const existing = await db.prepare("SELECT * FROM help_articles WHERE id = ?").get(req.params.id);
     if (!existing) return res.status(404).json({ error: "Article not found" });
@@ -159,7 +168,10 @@ router.delete("/:id", authenticate, async (req, res) => {
 // ─── GET /api/help/admin — Admin: list ALL articles (including unpublished) ───
 router.get("/admin", authenticate, async (req, res) => {
   try {
-    if (!req.isAdmin) return res.status(403).json({ error: "Admin access required" });
+    if (!req.isAdmin) {
+      const adminCheck = await getDb().then(db => db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id));
+      if (!adminCheck?.is_admin) return res.status(403).json({ error: "Admin access required" });
+    }
     const db = await getDb();
     const articles = await db.prepare("SELECT * FROM help_articles ORDER BY category ASC, sort_order ASC, created_at ASC").all();
 
