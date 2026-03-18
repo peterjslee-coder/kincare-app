@@ -106,6 +106,9 @@ const AdminPanel = window.AdminPanel = () => {
   const [costLoading, setCostLoading] = useState(false);
   const [newCost, setNewCost] = useState({ category: '', description: '', amount: '', period_month: new Date().toISOString().substring(0, 7) });
   const [costSaving, setCostSaving] = useState(false);
+  const [costRecurring, setCostRecurring] = useState([]);
+  const [newRecurring, setNewRecurring] = useState({ category: '', description: '', amount: '', recurrence: 'monthly', start_month: new Date().toISOString().substring(0, 7) });
+  const [recurSaving, setRecurSaving] = useState(false);
 
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
 
@@ -116,10 +119,27 @@ const AdminPanel = window.AdminPanel = () => {
         apiFetch('/api/costs/summary?months=6'),
         apiFetch('/api/costs'),
       ]);
-      if (summaryRes?.ok) { const d = await summaryRes.json(); setCostSummary(d.summary || []); }
+      if (summaryRes?.ok) { const d = await summaryRes.json(); setCostSummary(d.summary || []); setCostRecurring(d.recurring || []); }
       if (entriesRes?.ok) { const d = await entriesRes.json(); setCostEntries(d.costs || []); }
     } catch {}
     setCostLoading(false);
+  };
+
+  const handleAddRecurring = async () => {
+    if (!newRecurring.category || !newRecurring.amount) return;
+    setRecurSaving(true);
+    try {
+      const res = await apiFetch('/api/costs/recurring', {
+        method: 'POST',
+        body: JSON.stringify(newRecurring),
+      });
+      if (res?.ok) {
+        showToast('Recurring expense added', 'success');
+        setNewRecurring({ category: '', description: '', amount: '', recurrence: 'monthly', start_month: new Date().toISOString().substring(0, 7) });
+        loadCosts();
+      }
+    } catch {}
+    setRecurSaving(false);
   };
 
   const handleAddCost = async () => {
@@ -3246,89 +3266,130 @@ const AdminPanel = window.AdminPanel = () => {
       {/* ── COSTS TAB ── */}
       {activeTab === 'costs' && (
         <div>
+          {/* Recurring Expenses */}
           <div className="card">
-            <div className="card-header">Add Cost Entry</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <div className="card-header">Recurring Expenses</div>
+            {(costSummary.length > 0 && costRecurring.length > 0) ? (
+              <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+                {costRecurring.map(r => (
+                  <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{r.category}</span>
+                      <span style={{ marginLeft: 6, fontSize: 11, color: '#888' }}>{r.description || ''}</span>
+                      <span style={{ marginLeft: 6, fontSize: 10, background: '#e8f5e9', color: '#2e7d32', padding: '1px 6px', borderRadius: 4 }}>
+                        {r.recurrence === 'monthly' ? '/mo' : '/yr'} since {r.start_month}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>${parseFloat(r.amount).toFixed(2)}</span>
+                      <button onClick={async () => { if (!confirm(`Remove ${r.category} recurring expense?`)) return; try { const res = await apiFetch(`/api/costs/recurring/${r.id}`, { method: 'DELETE' }); if (res?.ok) loadCosts(); } catch {} }}
+                        style={{ padding: '2px 6px', background: '#fff', color: '#c62828', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                        {'\u2715'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>No recurring expenses yet.</div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <select value={newRecurring.category || ''} onChange={e => setNewRecurring({ ...newRecurring, category: e.target.value })}
+                style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13 }}>
+                <option value="">Category...</option>
+                {costCategories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={newRecurring.recurrence || 'monthly'} onChange={e => setNewRecurring({ ...newRecurring, recurrence: e.target.value })}
+                style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13 }}>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+              <input type="number" step="0.01" placeholder="Amount ($)" value={newRecurring.amount || ''}
+                onChange={e => setNewRecurring({ ...newRecurring, amount: e.target.value })}
+                style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13 }} />
+              <input type="month" value={newRecurring.start_month || new Date().toISOString().substring(0, 7)}
+                onChange={e => setNewRecurring({ ...newRecurring, start_month: e.target.value })}
+                style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13 }} />
+            </div>
+            <input type="text" placeholder="Description (e.g. Railway Hobby plan)" value={newRecurring.description || ''}
+              onChange={e => setNewRecurring({ ...newRecurring, description: e.target.value })}
+              style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }} />
+            <button onClick={handleAddRecurring} disabled={recurSaving || !newRecurring.category || !newRecurring.amount}
+              style={{ padding: '6px 16px', background: !newRecurring.category || !newRecurring.amount ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {recurSaving ? 'Adding...' : 'Add Recurring'}
+            </button>
+          </div>
+
+          {/* One-time expense entry */}
+          <div className="card">
+            <div className="card-header">Add One-Time Expense</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
               <select value={newCost.category} onChange={e => setNewCost({ ...newCost, category: e.target.value })}
-                style={{ padding: 10, border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }}>
-                <option value="">Select category...</option>
+                style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13 }}>
+                <option value="">Category...</option>
                 {costCategories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <input type="month" value={newCost.period_month} onChange={e => setNewCost({ ...newCost, period_month: e.target.value })}
-                style={{ padding: 10, border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
+                style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13 }} />
               <input type="number" step="0.01" placeholder="Amount ($)" value={newCost.amount}
                 onChange={e => setNewCost({ ...newCost, amount: e.target.value })}
-                style={{ padding: 10, border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
-              <input type="text" placeholder="Description (optional)" value={newCost.description}
+                style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13 }} />
+              <input type="text" placeholder="Description" value={newCost.description}
                 onChange={e => setNewCost({ ...newCost, description: e.target.value })}
-                style={{ padding: 10, border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
+                style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13 }} />
             </div>
             <button onClick={handleAddCost} disabled={costSaving || !newCost.category || !newCost.amount}
-              style={{ padding: '8px 20px', background: !newCost.category || !newCost.amount ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-              {costSaving ? 'Saving...' : 'Add Entry'}
+              style={{ padding: '6px 16px', background: !newCost.category || !newCost.amount ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {costSaving ? 'Saving...' : 'Add One-Time'}
             </button>
           </div>
 
           {/* Monthly Summary */}
           {costLoading ? (
             <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Loading costs...</div>
-          ) : costSummary.length === 0 && costEntries.length === 0 ? (
+          ) : costSummary.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', color: '#888', padding: 40 }}>
-              No cost entries yet. Add your first one above, or auto-pulled Twilio/Stripe data will appear here.
+              No cost data yet. Add recurring expenses or one-time entries above.
             </div>
           ) : (
             <>
               {costSummary.map(month => (
                 <div key={month.month} className="card" style={{ marginBottom: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>
-                      {new Date(month.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: '#c62828' }}>
-                      ${month.total.toFixed(2)}
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    {Object.entries(month.categories).sort((a, b) => b[1].amount - a[1].amount).map(([cat, data]) => (
-                      <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8f9fa', borderRadius: 8 }}>
-                        <div>
-                          <span style={{ fontWeight: 600, fontSize: 14 }}>{cat}</span>
-                          {data.source === 'auto' && (
-                            <span style={{ marginLeft: 6, fontSize: 10, background: '#e3f2fd', color: '#1565c0', padding: '1px 6px', borderRadius: 4 }}>auto</span>
-                          )}
-                          {data.count > 0 && <span style={{ marginLeft: 6, fontSize: 11, color: '#888' }}>({data.count} items)</span>}
-                        </div>
-                        <span style={{ fontWeight: 700, fontSize: 14, color: '#333' }}>${data.amount.toFixed(2)}</span>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>
+                        {new Date(month.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                       </div>
-                    ))}
+                      {month.runningTotal !== undefined && (
+                        <div style={{ fontSize: 11, color: '#888' }}>Running total: ${month.runningTotal.toFixed(2)}</div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: month.total > 0 ? '#c62828' : '#888' }}>
+                        ${month.total.toFixed(2)}
+                      </div>
+                    </div>
                   </div>
+                  {Object.keys(month.categories).length > 0 && (
+                    <div style={{ display: 'grid', gap: 4 }}>
+                      {Object.entries(month.categories).sort((a, b) => b[1].amount - a[1].amount).map(([cat, data]) => (
+                        <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#f8f9fa', borderRadius: 6, fontSize: 13 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 600 }}>{cat}</span>
+                            {data.source === 'auto' && (
+                              <span style={{ fontSize: 9, background: '#e3f2fd', color: '#1565c0', padding: '1px 5px', borderRadius: 3 }}>auto</span>
+                            )}
+                            {data.source === 'recurring' && (
+                              <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', padding: '1px 5px', borderRadius: 3 }}>recurring</span>
+                            )}
+                          </div>
+                          <span style={{ fontWeight: 700 }}>${data.amount.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
-
-              {/* Individual entries */}
-              {costEntries.length > 0 && (
-                <div className="card">
-                  <div className="card-header">All Manual Entries</div>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    {costEntries.map(c => (
-                      <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8f9fa', borderRadius: 8 }}>
-                        <div>
-                          <span style={{ fontWeight: 600, fontSize: 13 }}>{c.category}</span>
-                          <span style={{ marginLeft: 8, fontSize: 12, color: '#888' }}>{c.period_month}</span>
-                          {c.description && <span style={{ marginLeft: 8, fontSize: 12, color: '#aaa' }}>{c.description}</span>}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontWeight: 700, fontSize: 13 }}>${parseFloat(c.amount).toFixed(2)}</span>
-                          <button onClick={() => handleDeleteCost(c.id)}
-                            style={{ padding: '2px 6px', background: '#fff', color: '#c62828', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
-                            {'\u2715'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>

@@ -48242,6 +48242,15 @@ const AdminPanel = window.AdminPanel = () => {
     period_month: new Date().toISOString().substring(0, 7)
   });
   const [costSaving, setCostSaving] = useState(false);
+  const [costRecurring, setCostRecurring] = useState([]);
+  const [newRecurring, setNewRecurring] = useState({
+    category: '',
+    description: '',
+    amount: '',
+    recurrence: 'monthly',
+    start_month: new Date().toISOString().substring(0, 7)
+  });
+  const [recurSaving, setRecurSaving] = useState(false);
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
   const loadCosts = async () => {
     setCostLoading(true);
@@ -48250,6 +48259,7 @@ const AdminPanel = window.AdminPanel = () => {
       if (summaryRes !== null && summaryRes !== void 0 && summaryRes.ok) {
         const d = await summaryRes.json();
         setCostSummary(d.summary || []);
+        setCostRecurring(d.recurring || []);
       }
       if (entriesRes !== null && entriesRes !== void 0 && entriesRes.ok) {
         const d = await entriesRes.json();
@@ -48257,6 +48267,28 @@ const AdminPanel = window.AdminPanel = () => {
       }
     } catch {}
     setCostLoading(false);
+  };
+  const handleAddRecurring = async () => {
+    if (!newRecurring.category || !newRecurring.amount) return;
+    setRecurSaving(true);
+    try {
+      const res = await apiFetch('/api/costs/recurring', {
+        method: 'POST',
+        body: JSON.stringify(newRecurring)
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast('Recurring expense added', 'success');
+        setNewRecurring({
+          category: '',
+          description: '',
+          amount: '',
+          recurrence: 'monthly',
+          start_month: new Date().toISOString().substring(0, 7)
+        });
+        loadCosts();
+      }
+    } catch {}
+    setRecurSaving(false);
   };
   const handleAddCost = async () => {
     if (!newCost.category || !newCost.amount || !newCost.period_month) return;
@@ -54449,12 +54481,187 @@ const AdminPanel = window.AdminPanel = () => {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
-  }, "Add Cost Entry"), /*#__PURE__*/React.createElement("div", {
+  }, "Recurring Expenses"), costSummary.length > 0 && costRecurring.length > 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: 6,
+      marginBottom: 12
+    }
+  }, costRecurring.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.id,
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '8px 12px',
+      background: '#f0fdf4',
+      borderRadius: 8,
+      border: '1px solid #bbf7d0'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, r.category), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 6,
+      fontSize: 11,
+      color: '#888'
+    }
+  }, r.description || ''), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 6,
+      fontSize: 10,
+      background: '#e8f5e9',
+      color: '#2e7d32',
+      padding: '1px 6px',
+      borderRadius: 4
+    }
+  }, r.recurrence === 'monthly' ? '/mo' : '/yr', " since ", r.start_month)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      fontSize: 13
+    }
+  }, "$", parseFloat(r.amount).toFixed(2)), /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      if (!confirm(`Remove ${r.category} recurring expense?`)) return;
+      try {
+        const res = await apiFetch(`/api/costs/recurring/${r.id}`, {
+          method: 'DELETE'
+        });
+        if (res !== null && res !== void 0 && res.ok) loadCosts();
+      } catch {}
+    },
+    style: {
+      padding: '2px 6px',
+      background: '#fff',
+      color: '#c62828',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 11,
+      cursor: 'pointer'
+    }
+  }, '\u2715'))))) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#888',
+      marginBottom: 12
+    }
+  }, "No recurring expenses yet."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
-      gap: 10,
-      marginBottom: 12
+      gap: 8,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("select", {
+    value: newRecurring.category || '',
+    onChange: e => setNewRecurring({
+      ...newRecurring,
+      category: e.target.value
+    }),
+    style: {
+      padding: 8,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "Category..."), costCategories.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c,
+    value: c
+  }, c))), /*#__PURE__*/React.createElement("select", {
+    value: newRecurring.recurrence || 'monthly',
+    onChange: e => setNewRecurring({
+      ...newRecurring,
+      recurrence: e.target.value
+    }),
+    style: {
+      padding: 8,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "monthly"
+  }, "Monthly"), /*#__PURE__*/React.createElement("option", {
+    value: "yearly"
+  }, "Yearly")), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    step: "0.01",
+    placeholder: "Amount ($)",
+    value: newRecurring.amount || '',
+    onChange: e => setNewRecurring({
+      ...newRecurring,
+      amount: e.target.value
+    }),
+    style: {
+      padding: 8,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 13
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "month",
+    value: newRecurring.start_month || new Date().toISOString().substring(0, 7),
+    onChange: e => setNewRecurring({
+      ...newRecurring,
+      start_month: e.target.value
+    }),
+    style: {
+      padding: 8,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 13
+    }
+  })), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    placeholder: "Description (e.g. Railway Hobby plan)",
+    value: newRecurring.description || '',
+    onChange: e => setNewRecurring({
+      ...newRecurring,
+      description: e.target.value
+    }),
+    style: {
+      width: '100%',
+      padding: 8,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 13,
+      marginBottom: 8,
+      boxSizing: 'border-box'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: handleAddRecurring,
+    disabled: recurSaving || !newRecurring.category || !newRecurring.amount,
+    style: {
+      padding: '6px 16px',
+      background: !newRecurring.category || !newRecurring.amount ? '#999' : '#1b6b5a',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, recurSaving ? 'Adding...' : 'Add Recurring')), /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header"
+  }, "Add One-Time Expense"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 8,
+      marginBottom: 8
     }
   }, /*#__PURE__*/React.createElement("select", {
     value: newCost.category,
@@ -54463,14 +54670,14 @@ const AdminPanel = window.AdminPanel = () => {
       category: e.target.value
     }),
     style: {
-      padding: 10,
+      padding: 8,
       border: '1px solid #ddd',
       borderRadius: 8,
-      fontSize: 14
+      fontSize: 13
     }
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
-  }, "Select category..."), costCategories.map(c => /*#__PURE__*/React.createElement("option", {
+  }, "Category..."), costCategories.map(c => /*#__PURE__*/React.createElement("option", {
     key: c,
     value: c
   }, c))), /*#__PURE__*/React.createElement("input", {
@@ -54481,10 +54688,10 @@ const AdminPanel = window.AdminPanel = () => {
       period_month: e.target.value
     }),
     style: {
-      padding: 10,
+      padding: 8,
       border: '1px solid #ddd',
       borderRadius: 8,
-      fontSize: 14
+      fontSize: 13
     }
   }), /*#__PURE__*/React.createElement("input", {
     type: "number",
@@ -54496,52 +54703,52 @@ const AdminPanel = window.AdminPanel = () => {
       amount: e.target.value
     }),
     style: {
-      padding: 10,
+      padding: 8,
       border: '1px solid #ddd',
       borderRadius: 8,
-      fontSize: 14
+      fontSize: 13
     }
   }), /*#__PURE__*/React.createElement("input", {
     type: "text",
-    placeholder: "Description (optional)",
+    placeholder: "Description",
     value: newCost.description,
     onChange: e => setNewCost({
       ...newCost,
       description: e.target.value
     }),
     style: {
-      padding: 10,
+      padding: 8,
       border: '1px solid #ddd',
       borderRadius: 8,
-      fontSize: 14
+      fontSize: 13
     }
   })), /*#__PURE__*/React.createElement("button", {
     onClick: handleAddCost,
     disabled: costSaving || !newCost.category || !newCost.amount,
     style: {
-      padding: '8px 20px',
+      padding: '6px 16px',
       background: !newCost.category || !newCost.amount ? '#999' : '#1b6b5a',
       color: '#fff',
       border: 'none',
       borderRadius: 8,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, costSaving ? 'Saving...' : 'Add Entry')), costLoading ? /*#__PURE__*/React.createElement("div", {
+  }, costSaving ? 'Saving...' : 'Add One-Time')), costLoading ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       padding: 40,
       color: '#888'
     }
-  }, "Loading costs...") : costSummary.length === 0 && costEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "Loading costs...") : costSummary.length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       textAlign: 'center',
       color: '#888',
       padding: 40
     }
-  }, "No cost entries yet. Add your first one above, or auto-pulled Twilio/Stripe data will appear here.") : /*#__PURE__*/React.createElement(React.Fragment, null, costSummary.map(month => /*#__PURE__*/React.createElement("div", {
+  }, "No cost data yet. Add recurring expenses or one-time entries above.") : /*#__PURE__*/React.createElement(React.Fragment, null, costSummary.map(month => /*#__PURE__*/React.createElement("div", {
     key: month.month,
     className: "card",
     style: {
@@ -54554,7 +54761,7 @@ const AdminPanel = window.AdminPanel = () => {
       alignItems: 'center',
       marginBottom: 12
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 16,
       fontWeight: 700,
@@ -54563,16 +54770,25 @@ const AdminPanel = window.AdminPanel = () => {
   }, new Date(month.month + '-01').toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric'
-  })), /*#__PURE__*/React.createElement("div", {
+  })), month.runningTotal !== undefined && /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 20,
-      fontWeight: 800,
-      color: '#c62828'
+      fontSize: 11,
+      color: '#888'
     }
-  }, "$", month.total.toFixed(2))), /*#__PURE__*/React.createElement("div", {
+  }, "Running total: $", month.runningTotal.toFixed(2))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'right'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 22,
+      fontWeight: 800,
+      color: month.total > 0 ? '#c62828' : '#888'
+    }
+  }, "$", month.total.toFixed(2)))), Object.keys(month.categories).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
-      gap: 6
+      gap: 4
     }
   }, Object.entries(month.categories).sort((a, b) => b[1].amount - a[1].amount).map(([cat, data]) => /*#__PURE__*/React.createElement("div", {
     key: cat,
@@ -54580,95 +54796,42 @@ const AdminPanel = window.AdminPanel = () => {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: '8px 12px',
+      padding: '6px 10px',
       background: '#f8f9fa',
-      borderRadius: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 600,
-      fontSize: 14
-    }
-  }, cat), data.source === 'auto' && /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: 6,
-      fontSize: 10,
-      background: '#e3f2fd',
-      color: '#1565c0',
-      padding: '1px 6px',
-      borderRadius: 4
-    }
-  }, "auto"), data.count > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: 6,
-      fontSize: 11,
-      color: '#888'
-    }
-  }, "(", data.count, " items)")), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 700,
-      fontSize: 14,
-      color: '#333'
-    }
-  }, "$", data.amount.toFixed(2))))))), costEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "card"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "card-header"
-  }, "All Manual Entries"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gap: 6
-    }
-  }, costEntries.map(c => /*#__PURE__*/React.createElement("div", {
-    key: c.id,
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '8px 12px',
-      background: '#f8f9fa',
-      borderRadius: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 600,
+      borderRadius: 6,
       fontSize: 13
     }
-  }, c.category), /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: 8,
-      fontSize: 12,
-      color: '#888'
-    }
-  }, c.period_month), c.description && /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: 8,
-      fontSize: 12,
-      color: '#aaa'
-    }
-  }, c.description)), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: 8
+      gap: 6
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontWeight: 700,
-      fontSize: 13
+      fontWeight: 600
     }
-  }, "$", parseFloat(c.amount).toFixed(2)), /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleDeleteCost(c.id),
+  }, cat), data.source === 'auto' && /*#__PURE__*/React.createElement("span", {
     style: {
-      padding: '2px 6px',
-      background: '#fff',
-      color: '#c62828',
-      border: '1px solid #ddd',
-      borderRadius: 4,
-      fontSize: 11,
-      cursor: 'pointer'
+      fontSize: 9,
+      background: '#e3f2fd',
+      color: '#1565c0',
+      padding: '1px 5px',
+      borderRadius: 3
     }
-  }, '\u2715')))))))), freezeTarget && /*#__PURE__*/React.createElement("div", {
+  }, "auto"), data.source === 'recurring' && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 9,
+      background: '#e8f5e9',
+      color: '#2e7d32',
+      padding: '1px 5px',
+      borderRadius: 3
+    }
+  }, "recurring")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700
+    }
+  }, "$", data.amount.toFixed(2))))))))), freezeTarget && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
       top: 0,

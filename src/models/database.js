@@ -790,6 +790,21 @@ async function initializeDatabase() {
       created_by TEXT REFERENCES users(id),
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
+    // v1.46.15 — Recurring expenses
+    `ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS recurrence TEXT DEFAULT 'one-time'`,
+    `ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS active INTEGER DEFAULT 1`,
+    `CREATE TABLE IF NOT EXISTS recurring_expenses (
+      id TEXT PRIMARY KEY,
+      category TEXT NOT NULL,
+      description TEXT,
+      amount NUMERIC(10,2) NOT NULL,
+      recurrence TEXT NOT NULL DEFAULT 'monthly',
+      start_month TEXT NOT NULL,
+      end_month TEXT,
+      active INTEGER DEFAULT 1,
+      created_by TEXT REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
