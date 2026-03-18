@@ -24234,6 +24234,10 @@ const MyAccount = window.MyAccount = ({
   const [savingPayout, setSavingPayout] = useState(false);
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
+  // Caregiver - Checkr Background Check state
+  const [checkrStatus, setCheckrStatus] = useState(null); // null | 'not_initiated' | 'in_progress' | 'complete' | 'error'
+  const [checkrError, setCheckrError] = useState(null);
+
   // Caregiver - Documents state
   const [documents, setDocuments] = useState([]);
   const [docUploading, setDocUploading] = useState(null);
@@ -24561,6 +24565,15 @@ const MyAccount = window.MyAccount = ({
           setBgCheckPaid(!!d.backgroundCheckPaid);
         }
       }).catch(() => {});
+      // Fetch Checkr status
+      apiFetch('/api/checkr/status').then(async r => {
+        if (r !== null && r !== void 0 && r.ok) {
+          const d = await r.json();
+          setCheckrStatus(d.status || 'not_initiated');
+        }
+      }).catch(() => {
+        setCheckrStatus('not_initiated');
+      });
       apiFetch('/api/caregivers/me').then(async r => {
         if (r !== null && r !== void 0 && r.ok) {
           var _d$profile, _d$profile2, _d$profile3;
@@ -26544,7 +26557,7 @@ const MyAccount = window.MyAccount = ({
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
-  }, "Background Check"), bgCheckPaid ? /*#__PURE__*/React.createElement("div", {
+  }, "Background Check"), checkrStatus === 'complete' || bgCheckPaid ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -26560,7 +26573,59 @@ const MyAccount = window.MyAccount = ({
       color: '#1b6b5a',
       fontWeight: 600
     }
-  }, "Background check complete")) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+  }, "Background check complete")) : checkrStatus === 'in_progress' ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#666',
+      fontSize: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: '#1b6b5a'
+    }
+  }, "Processing your background check...")), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 8px',
+      fontSize: 13
+    }
+  }, "We're reviewing your information. You'll receive an email when the process is complete."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      fontSize: 13,
+      color: '#888'
+    }
+  }, "Status: ", /*#__PURE__*/React.createElement("strong", null, "In Progress"))) : checkrError ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#dc2626',
+      fontSize: 14,
+      padding: 12,
+      background: '#fef2f2',
+      borderRadius: 8,
+      border: '1px solid #fca5a5'
+    }
+  }, /*#__PURE__*/React.createElement("strong", null, "Error:"), " ", checkrError, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setCheckrError(null);
+      setCheckrStatus('not_initiated');
+    },
+    style: {
+      padding: '6px 12px',
+      background: '#dc2626',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 6,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Try Again"))) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 14,
       color: '#666',
@@ -26572,18 +26637,34 @@ const MyAccount = window.MyAccount = ({
       fontWeight: 800,
       color: '#1b6b5a'
     }
-  }, "$30"), " one-time fee. Refunded after 10 completed sessions."), /*#__PURE__*/React.createElement("button", {
+  }, "$30"), " one-time fee. Refunded after 10 completed sessions."), /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: '8px 20px',
-      background: '#1b6b5a',
-      color: '#fff',
-      border: 'none',
+      marginBottom: 16,
+      padding: 16,
+      background: '#f9f9f9',
       borderRadius: 8,
-      fontSize: 14,
-      fontWeight: 600,
-      cursor: 'pointer'
+      border: '1px solid #e0e0e0'
     }
-  }, "Pay Now"))), /*#__PURE__*/React.createElement("div", {
+  }, typeof CheckrEmbed !== 'undefined' ? React.createElement(CheckrEmbed, {
+    onComplete: data => {
+      console.log('Background check complete:', data);
+      setCheckrStatus('complete');
+      setBgCheckPaid(true);
+      if (onNavigate) onNavigate('payments');
+    },
+    onError: err => {
+      console.error('Background check error:', err);
+      setCheckrError((err === null || err === void 0 ? void 0 : err.message) || 'Failed to submit background check');
+      setCheckrStatus('error');
+    }
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 12,
+      color: '#888',
+      fontSize: 13,
+      textAlign: 'center'
+    }
+  }, "Loading background check form...")))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
@@ -45465,6 +45546,151 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       cursor: 'pointer'
     }
   }, "Go to My Dashboard"))));
+};
+;
+// ─── Checkr Background Check Embed Component ───
+// Renders the Checkr NewInvitation embed for caregivers to initiate their background check.
+// The Checkr WebSDK is loaded dynamically from CDN based on config from the backend.
+
+const CheckrEmbed = window.CheckrEmbed = ({
+  onComplete,
+  onError
+}) => {
+  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState(null);
+  const [error, setError] = useState(null);
+  const [status, setStatus] = useState(null); // 'idle', 'initiated', 'in_progress', 'complete'
+  const embedRef = useRef(null);
+  const embedInstanceRef = useRef(null);
+
+  // Load Checkr config and SDK
+  useEffect(() => {
+    async function init() {
+      try {
+        // Get config from backend
+        const res = await apiFetch('/api/checkr/config');
+        const cfg = await res.json();
+        if (!cfg.configured) {
+          setError('Background check service is not yet configured.');
+          setLoading(false);
+          return;
+        }
+        setConfig(cfg);
+
+        // Dynamically load the Checkr SDK if not already loaded
+        if (!window.Checkr) {
+          const script = document.createElement('script');
+          script.src = cfg.embedUrl + '/v1/checkr.js';
+          script.onload = () => {
+            console.log('[checkr-embed] SDK loaded');
+            setLoading(false);
+          };
+          script.onerror = () => {
+            console.error('[checkr-embed] Failed to load SDK');
+            setError('Failed to load background check service.');
+            setLoading(false);
+          };
+          document.head.appendChild(script);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[checkr-embed] Init error:', err);
+        setError('Failed to initialize background check.');
+        setLoading(false);
+      }
+    }
+    init();
+  }, []);
+
+  // Render the embed once SDK is loaded
+  useEffect(() => {
+    if (loading || !config || !window.Checkr || !embedRef.current) return;
+    try {
+      // Clear any previous embed instance
+      if (embedInstanceRef.current) {
+        try {
+          var _embedInstanceRef$cur, _embedInstanceRef$cur2;
+          (_embedInstanceRef$cur = (_embedInstanceRef$cur2 = embedInstanceRef.current).destroy) === null || _embedInstanceRef$cur === void 0 || _embedInstanceRef$cur.call(_embedInstanceRef$cur2);
+        } catch (e) {
+          console.warn('[checkr-embed] Could not destroy previous instance:', e);
+        }
+      }
+      console.log('[checkr-embed] Creating NewInvitation embed');
+      embedInstanceRef.current = new window.Checkr.Embeds.NewInvitation({
+        container: embedRef.current,
+        sessionTokenPath: '/api/checkr/session-token',
+        onComplete: data => {
+          console.log('[checkr-embed] Complete event:', data);
+          setStatus('complete');
+          if (onComplete) onComplete(data);
+        },
+        onError: err => {
+          console.error('[checkr-embed] Error event:', err);
+          setStatus('idle');
+          if (onError) onError(err);
+          setError('Background check submission failed. Please try again.');
+        }
+      });
+    } catch (err) {
+      console.error('[checkr-embed] Init error:', err);
+      setError('Failed to initialize background check form.');
+      setLoading(false);
+    }
+  }, [loading, config, onComplete, onError]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (embedInstanceRef.current) {
+        try {
+          var _embedInstanceRef$cur3, _embedInstanceRef$cur4;
+          (_embedInstanceRef$cur3 = (_embedInstanceRef$cur4 = embedInstanceRef.current).destroy) === null || _embedInstanceRef$cur3 === void 0 || _embedInstanceRef$cur3.call(_embedInstanceRef$cur4);
+        } catch (e) {
+          console.warn('[checkr-embed] Could not destroy on unmount:', e);
+        }
+      }
+    };
+  }, []);
+  if (error) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: 16,
+        background: '#fef2f2',
+        border: '1px solid #fca5a5',
+        borderRadius: 10,
+        color: '#dc2626',
+        fontSize: 13,
+        lineHeight: 1.5
+      }
+    }, error);
+  }
+  if (loading) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: 20,
+        textAlign: 'center',
+        color: '#888',
+        fontSize: 14
+      }
+    }, "Loading background check form...");
+  }
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    ref: embedRef,
+    style: {
+      minHeight: 400
+    }
+  }), (config === null || config === void 0 ? void 0 : config.staging) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      padding: 6,
+      background: '#fff3e0',
+      borderRadius: 6,
+      fontSize: 11,
+      color: '#e65100',
+      textAlign: 'center'
+    }
+  }, "Staging environment \u2014 using test data"));
 };
 ;
 // FamilyPayments — Payment method setup + history for family users

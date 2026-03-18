@@ -57,6 +57,7 @@ const scripts = [
   "js/components/DemoPickerPage.js",
   "js/components/StripePaymentForm.js",
   "js/components/CaregiverOnboarding.js",
+  "js/components/CheckrEmbed.js",
   "js/components/FamilyPayments.js",
   "js/components/AdminFinancials.js",
   "js/components/HelpPage.js",

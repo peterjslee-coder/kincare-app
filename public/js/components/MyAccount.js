@@ -208,6 +208,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   const [savingPayout, setSavingPayout] = useState(false);
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
+  // Caregiver - Checkr Background Check state
+  const [checkrStatus, setCheckrStatus] = useState(null); // null | 'not_initiated' | 'in_progress' | 'complete' | 'error'
+  const [checkrError, setCheckrError] = useState(null);
+
   // Caregiver - Documents state
   const [documents, setDocuments] = useState([]);
   const [docUploading, setDocUploading] = useState(null);
@@ -480,6 +484,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       apiFetch('/api/dashboard').then(async r => {
         if (r?.ok) { const d = await r.json(); setBgCheckPaid(!!d.backgroundCheckPaid); }
       }).catch(() => {});
+      // Fetch Checkr status
+      apiFetch('/api/checkr/status').then(async r => {
+        if (r?.ok) { const d = await r.json(); setCheckrStatus(d.status || 'not_initiated'); }
+      }).catch(() => { setCheckrStatus('not_initiated'); });
       apiFetch('/api/caregivers/me').then(async r => {
         if (r?.ok) { const d = await r.json(); setEditRates({ daytime: d.profile?.rate_daytime || '24', nighttime: d.profile?.rate_nighttime || '28', overnight: d.profile?.rate_overnight || '30' }); }
       }).catch(() => {});
@@ -1532,19 +1540,57 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           {/* Background Check Card */}
           <div className="card">
             <div className="card-header">Background Check</div>
-            {bgCheckPaid ? (
+            {checkrStatus === 'complete' || bgCheckPaid ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 18 }}>✓</span>
                 <span style={{ fontSize: 14, color: '#1b6b5a', fontWeight: 600 }}>Background check complete</span>
+              </div>
+            ) : checkrStatus === 'in_progress' ? (
+              <div style={{ color: '#666', fontSize: 14 }}>
+                <div style={{ marginBottom: 12 }}>
+                  <strong style={{ color: '#1b6b5a' }}>Processing your background check...</strong>
+                </div>
+                <p style={{ margin: '0 0 8px', fontSize: 13 }}>
+                  We're reviewing your information. You'll receive an email when the process is complete.
+                </p>
+                <p style={{ margin: 0, fontSize: 13, color: '#888' }}>
+                  Status: <strong>In Progress</strong>
+                </p>
+              </div>
+            ) : checkrError ? (
+              <div style={{ color: '#dc2626', fontSize: 14, padding: 12, background: '#fef2f2', borderRadius: 8, border: '1px solid #fca5a5' }}>
+                <strong>Error:</strong> {checkrError}
+                <div style={{ marginTop: 12 }}>
+                  <button onClick={() => { setCheckrError(null); setCheckrStatus('not_initiated'); }}
+                    style={{ padding: '6px 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Try Again
+                  </button>
+                </div>
               </div>
             ) : (
               <div>
                 <p style={{ fontSize: 14, color: '#666', margin: '0 0 12px' }}>
                   <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>$30</span> one-time fee. Refunded after 10 completed sessions.
                 </p>
-                <button style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                  Pay Now
-                </button>
+                <div style={{ marginBottom: 16, padding: 16, background: '#f9f9f9', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+                  {typeof CheckrEmbed !== 'undefined' ? React.createElement(CheckrEmbed, {
+                    onComplete: (data) => {
+                      console.log('Background check complete:', data);
+                      setCheckrStatus('complete');
+                      setBgCheckPaid(true);
+                      if (onNavigate) onNavigate('payments');
+                    },
+                    onError: (err) => {
+                      console.error('Background check error:', err);
+                      setCheckrError(err?.message || 'Failed to submit background check');
+                      setCheckrStatus('error');
+                    },
+                  }) : (
+                    <div style={{ padding: 12, color: '#888', fontSize: 13, textAlign: 'center' }}>
+                      Loading background check form...
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
