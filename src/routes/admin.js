@@ -70,8 +70,8 @@ router.get("/alerts", async (req, res) => {
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'new' AND created_at > NOW() - INTERVAL '30 days'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM safety_flags WHERE status = 'pending'`).get().catch(() => ({ count: 0 })),
-      // Unread Checkr webhook events (submitted, cleared, flagged, expired) in the last 7 days
-      db.prepare(`SELECT COUNT(*) as count FROM activity_feed WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired') AND is_read = 0 AND created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
+      // Unread Checkr webhook events in the last 7 days
+      db.prepare(`SELECT COUNT(*) as count FROM activity_feed WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired', 'checkr_suspended', 'checkr_resumed', 'checkr_disputed') AND is_read = 0 AND created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
     ]);
 
     const total = (parseInt(pendingUsers.count) || 0) +
@@ -101,7 +101,7 @@ router.post("/alerts/dismiss-checkr", async (req, res) => {
   try {
     const db = await getDb();
     await db.prepare(
-      `UPDATE activity_feed SET is_read = 1 WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired') AND is_read = 0`
+      `UPDATE activity_feed SET is_read = 1 WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired', 'checkr_suspended', 'checkr_resumed', 'checkr_disputed') AND is_read = 0`
     ).run();
     res.json({ ok: true });
   } catch (err) {

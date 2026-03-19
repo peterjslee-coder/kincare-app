@@ -506,6 +506,100 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
         break;
       }
 
+      // ─── Report suspended (e.g., SSN mismatch, requires candidate action) ───
+      case "report.suspended": {
+        const report = data.object;
+        const { id: reportId, candidate_id, status } = report;
+        console.log(`[checkr-webhook] Report suspended: ${reportId}, candidate: ${candidate_id}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'suspended', checkr_report_id = ?, updated_at = NOW() WHERE checkr_candidate_id = ?"
+        ).run(reportId, candidate_id);
+
+        // Notify admins — this is an action item, candidate needs to fix something
+        try {
+          const { v4: uuid } = require("uuid");
+          const cgProfile = await db.prepare(
+            "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_candidate_id = ?"
+          ).get(candidate_id);
+          const candidateName = cgProfile ? `${cgProfile.first_name} ${cgProfile.last_name}` : `Candidate ${(candidate_id || '').substring(0, 12)}`;
+          const title = `⚠️ Background check suspended — ${candidateName}`;
+          const msg = cgProfile
+            ? `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) background check is ON HOLD. Checkr found an issue (likely SSN mismatch). The candidate has been emailed to correct it.`
+            : `Checkr report ${reportId} is suspended. Candidate needs to resolve an exception (likely SSN mismatch).`;
+          const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+          for (const admin of admins) {
+            await db.prepare(
+              "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+            ).run(uuid(), admin.id, "checkr_suspended", title, msg, JSON.stringify({ reportId, candidateId: candidate_id, userId: cgProfile?.user_id }));
+          }
+          try {
+            const { sendPushToUser } = require("../utils/push");
+            if (sendPushToUser) {
+              for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
+            }
+          } catch {}
+        } catch (alertErr) {
+          console.error("[checkr-webhook] Report suspended alert error:", alertErr.message);
+        }
+
+        writeAuditLog({
+          action: "checkr_suspended",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { reportId, candidateId: candidate_id },
+          severity: "warning",
+        });
+        break;
+      }
+
+      // ─── Report resumed (e.g., candidate corrected SSN) ───
+      case "report.resumed": {
+        const report = data.object;
+        const { id: reportId, candidate_id } = report;
+        console.log(`[checkr-webhook] Report resumed: ${reportId}, candidate: ${candidate_id}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'processing', updated_at = NOW() WHERE checkr_candidate_id = ?"
+        ).run(candidate_id);
+
+        // Notify admins — good news, candidate fixed the issue
+        try {
+          const { v4: uuid } = require("uuid");
+          const cgProfile = await db.prepare(
+            "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_candidate_id = ?"
+          ).get(candidate_id);
+          const candidateName = cgProfile ? `${cgProfile.first_name} ${cgProfile.last_name}` : `Candidate ${(candidate_id || '').substring(0, 12)}`;
+          const title = `🔄 Background check resumed — ${candidateName}`;
+          const msg = cgProfile
+            ? `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) resolved their exception. Background check is processing again.`
+            : `Checkr report ${reportId} has resumed processing after the candidate resolved the exception.`;
+          const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+          for (const admin of admins) {
+            await db.prepare(
+              "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+            ).run(uuid(), admin.id, "checkr_resumed", title, msg, JSON.stringify({ reportId, candidateId: candidate_id, userId: cgProfile?.user_id }));
+          }
+          try {
+            const { sendPushToUser } = require("../utils/push");
+            if (sendPushToUser) {
+              for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
+            }
+          } catch {}
+        } catch (alertErr) {
+          console.error("[checkr-webhook] Report resumed alert error:", alertErr.message);
+        }
+
+        writeAuditLog({
+          action: "checkr_resumed",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { reportId, candidateId: candidate_id },
+          severity: "info",
+        });
+        break;
+      }
+
       // ─── Candidate engaged with adverse action ───
       case "report.pre_adverse_action": {
         const { id: reportId, candidate_id } = data.object;
@@ -521,6 +615,53 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
           method: "POST",
           details: { reportId, candidateId: candidate_id },
           severity: "critical",
+        });
+        break;
+      }
+
+      // ─── Report disputed by candidate ───
+      case "report.disputed": {
+        const report = data.object;
+        const { id: reportId, candidate_id } = report;
+        console.log(`[checkr-webhook] Report disputed: ${reportId}, candidate: ${candidate_id}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'disputed', updated_at = NOW() WHERE checkr_candidate_id = ?"
+        ).run(candidate_id);
+
+        // Notify admins
+        try {
+          const { v4: uuid } = require("uuid");
+          const cgProfile = await db.prepare(
+            "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_candidate_id = ?"
+          ).get(candidate_id);
+          const candidateName = cgProfile ? `${cgProfile.first_name} ${cgProfile.last_name}` : `Candidate ${(candidate_id || '').substring(0, 12)}`;
+          const title = `⚖️ Background check disputed — ${candidateName}`;
+          const msg = cgProfile
+            ? `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) is disputing their background check results. Check Checkr dashboard for details.`
+            : `Checkr report ${reportId} has been disputed by the candidate.`;
+          const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+          for (const admin of admins) {
+            await db.prepare(
+              "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+            ).run(uuid(), admin.id, "checkr_disputed", title, msg, JSON.stringify({ reportId, candidateId: candidate_id, userId: cgProfile?.user_id }));
+          }
+          try {
+            const { sendPushToUser } = require("../utils/push");
+            if (sendPushToUser) {
+              for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
+            }
+          } catch {}
+        } catch (alertErr) {
+          console.error("[checkr-webhook] Report disputed alert error:", alertErr.message);
+        }
+
+        writeAuditLog({
+          action: "checkr_disputed",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { reportId, candidateId: candidate_id },
+          severity: "warning",
         });
         break;
       }

@@ -3419,12 +3419,16 @@ const AdminPanel = window.AdminPanel = () => {
                 const statusColor = c.checkr_status === 'clear' ? '#2e7d32' :
                   c.checkr_status === 'consider' ? '#e65100' :
                   c.checkr_status === 'adverse_action' ? '#c62828' :
+                  c.checkr_status === 'suspended' ? '#e65100' :
+                  c.checkr_status === 'disputed' ? '#6a1b9a' :
                   c.checkr_status === 'processing' ? '#1565c0' :
                   c.checkr_status === 'invitation_sent' ? '#7b1fa2' :
                   c.checkr_status === 'invitation_expired' ? '#888' : '#555';
                 const statusIcon = c.checkr_status === 'clear' ? '\u2705' :
                   c.checkr_status === 'consider' ? '\u26A0\uFE0F' :
                   c.checkr_status === 'adverse_action' ? '\u{1F6A8}' :
+                  c.checkr_status === 'suspended' ? '\u26A0\uFE0F' :
+                  c.checkr_status === 'disputed' ? '\u2696\uFE0F' :
                   c.checkr_status === 'processing' ? '\u23F3' :
                   c.checkr_status === 'invitation_sent' ? '\u{1F4E8}' :
                   c.checkr_status === 'invitation_expired' ? '\u23F0' : '\u2022';
@@ -3432,7 +3436,7 @@ const AdminPanel = window.AdminPanel = () => {
 
                 return (
                   <div key={c.user_id} className="card" style={{
-                    border: c.checkr_status === 'consider' || c.checkr_status === 'adverse_action' ? '2px solid ' + statusColor : '1px solid #e5e7eb',
+                    border: c.checkr_status === 'consider' || c.checkr_status === 'adverse_action' || c.checkr_status === 'suspended' || c.checkr_status === 'disputed' ? '2px solid ' + statusColor : '1px solid #e5e7eb',
                     padding: '14px 18px',
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
