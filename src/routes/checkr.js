@@ -339,6 +339,34 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
           "UPDATE caregiver_profiles SET checkr_status = 'processing', updated_at = NOW() WHERE checkr_invitation_id = ? OR checkr_candidate_id = ?"
         ).run(invitationId, candidate_id);
 
+        // Notify admins that a candidate submitted their background check form
+        try {
+          const { v4: uuid } = require("uuid");
+          const cgProfile = await db.prepare(
+            "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_invitation_id = ? OR cp.checkr_candidate_id = ?"
+          ).get(invitationId, candidate_id);
+          const candidateName = cgProfile ? `${cgProfile.first_name} ${cgProfile.last_name}` : `Candidate ${(candidate_id || '').substring(0, 12)}`;
+          const title = `📋 Background check submitted — ${candidateName}`;
+          const msg = cgProfile
+            ? `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) completed the Checkr invitation form. Report is now processing.`
+            : `Checkr candidate ${candidate_id} completed the invitation form. Report is now processing.`;
+          const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+          for (const admin of admins) {
+            await db.prepare(
+              "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+            ).run(uuid(), admin.id, "checkr_submitted", title, msg, JSON.stringify({ invitationId, candidateId: candidate_id, userId: cgProfile?.user_id }));
+          }
+          // Push notification to admins
+          try {
+            const { sendPushToUser } = require("../utils/push");
+            if (sendPushToUser) {
+              for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
+            }
+          } catch {}
+        } catch (alertErr) {
+          console.error("[checkr-webhook] Invitation completed alert error:", alertErr.message);
+        }
+
         writeAuditLog({
           action: "checkr_invitation_completed",
           endpoint: "/api/checkr/webhook",
@@ -371,32 +399,34 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
         if (updated.changes > 0) {
           console.log(`[checkr-webhook] Caregiver profile updated — cleared: ${cleared}`);
 
-          // Alert admin for non-clear results
-          if (!cleared) {
-            try {
-              const { v4: uuid } = require("uuid");
-              const cgProfile = await db.prepare(
-                "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_candidate_id = ?"
-              ).get(candidate_id);
-              if (cgProfile) {
-                const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
-                const title = `🔍 Background check: ${status.toUpperCase()} — ${cgProfile.first_name} ${cgProfile.last_name}`;
-                const msg = `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) background check returned "${status}". Review in Admin → BG Checks.`;
-                for (const admin of admins) {
-                  await db.prepare(
-                    "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                  ).run(uuid(), admin.id, "checkr_flagged", title, msg, JSON.stringify({ reportId, candidateId: candidate_id, status, userId: cgProfile.user_id }));
-                }
-                try {
-                  const { sendPushToUser } = require("../utils/push");
-                  if (sendPushToUser) {
-                    for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
-                  }
-                } catch {}
+          // Alert admins for ALL report completions (clear and non-clear)
+          try {
+            const { v4: uuid } = require("uuid");
+            const cgProfile = await db.prepare(
+              "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_candidate_id = ?"
+            ).get(candidate_id);
+            if (cgProfile) {
+              const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+              const icon = cleared ? '✅' : '🔍';
+              const eventType = cleared ? "checkr_cleared" : "checkr_flagged";
+              const title = `${icon} Background check: ${status.toUpperCase()} — ${cgProfile.first_name} ${cgProfile.last_name}`;
+              const msg = cleared
+                ? `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) passed their background check. They're cleared for sessions.`
+                : `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) background check returned "${status}". Review in Admin → BG Checks.`;
+              for (const admin of admins) {
+                await db.prepare(
+                  "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                ).run(uuid(), admin.id, eventType, title, msg, JSON.stringify({ reportId, candidateId: candidate_id, status, userId: cgProfile.user_id }));
               }
-            } catch (alertErr) {
-              console.error("[checkr-webhook] Admin alert error:", alertErr.message);
+              try {
+                const { sendPushToUser } = require("../utils/push");
+                if (sendPushToUser) {
+                  for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
+                }
+              } catch {}
             }
+          } catch (alertErr) {
+            console.error("[checkr-webhook] Admin alert error:", alertErr.message);
           }
         } else {
           console.warn(`[checkr-webhook] No caregiver found for candidate ${candidate_id}`);
@@ -438,6 +468,33 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
         await db.prepare(
           "UPDATE caregiver_profiles SET checkr_status = 'invitation_expired', updated_at = NOW() WHERE checkr_invitation_id = ?"
         ).run(invitationId);
+
+        // Notify admins about expired invitation
+        try {
+          const { v4: uuid } = require("uuid");
+          const cgProfile = await db.prepare(
+            "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_invitation_id = ?"
+          ).get(invitationId);
+          const candidateName = cgProfile ? `${cgProfile.first_name} ${cgProfile.last_name}` : `Candidate ${(candidate_id || '').substring(0, 12)}`;
+          const title = `⏰ Background check expired — ${candidateName}`;
+          const msg = cgProfile
+            ? `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) didn't complete the Checkr invitation in time. You may need to resend.`
+            : `Checkr invitation ${invitationId} expired. Candidate didn't complete in time.`;
+          const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+          for (const admin of admins) {
+            await db.prepare(
+              "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+            ).run(uuid(), admin.id, "checkr_expired", title, msg, JSON.stringify({ invitationId, candidateId: candidate_id, userId: cgProfile?.user_id }));
+          }
+          try {
+            const { sendPushToUser } = require("../utils/push");
+            if (sendPushToUser) {
+              for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
+            }
+          } catch {}
+        } catch (alertErr) {
+          console.error("[checkr-webhook] Invitation expired alert error:", alertErr.message);
+        }
 
         writeAuditLog({
           action: "checkr_invitation_expired",

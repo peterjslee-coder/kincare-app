@@ -1271,6 +1271,7 @@ const App = () => {
                         adminAlertDetails.pausedCaregivers && `${adminAlertDetails.pausedCaregivers} paused caregivers`,
                         adminAlertDetails.pendingConsent && `${adminAlertDetails.pendingConsent} pending consent`,
                         adminAlertDetails.newFeedback && `${adminAlertDetails.newFeedback} new feedback`,
+                        adminAlertDetails.checkrAlerts && `${adminAlertDetails.checkrAlerts} background check updates`,
                       ].filter(Boolean).join(', ') : ''} style={{
                         marginLeft: 'auto', background: '#dc2626', color: '#fff', borderRadius: 10,
                         padding: '1px 6px', fontSize: 10, fontWeight: 700,

@@ -595,7 +595,7 @@ Priority: **MEDIUM** — Real social model + navigation fixes.
 - [ ] **Back swipe navigation.** In-app history stack so iOS back gesture works. *(Feedback #22, existing)*
 - [ ] **Message push deep-links.** Push notification opens directly to conversation.
 - [ ] **Video chat — Meet link in messages.**
-- [ ] **Session check-in/checkout + time extension.** *(Feedback #1)*
+- [ ] **Session check-in/checkout + time extension.** *(Feedback #1)* **Updated Mar 19:** Includes early checkout pay rule (15-min block billing from check-in to check-out, not from scheduled start), early checkout prompt with reason collection, and server-side duration calculation in care recipient's timezone. See TASKS.md for full spec.
 
 ---
 

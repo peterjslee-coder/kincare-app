@@ -64,19 +64,22 @@ router.use(authenticate, checkAdmin, requireAdmin);
 router.get("/alerts", async (req, res) => {
   try {
     const db = await getDb();
-    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags] = await Promise.all([
+    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, checkrAlerts] = await Promise.all([
       db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1 AND created_at > '2026-02-20'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'new' AND created_at > NOW() - INTERVAL '30 days'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM safety_flags WHERE status = 'pending'`).get().catch(() => ({ count: 0 })),
+      // Unread Checkr webhook events (submitted, cleared, flagged, expired) in the last 7 days
+      db.prepare(`SELECT COUNT(*) as count FROM activity_feed WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired') AND is_read = 0 AND created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
     ]);
 
     const total = (parseInt(pendingUsers.count) || 0) +
       (parseInt(pausedCaregivers.count) || 0) +
       (parseInt(pendingConsent.count) || 0) +
       (parseInt(newFeedback.count) || 0) +
-      (parseInt(safetyFlags.count) || 0);
+      (parseInt(safetyFlags.count) || 0) +
+      (parseInt(checkrAlerts.count) || 0);
 
     res.json({
       total,
@@ -85,6 +88,7 @@ router.get("/alerts", async (req, res) => {
       pendingConsent: parseInt(pendingConsent.count) || 0,
       newFeedback: parseInt(newFeedback.count) || 0,
       safetyFlags: parseInt(safetyFlags.count) || 0,
+      checkrAlerts: parseInt(checkrAlerts.count) || 0,
     });
   } catch (err) {
     console.error("Admin alerts error:", err);
