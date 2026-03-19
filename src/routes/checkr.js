@@ -565,21 +565,38 @@ router.post("/test-candidate", authenticate, async (req, res) => {
     // so webhooks can update the profile when results come back
     const { v4: uuid } = require("uuid");
     const testUserId = uuid();
-    const testEmail = `test-${first_name.toLowerCase()}-${last_name.toLowerCase()}@checkr-mock.inplace`;
+    const testEmail = `test-${first_name.toLowerCase()}-${last_name.toLowerCase()}-${Date.now()}@checkr-mock.inplace`;
+
+    // Create test user
     try {
       await db.prepare(
         "INSERT INTO users (id, email, first_name, last_name, role, password_hash, is_active, is_demo) VALUES (?, ?, ?, ?, 'caregiver', 'checkr-test-no-login', 1, 0)"
       ).run(testUserId, testEmail, first_name, last_name);
+      console.log(`[checkr-test] Created test user: ${testEmail}`);
+    } catch (userErr) {
+      console.warn(`[checkr-test] User creation failed:`, userErr.message);
+    }
 
+    // Create caregiver profile linked to Checkr candidate — separate try so it runs even if user already existed
+    try {
       await db.prepare(`
         INSERT INTO caregiver_profiles (id, user_id, legal_first_name, legal_last_name, date_of_birth,
           checkr_candidate_id, checkr_invitation_id, checkr_status, background_check_consent, background_check_paid)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'invitation_sent', 1, 1)
       `).run(uuid(), testUserId, first_name, last_name, dob || null, candidate.id, invitation.id);
-
-      console.log(`[checkr-test] Created test profile for ${first_name} ${last_name} linked to candidate ${candidate.id}`);
+      console.log(`[checkr-test] Created profile linked to candidate ${candidate.id}`);
     } catch (profileErr) {
-      console.warn(`[checkr-test] Profile creation failed (may already exist):`, profileErr.message);
+      // If profile creation fails, try updating existing profile with the new candidate ID
+      try {
+        const existing = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(testUserId);
+        if (existing) {
+          await db.prepare("UPDATE caregiver_profiles SET checkr_candidate_id = ?, checkr_invitation_id = ?, checkr_status = 'invitation_sent' WHERE user_id = ?")
+            .run(candidate.id, invitation.id, testUserId);
+          console.log(`[checkr-test] Updated existing profile with candidate ${candidate.id}`);
+        }
+      } catch (updateErr) {
+        console.error(`[checkr-test] Profile creation AND update failed:`, profileErr.message, updateErr.message);
+      }
     }
 
     res.json({
