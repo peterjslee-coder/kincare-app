@@ -26,6 +26,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [checkOutPhotoUrls, setCheckOutPhotoUrls] = useState([]);
   const checkOutPhotoRef = useRef(null);
   const [checkSubmitting, setCheckSubmitting] = useState(false);
+  const [earlyDepartureReason, setEarlyDepartureReason] = useState('');
+  const [earlyDepartureAcked, setEarlyDepartureAcked] = useState(false);
   const [checkInLocation, setCheckInLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
   // Care briefing state (pre-check-in review)
@@ -1602,6 +1604,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           setCheckOutSummary('');
                           setCheckOutPhotos([]);
                           setCheckOutPhotoUrls(prev => { prev.forEach(u => URL.revokeObjectURL(u)); return []; });
+                          setEarlyDepartureReason('');
+                          setEarlyDepartureAcked(false);
                           setCheckOutSession(s);
                         }} style={{
                           padding: '10px 22px', background: '#c62828', color: '#fff', border: 'none',
@@ -2301,6 +2305,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               setCheckOutSummary('');
               setCheckOutPhotos([]);
               setCheckOutPhotoUrls(prev => { prev.forEach(u => URL.revokeObjectURL(u)); return []; });
+              setEarlyDepartureReason('');
+              setEarlyDepartureAcked(false);
               setCheckOutSession(s);
             } else {
               setVisitLogSession(s);
@@ -2871,12 +2877,70 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               )}
             </div>
 
+            {/* ─── EARLY DEPARTURE WARNING ─── */}
+            {(() => {
+              if (!checkOutSession) return null;
+              const sDate = checkOutSession.date || checkOutSession.scheduled_date;
+              const sTime = checkOutSession.time || checkOutSession.scheduled_time;
+              const sDur = parseFloat(checkOutSession.durationHours || checkOutSession.duration_hours || 0);
+              if (!sDate || !sTime || !sDur) return null;
+              const [hh, mm] = sTime.split(':').map(Number);
+              const schedEnd = new Date(`${sDate}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`);
+              schedEnd.setMinutes(schedEnd.getMinutes() + (sDur * 60));
+              const minsEarly = Math.max(0, (schedEnd - new Date()) / 60000);
+              if (minsEarly <= 15) return null;
+              const endTimeStr = schedEnd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: checkOutSession.timezone || 'America/New_York' });
+              // Calculate pay impact
+              const totalMins = sDur * 60;
+              const actualMins = totalMins - minsEarly;
+              const roundedMins = Math.ceil(actualMins / 15) * 15;
+              const payPercent = Math.round((roundedMins / totalMins) * 100);
+              return React.createElement('div', { style: {
+                background: '#fff3e0', border: '2px solid #e8724a', borderRadius: 12,
+                padding: 16, marginBottom: 16,
+              }},
+                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } },
+                  React.createElement('span', { style: { fontSize: 20 } }, '⚠️'),
+                  React.createElement('strong', { style: { fontSize: 14, color: '#c62828' } }, 'Early Checkout')
+                ),
+                React.createElement('p', { style: { fontSize: 13, color: '#333', margin: '0 0 8px', lineHeight: 1.5 } },
+                  `This appointment is scheduled until ${endTimeStr}. You are checking out ${Math.round(minsEarly)} minutes early.`
+                ),
+                React.createElement('p', { style: { fontSize: 13, color: '#c62828', fontWeight: 600, margin: '0 0 12px' } },
+                  `Pay is calculated in 15-minute blocks — you'll receive ${payPercent}% of the session pay.`
+                ),
+                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#333' } },
+                  'Please let us and the family know why you\'re leaving early: *'
+                ),
+                React.createElement('textarea', {
+                  value: earlyDepartureReason,
+                  onChange: e => { setEarlyDepartureReason(e.target.value); if (e.target.value.trim()) setEarlyDepartureAcked(true); },
+                  placeholder: 'e.g., Family emergency, care recipient asked me to leave, appointment was rescheduled...',
+                  style: { width: '100%', minHeight: 60, padding: 10, borderRadius: 8, border: '1px solid #e8724a', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' },
+                })
+              );
+            })()}
+
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setCheckOutSession(null)} style={{
                 padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8,
                 cursor: 'pointer', fontSize: 13,
               }}>Cancel</button>
               <button onClick={async () => {
+                // Check if early departure requires a reason
+                const sDate2 = checkOutSession.date || checkOutSession.scheduled_date;
+                const sTime2 = checkOutSession.time || checkOutSession.scheduled_time;
+                const sDur2 = parseFloat(checkOutSession.durationHours || checkOutSession.duration_hours || 0);
+                if (sDate2 && sTime2 && sDur2) {
+                  const [hh2, mm2] = sTime2.split(':').map(Number);
+                  const schedEnd2 = new Date(`${sDate2}T${String(hh2).padStart(2,'0')}:${String(mm2).padStart(2,'0')}:00`);
+                  schedEnd2.setMinutes(schedEnd2.getMinutes() + (sDur2 * 60));
+                  const minsEarly2 = Math.max(0, (schedEnd2 - new Date()) / 60000);
+                  if (minsEarly2 > 15 && !earlyDepartureReason.trim()) {
+                    showToast('Please provide a reason for leaving early', 'error');
+                    return;
+                  }
+                }
                 setCheckSubmitting(true);
                 try {
                   const res = await apiFetch('/api/sessions/' + checkOutSession.id + '/check-out', {
@@ -2887,6 +2951,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       careFeedback: checkOutCareFeedback.trim() || null,
                       serviceFeedback: checkOutServiceFeedback.trim() || null,
                       summary: checkOutSummary.trim() || null,
+                      earlyDepartureReason: earlyDepartureReason.trim() || null,
                     }),
                   });
                   if (res?.ok) {
@@ -2911,6 +2976,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     setCheckOutPhotos([]);
                     setCheckOutPhotoUrls([]);
                     setCheckOutSummary('');
+                    setEarlyDepartureReason('');
+                    setEarlyDepartureAcked(false);
                     showToast('Checked out! Session complete.', 'success');
                     setCheckOutSession(null);
                     const refreshRes = await apiFetch('/api/dashboard');

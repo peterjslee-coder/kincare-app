@@ -829,6 +829,9 @@ async function initializeDatabase() {
     // v1.48.0 — AI Care Plan Generation
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_plan TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_plan_updated_at TIMESTAMPTZ`,
+    // v1.50.19 — Early departure tracking
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS early_departure_reason TEXT`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS early_departure_minutes REAL`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

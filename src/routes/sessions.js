@@ -1245,7 +1245,7 @@ router.post("/:id/check-in", async (req, res) => {
 router.post("/:id/check-out", async (req, res) => {
   try {
     const db = await getDb();
-    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary } = req.body;
+    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary, earlyDepartureReason } = req.body;
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
@@ -1315,6 +1315,17 @@ router.post("/:id/check-out", async (req, res) => {
       console.error("[checkout] Payment capture error (non-blocking):", captureErr.message);
     }
 
+    // Calculate how many minutes early (for storage and notification)
+    let earlyMinutes = 0;
+    if (visitLog && visitLog.check_in_time && session.scheduled_time && session.duration_hours) {
+      const schedDate = session.scheduled_date;
+      const schedTime = session.scheduled_time;
+      const [h, m] = schedTime.split(':').map(Number);
+      const schedEnd = new Date(`${schedDate}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
+      schedEnd.setMinutes(schedEnd.getMinutes() + (parseFloat(session.duration_hours) * 60));
+      earlyMinutes = Math.max(0, (schedEnd - new Date()) / 60000);
+    }
+
     if (visitLog) {
       await db.prepare(`
         UPDATE visit_logs SET
@@ -1324,7 +1335,9 @@ router.post("/:id/check-out", async (req, res) => {
           care_feedback = ?,
           service_feedback = ?,
           summary = ?,
-          mood_rating = ?
+          mood_rating = ?,
+          early_departure_reason = ?,
+          early_departure_minutes = ?
         WHERE id = ?
       `).run(
         departureMood || null,
@@ -1333,6 +1346,8 @@ router.post("/:id/check-out", async (req, res) => {
         serviceFeedback || null,
         summary || null,
         departureMood || null,
+        earlyMinutes > 15 ? (earlyDepartureReason || null) : null,
+        earlyMinutes > 15 ? Math.round(earlyMinutes) : null,
         visitLog.id
       );
     }
@@ -1360,15 +1375,19 @@ router.post("/:id/check-out", async (req, res) => {
       ? ` Noted: ${conditionTags.join(", ")}.`
       : "";
 
+    const earlyNote = earlyMinutes > 15
+      ? ` Left ${Math.round(earlyMinutes)} min early.${earlyDepartureReason ? ` Reason: ${earlyDepartureReason}` : ""}`
+      : "";
+
     await db.prepare(
       "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_checkout', ?, ?, ?)"
     ).run(
       require("uuid").v4(),
       session.family_user_id,
       session.care_recipient_id,
-      `${caregiverName} has checked out`,
-      `Care session with ${session.recipient_first_name} is complete. ${departureMood ? `Mood at departure: ${departureMood}.` : ""}${tagSummary}`,
-      JSON.stringify({ sessionId: req.params.id })
+      `${caregiverName} has checked out${earlyMinutes > 15 ? " early" : ""}`,
+      `Care session with ${session.recipient_first_name} is complete.${earlyNote} ${departureMood ? `Mood at departure: ${departureMood}.` : ""}${tagSummary}`,
+      JSON.stringify({ sessionId: req.params.id, earlyDeparture: earlyMinutes > 15, earlyMinutes: earlyMinutes > 15 ? Math.round(earlyMinutes) : 0 })
     );
 
     if (emitToUser) {
