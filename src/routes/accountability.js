@@ -580,10 +580,13 @@ async function pollPaymentAuthorizations() {
 
     // Find confirmed sessions ~24 hours from now that haven't been authorized yet
     // Window: 23h to 25h from now (so we don't miss any)
+    // Include care recipient timezone for accurate timing
     const sessions = await db.prepare(`
-      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.family_user_id
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.family_user_id,
+        cr.timezone AS care_timezone
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users cu ON cp.user_id = cu.id
       WHERE cs.status = 'confirmed'
@@ -597,11 +600,12 @@ async function pollPaymentAuthorizations() {
 
     if (!sessions || sessions.length === 0) return;
 
-    const now = getNowInZone();
     for (const s of sessions) {
       try {
+        const tz = s.care_timezone || 'America/New_York';
+        const now = getNowInZone(tz);
         const dateStr = s.scheduled_date.split('T')[0];
-        const sessionStart = buildDateTimeInZone(dateStr, s.scheduled_time);
+        const sessionStart = buildDateTimeInZone(dateStr, s.scheduled_time, tz);
         const hoursUntil = (sessionStart - now) / 3600000;
 
         // Authorize if within 23-25 hour window (or if session is <24hrs out and not yet authorized)
@@ -631,17 +635,20 @@ async function pollLateCheckIns() {
 
     // Find in_progress sessions where check-in was late
     // (checked in 10+ minutes after scheduled start, not yet flagged)
+    // Include care recipient timezone for accurate timing
     const sessions = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.family_user_id,
         cs.caregiver_id, cs.late_check_in,
         vl.check_in_time,
         cp.user_id AS caregiver_user_id,
-        u.first_name AS cg_first
+        u.first_name AS cg_first,
+        cr.timezone AS care_timezone
       FROM care_sessions cs
       JOIN visit_logs vl ON cs.id = vl.session_id
       JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       JOIN users u ON cp.user_id = u.id
       JOIN users fu ON cs.family_user_id = fu.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       WHERE cs.status = 'in_progress'
         AND cs.late_check_in = 0
         AND vl.check_in_time IS NOT NULL
@@ -653,8 +660,9 @@ async function pollLateCheckIns() {
 
     for (const s of sessions) {
       try {
+        const tz = s.care_timezone || 'America/New_York';
         const dateStr = s.scheduled_date.split('T')[0];
-        const scheduledStart = buildDateTimeInZone(dateStr, s.scheduled_time);
+        const scheduledStart = buildDateTimeInZone(dateStr, s.scheduled_time, tz);
         const checkInTime = new Date(s.check_in_time);
         const lateMinutes = Math.floor((checkInTime - scheduledStart) / 60000);
 
@@ -685,12 +693,14 @@ async function pollCaregiverNoShows() {
   try {
     const db = await getDb();
 
-    // Find confirmed sessions past start + 10 min grace with no check-in
+    // Find confirmed sessions past start + grace with no check-in
+    // Include care recipient timezone for accurate timing
     const sessions = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.family_user_id,
         cs.caregiver_id, cs.caregiver_no_show,
         cp.user_id AS caregiver_user_id,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
+        cr.timezone AS care_timezone,
         cu.first_name AS caregiver_first_name
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
@@ -709,11 +719,12 @@ async function pollCaregiverNoShows() {
 
     if (!sessions || sessions.length === 0) return;
 
-    const now = getNowInZone();
     for (const s of sessions) {
       try {
+        const tz = s.care_timezone || 'America/New_York';
+        const now = getNowInZone(tz);
         const dateStr = s.scheduled_date.split('T')[0];
-        const scheduledStart = buildDateTimeInZone(dateStr, s.scheduled_time);
+        const scheduledStart = buildDateTimeInZone(dateStr, s.scheduled_time, tz);
         const minutesPastStart = (now - scheduledStart) / 60000;
 
         // After the session's FULL duration has passed (not just 10 min) — caregiver never showed

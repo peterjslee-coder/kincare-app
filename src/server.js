@@ -299,7 +299,7 @@ app.use("/api/scheduling", require("./routes/nlScheduling"));
 app.use("/api/ipai", require("./routes/ipaiChat"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.50.20";
+const APP_VERSION = "1.50.21";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -514,84 +514,103 @@ async function start() {
   setInterval(async () => {
     try {
       const pollDb = await getDb();
-      // All session times are care-location times — use centralized timezone utility
-      const etNow = getNowInZone();
-      const todayStr = getTodayStringInZone();
+      // ─── Per-session timezone-aware notification logic ───
+      // Each session uses its care recipient's timezone for all timing decisions.
+      // We query sessions whose scheduled_date is "today" in ANY US timezone
+      // (widened to yesterday..tomorrow to catch cross-timezone edge cases),
+      // then compare using each session's specific care-location timezone.
+      const eastNow = getTodayStringInZone('America/New_York');
+      const westNow = getTodayStringInZone('Pacific/Honolulu');
+      // Build a date range that covers "today" across all US timezones
+      const dateRangeStart = eastNow < westNow ? eastNow : westNow;
+      const dateRangeEnd = eastNow > westNow ? eastNow : westNow;
 
       // ─── Pre-check-in reminders ───
-      // Find confirmed sessions today that haven't had pre_check_in notification
+      // Find confirmed sessions that haven't had pre_check_in notification
       // Exclude demo sessions — demo data must never trigger real notifications
       const checkInCandidates = await pollDb.prepare(`
-        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent,
+          cr.timezone AS care_timezone
         FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
         LEFT JOIN users u ON cs.family_user_id = u.id
         LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
         LEFT JOIN users cu ON cp.user_id = cu.id
         WHERE cs.status = 'confirmed'
-          AND cs.scheduled_date = ?
+          AND cs.scheduled_date BETWEEN ? AND ?
           AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%pre_check_in%')
           AND (u.is_demo IS NULL OR u.is_demo = 0)
           AND (cu.is_demo IS NULL OR cu.is_demo = 0)
-      `).all(todayStr);
+      `).all(dateRangeStart, dateRangeEnd);
 
       for (const s of checkInCandidates) {
         if (!s.scheduled_time) continue;
-        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time);
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
         const reminderTime = new Date(sessionStart.getTime() - REMINDER_WINDOW_MINUTES * 60000);
         // Send if we're within the notification window (up to session start)
-        if (etNow >= reminderTime && etNow <= sessionStart) {
+        if (careNow >= reminderTime && careNow <= sessionStart) {
           await sendSessionReminders(s.id, "pre_check_in");
         }
       }
 
       // ─── Pre-check-out reminders ───
-      // Find in_progress sessions today that haven't had pre_check_out notification
+      // Find in_progress sessions that haven't had pre_check_out notification
       const checkOutCandidates = await pollDb.prepare(`
-        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.notifications_sent
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.notifications_sent,
+          cr.timezone AS care_timezone
         FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
         LEFT JOIN users u ON cs.family_user_id = u.id
         LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
         LEFT JOIN users cu ON cp.user_id = cu.id
         WHERE cs.status = 'in_progress'
-          AND cs.scheduled_date = ?
+          AND cs.scheduled_date BETWEEN ? AND ?
           AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%pre_check_out%')
           AND (u.is_demo IS NULL OR u.is_demo = 0)
           AND (cu.is_demo IS NULL OR cu.is_demo = 0)
-      `).all(todayStr);
+      `).all(dateRangeStart, dateRangeEnd);
 
       for (const s of checkOutCandidates) {
         if (!s.scheduled_time || !s.duration_hours) continue;
-        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time);
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
         const sessionEnd = new Date(sessionStart.getTime() + s.duration_hours * 60 * 60000);
         const reminderTime = new Date(sessionEnd.getTime() - REMINDER_WINDOW_MINUTES * 60000);
         // Send if we're within the check-out notification window
-        if (etNow >= reminderTime && etNow <= sessionEnd) {
+        if (careNow >= reminderTime && careNow <= sessionEnd) {
           await sendSessionReminders(s.id, "pre_check_out");
         }
       }
 
       // ─── Overdue check-in alerts ───
-      // Confirmed sessions today where start time + grace period has passed but caregiver hasn't checked in
+      // Confirmed sessions where start time + grace period has passed but caregiver hasn't checked in
       const overdueCandidates = await pollDb.prepare(`
-        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent,
+          cr.timezone AS care_timezone
         FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
         LEFT JOIN users u ON cs.family_user_id = u.id
         LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
         LEFT JOIN users cu ON cp.user_id = cu.id
         WHERE cs.status = 'confirmed'
-          AND cs.scheduled_date = ?
+          AND cs.scheduled_date BETWEEN ? AND ?
           AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%overdue_check_in%')
           AND (u.is_demo IS NULL OR u.is_demo = 0)
           AND (cu.is_demo IS NULL OR cu.is_demo = 0)
-      `).all(todayStr);
+      `).all(dateRangeStart, dateRangeEnd);
 
       for (const s of overdueCandidates) {
         if (!s.scheduled_time) continue;
-        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time);
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
         const overdueTime = new Date(sessionStart.getTime() + OVERDUE_GRACE_MINUTES * 60000);
         const maxWindow = new Date(sessionStart.getTime() + MAX_OVERDUE_WINDOW * 60000);
         // Send if we're past grace period but within the overdue window
-        if (etNow >= overdueTime && etNow <= maxWindow) {
+        if (careNow >= overdueTime && careNow <= maxWindow) {
           await sendSessionReminders(s.id, "overdue_check_in");
         }
       }
@@ -600,9 +619,11 @@ async function start() {
         const pendingInterviews = await pollDb.prepare(`
           SELECT i.id, i.session_id, i.requested_by, i.requested_of,
             i.reminder_48h_sent, i.reminder_24h_sent, i.reminder_2h_sent,
-            cs.scheduled_date, cs.scheduled_time
+            cs.scheduled_date, cs.scheduled_time, cs.care_recipient_id,
+            cr.timezone AS care_timezone
           FROM interviews i
           JOIN care_sessions cs ON i.session_id = cs.id
+          LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
           LEFT JOIN users u ON cs.family_user_id = u.id
           LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
           LEFT JOIN users cu ON cp.user_id = cu.id
@@ -614,8 +635,10 @@ async function start() {
 
         for (const iv of pendingInterviews) {
           if (!iv.scheduled_date || !iv.scheduled_time) continue;
-          const sessionStart = buildDateTimeInZone(iv.scheduled_date, iv.scheduled_time);
-          const hoursUntil = (sessionStart - etNow) / (60 * 60000);
+          const ivTz = iv.care_timezone || 'America/New_York';
+          const ivNow = getNowInZone(ivTz);
+          const sessionStart = buildDateTimeInZone(iv.scheduled_date, iv.scheduled_time, ivTz);
+          const hoursUntil = (sessionStart - ivNow) / (60 * 60000);
 
           // 48-hour reminder
           if (hoursUntil <= 48 && hoursUntil > 24 && !iv.reminder_48h_sent) {

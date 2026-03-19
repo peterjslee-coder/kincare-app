@@ -402,9 +402,12 @@ router.put("/:id/claim", async (req, res) => {
   const recipientName = updated.recipient_name || 'your loved one';
 
   // Build a friendly push body with "today" / "tomorrow" / date
+  // Use care recipient's timezone for date comparison
+  const acceptCrTz = await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+  const acceptTz = acceptCrTz?.timezone || 'America/New_York';
   const sessionDateLabel = (() => {
-    const today = getTodayStringInZone();
-    const tomorrow = new Date(getNowInZone());
+    const today = getTodayStringInZone(acceptTz);
+    const tomorrow = new Date(getNowInZone(acceptTz));
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomStr = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getDate()).padStart(2, '0');
     if (session.scheduled_date === today) return 'today';
@@ -471,13 +474,16 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   // Schedule pre-check-in reminders if session is today and within the notification window
-  // All times are care-location times — compare in care timezone
+  // Use care recipient's timezone for timing comparison
   if (session.scheduled_date && session.scheduled_time) {
     const REMINDER_WINDOW = 15;
-    const etNow = getNowInZone();
-    const sessionStartET = buildDateTimeInZone(session.scheduled_date, session.scheduled_time);
-    const reminderTime = new Date(sessionStartET.getTime() - REMINDER_WINDOW * 60000);
-    if (etNow >= reminderTime && etNow <= sessionStartET) {
+    // Look up care recipient timezone for this session
+    const crTzRow = await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+    const claimTz = crTzRow?.timezone || 'America/New_York';
+    const claimNow = getNowInZone(claimTz);
+    const sessionStartCare = buildDateTimeInZone(session.scheduled_date, session.scheduled_time, claimTz);
+    const reminderTime = new Date(sessionStartCare.getTime() - REMINDER_WINDOW * 60000);
+    if (claimNow >= reminderTime && claimNow <= sessionStartCare) {
       // Session is within the notification window right now — send immediately
       sendSessionReminders(req.params.id, "pre_check_in").catch(() => {});
     }
@@ -1102,7 +1108,8 @@ router.post("/:id/check-in", async (req, res) => {
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id, cp.early_check_in_allowed,
-        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        cr.timezone AS care_timezone
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
@@ -1119,15 +1126,16 @@ router.post("/:id/check-in", async (req, res) => {
 
     // ─── Timing gate: 15 min before session start ───
     // Allow check-in after start time (late is fine), but block too-early check-ins
-    // All times are care-location times — use centralized timezone utility
+    // All times are care-location times — use care recipient's timezone
+    const careTz = session.care_timezone || 'America/New_York';
     const CHECK_IN_WINDOW_MINUTES = 15;
     if (session.scheduled_date && session.scheduled_time) {
       const dateStr = session.scheduled_date.split('T')[0];
-      const nowET = getNowInZone();
-      const sessionStartLocal = buildDateTimeInZone(dateStr, session.scheduled_time);
+      const nowCare = getNowInZone(careTz);
+      const sessionStartLocal = buildDateTimeInZone(dateStr, session.scheduled_time, careTz);
       const earliestCheckIn = new Date(sessionStartLocal.getTime() - CHECK_IN_WINDOW_MINUTES * 60000);
 
-      if (nowET < earliestCheckIn && !session.early_check_in_allowed) {
+      if (nowCare < earliestCheckIn && !session.early_check_in_allowed) {
         return res.status(400).json({
           error: "Check-in window not open yet",
           message: `You can check in starting ${CHECK_IN_WINDOW_MINUTES} minutes before your session at ${session.scheduled_time}`,
@@ -1138,15 +1146,17 @@ router.post("/:id/check-in", async (req, res) => {
     }
 
     // ─── Detect late check-in (10+ minutes after scheduled start) ───
+    // Use care recipient's timezone — not server or device timezone
     let lateCheckIn = false;
     let lateMinutes = 0;
     if (session.scheduled_date && session.scheduled_time) {
       try {
-        const scheduledStart = new Date(`${session.scheduled_date}T${session.scheduled_time.padStart(5, "0")}:00`);
-        lateMinutes = Math.floor((new Date() - scheduledStart) / 60000);
+        const nowCare = getNowInZone(careTz);
+        const scheduledStart = buildDateTimeInZone(session.scheduled_date.split('T')[0], session.scheduled_time, careTz);
+        lateMinutes = Math.floor((nowCare - scheduledStart) / 60000);
         if (lateMinutes >= 10) {
           lateCheckIn = true;
-          console.log(`[check-in] Late by ${lateMinutes} min — session ${req.params.id.slice(0, 8)}`);
+          console.log(`[check-in] Late by ${lateMinutes} min (tz: ${careTz}) — session ${req.params.id.slice(0, 8)}`);
         }
       } catch {}
     }
@@ -1249,7 +1259,8 @@ router.post("/:id/check-out", async (req, res) => {
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
-        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        cr.timezone AS care_timezone
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
@@ -1263,6 +1274,9 @@ router.post("/:id/check-out", async (req, res) => {
     if (session.status !== "in_progress") {
       return res.status(400).json({ error: `Cannot check out — session status is '${session.status}'` });
     }
+
+    // All timing uses care recipient's timezone
+    const careTz = session.care_timezone || 'America/New_York';
 
     // Calculate actual duration and adjust pay if checked out early
     const visitLog = await db.prepare(
@@ -1316,14 +1330,14 @@ router.post("/:id/check-out", async (req, res) => {
     }
 
     // Calculate how many minutes early (for storage and notification)
+    // Use care recipient's timezone — not server or device timezone
     let earlyMinutes = 0;
     if (visitLog && visitLog.check_in_time && session.scheduled_time && session.duration_hours) {
-      const schedDate = session.scheduled_date;
-      const schedTime = session.scheduled_time;
-      const [h, m] = schedTime.split(':').map(Number);
-      const schedEnd = new Date(`${schedDate}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
-      schedEnd.setMinutes(schedEnd.getMinutes() + (parseFloat(session.duration_hours) * 60));
-      earlyMinutes = Math.max(0, (schedEnd - new Date()) / 60000);
+      const dateStr = (session.scheduled_date || '').split('T')[0];
+      const sessionStart = buildDateTimeInZone(dateStr, session.scheduled_time, careTz);
+      const schedEnd = new Date(sessionStart.getTime() + parseFloat(session.duration_hours) * 60 * 60000);
+      const nowCare = getNowInZone(careTz);
+      earlyMinutes = Math.max(0, (schedEnd - nowCare) / 60000);
     }
 
     if (visitLog) {
@@ -1472,9 +1486,11 @@ router.put("/:id/cancel", async (req, res) => {
     const activeRole = req.user.activeRole || req.user.role;
 
     const session = await db.prepare(`
-      SELECT cs.*, cp.user_id AS caregiver_user_id
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.timezone AS care_timezone
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       WHERE cs.id = ?
     `).get(req.params.id);
 
@@ -1498,8 +1514,10 @@ router.put("/:id/cancel", async (req, res) => {
 
     // Check if this is a late cancellation (<24 hours before session)
     // No caregiver assigned = always free cancel (no one to compensate)
-    const sessionDateTime = buildDateTimeInZone(session.scheduled_date.split("T")[0], session.scheduled_time || "00:00");
-    const hoursUntilSession = (sessionDateTime - getNowInZone()) / (1000 * 60 * 60);
+    // Use care recipient's timezone for timing
+    const cancelTz = session.care_timezone || 'America/New_York';
+    const sessionDateTime = buildDateTimeInZone(session.scheduled_date.split("T")[0], session.scheduled_time || "00:00", cancelTz);
+    const hoursUntilSession = (sessionDateTime - getNowInZone(cancelTz)) / (1000 * 60 * 60);
     const hasCaregiver = !!session.caregiver_id;
     const isLateCancel = hasCaregiver && hoursUntilSession < 24;
 

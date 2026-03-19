@@ -194,66 +194,46 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** March 17, 2026 | **Version:** v1.49.7 | **Session type:** Bug fixes + admin tools + iPAi AI platform
+**Date:** March 19, 2026 | **Version:** v1.50.21 | **Session type:** P0 timezone architecture fix + bug fixes + documentation
 
 ### What was done this session:
 
-**Bug fixes (v1.46.3–v1.46.6):**
-- Fixed Tony's duplicate proposal bug, no-show visibility, admin review flow, checkout care notes consolidation, stale past-time open jobs
-- Fixed Stripe dashboard link (was hardcoded to platform dashboard)
-- Pre-filled Stripe business_profile to skip webpage/industry during onboarding
-- Fixed schedule day count off-by-one (calendar dates instead of raw minutes)
+**P0 Timezone Architecture Fix (v1.50.21):**
+- Rewrote notification poller (server.js) to JOIN `care_recipients` and use per-session `cr.timezone` for all timing decisions
+- Widened poller date filter to cover all US timezones (no more single-tz `scheduled_date = today`)
+- Fixed check-in gate and late detection in sessions.js: replaced naive `new Date(date + 'T' + time)` with `buildDateTimeInZone(date, time, careTz)`
+- Fixed check-out early-minutes calculation to use care recipient timezone
+- Fixed accountability pollers (payment auth, late check-in, no-show) to use per-session timezone
+- Fixed cancellation late-cancel detection to use care timezone
+- Fixed session accept flow (claim) — notification trigger and "today/tomorrow" label now use care timezone
+- All session queries in check-in, check-out, cancel now SELECT `cr.timezone AS care_timezone`
 
-**Admin tools (v1.46.8–v1.46.14):**
-- Admin alert badge on sidebar/bottom nav with per-tab breakdown (People, Sessions, Auth, Feedback)
-- Admin service messaging — send messages as "InPlace Support" from admin panel
-- Manual caregiver freeze/pause with reason from People tab
-- Paused caregivers in Action Required banner with Message + Reinstate + Call buttons
-- Costs tracking tab — recurring expenses, one-time entries, auto-pull from Twilio/Stripe, Claude API ready
-- Fixed FAQ admin access bug (help.js checking req.isAdmin wrong)
+**Bug fixes (v1.50.19):**
+- Fixed "Now open to all caregivers" text persisting on accepted Next Up appointment cards (added `!s.caregiverName` guard)
+- Marked 4 previously-fixed P1 bugs as resolved in TASKS.md
+- Marked P1 early checkout duration miscalculation as resolved (unblocked by timezone fix)
 
-**iPAi AI platform (v1.47.0–v1.47.3):**
-- iPAi checkmark badge component (IPAiBadge.js) — tiny teal pill, deployed on matching + care profile
-- AI matching engine (src/utils/aiMatching.js) — 6-factor weighted scoring, sorts caregivers by match quality
-- Care Intelligence engine (src/utils/careIntelligence.js) — deep behavioral + medical insights from visit data
-- Post-session AI summaries — auto-generated warm family summaries after caregiver checkout
-- Caregiver coaching — private AI tips for caregivers specific to each care recipient
-- IPAiInsightsCard component on Care Profile page
+**Checkr testing:**
+- Working through Checkr test candidates spreadsheet. Little John completed. Two remaining: "Roll Tide" and "Camo Time."
 
-**Infrastructure:**
-- Regenerated GitHub PAT, updated git remote (expires Apr 15, 2026)
-- Session continuity system: TASKS_ARCHIVE.md, CHANGELOG.md, CLAUDE.md handoff, feedback-loop task rewrite
-- Paused caregiver gated from accepting jobs (server 403 + client disabled buttons)
-
-### PRIORITY FOR NEXT SESSION — two bugs to fix first:
-1. **Care Intelligence "failed to generate" error.** The AI test endpoint works (`/api/care-intelligence/test/ai` returns success). The issue is somewhere in the data pipeline — a SQL query or data format problem. Diagnostic endpoint deployed at `/api/care-intelligence/test/data/:recipientId` — Pete should hit this URL logged in and share the output. It tests each step: DB, recipient, visits, notes, gatherVisitData, AI call.
-2. **iPAi chatbot in Messages — duplicate entries + routing.** The pinned iPAi card shows at the top of Messages, but the actual iPAi conversation from the seed data shows separately as "iPAi Assistant." Need to merge them and ensure messages route through `/api/ipai/chat`. The detection logic checks name/email but might not match. Also need to filter the duplicate from the conversation list.
+### PRIORITY FOR NEXT SESSION:
+1. **Complete Checkr test cases** — Roll Tide and Camo Time candidates remain.
+2. **Early checkout prompt + pay logic** — Build the checkout modal warning and 15-min block pay calculation (see TASKS.md spec). Server-side duration computation now enabled by timezone fix.
+3. **Test timezone fix in production** — Deploy v1.50.21, have Pete verify push notifications arrive at the right time from Texas.
 
 ### What was discovered / still open:
-- Cary's "Set Up Payments" card showing despite prior Stripe connection — needs investigation
-- Checkr: Guilherme confirmed Embeds require same webinar/checklist process as API. Pete emailed asking about Embeds + candidate-pay. Waiting on reply.
-- DUNS number (106784345) has wrong business name — blocking Google Play. D&B requires 8-day verification. Alternative: Google Play manual verification via business docs.
-- Anthropic Admin API key not available on Individual org plan — Claude API cost ($0.01/mo) entered manually for now. At scale, upgrade to Team plan for auto-pull.
-- Care summary still has markdown formatting for Betty — needs regeneration after v1.48.3 prompt fix
+- Checkr: 2 of N candidates remaining (Roll Tide, Camo Time)
+- Dashboard `getNowInZone()` calls still use default timezone for aggregate views (monthly stats, "today" filter) — acceptable since these are family-view aggregates, not per-session timing
+- Frontend `RequestCareModal.js` line 38 still uses `new Date(date + 'T' + time + ':00')` for short-notice detection — low priority since it's a display hint, not a gate
+- DUNS number (106784345) has wrong business name — blocking Google Play. D&B requires 8-day verification.
 
-### Key decisions made:
-- Background checks: Required for all caregivers. Checkr Embeds route. Candidate-pay if possible.
-- iPAi brand: Teal checkmark pill badge. Replaces "GREAT MATCH" only. Other pills (No Conflicts, Bonus Pay) stay.
-- AI strategy: All models use Haiku for now (Sonnet wasn't accessible on Pete's API key plan). Matching (algorithmic + Haiku explanations), Care Intelligence (Haiku), post-session summaries (Haiku), caregiver coaching (Haiku), iPAi chatbot (Haiku). All non-blocking, all marked with iPAi badge.
-- Cost tracking: Recurring + one-time + auto-pulled. $200/mo Claude subscription tracked as recurring. Railway, Twilio, Stripe auto-pulled.
-- iPAi chatbot: Lives in Messages as a pinned conversation. Classifies intent (scheduling, care question, availability, help, etc.) and routes to appropriate handler. 30 msg/day rate limit per user.
+### Key decisions made (this session):
+- **Pay calculation rule:** Pay is from actual check-in to actual check-out, in 15-min blocks. NOT from scheduled appointment start time. Caregiver checks out ≤15 min early = full pay. >15 min early = rounded down to nearest 15-min block.
+- **Early checkout prompt:** Required text reason when checking out >15 min early. Stored in `early_checkout_reason` column. Notification sent to care team.
+- **Timezone anchoring:** All session timing (notifications, gates, duration, pay) must use the care recipient's timezone. Device timezone is irrelevant for business logic.
 
 ### New tables/columns this session:
-- `messages.sender_label` — custom display name for admin service messages
-- `visit_logs.ai_summary` — AI-generated post-session summary (JSON)
-- `visit_logs.ai_coaching` — AI-generated caregiver coaching tips (JSON)
-- `platform_costs` table — one-time cost entries
-- `recurring_expenses` table — monthly/yearly subscriptions
-- `care_recipients.family_ai_notes` — family additions for iPAi to incorporate
-- `care_recipients.ai_care_plan` — living care plan (JSON)
-- `care_recipients.ai_care_plan_updated_at`
-- `caregiver_profiles.account_paused` (added previous session, used extensively this session)
-- iPAi system user: `ipai@yourinplace.com` (auto-created by chatbot or seed)
+- `visit_logs.early_checkout_reason` (planned — not yet added to DB, captured in TASKS.md spec)
 
 ## Local Development
 
@@ -429,16 +409,19 @@ The server uses Socket.io for real-time updates. Express is wrapped in `http.cre
 
 **All times are care-location times, period.** When a session is booked for 8am, that means 8am where the care is happening (currently always Eastern / America/New_York). It does not matter where the person booking, viewing, or receiving notifications is physically located. If Pete is in China and schedules care for Mom in Virginia, the calendar shows Virginia time. Push notifications fire based on Virginia time. Check-in gates open based on Virginia time.
 
-**Current implementation (interim):** Session dates and times are stored as naive TEXT strings (`scheduled_date` = "2026-02-26", `scheduled_time` = "08:00") with no timezone metadata. All backend comparisons use `toLocaleString('en-US', { timeZone: 'America/New_York' })` to get Eastern "now". All frontend check-in gates do the same. This works for Virginia-only care but is hardcoded.
+**Implementation (v1.50.21, Mar 19 — P0 fix complete):** Session dates/times are stored as naive TEXT strings (`scheduled_date` = "2026-02-26", `scheduled_time` = "08:00"). The `care_recipients.timezone` column (default `'America/New_York'`) determines the timezone for all session logic. Backend utilities `getNowInZone(tz)` and `buildDateTimeInZone(date, time, tz)` in `src/utils/timezone.js` handle all conversions. Frontend mirror: `TimezoneHelper.js`. All time-sensitive backend code (notification poller, check-in/check-out, accountability pollers, cancellation) now JOINs `care_recipients` and passes `cr.timezone` to these utilities. The notification poller date filter uses a range (earliest US tz to latest) to catch cross-timezone edge cases. No more hardcoded single-timezone assumptions in any time-critical path.
 
-**Long-term fix (P0 in TASKS.md):** Store a `timezone` column on `care_recipients` (default `'America/New_York'`). All date/time logic reads the care recipient's timezone instead of hardcoding Eastern. This enables multi-state expansion.
+**Real-world failures (Mar 19, now fixed):** (1) Pete was in Texas (CST). Betty's 8am EST appointment triggered Pete's push notification at 7:45am CST instead of 6:45am CST — the notification poller used default timezone without per-session lookup. Fixed: poller now reads `cr.timezone` per session. (2) Cary's phone clock was 1 hour behind EST. She checked out 1 hour early from a 4-hour session, but the app showed 2 hours early because it used naive date parsing. Fixed: `earlyMinutes` now uses `buildDateTimeInZone` with care recipient's timezone.
 
 **Rules for any new date/time code:**
 - Never use `new Date().toISOString().split('T')[0]` for "today" — that returns UTC date
-- Never use `new Date(dateStr + 'T' + timeStr + ':00')` — that parses as UTC
-- Backend: always compute "now" as `new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))`
-- Frontend: same pattern for check-in gates and session comparisons
-- Push notification timing: compare against Eastern time, not server time (Railway runs in UTC)
+- Never use `new Date(dateStr + 'T' + timeStr + ':00')` — that parses in server-local timezone, not care timezone
+- Backend: always use `getNowInZone(careTz)` and `buildDateTimeInZone(date, time, careTz)` from `src/utils/timezone.js`
+- Frontend: use `TimezoneHelper.getNow(tz)` and `TimezoneHelper.buildDateTime(date, time, tz)`
+- Always JOIN `care_recipients` in queries and SELECT `cr.timezone AS care_timezone`
+- Push notification timing: compare against care recipient's timezone, not server time (Railway runs in UTC) and not the notification recipient's device timezone
+- Check-in/check-out timestamps: record in UTC server-side via NOW(). Never trust the client's `new Date()` for session duration or pay calculations.
+- Pay calculations: always server-side, always in care recipient's timezone. Pay is computed from actual check-in to actual check-out in 15-minute blocks (see TASKS.md early checkout rule).
 
 ## Dev Rules (Persistent)
 
