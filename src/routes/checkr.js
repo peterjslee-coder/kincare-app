@@ -485,9 +485,12 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
 // ─── GET /api/checkr/admin/candidates ───
 // Admin view of all Checkr-related caregiver statuses
 router.get("/admin/candidates", authenticate, async (req, res) => {
-  if (!req.user.is_admin) return res.status(403).json({ error: "Admin only" });
-
   const db = await getDb();
+  if (!req.isAdmin) {
+    const adminCheck = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (!adminCheck?.is_admin) return res.status(403).json({ error: "Admin only" });
+  }
+
   try {
     const candidates = await db.prepare(`
       SELECT
