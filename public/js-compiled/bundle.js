@@ -48437,6 +48437,21 @@ const AdminPanel = window.AdminPanel = () => {
   });
   const [expandedFeedback, setExpandedFeedback] = useState(null);
   const [feedbackEditNotes, setFeedbackEditNotes] = useState('');
+  // Background checks
+  const [bgCheckCandidates, setBgCheckCandidates] = useState([]);
+  const [bgCheckLoading, setBgCheckLoading] = useState(false);
+  const loadBgChecks = async () => {
+    setBgCheckLoading(true);
+    try {
+      const res = await apiFetch('/api/checkr/admin/candidates');
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setBgCheckCandidates(data.candidates || []);
+      }
+    } catch {}
+    setBgCheckLoading(false);
+  };
+
   // Safety flags
   const [safetyFlags, setSafetyFlags] = useState([]);
   const [safetyFlagCount, setSafetyFlagCount] = useState(0);
@@ -48869,6 +48884,7 @@ const AdminPanel = window.AdminPanel = () => {
       loadPausedCaregivers();
     }
     if (activeTab === 'safety') loadSafetyFlags();
+    if (activeTab === 'bgchecks') loadBgChecks();
     if (activeTab === 'costs') loadCosts();
   }, [activeTab]);
 
@@ -49594,6 +49610,10 @@ const AdminPanel = window.AdminPanel = () => {
       label: 'Auth',
       icon: '\u{1F512}',
       badge: consentAlerts.length || null
+    }, {
+      id: 'bgchecks',
+      label: 'BG Checks',
+      icon: '🔍'
     }, {
       id: 'safety',
       label: 'Safety Flags',
@@ -54851,7 +54871,210 @@ const AdminPanel = window.AdminPanel = () => {
       textAlign: 'center',
       color: '#999'
     }
-  }, "No caregiver profile found for this user."))), activeTab === 'safety' && /*#__PURE__*/React.createElement("div", null, safetyLoading ? /*#__PURE__*/React.createElement("div", {
+  }, "No caregiver profile found for this user."))), activeTab === 'bgchecks' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: '#333'
+    }
+  }, "Background Check Status"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#888'
+    }
+  }, process.env.CHECKR_STAGING === 'true' ? 'Staging environment' : 'Production', " \u2014 ", bgCheckCandidates.length, " candidates")), /*#__PURE__*/React.createElement("button", {
+    onClick: loadBgChecks,
+    style: {
+      padding: '6px 14px',
+      background: '#1b6b5a',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Refresh")), bgCheckLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: 40,
+      color: '#888'
+    }
+  }, "Loading background checks...") : bgCheckCandidates.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      textAlign: 'center',
+      color: '#888',
+      padding: 40
+    }
+  }, "No caregivers have consented to background checks yet.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: 10
+    }
+  }, bgCheckCandidates.map(c => {
+    const statusColor = c.checkr_status === 'clear' ? '#2e7d32' : c.checkr_status === 'consider' ? '#e65100' : c.checkr_status === 'adverse_action' ? '#c62828' : c.checkr_status === 'processing' ? '#1565c0' : c.checkr_status === 'invitation_sent' ? '#7b1fa2' : c.checkr_status === 'invitation_expired' ? '#888' : '#555';
+    const statusIcon = c.checkr_status === 'clear' ? '\u2705' : c.checkr_status === 'consider' ? '\u26A0\uFE0F' : c.checkr_status === 'adverse_action' ? '\u{1F6A8}' : c.checkr_status === 'processing' ? '\u23F3' : c.checkr_status === 'invitation_sent' ? '\u{1F4E8}' : c.checkr_status === 'invitation_expired' ? '\u23F0' : '\u2022';
+    const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
+    return /*#__PURE__*/React.createElement("div", {
+      key: c.user_id,
+      className: "card",
+      style: {
+        border: c.checkr_status === 'consider' || c.checkr_status === 'adverse_action' ? '2px solid ' + statusColor : '1px solid #e5e7eb',
+        padding: '14px 18px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: 12,
+        flexWrap: 'wrap'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 15,
+        color: '#333'
+      }
+    }, c.legal_first_name || c.first_name, " ", c.legal_last_name || c.last_name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#888'
+      }
+    }, c.email), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", null, statusIcon), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 600,
+        fontSize: 13,
+        color: statusColor,
+        textTransform: 'uppercase'
+      }
+    }, (c.checkr_status || 'pending').replace(/_/g, ' '))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: '#aaa',
+        marginTop: 4
+      }
+    }, c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted', c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : '')), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6
+      }
+    }, c.checkr_candidate_id && /*#__PURE__*/React.createElement("a", {
+      href: `${checkrDashUrl}/candidates/${c.checkr_candidate_id}`,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      style: {
+        padding: '5px 12px',
+        background: '#1565c0',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 6,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer',
+        textDecoration: 'none',
+        textAlign: 'center'
+      }
+    }, "View on Checkr"), c.checkr_report_id && /*#__PURE__*/React.createElement("a", {
+      href: `${checkrDashUrl}/reports/${c.checkr_report_id}`,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      style: {
+        padding: '5px 12px',
+        background: '#fff',
+        color: '#1565c0',
+        border: '1px solid #1565c0',
+        borderRadius: 6,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer',
+        textDecoration: 'none',
+        textAlign: 'center'
+      }
+    }, "View Report"), c.checkr_status === 'consider' && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 4
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: async () => {
+        if (!confirm(`Approve ${c.first_name} despite flagged background check?`)) return;
+        try {
+          await apiFetch(`/api/admin/users/${c.user_id}/approve`, {
+            method: 'PUT'
+          });
+          showToast('Caregiver approved', 'success');
+          loadBgChecks();
+        } catch {}
+      },
+      style: {
+        padding: '4px 10px',
+        background: '#2e7d32',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Approve"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setFreezeTarget({
+          userId: c.user_id,
+          name: `${c.first_name} ${c.last_name}`
+        });
+        setFreezeReason('Background check flagged');
+      },
+      style: {
+        padding: '4px 10px',
+        background: '#c62828',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Reject")), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setAdminMsgTarget({
+          userId: c.user_id,
+          name: `${c.first_name} ${c.last_name}`
+        });
+        setAdminMsgText('');
+      },
+      style: {
+        padding: '4px 10px',
+        background: '#fff',
+        color: '#1b6b5a',
+        border: '1px solid #1b6b5a',
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, '\u{1F4AC}', " Message"))));
+  }))), activeTab === 'safety' && /*#__PURE__*/React.createElement("div", null, safetyLoading ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       padding: 40,

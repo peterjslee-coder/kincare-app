@@ -353,6 +353,34 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
 
         if (updated.changes > 0) {
           console.log(`[checkr-webhook] Caregiver profile updated — cleared: ${cleared}`);
+
+          // Alert admin for non-clear results
+          if (!cleared) {
+            try {
+              const { v4: uuid } = require("uuid");
+              const cgProfile = await db.prepare(
+                "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_candidate_id = ?"
+              ).get(candidate_id);
+              if (cgProfile) {
+                const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+                const title = `🔍 Background check: ${status.toUpperCase()} — ${cgProfile.first_name} ${cgProfile.last_name}`;
+                const msg = `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) background check returned "${status}". Review in Admin → BG Checks.`;
+                for (const admin of admins) {
+                  await db.prepare(
+                    "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                  ).run(uuid(), admin.id, "checkr_flagged", title, msg, JSON.stringify({ reportId, candidateId: candidate_id, status, userId: cgProfile.user_id }));
+                }
+                try {
+                  const { sendPushToUser } = require("../utils/push");
+                  if (sendPushToUser) {
+                    for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
+                  }
+                } catch {}
+              }
+            } catch (alertErr) {
+              console.error("[checkr-webhook] Admin alert error:", alertErr.message);
+            }
+          }
         } else {
           console.warn(`[checkr-webhook] No caregiver found for candidate ${candidate_id}`);
         }
