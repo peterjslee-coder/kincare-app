@@ -35,6 +35,7 @@ const AdminPanel = window.AdminPanel = () => {
   // Background checks
   const [bgCheckCandidates, setBgCheckCandidates] = useState([]);
   const [bgCheckLoading, setBgCheckLoading] = useState(false);
+  const [checkrAlertCount, setCheckrAlertCount] = useState(0);
 
   const loadBgChecks = async () => {
     setBgCheckLoading(true);
@@ -401,6 +402,7 @@ const AdminPanel = window.AdminPanel = () => {
       if (d) {
         setNewFeedbackCount(d.newFeedback || 0);
         setSafetyFlagCount(d.safetyFlags || 0);
+        setCheckrAlertCount(d.checkrAlerts || 0);
       }
     }).catch(() => {});
     // Fetch current user for settings tab
@@ -994,7 +996,7 @@ const AdminPanel = window.AdminPanel = () => {
     ]},
     { label: 'Trust & Safety', tabs: [
       { id: 'authorizations', label: 'Auth', icon: '\u{1F512}', badge: consentAlerts.length || null },
-      { id: 'bgchecks', label: 'BG Checks', icon: '🔍' },
+      { id: 'bgchecks', label: 'BG Checks', icon: '🔍', badge: checkrAlertCount || null },
       { id: 'safety', label: 'Safety Flags', icon: '🚨', badge: safetyFlagCount || null },
       { id: 'customerservice', label: 'Support', icon: '🛎️' },
       { id: 'security', label: 'Security', icon: '🛡️' },
