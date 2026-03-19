@@ -96,6 +96,20 @@ router.get("/alerts", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/alerts/dismiss-checkr — Mark Checkr alerts as read ───
+router.post("/alerts/dismiss-checkr", async (req, res) => {
+  try {
+    const db = await getDb();
+    await db.prepare(
+      `UPDATE activity_feed SET is_read = 1 WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired') AND is_read = 0`
+    ).run();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Dismiss checkr alerts error:", err);
+    res.status(500).json({ error: "Failed to dismiss alerts" });
+  }
+});
+
 // ─── GET /api/admin/stats — Platform overview metrics ───
 router.get("/stats", async (req, res) => {
   try {

@@ -421,7 +421,13 @@ const AdminPanel = window.AdminPanel = () => {
     if (activeTab === 'security') { loadSecDashboard(); loadSecAuditLog(); }
     if (activeTab === 'sessions') { loadNoShowSessions(); loadPausedCaregivers(); }
     if (activeTab === 'safety') loadSafetyFlags();
-    if (activeTab === 'bgchecks') loadBgChecks();
+    if (activeTab === 'bgchecks') {
+      loadBgChecks();
+      // Mark Checkr alerts as read when viewing the tab
+      if (checkrAlertCount > 0) {
+        apiFetch('/api/admin/alerts/dismiss-checkr', { method: 'POST' }).then(() => setCheckrAlertCount(0)).catch(() => {});
+      }
+    }
     if (activeTab === 'costs') loadCosts();
   }, [activeTab]);
 
