@@ -558,13 +558,35 @@ router.post("/test-candidate", authenticate, async (req, res) => {
     });
     console.log(`[checkr-test] Invitation created: ${invitation.id}, url: ${invitation.invitation_url}`);
 
+    // Step 3: Create a test user + caregiver profile linked to this Checkr candidate
+    // so webhooks can update the profile when results come back
+    const { v4: uuid } = require("uuid");
+    const testUserId = uuid();
+    const testEmail = `test-${first_name.toLowerCase()}-${last_name.toLowerCase()}@checkr-mock.inplace`;
+    try {
+      await db.prepare(
+        "INSERT INTO users (id, email, first_name, last_name, role, password_hash, is_active, is_demo) VALUES (?, ?, ?, ?, 'caregiver', 'checkr-test-no-login', 1, 0)"
+      ).run(testUserId, testEmail, first_name, last_name);
+
+      await db.prepare(`
+        INSERT INTO caregiver_profiles (id, user_id, legal_first_name, legal_last_name, date_of_birth,
+          checkr_candidate_id, checkr_invitation_id, checkr_status, background_check_consent, background_check_paid)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'invitation_sent', 1, 1)
+      `).run(uuid(), testUserId, first_name, last_name, dob || null, candidate.id, invitation.id);
+
+      console.log(`[checkr-test] Created test profile for ${first_name} ${last_name} linked to candidate ${candidate.id}`);
+    } catch (profileErr) {
+      console.warn(`[checkr-test] Profile creation failed (may already exist):`, profileErr.message);
+    }
+
     res.json({
       success: true,
       candidateId: candidate.id,
       invitationId: invitation.id,
       invitationUrl: invitation.invitation_url,
+      testUserId,
       package: packageSlug,
-      message: `Check your email at ${email} for the Checkr invitation link. Use the mock data exactly as provided.`,
+      message: `Check your email at ${email} for the Checkr invitation link. Test profile created — webhooks will update status.`,
     });
   } catch (err) {
     console.error("[checkr-test] Error:", err);
