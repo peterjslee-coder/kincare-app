@@ -383,9 +383,10 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
         const { id: reportId, candidate_id, status, result } = report;
         console.log(`[checkr-webhook] Report completed: ${reportId}, candidate: ${candidate_id}, status: ${status}, result: ${result}`);
 
-        // Status can be: "clear", "consider", "suspended", "dispute"
-        const cleared = status === "clear";
-        const checkrStatus = status === "clear" ? "clear" : status;
+        // Checkr report.completed: status = "complete" (lifecycle), result = "clear" | "consider" (finding)
+        const actualResult = result || status;
+        const cleared = actualResult === "clear";
+        const checkrStatus = cleared ? "clear" : (actualResult === "consider" ? "consider" : actualResult);
 
         const updated = await db.prepare(
           `UPDATE caregiver_profiles SET
@@ -409,14 +410,14 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
               const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
               const icon = cleared ? '✅' : '🔍';
               const eventType = cleared ? "checkr_cleared" : "checkr_flagged";
-              const title = `${icon} Background check: ${status.toUpperCase()} — ${cgProfile.first_name} ${cgProfile.last_name}`;
+              const title = `${icon} Background check: ${actualResult.toUpperCase()} — ${cgProfile.first_name} ${cgProfile.last_name}`;
               const msg = cleared
                 ? `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) passed their background check. They're cleared for sessions.`
-                : `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) background check returned "${status}". Review in Admin → BG Checks.`;
+                : `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) background check returned "${actualResult}". Review in Admin → BG Checks.`;
               for (const admin of admins) {
                 await db.prepare(
                   "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                ).run(uuid(), admin.id, eventType, title, msg, JSON.stringify({ reportId, candidateId: candidate_id, status, userId: cgProfile.user_id }));
+                ).run(uuid(), admin.id, eventType, title, msg, JSON.stringify({ reportId, candidateId: candidate_id, status: actualResult, userId: cgProfile.user_id }));
               }
               try {
                 const { sendPushToUser } = require("../utils/push");
@@ -445,10 +446,12 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
       // ─── Report updated (e.g., additional screening results came in) ───
       case "report.updated": {
         const report = data.object;
-        const { id: reportId, candidate_id, status } = report;
-        console.log(`[checkr-webhook] Report updated: ${reportId}, status: ${status}`);
+        const { id: reportId, candidate_id, status, result } = report;
+        const updatedResult = result || status;
+        console.log(`[checkr-webhook] Report updated: ${reportId}, status: ${status}, result: ${result}`);
 
-        const cleared = status === "clear";
+        const cleared = updatedResult === "clear";
+        const updatedStatus = cleared ? "clear" : (updatedResult === "consider" ? "consider" : updatedResult);
         await db.prepare(
           `UPDATE caregiver_profiles SET
             checkr_status = ?,
@@ -456,7 +459,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
             is_background_checked = ?,
             updated_at = NOW()
           WHERE checkr_candidate_id = ?`
-        ).run(status, reportId, cleared ? 1 : 0, candidate_id);
+        ).run(updatedStatus, reportId, cleared ? 1 : 0, candidate_id);
         break;
       }
 
@@ -677,6 +680,52 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
     console.error("[checkr-webhook] Processing error:", err);
     // Still return 200 — we don't want Checkr retrying on our error
     res.json({ received: true, error: "Processing error logged" });
+  }
+});
+
+// ─── POST /api/checkr/admin/sync-statuses ───
+// Re-fetch report results from Checkr API and fix stored statuses
+router.post("/admin/sync-statuses", authenticate, async (req, res) => {
+  const db = await getDb();
+  if (!req.isAdmin) {
+    const adminCheck = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (!adminCheck?.is_admin) return res.status(403).json({ error: "Admin only" });
+  }
+
+  try {
+    const candidates = await db.prepare(
+      "SELECT checkr_candidate_id, checkr_report_id, checkr_status FROM caregiver_profiles WHERE checkr_report_id IS NOT NULL"
+    ).all();
+
+    let updated = 0;
+    for (const c of candidates) {
+      try {
+        const reportResp = await fetch(`https://api.checkrhq-staging.net/v1/reports/${c.checkr_report_id}`, {
+          headers: { Authorization: `Bearer ${process.env.CHECKR_API_KEY}` },
+        });
+        if (reportResp.ok) {
+          const report = await reportResp.json();
+          const actualResult = report.result || report.status;
+          const cleared = actualResult === "clear";
+          const newStatus = cleared ? "clear" : (actualResult === "consider" ? "consider" : actualResult);
+
+          if (newStatus !== c.checkr_status) {
+            await db.prepare(
+              "UPDATE caregiver_profiles SET checkr_status = ?, is_background_checked = ?, updated_at = NOW() WHERE checkr_report_id = ?"
+            ).run(newStatus, cleared ? 1 : 0, c.checkr_report_id);
+            updated++;
+            console.log(`[checkr-sync] ${c.checkr_candidate_id}: ${c.checkr_status} → ${newStatus}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`[checkr-sync] Failed for report ${c.checkr_report_id}:`, err.message);
+      }
+    }
+
+    res.json({ ok: true, checked: candidates.length, updated });
+  } catch (err) {
+    console.error("[checkr-sync] Error:", err);
+    res.status(500).json({ error: "Sync failed" });
   }
 });
 
