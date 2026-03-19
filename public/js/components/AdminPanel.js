@@ -1037,12 +1037,12 @@ const AdminPanel = window.AdminPanel = () => {
       </div>
 
       {/* ── ACTION REQUIRED BANNER — always visible when pending approvals exist ── */}
-      {(pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0) && (
+      {(pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0) && (
         <div style={{ marginBottom: 16, padding: 16, background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: '2px solid #ff9800', borderRadius: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#e65100', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             {'\u{1F514}'} Action Required
             <span style={{ background: '#e65100', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
-              {pendingApprovals.length + consentAlerts.length + pausedCaregivers.length}
+              {pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount}
             </span>
           </div>
 
@@ -1186,6 +1186,24 @@ const AdminPanel = window.AdminPanel = () => {
               </div>
             </div>
           ))}
+
+          {/* Background check updates */}
+          {checkrAlertCount > 0 && (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Background Checks</div>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#fff', borderRadius: 10, border: '1px solid #ffe0b2', cursor: 'pointer',
+              }} onClick={() => { setActiveTab('bgchecks'); loadBgChecks(); }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#1565c0' }}>
+                    {'\u{1F50D}'} {checkrAlertCount} background check update{checkrAlertCount !== 1 ? 's' : ''}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#888' }}>Click to review in BG Checks tab</div>
+                </div>
+                <span style={{ background: '#1565c0', color: '#fff', borderRadius: 20, padding: '4px 12px', fontSize: 13, fontWeight: 700 }}>{checkrAlertCount}</span>
+              </div>
+            </>
+          )}
         </div>
       )}
 
