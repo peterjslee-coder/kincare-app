@@ -54889,7 +54889,7 @@ const AdminPanel = window.AdminPanel = () => {
       fontSize: 12,
       color: '#888'
     }
-  }, process.env.CHECKR_STAGING === 'true' ? 'Staging environment' : 'Production', " \u2014 ", bgCheckCandidates.length, " candidates")), /*#__PURE__*/React.createElement("button", {
+  }, bgCheckCandidates.length, " candidates")), /*#__PURE__*/React.createElement("button", {
     onClick: loadBgChecks,
     style: {
       padding: '6px 14px',

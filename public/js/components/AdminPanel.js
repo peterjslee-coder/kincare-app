@@ -3371,7 +3371,7 @@ const AdminPanel = window.AdminPanel = () => {
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>Background Check Status</div>
               <div style={{ fontSize: 12, color: '#888' }}>
-                {process.env.CHECKR_STAGING === 'true' ? 'Staging environment' : 'Production'} — {bgCheckCandidates.length} candidates
+                {bgCheckCandidates.length} candidates
               </div>
             </div>
             <button onClick={loadBgChecks} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
