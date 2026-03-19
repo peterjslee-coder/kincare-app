@@ -309,7 +309,24 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
   }
 
   const { type, data } = body;
-  console.log(`[checkr-webhook] Event: ${type}`);
+  console.log(`[checkr-webhook] Event: ${type}`, JSON.stringify(data?.object || {}).substring(0, 200));
+
+  // Log every webhook event to the database for debugging/certification
+  try {
+    const { v4: uuid } = require("uuid");
+    await db.prepare(`
+      INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
+      VALUES (?, (SELECT id FROM users WHERE is_admin = 1 LIMIT 1), ?, ?, ?, ?, NOW())
+    `).run(
+      uuid(),
+      "checkr_webhook",
+      `Checkr: ${type}`,
+      `Candidate: ${data?.object?.candidate_id || data?.object?.id || 'unknown'}, Status: ${data?.object?.status || 'n/a'}`,
+      JSON.stringify({ type, object: data?.object })
+    );
+  } catch (logErr) {
+    console.warn("[checkr-webhook] Failed to log event:", logErr.message);
+  }
 
   try {
     switch (type) {
