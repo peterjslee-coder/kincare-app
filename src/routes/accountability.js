@@ -771,10 +771,10 @@ async function pollCaregiverNoShows() {
             }
           }
 
-          // ─── Pause caregiver's account pending admin review ───
+          // ─── Pause caregiver's account pending admin review (only if not already paused) ───
           try {
-            const cgProfile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(s.caregiver_user_id);
-            if (cgProfile) {
+            const cgProfile = await db.prepare("SELECT id, account_paused FROM caregiver_profiles WHERE user_id = ?").get(s.caregiver_user_id);
+            if (cgProfile && !cgProfile.account_paused) {
               await db.prepare(`
                 UPDATE caregiver_profiles SET
                   is_available = 0,
@@ -783,6 +783,9 @@ async function pollCaregiverNoShows() {
                   account_paused_at = NOW()
                 WHERE id = ?
               `).run(s.scheduled_date, cgProfile.id);
+              console.log(`[accountability] Paused caregiver ${s.caregiver_user_id} for no-show`);
+            } else if (cgProfile?.account_paused) {
+              console.log(`[accountability] Caregiver ${s.caregiver_user_id} already paused — skipping`);
             }
           } catch (pauseErr) {
             console.error(`[accountability] Failed to pause caregiver account:`, pauseErr.message);

@@ -310,10 +310,12 @@ const AdminPanel = window.AdminPanel = () => {
         const err = await res?.json().catch(() => ({}));
         showToast(err?.error || 'Failed to send message', 'error');
       }
-    } catch {
-      showToast('Failed to send message', 'error');
+    } catch (err) {
+      console.error('Admin message error:', err);
+      showToast('Failed to send message — try refreshing the page', 'error');
+    } finally {
+      setAdminMsgSending(false);
     }
-    setAdminMsgSending(false);
   };
 
   const loadNoShowSessions = async () => {
