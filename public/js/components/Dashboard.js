@@ -1263,7 +1263,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                         {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
                       </div>
                       {isSeekingCaregiver && !s.offeredToCaregiverId && <div style={{ fontSize: 12, fontWeight: 600, color: '#e8724a', marginTop: 4 }}>Seeking caregiver</div>}
-                      {s.offeredToCaregiverId && (() => {
+                      {s.offeredToCaregiverId && !s.caregiverName && (() => {
                         const exUntil = s.exclusiveUntil ? new Date(s.exclusiveUntil) : null;
                         const exRemain = exUntil ? Math.max(0, Math.floor((exUntil - new Date()) / 60000)) : null;
                         const exExpired = exUntil && exRemain <= 0;
