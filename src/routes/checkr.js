@@ -501,7 +501,7 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
         u.email, u.first_name, u.last_name
       FROM caregiver_profiles cp
       JOIN users u ON cp.user_id = u.id
-      WHERE cp.background_check_consent = 1
+      WHERE cp.background_check_consent = 1 OR cp.checkr_candidate_id IS NOT NULL
       ORDER BY cp.updated_at DESC
     `).all();
 
