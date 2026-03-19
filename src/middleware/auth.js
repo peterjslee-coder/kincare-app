@@ -204,6 +204,8 @@ function verifyCsrf(req, res, next) {
     "/api/auth/verify-email", "/api/auth/refresh", "/api/auth/passkey-login",
     "/api/auth/passkey-login-verify", "/api/auth/logout"];
   if (publicAuthPaths.some(p => req.path === p)) return next();
+  // Skip for webhook endpoints (server-to-server, no cookie/CSRF)
+  if (req.path === "/api/checkr/webhook" || req.path === "/api/payments/webhook") return next();
   // Skip if no auth cookie present
   if (!req.cookies?.auth_token) return next();
 
