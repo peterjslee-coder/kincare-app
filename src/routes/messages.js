@@ -46,11 +46,16 @@ router.get("/conversations", async (req, res) => {
     `).all(conv.id);
 
     // For direct conversations, use partner name as conversation name
+    // EXCEPT when conversation has an explicit name like "InPlace Support" or "iPAi"
     let displayName = conv.name;
     let partnerPhoto = null;
     if (conv.type === "direct") {
       const partner = members.find(m => m.id !== userId);
-      displayName = partner ? `${partner.first_name} ${partner.last_name}` : "Unknown";
+      if (conv.name && (conv.name === "InPlace Support" || conv.name === "iPAi")) {
+        displayName = conv.name;
+      } else {
+        displayName = partner ? `${partner.first_name} ${partner.last_name}` : "Unknown";
+      }
       partnerPhoto = partner?.profile_photo || null;
     }
 
