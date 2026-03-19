@@ -581,8 +581,8 @@ router.post("/test-candidate", authenticate, async (req, res) => {
     try {
       await db.prepare(`
         INSERT INTO caregiver_profiles (id, user_id, legal_first_name, legal_last_name, date_of_birth,
-          checkr_candidate_id, checkr_invitation_id, checkr_status, background_check_consent, background_check_paid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'invitation_sent', 1, 1)
+          checkr_candidate_id, checkr_invitation_id, checkr_status, background_check_consent, background_check_paid, hourly_rate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'invitation_sent', 1, 1, 25)
       `).run(uuid(), testUserId, first_name, last_name, dob || null, candidate.id, invitation.id);
       console.log(`[checkr-test] Created profile linked to candidate ${candidate.id}`);
     } catch (profileErr) {
