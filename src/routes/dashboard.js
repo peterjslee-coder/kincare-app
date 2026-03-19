@@ -150,6 +150,8 @@ async function familyDashboard(db, userId, res) {
         LEFT JOIN visit_logs vl ON vl.session_id = cs.id
         WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
           AND cs.status = 'completed'
+          AND cs.cancelled_by IS NULL
+          AND cs.caregiver_no_show = 0
           AND cs.scheduled_date >= ?
         ORDER BY cs.id
       ) sub

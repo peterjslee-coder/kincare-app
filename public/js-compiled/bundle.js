@@ -6613,7 +6613,16 @@ const Dashboard = window.Dashboard = ({
     style: {
       marginBottom: 16
     }
-  }, pendingReviews.map(pr => {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: '#c62828',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginBottom: 10
+    }
+  }, '\u{1F6A8}', " Action Required \u2014 Review (", pendingReviews.length, ")"), pendingReviews.map(pr => {
     var _pr$caregiver_name, _pr$caregiver_name2, _pr$caregiver_name3;
     const isNoShow = !!pr.caregiver_no_show;
     const borderColor = isNoShow ? '#ef5350' : '#ffc107';
@@ -6660,7 +6669,7 @@ const Dashboard = window.Dashboard = ({
         fontWeight: 700,
         color: isNoShow ? '#c62828' : '#f57f17'
       }
-    }, isNoShow ? '\u{26A0}\u{FE0F}' : '\u2B50', " Please review ", pr.caregiver_name), /*#__PURE__*/React.createElement("span", {
+    }, isNoShow ? '\u2716 No Show — ' : '\u2B50 ', pr.caregiver_name, " \xB7 ", pr.recipient_first_name), /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 12,
         color: '#999'

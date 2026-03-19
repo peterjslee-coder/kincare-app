@@ -719,6 +719,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {/* Pending Reviews — stacked at top until completed */}
       {pendingReviews.length > 0 && (
         <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#c62828', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+            {'\u{1F6A8}'} Action Required — Review ({pendingReviews.length})
+          </div>
           {pendingReviews.map(pr => {
             const isNoShow = !!pr.caregiver_no_show;
             const borderColor = isNoShow ? '#ef5350' : '#ffc107';
@@ -738,7 +741,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: isNoShow ? '#c62828' : '#f57f17' }}>
-                    {isNoShow ? '\u{26A0}\u{FE0F}' : '\u2B50'} Please review {pr.caregiver_name}
+                    {isNoShow ? '\u2716 No Show — ' : '\u2B50 '}{pr.caregiver_name} · {pr.recipient_first_name}
                   </span>
                   <span style={{ fontSize: 12, color: '#999' }}>
                     {pr.scheduled_date}
