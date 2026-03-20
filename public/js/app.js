@@ -534,18 +534,23 @@ const App = () => {
     // If we're in a pre-auth URL mode (reset-password, consent-response), skip auto-login
     if (appState === 'reset-password' || appState === 'consent-response') return;
 
+    // Email verification links need to skip auto-login but still run the verify code below
+    const isVerifyingEmail = appState === 'verifying-email';
+
     // Only auto-restore if this tab has an active session (set at login).
     // Closing the browser/tab clears sessionStorage, so the user must
     // re-authenticate on next visit instead of silently auto-logging in.
     // Invite links bypass this check so the accept-invite flow still works.
+    // Verify links also bypass — they need the verify code to run.
     const hasActiveSession = sessionStorage.getItem('inplace_session_active');
     const hasInviteToken = new URLSearchParams(window.location.search).get('invite')
       || new URLSearchParams(window.__originalSearch || '').get('invite')
       || localStorage.getItem('pendingInviteToken');
-    if (!hasActiveSession && !hasInviteToken) return;
+    if (!hasActiveSession && !hasInviteToken && !isVerifyingEmail) return;
 
     // Restore session from httpOnly cookie (server reads cookie automatically)
-    apiFetch('/api/auth/me').then(async r => {
+    // Skip auto-login for email verification — let the verify code handle navigation
+    if (!isVerifyingEmail) apiFetch('/api/auth/me').then(async r => {
         if (r?.ok) {
           const data = await r.json();
           // Server includes token for in-memory use (WebSocket auth)
