@@ -1391,8 +1391,28 @@ const App = () => {
               Thank you for signing up for InPlace! Your account is being reviewed by our team.
               You'll receive a notification once you've been approved to continue.
             </p>
+
+            {/* Email verification callout */}
+            {currentUser.emailVerified === false && (
+              <div style={{ background: '#fff3e0', border: '2px solid #e8724a', borderRadius: 12, padding: 16, margin: '0 0 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#e65100', marginBottom: 4 }}>Please verify your email</div>
+                <p style={{ fontSize: 13, color: '#bf360c', margin: 0, lineHeight: 1.5 }}>
+                  Check your inbox for a verification link from InPlace. If you don't see it, check your spam folder.
+                </p>
+              </div>
+            )}
+
+            <div style={{ background: '#f0faf7', border: '1px solid #b2dfdb', borderRadius: 12, padding: 16, margin: '0 0 20px', textAlign: 'left' }}>
+              <p style={{ fontSize: 14, color: '#444', lineHeight: 1.6, margin: '0 0 12px' }}>
+                If you're reading this message and you haven't spoken to admin about creating an account, thank you for your interest and we'll be in touch.
+              </p>
+              <p style={{ fontSize: 14, color: '#444', lineHeight: 1.6, margin: 0 }}>
+                If you have spoken to admin, your account creation will be approved shortly.
+              </p>
+            </div>
+
             <p style={{ fontSize: 13, color: '#999' }}>
-              This usually takes less than 24 hours. If you have questions, contact us at support@yourinplace.com.
+              If you have questions, contact us at support@yourinplace.com.
             </p>
             <button onClick={() => { AUTH_TOKEN = null; fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {}); window.location.reload(); }}
               style={{ marginTop: 20, padding: '10px 24px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
