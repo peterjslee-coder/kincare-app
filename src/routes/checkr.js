@@ -698,6 +698,7 @@ router.post("/admin/sync-statuses", authenticate, async (req, res) => {
     ).all();
 
     let updated = 0;
+    const details = [];
     for (const c of candidates) {
       try {
         const reportResp = await fetch(`https://api.checkrhq-staging.net/v1/reports/${c.checkr_report_id}`, {
@@ -708,6 +709,14 @@ router.post("/admin/sync-statuses", authenticate, async (req, res) => {
           const actualResult = report.result || report.status;
           const cleared = actualResult === "clear";
           const newStatus = cleared ? "clear" : (actualResult === "consider" ? "consider" : actualResult);
+
+          details.push({
+            candidate: c.checkr_candidate_id,
+            oldStatus: c.checkr_status,
+            apiStatus: report.status,
+            apiResult: report.result,
+            newStatus,
+          });
 
           if (newStatus !== c.checkr_status) {
             await db.prepare(
@@ -722,7 +731,7 @@ router.post("/admin/sync-statuses", authenticate, async (req, res) => {
       }
     }
 
-    res.json({ ok: true, checked: candidates.length, updated });
+    res.json({ ok: true, checked: candidates.length, updated, details });
   } catch (err) {
     console.error("[checkr-sync] Error:", err);
     res.status(500).json({ error: "Sync failed" });
