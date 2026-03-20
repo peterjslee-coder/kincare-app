@@ -35,7 +35,16 @@ function getFromAddress() {
  * Send an email via Resend.
  * Returns { success: true } or { success: false, error: string }
  */
+/**
+ * Strip plus-addressing tag from email (e.g. peter+nick@x.com → peter@x.com).
+ * Our mail server doesn't support sub-addressing, so deliver to the base mailbox.
+ */
+function stripPlusTag(email) {
+  return email.replace(/\+[^@]*@/, "@");
+}
+
 async function sendEmail({ to, subject, html }) {
+  to = stripPlusTag(to);
   const resend = getResend();
 
   if (!resend) {
