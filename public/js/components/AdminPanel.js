@@ -1593,7 +1593,7 @@ const AdminPanel = window.AdminPanel = () => {
                               <button onClick={() => handleNukeUser(u.id, u.email)}
                                 style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
                                 title="Permanently delete all data (requires passkey)">
-                                {'\u{1F344}\u2601\uFE0F'}
+                                {'\u2622\uFE0F'}
                               </button>
                             </div>
                           ) : (
@@ -1610,7 +1610,7 @@ const AdminPanel = window.AdminPanel = () => {
                               <button onClick={() => handleNukeUser(u.id, u.email)}
                                 style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
                                 title="Permanently delete all data (requires passkey)">
-                                {'\u{1F344}\u2601\uFE0F'}
+                                {'\u2622\uFE0F'}
                               </button>
                             </div>
                           )}

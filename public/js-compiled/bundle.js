@@ -51133,7 +51133,7 @@ const AdminPanel = window.AdminPanel = () => {
         cursor: 'pointer'
       },
       title: "Permanently delete all data (requires passkey)"
-    }, '\u{1F344}\u2601\uFE0F')) : /*#__PURE__*/React.createElement("div", {
+    }, '\u2622\uFE0F')) : /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         gap: '4px',
@@ -51176,7 +51176,7 @@ const AdminPanel = window.AdminPanel = () => {
         cursor: 'pointer'
       },
       title: "Permanently delete all data (requires passkey)"
-    }, '\u{1F344}\u2601\uFE0F')), nukeError && nukeConfirm === u.id && /*#__PURE__*/React.createElement("div", {
+    }, '\u2622\uFE0F')), nukeError && nukeConfirm === u.id && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: '10px',
         color: '#c62828',
