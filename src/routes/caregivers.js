@@ -358,7 +358,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       bio, yearsExperience, hourlyRate, specialties,
       certifications, maxTravelMiles, city, state, address,
       // Checkr / onboarding fields
-      legalFirstName, legalLastName, dateOfBirth, ssnLast4,
+      legalFirstName, legalMiddleName, legalLastName, dateOfBirth, ssnLast4,
       addressLine1, addressLine2, zip, dlNumber, dlState,
       backgroundCheckConsent,
       // v1.5.0 — work location, stoplight, terms
@@ -407,6 +407,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
           latitude = COALESCE(?, latitude),
           longitude = COALESCE(?, longitude),
           legal_first_name = COALESCE(?, legal_first_name),
+          legal_middle_name = COALESCE(?, legal_middle_name),
           legal_last_name = COALESCE(?, legal_last_name),
           date_of_birth = COALESCE(?, date_of_birth),
           ssn_last4 = COALESCE(?, ssn_last4),
@@ -433,7 +434,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
         certifications ? JSON.stringify(certifications) : null,
         travelRadius || maxTravelMiles, city, state,
         lat, lng,
-        legalFirstName || null, legalLastName || null,
+        legalFirstName || null, legalMiddleName !== undefined ? (legalMiddleName || null) : null, legalLastName || null,
         dateOfBirth || null, ssnLast4 || null,
         addressLine1 || null, addressLine2 || null, zip || null,
         dlNumber || null, dlState || null,
@@ -472,12 +473,12 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       INSERT INTO caregiver_profiles
       (id, user_id, bio, years_experience, hourly_rate, rate_daytime, rate_nighttime, rate_overnight,
        specialties, certifications, max_travel_miles, location_city, location_state,
-       latitude, longitude, legal_first_name, legal_last_name,
+       latitude, longitude, legal_first_name, legal_middle_name, legal_last_name,
        date_of_birth, ssn_last4, address_line1, address_line2, zip,
        dl_number, dl_state, background_check_consent, background_check_consent_at,
        work_location_address, care_stoplight, terms_accepted_at, terms_version,
        academic_program, academic_program_year, needs_hour_reports, open_to_interview)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
        ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
@@ -486,7 +487,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       JSON.stringify(certifications || []),
       maxTravelMiles || 10, city || null, state || null,
       lat, lng,
-      legalFirstName || null, legalLastName || null,
+      legalFirstName || null, legalMiddleName || null, legalLastName || null,
       dateOfBirth || null, ssnLast4 || null,
       addressLine1 || null, addressLine2 || null, zip || null,
       dlNumber || null, dlState || null,

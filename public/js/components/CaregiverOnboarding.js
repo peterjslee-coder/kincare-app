@@ -121,7 +121,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     // Step 3 — Pets, Allergies & Medical
     comfortableWithPets: null, petAllergies: '', foodAllergies: '', medicalConditions: '', openToInterview: null,
     // Step 4 — Legal / Checkr
-    legalFirstName: '', legalLastName: '', dateOfBirth: '', ssnLast4: '',
+    legalFirstName: '', legalMiddleName: '', noMiddleName: false, legalLastName: '', dateOfBirth: '', ssnLast4: '',
     dlNumber: '', dlState: '', backgroundCheckConsent: false,
     // Step 5 — Certifications
     certifications: [{ certType: '', certNumber: '', issuer: '', expiryDate: '' }],
@@ -422,7 +422,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           rateDaytime: parseFloat(form.rateDaytime) || null,
           rateNighttime: parseFloat(form.rateNighttime) || null,
           rateOvernight: parseFloat(form.rateOvernight) || null,
-          legalFirstName: form.legalFirstName, legalLastName: form.legalLastName,
+          legalFirstName: form.legalFirstName, legalMiddleName: form.noMiddleName ? '' : form.legalMiddleName, legalLastName: form.legalLastName,
           dateOfBirth: form.dateOfBirth, ssnLast4: form.ssnLast4,
           dlNumber: form.dlNumber, dlState: form.dlState,
           backgroundCheckConsent: form.backgroundCheckConsent,
@@ -1061,6 +1061,17 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <input style={errors.legalFirstName ? inputErrorStyle : inputStyle} value={form.legalFirstName}
                   onChange={(e) => updateForm('legalFirstName', e.target.value)} placeholder="As on ID" />
                 {errors.legalFirstName && <div style={errorStyle}>{errors.legalFirstName}</div>}
+              </div>
+              <div style={fieldGroup}>
+                <label style={labelStyle}>Legal Middle Name</label>
+                <input style={inputStyle} value={form.legalMiddleName}
+                  onChange={(e) => updateForm('legalMiddleName', e.target.value)} placeholder="As on ID"
+                  disabled={form.noMiddleName} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: 13, color: '#666', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={form.noMiddleName}
+                    onChange={(e) => { updateForm('noMiddleName', e.target.checked); if (e.target.checked) updateForm('legalMiddleName', ''); }} />
+                  I don't have a middle name
+                </label>
               </div>
               <div style={fieldGroup}>
                 <label style={labelStyle}>Legal Last Name *</label>

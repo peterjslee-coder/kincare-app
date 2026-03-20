@@ -43302,6 +43302,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     openToInterview: null,
     // Step 4 — Legal / Checkr
     legalFirstName: '',
+    legalMiddleName: '',
+    noMiddleName: false,
     legalLastName: '',
     dateOfBirth: '',
     ssnLast4: '',
@@ -43702,6 +43704,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
           rateNighttime: parseFloat(form.rateNighttime) || null,
           rateOvernight: parseFloat(form.rateOvernight) || null,
           legalFirstName: form.legalFirstName,
+          legalMiddleName: form.noMiddleName ? '' : form.legalMiddleName,
           legalLastName: form.legalLastName,
           dateOfBirth: form.dateOfBirth,
           ssnLast4: form.ssnLast4,
@@ -44817,6 +44820,33 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
   }), errors.legalFirstName && /*#__PURE__*/React.createElement("div", {
     style: errorStyle
   }, errors.legalFirstName)), /*#__PURE__*/React.createElement("div", {
+    style: fieldGroup
+  }, /*#__PURE__*/React.createElement("label", {
+    style: labelStyle
+  }, "Legal Middle Name"), /*#__PURE__*/React.createElement("input", {
+    style: inputStyle,
+    value: form.legalMiddleName,
+    onChange: e => updateForm('legalMiddleName', e.target.value),
+    placeholder: "As on ID",
+    disabled: form.noMiddleName
+  }), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 4,
+      fontSize: 13,
+      color: '#666',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: form.noMiddleName,
+    onChange: e => {
+      updateForm('noMiddleName', e.target.checked);
+      if (e.target.checked) updateForm('legalMiddleName', '');
+    }
+  }), "I don't have a middle name")), /*#__PURE__*/React.createElement("div", {
     style: fieldGroup
   }, /*#__PURE__*/React.createElement("label", {
     style: labelStyle

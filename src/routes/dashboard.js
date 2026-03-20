@@ -579,6 +579,7 @@ async function caregiverDashboard(db, userId, res) {
       checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
       bgCheckRejectionReason: profile.bg_check_rejection_reason || null,
       legalFirstName: profile.legal_first_name,
+      legalMiddleName: profile.legal_middle_name || '',
       legalLastName: profile.legal_last_name,
       dateOfBirth: profile.date_of_birth,
       ssnLast4: profile.ssn_last4,
