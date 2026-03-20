@@ -2247,6 +2247,11 @@ router.put("/users/:id/approve", requireAdmin, async (req, res) => {
       await db.prepare(
         "UPDATE caregiver_profiles SET checkr_status = 'consider_approved', is_background_checked = 1, updated_at = NOW() WHERE user_id = ?"
       ).run(req.params.id);
+    } else if (cgProfile && cgProfile.checkr_status === "rejected") {
+      // Un-reject: reset back to consider so admin can re-review
+      await db.prepare(
+        "UPDATE caregiver_profiles SET checkr_status = 'consider', bg_check_rejection_reason = NULL, updated_at = NOW() WHERE user_id = ?"
+      ).run(req.params.id);
     }
 
     await logAdminAction(req, "account_approved", "user", req.params.id, {
