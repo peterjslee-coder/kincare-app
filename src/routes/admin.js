@@ -782,6 +782,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
       await tx.prepare("DELETE FROM care_recipients WHERE family_user_id = ?").run(id);
 
       // Auth & security
+      await tx.prepare("DELETE FROM refresh_tokens WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(id);
