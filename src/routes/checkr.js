@@ -701,40 +701,26 @@ router.post("/admin/sync-statuses", authenticate, async (req, res) => {
     const details = [];
     for (const c of candidates) {
       try {
-        const reportResp = await fetch(`https://api.checkrhq-staging.net/v1/reports/${c.checkr_report_id}`, {
-          headers: { Authorization: `Bearer ${process.env.CHECKR_API_KEY}` },
+        const report = await checkrRequest("GET", `/reports/${c.checkr_report_id}`);
+        const actualResult = report.result || report.status;
+        const cleared = actualResult === "clear";
+        const newStatus = cleared ? "clear" : (actualResult === "consider" ? "consider" : actualResult);
+
+        details.push({
+          candidate: c.checkr_candidate_id,
+          reportId: c.checkr_report_id,
+          oldStatus: c.checkr_status,
+          apiStatus: report.status,
+          apiResult: report.result,
+          newStatus,
         });
-        if (reportResp.ok) {
-          const report = await reportResp.json();
-          const actualResult = report.result || report.status;
-          const cleared = actualResult === "clear";
-          const newStatus = cleared ? "clear" : (actualResult === "consider" ? "consider" : actualResult);
 
-          details.push({
-            candidate: c.checkr_candidate_id,
-            reportId: c.checkr_report_id,
-            oldStatus: c.checkr_status,
-            apiStatus: report.status,
-            apiResult: report.result,
-            newStatus,
-          });
-
-          if (newStatus !== c.checkr_status) {
-            await db.prepare(
-              "UPDATE caregiver_profiles SET checkr_status = ?, is_background_checked = ?, updated_at = NOW() WHERE checkr_report_id = ?"
-            ).run(newStatus, cleared ? 1 : 0, c.checkr_report_id);
-            updated++;
-            console.log(`[checkr-sync] ${c.checkr_candidate_id}: ${c.checkr_status} → ${newStatus}`);
-          }
-        } else {
-          const errText = await reportResp.text().catch(() => "no body");
-          details.push({
-            candidate: c.checkr_candidate_id,
-            reportId: c.checkr_report_id,
-            oldStatus: c.checkr_status,
-            error: `HTTP ${reportResp.status}`,
-            errorBody: errText.substring(0, 200),
-          });
+        if (newStatus !== c.checkr_status) {
+          await db.prepare(
+            "UPDATE caregiver_profiles SET checkr_status = ?, is_background_checked = ?, updated_at = NOW() WHERE checkr_report_id = ?"
+          ).run(newStatus, cleared ? 1 : 0, c.checkr_report_id);
+          updated++;
+          console.log(`[checkr-sync] ${c.checkr_candidate_id}: ${c.checkr_status} → ${newStatus}`);
         }
       } catch (err) {
         console.warn(`[checkr-sync] Failed for report ${c.checkr_report_id}:`, err.message);
