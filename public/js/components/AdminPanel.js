@@ -1072,12 +1072,12 @@ const AdminPanel = window.AdminPanel = () => {
       </div>
 
       {/* ── ACTION REQUIRED BANNER — always visible when pending approvals exist ── */}
-      {(pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0) && (
-        <div style={{ marginBottom: 16, padding: 16, background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: '2px solid #ff9800', borderRadius: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#e65100', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            {'\u{1F514}'} Action Required
-            <span style={{ background: '#e65100', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
-              {pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount}
+      {(pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 || safetyFlagCount > 0) && (
+        <div style={{ marginBottom: 16, padding: 16, background: safetyFlagCount > 0 ? 'linear-gradient(135deg, #fce4ec, #ffcdd2)' : 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: safetyFlagCount > 0 ? '2px solid #c62828' : '2px solid #ff9800', borderRadius: 14 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: safetyFlagCount > 0 ? '#c62828' : '#e65100', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {safetyFlagCount > 0 ? '\u{1F6A8}' : '\u{1F514}'} Action Required
+            <span style={{ background: safetyFlagCount > 0 ? '#c62828' : '#e65100', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
+              {pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount + safetyFlagCount}
             </span>
           </div>
 
@@ -1237,6 +1237,44 @@ const AdminPanel = window.AdminPanel = () => {
                 </div>
                 <span style={{ background: '#1565c0', color: '#fff', borderRadius: 20, padding: '4px 12px', fontSize: 13, fontWeight: 700 }}>{checkrAlertCount}</span>
               </div>
+            </>
+          )}
+
+          {/* Safety flags */}
+          {safetyFlagCount > 0 && (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Safety Flags</div>
+              {safetyFlags.filter(f => f.status === 'pending').map(flag => (
+                <div key={flag.id} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10,
+                  border: flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat') ? '2px solid #c62828' : '1px solid #ffcc80',
+                  cursor: 'pointer',
+                }} onClick={() => { setActiveTab('safety'); }}>
+                  <div style={{ flex: '1 1 200px' }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat') ? '#c62828' : '#e65100' }}>
+                      {flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat') ? '\u{1F6A8}' : '\u26A0\uFE0F'}{' '}
+                      {flag.first_name} {flag.last_name}
+                      <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                        ({flag.flag_type?.replace(/_/g, ' ') || 'flagged'})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                      {'\u201C'}{(flag.user_message || '').substring(0, 120)}{(flag.user_message || '').length > 120 ? '...' : ''}{'\u201D'}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>{flag.email} {'\u00B7'} {new Date(flag.created_at).toLocaleString()}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'resolved'); }}
+                      style={{ padding: '6px 12px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                      {'\u2713'} Resolve
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'escalated'); }}
+                      style={{ padding: '6px 12px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                      Escalate
+                    </button>
+                  </div>
+                </div>
+              ))}
             </>
           )}
         </div>
