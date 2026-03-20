@@ -835,6 +835,8 @@ async function initializeDatabase() {
     // v1.50.27 — Admin alert dismiss snapshot
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_alerts_snapshot TEXT`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_alerts_seen_at TIMESTAMPTZ`,
+    // v1.50.29 — BG check rejection flow
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_rejection_reason TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

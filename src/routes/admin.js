@@ -67,7 +67,7 @@ router.get("/alerts", async (req, res) => {
     const db = await getDb();
     const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, checkrAlerts, userRow] = await Promise.all([
       db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1 AND created_at > '2026-02-20'`).get(),
-      db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1`).get(),
+      db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1 AND COALESCE(checkr_status, 'pending') != 'rejected'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'new' AND created_at > NOW() - INTERVAL '30 days'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM safety_flags WHERE status = 'pending'`).get().catch(() => ({ count: 0 })),
@@ -2297,6 +2297,78 @@ router.put("/users/:id/unapprove", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("Unapprove error:", err);
     res.status(500).json({ error: "Failed to unapprove" });
+  }
+});
+
+// PUT /api/admin/users/:id/reject-bgcheck — Reject caregiver due to background check (soft lock with appeal)
+router.put("/users/:id/reject-bgcheck", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { reason } = req.body;
+    const user = await db.prepare("SELECT id, first_name, last_name, email FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Update checkr status to rejected and store reason
+    await db.prepare(
+      "UPDATE caregiver_profiles SET checkr_status = 'rejected', bg_check_rejection_reason = ?, account_paused = 0, updated_at = NOW() WHERE user_id = ?"
+    ).run(reason || 'Background check did not meet requirements', req.params.id);
+
+    // Log the action
+    await logAdminAction(req, "bgcheck_rejected", "user", req.params.id, {
+      userName: `${user.first_name} ${user.last_name}`.trim(),
+      email: user.email,
+      reason: reason || 'Background check did not meet requirements',
+    });
+
+    // Send them an in-app message from admin explaining the decision
+    const sendAdminMsg = async (msg) => {
+      try {
+        // Find or create a conversation
+        let convo = await db.prepare(
+          "SELECT id FROM conversations WHERE type = 'admin_support' AND JSON_EXTRACT(participants, '$') LIKE ?"
+        ).get(`%${req.params.id}%`);
+        if (!convo) {
+          const convoId = uuid();
+          await db.prepare(
+            "INSERT INTO conversations (id, type, participants, created_at, updated_at) VALUES (?, 'admin_support', ?, NOW(), NOW())"
+          ).run(convoId, JSON.stringify([req.params.id, req.user.id]));
+          convo = { id: convoId };
+        }
+        await db.prepare(
+          "INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, created_at) VALUES (?, ?, ?, ?, ?, NOW())"
+        ).run(uuid(), req.user.id, req.params.id, convo.id, msg);
+      } catch (msgErr) { console.warn("[reject-bgcheck] Message send failed:", msgErr.message); }
+    };
+    await sendAdminMsg(
+      `Hi ${user.first_name}, we've reviewed your background check results and unfortunately we're unable to approve your account for caregiving at this time.\n\n` +
+      `Reason: ${reason || 'Background check did not meet our requirements.'}\n\n` +
+      `If you believe this is an error or would like to provide additional context, please reply to this message and we'll review your case.`
+    );
+
+    // Push notification
+    try {
+      const sendPush = req.app.get("sendPush");
+      if (sendPush) {
+        await sendPush(req.params.id, {
+          title: "Background Check Update",
+          body: "We've sent you a message regarding your background check. Please check your Messages.",
+          data: { type: "bgcheck_rejected" },
+        });
+      }
+    } catch {}
+
+    // Activity feed entry for admin
+    try {
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, created_at) VALUES (?, ?, 'checkr_rejected', ?, ?, NOW())"
+      ).run(uuid(), req.user.id, `Background check rejected — ${user.first_name} ${user.last_name}`,
+        `${user.first_name} ${user.last_name} was rejected due to background check findings. Reason: ${reason || 'Did not meet requirements'}`);
+    } catch {}
+
+    res.json({ success: true, message: `Rejected ${user.first_name} ${user.last_name} — they've been notified via message` });
+  } catch (err) {
+    console.error("BG check reject error:", err);
+    res.status(500).json({ error: "Failed to reject" });
   }
 });
 

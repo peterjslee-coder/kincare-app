@@ -290,6 +290,34 @@ const AdminPanel = window.AdminPanel = () => {
     setFreezeSending(false);
   };
 
+  // BG check rejection modal
+  const [rejectBgTarget, setRejectBgTarget] = useState(null); // { userId, name }
+  const [rejectBgReason, setRejectBgReason] = useState('');
+  const [rejectBgSending, setRejectBgSending] = useState(false);
+
+  const handleRejectBgCheck = async () => {
+    if (!rejectBgReason.trim() || !rejectBgTarget) return;
+    setRejectBgSending(true);
+    try {
+      const res = await apiFetch(`/api/admin/users/${rejectBgTarget.userId}/reject-bgcheck`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason: rejectBgReason.trim() }),
+      });
+      if (res?.ok) {
+        showToast(`${rejectBgTarget.name} rejected — they've been notified`, 'success');
+        setRejectBgTarget(null);
+        setRejectBgReason('');
+        loadBgChecks();
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        showToast(err?.error || 'Failed to reject', 'error');
+      }
+    } catch {
+      showToast('Failed to reject', 'error');
+    }
+    setRejectBgSending(false);
+  };
+
   // Admin service message modal
   const [adminMsgTarget, setAdminMsgTarget] = useState(null); // { userId, name }
   const [adminMsgText, setAdminMsgText] = useState('');
@@ -3395,20 +3423,20 @@ const AdminPanel = window.AdminPanel = () => {
       {/* ── BACKGROUND CHECKS TAB ── */}
       {activeTab === 'bgchecks' && (() => {
         const actionStatuses = ['consider', 'suspended', 'disputed', 'adverse_action', 'processing', 'invitation_sent', 'invitation_expired'];
-        const filedStatuses = ['clear', 'consider_approved'];
+        const filedStatuses = ['clear', 'consider_approved', 'rejected'];
         const actionItems = bgCheckCandidates.filter(c => actionStatuses.includes(c.checkr_status) || (!c.checkr_status || c.checkr_status === 'pending'));
         const filedItems = bgCheckCandidates.filter(c => filedStatuses.includes(c.checkr_status));
         const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
 
         const getStatusColor = (s) => s === 'clear' ? '#2e7d32' : s === 'consider' ? '#e65100' :
           s === 'adverse_action' ? '#c62828' : s === 'suspended' ? '#e65100' : s === 'disputed' ? '#6a1b9a' :
-          s === 'consider_approved' ? '#2e7d32' : s === 'processing' ? '#1565c0' :
+          s === 'consider_approved' ? '#2e7d32' : s === 'rejected' ? '#b71c1c' : s === 'processing' ? '#1565c0' :
           s === 'invitation_sent' ? '#7b1fa2' : s === 'invitation_expired' ? '#888' : '#555';
         const getStatusIcon = (s) => s === 'clear' ? '\u2705' : s === 'consider' ? '\u26A0\uFE0F' :
           s === 'adverse_action' ? '\u{1F6A8}' : s === 'suspended' ? '\u26A0\uFE0F' : s === 'disputed' ? '\u2696\uFE0F' :
-          s === 'consider_approved' ? '\u2705' : s === 'processing' ? '\u23F3' :
+          s === 'consider_approved' ? '\u2705' : s === 'rejected' ? '\u274C' : s === 'processing' ? '\u23F3' :
           s === 'invitation_sent' ? '\u{1F4E8}' : s === 'invitation_expired' ? '\u23F0' : '\u2022';
-        const getStatusLabel = (s) => s === 'consider_approved' ? 'APPROVED (FLAGGED)' : (s || 'pending').replace(/_/g, ' ').toUpperCase();
+        const getStatusLabel = (s) => s === 'consider_approved' ? 'APPROVED (FLAGGED)' : s === 'rejected' ? 'REJECTED' : (s || 'pending').replace(/_/g, ' ').toUpperCase();
         const isHighlight = (s) => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed';
 
         const renderCard = (c, faded) => {
@@ -3450,7 +3478,7 @@ const AdminPanel = window.AdminPanel = () => {
                       View Report
                     </a>
                   )}
-                  {c.checkr_status === 'consider' && (
+                  {(c.checkr_status === 'consider' || c.checkr_status === 'disputed') && (
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button onClick={async () => {
                         if (!confirm(`Approve ${c.first_name} despite flagged background check?`)) return;
@@ -3462,7 +3490,7 @@ const AdminPanel = window.AdminPanel = () => {
                       }} style={{ padding: '4px 10px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         Approve
                       </button>
-                      <button onClick={() => { setFreezeTarget({ userId: c.user_id, name: `${c.first_name} ${c.last_name}` }); setFreezeReason('Background check flagged'); }}
+                      <button onClick={() => { setRejectBgTarget({ userId: c.user_id, name: `${c.first_name} ${c.last_name}` }); setRejectBgReason(''); }}
                         style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         Reject
                       </button>
@@ -3820,6 +3848,42 @@ const AdminPanel = window.AdminPanel = () => {
               <button onClick={handleFreezeCaregiver} disabled={freezeSending || !freezeReason.trim()}
                 style={{ padding: '8px 20px', background: freezeSending || !freezeReason.trim() ? '#999' : '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 {freezeSending ? 'Freezing...' : 'Freeze Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── BG CHECK REJECTION MODAL ── */}
+      {rejectBgTarget && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setRejectBgTarget(null); }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 480, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#b71c1c', marginBottom: 4 }}>
+              {'\u274C'} Reject {rejectBgTarget.name}
+            </div>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
+              This will mark their background check as rejected. They can still log in but will see a rejection notice and can message you to appeal.
+            </div>
+            <textarea
+              value={rejectBgReason}
+              onChange={(e) => setRejectBgReason(e.target.value)}
+              placeholder="Reason for rejection (required)..."
+              rows={3}
+              style={{ width: '100%', padding: 12, border: '2px solid #e5e7eb', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8, resize: 'vertical' }}
+              autoFocus
+            />
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 14 }}>
+              The caregiver will receive a message with this reason and instructions to appeal.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setRejectBgTarget(null)}
+                style={{ padding: '8px 20px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={handleRejectBgCheck} disabled={rejectBgSending || !rejectBgReason.trim()}
+                style={{ padding: '8px 20px', background: rejectBgSending || !rejectBgReason.trim() ? '#999' : '#b71c1c', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                {rejectBgSending ? 'Rejecting...' : 'Reject Caregiver'}
               </button>
             </div>
           </div>

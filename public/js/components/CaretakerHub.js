@@ -1144,6 +1144,31 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             </div>
           </div>
         );
+        if (checkrStatus === 'rejected') return (
+          <div className="card" style={{
+            marginBottom: 16, padding: '16px 18px',
+            background: '#fff5f5', border: '2px solid #ef5350', borderRadius: 12,
+            boxShadow: '0 2px 12px rgba(239,83,80,0.15)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 24 }}>{'\u274C'}</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#b71c1c' }}>Background Check Not Approved</div>
+                <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>
+                  We were unable to approve your account based on your background check results.
+                </div>
+              </div>
+            </div>
+            {profile.bgCheckRejectionReason && (
+              <div style={{ fontSize: 13, color: '#b71c1c', fontWeight: 600, padding: '6px 10px', background: '#ffebee', borderRadius: 8, marginBottom: 6 }}>
+                {profile.bgCheckRejectionReason}
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+              If you believe this is an error or would like to provide additional context, please check your Messages — we've sent you details and you can reply to appeal.
+            </div>
+          </div>
+        );
         return null;
       })()}
 

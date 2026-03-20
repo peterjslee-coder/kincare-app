@@ -7584,7 +7584,7 @@ const Dashboard = window.Dashboard = ({
           color: '#e8724a',
           marginTop: 4
         }
-      }, "Seeking caregiver"), s.offeredToCaregiverId && (() => {
+      }, "Seeking caregiver"), s.offeredToCaregiverId && !s.caregiverName && (() => {
         const exUntil = s.exclusiveUntil ? new Date(s.exclusiveUntil) : null;
         const exRemain = exUntil ? Math.max(0, Math.floor((exUntil - new Date()) / 60000)) : null;
         const exExpired = exUntil && exRemain <= 0;
@@ -32881,6 +32881,8 @@ const CaretakerHub = window.CaretakerHub = ({
   const [checkOutPhotoUrls, setCheckOutPhotoUrls] = useState([]);
   const checkOutPhotoRef = useRef(null);
   const [checkSubmitting, setCheckSubmitting] = useState(false);
+  const [earlyDepartureReason, setEarlyDepartureReason] = useState('');
+  const [earlyDepartureAcked, setEarlyDepartureAcked] = useState(false);
   const [checkInLocation, setCheckInLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
   // Care briefing state (pre-check-in review)
@@ -34291,6 +34293,56 @@ const CaretakerHub = window.CaretakerHub = ({
         marginTop: 2
       }
     }, "Your background check is in progress. You'll be notified once it clears.")));
+    if (checkrStatus === 'rejected') return /*#__PURE__*/React.createElement("div", {
+      className: "card",
+      style: {
+        marginBottom: 16,
+        padding: '16px 18px',
+        background: '#fff5f5',
+        border: '2px solid #ef5350',
+        borderRadius: 12,
+        boxShadow: '0 2px 12px rgba(239,83,80,0.15)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 24
+      }
+    }, '\u274C'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 15,
+        color: '#b71c1c'
+      }
+    }, "Background Check Not Approved"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#555',
+        marginTop: 2
+      }
+    }, "We were unable to approve your account based on your background check results."))), profile.bgCheckRejectionReason && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#b71c1c',
+        fontWeight: 600,
+        padding: '6px 10px',
+        background: '#ffebee',
+        borderRadius: 8,
+        marginBottom: 6
+      }
+    }, profile.bgCheckRejectionReason), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#666',
+        marginTop: 4
+      }
+    }, "If you believe this is an error or would like to provide additional context, please check your Messages \u2014 we've sent you details and you can reply to appeal."));
     return null;
   })(), profile.accountPaused && /*#__PURE__*/React.createElement("div", {
     className: "card",
@@ -35119,6 +35171,8 @@ const CaretakerHub = window.CaretakerHub = ({
             prev.forEach(u => URL.revokeObjectURL(u));
             return [];
           });
+          setEarlyDepartureReason('');
+          setEarlyDepartureAcked(false);
           setCheckOutSession(s);
         },
         style: {
@@ -36644,6 +36698,8 @@ const CaretakerHub = window.CaretakerHub = ({
           prev.forEach(u => URL.revokeObjectURL(u));
           return [];
         });
+        setEarlyDepartureReason('');
+        setEarlyDepartureAcked(false);
         setCheckOutSession(s);
       } else {
         setVisitLogSession(s);
@@ -37829,7 +37885,92 @@ const CaretakerHub = window.CaretakerHub = ({
       alignItems: 'center',
       justifyContent: 'center'
     }
-  }, "\xD7"))))), /*#__PURE__*/React.createElement("div", {
+  }, "\xD7"))))), (() => {
+    if (!checkOutSession) return null;
+    const sDate = checkOutSession.date || checkOutSession.scheduled_date;
+    const sTime = checkOutSession.time || checkOutSession.scheduled_time;
+    const sDur = parseFloat(checkOutSession.durationHours || checkOutSession.duration_hours || 0);
+    if (!sDate || !sTime || !sDur) return null;
+    const [hh, mm] = sTime.split(':').map(Number);
+    const schedEnd = new Date(`${sDate}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`);
+    schedEnd.setMinutes(schedEnd.getMinutes() + sDur * 60);
+    const minsEarly = Math.max(0, (schedEnd - new Date()) / 60000);
+    if (minsEarly <= 15) return null;
+    const endTimeStr = schedEnd.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: checkOutSession.timezone || 'America/New_York'
+    });
+    // Calculate pay impact
+    const totalMins = sDur * 60;
+    const actualMins = totalMins - minsEarly;
+    const roundedMins = Math.ceil(actualMins / 15) * 15;
+    const payPercent = Math.round(roundedMins / totalMins * 100);
+    return React.createElement('div', {
+      style: {
+        background: '#fff3e0',
+        border: '2px solid #e8724a',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16
+      }
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8
+      }
+    }, React.createElement('span', {
+      style: {
+        fontSize: 20
+      }
+    }, '⚠️'), React.createElement('strong', {
+      style: {
+        fontSize: 14,
+        color: '#c62828'
+      }
+    }, 'Early Checkout')), React.createElement('p', {
+      style: {
+        fontSize: 13,
+        color: '#333',
+        margin: '0 0 8px',
+        lineHeight: 1.5
+      }
+    }, `This appointment is scheduled until ${endTimeStr}. You are checking out ${Math.round(minsEarly)} minutes early.`), React.createElement('p', {
+      style: {
+        fontSize: 13,
+        color: '#c62828',
+        fontWeight: 600,
+        margin: '0 0 12px'
+      }
+    }, `Pay is calculated in 15-minute blocks — you'll receive ${payPercent}% of the session pay.`), React.createElement('label', {
+      style: {
+        display: 'block',
+        fontSize: 13,
+        fontWeight: 600,
+        marginBottom: 6,
+        color: '#333'
+      }
+    }, 'Please let us and the family know why you\'re leaving early: *'), React.createElement('textarea', {
+      value: earlyDepartureReason,
+      onChange: e => {
+        setEarlyDepartureReason(e.target.value);
+        if (e.target.value.trim()) setEarlyDepartureAcked(true);
+      },
+      placeholder: 'e.g., Family emergency, care recipient asked me to leave, appointment was rescheduled...',
+      style: {
+        width: '100%',
+        minHeight: 60,
+        padding: 10,
+        borderRadius: 8,
+        border: '1px solid #e8724a',
+        fontSize: 13,
+        resize: 'vertical',
+        boxSizing: 'border-box'
+      }
+    }));
+  })(), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 10,
@@ -37848,6 +37989,20 @@ const CaretakerHub = window.CaretakerHub = ({
     }
   }, "Cancel"), /*#__PURE__*/React.createElement("button", {
     onClick: async () => {
+      // Check if early departure requires a reason
+      const sDate2 = checkOutSession.date || checkOutSession.scheduled_date;
+      const sTime2 = checkOutSession.time || checkOutSession.scheduled_time;
+      const sDur2 = parseFloat(checkOutSession.durationHours || checkOutSession.duration_hours || 0);
+      if (sDate2 && sTime2 && sDur2) {
+        const [hh2, mm2] = sTime2.split(':').map(Number);
+        const schedEnd2 = new Date(`${sDate2}T${String(hh2).padStart(2, '0')}:${String(mm2).padStart(2, '0')}:00`);
+        schedEnd2.setMinutes(schedEnd2.getMinutes() + sDur2 * 60);
+        const minsEarly2 = Math.max(0, (schedEnd2 - new Date()) / 60000);
+        if (minsEarly2 > 15 && !earlyDepartureReason.trim()) {
+          showToast('Please provide a reason for leaving early', 'error');
+          return;
+        }
+      }
       setCheckSubmitting(true);
       try {
         const res = await apiFetch('/api/sessions/' + checkOutSession.id + '/check-out', {
@@ -37857,7 +38012,8 @@ const CaretakerHub = window.CaretakerHub = ({
             conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
             careFeedback: checkOutCareFeedback.trim() || null,
             serviceFeedback: checkOutServiceFeedback.trim() || null,
-            summary: checkOutSummary.trim() || null
+            summary: checkOutSummary.trim() || null,
+            earlyDepartureReason: earlyDepartureReason.trim() || null
           })
         });
         if (res !== null && res !== void 0 && res.ok) {
@@ -37890,6 +38046,8 @@ const CaretakerHub = window.CaretakerHub = ({
           setCheckOutPhotos([]);
           setCheckOutPhotoUrls([]);
           setCheckOutSummary('');
+          setEarlyDepartureReason('');
+          setEarlyDepartureAcked(false);
           showToast('Checked out! Session complete.', 'success');
           setCheckOutSession(null);
           const refreshRes = await apiFetch('/api/dashboard');
@@ -48449,6 +48607,7 @@ const AdminPanel = window.AdminPanel = () => {
   // Background checks
   const [bgCheckCandidates, setBgCheckCandidates] = useState([]);
   const [bgCheckLoading, setBgCheckLoading] = useState(false);
+  const [checkrAlertCount, setCheckrAlertCount] = useState(0);
   const loadBgChecks = async () => {
     setBgCheckLoading(true);
     try {
@@ -48739,6 +48898,35 @@ const AdminPanel = window.AdminPanel = () => {
     setFreezeSending(false);
   };
 
+  // BG check rejection modal
+  const [rejectBgTarget, setRejectBgTarget] = useState(null); // { userId, name }
+  const [rejectBgReason, setRejectBgReason] = useState('');
+  const [rejectBgSending, setRejectBgSending] = useState(false);
+  const handleRejectBgCheck = async () => {
+    if (!rejectBgReason.trim() || !rejectBgTarget) return;
+    setRejectBgSending(true);
+    try {
+      const res = await apiFetch(`/api/admin/users/${rejectBgTarget.userId}/reject-bgcheck`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          reason: rejectBgReason.trim()
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast(`${rejectBgTarget.name} rejected — they've been notified`, 'success');
+        setRejectBgTarget(null);
+        setRejectBgReason('');
+        loadBgChecks();
+      } else {
+        const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+        showToast((err === null || err === void 0 ? void 0 : err.error) || 'Failed to reject', 'error');
+      }
+    } catch {
+      showToast('Failed to reject', 'error');
+    }
+    setRejectBgSending(false);
+  };
+
   // Admin service message modal
   const [adminMsgTarget, setAdminMsgTarget] = useState(null); // { userId, name }
   const [adminMsgText, setAdminMsgText] = useState('');
@@ -48867,6 +49055,7 @@ const AdminPanel = window.AdminPanel = () => {
       if (d) {
         setNewFeedbackCount(d.newFeedback || 0);
         setSafetyFlagCount(d.safetyFlags || 0);
+        setCheckrAlertCount(d.checkrAlerts || 0);
       }
     }).catch(() => {});
     // Fetch current user for settings tab
@@ -48895,7 +49084,15 @@ const AdminPanel = window.AdminPanel = () => {
       loadPausedCaregivers();
     }
     if (activeTab === 'safety') loadSafetyFlags();
-    if (activeTab === 'bgchecks') loadBgChecks();
+    if (activeTab === 'bgchecks') {
+      loadBgChecks();
+      // Mark Checkr alerts as read when viewing the tab
+      if (checkrAlertCount > 0) {
+        apiFetch('/api/admin/alerts/dismiss-checkr', {
+          method: 'POST'
+        }).then(() => setCheckrAlertCount(0)).catch(() => {});
+      }
+    }
     if (activeTab === 'costs') loadCosts();
   }, [activeTab]);
 
@@ -49624,7 +49821,8 @@ const AdminPanel = window.AdminPanel = () => {
     }, {
       id: 'bgchecks',
       label: 'BG Checks',
-      icon: '🔍'
+      icon: '🔍',
+      badge: checkrAlertCount || null
     }, {
       id: 'safety',
       label: 'Safety Flags',
@@ -49724,7 +49922,7 @@ const AdminPanel = window.AdminPanel = () => {
       gap: '6px',
       whiteSpace: 'nowrap'
     }
-  }, "\u2699\uFE0F My Account")), (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "\u2699\uFE0F My Account")), (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16,
       padding: 16,
@@ -49750,7 +49948,7 @@ const AdminPanel = window.AdminPanel = () => {
       padding: '2px 10px',
       fontSize: 13
     }
-  }, pendingApprovals.length + consentAlerts.length + pausedCaregivers.length)), pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount)), pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       fontWeight: 600,
@@ -50060,7 +50258,52 @@ const AdminPanel = window.AdminPanel = () => {
       display: 'inline-flex',
       alignItems: 'center'
     }
-  }, '\u{1F4DE}', " Call"))))), /*#__PURE__*/React.createElement("div", {
+  }, '\u{1F4DE}', " Call")))), checkrAlertCount > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#888',
+      marginBottom: 6,
+      marginTop: pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 ? 12 : 0,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }
+  }, "Background Checks"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '10px 14px',
+      background: '#fff',
+      borderRadius: 10,
+      border: '1px solid #ffe0b2',
+      cursor: 'pointer'
+    },
+    onClick: () => {
+      setActiveTab('bgchecks');
+      loadBgChecks();
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      fontSize: 14,
+      color: '#1565c0'
+    }
+  }, '\u{1F50D}', " ", checkrAlertCount, " background check update", checkrAlertCount !== 1 ? 's' : ''), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#888'
+    }
+  }, "Click to review in BG Checks tab")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: '#1565c0',
+      color: '#fff',
+      borderRadius: 20,
+      padding: '4px 12px',
+      fontSize: 13,
+      fontWeight: 700
+    }
+  }, checkrAlertCount)))), /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       marginBottom: 16
@@ -54882,210 +55125,254 @@ const AdminPanel = window.AdminPanel = () => {
       textAlign: 'center',
       color: '#999'
     }
-  }, "No caregiver profile found for this user."))), activeTab === 'bgchecks' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 16,
-      fontWeight: 700,
-      color: '#333'
-    }
-  }, "Background Check Status"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: '#888'
-    }
-  }, bgCheckCandidates.length, " candidates")), /*#__PURE__*/React.createElement("button", {
-    onClick: loadBgChecks,
-    style: {
-      padding: '6px 14px',
-      background: '#1b6b5a',
-      color: '#fff',
-      border: 'none',
-      borderRadius: 8,
-      fontSize: 13,
-      fontWeight: 600,
-      cursor: 'pointer'
-    }
-  }, "Refresh")), bgCheckLoading ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: 'center',
-      padding: 40,
-      color: '#888'
-    }
-  }, "Loading background checks...") : bgCheckCandidates.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      textAlign: 'center',
-      color: '#888',
-      padding: 40
-    }
-  }, "No caregivers have consented to background checks yet.") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gap: 10
-    }
-  }, bgCheckCandidates.map(c => {
-    const statusColor = c.checkr_status === 'clear' ? '#2e7d32' : c.checkr_status === 'consider' ? '#e65100' : c.checkr_status === 'adverse_action' ? '#c62828' : c.checkr_status === 'processing' ? '#1565c0' : c.checkr_status === 'invitation_sent' ? '#7b1fa2' : c.checkr_status === 'invitation_expired' ? '#888' : '#555';
-    const statusIcon = c.checkr_status === 'clear' ? '\u2705' : c.checkr_status === 'consider' ? '\u26A0\uFE0F' : c.checkr_status === 'adverse_action' ? '\u{1F6A8}' : c.checkr_status === 'processing' ? '\u23F3' : c.checkr_status === 'invitation_sent' ? '\u{1F4E8}' : c.checkr_status === 'invitation_expired' ? '\u23F0' : '\u2022';
+  }, "No caregiver profile found for this user."))), activeTab === 'bgchecks' && (() => {
+    const actionStatuses = ['consider', 'suspended', 'disputed', 'adverse_action', 'processing', 'invitation_sent', 'invitation_expired'];
+    const filedStatuses = ['clear', 'consider_approved', 'rejected'];
+    const actionItems = bgCheckCandidates.filter(c => actionStatuses.includes(c.checkr_status) || !c.checkr_status || c.checkr_status === 'pending');
+    const filedItems = bgCheckCandidates.filter(c => filedStatuses.includes(c.checkr_status));
     const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
-    return /*#__PURE__*/React.createElement("div", {
-      key: c.user_id,
-      className: "card",
-      style: {
-        border: c.checkr_status === 'consider' || c.checkr_status === 'adverse_action' ? '2px solid ' + statusColor : '1px solid #e5e7eb',
-        padding: '14px 18px'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
+    const getStatusColor = s => s === 'clear' ? '#2e7d32' : s === 'consider' ? '#e65100' : s === 'adverse_action' ? '#c62828' : s === 'suspended' ? '#e65100' : s === 'disputed' ? '#6a1b9a' : s === 'consider_approved' ? '#2e7d32' : s === 'rejected' ? '#b71c1c' : s === 'processing' ? '#1565c0' : s === 'invitation_sent' ? '#7b1fa2' : s === 'invitation_expired' ? '#888' : '#555';
+    const getStatusIcon = s => s === 'clear' ? '\u2705' : s === 'consider' ? '\u26A0\uFE0F' : s === 'adverse_action' ? '\u{1F6A8}' : s === 'suspended' ? '\u26A0\uFE0F' : s === 'disputed' ? '\u2696\uFE0F' : s === 'consider_approved' ? '\u2705' : s === 'rejected' ? '\u274C' : s === 'processing' ? '\u23F3' : s === 'invitation_sent' ? '\u{1F4E8}' : s === 'invitation_expired' ? '\u23F0' : '\u2022';
+    const getStatusLabel = s => s === 'consider_approved' ? 'APPROVED (FLAGGED)' : s === 'rejected' ? 'REJECTED' : (s || 'pending').replace(/_/g, ' ').toUpperCase();
+    const isHighlight = s => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed';
+    const renderCard = (c, faded) => {
+      const statusColor = getStatusColor(c.checkr_status);
+      return /*#__PURE__*/React.createElement("div", {
+        key: c.user_id,
+        className: "card",
+        style: {
+          border: isHighlight(c.checkr_status) ? '2px solid ' + statusColor : '1px solid #e5e7eb',
+          padding: '14px 18px',
+          opacity: faded ? 0.55 : 1,
+          transition: 'opacity 0.3s ease'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 12,
+          flexWrap: 'wrap'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontWeight: 700,
+          fontSize: 15,
+          color: '#333'
+        }
+      }, c.legal_first_name || c.first_name, " ", c.legal_last_name || c.last_name), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#888'
+        }
+      }, c.email), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          marginTop: 6
+        }
+      }, /*#__PURE__*/React.createElement("span", null, getStatusIcon(c.checkr_status)), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 600,
+          fontSize: 13,
+          color: statusColor
+        }
+      }, getStatusLabel(c.checkr_status))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: '#aaa',
+          marginTop: 4
+        }
+      }, c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted', c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : '')), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6
+        }
+      }, c.checkr_candidate_id && /*#__PURE__*/React.createElement("a", {
+        href: `${checkrDashUrl}/candidates/${c.checkr_candidate_id}`,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        style: {
+          padding: '5px 12px',
+          background: '#1565c0',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 6,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+          textDecoration: 'none',
+          textAlign: 'center'
+        }
+      }, "View on Checkr"), c.checkr_report_id && /*#__PURE__*/React.createElement("a", {
+        href: `${checkrDashUrl}/reports/${c.checkr_report_id}`,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        style: {
+          padding: '5px 12px',
+          background: '#fff',
+          color: '#1565c0',
+          border: '1px solid #1565c0',
+          borderRadius: 6,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+          textDecoration: 'none',
+          textAlign: 'center'
+        }
+      }, "View Report"), (c.checkr_status === 'consider' || c.checkr_status === 'disputed') && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 4
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: async () => {
+          if (!confirm(`Approve ${c.first_name} despite flagged background check?`)) return;
+          try {
+            await apiFetch(`/api/admin/users/${c.user_id}/approve`, {
+              method: 'PUT'
+            });
+            showToast('Caregiver approved — moved to Reviewed', 'success');
+            loadBgChecks();
+          } catch {}
+        },
+        style: {
+          padding: '4px 10px',
+          background: '#2e7d32',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 4,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "Approve"), /*#__PURE__*/React.createElement("button", {
+        onClick: () => {
+          setRejectBgTarget({
+            userId: c.user_id,
+            name: `${c.first_name} ${c.last_name}`
+          });
+          setRejectBgReason('');
+        },
+        style: {
+          padding: '4px 10px',
+          background: '#c62828',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 4,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "Reject")), /*#__PURE__*/React.createElement("button", {
+        onClick: () => {
+          setAdminMsgTarget({
+            userId: c.user_id,
+            name: `${c.first_name} ${c.last_name}`
+          });
+          setAdminMsgText('');
+        },
+        style: {
+          padding: '4px 10px',
+          background: '#fff',
+          color: '#1b6b5a',
+          border: '1px solid #1b6b5a',
+          borderRadius: 4,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, '\u{1F4AC}', " Message"))));
+    };
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: 12,
-        flexWrap: 'wrap'
+        alignItems: 'center',
+        marginBottom: 16
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
       style: {
-        flex: 1
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
+        fontSize: 16,
         fontWeight: 700,
-        fontSize: 15,
         color: '#333'
       }
-    }, c.legal_first_name || c.first_name, " ", c.legal_last_name || c.last_name), /*#__PURE__*/React.createElement("div", {
+    }, "Background Check Status"), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
         color: '#888'
       }
-    }, c.email), /*#__PURE__*/React.createElement("div", {
+    }, bgCheckCandidates.length, " candidates", actionItems.length > 0 ? ` \u00B7 ${actionItems.length} need attention` : '')), /*#__PURE__*/React.createElement("button", {
+      onClick: loadBgChecks,
+      style: {
+        padding: '6px 14px',
+        background: '#1b6b5a',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Refresh")), bgCheckLoading ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center',
+        padding: 40,
+        color: '#888'
+      }
+    }, "Loading background checks...") : bgCheckCandidates.length === 0 ? /*#__PURE__*/React.createElement("div", {
+      className: "card",
+      style: {
+        textAlign: 'center',
+        color: '#888',
+        padding: 40
+      }
+    }, "No caregivers have consented to background checks yet.") : /*#__PURE__*/React.createElement("div", null, actionItems.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gap: 10
+      }
+    }, actionItems.map(c => renderCard(c, false))), filedItems.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
-        gap: 6,
-        marginTop: 6
+        gap: 12,
+        margin: '24px 0 16px'
       }
-    }, /*#__PURE__*/React.createElement("span", null, statusIcon), /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement("div", {
       style: {
-        fontWeight: 600,
-        fontSize: 13,
-        color: statusColor,
-        textTransform: 'uppercase'
+        flex: 1,
+        height: 1,
+        background: '#e0e0e0'
       }
-    }, (c.checkr_status || 'pending').replace(/_/g, ' '))), /*#__PURE__*/React.createElement("div", {
+    }), /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 11,
+        fontWeight: 600,
         color: '#aaa',
-        marginTop: 4
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        whiteSpace: 'nowrap'
       }
-    }, c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted', c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : '')), /*#__PURE__*/React.createElement("div", {
+    }, "Reviewed (", filedItems.length, ")"), /*#__PURE__*/React.createElement("div", {
       style: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6
+        flex: 1,
+        height: 1,
+        background: '#e0e0e0'
       }
-    }, c.checkr_candidate_id && /*#__PURE__*/React.createElement("a", {
-      href: `${checkrDashUrl}/candidates/${c.checkr_candidate_id}`,
-      target: "_blank",
-      rel: "noopener noreferrer",
+    })), filedItems.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
-        padding: '5px 12px',
-        background: '#1565c0',
-        color: '#fff',
-        border: 'none',
-        borderRadius: 6,
-        fontSize: 11,
-        fontWeight: 600,
-        cursor: 'pointer',
-        textDecoration: 'none',
-        textAlign: 'center'
+        display: 'grid',
+        gap: 8
       }
-    }, "View on Checkr"), c.checkr_report_id && /*#__PURE__*/React.createElement("a", {
-      href: `${checkrDashUrl}/reports/${c.checkr_report_id}`,
-      target: "_blank",
-      rel: "noopener noreferrer",
-      style: {
-        padding: '5px 12px',
-        background: '#fff',
-        color: '#1565c0',
-        border: '1px solid #1565c0',
-        borderRadius: 6,
-        fontSize: 11,
-        fontWeight: 600,
-        cursor: 'pointer',
-        textDecoration: 'none',
-        textAlign: 'center'
-      }
-    }, "View Report"), c.checkr_status === 'consider' && /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        gap: 4
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      onClick: async () => {
-        if (!confirm(`Approve ${c.first_name} despite flagged background check?`)) return;
-        try {
-          await apiFetch(`/api/admin/users/${c.user_id}/approve`, {
-            method: 'PUT'
-          });
-          showToast('Caregiver approved', 'success');
-          loadBgChecks();
-        } catch {}
-      },
-      style: {
-        padding: '4px 10px',
-        background: '#2e7d32',
-        color: '#fff',
-        border: 'none',
-        borderRadius: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        cursor: 'pointer'
-      }
-    }, "Approve"), /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        setFreezeTarget({
-          userId: c.user_id,
-          name: `${c.first_name} ${c.last_name}`
-        });
-        setFreezeReason('Background check flagged');
-      },
-      style: {
-        padding: '4px 10px',
-        background: '#c62828',
-        color: '#fff',
-        border: 'none',
-        borderRadius: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        cursor: 'pointer'
-      }
-    }, "Reject")), /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        setAdminMsgTarget({
-          userId: c.user_id,
-          name: `${c.first_name} ${c.last_name}`
-        });
-        setAdminMsgText('');
-      },
-      style: {
-        padding: '4px 10px',
-        background: '#fff',
-        color: '#1b6b5a',
-        border: '1px solid #1b6b5a',
-        borderRadius: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        cursor: 'pointer'
-      }
-    }, '\u{1F4AC}', " Message"))));
-  }))), activeTab === 'safety' && /*#__PURE__*/React.createElement("div", null, safetyLoading ? /*#__PURE__*/React.createElement("div", {
+    }, filedItems.map(c => renderCard(c, true)))));
+  })(), activeTab === 'safety' && /*#__PURE__*/React.createElement("div", null, safetyLoading ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       padding: 40,
@@ -55828,7 +56115,100 @@ const AdminPanel = window.AdminPanel = () => {
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, freezeSending ? 'Freezing...' : 'Freeze Account')))), adminMsgTarget && /*#__PURE__*/React.createElement("div", {
+  }, freezeSending ? 'Freezing...' : 'Freeze Account')))), rejectBgTarget && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.5)',
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20
+    },
+    onClick: e => {
+      if (e.target === e.currentTarget) setRejectBgTarget(null);
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#fff',
+      borderRadius: 16,
+      padding: 24,
+      maxWidth: 480,
+      width: '100%',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: '#b71c1c',
+      marginBottom: 4
+    }
+  }, '\u274C', " Reject ", rejectBgTarget.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#888',
+      marginBottom: 16
+    }
+  }, "This will mark their background check as rejected. They can still log in but will see a rejection notice and can message you to appeal."), /*#__PURE__*/React.createElement("textarea", {
+    value: rejectBgReason,
+    onChange: e => setRejectBgReason(e.target.value),
+    placeholder: "Reason for rejection (required)...",
+    rows: 3,
+    style: {
+      width: '100%',
+      padding: 12,
+      border: '2px solid #e5e7eb',
+      borderRadius: 10,
+      fontSize: 14,
+      fontFamily: 'inherit',
+      boxSizing: 'border-box',
+      marginBottom: 8,
+      resize: 'vertical'
+    },
+    autoFocus: true
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#999',
+      marginBottom: 14
+    }
+  }, "The caregiver will receive a message with this reason and instructions to appeal."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10,
+      justifyContent: 'flex-end'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setRejectBgTarget(null),
+    style: {
+      padding: '8px 20px',
+      background: '#f5f5f5',
+      color: '#666',
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleRejectBgCheck,
+    disabled: rejectBgSending || !rejectBgReason.trim(),
+    style: {
+      padding: '8px 20px',
+      background: rejectBgSending || !rejectBgReason.trim() ? '#999' : '#b71c1c',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, rejectBgSending ? 'Rejecting...' : 'Reject Caregiver')))), adminMsgTarget && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
       top: 0,
@@ -57519,6 +57899,19 @@ const App = () => {
     setSidebarOpen(false);
     // Clear unread badge when opening messages
     if (page === 'messages') setUnreadMsgCount(0);
+    // Clear admin badge when opening admin — save current counts as "seen"
+    if (page === 'admin' && adminAlertCount > 0 && adminAlertDetails !== null && adminAlertDetails !== void 0 && adminAlertDetails._raw) {
+      setAdminAlertCount(0);
+      apiFetch('/api/admin/alerts/dismiss-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          snapshot: adminAlertDetails._raw
+        })
+      }).catch(() => {});
+    }
   };
 
   // Platform invite onboarding flow (caregiver, family, or care_for)
@@ -58175,7 +58568,7 @@ const App = () => {
         lineHeight: '16px'
       }
     }, unreadMsgCount > 99 ? '99+' : unreadMsgCount), item.id === 'admin' && adminAlertCount > 0 && /*#__PURE__*/React.createElement("span", {
-      title: adminAlertDetails ? [adminAlertDetails.pendingUsers && `${adminAlertDetails.pendingUsers} pending users`, adminAlertDetails.pausedCaregivers && `${adminAlertDetails.pausedCaregivers} paused caregivers`, adminAlertDetails.pendingConsent && `${adminAlertDetails.pendingConsent} pending consent`, adminAlertDetails.newFeedback && `${adminAlertDetails.newFeedback} new feedback`].filter(Boolean).join(', ') : '',
+      title: adminAlertDetails ? [adminAlertDetails.pendingUsers && `${adminAlertDetails.pendingUsers} pending users`, adminAlertDetails.pausedCaregivers && `${adminAlertDetails.pausedCaregivers} paused caregivers`, adminAlertDetails.pendingConsent && `${adminAlertDetails.pendingConsent} pending consent`, adminAlertDetails.newFeedback && `${adminAlertDetails.newFeedback} new feedback`, adminAlertDetails.checkrAlerts && `${adminAlertDetails.checkrAlerts} background check updates`].filter(Boolean).join(', ') : '',
       style: {
         marginLeft: 'auto',
         background: '#dc2626',
