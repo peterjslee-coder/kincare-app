@@ -1166,9 +1166,10 @@ const App = () => {
   const getBottomNavItems = () => {
     if (role === 'caregiver') {
       const cgOnboarded = currentUser?.onboardingComplete !== false;
+      const firstStepsRemain = !!window.__caregiverFirstStepsRemain;
       return [
         { id: 'dashboard', icon: '🏠', label: 'Home' },
-        { id: 'find-work', icon: '🔍', label: 'Find Work', isAccent: true, disabled: !cgOnboarded },
+        { id: 'find-work', icon: '🔍', label: 'Find Work', isAccent: true, disabled: !cgOnboarded || firstStepsRemain },
         { id: 'messages', icon: '💬', label: 'Messages', disabled: !cgOnboarded },
         { id: 'account', icon: '👤', label: 'Account' },
       ];

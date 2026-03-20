@@ -1040,19 +1040,26 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const hasPreferences = !!stoplightData;
 
   const firstSteps = [
-    { id: 'photo', label: 'Review your account page and add a profile picture', desc: 'Families want to see who they\'re inviting into their home', done: hasPhoto, missing: !hasPhoto ? 'Upload a profile photo' : null },
-    { id: 'avail-rates', label: 'Set your availability and rates', desc: 'Tell families when you\'re free and what you charge', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
-    { id: 'security', label: 'Make your account more secure', desc: 'Review your security settings and enable 2FA', done: securityReviewed, missing: !securityReviewed ? 'Open Settings and scroll to the bottom to review all options' : null },
     { id: 'stripe-bg',
-      label: platformConfig.stripeConfigured ? 'Set up Stripe, add bank details, and pay for background check' : 'Payment & background check setup (coming soon)',
-      desc: platformConfig.stripeConfigured ? 'Required before you can accept paid jobs — $30 for background check' : 'Payment setup and background checks will be available soon. You can browse families and set up your profile in the meantime.',
-      done: platformConfig.stripeConfigured ? (stripeConnected && bgPaid) : true, // Mark done if not configured (non-blocking)
-      missing: platformConfig.stripeConfigured ? (() => { const m = []; if (!stripeConnected) m.push('connect Stripe'); if (!bgPaid) m.push('pay for background check ($30)'); const d = []; if (stripeConnected) d.push('Stripe connected \u2713'); return (d.length > 0 ? d.join(', ') + ' \u2014 ' : '') + (m.length > 0 ? 'Still needed: ' + m.join(' and ') : ''); })() || null : null },
+      label: 'Set up Stripe and connect your bank account',
+      desc: 'Connect your bank account to receive payments for care sessions. Stripe handles everything securely.',
+      done: stripeConnected,
+      missing: !stripeConnected ? 'Connect Stripe to continue' : null },
+    { id: 'background-check',
+      label: 'Start your background check',
+      desc: 'A background check is required to participate on InPlace. This is a one-time $30 fee that is refunded after 10 completed sessions. Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
+      done: bgPaid,
+      missing: !bgPaid ? (stripeConnected ? 'Pay for background check ($30)' : 'Complete Stripe setup first') : null },
+    { id: 'security', label: 'Make your account more secure', desc: 'Set up two-factor authentication or biometrics to protect your account', done: securityReviewed, missing: !securityReviewed ? 'Enable 2FA or biometrics in Settings' : null },
     { id: 'preferences', label: 'Select your care preferences', desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
+    { id: 'avail-rates', label: 'Set your availability and rates', desc: 'Tell families when you\'re free and what you charge', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
+    { id: 'photo', label: 'Review your account page and add a profile picture', desc: 'Families want to see who they\'re inviting into their home', done: hasPhoto, missing: !hasPhoto ? 'Upload a profile photo' : null },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
   // Show checklist whenever steps remain — disappears when ALL done (or admin overrides all fields)
   const showFirstSteps = firstStepsDone < firstSteps.length;
+  // Expose to parent (app.js) so bottom nav can grey out Find Work
+  window.__caregiverFirstStepsRemain = showFirstSteps;
   // NEVER gate/blur the dashboard — checklist is motivational, not a lock
   const onboardingGated = false;
   const shouldBlur = false;
@@ -1199,54 +1206,76 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       )}
 
-      {/* Stripe Connect Onboarding — shows when not yet connected OR when embedded onboarding is open */}
-      {(!stripeStatus || stripeStatus.status === 'not_started' || stripeStatus.status === 'pending' || showStripeOnboarding) && (
-        <div className="card" style={{ marginBottom: 16, padding: '18px 20px', borderLeft: '4px solid #6366f1' }}>
-          {!showStripeOnboarding ? (
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <span style={{ fontSize: 24, marginTop: 2 }}>💳</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#333', marginBottom: 4 }}>Set Up Payments</div>
-                <div style={{ fontSize: 13, color: '#555' }}>
-                  Connect your bank account to receive payments for care sessions. This takes about 5 minutes — Stripe handles everything securely.
-                </div>
-                {stripeError && (
-                  <div style={{ fontSize: 12, color: '#dc2626', marginTop: 6, padding: '6px 10px', background: '#fef2f2', borderRadius: 6 }}>
-                    {stripeError}
-                  </div>
-                )}
-                <button
-                  onClick={handleStripeOnboard}
-                  disabled={stripeLoading}
-                  style={{
-                    marginTop: 10, padding: '8px 18px', borderRadius: 8,
-                    background: stripeLoading ? '#94a3b8' : '#6366f1', color: '#fff',
-                    border: 'none', fontSize: 13, fontWeight: 600, cursor: stripeLoading ? 'wait' : 'pointer',
-                  }}
-                >
-                  {stripeLoading ? 'Setting up...' : stripeStatus?.status === 'pending' ? 'Continue Setup' : 'Set Up Payments'}
-                </button>
+      {/* First Steps — THE top tile on dashboard when steps remain */}
+      {showFirstSteps && (
+        <div style={{ background: '#fff', borderRadius: '14px', border: '2px solid #e8724a', padding: '20px 22px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#b45309' }}>First Steps</h3>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ height: '6px', background: '#f3e8d0', borderRadius: '3px', overflow: 'hidden', width: '120px', marginRight: '10px' }}>
+                <div style={{ height: '100%', background: '#2e5984', borderRadius: '3px', transition: 'width 0.3s', width: (firstStepsDone / firstSteps.length * 100) + '%' }}></div>
               </div>
+              <span style={{ fontSize: '12px', color: '#888', whiteSpace: 'nowrap' }}>{firstStepsDone} of {firstSteps.length} complete</span>
             </div>
-          ) : (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Payment Setup</div>
-                <button onClick={() => {
-                  setShowStripeOnboarding(false);
-                  apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
-                }} style={{
-                  padding: '4px 10px', borderRadius: 6, border: '1px solid #ccc',
-                  background: '#f8f8f8', color: '#666', fontSize: 12, cursor: 'pointer',
-                }}>Close</button>
-              </div>
-              <div ref={stripeOnboardingRef} style={{ minHeight: 300 }}>
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#888' }}>
-                  Loading Stripe onboarding...
+          </div>
+          <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {firstSteps.map((s, idx) => (
+              <div key={s.id} onClick={() => {
+                if (s.done) return;
+                if (s.id === 'photo') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'avail-rates') window.__navigateTo && window.__navigateTo('find-work');
+                if (s.id === 'security') {
+                  window.__accountTab = 'settings';
+                  window.__navigateTo && window.__navigateTo('account');
+                  // Also fire event for already-mounted MyAccount to switch tabs
+                  setTimeout(() => window.dispatchEvent(new CustomEvent('accountTabSwitch', { detail: { tab: 'settings' } })), 100);
+                }
+                if (s.id === 'stripe-bg') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'background-check') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
+                if (s.id === 'preferences') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
+              }} style={{
+                display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px',
+                borderRadius: '10px', border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',
+                background: s.done ? '#f1f8f1' : '#fff',
+                cursor: s.done ? 'default' : 'pointer',
+                transition: 'all 0.15s',
+              }}>
+                <div style={{
+                  width: '28px', height: '28px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '13px', fontWeight: 700, flexShrink: 0, marginTop: '1px',
+                  background: s.done ? '#4caf50' : 'transparent',
+                  color: s.done ? '#fff' : '#e8724a',
+                  border: s.done ? '2px solid #4caf50' : '2px solid #e8724a',
+                }}>{s.done ? '\u2713' : (idx + 1)}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: '14px', fontWeight: 600,
+                    color: s.done ? '#4caf50' : '#333',
+                    textDecoration: s.done ? 'line-through' : 'none',
+                    textDecorationColor: s.done ? '#a5d6a7' : undefined,
+                  }}>{s.label}</div>
+                  {!s.done && s.desc && <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{s.desc}</div>}
+                  {!s.done && s.missing && (
+                    <div style={{ marginTop: '6px', padding: '6px 10px', background: '#fff8f0', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '13px' }}>{'\u26A0\uFE0F'}</span> {s.missing}
+                    </div>
+                  )}
                 </div>
+                {!s.done && <span style={{ color: '#ccc', fontSize: '18px', marginTop: '3px' }}>{'\u203A'}</span>}
               </div>
-            </div>
-          )}
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Calendar Placeholder — shown when no availability set yet */}
+      {showFirstSteps && !hasAvailability && (
+        <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #e5e7eb', padding: '28px 22px', textAlign: 'center', marginBottom: '20px' }}>
+          <div style={{ fontSize: '40px', marginBottom: '8px', opacity: 0.5 }}>📅</div>
+          <div style={{ fontSize: '14px', color: '#999' }}>Your availability and booked sessions will show here later</div>
+          <div style={{ fontSize: '12px', color: '#bbb', marginTop: '4px' }}>Complete step 2 to set your availability and see your calendar</div>
         </div>
       )}
 
@@ -1765,26 +1794,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* Find Work — first thing after the 24hr window */}
-      {!bgCheckPaid && (
-        <div style={{ borderRadius: 14, overflow: 'hidden', marginBottom: 20, border: '1px solid #e5e7eb', background: '#fff' }}>
-          <div style={{ background: 'linear-gradient(135deg, #6b7280 0%, #9ca3af 100%)', color: '#fff', padding: '16px 20px' }}>
-            <div style={{ fontWeight: 700, fontSize: 17 }}>🔒 Find Work</div>
-            <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>Complete your background check to view available jobs</div>
-          </div>
-          <div style={{ padding: '24px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🔐</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Background Check Required</div>
-            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, lineHeight: 1.5 }}>
-              For the safety of our care recipients, you must complete a background check before viewing job details or accepting care requests. This is a one-time $30 fee that is refunded after 10 completed sessions.
-            </div>
-            <button onClick={() => { window.__accountTab = 'payments'; if (window.__navigateTo) window.__navigateTo('account'); }}
-              style={{ padding: '10px 24px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-              Go to Payments → Pay for Background Check
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Find Work — shows available jobs */}
       {bgCheckPaid && (() => {
         // Filter out jobs caregiver already has a pending proposal on (shown in My Proposals)
         const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
@@ -2127,88 +2137,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* First Steps — THE top tile on dashboard when steps remain */}
-      {showFirstSteps && (
-        <div style={{ background: '#fff', borderRadius: '14px', border: '2px solid #e8724a', padding: '20px 22px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#b45309' }}>First Steps</h3>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ height: '6px', background: '#f3e8d0', borderRadius: '3px', overflow: 'hidden', width: '120px', marginRight: '10px' }}>
-                <div style={{ height: '100%', background: '#2e5984', borderRadius: '3px', transition: 'width 0.3s', width: (firstStepsDone / firstSteps.length * 100) + '%' }}></div>
-              </div>
-              <span style={{ fontSize: '12px', color: '#888', whiteSpace: 'nowrap' }}>{firstStepsDone} of {firstSteps.length} complete</span>
-            </div>
-          </div>
-          <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
-          <div style={{ display: 'grid', gap: '8px' }}>
-            {firstSteps.map((s, idx) => (
-              <div key={s.id} onClick={() => {
-                if (s.done) return;
-                if (s.id === 'photo') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'avail-rates') window.__navigateTo && window.__navigateTo('find-work');
-                if (s.id === 'security') {
-                  window.__accountTab = 'settings';
-                  window.__navigateTo && window.__navigateTo('account');
-                  // Also fire event for already-mounted MyAccount to switch tabs
-                  setTimeout(() => window.dispatchEvent(new CustomEvent('accountTabSwitch', { detail: { tab: 'settings' } })), 100);
-                }
-                if (s.id === 'stripe-bg') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'preferences') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
-              }} style={{
-                display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px',
-                borderRadius: '10px', border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',
-                background: s.done ? '#f1f8f1' : '#fff',
-                cursor: s.done ? 'default' : 'pointer',
-                transition: 'all 0.15s',
-              }}>
-                <div style={{
-                  width: '28px', height: '28px', borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '13px', fontWeight: 700, flexShrink: 0, marginTop: '1px',
-                  background: s.done ? '#4caf50' : 'transparent',
-                  color: s.done ? '#fff' : '#e8724a',
-                  border: s.done ? '2px solid #4caf50' : '2px solid #e8724a',
-                }}>{s.done ? '\u2713' : (idx + 1)}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    fontSize: '14px', fontWeight: 600,
-                    color: s.done ? '#4caf50' : '#333',
-                    textDecoration: s.done ? 'line-through' : 'none',
-                    textDecorationColor: s.done ? '#a5d6a7' : undefined,
-                  }}>{s.label}</div>
-                  {!s.done && s.desc && <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{s.desc}</div>}
-                  {!s.done && s.missing && (
-                    <div style={{ marginTop: '6px', padding: '6px 10px', background: '#fff8f0', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '13px' }}>{'\u26A0\uFE0F'}</span> {s.missing}
-                    </div>
-                  )}
-                  {!s.done && s.id === 'security' && (
-                    <button onClick={(e) => {
-                      e.stopPropagation();
-                      localStorage.setItem('inplace_security_reviewed', '1');
-                      window.location.reload();
-                    }} style={{
-                      marginTop: 6, padding: '4px 10px', borderRadius: 6,
-                      border: '1px solid #ccc', background: '#f8f8f8', color: '#666',
-                      fontSize: 11, cursor: 'pointer', fontWeight: 500,
-                    }}>I've reviewed my security settings</button>
-                  )}
-                </div>
-                {!s.done && <span style={{ color: '#ccc', fontSize: '18px', marginTop: '3px' }}>{'\u203A'}</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Calendar Placeholder — shown when no availability set yet */}
-      {showFirstSteps && !hasAvailability && (
-        <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #e5e7eb', padding: '28px 22px', textAlign: 'center', marginBottom: '20px' }}>
-          <div style={{ fontSize: '40px', marginBottom: '8px', opacity: 0.5 }}>📅</div>
-          <div style={{ fontSize: '14px', color: '#999' }}>Your availability and booked sessions will show here later</div>
-          <div style={{ fontSize: '12px', color: '#bbb', marginTop: '4px' }}>Complete step 2 to set your availability and see your calendar</div>
-        </div>
-      )}
 
       {/* Dashboard content — blurred when onboarding incomplete, lifts when working on a step */}
       <div className={shouldBlur ? 'onboarding-content-lock' : ''}>
