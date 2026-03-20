@@ -712,6 +712,7 @@ router.post("/admin/sync-statuses", authenticate, async (req, res) => {
 
           details.push({
             candidate: c.checkr_candidate_id,
+            reportId: c.checkr_report_id,
             oldStatus: c.checkr_status,
             apiStatus: report.status,
             apiResult: report.result,
@@ -725,6 +726,15 @@ router.post("/admin/sync-statuses", authenticate, async (req, res) => {
             updated++;
             console.log(`[checkr-sync] ${c.checkr_candidate_id}: ${c.checkr_status} → ${newStatus}`);
           }
+        } else {
+          const errText = await reportResp.text().catch(() => "no body");
+          details.push({
+            candidate: c.checkr_candidate_id,
+            reportId: c.checkr_report_id,
+            oldStatus: c.checkr_status,
+            error: `HTTP ${reportResp.status}`,
+            errorBody: errText.substring(0, 200),
+          });
         }
       } catch (err) {
         console.warn(`[checkr-sync] Failed for report ${c.checkr_report_id}:`, err.message);
