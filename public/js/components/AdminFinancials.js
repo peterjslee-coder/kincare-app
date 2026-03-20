@@ -22,17 +22,22 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [paymentsEnabled, setPaymentsEnabled] = useState(false);
   const [paymentToggleLoading, setPaymentToggleLoading] = useState(false);
   const [paymentToggleConfirm, setPaymentToggleConfirm] = useState(false);
+  // Treasury (Mercury + Stripe)
+  const [treasury, setTreasury] = useState(null);
+  const [treasuryLoading, setTreasuryLoading] = useState(true);
+  const [treasuryExpanded, setTreasuryExpanded] = useState(null); // 'mercury-{id}' or 'stripe-payouts' etc
 
   const fetchAll = async (showRefresh) => {
     if (showRefresh) setRefreshing(true);
     try {
-      const [sumRes, brkRes, insRes, txRes, feeRes, payRes] = await Promise.all([
+      const [sumRes, brkRes, insRes, txRes, feeRes, payRes, trsRes] = await Promise.all([
         apiFetch('/api/admin/financials/summary'),
         apiFetch('/api/admin/financials/breakdown'),
         apiFetch('/api/admin/financials/insights'),
         apiFetch(`/api/admin/financials/transactions?page=${txPage}&limit=25`),
         apiFetch('/api/admin/financials/platform-fee'),
         apiFetch('/api/admin/financials/payments-enabled'),
+        apiFetch('/api/admin/treasury'),
       ]);
       if (sumRes?.ok) setSummary(await sumRes.json());
       if (brkRes?.ok) setBreakdown(await brkRes.json());
@@ -47,6 +52,8 @@ const AdminFinancials = window.AdminFinancials = () => {
         const pd = await payRes.json();
         setPaymentsEnabled(pd.paymentsEnabled);
       }
+      if (trsRes?.ok) { setTreasury(await trsRes.json()); }
+      setTreasuryLoading(false);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Financials fetch error:', err);
@@ -351,6 +358,200 @@ const AdminFinancials = window.AdminFinancials = () => {
           {refreshing ? '↻ Refreshing...' : '↻ Refresh'}
         </button>
       </div>
+
+      {/* ── Treasury / Cash Position ── */}
+      {treasury && (treasury.connected?.mercury || treasury.connected?.stripe) && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1565c0' }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div><span className="card-icon">{'\u{1F3E6}'}</span>Cash Position</div>
+            <div style={{ fontSize: 11, color: '#888' }}>
+              {treasury.connected?.mercury && <span style={{ marginRight: 8 }}>{'\u2705'} Mercury</span>}
+              {treasury.connected?.stripe && <span>{'\u2705'} Stripe</span>}
+              {!treasury.connected?.mercury && <span style={{ marginRight: 8, color: '#999' }}>{'\u274C'} Mercury (add MERCURY_API_TOKEN)</span>}
+            </div>
+          </div>
+
+          {/* Balance summary row */}
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+            {/* Mercury total */}
+            {treasury.mercury && (
+              <div style={{ flex: '1 1 200px', padding: 16, background: 'linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%)', borderRadius: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Mercury</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: '#1565c0' }}>
+                  ${treasury.mercury.totalBalance?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{treasury.mercury.accounts?.length || 0} account{treasury.mercury.accounts?.length !== 1 ? 's' : ''}</div>
+              </div>
+            )}
+            {/* Stripe balance */}
+            {treasury.stripe && (
+              <div style={{ flex: '1 1 200px', padding: 16, background: 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)', borderRadius: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Stripe</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: '#2e7d32' }}>
+                  ${treasury.stripe.balance?.total?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                  ${treasury.stripe.balance?.available?.toFixed(2)} available · ${treasury.stripe.balance?.pending?.toFixed(2)} pending
+                </div>
+              </div>
+            )}
+            {/* Combined total */}
+            {treasury.mercury && treasury.stripe && (
+              <div style={{ flex: '1 1 200px', padding: 16, background: 'linear-gradient(135deg, #f3e5f5 0%, #fce4ec 100%)', borderRadius: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Total Cash</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: '#7b1fa2' }}>
+                  ${((treasury.mercury.totalBalance || 0) + (treasury.stripe.balance?.total || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>All accounts combined</div>
+              </div>
+            )}
+          </div>
+
+          {/* Mercury accounts detail */}
+          {treasury.mercury && treasury.mercury.accounts?.map(acct => (
+            <div key={acct.id} style={{ marginBottom: 8 }}>
+              <div onClick={() => setTreasuryExpanded(treasuryExpanded === `m-${acct.id}` ? null : `m-${acct.id}`)}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f5f7fa', borderRadius: 8, cursor: 'pointer', border: '1px solid #e0e0e0' }}>
+                <div>
+                  <span style={{ fontWeight: 600, fontSize: 13, color: '#1565c0' }}>{acct.name}</span>
+                  <span style={{ marginLeft: 8, fontSize: 10, background: '#e3f2fd', color: '#1565c0', padding: '1px 6px', borderRadius: 4 }}>{acct.type}</span>
+                  {acct.accountNumber && <span style={{ marginLeft: 8, fontSize: 11, color: '#999' }}>{acct.accountNumber}</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: '#333' }}>
+                    ${(acct.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#888' }}>{treasuryExpanded === `m-${acct.id}` ? '\u25B2' : '\u25BC'}</span>
+                </div>
+              </div>
+              {/* Recent transactions for this account */}
+              {treasuryExpanded === `m-${acct.id}` && acct.recentTransactions && (
+                <div style={{ margin: '4px 0 0 0', border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
+                  {acct.recentTransactions.length === 0 ? (
+                    <div style={{ padding: 12, textAlign: 'center', color: '#999', fontSize: 12 }}>No recent transactions</div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #e0e0e0' }}>
+                          <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Date</th>
+                          <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Counterparty</th>
+                          <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Note</th>
+                          <th style={{ textAlign: 'right', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {acct.recentTransactions.map(tx => (
+                          <tr key={tx.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                            <td style={{ padding: '6px 10px', color: '#666', whiteSpace: 'nowrap' }}>
+                              {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
+                            </td>
+                            <td style={{ padding: '6px 10px', fontWeight: 500 }}>{tx.counterpartyName}</td>
+                            <td style={{ padding: '6px 10px', color: '#888', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {tx.note || '—'}
+                            </td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: tx.amount >= 0 ? '#2e7d32' : '#c62828' }}>
+                              {tx.amount >= 0 ? '+' : ''}{tx.amount?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Stripe details: payouts + disputes */}
+          {treasury.stripe && (
+            <div style={{ marginTop: treasury.mercury ? 8 : 0 }}>
+              {/* 30-day Stripe stats */}
+              {treasury.stripe.last30Days?.count > 0 && (
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <div style={{ padding: '6px 12px', background: '#f5f5f5', borderRadius: 6, fontSize: 12, color: '#555' }}>
+                    30-day volume: <strong>${treasury.stripe.last30Days.volume?.toFixed(2)}</strong> ({treasury.stripe.last30Days.count} charges)
+                  </div>
+                  <div style={{ padding: '6px 12px', background: '#f5f5f5', borderRadius: 6, fontSize: 12, color: '#555' }}>
+                    Stripe fees: <strong>${treasury.stripe.last30Days.fees?.toFixed(2)}</strong> ({treasury.stripe.last30Days.effectiveFeeRate}%)
+                  </div>
+                </div>
+              )}
+
+              {/* Recent payouts */}
+              {treasury.stripe.recentPayouts?.length > 0 && (
+                <div>
+                  <div onClick={() => setTreasuryExpanded(treasuryExpanded === 'stripe-payouts' ? null : 'stripe-payouts')}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f0f7f0', borderRadius: 8, cursor: 'pointer', border: '1px solid #c8e6c9', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: '#2e7d32' }}>Stripe Payouts (to Mercury)</span>
+                    <span style={{ fontSize: 12, color: '#888' }}>{treasuryExpanded === 'stripe-payouts' ? '\u25B2' : '\u25BC'} {treasury.stripe.recentPayouts.length} recent</span>
+                  </div>
+                  {treasuryExpanded === 'stripe-payouts' && (
+                    <div style={{ border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden', marginBottom: 8 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #e0e0e0' }}>
+                            <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Date</th>
+                            <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Arrival</th>
+                            <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Status</th>
+                            <th style={{ textAlign: 'right', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {treasury.stripe.recentPayouts.map(p => (
+                            <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                              <td style={{ padding: '6px 10px', color: '#666' }}>{new Date(p.created).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
+                              <td style={{ padding: '6px 10px', color: '#666' }}>{new Date(p.arrivalDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
+                              <td style={{ padding: '6px 10px' }}>
+                                <span style={{
+                                  fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600,
+                                  background: p.status === 'paid' ? '#e8f5e9' : p.status === 'pending' ? '#fff8e1' : p.status === 'in_transit' ? '#e3f2fd' : '#f5f5f5',
+                                  color: p.status === 'paid' ? '#2e7d32' : p.status === 'pending' ? '#f57f17' : p.status === 'in_transit' ? '#1565c0' : '#888',
+                                }}>{p.status}</span>
+                              </td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>${p.amount?.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Open disputes alert */}
+              {treasury.stripe.openDisputes?.length > 0 && (
+                <div style={{ padding: '10px 14px', background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, marginTop: 4 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#e65100', marginBottom: 4 }}>
+                    {'\u26A0\uFE0F'} {treasury.stripe.openDisputes.length} Open Dispute{treasury.stripe.openDisputes.length > 1 ? 's' : ''}
+                  </div>
+                  {treasury.stripe.openDisputes.map(d => (
+                    <div key={d.id} style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>
+                      ${d.amount.toFixed(2)} — {d.reason} — due {d.evidenceDueBy ? new Date(d.evidenceDueBy).toLocaleDateString() : 'N/A'}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Errors */}
+          {treasury.errors?.length > 0 && (
+            <div style={{ marginTop: 8, padding: 8, background: '#fce4ec', borderRadius: 6, fontSize: 11, color: '#c62828' }}>
+              {treasury.errors.map((e, i) => <div key={i}>{e}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Not connected prompt */}
+      {treasury && !treasury.connected?.mercury && !treasury.connected?.stripe && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #ff9800', background: '#fff8f0' }}>
+          <div className="card-header"><span className="card-icon">{'\u{1F3E6}'}</span>Connect Your Accounts</div>
+          <div style={{ fontSize: 13, color: '#555' }}>
+            Add <strong>MERCURY_API_TOKEN</strong> and/or <strong>STRIPE_SECRET_KEY</strong> to your Railway environment variables to see live account balances, transactions, and payouts here.
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="stats-grid">

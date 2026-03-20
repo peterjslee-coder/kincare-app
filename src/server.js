@@ -278,6 +278,7 @@ app.use("/api/password-reset", require("./routes/passwordReset"));
 app.use("/api/availability", require("./routes/availability"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/admin/financials", require("./routes/financials"));
+app.use("/api/admin/treasury", require("./routes/treasury"));
 app.use("/api/costs", require("./routes/costs"));
 app.use("/api/platform-invites", require("./routes/platformInvites"));
 app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
@@ -299,7 +300,7 @@ app.use("/api/scheduling", require("./routes/nlScheduling"));
 app.use("/api/ipai", require("./routes/ipaiChat"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.50.42";
+const APP_VERSION = "1.50.43";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
