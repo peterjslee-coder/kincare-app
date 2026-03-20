@@ -2910,11 +2910,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const sDur = parseFloat(checkOutSession.durationHours || checkOutSession.duration_hours || 0);
               if (!sDate || !sTime || !sDur) return null;
               const [hh, mm] = sTime.split(':').map(Number);
-              const schedEnd = new Date(`${sDate}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`);
-              schedEnd.setMinutes(schedEnd.getMinutes() + (sDur * 60));
-              const minsEarly = Math.max(0, (schedEnd - new Date()) / 60000);
+              // Use care recipient's timezone for comparison (not browser local TZ)
+              const careTz = checkOutSession.timezone || 'America/New_York';
+              const nowCare = new Date(new Date().toLocaleString('en-US', { timeZone: careTz }));
+              const schedEnd = new Date(nowCare);
+              const [sy, smo, sd] = sDate.split('-').map(Number);
+              schedEnd.setFullYear(sy, smo - 1, sd);
+              schedEnd.setHours(hh, mm, 0, 0);
+              schedEnd.setMinutes(schedEnd.getMinutes() + Math.round(sDur * 60));
+              const minsEarly = Math.max(0, (schedEnd - nowCare) / 60000);
               if (minsEarly <= 15) return null;
-              const endTimeStr = schedEnd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: checkOutSession.timezone || 'America/New_York' });
+              // schedEnd's .getHours() already represents care-TZ wall clock, so format directly
+              const endH = schedEnd.getHours();
+              const endM = schedEnd.getMinutes();
+              const endTimeStr = `${endH % 12 || 12}:${String(endM).padStart(2, '0')} ${endH >= 12 ? 'PM' : 'AM'}`;
               // Calculate pay impact
               const totalMins = sDur * 60;
               const actualMins = totalMins - minsEarly;
@@ -2958,9 +2967,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 const sDur2 = parseFloat(checkOutSession.durationHours || checkOutSession.duration_hours || 0);
                 if (sDate2 && sTime2 && sDur2) {
                   const [hh2, mm2] = sTime2.split(':').map(Number);
-                  const schedEnd2 = new Date(`${sDate2}T${String(hh2).padStart(2,'0')}:${String(mm2).padStart(2,'0')}:00`);
-                  schedEnd2.setMinutes(schedEnd2.getMinutes() + (sDur2 * 60));
-                  const minsEarly2 = Math.max(0, (schedEnd2 - new Date()) / 60000);
+                  // Use care recipient's timezone (same as warning display)
+                  const careTz2 = checkOutSession.timezone || 'America/New_York';
+                  const nowCare2 = new Date(new Date().toLocaleString('en-US', { timeZone: careTz2 }));
+                  const schedEnd2 = new Date(nowCare2);
+                  const [sy2, smo2, sd2] = sDate2.split('-').map(Number);
+                  schedEnd2.setFullYear(sy2, smo2 - 1, sd2);
+                  schedEnd2.setHours(hh2, mm2, 0, 0);
+                  schedEnd2.setMinutes(schedEnd2.getMinutes() + Math.round(sDur2 * 60));
+                  const minsEarly2 = Math.max(0, (schedEnd2 - nowCare2) / 60000);
                   if (minsEarly2 > 15 && !earlyDepartureReason.trim()) {
                     showToast('Please provide a reason for leaving early', 'error');
                     return;
@@ -2968,8 +2983,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 }
                 setCheckSubmitting(true);
                 try {
+                  // Add 30-second timeout to prevent infinite hang
+                  const controller = new AbortController();
+                  const timeout = setTimeout(() => controller.abort(), 30000);
                   const res = await apiFetch('/api/sessions/' + checkOutSession.id + '/check-out', {
                     method: 'POST',
+                    signal: controller.signal,
                     body: JSON.stringify({
                       departureMood: checkOutMood || null,
                       conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
@@ -2979,7 +2998,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       earlyDepartureReason: earlyDepartureReason.trim() || null,
                     }),
                   });
-                  if (res?.ok) {
+                  clearTimeout(timeout);
+                  if (!res) {
+                    showToast('Session expired — please sign in again', 'error');
+                  } else if (res.ok) {
                     const checkOutData = await res.json();
                     // Upload photos if any
                     if (checkOutPhotos.length > 0 && checkOutData.visitLog?.id) {
@@ -2989,13 +3011,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         const token = window.AUTH_TOKEN;
                         const __csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
                         const __csrfH = __csrf ? { 'X-CSRF-Token': __csrf } : {};
-                        await fetch(`${API_BASE}/api/photos/visit/${checkOutData.visitLog.id}`, {
+                        const photoRes = await fetch(`${API_BASE}/api/photos/visit/${checkOutData.visitLog.id}`, {
                           method: 'POST',
                           credentials: 'same-origin',
                           headers: { 'Authorization': `Bearer ${token}`, ...__csrfH },
                           body: formData,
                         });
-                      } catch (photoErr) { console.warn('Photo upload failed:', photoErr); }
+                        if (!photoRes.ok) console.warn('Photo upload failed:', photoRes.status);
+                      } catch (photoErr) { console.warn('Photo upload failed:', photoErr); showToast('Photos could not be uploaded', 'error'); }
                     }
                     checkOutPhotoUrls.forEach(u => URL.revokeObjectURL(u));
                     setCheckOutPhotos([]);
@@ -3008,10 +3031,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     const refreshRes = await apiFetch('/api/dashboard');
                     if (refreshRes?.ok) setData(await refreshRes.json());
                   } else {
-                    const err = await res?.json().catch(() => null);
+                    const err = await res.json().catch(() => null);
                     showToast(err?.error || 'Check-out failed', 'error');
                   }
-                } catch (e) { showToast('Check-out failed', 'error'); }
+                } catch (e) {
+                  if (e.name === 'AbortError') {
+                    showToast('Check-out is taking too long — please try again', 'error');
+                  } else {
+                    showToast('Check-out failed — ' + (e.message || 'network error'), 'error');
+                  }
+                }
                 setCheckSubmitting(false);
               }} disabled={checkSubmitting} style={{
                 padding: '10px 24px', background: '#c62828', color: '#fff', border: 'none',

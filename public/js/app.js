@@ -1158,7 +1158,7 @@ const App = () => {
     if (currentPage === 'help') return <HelpPage key={pageKey} currentUser={currentUser} onNavigate={setCurrentPage} />;
     if (currentPage === 'financials') return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />; {/* Financials moved to Account */}
     if (currentPage === 'payments') { window.__accountTab = 'payments'; return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />; }
-    if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={pageKey} />;
+    if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={pageKey} currentUser={currentUser} />;
     return <Dashboard key={pageKey} onNavigate={setCurrentPage} />;
   };
 
