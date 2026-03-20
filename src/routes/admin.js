@@ -2675,6 +2675,22 @@ router.get("/safety-flags", authenticate, checkAdmin, requireAdmin, async (req, 
       ORDER BY sf.created_at DESC
       LIMIT 50
     `).all();
+
+    // Enrich each flag with conversation participants (so admin can message anyone involved)
+    for (const flag of flags) {
+      if (flag.conversation_id) {
+        const participants = await db.prepare(`
+          SELECT u.id AS user_id, u.first_name, u.last_name, u.email, u.role
+          FROM conversation_members cm
+          JOIN users u ON cm.user_id = u.id
+          WHERE cm.conversation_id = ?
+        `).all(flag.conversation_id);
+        flag.participants = participants;
+      } else {
+        flag.participants = [];
+      }
+    }
+
     res.json({ flags });
   } catch (err) {
     console.error("Safety flags error:", err);

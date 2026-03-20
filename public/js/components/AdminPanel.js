@@ -63,7 +63,7 @@ const AdminPanel = window.AdminPanel = () => {
       if (res?.ok) {
         const data = await res.json();
         setSafetyFlags(data.flags || []);
-        setSafetyFlagCount((data.flags || []).filter(f => f.status === 'pending').length);
+        setSafetyFlagCount((data.flags || []).filter(f => f.status === 'pending' || f.status === 'escalated').length);
       }
     } catch {}
     setSafetyLoading(false);
@@ -1244,37 +1244,69 @@ const AdminPanel = window.AdminPanel = () => {
           {safetyFlagCount > 0 && (
             <>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Safety Flags</div>
-              {safetyFlags.filter(f => f.status === 'pending').map(flag => (
+              {safetyFlags.filter(f => f.status === 'pending' || f.status === 'escalated').map(flag => {
+                const isSevere = flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat');
+                const isEscalated = flag.status === 'escalated';
+                return (
                 <div key={flag.id} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10,
-                  border: flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat') ? '2px solid #c62828' : '1px solid #ffcc80',
+                  padding: '12px 14px', marginBottom: 6, background: isEscalated ? '#fff5f5' : '#fff', borderRadius: 10,
+                  border: isEscalated ? '2px solid #b71c1c' : isSevere ? '2px solid #c62828' : '1px solid #ffcc80',
                   cursor: 'pointer',
                 }} onClick={() => { setActiveTab('safety'); }}>
-                  <div style={{ flex: '1 1 200px' }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat') ? '#c62828' : '#e65100' }}>
-                      {flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat') ? '\u{1F6A8}' : '\u26A0\uFE0F'}{' '}
-                      {flag.first_name} {flag.last_name}
-                      <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
-                        ({flag.flag_type?.replace(/_/g, ' ') || 'flagged'})
-                      </span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ flex: '1 1 200px' }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: isSevere || isEscalated ? '#c62828' : '#e65100' }}>
+                        {isEscalated ? '\u{1F6A8}\u{1F6A8}' : isSevere ? '\u{1F6A8}' : '\u26A0\uFE0F'}{' '}
+                        {flag.first_name} {flag.last_name}
+                        <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                          ({flag.flag_type?.replace(/_/g, ' ') || 'flagged'})
+                        </span>
+                        {isEscalated && (
+                          <span style={{ marginLeft: 6, padding: '1px 8px', background: '#b71c1c', color: '#fff', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Escalated</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                        {'\u201C'}{(flag.user_message || '').substring(0, 120)}{(flag.user_message || '').length > 120 ? '...' : ''}{'\u201D'}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>{flag.email} {'\u00B7'} {new Date(flag.created_at).toLocaleString()}</div>
                     </div>
-                    <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                      {'\u201C'}{(flag.user_message || '').substring(0, 120)}{(flag.user_message || '').length > 120 ? '...' : ''}{'\u201D'}
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      {!isEscalated && (
+                        <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'escalated'); }}
+                          style={{ padding: '6px 12px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                          {'\u{1F6A8}'} Escalate
+                        </button>
+                      )}
+                      <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'resolved'); }}
+                        style={{ padding: '6px 12px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                        {'\u2713'} Resolve
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'dismissed'); }}
+                        style={{ padding: '6px 12px', background: '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                        Dismiss
+                      </button>
                     </div>
-                    <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>{flag.email} {'\u00B7'} {new Date(flag.created_at).toLocaleString()}</div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'resolved'); }}
-                      style={{ padding: '6px 12px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
-                      {'\u2713'} Resolve
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'escalated'); }}
-                      style={{ padding: '6px 12px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
-                      Escalate
-                    </button>
-                  </div>
+                  {/* Conversation participants — message anyone involved */}
+                  {flag.participants && flag.participants.length > 0 && (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #eee', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Message:</span>
+                      {flag.participants.map(p => (
+                        <button key={p.user_id} onClick={(e) => {
+                          e.stopPropagation();
+                          setAdminMsgTarget({ userId: p.user_id, name: `${p.first_name} ${p.last_name}` });
+                          setAdminMsgText('');
+                        }}
+                          style={{ padding: '4px 10px', background: '#f5f5f5', color: '#1b6b5a', border: '1px solid #ccc', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {'\u{1F4AC}'} {p.first_name} {p.last_name}
+                          <span style={{ fontWeight: 400, fontSize: 10, color: '#888' }}>({p.role})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </>
           )}
         </div>
