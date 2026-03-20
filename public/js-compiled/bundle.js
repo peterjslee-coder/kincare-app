@@ -57166,11 +57166,18 @@ const _DayIcon = () => {
 const App = () => {
   var _currentUser$firstNam, _currentUser$roles2;
   // Detect URL params at init — BEFORE any useEffect or auto-login can race
+  // Capture verify token BEFORE any replaceState can strip the URL
+  const [pendingVerifyToken] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    const vt = p.get('verify');
+    if (vt) window.history.replaceState({}, '', window.location.pathname);
+    return vt || null;
+  });
   const [appState, setAppState] = useState(() => {
+    if (pendingVerifyToken) return 'verifying-email';
     const p = new URLSearchParams(window.location.search);
     if (p.get('reset')) return 'reset-password';
     if (p.get('consent-response')) return 'consent-response';
-    if (p.get('verify')) return 'verifying-email';
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
@@ -57470,6 +57477,57 @@ const App = () => {
     return ct || null;
   });
   const [verifyMessage, setVerifyMessage] = useState(null);
+
+  // ─── Dedicated email verification useEffect (isolated from auto-login) ───
+  useEffect(() => {
+    if (!pendingVerifyToken) return;
+    const loggedIn = !!AUTH_TOKEN;
+    trackAuthEvent('email-verify', 'attempt', {
+      loggedIn,
+      source: 'verify-link'
+    });
+    fetch(API_BASE + `/api/auth/verify?token=${pendingVerifyToken}`).then(r => r.json()).then(data => {
+      if (data !== null && data !== void 0 && data.message) {
+        trackAuthEvent('email-verify', 'success', {
+          loggedIn
+        });
+        setVerifyMessage({
+          type: 'success',
+          text: 'Email verified! Sign in to continue.'
+        });
+        if (loggedIn) {
+          apiFetch('/api/auth/me').then(r2 => r2 === null || r2 === void 0 ? void 0 : r2.json()).then(meData => {
+            if (meData !== null && meData !== void 0 && meData.user) setCurrentUser(prev => prev ? {
+              ...prev,
+              emailVerified: !!meData.user.email_verified
+            } : prev);
+          }).catch(() => {});
+        } else {
+          setAppState('login');
+        }
+      } else {
+        trackAuthEvent('email-verify', 'error', {
+          loggedIn,
+          error: (data === null || data === void 0 ? void 0 : data.error) || 'unknown'
+        });
+        setVerifyMessage({
+          type: 'error',
+          text: (data === null || data === void 0 ? void 0 : data.error) || 'Verification failed'
+        });
+        setAppState('login');
+      }
+    }).catch(err => {
+      trackAuthEvent('email-verify', 'error', {
+        loggedIn,
+        error: (err === null || err === void 0 ? void 0 : err.message) || 'network-error'
+      });
+      setVerifyMessage({
+        type: 'error',
+        text: 'Verification failed. Please try again or contact support.'
+      });
+      setAppState('login');
+    });
+  }, []);
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
   const pendingInviteRef = useRef(null); // Ref mirror — survives closures
   const [inviteInfo, setInviteInfo] = useState(null); // { email, role, teamName, recipientName, inviterName }
@@ -57483,21 +57541,16 @@ const App = () => {
     // If we're in a pre-auth URL mode (reset-password, consent-response), skip auto-login
     if (appState === 'reset-password' || appState === 'consent-response') return;
 
-    // Email verification links need to skip auto-login but still run the verify code below
-    const isVerifyingEmail = appState === 'verifying-email';
-
     // Only auto-restore if this tab has an active session (set at login).
     // Closing the browser/tab clears sessionStorage, so the user must
     // re-authenticate on next visit instead of silently auto-logging in.
     // Invite links bypass this check so the accept-invite flow still works.
-    // Verify links also bypass — they need the verify code to run.
     const hasActiveSession = sessionStorage.getItem('inplace_session_active');
     const hasInviteToken = new URLSearchParams(window.location.search).get('invite') || new URLSearchParams(window.__originalSearch || '').get('invite') || localStorage.getItem('pendingInviteToken');
-    if (!hasActiveSession && !hasInviteToken && !isVerifyingEmail) return;
+    if (!hasActiveSession && !hasInviteToken) return;
 
     // Restore session from httpOnly cookie (server reads cookie automatically)
-    // Skip auto-login for email verification — let the verify code handle navigation
-    if (!isVerifyingEmail) apiFetch('/api/auth/me').then(async r => {
+    apiFetch('/api/auth/me').then(async r => {
       if (r !== null && r !== void 0 && r.ok) {
         const data = await r.json();
         // Server includes token for in-memory use (WebSocket auth)
@@ -57602,67 +57655,7 @@ const App = () => {
     // Preserve original search params before any replaceState calls strip them
     window.__originalSearch = window.location.search;
 
-    // Check for email verification token in URL
-    const vt = params.get('verify');
-    if (vt) {
-      window.history.replaceState({}, '', window.location.pathname);
-      const loggedIn = !!AUTH_TOKEN;
-      trackAuthEvent('email-verify', 'attempt', {
-        loggedIn,
-        source: 'verify-link'
-      });
-      // Show verifying state while API call is in-flight
-      if (!loggedIn) setVerifyMessage({
-        type: 'info',
-        text: 'Verifying your email...'
-      });
-      // Use raw fetch for verify — it's a public endpoint that works without auth
-      fetch(API_BASE + `/api/auth/verify?token=${vt}`).then(r => r.json()).then(data => {
-        if (data !== null && data !== void 0 && data.message) {
-          trackAuthEvent('email-verify', 'success', {
-            loggedIn
-          });
-          setVerifyMessage({
-            type: 'success',
-            text: 'Email verified! Sign in to continue.'
-          });
-          // If user is logged in, refresh their data so banner disappears
-          if (loggedIn) {
-            apiFetch('/api/auth/me').then(r2 => r2 === null || r2 === void 0 ? void 0 : r2.json()).then(meData => {
-              if (meData !== null && meData !== void 0 && meData.user) {
-                setCurrentUser(prev => prev ? {
-                  ...prev,
-                  emailVerified: !!meData.user.email_verified
-                } : prev);
-              }
-            }).catch(() => {});
-          } else {
-            // Not logged in — send them to login page with the success banner
-            setAppState('login');
-          }
-        } else {
-          trackAuthEvent('email-verify', 'error', {
-            loggedIn,
-            error: (data === null || data === void 0 ? void 0 : data.error) || 'unknown'
-          });
-          setVerifyMessage({
-            type: 'error',
-            text: (data === null || data === void 0 ? void 0 : data.error) || 'Verification failed'
-          });
-          if (!loggedIn) setAppState('login');
-        }
-      }).catch(err => {
-        trackAuthEvent('email-verify', 'error', {
-          loggedIn,
-          error: (err === null || err === void 0 ? void 0 : err.message) || 'network-error'
-        });
-        setVerifyMessage({
-          type: 'error',
-          text: 'Verification failed. Please try again or contact support.'
-        });
-        if (!loggedIn) setAppState('login');
-      });
-    }
+    // Email verification is handled by its own dedicated useEffect above
 
     // Check for care team invite token in URL or localStorage (survives approval gate)
     const inviteToken = params.get('invite') || localStorage.getItem('pendingInviteToken');
