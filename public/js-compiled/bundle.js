@@ -21674,9 +21674,6 @@ const RequestCareModal = window.RequestCareModal = ({
   }, {
     value: 'transportation',
     label: 'Transport'
-  }, {
-    value: 'health_wellness',
-    label: 'Health'
   }];
   const durationOptions = [{
     value: '1',
@@ -24631,14 +24628,23 @@ const MyAccount = window.MyAccount = ({
     }
   }, [activeTab]);
 
-  // Fetch caregiver care preferences
+  // Fetch caregiver care preferences (try care_preferences first, fall back to care_stoplight)
   useEffect(() => {
     if (activeTab === 'preferences') {
       apiFetch('/api/caregivers/me').then(async r => {
         if (r !== null && r !== void 0 && r.ok) {
-          var _d$profile5;
+          var _d$profile5, _d$profile6;
           const d = await r.json();
-          setPreferences((_d$profile5 = d.profile) !== null && _d$profile5 !== void 0 && _d$profile5.care_preferences ? JSON.parse(d.profile.care_preferences) : {});
+          const raw = ((_d$profile5 = d.profile) === null || _d$profile5 === void 0 ? void 0 : _d$profile5.care_preferences) || ((_d$profile6 = d.profile) === null || _d$profile6 === void 0 ? void 0 : _d$profile6.care_stoplight);
+          if (raw) {
+            try {
+              setPreferences(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            } catch {
+              setPreferences({});
+            }
+          } else {
+            setPreferences({});
+          }
         } else {
           setPreferences({});
         }
@@ -34023,11 +34029,29 @@ const CaretakerHub = window.CaretakerHub = ({
   const idVerified = idVerification.verified;
   const hasPreferences = !!stoplightData;
   const firstSteps = [{
-    id: 'photo',
-    label: 'Review your account page and add a profile picture',
-    desc: 'Families want to see who they\'re inviting into their home',
-    done: hasPhoto,
-    missing: !hasPhoto ? 'Upload a profile photo' : null
+    id: 'stripe-bg',
+    label: 'Set up Stripe and connect your bank account',
+    desc: 'Connect your bank account to receive payments for care sessions. Stripe handles everything securely.',
+    done: stripeConnected,
+    missing: !stripeConnected ? 'Connect Stripe to continue' : null
+  }, {
+    id: 'background-check',
+    label: 'Start your background check',
+    desc: 'A background check is required to participate on InPlace. This is a one-time $30 fee that is refunded after 10 completed sessions. Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
+    done: bgPaid,
+    missing: !bgPaid ? stripeConnected ? 'Pay for background check ($30)' : 'Complete Stripe setup first' : null
+  }, {
+    id: 'security',
+    label: 'Make your account more secure',
+    desc: 'Set up two-factor authentication or biometrics to protect your account',
+    done: securityReviewed,
+    missing: !securityReviewed ? 'Enable 2FA or biometrics in Settings' : null
+  }, {
+    id: 'preferences',
+    label: 'Select your care preferences',
+    desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients',
+    done: hasPreferences,
+    missing: !hasPreferences ? 'Select all preferences and save' : null
   }, {
     id: 'avail-rates',
     label: 'Set your availability and rates',
@@ -34040,35 +34064,17 @@ const CaretakerHub = window.CaretakerHub = ({
       return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null;
     })()
   }, {
-    id: 'security',
-    label: 'Make your account more secure',
-    desc: 'Review your security settings and enable 2FA',
-    done: securityReviewed,
-    missing: !securityReviewed ? 'Open Settings and scroll to the bottom to review all options' : null
-  }, {
-    id: 'stripe-bg',
-    label: platformConfig.stripeConfigured ? 'Set up Stripe, add bank details, and pay for background check' : 'Payment & background check setup (coming soon)',
-    desc: platformConfig.stripeConfigured ? 'Required before you can accept paid jobs — $30 for background check' : 'Payment setup and background checks will be available soon. You can browse families and set up your profile in the meantime.',
-    done: platformConfig.stripeConfigured ? stripeConnected && bgPaid : true,
-    // Mark done if not configured (non-blocking)
-    missing: platformConfig.stripeConfigured ? (() => {
-      const m = [];
-      if (!stripeConnected) m.push('connect Stripe');
-      if (!bgPaid) m.push('pay for background check ($30)');
-      const d = [];
-      if (stripeConnected) d.push('Stripe connected \u2713');
-      return (d.length > 0 ? d.join(', ') + ' \u2014 ' : '') + (m.length > 0 ? 'Still needed: ' + m.join(' and ') : '');
-    })() || null : null
-  }, {
-    id: 'preferences',
-    label: 'Select your care preferences',
-    desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients',
-    done: hasPreferences,
-    missing: !hasPreferences ? 'Select all preferences and save' : null
+    id: 'photo',
+    label: 'Review your account page and add a profile picture',
+    desc: 'Families want to see who they\'re inviting into their home',
+    done: hasPhoto,
+    missing: !hasPhoto ? 'Upload a profile photo' : null
   }];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
   // Show checklist whenever steps remain — disappears when ALL done (or admin overrides all fields)
   const showFirstSteps = firstStepsDone < firstSteps.length;
+  // Expose to parent (app.js) so bottom nav can grey out Find Work
+  window.__caregiverFirstStepsRemain = showFirstSteps;
   // NEVER gate/blur the dashboard — checklist is motivational, not a lock
   const onboardingGated = false;
   const shouldBlur = false;
@@ -34392,102 +34398,197 @@ const CaretakerHub = window.CaretakerHub = ({
       fontSize: 12,
       color: '#888'
     }
-  }, "An admin will review your account. If you believe this is an error, please contact support.")), (!stripeStatus || stripeStatus.status === 'not_started' || stripeStatus.status === 'pending' || showStripeOnboarding) && /*#__PURE__*/React.createElement("div", {
-    className: "card",
+  }, "An admin will review your account. If you believe this is an error, please contact support.")), showFirstSteps && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: 16,
-      padding: '18px 20px',
-      borderLeft: '4px solid #6366f1'
+      background: '#fff',
+      borderRadius: '14px',
+      border: '2px solid #e8724a',
+      padding: '20px 22px',
+      marginBottom: '20px',
+      boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)'
     }
-  }, !showStripeOnboarding ? /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: '14px'
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: 0,
+      fontSize: '17px',
+      fontWeight: 700,
+      color: '#b45309'
+    }
+  }, "First Steps"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: '6px',
+      background: '#f3e8d0',
+      borderRadius: '3px',
+      overflow: 'hidden',
+      width: '120px',
+      marginRight: '10px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: '100%',
+      background: '#2e5984',
+      borderRadius: '3px',
+      transition: 'width 0.3s',
+      width: firstStepsDone / firstSteps.length * 100 + '%'
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '12px',
+      color: '#888',
+      whiteSpace: 'nowrap'
+    }
+  }, firstStepsDone, " of ", firstSteps.length, " complete"))), /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    ref: avatarInputRef,
+    accept: "image/*",
+    style: {
+      display: 'none'
+    },
+    onChange: handleAvatarUpload
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: '8px'
+    }
+  }, firstSteps.map((s, idx) => /*#__PURE__*/React.createElement("div", {
+    key: s.id,
+    onClick: () => {
+      if (s.done) return;
+      if (s.id === 'photo') {
+        window.__accountTab = 'profile';
+        window.__navigateTo && window.__navigateTo('account');
+      }
+      if (s.id === 'avail-rates') window.__navigateTo && window.__navigateTo('find-work');
+      if (s.id === 'security') {
+        window.__accountTab = 'settings';
+        window.__navigateTo && window.__navigateTo('account');
+        // Also fire event for already-mounted MyAccount to switch tabs
+        setTimeout(() => window.dispatchEvent(new CustomEvent('accountTabSwitch', {
+          detail: {
+            tab: 'settings'
+          }
+        })), 100);
+      }
+      if (s.id === 'stripe-bg') {
+        window.__accountTab = 'payments';
+        window.__navigateTo && window.__navigateTo('account');
+      }
+      if (s.id === 'background-check') {
+        window.__accountTab = 'payments';
+        window.__navigateTo && window.__navigateTo('account');
+      }
+      if (s.id === 'preferences') {
+        window.__accountTab = 'preferences';
+        window.__navigateTo && window.__navigateTo('account');
+      }
+    },
     style: {
       display: 'flex',
       alignItems: 'flex-start',
-      gap: 12
+      gap: '12px',
+      padding: '12px 14px',
+      borderRadius: '10px',
+      border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',
+      background: s.done ? '#f1f8f1' : '#fff',
+      cursor: s.done ? 'default' : 'pointer',
+      transition: 'all 0.15s'
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 24,
-      marginTop: 2
+      width: '28px',
+      height: '28px',
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '13px',
+      fontWeight: 700,
+      flexShrink: 0,
+      marginTop: '1px',
+      background: s.done ? '#4caf50' : 'transparent',
+      color: s.done ? '#fff' : '#e8724a',
+      border: s.done ? '2px solid #4caf50' : '2px solid #e8724a'
     }
-  }, "\uD83D\uDCB3"), /*#__PURE__*/React.createElement("div", {
+  }, s.done ? '\u2713' : idx + 1), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
+      fontSize: '14px',
       fontWeight: 600,
-      fontSize: 14,
-      color: '#333',
-      marginBottom: 4
+      color: s.done ? '#4caf50' : '#333',
+      textDecoration: s.done ? 'line-through' : 'none',
+      textDecorationColor: s.done ? '#a5d6a7' : undefined
     }
-  }, "Set Up Payments"), /*#__PURE__*/React.createElement("div", {
+  }, s.label), !s.done && s.desc && /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 13,
-      color: '#555'
+      fontSize: '12px',
+      color: '#888',
+      marginTop: '2px'
     }
-  }, "Connect your bank account to receive payments for care sessions. This takes about 5 minutes \u2014 Stripe handles everything securely."), stripeError && /*#__PURE__*/React.createElement("div", {
+  }, s.desc), !s.done && s.missing && /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 12,
-      color: '#dc2626',
-      marginTop: 6,
+      marginTop: '6px',
       padding: '6px 10px',
-      background: '#fef2f2',
-      borderRadius: 6
-    }
-  }, stripeError), /*#__PURE__*/React.createElement("button", {
-    onClick: handleStripeOnboard,
-    disabled: stripeLoading,
-    style: {
-      marginTop: 10,
-      padding: '8px 18px',
-      borderRadius: 8,
-      background: stripeLoading ? '#94a3b8' : '#6366f1',
-      color: '#fff',
-      border: 'none',
-      fontSize: 13,
-      fontWeight: 600,
-      cursor: stripeLoading ? 'wait' : 'pointer'
-    }
-  }, stripeLoading ? 'Setting up...' : (stripeStatus === null || stripeStatus === void 0 ? void 0 : stripeStatus.status) === 'pending' ? 'Continue Setup' : 'Set Up Payments'))) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
+      background: '#fff8f0',
+      border: '1px solid #fde68a',
+      borderRadius: '6px',
+      fontSize: '11px',
+      color: '#b45309',
       display: 'flex',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 12
+      gap: '6px'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontWeight: 600,
-      fontSize: 14,
-      color: '#333'
+      fontSize: '13px'
     }
-  }, "Payment Setup"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setShowStripeOnboarding(false);
-      apiFetch('/api/payments/connect/status').then(r => (r === null || r === void 0 ? void 0 : r.ok) && r.json().then(s => setStripeStatus(s))).catch(() => {});
-    },
+  }, '\u26A0\uFE0F'), " ", s.missing)), !s.done && /*#__PURE__*/React.createElement("span", {
     style: {
-      padding: '4px 10px',
-      borderRadius: 6,
-      border: '1px solid #ccc',
-      background: '#f8f8f8',
-      color: '#666',
-      fontSize: 12,
-      cursor: 'pointer'
+      color: '#ccc',
+      fontSize: '18px',
+      marginTop: '3px'
     }
-  }, "Close")), /*#__PURE__*/React.createElement("div", {
-    ref: stripeOnboardingRef,
+  }, '\u203A'))))), showFirstSteps && !hasAvailability && /*#__PURE__*/React.createElement("div", {
     style: {
-      minHeight: 300
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
+      background: '#fff',
+      borderRadius: '14px',
+      border: '1px solid #e5e7eb',
+      padding: '28px 22px',
       textAlign: 'center',
-      padding: '40px 20px',
-      color: '#888'
+      marginBottom: '20px'
     }
-  }, "Loading Stripe onboarding...")))), (data.noShowAlerts || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '40px',
+      marginBottom: '8px',
+      opacity: 0.5
+    }
+  }, "\uD83D\uDCC5"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '14px',
+      color: '#999'
+    }
+  }, "Your availability and booked sessions will show here later"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      color: '#bbb',
+      marginTop: '4px'
+    }
+  }, "Complete step 2 to set your availability and see your calendar")), (data.noShowAlerts || []).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16
     }
@@ -35395,71 +35496,7 @@ const CaretakerHub = window.CaretakerHub = ({
         }, m.arrivalMood, '\u2192', m.departureMood))));
       })()));
     }));
-  })(), !bgCheckPaid && /*#__PURE__*/React.createElement("div", {
-    style: {
-      borderRadius: 14,
-      overflow: 'hidden',
-      marginBottom: 20,
-      border: '1px solid #e5e7eb',
-      background: '#fff'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: 'linear-gradient(135deg, #6b7280 0%, #9ca3af 100%)',
-      color: '#fff',
-      padding: '16px 20px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 17
-    }
-  }, "\uD83D\uDD12 Find Work"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      opacity: 0.9,
-      marginTop: 2
-    }
-  }, "Complete your background check to view available jobs")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '24px 20px',
-      textAlign: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 40,
-      marginBottom: 12
-    }
-  }, "\uD83D\uDD10"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 15,
-      fontWeight: 600,
-      color: '#374151',
-      marginBottom: 8
-    }
-  }, "Background Check Required"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 13,
-      color: '#6b7280',
-      marginBottom: 16,
-      lineHeight: 1.5
-    }
-  }, "For the safety of our care recipients, you must complete a background check before viewing job details or accepting care requests. This is a one-time $30 fee that is refunded after 10 completed sessions."), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      window.__accountTab = 'payments';
-      if (window.__navigateTo) window.__navigateTo('account');
-    },
-    style: {
-      padding: '10px 24px',
-      background: '#1b6b5a',
-      color: '#fff',
-      border: 'none',
-      borderRadius: 10,
-      fontSize: 14,
-      fontWeight: 700,
-      cursor: 'pointer'
-    }
-  }, "Go to Payments \u2192 Pay for Background Check"))), bgCheckPaid && (() => {
+  })(), bgCheckPaid && (() => {
     // Filter out jobs caregiver already has a pending proposal on (shown in My Proposals)
     const pendingProposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending').map(p => p.sessionId));
     // Filter out exclusive (non-expired) direct offers — they're shown in the "Just for You" section above
@@ -36158,210 +36195,7 @@ const CaretakerHub = window.CaretakerHub = ({
         }
       }, "$", s.caregiverPayout.toFixed(2)))));
     }));
-  })(), showFirstSteps && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#fff',
-      borderRadius: '14px',
-      border: '2px solid #e8724a',
-      padding: '20px 22px',
-      marginBottom: '20px',
-      boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: '14px'
-    }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: 0,
-      fontSize: '17px',
-      fontWeight: 700,
-      color: '#b45309'
-    }
-  }, "First Steps"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: '6px',
-      background: '#f3e8d0',
-      borderRadius: '3px',
-      overflow: 'hidden',
-      width: '120px',
-      marginRight: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: '100%',
-      background: '#2e5984',
-      borderRadius: '3px',
-      transition: 'width 0.3s',
-      width: firstStepsDone / firstSteps.length * 100 + '%'
-    }
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '12px',
-      color: '#888',
-      whiteSpace: 'nowrap'
-    }
-  }, firstStepsDone, " of ", firstSteps.length, " complete"))), /*#__PURE__*/React.createElement("input", {
-    type: "file",
-    ref: avatarInputRef,
-    accept: "image/*",
-    style: {
-      display: 'none'
-    },
-    onChange: handleAvatarUpload
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gap: '8px'
-    }
-  }, firstSteps.map((s, idx) => /*#__PURE__*/React.createElement("div", {
-    key: s.id,
-    onClick: () => {
-      if (s.done) return;
-      if (s.id === 'photo') {
-        window.__accountTab = 'profile';
-        window.__navigateTo && window.__navigateTo('account');
-      }
-      if (s.id === 'avail-rates') window.__navigateTo && window.__navigateTo('find-work');
-      if (s.id === 'security') {
-        window.__accountTab = 'settings';
-        window.__navigateTo && window.__navigateTo('account');
-        // Also fire event for already-mounted MyAccount to switch tabs
-        setTimeout(() => window.dispatchEvent(new CustomEvent('accountTabSwitch', {
-          detail: {
-            tab: 'settings'
-          }
-        })), 100);
-      }
-      if (s.id === 'stripe-bg') {
-        window.__accountTab = 'payments';
-        window.__navigateTo && window.__navigateTo('account');
-      }
-      if (s.id === 'preferences') {
-        window.__accountTab = 'preferences';
-        window.__navigateTo && window.__navigateTo('account');
-      }
-    },
-    style: {
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: '12px',
-      padding: '12px 14px',
-      borderRadius: '10px',
-      border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',
-      background: s.done ? '#f1f8f1' : '#fff',
-      cursor: s.done ? 'default' : 'pointer',
-      transition: 'all 0.15s'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: '28px',
-      height: '28px',
-      borderRadius: '50%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '13px',
-      fontWeight: 700,
-      flexShrink: 0,
-      marginTop: '1px',
-      background: s.done ? '#4caf50' : 'transparent',
-      color: s.done ? '#fff' : '#e8724a',
-      border: s.done ? '2px solid #4caf50' : '2px solid #e8724a'
-    }
-  }, s.done ? '\u2713' : idx + 1), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '14px',
-      fontWeight: 600,
-      color: s.done ? '#4caf50' : '#333',
-      textDecoration: s.done ? 'line-through' : 'none',
-      textDecorationColor: s.done ? '#a5d6a7' : undefined
-    }
-  }, s.label), !s.done && s.desc && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: '#888',
-      marginTop: '2px'
-    }
-  }, s.desc), !s.done && s.missing && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: '6px',
-      padding: '6px 10px',
-      background: '#fff8f0',
-      border: '1px solid #fde68a',
-      borderRadius: '6px',
-      fontSize: '11px',
-      color: '#b45309',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '6px'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '13px'
-    }
-  }, '\u26A0\uFE0F'), " ", s.missing), !s.done && s.id === 'security' && /*#__PURE__*/React.createElement("button", {
-    onClick: e => {
-      e.stopPropagation();
-      localStorage.setItem('inplace_security_reviewed', '1');
-      window.location.reload();
-    },
-    style: {
-      marginTop: 6,
-      padding: '4px 10px',
-      borderRadius: 6,
-      border: '1px solid #ccc',
-      background: '#f8f8f8',
-      color: '#666',
-      fontSize: 11,
-      cursor: 'pointer',
-      fontWeight: 500
-    }
-  }, "I've reviewed my security settings")), !s.done && /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: '#ccc',
-      fontSize: '18px',
-      marginTop: '3px'
-    }
-  }, '\u203A'))))), showFirstSteps && !hasAvailability && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#fff',
-      borderRadius: '14px',
-      border: '1px solid #e5e7eb',
-      padding: '28px 22px',
-      textAlign: 'center',
-      marginBottom: '20px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '40px',
-      marginBottom: '8px',
-      opacity: 0.5
-    }
-  }, "\uD83D\uDCC5"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '14px',
-      color: '#999'
-    }
-  }, "Your availability and booked sessions will show here later"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: '#bbb',
-      marginTop: '4px'
-    }
-  }, "Complete step 2 to set your availability and see your calendar")), /*#__PURE__*/React.createElement("div", {
+  })(), /*#__PURE__*/React.createElement("div", {
     className: shouldBlur ? 'onboarding-content-lock' : ''
   }, shouldBlur && /*#__PURE__*/React.createElement("div", {
     className: "lock-overlay"
@@ -37892,15 +37726,22 @@ const CaretakerHub = window.CaretakerHub = ({
     const sDur = parseFloat(checkOutSession.durationHours || checkOutSession.duration_hours || 0);
     if (!sDate || !sTime || !sDur) return null;
     const [hh, mm] = sTime.split(':').map(Number);
-    const schedEnd = new Date(`${sDate}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`);
-    schedEnd.setMinutes(schedEnd.getMinutes() + sDur * 60);
-    const minsEarly = Math.max(0, (schedEnd - new Date()) / 60000);
+    // Use care recipient's timezone for comparison (not browser local TZ)
+    const careTz = checkOutSession.timezone || 'America/New_York';
+    const nowCare = new Date(new Date().toLocaleString('en-US', {
+      timeZone: careTz
+    }));
+    const schedEnd = new Date(nowCare);
+    const [sy, smo, sd] = sDate.split('-').map(Number);
+    schedEnd.setFullYear(sy, smo - 1, sd);
+    schedEnd.setHours(hh, mm, 0, 0);
+    schedEnd.setMinutes(schedEnd.getMinutes() + Math.round(sDur * 60));
+    const minsEarly = Math.max(0, (schedEnd - nowCare) / 60000);
     if (minsEarly <= 15) return null;
-    const endTimeStr = schedEnd.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: checkOutSession.timezone || 'America/New_York'
-    });
+    // schedEnd's .getHours() already represents care-TZ wall clock, so format directly
+    const endH = schedEnd.getHours();
+    const endM = schedEnd.getMinutes();
+    const endTimeStr = `${endH % 12 || 12}:${String(endM).padStart(2, '0')} ${endH >= 12 ? 'PM' : 'AM'}`;
     // Calculate pay impact
     const totalMins = sDur * 60;
     const actualMins = totalMins - minsEarly;
@@ -37995,9 +37836,17 @@ const CaretakerHub = window.CaretakerHub = ({
       const sDur2 = parseFloat(checkOutSession.durationHours || checkOutSession.duration_hours || 0);
       if (sDate2 && sTime2 && sDur2) {
         const [hh2, mm2] = sTime2.split(':').map(Number);
-        const schedEnd2 = new Date(`${sDate2}T${String(hh2).padStart(2, '0')}:${String(mm2).padStart(2, '0')}:00`);
-        schedEnd2.setMinutes(schedEnd2.getMinutes() + sDur2 * 60);
-        const minsEarly2 = Math.max(0, (schedEnd2 - new Date()) / 60000);
+        // Use care recipient's timezone (same as warning display)
+        const careTz2 = checkOutSession.timezone || 'America/New_York';
+        const nowCare2 = new Date(new Date().toLocaleString('en-US', {
+          timeZone: careTz2
+        }));
+        const schedEnd2 = new Date(nowCare2);
+        const [sy2, smo2, sd2] = sDate2.split('-').map(Number);
+        schedEnd2.setFullYear(sy2, smo2 - 1, sd2);
+        schedEnd2.setHours(hh2, mm2, 0, 0);
+        schedEnd2.setMinutes(schedEnd2.getMinutes() + Math.round(sDur2 * 60));
+        const minsEarly2 = Math.max(0, (schedEnd2 - nowCare2) / 60000);
         if (minsEarly2 > 15 && !earlyDepartureReason.trim()) {
           showToast('Please provide a reason for leaving early', 'error');
           return;
@@ -38005,8 +37854,12 @@ const CaretakerHub = window.CaretakerHub = ({
       }
       setCheckSubmitting(true);
       try {
+        // Add 30-second timeout to prevent infinite hang
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
         const res = await apiFetch('/api/sessions/' + checkOutSession.id + '/check-out', {
           method: 'POST',
+          signal: controller.signal,
           body: JSON.stringify({
             departureMood: checkOutMood || null,
             conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
@@ -38016,7 +37869,10 @@ const CaretakerHub = window.CaretakerHub = ({
             earlyDepartureReason: earlyDepartureReason.trim() || null
           })
         });
-        if (res !== null && res !== void 0 && res.ok) {
+        clearTimeout(timeout);
+        if (!res) {
+          showToast('Session expired — please sign in again', 'error');
+        } else if (res.ok) {
           var _checkOutData$visitLo;
           const checkOutData = await res.json();
           // Upload photos if any
@@ -38029,7 +37885,7 @@ const CaretakerHub = window.CaretakerHub = ({
               const __csrfH = __csrf ? {
                 'X-CSRF-Token': __csrf
               } : {};
-              await fetch(`${API_BASE}/api/photos/visit/${checkOutData.visitLog.id}`, {
+              const photoRes = await fetch(`${API_BASE}/api/photos/visit/${checkOutData.visitLog.id}`, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
@@ -38038,8 +37894,10 @@ const CaretakerHub = window.CaretakerHub = ({
                 },
                 body: formData
               });
+              if (!photoRes.ok) console.warn('Photo upload failed:', photoRes.status);
             } catch (photoErr) {
               console.warn('Photo upload failed:', photoErr);
+              showToast('Photos could not be uploaded', 'error');
             }
           }
           checkOutPhotoUrls.forEach(u => URL.revokeObjectURL(u));
@@ -38053,11 +37911,15 @@ const CaretakerHub = window.CaretakerHub = ({
           const refreshRes = await apiFetch('/api/dashboard');
           if (refreshRes !== null && refreshRes !== void 0 && refreshRes.ok) setData(await refreshRes.json());
         } else {
-          const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => null));
+          const err = await res.json().catch(() => null);
           showToast((err === null || err === void 0 ? void 0 : err.error) || 'Check-out failed', 'error');
         }
       } catch (e) {
-        showToast('Check-out failed', 'error');
+        if (e.name === 'AbortError') {
+          showToast('Check-out is taking too long — please try again', 'error');
+        } else {
+          showToast('Check-out failed — ' + (e.message || 'network error'), 'error');
+        }
       }
       setCheckSubmitting(false);
     },
@@ -38909,9 +38771,9 @@ const FindWork = window.FindWork = () => {
       // Use dashboard API for enriched data (match quality, distance, health tags, care summary)
       const res = await apiFetch('/api/dashboard');
       if (res !== null && res !== void 0 && res.ok) {
-        var _d$profile6;
+        var _d$profile7;
         const d = await res.json();
-        setAccountPaused(!!(d !== null && d !== void 0 && (_d$profile6 = d.profile) !== null && _d$profile6 !== void 0 && _d$profile6.accountPaused));
+        setAccountPaused(!!(d !== null && d !== void 0 && (_d$profile7 = d.profile) !== null && _d$profile7 !== void 0 && _d$profile7.accountPaused));
         // openJobs from dashboard already has matchQuality, distanceMiles, healthTags, careSummary, etc.
         // Client-side safety: filter out jobs whose start time has already passed
         const now = new Date();
@@ -43956,13 +43818,41 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       }));
       return;
     }
-    // Accept any file from image/* inputs — some mobile browsers return empty MIME type for camera photos
     const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name) || file.type === '';
-    if (!isImage) {
+    const isPDF = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (!isImage && !isPDF) {
       setErrors(er => ({
         ...er,
-        [docType]: 'Must be an image file'
+        [docType]: 'Must be an image or PDF file'
       }));
+      return;
+    }
+
+    // PDFs skip image resize — store as-is
+    if (isPDF) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        setForm(f => {
+          const docs = f.documents.filter(d => d.type !== docType);
+          docs.push({
+            type: docType,
+            file,
+            preview: null,
+            fileName: file.name,
+            isPDF: true
+          });
+          return {
+            ...f,
+            documents: docs
+          };
+        });
+        setErrors(er => ({
+          ...er,
+          [docType]: null
+        }));
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
       return;
     }
     try {
@@ -43970,7 +43860,6 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
         dataUrl,
         blob
       } = await resizeImage(file);
-      // Create a new File object from the resized blob for upload
       const resizedFile = new File([blob], file.name, {
         type: blob.type || file.type || 'image/jpeg'
       });
@@ -43993,7 +43882,6 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       }));
     } catch (err) {
       console.error('Image processing error:', err);
-      // Fallback: use original file with object URL for preview
       const preview = URL.createObjectURL(file);
       setForm(f => {
         const docs = f.documents.filter(d => d.type !== docType);
@@ -44013,7 +43901,6 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
         [docType]: null
       }));
     }
-    // Reset the input so re-selecting the same file triggers onChange
     e.target.value = '';
   };
   const removeDocument = docType => {
@@ -44674,7 +44561,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     style: fieldGroup
   }, /*#__PURE__*/React.createElement("label", {
     style: labelStyle
-  }, "Years of Experience"), /*#__PURE__*/React.createElement("input", {
+  }, "Do you have experience caretaking? How many years?"), /*#__PURE__*/React.createElement("input", {
     type: "number",
     min: "0",
     style: inputStyle,
@@ -45382,7 +45269,18 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       background: '#f8f9fa',
       borderRadius: '8px'
     }
-  }, /*#__PURE__*/React.createElement("img", {
+  }, form.documents.find(d => d.type === 'dl_front').isPDF ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '80px',
+      height: '50px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#e8e8e8',
+      borderRadius: '6px',
+      fontSize: '22px'
+    }
+  }, "\uD83D\uDCC4") : /*#__PURE__*/React.createElement("img", {
     src: form.documents.find(d => d.type === 'dl_front').preview,
     style: {
       width: '80px',
@@ -45418,7 +45316,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     onChange: e => handleFileSelect('dl_front', e)
   }), /*#__PURE__*/React.createElement("input", {
     type: "file",
-    accept: "image/*",
+    accept: "image/*,application/pdf",
     id: "dl_front_gallery",
     style: {
       display: 'none'
@@ -45457,7 +45355,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, "\uD83D\uDDBC Choose Photo")), errors.dl_front && /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCC4 Choose File")), errors.dl_front && /*#__PURE__*/React.createElement("div", {
     style: errorStyle
   }, errors.dl_front))), /*#__PURE__*/React.createElement("div", {
     style: fieldGroup
@@ -45472,7 +45370,18 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       background: '#f8f9fa',
       borderRadius: '8px'
     }
-  }, /*#__PURE__*/React.createElement("img", {
+  }, form.documents.find(d => d.type === 'dl_back').isPDF ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '80px',
+      height: '50px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#e8e8e8',
+      borderRadius: '6px',
+      fontSize: '22px'
+    }
+  }, "\uD83D\uDCC4") : /*#__PURE__*/React.createElement("img", {
     src: form.documents.find(d => d.type === 'dl_back').preview,
     style: {
       width: '80px',
@@ -45508,7 +45417,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     onChange: e => handleFileSelect('dl_back', e)
   }), /*#__PURE__*/React.createElement("input", {
     type: "file",
-    accept: "image/*",
+    accept: "image/*,application/pdf",
     id: "dl_back_gallery",
     style: {
       display: 'none'
@@ -45547,7 +45456,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, "\uD83D\uDDBC Choose Photo")), errors.dl_back && /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCC4 Choose File")), errors.dl_back && /*#__PURE__*/React.createElement("div", {
     style: errorStyle
   }, errors.dl_back))), /*#__PURE__*/React.createElement("div", {
     style: fieldGroup
@@ -45559,7 +45468,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       color: '#999',
       margin: '0 0 8px'
     }
-  }, "Upload images of your certificates (CNA, CPR, etc.)"), form.documents.filter(d => d.type === 'certification').map((doc, i) => /*#__PURE__*/React.createElement("div", {
+  }, "Upload photos or PDFs of your certificates (CNA, CPR, etc.)"), form.documents.filter(d => d.type === 'certification').map((doc, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
     style: {
       display: 'flex',
@@ -45570,7 +45479,18 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       borderRadius: '8px',
       marginBottom: '8px'
     }
-  }, /*#__PURE__*/React.createElement("img", {
+  }, doc.isPDF ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '60px',
+      height: '40px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#e8e8e8',
+      borderRadius: '4px',
+      fontSize: '20px'
+    }
+  }, "\uD83D\uDCC4") : /*#__PURE__*/React.createElement("img", {
     src: doc.preview,
     style: {
       width: '60px',
@@ -45602,27 +45522,41 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     }
   }, "Remove"))), /*#__PURE__*/React.createElement("input", {
     type: "file",
-    accept: "image/*",
+    accept: "image/*,application/pdf",
     onChange: async e => {
       const file = e.target.files[0];
       if (!file) return;
       if (file.size > 10 * 1024 * 1024) return;
-      const {
-        dataUrl,
-        blob
-      } = await resizeImage(file);
-      const resizedFile = new File([blob], file.name, {
-        type: blob.type || file.type
-      });
-      setForm(f => ({
-        ...f,
-        documents: [...f.documents, {
-          type: 'certification',
-          file: resizedFile,
-          preview: dataUrl,
-          fileName: file.name
-        }]
-      }));
+      const isPDF = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+      if (isPDF) {
+        setForm(f => ({
+          ...f,
+          documents: [...f.documents, {
+            type: 'certification',
+            file,
+            preview: null,
+            fileName: file.name,
+            isPDF: true
+          }]
+        }));
+      } else {
+        const {
+          dataUrl,
+          blob
+        } = await resizeImage(file);
+        const resizedFile = new File([blob], file.name, {
+          type: blob.type || file.type
+        });
+        setForm(f => ({
+          ...f,
+          documents: [...f.documents, {
+            type: 'certification',
+            file: resizedFile,
+            preview: dataUrl,
+            fileName: file.name
+          }]
+        }));
+      }
       e.target.value = '';
     },
     style: {
@@ -45707,7 +45641,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     style: {
       color: '#888'
     }
-  }, "Experience:"), " ", form.yearsExperience || 0, " years"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+  }, "Caretaking experience:"), " ", form.yearsExperience || 0, " years"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
     style: {
       color: '#888'
     }
@@ -46459,7 +46393,7 @@ const FamilyPayments = window.FamilyPayments = () => {
 // Revenue analytics, AI insights, transaction history for platform admins
 
 const AdminFinancials = window.AdminFinancials = () => {
-  var _kpi$grossRevenue, _kpi$grossRevenue2, _kpi$platformRevenue, _kpi$platformRevenue2, _kpi$netRevenue, _kpi$netRevenue2, _kpi$totalSessions, _kpi$totalSessions2, _kpi$avgSessionValue, _kpi$avgSessionValue2, _kpi$bgCheckRevenue, _kpi$bgCheckRevenue2;
+  var _treasury$connected, _treasury$connected2, _treasury$connected3, _treasury$connected4, _treasury$connected5, _treasury$mercury$tot, _treasury$mercury$acc, _treasury$mercury$acc2, _treasury$stripe$bala, _treasury$stripe$bala2, _treasury$stripe$bala3, _treasury$stripe$bala4, _treasury$mercury$acc3, _treasury$stripe$last, _treasury$stripe$last2, _treasury$stripe$last3, _treasury$stripe$rece, _treasury$stripe$open, _treasury$errors, _treasury$connected6, _treasury$connected7, _kpi$grossRevenue, _kpi$grossRevenue2, _kpi$platformRevenue, _kpi$platformRevenue2, _kpi$netRevenue, _kpi$netRevenue2, _kpi$totalSessions, _kpi$totalSessions2, _kpi$avgSessionValue, _kpi$avgSessionValue2, _kpi$bgCheckRevenue, _kpi$bgCheckRevenue2;
   const [summary, setSummary] = useState(null);
   const [breakdown, setBreakdown] = useState(null);
   const [insights, setInsights] = useState([]);
@@ -46485,10 +46419,15 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [paymentsEnabled, setPaymentsEnabled] = useState(false);
   const [paymentToggleLoading, setPaymentToggleLoading] = useState(false);
   const [paymentToggleConfirm, setPaymentToggleConfirm] = useState(false);
+  // Treasury (Mercury + Stripe)
+  const [treasury, setTreasury] = useState(null);
+  const [treasuryLoading, setTreasuryLoading] = useState(true);
+  const [treasuryExpanded, setTreasuryExpanded] = useState(null); // 'mercury-{id}' or 'stripe-payouts' etc
+
   const fetchAll = async showRefresh => {
     if (showRefresh) setRefreshing(true);
     try {
-      const [sumRes, brkRes, insRes, txRes, feeRes, payRes] = await Promise.all([apiFetch('/api/admin/financials/summary'), apiFetch('/api/admin/financials/breakdown'), apiFetch('/api/admin/financials/insights'), apiFetch(`/api/admin/financials/transactions?page=${txPage}&limit=25`), apiFetch('/api/admin/financials/platform-fee'), apiFetch('/api/admin/financials/payments-enabled')]);
+      const [sumRes, brkRes, insRes, txRes, feeRes, payRes, trsRes] = await Promise.all([apiFetch('/api/admin/financials/summary'), apiFetch('/api/admin/financials/breakdown'), apiFetch('/api/admin/financials/insights'), apiFetch(`/api/admin/financials/transactions?page=${txPage}&limit=25`), apiFetch('/api/admin/financials/platform-fee'), apiFetch('/api/admin/financials/payments-enabled'), apiFetch('/api/admin/treasury')]);
       if (sumRes !== null && sumRes !== void 0 && sumRes.ok) setSummary(await sumRes.json());
       if (brkRes !== null && brkRes !== void 0 && brkRes.ok) setBreakdown(await brkRes.json());
       if (insRes !== null && insRes !== void 0 && insRes.ok) {
@@ -46505,6 +46444,10 @@ const AdminFinancials = window.AdminFinancials = () => {
         const pd = await payRes.json();
         setPaymentsEnabled(pd.paymentsEnabled);
       }
+      if (trsRes !== null && trsRes !== void 0 && trsRes.ok) {
+        setTreasury(await trsRes.json());
+      }
+      setTreasuryLoading(false);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Financials fetch error:', err);
@@ -47029,7 +46972,488 @@ const AdminFinancials = window.AdminFinancials = () => {
       fontWeight: 600,
       color: '#555'
     }
-  }, refreshing ? '↻ Refreshing...' : '↻ Refresh')), /*#__PURE__*/React.createElement("div", {
+  }, refreshing ? '↻ Refreshing...' : '↻ Refresh')), treasury && (((_treasury$connected = treasury.connected) === null || _treasury$connected === void 0 ? void 0 : _treasury$connected.mercury) || ((_treasury$connected2 = treasury.connected) === null || _treasury$connected2 === void 0 ? void 0 : _treasury$connected2.stripe)) && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 16,
+      borderLeft: '4px solid #1565c0'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header",
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "card-icon"
+  }, '\u{1F3E6}'), "Cash Position"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#888'
+    }
+  }, ((_treasury$connected3 = treasury.connected) === null || _treasury$connected3 === void 0 ? void 0 : _treasury$connected3.mercury) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginRight: 8
+    }
+  }, '\u2705', " Mercury"), ((_treasury$connected4 = treasury.connected) === null || _treasury$connected4 === void 0 ? void 0 : _treasury$connected4.stripe) && /*#__PURE__*/React.createElement("span", null, '\u2705', " Stripe"), !((_treasury$connected5 = treasury.connected) !== null && _treasury$connected5 !== void 0 && _treasury$connected5.mercury) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginRight: 8,
+      color: '#999'
+    }
+  }, '\u274C', " Mercury (add MERCURY_API_TOKEN)"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 16,
+      flexWrap: 'wrap',
+      marginBottom: 12
+    }
+  }, treasury.mercury && /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: '1 1 200px',
+      padding: 16,
+      background: 'linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%)',
+      borderRadius: 12,
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#555',
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginBottom: 4
+    }
+  }, "Mercury"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 28,
+      fontWeight: 800,
+      color: '#1565c0'
+    }
+  }, "$", (_treasury$mercury$tot = treasury.mercury.totalBalance) === null || _treasury$mercury$tot === void 0 ? void 0 : _treasury$mercury$tot.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#888',
+      marginTop: 2
+    }
+  }, ((_treasury$mercury$acc = treasury.mercury.accounts) === null || _treasury$mercury$acc === void 0 ? void 0 : _treasury$mercury$acc.length) || 0, " account", ((_treasury$mercury$acc2 = treasury.mercury.accounts) === null || _treasury$mercury$acc2 === void 0 ? void 0 : _treasury$mercury$acc2.length) !== 1 ? 's' : '')), treasury.stripe && /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: '1 1 200px',
+      padding: 16,
+      background: 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)',
+      borderRadius: 12,
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#555',
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginBottom: 4
+    }
+  }, "Stripe"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 28,
+      fontWeight: 800,
+      color: '#2e7d32'
+    }
+  }, "$", (_treasury$stripe$bala = treasury.stripe.balance) === null || _treasury$stripe$bala === void 0 || (_treasury$stripe$bala = _treasury$stripe$bala.total) === null || _treasury$stripe$bala === void 0 ? void 0 : _treasury$stripe$bala.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#888',
+      marginTop: 2
+    }
+  }, "$", (_treasury$stripe$bala2 = treasury.stripe.balance) === null || _treasury$stripe$bala2 === void 0 || (_treasury$stripe$bala2 = _treasury$stripe$bala2.available) === null || _treasury$stripe$bala2 === void 0 ? void 0 : _treasury$stripe$bala2.toFixed(2), " available \xB7 $", (_treasury$stripe$bala3 = treasury.stripe.balance) === null || _treasury$stripe$bala3 === void 0 || (_treasury$stripe$bala3 = _treasury$stripe$bala3.pending) === null || _treasury$stripe$bala3 === void 0 ? void 0 : _treasury$stripe$bala3.toFixed(2), " pending")), treasury.mercury && treasury.stripe && /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: '1 1 200px',
+      padding: 16,
+      background: 'linear-gradient(135deg, #f3e5f5 0%, #fce4ec 100%)',
+      borderRadius: 12,
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#555',
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      marginBottom: 4
+    }
+  }, "Total Cash"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 28,
+      fontWeight: 800,
+      color: '#7b1fa2'
+    }
+  }, "$", ((treasury.mercury.totalBalance || 0) + (((_treasury$stripe$bala4 = treasury.stripe.balance) === null || _treasury$stripe$bala4 === void 0 ? void 0 : _treasury$stripe$bala4.total) || 0)).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#888',
+      marginTop: 2
+    }
+  }, "All accounts combined"))), treasury.mercury && ((_treasury$mercury$acc3 = treasury.mercury.accounts) === null || _treasury$mercury$acc3 === void 0 ? void 0 : _treasury$mercury$acc3.map(acct => /*#__PURE__*/React.createElement("div", {
+    key: acct.id,
+    style: {
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: () => setTreasuryExpanded(treasuryExpanded === `m-${acct.id}` ? null : `m-${acct.id}`),
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '8px 12px',
+      background: '#f5f7fa',
+      borderRadius: 8,
+      cursor: 'pointer',
+      border: '1px solid #e0e0e0'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600,
+      fontSize: 13,
+      color: '#1565c0'
+    }
+  }, acct.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      fontSize: 10,
+      background: '#e3f2fd',
+      color: '#1565c0',
+      padding: '1px 6px',
+      borderRadius: 4
+    }
+  }, acct.type), acct.accountNumber && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      fontSize: 11,
+      color: '#999'
+    }
+  }, acct.accountNumber)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      fontSize: 14,
+      color: '#333'
+    }
+  }, "$", (acct.currentBalance || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: '#888'
+    }
+  }, treasuryExpanded === `m-${acct.id}` ? '\u25B2' : '\u25BC'))), treasuryExpanded === `m-${acct.id}` && acct.recentTransactions && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: '4px 0 0 0',
+      border: '1px solid #e0e0e0',
+      borderRadius: 8,
+      overflow: 'hidden'
+    }
+  }, acct.recentTransactions.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 12,
+      textAlign: 'center',
+      color: '#999',
+      fontSize: 12
+    }
+  }, "No recent transactions") : /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      background: '#f8f9fa',
+      borderBottom: '1px solid #e0e0e0'
+    }
+  }, /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '6px 10px',
+      fontSize: 10,
+      color: '#888',
+      fontWeight: 600
+    }
+  }, "Date"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '6px 10px',
+      fontSize: 10,
+      color: '#888',
+      fontWeight: 600
+    }
+  }, "Counterparty"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '6px 10px',
+      fontSize: 10,
+      color: '#888',
+      fontWeight: 600
+    }
+  }, "Note"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'right',
+      padding: '6px 10px',
+      fontSize: 10,
+      color: '#888',
+      fontWeight: 600
+    }
+  }, "Amount"))), /*#__PURE__*/React.createElement("tbody", null, acct.recentTransactions.map(tx => {
+    var _tx$amount;
+    return /*#__PURE__*/React.createElement("tr", {
+      key: tx.id,
+      style: {
+        borderBottom: '1px solid #f0f0f0'
+      }
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 10px',
+        color: '#666',
+        whiteSpace: 'nowrap'
+      }
+    }, tx.createdAt ? new Date(tx.createdAt).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric'
+    }) : '—'), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 10px',
+        fontWeight: 500
+      }
+    }, tx.counterpartyName), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 10px',
+        color: '#888',
+        maxWidth: 200,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, tx.note || '—'), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 10px',
+        textAlign: 'right',
+        fontWeight: 600,
+        color: tx.amount >= 0 ? '#2e7d32' : '#c62828'
+      }
+    }, tx.amount >= 0 ? '+' : '', (_tx$amount = tx.amount) === null || _tx$amount === void 0 ? void 0 : _tx$amount.toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    })));
+  }))))))), treasury.stripe && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: treasury.mercury ? 8 : 0
+    }
+  }, ((_treasury$stripe$last = treasury.stripe.last30Days) === null || _treasury$stripe$last === void 0 ? void 0 : _treasury$stripe$last.count) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 12,
+      flexWrap: 'wrap',
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '6px 12px',
+      background: '#f5f5f5',
+      borderRadius: 6,
+      fontSize: 12,
+      color: '#555'
+    }
+  }, "30-day volume: ", /*#__PURE__*/React.createElement("strong", null, "$", (_treasury$stripe$last2 = treasury.stripe.last30Days.volume) === null || _treasury$stripe$last2 === void 0 ? void 0 : _treasury$stripe$last2.toFixed(2)), " (", treasury.stripe.last30Days.count, " charges)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '6px 12px',
+      background: '#f5f5f5',
+      borderRadius: 6,
+      fontSize: 12,
+      color: '#555'
+    }
+  }, "Stripe fees: ", /*#__PURE__*/React.createElement("strong", null, "$", (_treasury$stripe$last3 = treasury.stripe.last30Days.fees) === null || _treasury$stripe$last3 === void 0 ? void 0 : _treasury$stripe$last3.toFixed(2)), " (", treasury.stripe.last30Days.effectiveFeeRate, "%)")), ((_treasury$stripe$rece = treasury.stripe.recentPayouts) === null || _treasury$stripe$rece === void 0 ? void 0 : _treasury$stripe$rece.length) > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    onClick: () => setTreasuryExpanded(treasuryExpanded === 'stripe-payouts' ? null : 'stripe-payouts'),
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '8px 12px',
+      background: '#f0f7f0',
+      borderRadius: 8,
+      cursor: 'pointer',
+      border: '1px solid #c8e6c9',
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600,
+      fontSize: 13,
+      color: '#2e7d32'
+    }
+  }, "Stripe Payouts (to Mercury)"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: '#888'
+    }
+  }, treasuryExpanded === 'stripe-payouts' ? '\u25B2' : '\u25BC', " ", treasury.stripe.recentPayouts.length, " recent")), treasuryExpanded === 'stripe-payouts' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      border: '1px solid #e0e0e0',
+      borderRadius: 8,
+      overflow: 'hidden',
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      background: '#f8f9fa',
+      borderBottom: '1px solid #e0e0e0'
+    }
+  }, /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '6px 10px',
+      fontSize: 10,
+      color: '#888',
+      fontWeight: 600
+    }
+  }, "Date"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '6px 10px',
+      fontSize: 10,
+      color: '#888',
+      fontWeight: 600
+    }
+  }, "Arrival"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '6px 10px',
+      fontSize: 10,
+      color: '#888',
+      fontWeight: 600
+    }
+  }, "Status"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'right',
+      padding: '6px 10px',
+      fontSize: 10,
+      color: '#888',
+      fontWeight: 600
+    }
+  }, "Amount"))), /*#__PURE__*/React.createElement("tbody", null, treasury.stripe.recentPayouts.map(p => {
+    var _p$amount;
+    return /*#__PURE__*/React.createElement("tr", {
+      key: p.id,
+      style: {
+        borderBottom: '1px solid #f0f0f0'
+      }
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 10px',
+        color: '#666'
+      }
+    }, new Date(p.created).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric'
+    })), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 10px',
+        color: '#666'
+      }
+    }, new Date(p.arrivalDate).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric'
+    })), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 10px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        padding: '2px 6px',
+        borderRadius: 4,
+        fontWeight: 600,
+        background: p.status === 'paid' ? '#e8f5e9' : p.status === 'pending' ? '#fff8e1' : p.status === 'in_transit' ? '#e3f2fd' : '#f5f5f5',
+        color: p.status === 'paid' ? '#2e7d32' : p.status === 'pending' ? '#f57f17' : p.status === 'in_transit' ? '#1565c0' : '#888'
+      }
+    }, p.status)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '6px 10px',
+        textAlign: 'right',
+        fontWeight: 600
+      }
+    }, "$", (_p$amount = p.amount) === null || _p$amount === void 0 ? void 0 : _p$amount.toFixed(2)));
+  }))))), ((_treasury$stripe$open = treasury.stripe.openDisputes) === null || _treasury$stripe$open === void 0 ? void 0 : _treasury$stripe$open.length) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '10px 14px',
+      background: '#fff3e0',
+      border: '1px solid #ffcc80',
+      borderRadius: 8,
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 13,
+      color: '#e65100',
+      marginBottom: 4
+    }
+  }, '\u26A0\uFE0F', " ", treasury.stripe.openDisputes.length, " Open Dispute", treasury.stripe.openDisputes.length > 1 ? 's' : ''), treasury.stripe.openDisputes.map(d => /*#__PURE__*/React.createElement("div", {
+    key: d.id,
+    style: {
+      fontSize: 12,
+      color: '#555',
+      marginBottom: 2
+    }
+  }, "$", d.amount.toFixed(2), " \u2014 ", d.reason, " \u2014 due ", d.evidenceDueBy ? new Date(d.evidenceDueBy).toLocaleDateString() : 'N/A')))), ((_treasury$errors = treasury.errors) === null || _treasury$errors === void 0 ? void 0 : _treasury$errors.length) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      padding: 8,
+      background: '#fce4ec',
+      borderRadius: 6,
+      fontSize: 11,
+      color: '#c62828'
+    }
+  }, treasury.errors.map((e, i) => /*#__PURE__*/React.createElement("div", {
+    key: i
+  }, e)))), treasury && !((_treasury$connected6 = treasury.connected) !== null && _treasury$connected6 !== void 0 && _treasury$connected6.mercury) && !((_treasury$connected7 = treasury.connected) !== null && _treasury$connected7 !== void 0 && _treasury$connected7.stripe) && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 16,
+      borderLeft: '4px solid #ff9800',
+      background: '#fff8f0'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "card-icon"
+  }, '\u{1F3E6}'), "Connect Your Accounts"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#555'
+    }
+  }, "Add ", /*#__PURE__*/React.createElement("strong", null, "MERCURY_API_TOKEN"), " and/or ", /*#__PURE__*/React.createElement("strong", null, "STRIPE_SECRET_KEY"), " to your Railway environment variables to see live account balances, transactions, and payouts here.")), /*#__PURE__*/React.createElement("div", {
     className: "stats-grid"
   }, /*#__PURE__*/React.createElement(KpiCard, {
     icon: "\uD83D\uDCB0",
@@ -48648,9 +49072,697 @@ const HelpPage = window.HelpPage = ({
   }, React.createElement('strong', null, 'Admin: '), d.admin_notes))))));
 };
 ;
+// ─── Safety Flags Tab — Evidence Thread UI ───
+// Full audit trail for safety flags: original conversation, admin outreach, notes, timestamps.
+// Designed for court-admissible evidence preservation.
+
+const SafetyFlagsTab = window.SafetyFlagsTab = ({
+  safetyFlags,
+  safetyLoading,
+  handleReviewFlag,
+  loadSafetyFlags,
+  apiFetch,
+  showToast,
+  currentUserId
+}) => {
+  const [expandedFlag, setExpandedFlag] = useState(null); // flag ID currently expanded
+  const [threadData, setThreadData] = useState(null); // { flag, evidenceMessages, outreachMessages, events, participants }
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [msgTarget, setMsgTarget] = useState(null); // { userId, name } — who we're messaging
+  const [msgText, setMsgText] = useState('');
+  const [msgSending, setMsgSending] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [noteSending, setNoteSending] = useState(false);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const fmtDate = d => d ? new Date(d).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  }) : '';
+  const fmtTime = d => d ? new Date(d).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit'
+  }) : '';
+  const fmtDateTime = d => d ? `${fmtDate(d)} at ${fmtTime(d)}` : '';
+
+  // Load full thread when a flag is expanded
+  const loadThread = async flagId => {
+    if (expandedFlag === flagId) {
+      setExpandedFlag(null);
+      setThreadData(null);
+      return;
+    }
+    setExpandedFlag(flagId);
+    setThreadLoading(true);
+    setMsgTarget(null);
+    setMsgText('');
+    setNoteText('');
+    try {
+      const res = await apiFetch(`/api/admin/safety-flags/${flagId}/thread`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setThreadData(data);
+      } else {
+        showToast('Failed to load evidence thread', 'error');
+        setExpandedFlag(null);
+      }
+    } catch {
+      showToast('Failed to load evidence thread', 'error');
+      setExpandedFlag(null);
+    }
+    setThreadLoading(false);
+  };
+
+  // Send outreach message
+  const sendMessage = async (flagId, userId) => {
+    if (!msgText.trim()) return;
+    setMsgSending(true);
+    try {
+      const res = await apiFetch(`/api/admin/safety-flags/${flagId}/message/${userId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          message: msgText.trim()
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        setMsgText('');
+        setMsgTarget(null);
+        loadThread(flagId); // re-expand to refresh
+        setTimeout(() => loadThread(flagId), 100);
+      } else {
+        const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+        showToast((err === null || err === void 0 ? void 0 : err.error) || 'Failed to send', 'error');
+      }
+    } catch {
+      showToast('Failed to send message', 'error');
+    }
+    setMsgSending(false);
+  };
+
+  // Add admin note
+  const addNote = async flagId => {
+    if (!noteText.trim()) return;
+    setNoteSending(true);
+    try {
+      const res = await apiFetch(`/api/admin/safety-flags/${flagId}/note`, {
+        method: 'POST',
+        body: JSON.stringify({
+          note: noteText.trim()
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        setNoteText('');
+        loadThread(flagId);
+        setTimeout(() => loadThread(flagId), 100);
+      } else {
+        showToast('Failed to add note', 'error');
+      }
+    } catch {
+      showToast('Failed to add note', 'error');
+    }
+    setNoteSending(false);
+  };
+
+  // Refresh thread periodically when expanded (catch new replies)
+  useEffect(() => {
+    if (!expandedFlag) return;
+    const interval = setInterval(() => {
+      apiFetch(`/api/admin/safety-flags/${expandedFlag}/thread`).then(r => r !== null && r !== void 0 && r.ok ? r.json() : null).then(data => {
+        if (data) setThreadData(data);
+      }).catch(() => {});
+    }, 15000); // Every 15 seconds
+    return () => clearInterval(interval);
+  }, [expandedFlag]);
+  if (safetyLoading) {
+    return React.createElement('div', {
+      style: {
+        textAlign: 'center',
+        padding: 40,
+        color: '#888'
+      }
+    }, 'Loading safety flags...');
+  }
+  if (safetyFlags.length === 0) {
+    return React.createElement('div', {
+      className: 'card',
+      style: {
+        textAlign: 'center',
+        color: '#888',
+        padding: 40
+      }
+    }, 'No safety flags. All conversations are monitored for abuse, exploitation, and off-platform circumvention.');
+  }
+  return React.createElement('div', null, safetyFlags.map(f => {
+    var _f$flag_type, _f$flag_type2, _f$flag_type3, _f$flag_type4, _f$flag_type5;
+    const isAbuse = ((_f$flag_type = f.flag_type) === null || _f$flag_type === void 0 ? void 0 : _f$flag_type.includes('abuse')) || ((_f$flag_type2 = f.flag_type) === null || _f$flag_type2 === void 0 ? void 0 : _f$flag_type2.includes('neglect')) || ((_f$flag_type3 = f.flag_type) === null || _f$flag_type3 === void 0 ? void 0 : _f$flag_type3.includes('threat')) || ((_f$flag_type4 = f.flag_type) === null || _f$flag_type4 === void 0 ? void 0 : _f$flag_type4.includes('exploitation'));
+    const isPending = f.status === 'pending';
+    const isEscalated = f.status === 'escalated';
+    const isActive = isPending || isEscalated;
+    const isExpanded = expandedFlag === f.id;
+    const unread = isActive && !f.admin_read_at;
+    return React.createElement('div', {
+      key: f.id,
+      className: 'card',
+      style: {
+        marginBottom: 12,
+        border: isEscalated ? '2px solid #b71c1c' : isPending ? `2px solid ${isAbuse ? '#dc2626' : '#ff9800'}` : '1px solid #e5e7eb',
+        background: isEscalated ? '#fff5f5' : isPending ? isAbuse ? '#fef2f2' : '#fff8f0' : '#fff',
+        position: 'relative'
+      }
+    },
+    // Unread indicator
+    unread && React.createElement('div', {
+      style: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        width: 10,
+        height: 10,
+        borderRadius: '50%',
+        background: '#dc2626'
+      },
+      title: 'Unread'
+    }),
+    // ── Flag header (always visible, clickable to expand) ──
+    React.createElement('div', {
+      style: {
+        cursor: 'pointer'
+      },
+      onClick: () => loadThread(f.id)
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4
+      }
+    }, React.createElement('span', {
+      style: {
+        fontSize: 16
+      }
+    }, isEscalated ? '\u{1F6A8}\u{1F6A8}' : isAbuse ? '\u{1F6A8}' : '\u26A0\uFE0F'), React.createElement('span', {
+      style: {
+        fontWeight: 700,
+        fontSize: 14,
+        color: isAbuse || isEscalated ? '#dc2626' : '#e65100'
+      }
+    }, ((_f$flag_type5 = f.flag_type) === null || _f$flag_type5 === void 0 ? void 0 : _f$flag_type5.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) || 'Flagged'), React.createElement('span', {
+      style: {
+        fontSize: 10,
+        padding: '2px 8px',
+        borderRadius: 4,
+        fontWeight: 600,
+        background: isEscalated ? '#b71c1c' : isPending ? '#ffebee' : f.status === 'resolved' ? '#e8f5e9' : f.status === 'dismissed' ? '#f5f5f5' : '#f5f5f5',
+        color: isEscalated ? '#fff' : isPending ? '#c62828' : f.status === 'resolved' ? '#2e7d32' : '#888'
+      }
+    }, f.status.toUpperCase()), React.createElement('span', {
+      style: {
+        fontSize: 12,
+        color: '#888',
+        marginLeft: 'auto'
+      }
+    }, isExpanded ? '\u25B2 Collapse' : '\u25BC View Thread')), React.createElement('div', {
+      style: {
+        fontWeight: 600,
+        fontSize: 13
+      }
+    }, `${f.first_name} ${f.last_name}`, React.createElement('span', {
+      style: {
+        fontWeight: 400,
+        color: '#888',
+        marginLeft: 6,
+        fontSize: 12
+      }
+    }, f.email)), React.createElement('div', {
+      style: {
+        fontSize: 11,
+        color: '#999',
+        marginTop: 2
+      }
+    }, fmtDateTime(f.created_at)), React.createElement('div', {
+      style: {
+        marginTop: 6,
+        padding: 10,
+        background: '#f8f9fa',
+        borderRadius: 8,
+        fontSize: 13,
+        color: '#333',
+        lineHeight: 1.5,
+        borderLeft: `3px solid ${isAbuse ? '#dc2626' : '#ff9800'}`
+      }
+    }, `\u201C${f.user_message}\u201D`)),
+    // ── Status actions (always visible for active flags) ──
+    isActive && React.createElement('div', {
+      style: {
+        marginTop: 10,
+        display: 'flex',
+        gap: 8,
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }
+    }, React.createElement('input', {
+      type: 'text',
+      placeholder: 'Notes for resolution...',
+      value: reviewNotes,
+      onChange: e => setReviewNotes(e.target.value),
+      style: {
+        flex: 1,
+        minWidth: 150,
+        padding: 8,
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        fontSize: 13
+      }
+    }), !isEscalated && React.createElement('button', {
+      onClick: () => {
+        handleReviewFlag(f.id, 'escalated');
+        loadSafetyFlags();
+      },
+      style: {
+        padding: '6px 14px',
+        background: '#dc2626',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, '\u{1F6A8} Escalate'), React.createElement('button', {
+      onClick: () => {
+        handleReviewFlag(f.id, 'resolved');
+        loadSafetyFlags();
+      },
+      style: {
+        padding: '6px 14px',
+        background: '#1b6b5a',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, '\u2713 Resolve'), React.createElement('button', {
+      onClick: () => {
+        handleReviewFlag(f.id, 'dismissed');
+        loadSafetyFlags();
+      },
+      style: {
+        padding: '6px 14px',
+        background: '#f5f5f5',
+        color: '#888',
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, 'Dismiss')),
+    // ── Expanded evidence thread ──
+    isExpanded && React.createElement('div', {
+      style: {
+        marginTop: 16,
+        borderTop: '2px solid #e0e0e0',
+        paddingTop: 16
+      }
+    }, threadLoading ? React.createElement('div', {
+      style: {
+        textAlign: 'center',
+        padding: 20,
+        color: '#888'
+      }
+    }, 'Loading evidence thread...') : threadData && React.createElement(React.Fragment, null,
+    // ─── SECTION 1: Original Conversation (Evidence) ───
+    React.createElement('div', {
+      style: {
+        marginBottom: 20
+      }
+    }, React.createElement('div', {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#555',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        marginBottom: 8,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6
+      }
+    }, '\u{1F4DD} Original Conversation (Evidence)'), threadData.evidenceMessages.length === 0 ? React.createElement('div', {
+      style: {
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
+        padding: 8
+      }
+    }, 'No conversation messages found.') : React.createElement('div', {
+      style: {
+        background: '#fafafa',
+        borderRadius: 8,
+        padding: 8,
+        maxHeight: 400,
+        overflowY: 'auto'
+      }
+    }, threadData.evidenceMessages.map(m => {
+      const isFlaggedMsg = m.content === f.user_message;
+      return React.createElement('div', {
+        key: m.id,
+        style: {
+          padding: '8px 12px',
+          marginBottom: 4,
+          borderRadius: 8,
+          background: isFlaggedMsg ? '#ffebee' : '#fff',
+          border: isFlaggedMsg ? '1px solid #ef9a9a' : '1px solid #eee'
+        }
+      }, React.createElement('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 8
+        }
+      }, React.createElement('span', {
+        style: {
+          fontWeight: 600,
+          fontSize: 12,
+          color: '#333'
+        }
+      }, m.sender_label || `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Unknown', React.createElement('span', {
+        style: {
+          fontWeight: 400,
+          color: '#aaa',
+          marginLeft: 6,
+          fontSize: 10
+        }
+      }, m.role || '')), React.createElement('span', {
+        style: {
+          fontSize: 10,
+          color: '#999',
+          whiteSpace: 'nowrap'
+        }
+      }, fmtDateTime(m.created_at))), React.createElement('div', {
+        style: {
+          fontSize: 13,
+          color: '#333',
+          marginTop: 4,
+          lineHeight: 1.4
+        }
+      }, m.content), isFlaggedMsg && React.createElement('div', {
+        style: {
+          fontSize: 10,
+          color: '#c62828',
+          fontWeight: 600,
+          marginTop: 4
+        }
+      }, '\u2191 FLAGGED MESSAGE'));
+    }))),
+    // ─── SECTION 2: Admin Outreach Threads ───
+    React.createElement('div', {
+      style: {
+        marginBottom: 20
+      }
+    }, React.createElement('div', {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#555',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        marginBottom: 8
+      }
+    }, '\u{1F4AC} Admin Outreach'),
+    // Participant message buttons
+    threadData.participants && threadData.participants.length > 0 && React.createElement('div', {
+      style: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 10
+      }
+    }, threadData.participants.map(p => React.createElement('button', {
+      key: p.user_id,
+      onClick: () => {
+        setMsgTarget({
+          userId: p.user_id,
+          name: `${p.first_name} ${p.last_name}`
+        });
+        setMsgText('');
+      },
+      style: {
+        padding: '6px 12px',
+        borderRadius: 6,
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer',
+        background: (msgTarget === null || msgTarget === void 0 ? void 0 : msgTarget.userId) === p.user_id ? '#1b6b5a' : '#f5f5f5',
+        color: (msgTarget === null || msgTarget === void 0 ? void 0 : msgTarget.userId) === p.user_id ? '#fff' : '#1b6b5a',
+        border: `1px solid ${(msgTarget === null || msgTarget === void 0 ? void 0 : msgTarget.userId) === p.user_id ? '#1b6b5a' : '#ccc'}`
+      }
+    }, `Message ${p.first_name} ${p.last_name} (${p.role})`))),
+    // Message input (when a participant is selected)
+    msgTarget && React.createElement('div', {
+      style: {
+        background: '#f0faf6',
+        border: '1px solid #b2dfdb',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 10
+      }
+    }, React.createElement('div', {
+      style: {
+        fontSize: 12,
+        color: '#1b6b5a',
+        fontWeight: 600,
+        marginBottom: 6
+      }
+    }, `Sending as InPlace Support to ${msgTarget.name}`), React.createElement('textarea', {
+      value: msgText,
+      onChange: e => setMsgText(e.target.value),
+      placeholder: `Hi ${msgTarget.name.split(' ')[0]}, this is InPlace Support. We noticed a concern in a recent conversation and wanted to follow up...`,
+      rows: 3,
+      style: {
+        width: '100%',
+        padding: 10,
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        fontSize: 13,
+        resize: 'vertical',
+        boxSizing: 'border-box'
+      }
+    }), React.createElement('div', {
+      style: {
+        display: 'flex',
+        gap: 8,
+        marginTop: 6
+      }
+    }, React.createElement('button', {
+      onClick: () => sendMessage(f.id, msgTarget.userId),
+      disabled: msgSending || !msgText.trim(),
+      style: {
+        padding: '6px 16px',
+        background: msgSending || !msgText.trim() ? '#999' : '#1b6b5a',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, msgSending ? 'Sending...' : 'Send as InPlace Support'), React.createElement('button', {
+      onClick: () => {
+        setMsgTarget(null);
+        setMsgText('');
+      },
+      style: {
+        padding: '6px 12px',
+        background: '#f5f5f5',
+        color: '#888',
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, 'Cancel'))),
+    // Existing outreach threads
+    threadData.outreachMessages.length === 0 && !msgTarget ? React.createElement('div', {
+      style: {
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
+        padding: 8
+      }
+    }, 'No outreach messages sent yet.') : threadData.outreachMessages.map(thread => React.createElement('div', {
+      key: thread.threadId,
+      style: {
+        background: '#f0faf6',
+        borderRadius: 8,
+        padding: 10,
+        marginBottom: 8,
+        border: '1px solid #e0e0e0'
+      }
+    }, React.createElement('div', {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: '#1b6b5a',
+        marginBottom: 6,
+        textTransform: 'uppercase'
+      }
+    }, `Thread with ${thread.participant.firstName} ${thread.participant.lastName} (${thread.participant.email})`), thread.messages.map(m => {
+      const isAdmin = m.sender_label === 'InPlace Support' || m.sender_id === currentUserId;
+      return React.createElement('div', {
+        key: m.id,
+        style: {
+          padding: '8px 12px',
+          marginBottom: 4,
+          borderRadius: 8,
+          background: isAdmin ? '#e8f5e9' : '#fff',
+          border: '1px solid #eee',
+          marginLeft: isAdmin ? 20 : 0,
+          marginRight: isAdmin ? 0 : 20
+        }
+      }, React.createElement('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 8
+        }
+      }, React.createElement('span', {
+        style: {
+          fontWeight: 600,
+          fontSize: 12,
+          color: isAdmin ? '#1b6b5a' : '#333'
+        }
+      }, isAdmin ? 'InPlace Support (You)' : `${m.first_name || ''} ${m.last_name || ''}`.trim()), React.createElement('span', {
+        style: {
+          fontSize: 10,
+          color: '#999',
+          whiteSpace: 'nowrap'
+        }
+      }, fmtDateTime(m.created_at))), React.createElement('div', {
+        style: {
+          fontSize: 13,
+          color: '#333',
+          marginTop: 4,
+          lineHeight: 1.4
+        }
+      }, m.content));
+    })))),
+    // ─── SECTION 3: Internal Notes ───
+    React.createElement('div', {
+      style: {
+        marginBottom: 20
+      }
+    }, React.createElement('div', {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#555',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        marginBottom: 8
+      }
+    }, '\u{1F4CB} Internal Notes & Audit Trail'), React.createElement('div', {
+      style: {
+        display: 'flex',
+        gap: 8,
+        marginBottom: 10
+      }
+    }, React.createElement('input', {
+      type: 'text',
+      placeholder: 'Add internal note (not visible to users)...',
+      value: noteText,
+      onChange: e => setNoteText(e.target.value),
+      onKeyDown: e => {
+        if (e.key === 'Enter') addNote(f.id);
+      },
+      style: {
+        flex: 1,
+        padding: 8,
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        fontSize: 13
+      }
+    }), React.createElement('button', {
+      onClick: () => addNote(f.id),
+      disabled: noteSending || !noteText.trim(),
+      style: {
+        padding: '6px 14px',
+        background: noteSending || !noteText.trim() ? '#999' : '#555',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, noteSending ? '...' : 'Add Note')),
+    // Audit trail timeline
+    threadData.events.length === 0 ? React.createElement('div', {
+      style: {
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
+        padding: 8
+      }
+    }, 'No audit events yet.') : React.createElement('div', {
+      style: {
+        borderLeft: '2px solid #e0e0e0',
+        marginLeft: 8,
+        paddingLeft: 16
+      }
+    }, threadData.events.map(evt => React.createElement('div', {
+      key: evt.id,
+      style: {
+        position: 'relative',
+        marginBottom: 10,
+        fontSize: 12
+      }
+    },
+    // Timeline dot
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        left: -22,
+        top: 4,
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: evt.event_type === 'admin_message' ? '#1b6b5a' : evt.event_type === 'admin_note' ? '#555' : evt.event_type.includes('escalat') ? '#dc2626' : evt.event_type.includes('resolved') ? '#4caf50' : '#999'
+      }
+    }), React.createElement('div', {
+      style: {
+        color: '#999',
+        fontSize: 10,
+        marginBottom: 2
+      }
+    }, fmtDateTime(evt.created_at)), React.createElement('div', {
+      style: {
+        color: '#333'
+      }
+    }, React.createElement('span', {
+      style: {
+        fontWeight: 600
+      }
+    }, evt.actor_first ? `${evt.actor_first} ${evt.actor_last}` : evt.actor_label || 'System'), ` \u2014 `, evt.event_type === 'admin_viewed' ? 'Viewed this flag' : evt.event_type === 'admin_note' ? evt.content : evt.event_type === 'admin_message' ? `Messaged ${(() => {
+      try {
+        const m = JSON.parse(evt.metadata);
+        return m.recipientName || 'participant';
+      } catch {
+        return 'participant';
+      }
+    })()}: "${(evt.content || '').substring(0, 100)}${(evt.content || '').length > 100 ? '...' : ''}"` : evt.content || evt.event_type.replace(/_/g, ' ')))))))));
+  }));
+};
+;
 // ─── Admin / Superuser Dashboard ───
 // Only visible to users with is_admin = 1. Layered on top of normal family account.
-const AdminPanel = window.AdminPanel = () => {
+const AdminPanel = window.AdminPanel = ({
+  currentUser
+}) => {
   var _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu;
   const {
     showToast
@@ -48717,7 +49829,7 @@ const AdminPanel = window.AdminPanel = () => {
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
         setSafetyFlags(data.flags || []);
-        setSafetyFlagCount((data.flags || []).filter(f => f.status === 'pending').length);
+        setSafetyFlagCount((data.flags || []).filter(f => f.status === 'pending' || f.status === 'escalated').length);
       }
     } catch {}
     setSafetyLoading(false);
@@ -48840,6 +49952,8 @@ const AdminPanel = window.AdminPanel = () => {
   const [recurSaving, setRecurSaving] = useState(false);
   const [editingRecurring, setEditingRecurring] = useState(null); // holds id of expense being edited
   const [editRecurringData, setEditRecurringData] = useState({}); // holds edited values for the expense
+  const [editingCost, setEditingCost] = useState(null); // holds id of one-time cost being edited
+  const [editCostData, setEditCostData] = useState({}); // holds edited values
 
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
   const loadCosts = async () => {
@@ -48951,6 +50065,22 @@ const AdminPanel = window.AdminPanel = () => {
       });
       if (res !== null && res !== void 0 && res.ok) loadCosts();
     } catch {}
+  };
+  const handleSaveCost = async id => {
+    setCostSaving(true);
+    try {
+      const res = await apiFetch(`/api/costs/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(editCostData)
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast('Cost entry updated', 'success');
+        setEditingCost(null);
+        setEditCostData({});
+        loadCosts();
+      }
+    } catch {}
+    setCostSaving(false);
   };
 
   // Admin freeze modal
@@ -50013,33 +51143,33 @@ const AdminPanel = window.AdminPanel = () => {
       gap: '6px',
       whiteSpace: 'nowrap'
     }
-  }, "\u2699\uFE0F My Account")), (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "\u2699\uFE0F My Account")), (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 || safetyFlagCount > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16,
       padding: 16,
-      background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)',
-      border: '2px solid #ff9800',
+      background: safetyFlagCount > 0 ? 'linear-gradient(135deg, #fce4ec, #ffcdd2)' : 'linear-gradient(135deg, #fff3e0, #ffe0b2)',
+      border: safetyFlagCount > 0 ? '2px solid #c62828' : '2px solid #ff9800',
       borderRadius: 14
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 15,
       fontWeight: 700,
-      color: '#e65100',
+      color: safetyFlagCount > 0 ? '#c62828' : '#e65100',
       marginBottom: 12,
       display: 'flex',
       alignItems: 'center',
       gap: 8
     }
-  }, '\u{1F514}', " Action Required", /*#__PURE__*/React.createElement("span", {
+  }, safetyFlagCount > 0 ? '\u{1F6A8}' : '\u{1F514}', " Action Required", /*#__PURE__*/React.createElement("span", {
     style: {
-      background: '#e65100',
+      background: safetyFlagCount > 0 ? '#c62828' : '#e65100',
       color: '#fff',
       borderRadius: 20,
       padding: '2px 10px',
       fontSize: 13
     }
-  }, pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount)), pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount + safetyFlagCount)), pendingApprovals.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       fontWeight: 600,
@@ -50394,7 +51524,181 @@ const AdminPanel = window.AdminPanel = () => {
       fontSize: 13,
       fontWeight: 700
     }
-  }, checkrAlertCount)))), /*#__PURE__*/React.createElement("div", {
+  }, checkrAlertCount))), safetyFlagCount > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#888',
+      marginBottom: 6,
+      marginTop: pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 ? 12 : 0,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }
+  }, "Safety Flags"), safetyFlags.filter(f => f.status === 'pending' || f.status === 'escalated').map(flag => {
+    var _flag$flag_type, _flag$flag_type2, _flag$flag_type3, _flag$flag_type4;
+    const isSevere = ((_flag$flag_type = flag.flag_type) === null || _flag$flag_type === void 0 ? void 0 : _flag$flag_type.includes('abuse')) || ((_flag$flag_type2 = flag.flag_type) === null || _flag$flag_type2 === void 0 ? void 0 : _flag$flag_type2.includes('neglect')) || ((_flag$flag_type3 = flag.flag_type) === null || _flag$flag_type3 === void 0 ? void 0 : _flag$flag_type3.includes('threat'));
+    const isEscalated = flag.status === 'escalated';
+    return /*#__PURE__*/React.createElement("div", {
+      key: flag.id,
+      style: {
+        padding: '12px 14px',
+        marginBottom: 6,
+        background: isEscalated ? '#fff5f5' : '#fff',
+        borderRadius: 10,
+        border: isEscalated ? '2px solid #b71c1c' : isSevere ? '2px solid #c62828' : '1px solid #ffcc80',
+        cursor: 'pointer'
+      },
+      onClick: () => {
+        setActiveTab('safety');
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        flexWrap: 'wrap',
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: '1 1 200px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 14,
+        color: isSevere || isEscalated ? '#c62828' : '#e65100'
+      }
+    }, isEscalated ? '\u{1F6A8}\u{1F6A8}' : isSevere ? '\u{1F6A8}' : '\u26A0\uFE0F', ' ', flag.first_name, " ", flag.last_name, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 400,
+        fontSize: 12,
+        color: '#888',
+        marginLeft: 6
+      }
+    }, "(", ((_flag$flag_type4 = flag.flag_type) === null || _flag$flag_type4 === void 0 ? void 0 : _flag$flag_type4.replace(/_/g, ' ')) || 'flagged', ")"), isEscalated && /*#__PURE__*/React.createElement("span", {
+      style: {
+        marginLeft: 6,
+        padding: '1px 8px',
+        background: '#b71c1c',
+        color: '#fff',
+        borderRadius: 4,
+        fontSize: 10,
+        fontWeight: 700,
+        textTransform: 'uppercase'
+      }
+    }, "Escalated")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#666',
+        marginTop: 2
+      }
+    }, '\u201C', (flag.user_message || '').substring(0, 120), (flag.user_message || '').length > 120 ? '...' : '', '\u201D'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: '#aaa',
+        marginTop: 2
+      }
+    }, flag.email, " ", '\u00B7', " ", new Date(flag.created_at).toLocaleString())), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 6,
+        flexShrink: 0
+      }
+    }, !isEscalated && /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        handleReviewFlag(flag.id, 'escalated');
+      },
+      style: {
+        padding: '6px 12px',
+        background: '#c62828',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 8,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, '\u{1F6A8}', " Escalate"), /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        handleReviewFlag(flag.id, 'resolved');
+      },
+      style: {
+        padding: '6px 12px',
+        background: '#4caf50',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 8,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, '\u2713', " Resolve"), /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        handleReviewFlag(flag.id, 'dismissed');
+      },
+      style: {
+        padding: '6px 12px',
+        background: '#f5f5f5',
+        color: '#888',
+        border: '1px solid #ddd',
+        borderRadius: 8,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Dismiss"))), flag.participants && flag.participants.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 8,
+        paddingTop: 8,
+        borderTop: '1px solid #eee',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 6,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: '#888',
+        fontWeight: 600,
+        textTransform: 'uppercase',
+        letterSpacing: '0.3px'
+      }
+    }, "Message:"), flag.participants.map(p => /*#__PURE__*/React.createElement("button", {
+      key: p.user_id,
+      onClick: e => {
+        e.stopPropagation();
+        setAdminMsgTarget({
+          userId: p.user_id,
+          name: `${p.first_name} ${p.last_name}`
+        });
+        setAdminMsgText('');
+      },
+      style: {
+        padding: '4px 10px',
+        background: '#f5f5f5',
+        color: '#1b6b5a',
+        border: '1px solid #ccc',
+        borderRadius: 6,
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4
+      }
+    }, '\u{1F4AC}', " ", p.first_name, " ", p.last_name, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 400,
+        fontSize: 10,
+        color: '#888'
+      }
+    }, "(", p.role, ")")))));
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       marginBottom: 16
@@ -55477,185 +56781,22 @@ const AdminPanel = window.AdminPanel = () => {
         gap: 8
       }
     }, filedItems.map(c => renderCard(c, true)))));
-  })(), activeTab === 'safety' && /*#__PURE__*/React.createElement("div", null, safetyLoading ? /*#__PURE__*/React.createElement("div", {
+  })(), activeTab === 'safety' && (typeof SafetyFlagsTab === 'function' ? React.createElement(SafetyFlagsTab, {
+    safetyFlags,
+    safetyLoading,
+    safetyFlagCount,
+    handleReviewFlag,
+    loadSafetyFlags,
+    apiFetch,
+    showToast,
+    currentUserId: currentUser === null || currentUser === void 0 ? void 0 : currentUser.id
+  }) : React.createElement('div', {
     style: {
-      textAlign: 'center',
       padding: 40,
+      textAlign: 'center',
       color: '#888'
     }
-  }, "Loading safety flags...") : safetyFlags.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      textAlign: 'center',
-      color: '#888',
-      padding: 40
-    }
-  }, "No safety flags. iPAi monitors all conversations for abuse, exploitation, and off-platform circumvention attempts.") : /*#__PURE__*/React.createElement("div", null, safetyFlags.map(f => {
-    const isAbuse = f.flag_type === 'abuse_signal' || f.flag_type === 'abuse_concern';
-    const isPending = f.status === 'pending';
-    return /*#__PURE__*/React.createElement("div", {
-      key: f.id,
-      className: "card",
-      style: {
-        marginBottom: 10,
-        border: isPending ? `2px solid ${isAbuse ? '#dc2626' : '#ff9800'}` : '1px solid #e5e7eb',
-        background: isPending ? isAbuse ? '#fef2f2' : '#fff8f0' : '#fff'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: 12,
-        flexWrap: 'wrap'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        flex: 1
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 4
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 16
-      }
-    }, isAbuse ? '\u{1F6A8}' : '\u26A0\uFE0F'), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontWeight: 700,
-        fontSize: 14,
-        color: isAbuse ? '#dc2626' : '#e65100'
-      }
-    }, isAbuse ? 'Abuse / Safety Concern' : 'Off-Platform Attempt'), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        padding: '2px 8px',
-        borderRadius: 4,
-        fontWeight: 600,
-        background: isPending ? '#ffebee' : f.status === 'resolved' ? '#e8f5e9' : '#f5f5f5',
-        color: isPending ? '#c62828' : f.status === 'resolved' ? '#2e7d32' : '#888'
-      }
-    }, f.status)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontWeight: 600,
-        fontSize: 13
-      }
-    }, f.first_name, " ", f.last_name, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontWeight: 400,
-        color: '#888',
-        marginLeft: 6
-      }
-    }, f.email)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 12,
-        color: '#888',
-        marginTop: 2
-      }
-    }, new Date(f.created_at).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 8,
-        padding: 10,
-        background: '#f8f9fa',
-        borderRadius: 8,
-        fontSize: 13,
-        color: '#333',
-        lineHeight: 1.5,
-        borderLeft: `3px solid ${isAbuse ? '#dc2626' : '#ff9800'}`
-      }
-    }, "\"", f.user_message, "\""), f.admin_notes && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 6,
-        fontSize: 12,
-        color: '#1b6b5a',
-        fontStyle: 'italic'
-      }
-    }, "Admin notes: ", f.admin_notes, " \u2014 ", f.reviewer_first, " ", f.reviewer_last))), isPending && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 10,
-        display: 'flex',
-        gap: 8,
-        alignItems: 'center',
-        flexWrap: 'wrap'
-      }
-    }, /*#__PURE__*/React.createElement("input", {
-      type: "text",
-      placeholder: "Add notes...",
-      value: safetyReviewNotes,
-      onChange: e => setSafetyReviewNotes(e.target.value),
-      style: {
-        flex: 1,
-        minWidth: 150,
-        padding: 8,
-        border: '1px solid #ddd',
-        borderRadius: 6,
-        fontSize: 13
-      }
-    }), /*#__PURE__*/React.createElement("button", {
-      onClick: () => handleReviewFlag(f.id, 'resolved'),
-      style: {
-        padding: '6px 14px',
-        background: '#1b6b5a',
-        color: '#fff',
-        border: 'none',
-        borderRadius: 6,
-        fontWeight: 600,
-        fontSize: 12,
-        cursor: 'pointer'
-      }
-    }, '\u2705', " Resolved"), /*#__PURE__*/React.createElement("button", {
-      onClick: () => handleReviewFlag(f.id, 'escalated'),
-      style: {
-        padding: '6px 14px',
-        background: '#dc2626',
-        color: '#fff',
-        border: 'none',
-        borderRadius: 6,
-        fontWeight: 600,
-        fontSize: 12,
-        cursor: 'pointer'
-      }
-    }, '\u{1F6A8}', " Escalate"), /*#__PURE__*/React.createElement("button", {
-      onClick: () => handleReviewFlag(f.id, 'dismissed'),
-      style: {
-        padding: '6px 14px',
-        background: '#f5f5f5',
-        color: '#888',
-        border: '1px solid #ddd',
-        borderRadius: 6,
-        fontSize: 12,
-        cursor: 'pointer'
-      }
-    }, "Dismiss"), /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        setAdminMsgTarget({
-          userId: f.user_id,
-          name: `${f.first_name} ${f.last_name}`
-        });
-        setAdminMsgText('');
-      },
-      style: {
-        padding: '6px 14px',
-        background: '#fff',
-        color: '#1b6b5a',
-        border: '1px solid #1b6b5a',
-        borderRadius: 6,
-        fontWeight: 600,
-        fontSize: 12,
-        cursor: 'pointer'
-      }
-    }, '\u{1F4AC}', " Message")));
-  }))), activeTab === 'costs' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, 'Safety flags component loading... Please refresh the page.')), activeTab === 'costs' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
@@ -56020,7 +57161,24 @@ const AdminPanel = window.AdminPanel = () => {
       borderRadius: 8,
       fontSize: 13
     }
-  })), /*#__PURE__*/React.createElement("button", {
+  })), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    placeholder: "Notes (e.g. legal fees, LLC filing Mar 2026)",
+    value: newCost.notes || '',
+    onChange: e => setNewCost({
+      ...newCost,
+      notes: e.target.value
+    }),
+    style: {
+      width: '100%',
+      padding: 8,
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 13,
+      marginBottom: 8,
+      boxSizing: 'border-box'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
     onClick: handleAddCost,
     disabled: costSaving || !newCost.category || !newCost.amount,
     style: {
@@ -56039,14 +57197,14 @@ const AdminPanel = window.AdminPanel = () => {
       padding: 40,
       color: '#888'
     }
-  }, "Loading costs...") : costSummary.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "Loading costs...") : costSummary.filter(m => m.total > 0).length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       textAlign: 'center',
       color: '#888',
       padding: 40
     }
-  }, "No cost data yet. Add recurring expenses or one-time entries above.") : /*#__PURE__*/React.createElement(React.Fragment, null, costSummary.map(month => /*#__PURE__*/React.createElement("div", {
+  }, "No cost data yet. Add recurring expenses or one-time entries above.") : /*#__PURE__*/React.createElement(React.Fragment, null, costSummary.filter(m => m.total > 0).map(month => /*#__PURE__*/React.createElement("div", {
     key: month.month,
     className: "card",
     style: {
@@ -56089,7 +57247,8 @@ const AdminPanel = window.AdminPanel = () => {
       gap: 4
     }
   }, Object.entries(month.categories).sort((a, b) => b[1].amount - a[1].amount).map(([cat, data]) => /*#__PURE__*/React.createElement("div", {
-    key: cat,
+    key: cat
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'space-between',
@@ -56129,7 +57288,187 @@ const AdminPanel = window.AdminPanel = () => {
     style: {
       fontWeight: 700
     }
-  }, "$", data.amount.toFixed(2))))))))), freezeTarget && /*#__PURE__*/React.createElement("div", {
+  }, "$", data.amount.toFixed(2))), (data.entries || []).map(entry => editingCost === entry.id ? /*#__PURE__*/React.createElement("div", {
+    key: entry.id,
+    style: {
+      margin: '4px 0 4px 16px',
+      padding: '8px 10px',
+      background: '#f0fdf4',
+      borderRadius: 6,
+      border: '1px solid #bbf7d0'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 6,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("select", {
+    value: editCostData.category || cat,
+    onChange: e => setEditCostData({
+      ...editCostData,
+      category: e.target.value
+    }),
+    style: {
+      padding: '5px 8px',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 12
+    }
+  }, costCategories.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c,
+    value: c
+  }, c))), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    step: "0.01",
+    value: editCostData.amount !== undefined ? editCostData.amount : entry.amount,
+    onChange: e => setEditCostData({
+      ...editCostData,
+      amount: e.target.value
+    }),
+    style: {
+      padding: '5px 8px',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 12
+    },
+    placeholder: "Amount"
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: editCostData.description !== undefined ? editCostData.description : entry.description || '',
+    onChange: e => setEditCostData({
+      ...editCostData,
+      description: e.target.value
+    }),
+    style: {
+      padding: '5px 8px',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 12
+    },
+    placeholder: "Description"
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "month",
+    value: editCostData.period_month || month.month,
+    onChange: e => setEditCostData({
+      ...editCostData,
+      period_month: e.target.value
+    }),
+    style: {
+      padding: '5px 8px',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 12
+    }
+  })), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: editCostData.notes !== undefined ? editCostData.notes : entry.notes || '',
+    onChange: e => setEditCostData({
+      ...editCostData,
+      notes: e.target.value
+    }),
+    style: {
+      width: '100%',
+      padding: '5px 8px',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 12,
+      boxSizing: 'border-box',
+      marginBottom: 6
+    },
+    placeholder: "Notes (e.g. legal fees, LLC filing Mar 2026)"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      justifyContent: 'flex-end'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setEditingCost(null);
+      setEditCostData({});
+    },
+    style: {
+      padding: '3px 10px',
+      background: '#f5f5f5',
+      color: '#666',
+      border: '1px solid #ddd',
+      borderRadius: 4,
+      fontSize: 11,
+      cursor: 'pointer'
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleDeleteCost(entry.id),
+    style: {
+      padding: '3px 10px',
+      background: '#fff3cd',
+      color: '#856404',
+      border: '1px solid #ffc107',
+      borderRadius: 4,
+      fontSize: 11,
+      cursor: 'pointer'
+    }
+  }, "Delete"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleSaveCost(entry.id),
+    disabled: costSaving,
+    style: {
+      padding: '3px 10px',
+      background: costSaving ? '#999' : '#1b6b5a',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 4,
+      fontSize: 11,
+      fontWeight: 600,
+      cursor: costSaving ? 'not-allowed' : 'pointer'
+    }
+  }, costSaving ? 'Saving...' : 'Save'))) : /*#__PURE__*/React.createElement("div", {
+    key: entry.id,
+    onClick: () => {
+      setEditingCost(entry.id);
+      setEditCostData({
+        category: cat,
+        amount: entry.amount,
+        description: entry.description || '',
+        notes: entry.notes || '',
+        period_month: month.month
+      });
+    },
+    style: {
+      margin: '4px 0 4px 16px',
+      padding: '4px 10px',
+      background: '#fff',
+      borderRadius: 4,
+      border: '1px solid #eee',
+      fontSize: 12,
+      cursor: 'pointer',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: '#555'
+    }
+  }, entry.description || cat), entry.notes && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#888',
+      marginTop: 2,
+      fontStyle: 'italic'
+    }
+  }, '\u{1F4DD}', " ", entry.notes)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600,
+      color: '#555',
+      whiteSpace: 'nowrap'
+    }
+  }, "$", entry.amount.toFixed(2))))))))))), freezeTarget && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
       top: 0,
@@ -58453,7 +59792,8 @@ const App = () => {
       });
     }
     if (currentPage === 'admin' && currentUser !== null && currentUser !== void 0 && currentUser.isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, {
-      key: pageKey
+      key: pageKey,
+      currentUser: currentUser
     });
     return /*#__PURE__*/React.createElement(Dashboard, {
       key: pageKey,
@@ -58465,6 +59805,7 @@ const App = () => {
   const getBottomNavItems = () => {
     if (role === 'caregiver') {
       const cgOnboarded = (currentUser === null || currentUser === void 0 ? void 0 : currentUser.onboardingComplete) !== false;
+      const firstStepsRemain = !!window.__caregiverFirstStepsRemain;
       return [{
         id: 'dashboard',
         icon: '🏠',
@@ -58474,7 +59815,7 @@ const App = () => {
         icon: '🔍',
         label: 'Find Work',
         isAccent: true,
-        disabled: !cgOnboarded
+        disabled: !cgOnboarded || firstStepsRemain
       }, {
         id: 'messages',
         icon: '💬',
@@ -58852,7 +60193,7 @@ const App = () => {
       fontSize: '16px',
       color: 'inherit'
     }
-  }, "\xD7")), currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && /*#__PURE__*/React.createElement(EmailVerificationBanner, {
+  }, "\xD7")), currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && currentUser.account_approved && /*#__PURE__*/React.createElement(EmailVerificationBanner, {
     userId: currentUser.id
   }), currentUser && !currentUser.account_approved && !currentUser.isDemo && !currentUser.is_admin ? /*#__PURE__*/React.createElement("div", {
     style: {
@@ -58880,12 +60221,58 @@ const App = () => {
       lineHeight: 1.6,
       margin: '0 0 20px'
     }
-  }, "Thank you for signing up for InPlace! Your account is being reviewed by our team. You'll receive a notification once you've been approved to continue."), /*#__PURE__*/React.createElement("p", {
+  }, "Thank you for signing up for InPlace! Your account is being reviewed by our team. You'll receive a notification once you've been approved to continue."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#e3f2fd',
+      border: '1px solid #90caf9',
+      borderRadius: 12,
+      padding: 16,
+      margin: '0 0 20px',
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 600,
+      color: '#1565c0',
+      marginBottom: 4
+    }
+  }, "Email verification"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: '#1976d2',
+      margin: 0,
+      lineHeight: 1.5
+    }
+  }, "Once your account is approved, you'll receive an email to verify your address and complete sign-up.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#f0faf7',
+      border: '1px solid #b2dfdb',
+      borderRadius: 12,
+      padding: 16,
+      margin: '0 0 20px',
+      textAlign: 'left'
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 14,
+      color: '#444',
+      lineHeight: 1.6,
+      margin: '0 0 12px'
+    }
+  }, "If you're reading this message and you haven't spoken to admin about creating an account, thank you for your interest and we'll be in touch."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 14,
+      color: '#444',
+      lineHeight: 1.6,
+      margin: 0
+    }
+  }, "If you have spoken to admin, your account creation will be approved shortly.")), /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 13,
       color: '#999'
     }
-  }, "This usually takes less than 24 hours. If you have questions, contact us at support@yourinplace.com."), /*#__PURE__*/React.createElement("button", {
+  }, "If you have questions, contact us at support@yourinplace.com."), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       AUTH_TOKEN = null;
       fetch('/api/auth/logout', {

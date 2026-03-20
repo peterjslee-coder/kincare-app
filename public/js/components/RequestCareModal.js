@@ -339,7 +339,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     { value: 'housekeeping', label: 'Housekeeping' },
     { value: 'meal_prep', label: 'Meal Prep' },
     { value: 'transportation', label: 'Transport' },
-    { value: 'health_wellness', label: 'Health' },
   ];
 
   const durationOptions = [

@@ -6,15 +6,16 @@ const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 
-// Multer config — memory storage, 10MB per file (phone photos can be large), images only
+// Multer config — memory storage, 10MB per file, images + PDFs
+const ALLOWED_MIMES = ["image/", "application/pdf"];
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max per file
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
+    if (ALLOWED_MIMES.some((m) => file.mimetype.startsWith(m))) {
       cb(null, true);
     } else {
-      cb(new Error("Only image files are allowed"));
+      cb(new Error("Only image and PDF files are allowed"));
     }
   },
 });

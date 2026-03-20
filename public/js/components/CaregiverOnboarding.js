@@ -616,13 +616,28 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { setErrors(er => ({ ...er, [docType]: 'File must be under 10MB' })); return; }
-    // Accept any file from image/* inputs — some mobile browsers return empty MIME type for camera photos
     const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name) || file.type === '';
-    if (!isImage) { setErrors(er => ({ ...er, [docType]: 'Must be an image file' })); return; }
+    const isPDF = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (!isImage && !isPDF) { setErrors(er => ({ ...er, [docType]: 'Must be an image or PDF file' })); return; }
+
+    // PDFs skip image resize — store as-is
+    if (isPDF) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setForm(f => {
+          const docs = f.documents.filter(d => d.type !== docType);
+          docs.push({ type: docType, file, preview: null, fileName: file.name, isPDF: true });
+          return { ...f, documents: docs };
+        });
+        setErrors(er => ({ ...er, [docType]: null }));
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+      return;
+    }
 
     try {
       const { dataUrl, blob } = await resizeImage(file);
-      // Create a new File object from the resized blob for upload
       const resizedFile = new File([blob], file.name, { type: blob.type || file.type || 'image/jpeg' });
       setForm(f => {
         const docs = f.documents.filter(d => d.type !== docType);
@@ -632,7 +647,6 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       setErrors(er => ({ ...er, [docType]: null }));
     } catch (err) {
       console.error('Image processing error:', err);
-      // Fallback: use original file with object URL for preview
       const preview = URL.createObjectURL(file);
       setForm(f => {
         const docs = f.documents.filter(d => d.type !== docType);
@@ -641,7 +655,6 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       });
       setErrors(er => ({ ...er, [docType]: null }));
     }
-    // Reset the input so re-selecting the same file triggers onChange
     e.target.value = '';
   };
 
@@ -1397,8 +1410,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               <label style={labelStyle}>Driver's License — Front *</label>
               {form.documents.find(d => d.type === 'dl_front') ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
-                  <img src={form.documents.find(d => d.type === 'dl_front').preview}
-                    style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />
+                  {form.documents.find(d => d.type === 'dl_front').isPDF
+                    ? <div style={{ width: '80px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e8e8e8', borderRadius: '6px', fontSize: '22px' }}>&#128196;</div>
+                    : <img src={form.documents.find(d => d.type === 'dl_front').preview}
+                        style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />}
                   <span style={{ fontSize: '13px', color: '#555', flex: 1 }}>{form.documents.find(d => d.type === 'dl_front').fileName}</span>
                   <button onClick={() => removeDocument('dl_front')} style={{
                     background: '#fff0f0', border: '1px solid #fdd', borderRadius: '6px',
@@ -1409,7 +1424,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <div>
                   <input type="file" accept="image/*" capture="environment" id="dl_front_camera" style={{ display: 'none' }}
                     onChange={(e) => handleFileSelect('dl_front', e)} />
-                  <input type="file" accept="image/*" id="dl_front_gallery" style={{ display: 'none' }}
+                  <input type="file" accept="image/*,application/pdf" id="dl_front_gallery" style={{ display: 'none' }}
                     onChange={(e) => handleFileSelect('dl_front', e)} />
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button type="button" onClick={() => document.getElementById('dl_front_camera').click()} style={{
@@ -1419,7 +1434,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     <button type="button" onClick={() => document.getElementById('dl_front_gallery').click()} style={{
                       flex: 1, padding: '14px 12px', background: 'white', color: '#1b6b5a', border: '2px solid #1b6b5a',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                    }}>&#128444; Choose Photo</button>
+                    }}>&#128196; Choose File</button>
                   </div>
                   {errors.dl_front && <div style={errorStyle}>{errors.dl_front}</div>}
                 </div>
@@ -1431,8 +1446,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               <label style={labelStyle}>Driver's License — Back *</label>
               {form.documents.find(d => d.type === 'dl_back') ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
-                  <img src={form.documents.find(d => d.type === 'dl_back').preview}
-                    style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />
+                  {form.documents.find(d => d.type === 'dl_back').isPDF
+                    ? <div style={{ width: '80px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e8e8e8', borderRadius: '6px', fontSize: '22px' }}>&#128196;</div>
+                    : <img src={form.documents.find(d => d.type === 'dl_back').preview}
+                        style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />}
                   <span style={{ fontSize: '13px', color: '#555', flex: 1 }}>{form.documents.find(d => d.type === 'dl_back').fileName}</span>
                   <button onClick={() => removeDocument('dl_back')} style={{
                     background: '#fff0f0', border: '1px solid #fdd', borderRadius: '6px',
@@ -1443,7 +1460,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <div>
                   <input type="file" accept="image/*" capture="environment" id="dl_back_camera" style={{ display: 'none' }}
                     onChange={(e) => handleFileSelect('dl_back', e)} />
-                  <input type="file" accept="image/*" id="dl_back_gallery" style={{ display: 'none' }}
+                  <input type="file" accept="image/*,application/pdf" id="dl_back_gallery" style={{ display: 'none' }}
                     onChange={(e) => handleFileSelect('dl_back', e)} />
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button type="button" onClick={() => document.getElementById('dl_back_camera').click()} style={{
@@ -1453,7 +1470,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     <button type="button" onClick={() => document.getElementById('dl_back_gallery').click()} style={{
                       flex: 1, padding: '14px 12px', background: 'white', color: '#1b6b5a', border: '2px solid #1b6b5a',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                    }}>&#128444; Choose Photo</button>
+                    }}>&#128196; Choose File</button>
                   </div>
                   {errors.dl_back && <div style={errorStyle}>{errors.dl_back}</div>}
                 </div>
@@ -1464,14 +1481,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <div style={fieldGroup}>
               <label style={labelStyle}>Certification Documents (Optional)</label>
               <p style={{ fontSize: '12px', color: '#999', margin: '0 0 8px' }}>
-                Upload images of your certificates (CNA, CPR, etc.)
+                Upload photos or PDFs of your certificates (CNA, CPR, etc.)
               </p>
               {form.documents.filter(d => d.type === 'certification').map((doc, i) => (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '10px',
                   background: '#f8f9fa', borderRadius: '8px', marginBottom: '8px',
                 }}>
-                  <img src={doc.preview} style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
+                  {doc.isPDF
+                    ? <div style={{ width: '60px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e8e8e8', borderRadius: '4px', fontSize: '20px' }}>&#128196;</div>
+                    : <img src={doc.preview} style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />}
                   <span style={{ fontSize: '13px', color: '#555', flex: 1 }}>{doc.fileName}</span>
                   <button onClick={() => {
                     setForm(f => ({ ...f, documents: f.documents.filter((d, idx) => !(d.type === 'certification' && idx === f.documents.indexOf(doc))) }));
@@ -1481,16 +1500,24 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   }}>Remove</button>
                 </div>
               ))}
-              <input type="file" accept="image/*" onChange={async (e) => {
+              <input type="file" accept="image/*,application/pdf" onChange={async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 if (file.size > 10 * 1024 * 1024) return;
-                const { dataUrl, blob } = await resizeImage(file);
-                const resizedFile = new File([blob], file.name, { type: blob.type || file.type });
-                setForm(f => ({
-                  ...f,
-                  documents: [...f.documents, { type: 'certification', file: resizedFile, preview: dataUrl, fileName: file.name }],
-                }));
+                const isPDF = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+                if (isPDF) {
+                  setForm(f => ({
+                    ...f,
+                    documents: [...f.documents, { type: 'certification', file, preview: null, fileName: file.name, isPDF: true }],
+                  }));
+                } else {
+                  const { dataUrl, blob } = await resizeImage(file);
+                  const resizedFile = new File([blob], file.name, { type: blob.type || file.type });
+                  setForm(f => ({
+                    ...f,
+                    documents: [...f.documents, { type: 'certification', file: resizedFile, preview: dataUrl, fileName: file.name }],
+                  }));
+                }
                 e.target.value = '';
               }} style={{ fontSize: '14px' }} />
             </div>
