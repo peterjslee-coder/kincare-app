@@ -926,6 +926,15 @@ const App = () => {
     setSidebarOpen(false);
     // Clear unread badge when opening messages
     if (page === 'messages') setUnreadMsgCount(0);
+    // Clear admin badge when opening admin — save current counts as "seen"
+    if (page === 'admin' && adminAlertCount > 0 && adminAlertDetails?._raw) {
+      setAdminAlertCount(0);
+      apiFetch('/api/admin/alerts/dismiss-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snapshot: adminAlertDetails._raw }),
+      }).catch(() => {});
+    }
   };
 
   // Platform invite onboarding flow (caregiver, family, or care_for)

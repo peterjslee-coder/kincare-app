@@ -61,10 +61,11 @@ async function checkAdmin(req, res, next) {
 router.use(authenticate, checkAdmin, requireAdmin);
 
 // ─── GET /api/admin/alerts — Lightweight count of items needing admin attention ───
+// Returns raw counts + a "seen" snapshot so the client only badges NEW items
 router.get("/alerts", async (req, res) => {
   try {
     const db = await getDb();
-    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, checkrAlerts] = await Promise.all([
+    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, checkrAlerts, userRow] = await Promise.all([
       db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1 AND created_at > '2026-02-20'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
@@ -72,23 +73,39 @@ router.get("/alerts", async (req, res) => {
       db.prepare(`SELECT COUNT(*) as count FROM safety_flags WHERE status = 'pending'`).get().catch(() => ({ count: 0 })),
       // Unread Checkr webhook events in the last 7 days
       db.prepare(`SELECT COUNT(*) as count FROM activity_feed WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired', 'checkr_suspended', 'checkr_resumed', 'checkr_disputed') AND is_read = 0 AND created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
+      // Fetch admin's last-seen snapshot
+      db.prepare(`SELECT admin_alerts_snapshot FROM users WHERE id = ?`).get(req.user.id).catch(() => null),
     ]);
 
-    const total = (parseInt(pendingUsers.count) || 0) +
-      (parseInt(pausedCaregivers.count) || 0) +
-      (parseInt(pendingConsent.count) || 0) +
-      (parseInt(newFeedback.count) || 0) +
-      (parseInt(safetyFlags.count) || 0) +
-      (parseInt(checkrAlerts.count) || 0);
-
-    res.json({
-      total,
+    const counts = {
       pendingUsers: parseInt(pendingUsers.count) || 0,
       pausedCaregivers: parseInt(pausedCaregivers.count) || 0,
       pendingConsent: parseInt(pendingConsent.count) || 0,
       newFeedback: parseInt(newFeedback.count) || 0,
       safetyFlags: parseInt(safetyFlags.count) || 0,
       checkrAlerts: parseInt(checkrAlerts.count) || 0,
+    };
+
+    // Calculate delta from last-seen snapshot — only badge genuinely new items
+    let seen = {};
+    try { seen = JSON.parse(userRow?.admin_alerts_snapshot || '{}'); } catch {}
+    const delta = {
+      pendingUsers: Math.max(0, counts.pendingUsers - (seen.pendingUsers || 0)),
+      pausedCaregivers: Math.max(0, counts.pausedCaregivers - (seen.pausedCaregivers || 0)),
+      pendingConsent: Math.max(0, counts.pendingConsent - (seen.pendingConsent || 0)),
+      newFeedback: Math.max(0, counts.newFeedback - (seen.newFeedback || 0)),
+      safetyFlags: Math.max(0, counts.safetyFlags - (seen.safetyFlags || 0)),
+      checkrAlerts: Math.max(0, counts.checkrAlerts - (seen.checkrAlerts || 0)),
+    };
+
+    const total = delta.pendingUsers + delta.pausedCaregivers + delta.pendingConsent +
+      delta.newFeedback + delta.safetyFlags + delta.checkrAlerts;
+
+    res.json({
+      total,
+      ...delta,
+      // Raw counts for the snapshot when dismissing
+      _raw: counts,
     });
   } catch (err) {
     console.error("Admin alerts error:", err);
@@ -106,6 +123,27 @@ router.post("/alerts/dismiss-checkr", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("Dismiss checkr alerts error:", err);
+    res.status(500).json({ error: "Failed to dismiss alerts" });
+  }
+});
+
+// ─── POST /api/admin/alerts/dismiss-all — Save current counts as "seen" snapshot ───
+// After this, only new items (counts that increase) will show in the badge
+router.post("/alerts/dismiss-all", async (req, res) => {
+  try {
+    const db = await getDb();
+    // Store snapshot of current counts on the user row
+    const snapshot = JSON.stringify(req.body.snapshot || {});
+    await db.prepare(
+      "UPDATE users SET admin_alerts_snapshot = ?, admin_alerts_seen_at = NOW() WHERE id = ?"
+    ).run(snapshot, req.user.id);
+    // Also mark Checkr alerts as read
+    await db.prepare(
+      `UPDATE activity_feed SET is_read = 1 WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired', 'checkr_suspended', 'checkr_resumed', 'checkr_disputed') AND is_read = 0`
+    ).run();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Dismiss all alerts error:", err);
     res.status(500).json({ error: "Failed to dismiss alerts" });
   }
 });

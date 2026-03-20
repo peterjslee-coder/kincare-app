@@ -832,6 +832,9 @@ async function initializeDatabase() {
     // v1.50.19 — Early departure tracking
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS early_departure_reason TEXT`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS early_departure_minutes REAL`,
+    // v1.50.27 — Admin alert dismiss snapshot
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_alerts_snapshot TEXT`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_alerts_seen_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
