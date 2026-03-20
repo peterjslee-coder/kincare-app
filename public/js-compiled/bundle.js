@@ -48570,6 +48570,9 @@ const HelpPage = window.HelpPage = ({
 // Only visible to users with is_admin = 1. Layered on top of normal family account.
 const AdminPanel = window.AdminPanel = () => {
   var _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu;
+  const {
+    showToast
+  } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);

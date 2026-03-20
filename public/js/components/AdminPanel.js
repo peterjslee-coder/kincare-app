@@ -1,6 +1,7 @@
 // ─── Admin / Superuser Dashboard ───
 // Only visible to users with is_admin = 1. Layered on top of normal family account.
 const AdminPanel = window.AdminPanel = () => {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
