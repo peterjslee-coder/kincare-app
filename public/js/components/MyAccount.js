@@ -518,11 +518,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     }
   }, [activeTab]);
 
-  // Fetch caregiver care preferences
+  // Fetch caregiver care preferences (try care_preferences first, fall back to care_stoplight)
   useEffect(() => {
     if (activeTab === 'preferences') {
       apiFetch('/api/caregivers/me').then(async r => {
-        if (r?.ok) { const d = await r.json(); setPreferences(d.profile?.care_preferences ? JSON.parse(d.profile.care_preferences) : {}); }
+        if (r?.ok) {
+          const d = await r.json();
+          const raw = d.profile?.care_preferences || d.profile?.care_stoplight;
+          if (raw) {
+            try { setPreferences(typeof raw === 'string' ? JSON.parse(raw) : raw); } catch { setPreferences({}); }
+          } else { setPreferences({}); }
+        }
         else { setPreferences({}); }
       }).catch(() => { setPreferences({}); });
     }

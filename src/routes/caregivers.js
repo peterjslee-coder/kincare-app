@@ -328,7 +328,7 @@ router.put("/me", requireRole("caregiver"), async (req, res) => {
   const updates = [];
   const params = [];
 
-  if (care_preferences !== undefined) { updates.push("care_preferences = ?"); params.push(care_preferences); }
+  if (care_preferences !== undefined) { updates.push("care_preferences = ?"); params.push(care_preferences); updates.push("care_stoplight = ?"); params.push(care_preferences); }
   if (rateDaytime !== undefined) { updates.push("rate_daytime = ?"); params.push(parseFloat(rateDaytime) || null); }
   if (rateNighttime !== undefined) { updates.push("rate_nighttime = ?"); params.push(parseFloat(rateNighttime) || null); }
   if (rateOvernight !== undefined) { updates.push("rate_overnight = ?"); params.push(parseFloat(rateOvernight) || null); }
