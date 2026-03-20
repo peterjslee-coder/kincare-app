@@ -3393,113 +3393,142 @@ const AdminPanel = window.AdminPanel = () => {
         </div>
       )}
       {/* ── BACKGROUND CHECKS TAB ── */}
-      {activeTab === 'bgchecks' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>Background Check Status</div>
-              <div style={{ fontSize: 12, color: '#888' }}>
-                {bgCheckCandidates.length} candidates
+      {activeTab === 'bgchecks' && (() => {
+        const actionStatuses = ['consider', 'suspended', 'disputed', 'adverse_action', 'processing', 'invitation_sent', 'invitation_expired'];
+        const filedStatuses = ['clear', 'consider_approved'];
+        const actionItems = bgCheckCandidates.filter(c => actionStatuses.includes(c.checkr_status) || (!c.checkr_status || c.checkr_status === 'pending'));
+        const filedItems = bgCheckCandidates.filter(c => filedStatuses.includes(c.checkr_status));
+        const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
+
+        const getStatusColor = (s) => s === 'clear' ? '#2e7d32' : s === 'consider' ? '#e65100' :
+          s === 'adverse_action' ? '#c62828' : s === 'suspended' ? '#e65100' : s === 'disputed' ? '#6a1b9a' :
+          s === 'consider_approved' ? '#2e7d32' : s === 'processing' ? '#1565c0' :
+          s === 'invitation_sent' ? '#7b1fa2' : s === 'invitation_expired' ? '#888' : '#555';
+        const getStatusIcon = (s) => s === 'clear' ? '\u2705' : s === 'consider' ? '\u26A0\uFE0F' :
+          s === 'adverse_action' ? '\u{1F6A8}' : s === 'suspended' ? '\u26A0\uFE0F' : s === 'disputed' ? '\u2696\uFE0F' :
+          s === 'consider_approved' ? '\u2705' : s === 'processing' ? '\u23F3' :
+          s === 'invitation_sent' ? '\u{1F4E8}' : s === 'invitation_expired' ? '\u23F0' : '\u2022';
+        const getStatusLabel = (s) => s === 'consider_approved' ? 'APPROVED (FLAGGED)' : (s || 'pending').replace(/_/g, ' ').toUpperCase();
+        const isHighlight = (s) => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed';
+
+        const renderCard = (c, faded) => {
+          const statusColor = getStatusColor(c.checkr_status);
+          return (
+            <div key={c.user_id} className="card" style={{
+              border: isHighlight(c.checkr_status) ? '2px solid ' + statusColor : '1px solid #e5e7eb',
+              padding: '14px 18px',
+              opacity: faded ? 0.55 : 1,
+              transition: 'opacity 0.3s ease',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: '#333' }}>
+                    {c.legal_first_name || c.first_name} {c.legal_last_name || c.last_name}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#888' }}>{c.email}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                    <span>{getStatusIcon(c.checkr_status)}</span>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: statusColor }}>
+                      {getStatusLabel(c.checkr_status)}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>
+                    {c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted'}
+                    {c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : ''}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {c.checkr_candidate_id && (
+                    <a href={`${checkrDashUrl}/candidates/${c.checkr_candidate_id}`} target="_blank" rel="noopener noreferrer"
+                      style={{ padding: '5px 12px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
+                      View on Checkr
+                    </a>
+                  )}
+                  {c.checkr_report_id && (
+                    <a href={`${checkrDashUrl}/reports/${c.checkr_report_id}`} target="_blank" rel="noopener noreferrer"
+                      style={{ padding: '5px 12px', background: '#fff', color: '#1565c0', border: '1px solid #1565c0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
+                      View Report
+                    </a>
+                  )}
+                  {c.checkr_status === 'consider' && (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button onClick={async () => {
+                        if (!confirm(`Approve ${c.first_name} despite flagged background check?`)) return;
+                        try {
+                          await apiFetch(`/api/admin/users/${c.user_id}/approve`, { method: 'PUT' });
+                          showToast('Caregiver approved — moved to Reviewed', 'success');
+                          loadBgChecks();
+                        } catch {}
+                      }} style={{ padding: '4px 10px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        Approve
+                      </button>
+                      <button onClick={() => { setFreezeTarget({ userId: c.user_id, name: `${c.first_name} ${c.last_name}` }); setFreezeReason('Background check flagged'); }}
+                        style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                  <button onClick={() => { setAdminMsgTarget({ userId: c.user_id, name: `${c.first_name} ${c.last_name}` }); setAdminMsgText(''); }}
+                    style={{ padding: '4px 10px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                    {'\u{1F4AC}'} Message
+                  </button>
+                </div>
               </div>
             </div>
-            <button onClick={loadBgChecks} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              Refresh
-            </button>
-          </div>
+          );
+        };
 
-          {bgCheckLoading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Loading background checks...</div>
-          ) : bgCheckCandidates.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', color: '#888', padding: 40 }}>
-              No caregivers have consented to background checks yet.
+        return (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>Background Check Status</div>
+                <div style={{ fontSize: 12, color: '#888' }}>
+                  {bgCheckCandidates.length} candidates{actionItems.length > 0 ? ` \u00B7 ${actionItems.length} need attention` : ''}
+                </div>
+              </div>
+              <button onClick={loadBgChecks} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Refresh
+              </button>
             </div>
-          ) : (
-            <div style={{ display: 'grid', gap: 10 }}>
-              {bgCheckCandidates.map(c => {
-                const statusColor = c.checkr_status === 'clear' ? '#2e7d32' :
-                  c.checkr_status === 'consider' ? '#e65100' :
-                  c.checkr_status === 'adverse_action' ? '#c62828' :
-                  c.checkr_status === 'suspended' ? '#e65100' :
-                  c.checkr_status === 'disputed' ? '#6a1b9a' :
-                  c.checkr_status === 'processing' ? '#1565c0' :
-                  c.checkr_status === 'invitation_sent' ? '#7b1fa2' :
-                  c.checkr_status === 'invitation_expired' ? '#888' : '#555';
-                const statusIcon = c.checkr_status === 'clear' ? '\u2705' :
-                  c.checkr_status === 'consider' ? '\u26A0\uFE0F' :
-                  c.checkr_status === 'adverse_action' ? '\u{1F6A8}' :
-                  c.checkr_status === 'suspended' ? '\u26A0\uFE0F' :
-                  c.checkr_status === 'disputed' ? '\u2696\uFE0F' :
-                  c.checkr_status === 'processing' ? '\u23F3' :
-                  c.checkr_status === 'invitation_sent' ? '\u{1F4E8}' :
-                  c.checkr_status === 'invitation_expired' ? '\u23F0' : '\u2022';
-                const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
 
-                return (
-                  <div key={c.user_id} className="card" style={{
-                    border: c.checkr_status === 'consider' || c.checkr_status === 'adverse_action' || c.checkr_status === 'suspended' || c.checkr_status === 'disputed' ? '2px solid ' + statusColor : '1px solid #e5e7eb',
-                    padding: '14px 18px',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15, color: '#333' }}>
-                          {c.legal_first_name || c.first_name} {c.legal_last_name || c.last_name}
-                        </div>
-                        <div style={{ fontSize: 12, color: '#888' }}>{c.email}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                          <span>{statusIcon}</span>
-                          <span style={{ fontWeight: 600, fontSize: 13, color: statusColor, textTransform: 'uppercase' }}>
-                            {(c.checkr_status || 'pending').replace(/_/g, ' ')}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>
-                          {c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted'}
-                          {c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : ''}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {c.checkr_candidate_id && (
-                          <a href={`${checkrDashUrl}/candidates/${c.checkr_candidate_id}`} target="_blank" rel="noopener noreferrer"
-                            style={{ padding: '5px 12px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
-                            View on Checkr
-                          </a>
-                        )}
-                        {c.checkr_report_id && (
-                          <a href={`${checkrDashUrl}/reports/${c.checkr_report_id}`} target="_blank" rel="noopener noreferrer"
-                            style={{ padding: '5px 12px', background: '#fff', color: '#1565c0', border: '1px solid #1565c0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
-                            View Report
-                          </a>
-                        )}
-                        {c.checkr_status === 'consider' && (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={async () => {
-                              if (!confirm(`Approve ${c.first_name} despite flagged background check?`)) return;
-                              try {
-                                await apiFetch(`/api/admin/users/${c.user_id}/approve`, { method: 'PUT' });
-                                showToast('Caregiver approved', 'success');
-                                loadBgChecks();
-                              } catch {}
-                            }} style={{ padding: '4px 10px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                              Approve
-                            </button>
-                            <button onClick={() => { setFreezeTarget({ userId: c.user_id, name: `${c.first_name} ${c.last_name}` }); setFreezeReason('Background check flagged'); }}
-                              style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                              Reject
-                            </button>
-                          </div>
-                        )}
-                        <button onClick={() => { setAdminMsgTarget({ userId: c.user_id, name: `${c.first_name} ${c.last_name}` }); setAdminMsgText(''); }}
-                          style={{ padding: '4px 10px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                          {'\u{1F4AC}'} Message
-                        </button>
-                      </div>
-                    </div>
+            {bgCheckLoading ? (
+              <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Loading background checks...</div>
+            ) : bgCheckCandidates.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', color: '#888', padding: 40 }}>
+                No caregivers have consented to background checks yet.
+              </div>
+            ) : (
+              <div>
+                {/* ─── ACTION REQUIRED ─── */}
+                {actionItems.length > 0 && (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {actionItems.map(c => renderCard(c, false))}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                )}
+
+                {/* ─── DIVIDER ─── */}
+                {filedItems.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 16px' }}>
+                    <div style={{ flex: 1, height: 1, background: '#e0e0e0' }}></div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                      Reviewed ({filedItems.length})
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: '#e0e0e0' }}></div>
+                  </div>
+                )}
+
+                {/* ─── REVIEWED / FILED ─── */}
+                {filedItems.length > 0 && (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {filedItems.map(c => renderCard(c, true))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── SAFETY FLAGS TAB ── */}
       {activeTab === 'safety' && (

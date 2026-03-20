@@ -2201,6 +2201,16 @@ router.put("/users/:id/approve", requireAdmin, async (req, res) => {
       "UPDATE users SET account_approved = 1, approved_by = ?, approved_at = NOW() WHERE id = ?"
     ).run(req.user.id, req.params.id);
 
+    // If this caregiver had a flagged BG check (consider/disputed), mark it as reviewed-and-approved
+    const cgProfile = await db.prepare(
+      "SELECT checkr_status FROM caregiver_profiles WHERE user_id = ?"
+    ).get(req.params.id);
+    if (cgProfile && (cgProfile.checkr_status === "consider" || cgProfile.checkr_status === "disputed")) {
+      await db.prepare(
+        "UPDATE caregiver_profiles SET checkr_status = 'consider_approved', is_background_checked = 1, updated_at = NOW() WHERE user_id = ?"
+      ).run(req.params.id);
+    }
+
     await logAdminAction(req, "account_approved", "user", req.params.id, {
       userName: `${user.first_name} ${user.last_name}`.trim(),
       email: user.email,
