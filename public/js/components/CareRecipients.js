@@ -169,7 +169,7 @@ const CareRecipients = window.CareRecipients = () => {
               personality: r.personality || '',
               preferences: r.preferences || '',
               emergencyContactName: r.emergency_contact_name || r.emergencyContactName || '',
-              emergencyContactPhone: r.emergency_contact_phone || r.emergencyContactPhone || '',
+              emergencyContactPhone: formatPhone(r.emergency_contact_phone || r.emergencyContactPhone) || '',
               authorizationTier: r.authorization_tier || r.authorizationTier || 'tier3',
             });
           }
@@ -256,7 +256,7 @@ const CareRecipients = window.CareRecipients = () => {
       personality: r.personality || '',
       preferences: r.preferences || '',
       emergencyContactName: r.emergency_contact_name || r.emergencyContactName || '',
-      emergencyContactPhone: r.emergency_contact_phone || r.emergencyContactPhone || '',
+      emergencyContactPhone: formatPhone(r.emergency_contact_phone || r.emergencyContactPhone) || '',
       authorizationTier: r.authorization_tier || 'tier3',
     });
     setEditingId(r.id);

@@ -178,7 +178,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       medications: Array.isArray(meds) ? meds.join('\n') : '',
       preferences: profile.preferences || '',
       emergency_contact_name: profile.emergency_contact_name || '',
-      emergency_contact_phone: profile.emergency_contact_phone || '',
+      emergency_contact_phone: formatPhone(profile.emergency_contact_phone) || '',
     });
     setEditing(true);
     setSaveMsg('');
