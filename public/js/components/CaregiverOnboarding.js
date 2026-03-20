@@ -1017,7 +1017,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             <div style={rowStyle}>
               <div style={fieldGroup}>
-                <label style={labelStyle}>Years of Experience</label>
+                <label style={labelStyle}>Do you have experience caretaking? How many years?</label>
                 <input type="number" min="0" style={inputStyle} value={form.yearsExperience}
                   onChange={(e) => updateForm('yearsExperience', e.target.value)} placeholder="0" />
               </div>
@@ -1522,7 +1522,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <div><span style={{ color: '#888' }}>Phone:</span> {formatPhone(form.phone)}</div>
                 <div><span style={{ color: '#888' }}>Location:</span> {form.city}, {form.state} {form.zip}</div>
                 <div><span style={{ color: '#888' }}>Rates:</span> Set from your dashboard</div>
-                <div><span style={{ color: '#888' }}>Experience:</span> {form.yearsExperience || 0} years</div>
+                <div><span style={{ color: '#888' }}>Caretaking experience:</span> {form.yearsExperience || 0} years</div>
                 <div><span style={{ color: '#888' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
                 <div><span style={{ color: '#888' }}>Documents:</span> {form.documents.length} uploaded</div>
                 <div><span style={{ color: '#888' }}>Travel radius:</span> {form.travelRadius} miles</div>
