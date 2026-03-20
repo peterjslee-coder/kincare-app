@@ -117,13 +117,18 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
       return res.status(400).json({ error: "Background check consent required" });
     }
 
-    // Check if already initiated
+    // Check if already initiated — allow re-initiation for expired, canceled, rejected, or did_not_pass
+    const reInitiatableStatuses = ['invitation_expired', 'invitation_canceled', 'rejected', 'did_not_pass'];
     if (profile.checkr_candidate_id && profile.checkr_invitation_id) {
-      return res.json({
-        status: "already_initiated",
-        checkrStatus: profile.checkr_status,
-        message: "Background check has already been initiated."
-      });
+      if (!reInitiatableStatuses.includes(profile.checkr_status)) {
+        return res.json({
+          status: "already_initiated",
+          checkrStatus: profile.checkr_status,
+          message: "Background check has already been initiated."
+        });
+      }
+      // Re-initiating: clear old invitation so a new one can be created
+      console.log(`[checkr] Re-initiating BG check for user ${req.user.id} (previous status: ${profile.checkr_status})`);
     }
 
     // Verify required fields
@@ -141,38 +146,85 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
       });
     }
 
-    // Step 1: Create candidate in Checkr
-    console.log(`[checkr] Creating candidate for ${profile.legal_first_name} ${profile.legal_last_name}`);
-    const candidate = await checkrRequest("POST", "/candidates", {
-      first_name: profile.legal_first_name,
-      last_name: profile.legal_last_name,
-      email: user.email,
-      dob: profile.date_of_birth,
-      ssn: profile.ssn_last4,
-      zipcode: profile.zip || undefined,
-      driver_license_number: profile.dl_number || undefined,
-      driver_license_state: profile.dl_state || undefined,
-    });
+    // Step 1: Create or reuse candidate in Checkr
+    // Certification requires: first_name, middle_name OR no_middle_name, last_name, zip, phone, email, custom_id
+    let candidate;
+    if (profile.checkr_candidate_id) {
+      // Re-initiation: reuse existing candidate
+      console.log(`[checkr] Reusing existing candidate ${profile.checkr_candidate_id} for user ${req.user.id}`);
+      candidate = { id: profile.checkr_candidate_id };
+    } else {
+      console.log(`[checkr] Creating candidate for ${profile.legal_first_name} ${profile.legal_last_name}`);
+      const candidatePayload = {
+        first_name: profile.legal_first_name,
+        last_name: profile.legal_last_name,
+        no_middle_name: !profile.legal_middle_name,
+        email: user.email,
+        phone: user.phone || undefined,
+        dob: profile.date_of_birth,
+        ssn: profile.ssn_last4,
+        zipcode: profile.zip || undefined,
+        custom_id: req.user.id,
+        driver_license_number: profile.dl_number || undefined,
+        driver_license_state: profile.dl_state || undefined,
+      };
+      if (profile.legal_middle_name) candidatePayload.middle_name = profile.legal_middle_name;
+      candidate = await checkrRequest("POST", "/candidates", candidatePayload);
+      console.log(`[checkr] Candidate created: ${candidate.id}`);
+    }
 
-    console.log(`[checkr] Candidate created: ${candidate.id}`);
-
-    // Save candidate ID immediately
+    // Save candidate ID immediately (or reset status for re-initiation)
     await db.prepare(
-      "UPDATE caregiver_profiles SET checkr_candidate_id = ?, checkr_status = 'initiated', updated_at = NOW() WHERE user_id = ?"
+      "UPDATE caregiver_profiles SET checkr_candidate_id = ?, checkr_status = 'initiated', checkr_eta = NULL, updated_at = NOW() WHERE user_id = ?"
     ).run(candidate.id, req.user.id);
 
     // Step 2: Create invitation — Checkr emails the candidate a link
     // to provide full SSN, consent, and complete the background check
     console.log(`[checkr] Creating invitation for candidate ${candidate.id}`);
 
-    // Use the configured package or default to basic+mvr
-    const packageSlug = process.env.CHECKR_PACKAGE || "essential_criminal";
+    // Certification: retrieve account hierarchy nodes and packages dynamically
+    let packageSlug = process.env.CHECKR_PACKAGE || "essential_criminal";
+    let nodeId = null;
+    try {
+      const nodesResp = await checkrRequest("GET", "/nodes?include=packages");
+      const nodes = nodesResp?.data || [];
+      if (nodes.length > 0) {
+        // Use the first node (InPlace only has one business line)
+        nodeId = nodes[0].id;
+        // If the node has assigned packages, use the first one
+        const nodePackages = nodes[0].packages || [];
+        if (nodePackages.length > 0) {
+          packageSlug = nodePackages[0].slug || nodePackages[0].name || packageSlug;
+        }
+      }
+    } catch (nodesErr) {
+      // Account hierarchy may not be enabled — fall back to GET /packages
+      console.warn("[checkr] GET /nodes failed, falling back to GET /packages:", nodesErr.message);
+    }
 
-    const invitation = await checkrRequest("POST", "/invitations", {
+    // Also call GET /packages as fallback / for accounts without hierarchy
+    if (!nodeId) {
+      try {
+        const pkgsResp = await checkrRequest("GET", "/packages");
+        const packages = pkgsResp?.data || [];
+        if (packages.length > 0) {
+          // Prefer configured package if it's in the list, otherwise use first available
+          const match = packages.find(p => p.slug === packageSlug);
+          if (!match && packages[0]?.slug) packageSlug = packages[0].slug;
+        }
+      } catch (pkgErr) {
+        console.warn("[checkr] GET /packages failed, using default:", pkgErr.message);
+      }
+    }
+
+    const invitationPayload = {
       candidate_id: candidate.id,
       package: packageSlug,
-      work_locations: [{ city: profile.work_city || "Radford", state: profile.work_state || "VA", country: "US" }],
-    });
+      work_locations: [{ city: profile.location_city || "Radford", state: profile.location_state || "VA", country: "US" }],
+    };
+    if (nodeId) invitationPayload.node = nodeId;
+
+    const invitation = await checkrRequest("POST", "/invitations", invitationPayload);
 
     console.log(`[checkr] Invitation created: ${invitation.id}, status: ${invitation.status}`);
 
@@ -238,12 +290,14 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
           const report = await checkrRequest("GET", `/reports/${reportId}`);
 
           // Update our records with latest status
+          // Certification: use report.result (clear/consider) for findings, report.status for lifecycle (complete/pending)
           let newStatus = profile.checkr_status;
           let cleared = false;
-          if (report.status === "clear") {
+          const actualResult = report.result || report.status;
+          if (actualResult === "clear") {
             newStatus = "clear";
             cleared = true;
-          } else if (report.status === "consider") {
+          } else if (actualResult === "consider") {
             newStatus = "consider"; // has flags but not disqualified
           } else if (report.status === "pending") {
             newStatus = "processing";
@@ -332,12 +386,19 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
     switch (type) {
       // ─── Invitation completed — candidate filled out the Checkr form ───
       case "invitation.completed": {
-        const { id: invitationId, candidate_id } = data.object;
-        console.log(`[checkr-webhook] Invitation completed: ${invitationId}, candidate: ${candidate_id}`);
+        const { id: invitationId, candidate_id, estimated_completion_time } = data.object;
+        console.log(`[checkr-webhook] Invitation completed: ${invitationId}, candidate: ${candidate_id}, eta: ${estimated_completion_time || 'none'}`);
 
-        await db.prepare(
-          "UPDATE caregiver_profiles SET checkr_status = 'processing', updated_at = NOW() WHERE checkr_invitation_id = ? OR checkr_candidate_id = ?"
-        ).run(invitationId, candidate_id);
+        // Certification: store ETA from invitation if available
+        if (estimated_completion_time) {
+          await db.prepare(
+            "UPDATE caregiver_profiles SET checkr_status = 'processing', checkr_eta = ?, updated_at = NOW() WHERE checkr_invitation_id = ? OR checkr_candidate_id = ?"
+          ).run(estimated_completion_time, invitationId, candidate_id);
+        } else {
+          await db.prepare(
+            "UPDATE caregiver_profiles SET checkr_status = 'processing', updated_at = NOW() WHERE checkr_invitation_id = ? OR checkr_candidate_id = ?"
+          ).run(invitationId, candidate_id);
+        }
 
         // Notify admins that a candidate submitted their background check form
         try {
@@ -446,20 +507,34 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
       // ─── Report updated (e.g., additional screening results came in) ───
       case "report.updated": {
         const report = data.object;
-        const { id: reportId, candidate_id, status, result } = report;
+        const { id: reportId, candidate_id, status, result, estimated_completion_time } = report;
         const updatedResult = result || status;
-        console.log(`[checkr-webhook] Report updated: ${reportId}, status: ${status}, result: ${result}`);
+        console.log(`[checkr-webhook] Report updated: ${reportId}, status: ${status}, result: ${result}, eta: ${estimated_completion_time || 'none'}`);
 
         const cleared = updatedResult === "clear";
         const updatedStatus = cleared ? "clear" : (updatedResult === "consider" ? "consider" : updatedResult);
-        await db.prepare(
-          `UPDATE caregiver_profiles SET
-            checkr_status = ?,
-            checkr_report_id = ?,
-            is_background_checked = ?,
-            updated_at = NOW()
-          WHERE checkr_candidate_id = ?`
-        ).run(updatedStatus, reportId, cleared ? 1 : 0, candidate_id);
+
+        // Certification: store ETA if provided by Checkr
+        if (estimated_completion_time) {
+          await db.prepare(
+            `UPDATE caregiver_profiles SET
+              checkr_status = ?,
+              checkr_report_id = ?,
+              is_background_checked = ?,
+              checkr_eta = ?,
+              updated_at = NOW()
+            WHERE checkr_candidate_id = ?`
+          ).run(updatedStatus, reportId, cleared ? 1 : 0, estimated_completion_time, candidate_id);
+        } else {
+          await db.prepare(
+            `UPDATE caregiver_profiles SET
+              checkr_status = ?,
+              checkr_report_id = ?,
+              is_background_checked = ?,
+              updated_at = NOW()
+            WHERE checkr_candidate_id = ?`
+          ).run(updatedStatus, reportId, cleared ? 1 : 0, candidate_id);
+        }
         break;
       }
 
@@ -669,6 +744,104 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
         break;
       }
 
+      // ─── Invitation created — Checkr sent the invitation ───
+      case "invitation.created": {
+        const { id: invitationId, candidate_id } = data.object;
+        console.log(`[checkr-webhook] Invitation created: ${invitationId}, candidate: ${candidate_id}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'invitation_sent', checkr_invitation_id = ?, updated_at = NOW() WHERE checkr_candidate_id = ?"
+        ).run(invitationId, candidate_id);
+
+        writeAuditLog({
+          action: "checkr_invitation_created",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { invitationId, candidateId: candidate_id },
+          severity: "info",
+        });
+        break;
+      }
+
+      // ─── Invitation deleted/canceled ───
+      case "invitation.deleted": {
+        const { id: invitationId, candidate_id } = data.object;
+        console.log(`[checkr-webhook] Invitation canceled: ${invitationId}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'invitation_canceled', updated_at = NOW() WHERE checkr_invitation_id = ? OR checkr_candidate_id = ?"
+        ).run(invitationId, candidate_id);
+
+        writeAuditLog({
+          action: "checkr_invitation_canceled",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { invitationId, candidateId: candidate_id },
+          severity: "info",
+        });
+        break;
+      }
+
+      // ─── Post-adverse action — 7 days passed since pre-adverse, no dispute → "Did Not Pass" ───
+      case "report.post_adverse_action": {
+        const { id: reportId, candidate_id } = data.object;
+        console.log(`[checkr-webhook] Post-adverse action: ${reportId}, candidate: ${candidate_id}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'did_not_pass', updated_at = NOW() WHERE checkr_candidate_id = ?"
+        ).run(candidate_id);
+
+        // Notify admins
+        try {
+          const { v4: uuid } = require("uuid");
+          const cgProfile = await db.prepare(
+            "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_candidate_id = ?"
+          ).get(candidate_id);
+          const candidateName = cgProfile ? `${cgProfile.first_name} ${cgProfile.last_name}` : `Candidate ${(candidate_id || '').substring(0, 12)}`;
+          const title = `🚫 Background check: DID NOT PASS — ${candidateName}`;
+          const msg = cgProfile
+            ? `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) did not pass the adverse action review period (7 days, no dispute). They should not be assigned to sessions.`
+            : `Checkr report ${reportId} post-adverse action complete — candidate did not pass.`;
+          const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+          for (const admin of admins) {
+            await db.prepare(
+              "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+            ).run(uuid(), admin.id, "checkr_did_not_pass", title, msg, JSON.stringify({ reportId, candidateId: candidate_id, userId: cgProfile?.user_id }));
+          }
+        } catch (alertErr) {
+          console.error("[checkr-webhook] Post-adverse action alert error:", alertErr.message);
+        }
+
+        writeAuditLog({
+          action: "checkr_post_adverse_action",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { reportId, candidateId: candidate_id },
+          severity: "critical",
+        });
+        break;
+      }
+
+      // ─── Report engaged — adjudicator marked as "engaged" (maps to Clear per cert guide) ───
+      case "report.engaged": {
+        const { id: reportId, candidate_id } = data.object;
+        console.log(`[checkr-webhook] Report engaged: ${reportId}, candidate: ${candidate_id}`);
+
+        // Per certification guide: report.engaged maps to "Clear" partner status
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'clear', is_background_checked = 1, checkr_report_id = ?, updated_at = NOW() WHERE checkr_candidate_id = ?"
+        ).run(reportId, candidate_id);
+
+        writeAuditLog({
+          action: "checkr_engaged",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { reportId, candidateId: candidate_id },
+          severity: "info",
+        });
+        break;
+      }
+
       default:
         console.log(`[checkr-webhook] Unhandled event type: ${type}`);
     }
@@ -749,7 +922,7 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
         cp.user_id, cp.legal_first_name, cp.legal_last_name,
         cp.checkr_status, cp.checkr_candidate_id, cp.checkr_invitation_id, cp.checkr_report_id,
         cp.is_background_checked, cp.background_check_paid, cp.background_check_consent,
-        cp.onboarding_complete,
+        cp.onboarding_complete, cp.checkr_eta,
         u.email, u.first_name, u.last_name
       FROM caregiver_profiles cp
       JOIN users u ON cp.user_id = u.id

@@ -837,6 +837,9 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_alerts_seen_at TIMESTAMPTZ`,
     // v1.50.29 — BG check rejection flow
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_rejection_reason TEXT`,
+    // v1.50.32 — Checkr certification: legal_middle_name + ETA tracking
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS legal_middle_name TEXT`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS checkr_eta TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

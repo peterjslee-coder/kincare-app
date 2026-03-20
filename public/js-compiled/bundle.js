@@ -55129,15 +55129,15 @@ const AdminPanel = window.AdminPanel = () => {
       color: '#999'
     }
   }, "No caregiver profile found for this user."))), activeTab === 'bgchecks' && (() => {
-    const actionStatuses = ['consider', 'suspended', 'disputed', 'adverse_action', 'processing', 'invitation_sent', 'invitation_expired'];
-    const filedStatuses = ['clear', 'consider_approved', 'rejected'];
+    const actionStatuses = ['consider', 'suspended', 'disputed', 'adverse_action', 'processing', 'invitation_sent', 'invitation_expired', 'invitation_canceled'];
+    const filedStatuses = ['clear', 'consider_approved', 'rejected', 'did_not_pass'];
     const actionItems = bgCheckCandidates.filter(c => actionStatuses.includes(c.checkr_status) || !c.checkr_status || c.checkr_status === 'pending');
     const filedItems = bgCheckCandidates.filter(c => filedStatuses.includes(c.checkr_status));
     const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
-    const getStatusColor = s => s === 'clear' ? '#2e7d32' : s === 'consider' ? '#e65100' : s === 'adverse_action' ? '#c62828' : s === 'suspended' ? '#e65100' : s === 'disputed' ? '#6a1b9a' : s === 'consider_approved' ? '#2e7d32' : s === 'rejected' ? '#b71c1c' : s === 'processing' ? '#1565c0' : s === 'invitation_sent' ? '#7b1fa2' : s === 'invitation_expired' ? '#888' : '#555';
-    const getStatusIcon = s => s === 'clear' ? '\u2705' : s === 'consider' ? '\u26A0\uFE0F' : s === 'adverse_action' ? '\u{1F6A8}' : s === 'suspended' ? '\u26A0\uFE0F' : s === 'disputed' ? '\u2696\uFE0F' : s === 'consider_approved' ? '\u2705' : s === 'rejected' ? '\u274C' : s === 'processing' ? '\u23F3' : s === 'invitation_sent' ? '\u{1F4E8}' : s === 'invitation_expired' ? '\u23F0' : '\u2022';
-    const getStatusLabel = s => s === 'consider_approved' ? 'APPROVED (FLAGGED)' : s === 'rejected' ? 'REJECTED' : (s || 'pending').replace(/_/g, ' ').toUpperCase();
-    const isHighlight = s => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed';
+    const getStatusColor = s => s === 'clear' ? '#2e7d32' : s === 'consider' ? '#e65100' : s === 'adverse_action' ? '#c62828' : s === 'suspended' ? '#e65100' : s === 'disputed' ? '#6a1b9a' : s === 'consider_approved' ? '#2e7d32' : s === 'rejected' ? '#b71c1c' : s === 'did_not_pass' ? '#b71c1c' : s === 'processing' ? '#1565c0' : s === 'invitation_sent' ? '#7b1fa2' : s === 'invitation_expired' ? '#888' : s === 'invitation_canceled' ? '#888' : '#555';
+    const getStatusIcon = s => s === 'clear' ? '\u2705' : s === 'consider' ? '\u26A0\uFE0F' : s === 'adverse_action' ? '\u{1F6A8}' : s === 'suspended' ? '\u26A0\uFE0F' : s === 'disputed' ? '\u2696\uFE0F' : s === 'consider_approved' ? '\u2705' : s === 'rejected' ? '\u274C' : s === 'did_not_pass' ? '\u{1F6AB}' : s === 'processing' ? '\u23F3' : s === 'invitation_sent' ? '\u{1F4E8}' : s === 'invitation_expired' ? '\u23F0' : s === 'invitation_canceled' ? '\u{1F6AB}' : '\u2022';
+    const getStatusLabel = s => s === 'consider_approved' ? 'APPROVED (FLAGGED)' : s === 'rejected' ? 'REJECTED' : s === 'did_not_pass' ? 'DID NOT PASS' : s === 'invitation_canceled' ? 'CANCELED' : (s || 'pending').replace(/_/g, ' ').toUpperCase();
+    const isHighlight = s => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed' || s === 'did_not_pass';
     const renderCard = (c, faded) => {
       const statusColor = getStatusColor(c.checkr_status);
       return /*#__PURE__*/React.createElement("div", {
@@ -55191,7 +55191,21 @@ const AdminPanel = window.AdminPanel = () => {
           color: '#aaa',
           marginTop: 4
         }
-      }, c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted', c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : '')), /*#__PURE__*/React.createElement("div", {
+      }, c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted', c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : ''), c.checkr_eta && c.checkr_status === 'processing' && (() => {
+        const eta = new Date(c.checkr_eta);
+        const now = new Date();
+        const diffMs = eta - now;
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const etaLabel = diffDays > 0 ? `~${diffDays} day${diffDays !== 1 ? 's' : ''} remaining` : 'Due any time now';
+        return /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 11,
+            color: '#1565c0',
+            marginTop: 2,
+            fontStyle: 'italic'
+          }
+        }, "ETA: ", eta.toLocaleDateString(), " (", etaLabel, ")");
+      })()), /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           flexDirection: 'column',
