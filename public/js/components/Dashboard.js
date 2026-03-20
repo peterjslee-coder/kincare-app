@@ -1158,7 +1158,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 marginTop: 10, padding: '8px 20px', background: '#e0e0e0', color: '#888', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
               }}>⚠️ Complete consent verification to book</button>
             ) : (
-              <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
+              <button onClick={() => { if (window.__navigateTo) window.__navigateTo('schedule'); }} style={{
                 marginTop: 10, padding: '8px 20px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
               }}>+ Request Care</button>
             )}
@@ -1176,7 +1176,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   padding: '4px 12px', background: '#e0e0e0', color: '#888', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 }}>⚠️ Verify consent first</button>
               ) : (
-                <button onClick={() => { if (window.__openRequestCareModal) window.__openRequestCareModal(); }} style={{
+                <button onClick={() => { if (window.__navigateTo) window.__navigateTo('schedule'); }} style={{
                   padding: '4px 12px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 }}>+ Request Care</button>
               )}
