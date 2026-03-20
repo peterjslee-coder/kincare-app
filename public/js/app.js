@@ -243,6 +243,7 @@ const App = () => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('reset')) return 'reset-password';
     if (p.get('consent-response')) return 'consent-response';
+    if (p.get('verify')) return 'verifying-email';
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
@@ -635,13 +636,15 @@ const App = () => {
       window.history.replaceState({}, '', window.location.pathname);
       const loggedIn = !!AUTH_TOKEN;
       trackAuthEvent('email-verify', 'attempt', { loggedIn, source: 'verify-link' });
+      // Show verifying state while API call is in-flight
+      if (!loggedIn) setVerifyMessage({ type: 'info', text: 'Verifying your email...' });
       // Use raw fetch for verify — it's a public endpoint that works without auth
       fetch(API_BASE + `/api/auth/verify?token=${vt}`)
         .then(r => r.json())
         .then(data => {
           if (data?.message) {
             trackAuthEvent('email-verify', 'success', { loggedIn });
-            setVerifyMessage({ type: 'success', text: 'Email verified! You can log in now.' });
+            setVerifyMessage({ type: 'success', text: 'Email verified! Sign in to continue.' });
             // If user is logged in, refresh their data so banner disappears
             if (loggedIn) {
               apiFetch('/api/auth/me').then(r2 => r2?.json()).then(meData => {
@@ -1033,6 +1036,13 @@ const App = () => {
     invite: <InviteLandingPage inviteInfo={inviteInfo} onNavigate={handleNavigate} />,
     splash: <SplashPage onNavigate={handleNavigate} inviteInfo={inviteInfo} />,
     demo: <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />,
+    'verifying-email': <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f5f5f5', padding: 24 }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: '48px 40px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>{'\u2709\uFE0F'}</div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700, color: '#333' }}>Verifying your email...</h2>
+        <p style={{ fontSize: 15, color: '#666', margin: 0 }}>Just a moment while we confirm your address.</p>
+      </div>
+    </div>,
     login: <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />,
     register: <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} />,
     'forgot-password': <ForgotPasswordPage onNavigate={handleNavigate} />,

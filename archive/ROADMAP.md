@@ -562,11 +562,11 @@ Priority: **HIGH** — Real user (Cary Taker) feedback + remaining UX items.
 
 ## v1.31.0: Stripe & Background Checks
 
-Priority: **HIGH** — Enable payments. *Blocked on Pete's Stripe and Checkr action items.*
+Priority: **HIGH** — Enable payments. *Stripe Connect done (v1.40.6–v1.40.9). Checkr integration done (v1.50.29–v1.50.35).*
 
-- [ ] **Stripe payment for background check:** Collect credit card via Stripe Elements. One-time charge for Checkr background check.
-- [ ] **Checkr integration:** Submit background check via Checkr API after payment. Webhook for results.
-- [ ] **Stripe Connect marketplace:** Families pay, caregivers get paid, platform takes configurable fee (20% base).
+- [ ] **Stripe payment for background check:** Collect credit card via Stripe Elements. One-time charge for Checkr background check. *(Blocked on deciding price — see Pete's Action Items)*
+- [x] **Checkr integration (v1.50.29–v1.50.35):** ✅ Full Checkr Partner Certification compliance achieved. Includes: POST /candidates (custom_id, phone, middle_name/no_middle_name), POST /invitations (node, work_locations), GET /packages (dynamic), GET /nodes?include=packages (account hierarchy), 12+ webhook handlers (report.completed, report.updated, report.created, report.suspended, report.resumed, report.disputed, invitation.created, invitation.completed, invitation.expired, invitation.deleted, report.post_adverse_action, report.engaged), ETA tracking + admin display, re-initiation for multiple BG checks per candidate, BG check rejection flow with soft lock + appeal, admin approval/rejection panel. OAuth N/A (single-account).
+- [x] **Stripe Connect marketplace (v1.40.6–v1.40.9):** ✅ Families pay, caregivers get paid, platform takes configurable fee (20% base). Express accounts with embedded Connect.js + redirect fallback.
 - [ ] **Caregiver earnings dashboard:** Real payment history from Stripe, pending payouts, tax summary.
 - [ ] **Family billing:** Payment methods, invoices, spending history.
 
@@ -911,7 +911,7 @@ Don't store health information. Simpler, faster to launch, no BAAs needed:
 > These unblock dev tasks above. Check them off as you go.
 
 - [ ] **Stripe: Add test API keys to Railway** — Dashboard → Developers → API keys → copy `sk_test_` and `pk_test_` → Railway env vars `STRIPE_SECRET_KEY` + `STRIPE_PUBLISHABLE_KEY`. Unblocks v1.18.0.
-- [ ] **Checkr: Sign up for partner account** — Get `CHECKR_API_KEY`, add to Railway. Checkr has sandbox mode for dev. Unblocks v1.18.0.
+- [x] **Checkr: Sign up for partner account** — ✅ Done. API key on Railway. Checkr-Hosted flow enabled. Partner Certification compliance achieved (v1.50.32–v1.50.35). Staging sandbox active.
 - [ ] **Stripe: Decide background check price** — Checkr basic check ~$25–$35. Pass through, mark up, or subsidize? Unblocks payment step UI.
 - [ ] **Plausible Analytics: Sign up at plausible.io** — Add `yourinplace.com`. Script tag already in index.html.
 - [ ] **Google OAuth: Set up in Google Cloud Console** — Create OAuth 2.0 credentials (free). Add `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` to Railway.

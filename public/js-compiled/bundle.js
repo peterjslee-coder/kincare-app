@@ -57164,6 +57164,7 @@ const App = () => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('reset')) return 'reset-password';
     if (p.get('consent-response')) return 'consent-response';
+    if (p.get('verify')) return 'verifying-email';
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
@@ -57599,6 +57600,11 @@ const App = () => {
         loggedIn,
         source: 'verify-link'
       });
+      // Show verifying state while API call is in-flight
+      if (!loggedIn) setVerifyMessage({
+        type: 'info',
+        text: 'Verifying your email...'
+      });
       // Use raw fetch for verify — it's a public endpoint that works without auth
       fetch(API_BASE + `/api/auth/verify?token=${vt}`).then(r => r.json()).then(data => {
         if (data !== null && data !== void 0 && data.message) {
@@ -57607,7 +57613,7 @@ const App = () => {
           });
           setVerifyMessage({
             type: 'success',
-            text: 'Email verified! You can log in now.'
+            text: 'Email verified! Sign in to continue.'
           });
           // If user is logged in, refresh their data so banner disappears
           if (loggedIn) {
@@ -58097,6 +58103,45 @@ const App = () => {
       onLogin: handleLogin,
       onNavigate: handleNavigate
     }),
+    'verifying-email': /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: '#f5f5f5',
+        padding: 24
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: '#fff',
+        borderRadius: 16,
+        padding: '48px 40px',
+        maxWidth: 420,
+        width: '100%',
+        textAlign: 'center',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 48,
+        marginBottom: 16
+      }
+    }, '\u2709\uFE0F'), /*#__PURE__*/React.createElement("h2", {
+      style: {
+        margin: '0 0 8px',
+        fontSize: 22,
+        fontWeight: 700,
+        color: '#333'
+      }
+    }, "Verifying your email..."), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: 15,
+        color: '#666',
+        margin: 0
+      }
+    }, "Just a moment while we confirm your address."))),
     login: /*#__PURE__*/React.createElement(LoginPage, {
       onLogin: handleLogin,
       onNavigate: handleNavigate,

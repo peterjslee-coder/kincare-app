@@ -100,6 +100,7 @@ https://yourinplace.com
         ├── push.js            ← Push notification subscribe/unsubscribe
         ├── consent.js         ← Consent/authorization (Tier 2 doc upload, Tier 3 attestation + outreach + admin review)
         ├── documents.js       ← Document verification, AI classification, consent audit log
+        ├── checkr.js          ← Checkr background check API (candidates, invitations, packages, nodes, webhooks, admin approval)
         └── admin.js           ← Admin-only endpoints (stats, users, waitlist, activity, invites, consent review, bg check approval)
 ```
 
@@ -192,47 +193,93 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 **Env vars (Railway):** `stripe_secret_key` (live), `stripe_publishable_key` (live), `STRIPE_WEBHOOK_SECRET` (from Stripe webhook config).
 
+## Checkr Integration (v1.50.29–v1.50.35)
+
+**Status:** Checkr Partner Certification compliance achieved (all requirements except OAuth, which is N/A for single-account setups).
+
+**Authentication:** Basic auth (`"Basic " + Buffer.from(key + ":").toString("base64")`), NOT Bearer. Base URL controlled by `CHECKR_STAGING` env var (true = staging sandbox, false/unset = production).
+
+**Key files:** `src/routes/checkr.js` (all Checkr API + webhooks), `public/js/components/AdminPanel.js` (admin BG check management), `public/js/components/CaregiverOnboarding.js` (middle name collection).
+
+**API endpoints implemented:**
+- `GET /packages` — Dynamic package list from Checkr account
+- `GET /nodes?include=packages` — Account hierarchy with node-specific packages
+- `POST /candidates` — Creates candidate with `custom_id`, `phone`, `middle_name`/`no_middle_name`, `email`, `first_name`, `last_name`
+- `POST /invitations` — Creates Checkr-hosted invitation with `node`, `work_locations`
+- `GET /reports/:id` — Fetches report details; uses `report.result` (not `report.status`) for findings
+
+**Webhook handlers (12+ types):**
+- `report.completed` — Updates status to `clear` or `consider` based on `result` field
+- `report.updated` — Tracks `estimated_completion_time` (ETA)
+- `report.created` — Initial report creation tracking
+- `report.suspended` / `report.resumed` — Status tracking
+- `report.disputed` — Dispute tracking
+- `report.post_adverse_action` — Adverse action workflow
+- `report.engaged` — Report engagement tracking
+- `invitation.created` — Invitation lifecycle tracking
+- `invitation.completed` — Marks `processing` status, captures ETA
+- `invitation.expired` — Marks invitation expired
+- `invitation.deleted` — Marks invitation deleted
+
+**Re-initiation flow:** Candidates with status `invitation_expired`, `invitation_canceled`, `rejected`, or `did_not_pass` can re-initiate BG checks. Reuses existing `checkr_candidate_id`, creates new invitation. Status resets to `initiated`, ETA cleared.
+
+**BG check admin flow:** Admin can approve (`consider` → `consider_approved`) or reject (`consider` → `rejected`) flagged results. Rejected caregivers get soft-locked (account_paused) with appeal option. Admin can later approve a rejected candidate (back to `consider`).
+
+**ETA tracking:** `checkr_eta` column on `caregiver_profiles` stores `estimated_completion_time` from webhooks. Admin panel displays "~X days remaining" or "Due any time now" for processing candidates.
+
+**DB columns added (v1.50.32):**
+- `caregiver_profiles.legal_middle_name` TEXT — Collected in CaregiverOnboarding Step 4
+- `caregiver_profiles.checkr_eta` TIMESTAMPTZ — ETA from Checkr webhooks
+
+**Important:** `report.result` = finding (clear/consider). `report.status` = lifecycle (pending/complete). Always use `result` for pass/fail logic.
+
 ## Last Session Handoff (updated each session)
 
-**Date:** March 19, 2026 | **Version:** v1.50.21 | **Session type:** P0 timezone architecture fix + bug fixes + documentation
+**Date:** March 19, 2026 | **Version:** v1.50.35 | **Session type:** Checkr Partner Certification compliance + middle name collection + doc updates
 
 ### What was done this session:
 
-**P0 Timezone Architecture Fix (v1.50.21):**
-- Rewrote notification poller (server.js) to JOIN `care_recipients` and use per-session `cr.timezone` for all timing decisions
-- Widened poller date filter to cover all US timezones (no more single-tz `scheduled_date = today`)
-- Fixed check-in gate and late detection in sessions.js: replaced naive `new Date(date + 'T' + time)` with `buildDateTimeInZone(date, time, careTz)`
-- Fixed check-out early-minutes calculation to use care recipient timezone
-- Fixed accountability pollers (payment auth, late check-in, no-show) to use per-session timezone
-- Fixed cancellation late-cancel detection to use care timezone
-- Fixed session accept flow (claim) — notification trigger and "today/tomorrow" label now use care timezone
-- All session queries in check-in, check-out, cancel now SELECT `cr.timezone AS care_timezone`
+**Checkr Partner Certification Compliance (v1.50.29–v1.50.32):**
+- Full re-audit of 14-page Checkr Partner Certification Requirements PDF against codebase
+- Fixed `report.result` vs `report.status` usage in status polling endpoint
+- Added ETA tracking from `report.updated` and `invitation.completed` webhooks
+- Added ETA display in admin panel ("~X days remaining")
+- Added re-initiation support for candidates with expired/canceled/rejected/did_not_pass status
+- Added all 12+ required webhook handlers
+- Dynamic GET /packages and GET /nodes endpoints confirmed working
+- POST /candidates with custom_id, phone, middle_name/no_middle_name confirmed
+- POST /invitations with node and work_locations confirmed
 
-**Bug fixes (v1.50.19):**
-- Fixed "Now open to all caregivers" text persisting on accepted Next Up appointment cards (added `!s.caregiverName` guard)
-- Marked 4 previously-fixed P1 bugs as resolved in TASKS.md
-- Marked P1 early checkout duration miscalculation as resolved (unblocked by timezone fix)
+**Middle Name Collection (v1.50.33):**
+- Added `legal_middle_name` column to caregiver_profiles (v1.50.32 migration)
+- Added middle name input + "I don't have a middle name" checkbox to CaregiverOnboarding Step 4
+- Wired through caregivers.js API (save/load) and dashboard.js (profile response)
+- Checkr POST /candidates already used middle_name/no_middle_name — now actually collected
 
-**Checkr testing:**
-- Working through Checkr test candidates spreadsheet. Little John completed. Two remaining: "Roll Tide" and "Camo Time."
+**Multi-test-account attempt + revert (v1.50.34–v1.50.35):**
+- v1.50.34: Added email exception for peter@yourinplace.com to allow multiple registrations
+- v1.50.35: FULLY REVERTED — Cary's account uses the same email (peter@yourinplace.com). Using +alias emails (peter+nick@yourinplace.com) instead for test accounts.
 
 ### PRIORITY FOR NEXT SESSION:
-1. **Complete Checkr test cases** — Roll Tide and Camo Time candidates remain.
-2. **Early checkout prompt + pay logic** — Build the checkout modal warning and 15-min block pay calculation (see TASKS.md spec). Server-side duration computation now enabled by timezone fix.
-3. **Test timezone fix in production** — Deploy v1.50.21, have Pete verify push notifications arrive at the right time from Texas.
+1. **Early checkout prompt + pay logic** — Build the checkout modal warning and 15-min block pay calculation (see TASKS.md spec). Server-side duration computation now enabled by timezone fix.
+2. **Test timezone fix in production** — Deploy and verify push notifications arrive at the right time.
+3. **Checkr test candidates** — Roll Tide and Camo Time candidates still need to be completed in sandbox.
 
 ### What was discovered / still open:
-- Checkr: 2 of N candidates remaining (Roll Tide, Camo Time)
-- Dashboard `getNowInZone()` calls still use default timezone for aggregate views (monthly stats, "today" filter) — acceptable since these are family-view aggregates, not per-session timing
-- Frontend `RequestCareModal.js` line 38 still uses `new Date(date + 'T' + time + ':00')` for short-notice detection — low priority since it's a display hint, not a gate
+- **Cary's email is peter@yourinplace.com** — same as Pete's. Any special-casing of that email risks Cary's account. Use +alias emails for test accounts.
+- Dashboard `getNowInZone()` calls still use default timezone for aggregate views — acceptable for family-view aggregates
+- Frontend `RequestCareModal.js` line 38 still uses naive date parsing for short-notice detection — low priority display hint
 - DUNS number (106784345) has wrong business name — blocking Google Play. D&B requires 8-day verification.
+- "Tester" last name convention: last name ending in "Tester" auto-verifies email + gets is_tester flag
 
 ### Key decisions made (this session):
-- **Pay calculation rule:** Pay is from actual check-in to actual check-out, in 15-min blocks. NOT from scheduled appointment start time. Caregiver checks out ≤15 min early = full pay. >15 min early = rounded down to nearest 15-min block.
-- **Early checkout prompt:** Required text reason when checking out >15 min early. Stored in `early_checkout_reason` column. Notification sent to care team.
-- **Timezone anchoring:** All session timing (notifications, gates, duration, pay) must use the care recipient's timezone. Device timezone is irrelevant for business logic.
+- **Checkr `result` vs `status`:** `result` = finding (clear/consider), `status` = lifecycle (pending/complete). Always use `result` for pass/fail.
+- **Re-initiation statuses:** Only `invitation_expired`, `invitation_canceled`, `rejected`, `did_not_pass` allow re-initiation. All others block with "already_initiated".
+- **No multi-account exception for shared emails.** Reverted because Cary shares peter@yourinplace.com. +alias approach is safe.
 
 ### New tables/columns this session:
+- `caregiver_profiles.legal_middle_name` TEXT (v1.50.32)
+- `caregiver_profiles.checkr_eta` TIMESTAMPTZ (v1.50.32)
 - `visit_logs.early_checkout_reason` (planned — not yet added to DB, captured in TASKS.md spec)
 
 ## Local Development

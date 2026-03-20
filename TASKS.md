@@ -255,7 +255,7 @@
 
 > Things only Pete can do — account signups, API keys, config. These unblock dev tasks above. Check them off as you go.
 
-- [ ] **Checkr: Get API key from Faraz.** Account created. Faraz at Checkr support (case #01523581) is enabling the Checkr-Hosted flow. Pete emailed Faraz requesting hosted flow. Once Faraz confirms, get the `CHECKR_API_KEY` from the Checkr dashboard and add it to Railway env vars. This unblocks: actually running background checks during caregiver onboarding.
+- [x] **Checkr: Get API key from Faraz.** ✅ Done — Checkr API key obtained and added to Railway env vars. Checkr-Hosted (invitation) flow enabled and working in staging sandbox. Partner Certification compliance achieved (v1.50.32).
 - [ ] **Stripe: Decide background check price.** What should caregivers be charged for the background check? Checkr's basic check runs ~$25–$35. Do you want to pass cost through at-cost, mark up, or subsidize? Claude needs this number to build the payment step.
 - [ ] **Plausible Analytics: Sign up at plausible.io.** Add `yourinplace.com` as a site. The script tag is already in index.html — just needs the account created.
 - [ ] **Google OAuth: Set up in Google Cloud Console.** Create OAuth 2.0 credentials (it's free). Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to Railway. This enables "Sign in with Google" (backend already built).
