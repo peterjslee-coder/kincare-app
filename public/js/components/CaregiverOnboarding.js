@@ -15,6 +15,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const [intlPhone, setIntlPhone] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
+  // ─── Scroll to top on step change ───
+  useEffect(() => { window.scrollTo(0, 0); }, [step]);
+
   // ─── Online/offline detection ───
   useEffect(() => {
     const goOffline = () => setIsOffline(true);
@@ -27,7 +30,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     };
   }, []);
 
-  // ─── Resilient fetch: auto-retry on transient network failures ───
+  // ─── Build auth headers helper (only includes Authorization when token exists) ───
+  const authHeaders = (extra = {}) => {
+    const token = authToken || window.AUTH_TOKEN;
+    const h = { ...extra };
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    return h;
+  };
+
+  // ─── Resilient fetch: auto-retry on transient network failures + 401 refresh ───
   const resilientFetch = async (url, options, retries = 2) => {
     // Auto-inject CSRF token for state-changing requests
     if (options && ['POST', 'PUT', 'DELETE', 'PATCH'].includes((options.method || '').toUpperCase())) {
@@ -42,6 +53,29 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           throw new Error('OFFLINE');
         }
         const res = await fetch(url, { credentials: 'same-origin', ...options });
+
+        // Auto-refresh on 401: try /api/auth/refresh, then retry original request once
+        if (res.status === 401 && attempt === 0 && url !== '/api/auth/refresh') {
+          try {
+            const refreshRes = await fetch('/api/auth/refresh', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+            });
+            if (refreshRes.ok) {
+              const refreshData = await refreshRes.json();
+              if (refreshData.token) {
+                setAuthTokenState(refreshData.token);
+                window.AUTH_TOKEN = refreshData.token;
+                // Update Authorization header for retry
+                if (options?.headers) {
+                  options.headers['Authorization'] = `Bearer ${refreshData.token}`;
+                }
+              }
+              continue; // Retry the original request with new token
+            }
+          } catch (_) { /* refresh failed, fall through to return original 401 */ }
+        }
+
         return res;
       } catch (err) {
         if (err.message === 'OFFLINE') throw err;
@@ -196,6 +230,24 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const CERT_TYPES = ['CNA', 'HHA', 'LPN', 'RN', 'CPR/First Aid', 'BLS', 'ACLS', 'Other'];
   const RADIUS_OPTIONS = ['5', '10', '15', '25', '50'];
 
+  // Pre-fill phone and name from user profile (avoids re-entering data from registration)
+  useEffect(() => {
+    const token = authToken || window.AUTH_TOKEN;
+    if (!token) return;
+    resilientFetch('/api/auth/me', {
+      headers: authHeaders(),
+    }).then(r => r.ok ? r.json() : null).then(data => {
+      if (data?.user) {
+        setForm(f => ({
+          ...f,
+          phone: f.phone || (data.user.phone ? formatPhone(data.user.phone) : ''),
+          legalFirstName: f.legalFirstName || data.user.first_name || '',
+          legalLastName: f.legalLastName || data.user.last_name || '',
+        }));
+      }
+    }).catch(() => {});
+  }, [authToken]);
+
   // Track page load / resume
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -334,7 +386,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (inviteToken && !signupToken) {
         await resilientFetch('/api/platform-invites/accept-invite', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ token: inviteToken }),
         });
       }
@@ -363,7 +415,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const token = authToken || window.AUTH_TOKEN;
       const res = await resilientFetch('/api/caregivers/profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           bio: form.bio, yearsExperience: parseInt(form.yearsExperience) || 0,
           hourlyRate: 24,
@@ -395,7 +447,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (form.comfortableWithPets !== null) userUpdate.pets = form.comfortableWithPets ? 'comfortable' : 'prefer-none';
       resilientFetch('/api/auth/me', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(userUpdate),
       }).catch(() => {});
 
@@ -416,7 +468,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const token = authToken || window.AUTH_TOKEN;
       const res = await resilientFetch('/api/caregivers/profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           hourlyRate: parseFloat(form.rateDaytime) || parseFloat(form.hourlyRate) || 25,
           rateDaytime: parseFloat(form.rateDaytime) || null,
@@ -450,7 +502,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const validCerts = form.certifications.filter(c => c.certType);
       await resilientFetch('/api/caregivers/profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           hourlyRate: parseFloat(form.rateDaytime) || parseFloat(form.hourlyRate) || 25,
           rateDaytime: parseFloat(form.rateDaytime) || null,
@@ -1209,7 +1261,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   : form.programNameOther || form.programName;
                 await resilientFetch('/api/caregivers/profile', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                  headers: authHeaders({ 'Content-Type': 'application/json' }),
                   body: JSON.stringify({
                     hourlyRate: parseFloat(form.rateDaytime) || parseFloat(form.hourlyRate) || 25,
                     rateDaytime: parseFloat(form.rateDaytime) || null,
