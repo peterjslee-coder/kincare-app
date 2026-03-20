@@ -212,12 +212,9 @@ router.post("/register", validateRegister, async (req, res) => {
       await db.prepare("DELETE FROM signup_intents WHERE token = ?").run(signupToken).catch(() => {});
     }
 
-    // Send verification email (skip for test accounts)
-    if (!isTestAccount) {
-      sendVerificationEmail(db, id, email, firstName).catch(err =>
-        console.error("  [email] Failed to queue verification email:", err.message)
-      );
-    }
+    // Verification email is sent AFTER admin approval (not at signup).
+    // This prevents burning the token before the account is approved.
+    // See: admin.js PUT /users/:id/approve
 
     // Auto-create care_recipient record for care_for signups (self-signup = Tier 1, auto-verified)
     if (role === "care_for") {
@@ -986,4 +983,5 @@ router.delete("/me", authenticate, async (req, res) => {
   }
 });
 
+router.sendVerificationEmail = sendVerificationEmail;
 module.exports = router;

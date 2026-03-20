@@ -1379,7 +1379,7 @@ const App = () => {
             <button onClick={() => setVerifyMessage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'inherit' }}>&times;</button>
           </div>
         )}
-        {currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && (
+        {currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && currentUser.account_approved && (
           <EmailVerificationBanner userId={currentUser.id} />
         )}
         {/* Account approval gate — show pending message for unapproved non-demo users */}
@@ -1392,15 +1392,13 @@ const App = () => {
               You'll receive a notification once you've been approved to continue.
             </p>
 
-            {/* Email verification callout */}
-            {currentUser.emailVerified === false && (
-              <div style={{ background: '#fff3e0', border: '2px solid #e8724a', borderRadius: 12, padding: 16, margin: '0 0 20px', textAlign: 'center' }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#e65100', marginBottom: 4 }}>Please verify your email</div>
-                <p style={{ fontSize: 13, color: '#bf360c', margin: 0, lineHeight: 1.5 }}>
-                  Check your inbox for a verification link from InPlace. If you don't see it, check your spam folder.
-                </p>
-              </div>
-            )}
+            {/* Email verification info */}
+            <div style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 12, padding: 16, margin: '0 0 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#1565c0', marginBottom: 4 }}>Email verification</div>
+              <p style={{ fontSize: 13, color: '#1976d2', margin: 0, lineHeight: 1.5 }}>
+                Once your account is approved, you'll receive an email to verify your address and complete sign-up.
+              </p>
+            </div>
 
             <div style={{ background: '#f0faf7', border: '1px solid #b2dfdb', borderRadius: 12, padding: 16, margin: '0 0 20px', textAlign: 'left' }}>
               <p style={{ fontSize: 14, color: '#444', lineHeight: 1.6, margin: '0 0 12px' }}>

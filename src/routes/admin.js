@@ -2,6 +2,8 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
+const authRouter = require("./auth");
+const { sendVerificationEmail } = authRouter;
 const {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
@@ -2259,6 +2261,19 @@ router.put("/users/:id/approve", requireAdmin, async (req, res) => {
       userName: `${user.first_name} ${user.last_name}`.trim(),
       email: user.email,
     });
+
+    // Send verification email now that account is approved
+    // (verification email is NOT sent at signup — only after admin approval)
+    try {
+      const userFull = await db.prepare("SELECT id, email, first_name, email_verified FROM users WHERE id = ?").get(req.params.id);
+      if (userFull && !userFull.email_verified) {
+        await sendVerificationEmail(db, userFull.id, userFull.email, userFull.first_name);
+        console.log(`  [admin] Sent verification email to ${userFull.email} after account approval`);
+      }
+    } catch (emailErr) {
+      console.error("  [admin] Failed to send verification email after approval:", emailErr.message);
+      // Don't fail the approval — email is best-effort
+    }
 
     // Notify the user their account is approved
     const emitToUser = req.app.get("emitToUser");
