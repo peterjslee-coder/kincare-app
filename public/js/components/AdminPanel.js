@@ -1058,7 +1058,7 @@ const AdminPanel = window.AdminPanel = () => {
               background: '#1b6b5a', color: 'white', padding: '4px 10px', borderRadius: '6px',
               fontSize: '13px', fontWeight: 700, letterSpacing: '0.5px',
             }}>ADMIN</span>
-            Platform Dashboard
+            Platform Dashboard <span style={{ fontSize: '14px', fontWeight: 700, color: '#888' }}>v{window.APP_VERSION || ''}</span>
           </h1>
           <div style={{ color: '#666', fontSize: '14px' }}>
             Manage users, approvals, and platform operations

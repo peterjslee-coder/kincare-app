@@ -49932,7 +49932,13 @@ const AdminPanel = window.AdminPanel = () => {
       fontWeight: 700,
       letterSpacing: '0.5px'
     }
-  }, "ADMIN"), "Platform Dashboard"), /*#__PURE__*/React.createElement("div", {
+  }, "ADMIN"), "Platform Dashboard ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '14px',
+      fontWeight: 700,
+      color: '#888'
+    }
+  }, "v", window.APP_VERSION || '')), /*#__PURE__*/React.createElement("div", {
     style: {
       color: '#666',
       fontSize: '14px'
