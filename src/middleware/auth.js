@@ -33,7 +33,8 @@ async function authenticate(req, res, next) {
       "/api/feedback",
       "/api/admin/treasury",
     ];
-    const isTotpExempt = TOTP_EXEMPT_PATHS.some(p => req.path.startsWith(p));
+    const fullPath = req.originalUrl || req.path;
+    const isTotpExempt = TOTP_EXEMPT_PATHS.some(p => fullPath.startsWith(p));
 
     const totpCode = req.headers["x-admin-totp"];
     if (!totpCode && !isTotpExempt) {
