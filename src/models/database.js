@@ -860,6 +860,8 @@ async function initializeDatabase() {
       participant_user_id TEXT NOT NULL REFERENCES users(id),
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
+    // v1.50.42 — Notes on cost entries
+    `ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS notes TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

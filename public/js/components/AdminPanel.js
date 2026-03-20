@@ -162,6 +162,8 @@ const AdminPanel = window.AdminPanel = () => {
   const [recurSaving, setRecurSaving] = useState(false);
   const [editingRecurring, setEditingRecurring] = useState(null); // holds id of expense being edited
   const [editRecurringData, setEditRecurringData] = useState({}); // holds edited values for the expense
+  const [editingCost, setEditingCost] = useState(null); // holds id of one-time cost being edited
+  const [editCostData, setEditCostData] = useState({}); // holds edited values
 
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
 
@@ -260,6 +262,23 @@ const AdminPanel = window.AdminPanel = () => {
       const res = await apiFetch(`/api/costs/${id}`, { method: 'DELETE' });
       if (res?.ok) loadCosts();
     } catch {}
+  };
+
+  const handleSaveCost = async (id) => {
+    setCostSaving(true);
+    try {
+      const res = await apiFetch(`/api/costs/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(editCostData),
+      });
+      if (res?.ok) {
+        showToast('Cost entry updated', 'success');
+        setEditingCost(null);
+        setEditCostData({});
+        loadCosts();
+      }
+    } catch {}
+    setCostSaving(false);
   };
 
   // Admin freeze modal
@@ -3647,11 +3666,13 @@ const AdminPanel = window.AdminPanel = () => {
 
       {/* ── SAFETY FLAGS TAB ── */}
       {activeTab === 'safety' && (
-        <SafetyFlagsTab
-          safetyFlags={safetyFlags} safetyLoading={safetyLoading} safetyFlagCount={safetyFlagCount}
-          handleReviewFlag={handleReviewFlag} loadSafetyFlags={loadSafetyFlags}
-          apiFetch={apiFetch} showToast={showToast} currentUserId={currentUser?.id}
-        />
+        typeof SafetyFlagsTab === 'function'
+          ? React.createElement(SafetyFlagsTab, {
+              safetyFlags, safetyLoading, safetyFlagCount,
+              handleReviewFlag, loadSafetyFlags,
+              apiFetch, showToast, currentUserId: currentUser?.id,
+            })
+          : React.createElement('div', { style: { padding: 40, textAlign: 'center', color: '#888' } }, 'Safety flags component loading... Please refresh the page.')
       )}
 
       {/* ── COSTS TAB ── */}
@@ -3778,6 +3799,9 @@ const AdminPanel = window.AdminPanel = () => {
                 onChange={e => setNewCost({ ...newCost, description: e.target.value })}
                 style={{ padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13 }} />
             </div>
+            <input type="text" placeholder="Notes (e.g. legal fees, LLC filing Mar 2026)" value={newCost.notes || ''}
+              onChange={e => setNewCost({ ...newCost, notes: e.target.value })}
+              style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }} />
             <button onClick={handleAddCost} disabled={costSaving || !newCost.category || !newCost.amount}
               style={{ padding: '6px 16px', background: !newCost.category || !newCost.amount ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               {costSaving ? 'Saving...' : 'Add One-Time'}
@@ -3787,13 +3811,13 @@ const AdminPanel = window.AdminPanel = () => {
           {/* Monthly Summary */}
           {costLoading ? (
             <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Loading costs...</div>
-          ) : costSummary.length === 0 ? (
+          ) : costSummary.filter(m => m.total > 0).length === 0 ? (
             <div className="card" style={{ textAlign: 'center', color: '#888', padding: 40 }}>
               No cost data yet. Add recurring expenses or one-time entries above.
             </div>
           ) : (
             <>
-              {costSummary.map(month => (
+              {costSummary.filter(m => m.total > 0).map(month => (
                 <div key={month.month} className="card" style={{ marginBottom: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div>
@@ -3813,17 +3837,72 @@ const AdminPanel = window.AdminPanel = () => {
                   {Object.keys(month.categories).length > 0 && (
                     <div style={{ display: 'grid', gap: 4 }}>
                       {Object.entries(month.categories).sort((a, b) => b[1].amount - a[1].amount).map(([cat, data]) => (
-                        <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#f8f9fa', borderRadius: 6, fontSize: 13 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontWeight: 600 }}>{cat}</span>
-                            {data.source === 'auto' && (
-                              <span style={{ fontSize: 9, background: '#e3f2fd', color: '#1565c0', padding: '1px 5px', borderRadius: 3 }}>auto</span>
-                            )}
-                            {data.source === 'recurring' && (
-                              <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', padding: '1px 5px', borderRadius: 3 }}>recurring</span>
-                            )}
+                        <div key={cat}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#f8f9fa', borderRadius: 6, fontSize: 13 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontWeight: 600 }}>{cat}</span>
+                              {data.source === 'auto' && (
+                                <span style={{ fontSize: 9, background: '#e3f2fd', color: '#1565c0', padding: '1px 5px', borderRadius: 3 }}>auto</span>
+                              )}
+                              {data.source === 'recurring' && (
+                                <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', padding: '1px 5px', borderRadius: 3 }}>recurring</span>
+                              )}
+                            </div>
+                            <span style={{ fontWeight: 700 }}>${data.amount.toFixed(2)}</span>
                           </div>
-                          <span style={{ fontWeight: 700 }}>${data.amount.toFixed(2)}</span>
+                          {/* Individual manual entries with edit/notes */}
+                          {(data.entries || []).map(entry => (
+                            editingCost === entry.id ? (
+                              <div key={entry.id} style={{ margin: '4px 0 4px 16px', padding: '8px 10px', background: '#f0fdf4', borderRadius: 6, border: '1px solid #bbf7d0' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+                                  <select value={editCostData.category || cat} onChange={e => setEditCostData({ ...editCostData, category: e.target.value })}
+                                    style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12 }}>
+                                    {costCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                                  </select>
+                                  <input type="number" step="0.01" value={editCostData.amount !== undefined ? editCostData.amount : entry.amount}
+                                    onChange={e => setEditCostData({ ...editCostData, amount: e.target.value })}
+                                    style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12 }} placeholder="Amount" />
+                                  <input type="text" value={editCostData.description !== undefined ? editCostData.description : (entry.description || '')}
+                                    onChange={e => setEditCostData({ ...editCostData, description: e.target.value })}
+                                    style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12 }} placeholder="Description" />
+                                  <input type="month" value={editCostData.period_month || month.month}
+                                    onChange={e => setEditCostData({ ...editCostData, period_month: e.target.value })}
+                                    style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12 }} />
+                                </div>
+                                <input type="text" value={editCostData.notes !== undefined ? editCostData.notes : (entry.notes || '')}
+                                  onChange={e => setEditCostData({ ...editCostData, notes: e.target.value })}
+                                  style={{ width: '100%', padding: '5px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12, boxSizing: 'border-box', marginBottom: 6 }}
+                                  placeholder="Notes (e.g. legal fees, LLC filing Mar 2026)" />
+                                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                  <button onClick={() => { setEditingCost(null); setEditCostData({}); }}
+                                    style={{ padding: '3px 10px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                                    Cancel
+                                  </button>
+                                  <button onClick={() => handleDeleteCost(entry.id)}
+                                    style={{ padding: '3px 10px', background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                                    Delete
+                                  </button>
+                                  <button onClick={() => handleSaveCost(entry.id)} disabled={costSaving}
+                                    style={{ padding: '3px 10px', background: costSaving ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: costSaving ? 'not-allowed' : 'pointer' }}>
+                                    {costSaving ? 'Saving...' : 'Save'}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div key={entry.id} onClick={() => { setEditingCost(entry.id); setEditCostData({ category: cat, amount: entry.amount, description: entry.description || '', notes: entry.notes || '', period_month: month.month }); }}
+                                style={{ margin: '4px 0 4px 16px', padding: '4px 10px', background: '#fff', borderRadius: 4, border: '1px solid #eee', fontSize: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                                <div style={{ flex: 1 }}>
+                                  <span style={{ color: '#555' }}>{entry.description || cat}</span>
+                                  {entry.notes && (
+                                    <div style={{ fontSize: 11, color: '#888', marginTop: 2, fontStyle: 'italic' }}>
+                                      {'\u{1F4DD}'} {entry.notes}
+                                    </div>
+                                  )}
+                                </div>
+                                <span style={{ fontWeight: 600, color: '#555', whiteSpace: 'nowrap' }}>${entry.amount.toFixed(2)}</span>
+                              </div>
+                            )
+                          ))}
                         </div>
                       ))}
                     </div>

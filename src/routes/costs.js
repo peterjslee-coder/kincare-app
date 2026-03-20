@@ -43,7 +43,7 @@ router.get("/summary", authenticate, checkAdmin, async (req, res) => {
 
     // Get one-time manual costs
     const manualCosts = await db.prepare(`
-      SELECT period_month, category, description, amount
+      SELECT id, period_month, category, description, amount, notes
       FROM platform_costs
       WHERE period_month >= ? AND period_month <= ?
       ORDER BY period_month DESC
@@ -139,16 +139,17 @@ router.get("/summary", authenticate, checkAdmin, async (req, res) => {
       monthMap[month] = { month, categories: {}, total: 0 };
     }
 
-    const addToMonth = (month, category, amount, source, description) => {
+    const addToMonth = (month, category, amount, source, description, entry) => {
       if (!monthMap[month]) monthMap[month] = { month, categories: {}, total: 0 };
-      if (!monthMap[month].categories[category]) monthMap[month].categories[category] = { amount: 0, source, items: [] };
+      if (!monthMap[month].categories[category]) monthMap[month].categories[category] = { amount: 0, source, items: [], entries: [] };
       monthMap[month].categories[category].amount += parseFloat(amount) || 0;
       if (description) monthMap[month].categories[category].items.push(description);
+      if (entry) monthMap[month].categories[category].entries.push(entry);
       monthMap[month].total += parseFloat(amount) || 0;
     };
 
     // Add one-time manual costs
-    for (const c of manualCosts) addToMonth(c.period_month, c.category, c.amount, "manual", c.description);
+    for (const c of manualCosts) addToMonth(c.period_month, c.category, c.amount, "manual", c.description, { id: c.id, description: c.description, amount: parseFloat(c.amount), notes: c.notes });
 
     // Add recurring expenses to each applicable month
     for (const r of recurring) {
@@ -208,20 +209,42 @@ router.get("/", authenticate, checkAdmin, async (req, res) => {
 router.post("/", authenticate, checkAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const { category, description, amount, period_month } = req.body;
+    const { category, description, amount, period_month, notes } = req.body;
     if (!category || !amount || !period_month) {
       return res.status(400).json({ error: "Category, amount, and period_month are required" });
     }
 
     const id = uuid();
     await db.prepare(`
-      INSERT INTO platform_costs (id, category, description, amount, period_month, source, created_by)
-      VALUES (?, ?, ?, ?, ?, 'manual', ?)
-    `).run(id, category.trim(), description?.trim() || null, parseFloat(amount), period_month, req.user.id);
+      INSERT INTO platform_costs (id, category, description, amount, period_month, source, created_by, notes)
+      VALUES (?, ?, ?, ?, ?, 'manual', ?, ?)
+    `).run(id, category.trim(), description?.trim() || null, parseFloat(amount), period_month, req.user.id, notes?.trim() || null);
 
     res.json({ success: true, id });
   } catch (err) {
     res.status(500).json({ error: "Failed to add cost" });
+  }
+});
+
+// ─── PUT /api/costs/:id — Edit a one-time cost entry ───
+router.put("/:id", authenticate, checkAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { category, description, amount, period_month, notes } = req.body;
+    const updates = [];
+    const params = [];
+    if (category !== undefined) { updates.push("category = ?"); params.push(category.trim()); }
+    if (description !== undefined) { updates.push("description = ?"); params.push(description?.trim() || null); }
+    if (amount !== undefined) { updates.push("amount = ?"); params.push(parseFloat(amount)); }
+    if (period_month !== undefined) { updates.push("period_month = ?"); params.push(period_month); }
+    if (notes !== undefined) { updates.push("notes = ?"); params.push(notes?.trim() || null); }
+    if (updates.length === 0) return res.status(400).json({ error: "Nothing to update" });
+
+    params.push(req.params.id);
+    await db.prepare(`UPDATE platform_costs SET ${updates.join(", ")} WHERE id = ?`).run(...params);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update cost entry" });
   }
 });
 
