@@ -3,6 +3,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { sendPushToUser } = require("./push");
+const { screenMessage } = require("../utils/messageSafety");
 
 const router = express.Router();
 router.use(authenticate);
@@ -426,6 +427,11 @@ router.post("/conversations/:id", async (req, res) => {
       });
     }
 
+    // Fire-and-forget AI safety screening
+    screenMessage(content.trim(), userId, newConvId, {
+      firstName: sender?.first_name, lastName: sender?.last_name,
+    }).catch(() => {});
+
     return res.status(201).json({ message, conversationId: newConvId });
   }
 
@@ -477,6 +483,11 @@ router.post("/conversations/:id", async (req, res) => {
       });
     }
   }
+
+  // Fire-and-forget AI safety screening
+  screenMessage(content.trim(), userId, convId, {
+    firstName: sender?.first_name, lastName: sender?.last_name,
+  }).catch(() => {});
 
   res.status(201).json({ message });
 });
@@ -541,6 +552,11 @@ router.post("/", async (req, res) => {
       ...message, senderName, type: "received", conversationId: convId,
     });
   }
+
+  // Fire-and-forget AI safety screening
+  screenMessage(content, req.user.id, convId, {
+    firstName: sender?.first_name, lastName: sender?.last_name,
+  }).catch(() => {});
 
   res.status(201).json({ message });
 });
