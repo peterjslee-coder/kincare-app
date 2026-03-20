@@ -2710,9 +2710,227 @@ router.put("/safety-flags/:id", authenticate, checkAdmin, requireAdmin, async (r
       WHERE id = ?
     `).run(status, admin_notes || null, req.user.id, req.params.id);
 
+    // Log status change as audit event
+    await db.prepare(
+      "INSERT INTO safety_flag_events (id, safety_flag_id, event_type, actor_id, actor_label, content, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())"
+    ).run(uuid(), req.params.id, `status_${status}`, req.user.id, "Admin",
+      admin_notes ? `Status changed to ${status}. Notes: ${admin_notes}` : `Status changed to ${status}`
+    ).catch(() => {});
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to update safety flag" });
+  }
+});
+
+// ─── GET /api/admin/safety-flags/:id/thread — Full evidence thread for a safety flag ───
+// Returns: original conversation messages, admin outreach threads, audit events — all in chronological order
+router.get("/safety-flags/:id/thread", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const flagId = req.params.id;
+
+    // Get the safety flag itself
+    const flag = await db.prepare(`
+      SELECT sf.*, u.first_name, u.last_name, u.email
+      FROM safety_flags sf JOIN users u ON sf.user_id = u.id
+      WHERE sf.id = ?
+    `).get(flagId);
+    if (!flag) return res.status(404).json({ error: "Safety flag not found" });
+
+    // Mark as read by admin
+    if (!flag.admin_read_at) {
+      await db.prepare("UPDATE safety_flags SET admin_read_at = NOW() WHERE id = ?").run(flagId);
+      // Log read event
+      await db.prepare(
+        "INSERT INTO safety_flag_events (id, safety_flag_id, event_type, actor_id, actor_label, created_at) VALUES (?, ?, 'admin_viewed', ?, 'Admin', NOW())"
+      ).run(uuid(), flagId, req.user.id);
+    }
+
+    // 1. Original conversation messages (evidence)
+    let evidenceMessages = [];
+    if (flag.conversation_id) {
+      evidenceMessages = await db.prepare(`
+        SELECT m.id, m.sender_id, m.content, m.created_at, m.sender_label,
+          u.first_name, u.last_name, u.email, u.role
+        FROM messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE m.conversation_id = ?
+        ORDER BY m.created_at ASC
+      `).all(flag.conversation_id);
+    }
+
+    // 2. Admin outreach threads (conversations linked to this safety flag)
+    const linkedThreads = await db.prepare(`
+      SELECT sft.*, c.name AS conv_name,
+        u.first_name AS participant_first, u.last_name AS participant_last, u.email AS participant_email
+      FROM safety_flag_threads sft
+      JOIN conversations c ON sft.conversation_id = c.id
+      JOIN users u ON sft.participant_user_id = u.id
+      WHERE sft.safety_flag_id = ?
+    `).all(flagId);
+
+    // Get messages for each linked thread
+    const outreachMessages = [];
+    for (const thread of linkedThreads) {
+      const msgs = await db.prepare(`
+        SELECT m.id, m.sender_id, m.content, m.created_at, m.sender_label,
+          u.first_name, u.last_name, u.email, u.role
+        FROM messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE m.conversation_id = ?
+        ORDER BY m.created_at ASC
+      `).all(thread.conversation_id);
+      outreachMessages.push({
+        threadId: thread.id,
+        conversationId: thread.conversation_id,
+        participant: {
+          userId: thread.participant_user_id,
+          firstName: thread.participant_first,
+          lastName: thread.participant_last,
+          email: thread.participant_email,
+        },
+        messages: msgs,
+      });
+    }
+
+    // 3. Audit events (status changes, notes, admin views)
+    const events = await db.prepare(`
+      SELECT e.*, u.first_name AS actor_first, u.last_name AS actor_last
+      FROM safety_flag_events e
+      LEFT JOIN users u ON e.actor_id = u.id
+      WHERE e.safety_flag_id = ?
+      ORDER BY e.created_at ASC
+    `).all(flagId);
+
+    // 4. Conversation participants
+    let participants = [];
+    if (flag.conversation_id) {
+      participants = await db.prepare(`
+        SELECT u.id AS user_id, u.first_name, u.last_name, u.email, u.role
+        FROM conversation_members cm
+        JOIN users u ON cm.user_id = u.id
+        WHERE cm.conversation_id = ?
+      `).all(flag.conversation_id);
+    }
+
+    res.json({
+      flag,
+      evidenceMessages,
+      outreachMessages,
+      events,
+      participants,
+    });
+  } catch (err) {
+    console.error("Safety flag thread error:", err);
+    res.status(500).json({ error: "Failed to load thread" });
+  }
+});
+
+// ─── POST /api/admin/safety-flags/:id/message/:userId — Send outreach message linked to safety flag ───
+router.post("/safety-flags/:id/message/:userId", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const flagId = req.params.id;
+    const targetUserId = req.params.userId;
+    const { message } = req.body;
+    if (!message || !message.trim()) return res.status(400).json({ error: "Message is required" });
+
+    const flag = await db.prepare("SELECT id, conversation_id FROM safety_flags WHERE id = ?").get(flagId);
+    if (!flag) return res.status(404).json({ error: "Safety flag not found" });
+
+    const targetUser = await db.prepare("SELECT id, first_name, last_name FROM users WHERE id = ?").get(targetUserId);
+    if (!targetUser) return res.status(404).json({ error: "User not found" });
+
+    // Check if we already have a linked thread for this participant
+    let thread = await db.prepare(
+      "SELECT * FROM safety_flag_threads WHERE safety_flag_id = ? AND participant_user_id = ?"
+    ).get(flagId, targetUserId);
+
+    let convId;
+    if (thread) {
+      convId = thread.conversation_id;
+    } else {
+      // Find existing InPlace Support conversation with this user, or create one
+      const existing = await db.prepare(`
+        SELECT c.id FROM conversations c
+        JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
+        JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
+        WHERE c.type = 'direct' AND c.name = 'InPlace Support'
+      `).get(req.user.id, targetUserId);
+
+      if (existing) {
+        convId = existing.id;
+      } else {
+        convId = uuid();
+        await db.prepare("INSERT INTO conversations (id, type, name, created_by) VALUES (?, 'direct', 'InPlace Support', ?)").run(convId, req.user.id);
+        await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convId, req.user.id);
+        await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convId, targetUserId);
+      }
+
+      // Link this conversation to the safety flag
+      await db.prepare(
+        "INSERT INTO safety_flag_threads (id, safety_flag_id, conversation_id, participant_user_id, created_at) VALUES (?, ?, ?, ?, NOW())"
+      ).run(uuid(), flagId, convId, targetUserId);
+    }
+
+    // Send the message
+    const msgId = uuid();
+    await db.prepare(
+      "INSERT INTO messages (id, sender_id, recipient_id, content, conversation_id, sender_label, created_at) VALUES (?, ?, ?, ?, ?, 'InPlace Support', NOW())"
+    ).run(msgId, req.user.id, targetUserId, message.trim(), convId);
+    await db.prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?").run(convId);
+
+    // Log as audit event
+    await db.prepare(
+      "INSERT INTO safety_flag_events (id, safety_flag_id, event_type, actor_id, actor_label, content, metadata, created_at) VALUES (?, ?, 'admin_message', ?, 'InPlace Support', ?, ?::jsonb, NOW())"
+    ).run(uuid(), flagId, req.user.id, message.trim().substring(0, 500),
+      JSON.stringify({ recipientId: targetUserId, recipientName: `${targetUser.first_name} ${targetUser.last_name}`, conversationId: convId })
+    );
+
+    // Push + WebSocket to recipient
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      emitToUser(targetUserId, "new_message", {
+        messageId: msgId, conversationId: convId,
+        senderId: req.user.id, senderName: "InPlace Support",
+        content: message.trim(),
+      });
+    }
+    try {
+      const { sendPushToUser } = require("./push");
+      sendPushToUser(targetUserId, {
+        title: "InPlace Support",
+        body: message.trim().substring(0, 100),
+        data: { type: "message", conversationId: convId },
+      }).catch(() => {});
+    } catch {}
+
+    await logAdminAction(req, "safety_flag_message", "safety_flag", flagId, {
+      recipientId: targetUserId, conversationId: convId,
+    });
+
+    res.json({ success: true, messageId: msgId, conversationId: convId });
+  } catch (err) {
+    console.error("Safety flag message error:", err);
+    res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+// ─── POST /api/admin/safety-flags/:id/note — Add internal admin note (not sent to anyone) ───
+router.post("/safety-flags/:id/note", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { note } = req.body;
+    if (!note || !note.trim()) return res.status(400).json({ error: "Note is required" });
+
+    await db.prepare(
+      "INSERT INTO safety_flag_events (id, safety_flag_id, event_type, actor_id, actor_label, content, created_at) VALUES (?, ?, 'admin_note', ?, 'Admin', ?, NOW())"
+    ).run(uuid(), req.params.id, req.user.id, note.trim());
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to add note" });
   }
 });
 

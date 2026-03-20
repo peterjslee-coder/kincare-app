@@ -840,6 +840,26 @@ async function initializeDatabase() {
     // v1.50.32 — Checkr certification: legal_middle_name + ETA tracking
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS legal_middle_name TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS checkr_eta TIMESTAMPTZ`,
+    // v1.50.40 — Safety flag evidence threads
+    `ALTER TABLE safety_flags ADD COLUMN IF NOT EXISTS admin_read_at TIMESTAMPTZ`,
+    `ALTER TABLE safety_flags ADD COLUMN IF NOT EXISTS severity TEXT`,
+    `CREATE TABLE IF NOT EXISTS safety_flag_events (
+      id TEXT PRIMARY KEY,
+      safety_flag_id TEXT NOT NULL REFERENCES safety_flags(id),
+      event_type TEXT NOT NULL,
+      actor_id TEXT REFERENCES users(id),
+      actor_label TEXT,
+      content TEXT,
+      metadata JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS safety_flag_threads (
+      id TEXT PRIMARY KEY,
+      safety_flag_id TEXT NOT NULL REFERENCES safety_flags(id),
+      conversation_id TEXT NOT NULL REFERENCES conversations(id),
+      participant_user_id TEXT NOT NULL REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
