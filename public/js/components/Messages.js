@@ -22,6 +22,8 @@ const Messages = window.Messages = () => {
   const [archivedIds, setArchivedIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('msg_archived') || '[]'); } catch { return []; }
   });
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const swipeRef = useRef({ startX: 0, startY: 0, id: null });
@@ -157,6 +159,22 @@ const Messages = window.Messages = () => {
     localStorage.setItem('msg_archived', JSON.stringify(updated));
     if (activeConvId === convId) { setActiveConvId(null); setMessages([]); }
     showToast('Conversation archived', 'success');
+  };
+
+  // Multi-select archive
+  const handleArchiveSelected = () => {
+    if (selectedIds.length === 0) return;
+    const updated = [...new Set([...archivedIds, ...selectedIds])];
+    setArchivedIds(updated);
+    localStorage.setItem('msg_archived', JSON.stringify(updated));
+    if (selectedIds.includes(activeConvId)) { setActiveConvId(null); setMessages([]); }
+    showToast(`${selectedIds.length} conversation${selectedIds.length > 1 ? 's' : ''} archived`, 'success');
+    setSelectedIds([]);
+    setSelectMode(false);
+  };
+
+  const toggleSelectId = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   // Swipe gesture handlers for conversation items
@@ -304,6 +322,15 @@ const Messages = window.Messages = () => {
   useEffect(() => {
     if (typeof onSocketEvent !== 'function') return;
     const cleanup = onSocketEvent('new_message', (msg) => {
+      // Auto-unarchive if message arrives in an archived conversation
+      setArchivedIds(prev => {
+        if (prev.includes(msg.conversationId)) {
+          const updated = prev.filter(id => id !== msg.conversationId);
+          localStorage.setItem('msg_archived', JSON.stringify(updated));
+          return updated;
+        }
+        return prev;
+      });
       // If viewing this conversation, add message directly
       if (msg.conversationId === activeConvId) {
         setMessages(prev => [...prev, msg]);
@@ -1026,23 +1053,46 @@ const Messages = window.Messages = () => {
   const renderConversationList = () => (
     <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="msg-list-header">
-        <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#333', margin: 0 }}>Messages</h1>
+        <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#333', margin: 0 }}>
+          {selectMode ? `${selectedIds.length} selected` : 'Messages'}
+        </h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => { setShowFindPeople(true); fetchPendingRequests(); }}
-            style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', position: 'relative' }}
-            title="Find people to connect with">
-            🔍 Find People
-            {pendingRequests.length > 0 && (
-              <span style={{ position: 'absolute', top: -6, right: -6, background: '#e65100', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {pendingRequests.length}
-              </span>
-            )}
-          </button>
-          <button onClick={handleNewChat}
-            style={{ background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
-            title="New message">
-            +
-          </button>
+          {selectMode ? (
+            <>
+              <button onClick={handleArchiveSelected}
+                disabled={selectedIds.length === 0}
+                style={{ background: selectedIds.length > 0 ? '#e65100' : '#ccc', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
+                Archive{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
+              </button>
+              <button onClick={() => { setSelectMode(false); setSelectedIds([]); }}
+                style={{ background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setSelectMode(true)}
+                style={{ background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                title="Select conversations to archive">
+                &#128451;
+              </button>
+              <button onClick={() => { setShowFindPeople(true); fetchPendingRequests(); }}
+                style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', position: 'relative' }}
+                title="Find people to connect with">
+                🔍 Find People
+                {pendingRequests.length > 0 && (
+                  <span style={{ position: 'absolute', top: -6, right: -6, background: '#e65100', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {pendingRequests.length}
+                  </span>
+                )}
+              </button>
+              <button onClick={handleNewChat}
+                style={{ background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+                title="New message">
+                +
+              </button>
+            </>
+          )}
         </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -1137,15 +1187,25 @@ const Messages = window.Messages = () => {
               </div>
               <div
                 className={`msg-conv-item ${activeConvId === c.id ? 'active' : ''}`}
-                onClick={() => handleSelectConversation(c)}
-                onTouchStart={(e) => onConvTouchStart(e, c.id)}
-                onTouchMove={(e) => onConvTouchMove(e, c.id)}
-                onTouchEnd={() => onConvTouchEnd(c.id)}
+                onClick={() => selectMode ? toggleSelectId(c.id) : handleSelectConversation(c)}
+                onTouchStart={(e) => !selectMode && onConvTouchStart(e, c.id)}
+                onTouchMove={(e) => !selectMode && onConvTouchMove(e, c.id)}
+                onTouchEnd={() => !selectMode && onConvTouchEnd(c.id)}
                 style={{
-                  position: 'relative', background: '#fff',
+                  position: 'relative', background: selectMode && selectedIds.includes(c.id) ? '#f0f7ff' : '#fff',
                   transform: isSwiping ? `translateX(${swipeOffset}px)` : 'none',
                   transition: isSwiping ? 'none' : 'transform 0.2s',
                 }}>
+                {selectMode && (
+                  <div style={{ display: 'flex', alignItems: 'center', marginRight: 8, flexShrink: 0 }}>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: 6, border: selectedIds.includes(c.id) ? 'none' : '2px solid #ccc',
+                      background: selectedIds.includes(c.id) ? '#1b6b5a' : '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: 14, fontWeight: 700,
+                    }}>{selectedIds.includes(c.id) ? '\u2713' : ''}</div>
+                  </div>
+                )}
                 <div style={{ position: 'relative', flexShrink: 0 }}>
                 {isGroup ? (
                   <div style={{ width: '44px', height: '44px', position: 'relative' }}>
