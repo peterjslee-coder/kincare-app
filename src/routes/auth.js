@@ -32,10 +32,8 @@ router.post("/signup-intent", async (req, res) => {
     }
 
     // Check if already registered (exclude soft-deleted accounts, case-insensitive)
-    // Special case: peter@yourinplace.com can register multiple test accounts
-    const TEST_MULTI_EMAIL = "peter@yourinplace.com";
     const existing = await db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email);
-    if (existing && email.toLowerCase() !== TEST_MULTI_EMAIL) {
+    if (existing) {
       return res.status(409).json({ error: "This email is already registered. Try signing in instead." });
     }
     // Clean up any ghost soft-deleted accounts still holding this email
@@ -128,9 +126,8 @@ router.get("/confirm-signup", async (req, res) => {
     }
 
     // Check if someone already registered with this email (exclude soft-deleted, case-insensitive)
-    // Special case: peter@yourinplace.com can register multiple test accounts
     const existing = await db.prepare("SELECT id, role FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(intent.email);
-    if (existing && intent.email.toLowerCase() !== "peter@yourinplace.com") {
+    if (existing) {
       await db.prepare("DELETE FROM signup_intents WHERE id = ?").run(intent.id);
       // Check if caregiver has completed profile
       let hasProfile = true;
@@ -182,27 +179,12 @@ router.post("/register", validateRegister, async (req, res) => {
       }
     }
 
-    // Special case: peter@yourinplace.com can register multiple test accounts
-    const isMultiTestEmail = email.toLowerCase() === "peter@yourinplace.com";
     const existing = await db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email);
-    if (existing && !isMultiTestEmail) {
+    if (existing) {
       return res.status(409).json({ error: "Email already registered" });
     }
     // Clean up ghost soft-deleted accounts still holding this email
-    if (!isMultiTestEmail) {
-      await db.prepare("DELETE FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 0").run(email);
-    }
-
-    // For multi-test email, generate a unique +testN suffix to satisfy DB uniqueness
-    let dbEmail = email;
-    if (isMultiTestEmail && existing) {
-      const allAccounts = await db.prepare(
-        "SELECT email FROM users WHERE LOWER(email) LIKE 'peter%@yourinplace.com' AND is_active = 1"
-      ).all();
-      const nextNum = allAccounts.length + 1;
-      dbEmail = `peter+test${nextNum}@yourinplace.com`;
-      console.log(`[auth] Multi-test account: storing as ${dbEmail}`);
-    }
+    await db.prepare("DELETE FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 0").run(email);
 
     // Check if email is blocked
     const blocked = await db.prepare("SELECT id FROM blocked_emails WHERE LOWER(email) = LOWER(?)").get(email);
@@ -214,15 +196,15 @@ router.post("/register", validateRegister, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Test account shortcut: last name ending in "Tester" auto-verifies + gets is_tester flag
-    const isTestAccount = /tester$/i.test((lastName || "").trim()) || isMultiTestEmail;
+    const isTestAccount = /tester$/i.test((lastName || "").trim());
 
     const roles = JSON.stringify([role]);
     await db.prepare(`
       INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, email_verified, is_tester)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, dbEmail, passwordHash, role, roles, firstName, lastName, phone || null, isTestAccount ? 1 : 0, isTestAccount ? 1 : 0);
+    `).run(id, email, passwordHash, role, roles, firstName, lastName, phone || null, isTestAccount ? 1 : 0, isTestAccount ? 1 : 0);
 
-    const user = { id, email: dbEmail, role, roles: [role], firstName, lastName, emailVerified: isTestAccount };
+    const user = { id, email, role, roles: [role], firstName, lastName, emailVerified: isTestAccount };
     const token = generateToken(user);
 
     // Clean up signup intent if one was used
