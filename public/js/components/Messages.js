@@ -173,6 +173,16 @@ const Messages = window.Messages = () => {
     setSelectMode(false);
   };
 
+  // Unarchive a conversation
+  const handleUnarchive = (convId) => {
+    const updated = archivedIds.filter(id => id !== convId);
+    setArchivedIds(updated);
+    localStorage.setItem('msg_archived', JSON.stringify(updated));
+    showToast('Conversation restored', 'success');
+  };
+
+  const [showArchived, setShowArchived] = useState(false);
+
   const toggleSelectId = (id) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
@@ -1327,6 +1337,55 @@ const Messages = window.Messages = () => {
             <span style={{ fontSize: 14, color: '#ccc', flexShrink: 0 }}>⏳</span>
           </div>
         ))}
+
+        {/* Archived conversations section */}
+        {(() => {
+          const archivedConvs = conversations.filter(c => archivedIds.includes(c.id));
+          if (archivedConvs.length === 0) return null;
+          return (
+            <div style={{ borderTop: '1px solid #e0e0e0' }}>
+              <div onClick={() => setShowArchived(!showArchived)}
+                style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: '#fafafa' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#888' }}>
+                  {'\uD83D\uDCE6'} Archived ({archivedConvs.length})
+                </span>
+                <span style={{ fontSize: 11, color: '#aaa', transform: showArchived ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
+              </div>
+              {showArchived && archivedConvs.sort((a, b) => {
+                const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+                const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+                return bTime - aTime;
+              }).map(c => {
+                const isGroup = isGroupConv(c);
+                return (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid #f5f5f5', background: '#fafafa' }}>
+                    <div onClick={() => handleSelectConversation(c)} style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                      {c.profilePhoto ? (
+                        <img src={c.profilePhoto} alt={c.name} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, opacity: 0.7 }} />
+                      ) : (
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '50%',
+                          background: getAvatarColor(c.name || '?'), color: '#fff',
+                          fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.7,
+                        }}>{getInitials(c.name || '?')}</div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: '#888' }}>{c.name}</div>
+                        <div style={{ fontSize: 12, color: '#bbb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.lastMessage ? (c.lastMessage.length > 40 ? c.lastMessage.substring(0, 40) + '...' : c.lastMessage) : 'No messages'}
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={() => handleUnarchive(c.id)}
+                      style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      Restore
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
