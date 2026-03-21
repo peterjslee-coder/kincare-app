@@ -511,9 +511,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           onClick={() => setPrefsExpanded(!prefsExpanded)}>
           <div className="card-header" style={{ margin: 0 }}>
             <span className="card-icon">{'\u2728'}</span>Care Preferences
-            {Object.values(carePrefs).filter(v => v > 0).length > 0 && (
+            {Object.keys(carePrefs).length > 0 && (
               <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1b6b5a', background: '#e8f5e9', padding: '2px 8px', borderRadius: 10 }}>
-                {Object.values(carePrefs).filter(v => v > 0).length}/{CARE_PREFS_LIST.length} rated
+                {Object.keys(carePrefs).length}/{CARE_PREFS_LIST.length} rated
               </span>
             )}
           </div>
