@@ -1216,38 +1216,42 @@ router.put("/users/:id/onboarding", async (req, res) => {
     if (!profile) return res.status(404).json({ error: "No caregiver profile found for this user" });
 
     const { backgroundCheckCleared, backgroundCheckPaid, onboardingComplete, isAvailable } = req.body;
-    const updates = [];
-    const params = [];
+    // Use a map to avoid duplicate column assignments when flags cascade
+    const colMap = new Map(); // column -> { sql, param? }
 
     if (backgroundCheckCleared !== undefined) {
-      updates.push("is_background_checked = ?");
-      params.push(backgroundCheckCleared ? 1 : 0);
-      // Also update checkr_status so the banner clears
-      updates.push(backgroundCheckCleared ? "checkr_status = 'clear'" : "checkr_status = 'pending'");
+      colMap.set("is_background_checked", { sql: "is_background_checked = ?", param: backgroundCheckCleared ? 1 : 0 });
+      colMap.set("checkr_status", { sql: backgroundCheckCleared ? "checkr_status = 'clear'" : "checkr_status = 'pending'" });
     }
     if (backgroundCheckPaid !== undefined) {
-      updates.push("background_check_paid = ?");
-      params.push(backgroundCheckPaid ? 1 : 0);
+      colMap.set("background_check_paid", { sql: "background_check_paid = ?", param: backgroundCheckPaid ? 1 : 0 });
     }
     if (onboardingComplete !== undefined) {
-      updates.push("onboarding_complete = ?");
-      params.push(onboardingComplete ? 1 : 0);
-      // When marking onboarding complete, also clear background check gates
+      colMap.set("onboarding_complete", { sql: "onboarding_complete = ?", param: onboardingComplete ? 1 : 0 });
       if (onboardingComplete) {
-        updates.push("is_background_checked = 1", "background_check_paid = 1", "checkr_status = 'clear'");
+        colMap.set("is_background_checked", { sql: "is_background_checked = 1" });
+        colMap.set("background_check_paid", { sql: "background_check_paid = 1" });
+        colMap.set("checkr_status", { sql: "checkr_status = 'clear'" });
       }
     }
     if (isAvailable !== undefined) {
-      updates.push("is_available = ?");
-      params.push(isAvailable ? 1 : 0);
-      // When marking available for jobs, cascade all onboarding gates
+      colMap.set("is_available", { sql: "is_available = ?", param: isAvailable ? 1 : 0 });
       if (isAvailable) {
-        updates.push("onboarding_complete = 1", "is_background_checked = 1", "background_check_paid = 1", "checkr_status = 'clear'");
+        colMap.set("onboarding_complete", { sql: "onboarding_complete = 1" });
+        colMap.set("is_background_checked", { sql: "is_background_checked = 1" });
+        colMap.set("background_check_paid", { sql: "background_check_paid = 1" });
+        colMap.set("checkr_status", { sql: "checkr_status = 'clear'" });
       }
     }
 
-    if (updates.length === 0) return res.status(400).json({ error: "No flags to update" });
+    if (colMap.size === 0) return res.status(400).json({ error: "No flags to update" });
 
+    const updates = [];
+    const params = [];
+    for (const entry of colMap.values()) {
+      updates.push(entry.sql);
+      if (entry.param !== undefined) params.push(entry.param);
+    }
     updates.push("updated_at = NOW()");
     params.push(req.params.id);
 
