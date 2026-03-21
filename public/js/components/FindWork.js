@@ -1,7 +1,10 @@
 // ─── FindWork — Caregiver work hub: open jobs, availability, rates, families ───
 // Sub-tabs: Open Jobs (list/map), Availability, My Rates, My Families
 const FindWork = window.FindWork = () => {
-  const [subTab, setSubTab] = useState('jobs'); // 'jobs' | 'availability' | 'rates' | 'families'
+  const [subTab, setSubTab] = useState(() => {
+    if (window.__findWorkTab) { const t = window.__findWorkTab; delete window.__findWorkTab; return t; }
+    return 'jobs';
+  }); // 'jobs' | 'availability' | 'rates' | 'families'
   const [openRequests, setOpenRequests] = useState([]);
   const [upcomingSessions, setUpcomingSessions] = useState([]);
   const [loading, setLoading] = useState(true);

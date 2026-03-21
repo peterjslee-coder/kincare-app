@@ -923,10 +923,12 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
         cp.checkr_status, cp.checkr_candidate_id, cp.checkr_invitation_id, cp.checkr_report_id,
         cp.is_background_checked, cp.background_check_paid, cp.background_check_consent,
         cp.onboarding_complete, cp.checkr_eta,
+        cp.bg_check_admin_approved, cp.bg_check_admin_approved_at,
         u.email, u.first_name, u.last_name
       FROM caregiver_profiles cp
       JOIN users u ON cp.user_id = u.id
       WHERE cp.background_check_consent = 1 OR cp.checkr_candidate_id IS NOT NULL
+            OR cp.is_background_checked = 1 OR cp.bg_check_admin_approved = 1
       ORDER BY cp.updated_at DESC
     `).all();
 

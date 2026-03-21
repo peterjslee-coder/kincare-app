@@ -555,15 +555,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     } catch (err) { setStripeError('Could not open Stripe dashboard. Please try again.'); }
   };
 
-  // Load stoplight from profile (must be before early returns — React hook order rules)
+  // Load care preferences from profile (try care_preferences first, fall back to care_stoplight)
   useEffect(() => {
-    if (!data?.profile?.care_stoplight) return;
+    const raw = data?.profile?.care_preferences || data?.profile?.care_stoplight;
+    if (!raw) return;
     try {
-      const parsed = typeof data.profile.care_stoplight === 'string' ? JSON.parse(data.profile.care_stoplight) : data.profile.care_stoplight;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       setStoplightData(parsed);
       setStoplightForm(parsed);
     } catch { /* ignore */ }
-  }, [data?.profile?.care_stoplight]);
+  }, [data?.profile?.care_preferences, data?.profile?.care_stoplight]);
 
   // Fetch documents when documents tab is active
   useEffect(() => {
@@ -1050,7 +1051,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const stripeConnected = stripeStatus?.status === 'active';
   const bgPaid = !!profile.background_check_paid || !!profile.isBackgroundChecked;
   const idVerified = idVerification.verified;
-  const hasPreferences = !!stoplightData;
+  const hasPreferences = !!stoplightData && Object.keys(stoplightData).length > 0;
 
   const firstSteps = [
     { id: 'stripe-bg',
@@ -1273,7 +1274,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               <div key={s.id} onClick={() => {
                 if (s.done) return;
                 if (s.id === 'photo') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'avail-rates') window.__navigateTo && window.__navigateTo('find-work');
+                if (s.id === 'avail-rates') { window.__findWorkTab = 'availability'; window.__navigateTo && window.__navigateTo('find-work'); }
                 if (s.id === 'security') {
                   window.__accountTab = 'settings';
                   window.__navigateTo && window.__navigateTo('account');

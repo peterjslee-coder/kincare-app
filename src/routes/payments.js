@@ -639,15 +639,26 @@ router.get("/connect/status", requireRole("caregiver"), async (req, res) => {
     }
 
     res.json({
-      connected: true,
+      connected: isComplete,
       status: isComplete ? "active" : "pending",
       chargesEnabled: account.charges_enabled,
       payoutsEnabled: account.payouts_enabled,
       detailsSubmitted: account.details_submitted,
       stripeAccountId: profile.stripe_account_id,
+      onboardingStarted: true,
     });
   } catch (err) {
     console.error("Stripe status check error:", err);
+    // If Stripe can't find the account (e.g. test/fake account), return graceful fallback
+    if (err.type === 'StripeInvalidRequestError' || err.statusCode === 404) {
+      return res.json({
+        connected: false,
+        status: "invalid",
+        onboardingStarted: true,
+        stripeAccountId: profile.stripe_account_id,
+        error: "Stripe account not found or invalid",
+      });
+    }
     res.status(500).json({ error: "Failed to check Stripe status" });
   }
 });

@@ -3521,8 +3521,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {activeTab === 'bgchecks' && (() => {
         const actionStatuses = ['consider', 'suspended', 'disputed', 'adverse_action', 'processing', 'invitation_sent', 'invitation_expired', 'invitation_canceled'];
         const filedStatuses = ['clear', 'consider_approved', 'rejected', 'did_not_pass'];
-        const actionItems = bgCheckCandidates.filter(c => actionStatuses.includes(c.checkr_status) || (!c.checkr_status || c.checkr_status === 'pending'));
-        const filedItems = bgCheckCandidates.filter(c => filedStatuses.includes(c.checkr_status));
+        const actionItems = bgCheckCandidates.filter(c => actionStatuses.includes(c.checkr_status) || ((!c.checkr_status || c.checkr_status === 'pending') && !c.is_background_checked && !c.bg_check_admin_approved));
+        const filedItems = bgCheckCandidates.filter(c => filedStatuses.includes(c.checkr_status) || c.is_background_checked || c.bg_check_admin_approved);
         const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
 
         const getStatusColor = (s) => s === 'clear' ? '#2e7d32' : s === 'consider' ? '#e65100' :
@@ -3541,10 +3541,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         const isHighlight = (s) => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed' || s === 'did_not_pass';
 
         const renderCard = (c, faded) => {
-          const statusColor = getStatusColor(c.checkr_status);
+          // For admin-approved caregivers without a checkr_status, treat as 'clear'
+          const effectiveStatus = (!c.checkr_status || c.checkr_status === 'pending') && (c.is_background_checked || c.bg_check_admin_approved)
+            ? 'clear' : c.checkr_status;
+          const statusColor = getStatusColor(effectiveStatus);
           return (
             <div key={c.user_id} className="card" style={{
-              border: isHighlight(c.checkr_status) ? '2px solid ' + statusColor : '1px solid #e5e7eb',
+              border: isHighlight(effectiveStatus) ? '2px solid ' + statusColor : '1px solid #e5e7eb',
               padding: '14px 18px',
               opacity: faded ? 0.55 : 1,
               transition: 'opacity 0.3s ease',
@@ -3556,16 +3559,17 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   </div>
                   <div style={{ fontSize: 12, color: '#888' }}>{c.email}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                    <span>{getStatusIcon(c.checkr_status)}</span>
+                    <span>{getStatusIcon(effectiveStatus)}</span>
                     <span style={{ fontWeight: 600, fontSize: 13, color: statusColor }}>
-                      {getStatusLabel(c.checkr_status)}
+                      {getStatusLabel(effectiveStatus)}
+                      {c.bg_check_admin_approved && !c.checkr_candidate_id ? ' (Admin)' : ''}
                     </span>
                   </div>
                   <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>
                     {c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted'}
                     {c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : ''}
                   </div>
-                  {c.checkr_eta && c.checkr_status === 'processing' && (() => {
+                  {c.checkr_eta && effectiveStatus === 'processing' && (() => {
                     const eta = new Date(c.checkr_eta);
                     const now = new Date();
                     const diffMs = eta - now;

@@ -1497,10 +1497,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{
                 width: 12, height: 12, borderRadius: '50%',
-                background: stripeStatus?.connected ? '#1b6b5a' : '#e8724a'
+                background: stripeStatus?.connected ? '#1b6b5a' : stripeStatus?.onboardingStarted ? '#f59e0b' : '#e8724a'
               }}></div>
               <span style={{ fontSize: 14, fontWeight: 500 }}>
-                {stripeStatus?.connected ? 'Connected' : 'Not connected'}
+                {stripeStatus?.connected ? 'Connected' : stripeStatus?.onboardingStarted ? 'Setup incomplete' : 'Not connected'}
               </span>
             </div>
             {stripeStatus?.connected ? (
@@ -1509,10 +1509,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 View Stripe Dashboard
               </button>
             ) : (
-              <button onClick={handleConnectStripe}
-                style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                Connect with Stripe
-              </button>
+              <div>
+                <button onClick={handleConnectStripe}
+                  style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  {stripeStatus?.onboardingStarted ? 'Complete Stripe Setup' : 'Connect with Stripe'}
+                </button>
+                {stripeStatus?.onboardingStarted && (
+                  <div style={{ fontSize: 12, color: '#b45309', marginTop: 8 }}>
+                    You started Stripe setup but haven't completed it. Click above to finish connecting your bank account.
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -1744,54 +1751,93 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       )}
 
       {/* ─── Care Preferences Tab (Caregiver Only) ─── */}
-      {activeTab === 'preferences' && isCaregiver && (
-        <div>
-          {preferences && (
-            <div>
-              {[
-                { key: 'personal_hygiene', label: 'Personal hygiene' },
-                { key: 'meal_preparation', label: 'Meal preparation' },
-                { key: 'medication_reminders', label: 'Medication reminders' },
-                { key: 'light_housekeeping', label: 'Light housekeeping' },
-                { key: 'transportation', label: 'Transportation' },
-                { key: 'companionship', label: 'Companionship' },
-                { key: 'memory_care', label: 'Memory care' },
-                { key: 'mobility_assistance', label: 'Mobility assistance' },
-                { key: 'overnight_care', label: 'Overnight care' },
-                { key: 'pet_friendly_homes', label: 'Pet-friendly homes' },
-              ].map(({ key, label }) => (
-                <div key={key} className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{label}</div>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <input type="radio" name={key} value="green" checked={preferences[key] === 'green'}
-                        onChange={() => setPreferences({ ...preferences, [key]: 'green' })} />
-                      <span style={{ fontSize: 18 }}>🟢</span>
-                      <span style={{ fontSize: 13 }}>Comfortable</span>
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <input type="radio" name={key} value="yellow" checked={preferences[key] === 'yellow'}
-                        onChange={() => setPreferences({ ...preferences, [key]: 'yellow' })} />
-                      <span style={{ fontSize: 18 }}>🟡</span>
-                      <span style={{ fontSize: 13 }}>Willing w/ Support</span>
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <input type="radio" name={key} value="red" checked={preferences[key] === 'red'}
-                        onChange={() => setPreferences({ ...preferences, [key]: 'red' })} />
-                      <span style={{ fontSize: 18 }}>🔴</span>
-                      <span style={{ fontSize: 13 }}>Not Comfortable</span>
-                    </label>
-                  </div>
-                </div>
-              ))}
-              <button onClick={handleSavePreferences} disabled={savingPrefs}
-                style={{ padding: '12px 24px', background: savingPrefs ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
-                {savingPrefs ? 'Saving...' : 'Save Preferences'}
-              </button>
+      {activeTab === 'preferences' && isCaregiver && (() => {
+        const CG_PREFS_LIST = [
+          { id: 'meal_prep', label: 'Meal preparation & cooking', icon: '\uD83C\uDF73' },
+          { id: 'housekeeping', label: 'Light housekeeping (tidying, dishes, laundry)', icon: '\uD83E\uDDF9' },
+          { id: 'errands', label: 'Grocery shopping & errands', icon: '\uD83D\uDED2' },
+          { id: 'med_reminders', label: 'Medication reminders', icon: '\uD83D\uDC8A' },
+          { id: 'bathing', label: 'Help with bathing, grooming & dressing', icon: '\uD83D\uDEBF' },
+          { id: 'fall_prevention', label: 'Fall prevention & mobility assistance', icon: '\uD83E\uDDAF' },
+          { id: 'transportation', label: 'Transportation to appointments', icon: '\uD83D\uDE97' },
+          { id: 'overnight', label: 'Overnight or evening supervision', icon: '\uD83C\uDF19' },
+          { id: 'wandering', label: 'Wandering prevention', icon: '\uD83D\uDEAA' },
+          { id: 'vitals', label: 'Vital signs monitoring (BP, temperature)', icon: '\uD83E\uDE7A' },
+          { id: 'exercise', label: 'Exercise & physical therapy support', icon: '\uD83C\uDFCB\uFE0F' },
+          { id: 'companionship', label: 'Companionship & conversation', icon: '\uD83D\uDCAC' },
+          { id: 'hobbies', label: 'Engaging in hobbies & activities together', icon: '\uD83C\uDFA8' },
+          { id: 'social_outings', label: 'Social outing accompaniment', icon: '\u26EA' },
+          { id: 'patience', label: 'Patience with repetition & confusion', icon: '\uD83D\uDC9B' },
+          { id: 'daily_updates', label: 'Daily updates & photos to family', icon: '\uD83D\uDCF8' },
+          { id: 'consistent_caregiver', label: 'Consistent same-caregiver scheduling', icon: '\uD83E\uDD1D' },
+          { id: 'condition_experience', label: 'Experience with specific conditions', icon: '\uD83D\uDCCB' },
+          { id: 'pets', label: 'Comfortable with pets in the home', icon: '\uD83D\uDC3E' },
+          { id: 'gardening', label: 'Gardening or light yard work', icon: '\uD83C\uDF31' },
+          { id: 'outdoor_walks', label: 'Outdoor walks & fresh air time', icon: '\uD83D\uDEB6' },
+          { id: 'socializing_out', label: 'Socializing away from home', icon: '\u2615' },
+          { id: 'tech_help', label: 'Technology help (phone, tablet, video calls)', icon: '\uD83D\uDCF1' },
+          { id: 'spiritual', label: 'Spiritual or religious practice support', icon: '\uD83D\uDD4A\uFE0F' },
+        ];
+        const CG_RATING_OPTIONS = [
+          { value: 'none', label: 'No pref', color: '#e0e0e0', textColor: '#999' },
+          { value: 'green', label: 'Comfortable', color: '#e8f5e9', textColor: '#2e7d32' },
+          { value: 'yellow', label: 'With support', color: '#fff3e0', textColor: '#e65100' },
+          { value: 'red', label: 'Not comfortable', color: '#ffebee', textColor: '#c62828' },
+        ];
+        const prefs = preferences || {};
+        const ratedCount = Object.values(prefs).filter(v => v && v !== 'none').length;
+        return (
+          <div>
+            <div style={{ background: '#f0faf8', border: '1px solid #c8e6c9', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 500, lineHeight: 1.5 }}>
+                Tell families what you're comfortable with. This helps us match you to compatible clients. <strong>{ratedCount}/{CG_PREFS_LIST.length} rated</strong>
+              </div>
             </div>
-          )}
-        </div>
-      )}
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+              {CG_RATING_OPTIONS.slice(1).map(r => (
+                <div key={r.value} style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600, background: r.color, color: r.textColor, border: '1px solid #ddd' }}>{r.label}</div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {CG_PREFS_LIST.map(pref => {
+                const val = prefs[pref.id] || 'none';
+                const ratingObj = CG_RATING_OPTIONS.find(r => r.value === val) || CG_RATING_OPTIONS[0];
+                return (
+                  <div key={pref.id} style={{
+                    borderRadius: 8,
+                    background: val !== 'none' ? ratingObj.color + '40' : '#fafafa',
+                    border: '1px solid ' + (val !== 'none' ? ratingObj.color : '#eee'),
+                    transition: 'all 0.2s',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
+                      <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{pref.icon}</span>
+                      <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: '#333', lineHeight: 1.3 }}>{pref.label}</div>
+                      <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                        {CG_RATING_OPTIONS.slice(1).map(r => (
+                          <button key={r.value} onClick={() => setPreferences({ ...prefs, [pref.id]: val === r.value ? 'none' : r.value })} style={{
+                            padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
+                            border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
+                            background: val === r.value ? r.color : '#fff',
+                            color: val === r.value ? r.textColor : '#999',
+                            cursor: 'pointer', transition: 'all 0.15s',
+                          }}>{r.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button onClick={handleSavePreferences} disabled={savingPrefs}
+              style={{ marginTop: 16, padding: '12px 24px', background: savingPrefs ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
+              {savingPrefs ? 'Saving...' : 'Save Preferences'}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Add a Role — merged into "Your Profiles" section in Profile card above */}
 
