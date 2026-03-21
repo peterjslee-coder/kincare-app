@@ -981,6 +981,14 @@ router.put("/:id/status", async (req, res) => {
 
   const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
 
+  // Check milestones on session completion
+  if (status === "completed" && session.caregiver_id) {
+    try {
+      const { checkSessionMilestones } = require("./referrals");
+      await checkSessionMilestones(db, session.caregiver_id);
+    } catch (e) { console.error("Milestone check error:", e); }
+  }
+
   // Real-time: notify family user of session status change
   const emitToUser = req.app.get("emitToUser");
   if (emitToUser) {

@@ -16,6 +16,26 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   const [sandboxPreview, setSandboxPreview] = useState(false);
   const [intlPhone, setIntlPhone] = useState(false);
 
+  // Referral state — post-registration "who referred you?" flow
+  const [showReferralStep, setShowReferralStep] = useState(false);
+  const [refCode, setRefCode] = useState('');
+  const [refSearch, setRefSearch] = useState('');
+  const [refCandidates, setRefCandidates] = useState([]);
+  const [refSearching, setRefSearching] = useState(false);
+  const [refClaiming, setRefClaiming] = useState(false);
+  const [refDone, setRefDone] = useState(false);
+  const [refReferrerName, setRefReferrerName] = useState('');
+  const [pendingUser, setPendingUser] = useState(null);
+
+  // Detect ?ref= URL param
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get('ref');
+      if (ref) setRefCode(ref);
+    } catch (e) {}
+  }, []);
+
   // For care team invites, auto-select family track and skip role picker
   const isInviteFlow = !!pendingInviteToken;
   useEffect(() => {
@@ -126,7 +146,30 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
         trackAuthEvent('registration', 'registration_success', { email: formData.email, role });
       }
       setAuthToken(res.token);
-      onLogin(res.user);
+      // If there's a referral code from URL, claim it automatically then log in
+      if (refCode) {
+        try {
+          const claimRes = await apiFetch('/api/referrals/claim', { method: 'POST', body: JSON.stringify({ referralCode: refCode }) });
+          if (claimRes?.ok) {
+            const claimData = await claimRes.json();
+            if (claimData.success && claimData.referrerName) {
+              setPendingUser(res.user);
+              setRefReferrerName(claimData.referrerName);
+              setRefDone(true);
+              setShowReferralStep(true);
+              setRegistering(false);
+              return; // Show thank-you before logging in
+            }
+          }
+        } catch (e) { console.error('Auto-claim referral error:', e); }
+        onLogin(res.user);
+        return;
+      }
+      // Otherwise show the "who referred you?" step
+      setPendingUser(res.user);
+      setShowReferralStep(true);
+      setRegistering(false);
+      return;
     } catch (err) {
       if (typeof trackAuthEvent === 'function') {
         trackAuthEvent('registration', 'error', { email: formData.email, role: track, error: err.message, source: 'network' });
@@ -135,6 +178,162 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
       setRegistering(false);
     }
   };
+
+  // ─── Referral Step (post-registration) ───
+  if (showReferralStep) {
+    const handleRefSearch = async () => {
+      if (!refSearch.trim()) return;
+      setRefSearching(true);
+      try {
+        const res = await apiFetch('/api/referrals/claim', {
+          method: 'POST',
+          body: JSON.stringify({ referrerSearch: refSearch.trim() }),
+        });
+        if (res?.ok) {
+          const d = await res.json();
+          setRefCandidates(d.candidates || []);
+        }
+      } catch (e) { console.error('Referral search error:', e); }
+      setRefSearching(false);
+    };
+    const handleSelectReferrer = async (referrerUserId) => {
+      setRefClaiming(true);
+      try {
+        const res = await apiFetch('/api/referrals/select-referrer', {
+          method: 'POST',
+          body: JSON.stringify({ referrerUserId }),
+        });
+        if (res?.ok) {
+          const d = await res.json();
+          if (d.success) {
+            setRefReferrerName(d.referrerName || '');
+            setRefDone(true);
+          }
+        }
+      } catch (e) { console.error('Select referrer error:', e); }
+      setRefClaiming(false);
+    };
+    const finishLogin = () => {
+      if (pendingUser) onLogin(pendingUser);
+    };
+
+    return (
+      <div className="register-container">
+        <div className="register-card" style={{ maxWidth: '480px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '8px' }}>{refDone ? '\u{1F389}' : '\u{1F91D}'}</div>
+            <h2 style={{ margin: '0 0 8px', fontSize: '20px' }}>
+              {refDone ? 'Welcome to inPlace!' : 'One Last Thing...'}
+            </h2>
+          </div>
+
+          {refDone ? (
+            <div>
+              {refReferrerName && (
+                <div style={{ background: '#e8f5e9', border: '1px solid #c8e6c9', borderRadius: 10, padding: '14px 16px', marginBottom: 16, textAlign: 'center' }}>
+                  <div style={{ fontSize: 14, color: '#2e7d32', fontWeight: 600 }}>
+                    {refReferrerName} has been credited for your referral. Thank you!
+                  </div>
+                </div>
+              )}
+              <button onClick={finishLogin} className="btn btn-primary" style={{ width: '100%', padding: '14px', fontSize: '16px' }}>
+                Get Started
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p style={{ color: '#666', fontSize: '14px', marginBottom: '16px', textAlign: 'center' }}>
+                Did someone tell you about inPlace? Let us thank them!
+              </p>
+
+              {/* Search by name */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Search by name</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input type="text" value={refSearch} onChange={(e) => setRefSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRefSearch()}
+                    placeholder="e.g. Sarah, Maria Jones..."
+                    style={{ flex: 1, padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
+                  <button onClick={handleRefSearch} disabled={refSearching || !refSearch.trim()} style={{
+                    padding: '10px 16px', background: refSearching ? '#ccc' : '#1b6b5a', color: '#fff',
+                    border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: refSearching ? 'wait' : 'pointer',
+                  }}>{refSearching ? '...' : 'Search'}</button>
+                </div>
+              </div>
+
+              {/* Search results */}
+              {refCandidates.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6 }}>Select who referred you:</div>
+                  {refCandidates.map(c => (
+                    <div key={c.id} onClick={() => !refClaiming && handleSelectReferrer(c.id)} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                      border: '1px solid #e0e0e0', borderRadius: 8, marginBottom: 6,
+                      cursor: refClaiming ? 'wait' : 'pointer', background: '#fff',
+                      transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1b6b5a'; e.currentTarget.style.background = '#f0faf8'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.background = '#fff'; }}
+                    >
+                      <div style={{
+                        width: 36, height: 36, borderRadius: '50%', background: '#e8f5e9',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 14, fontWeight: 700, color: '#1b6b5a', flexShrink: 0,
+                      }}>{(c.name || '?')[0].toUpperCase()}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{c.name}</div>
+                    </div>
+                  ))}
+                  {refCandidates.length === 0 && refSearch && (
+                    <div style={{ fontSize: 13, color: '#888', textAlign: 'center', padding: 10 }}>No matches found. Try a different name.</div>
+                  )}
+                </div>
+              )}
+
+              {/* Or enter referral code */}
+              {!refCode && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, color: '#999', textAlign: 'center', marginBottom: 8 }}>or enter a referral code</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="text" value={refCode} onChange={(e) => setRefCode(e.target.value)}
+                      placeholder="e.g. sarah-x9k2"
+                      style={{ flex: 1, padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
+                    <button onClick={async () => {
+                      if (!refCode.trim()) return;
+                      setRefClaiming(true);
+                      try {
+                        const res = await apiFetch('/api/referrals/claim', {
+                          method: 'POST',
+                          body: JSON.stringify({ referralCode: refCode.trim() }),
+                        });
+                        if (res?.ok) {
+                          const d = await res.json();
+                          if (d.success) { setRefReferrerName(d.referrerName || ''); setRefDone(true); }
+                        } else {
+                          const d = await res.json().catch(() => ({}));
+                          setRegError(d.error || 'Code not found');
+                        }
+                      } catch (e) { console.error('Claim referral error:', e); }
+                      setRefClaiming(false);
+                    }} disabled={refClaiming || !refCode.trim()} style={{
+                      padding: '10px 16px', background: refClaiming ? '#ccc' : '#1b6b5a', color: '#fff',
+                      border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: refClaiming ? 'wait' : 'pointer',
+                    }}>{refClaiming ? '...' : 'Apply'}</button>
+                  </div>
+                  {regError && <div style={{ fontSize: 12, color: '#c62828', marginTop: 4 }}>{regError}</div>}
+                </div>
+              )}
+
+              {/* Skip button */}
+              <button onClick={finishLogin} style={{
+                width: '100%', padding: '12px', background: '#f5f5f5', color: '#888',
+                border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 14, cursor: 'pointer', marginTop: 8,
+              }}>No one referred me — skip this</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ─── Sandbox preview ───
   if (sandboxPreview) {

@@ -96,6 +96,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Payout speed managed by Stripe directly — no surcharge from InPlace
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
+  // Referral & milestone state
+  const [referralData, setReferralData] = useState(null);
+  const [referralList, setReferralList] = useState([]);
+  const [refName, setRefName] = useState('');
+  const [refEmail, setRefEmail] = useState('');
+  const [refPhone, setRefPhone] = useState('');
+  const [refSending, setRefSending] = useState(false);
+  const [refMsg, setRefMsg] = useState('');
+  const [showReferralSection, setShowReferralSection] = useState(false);
+  const [milestones, setMilestones] = useState([]);
+  const [unackedMilestones, setUnackedMilestones] = useState([]);
+
   // Documents state
   const [documents, setDocuments] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
@@ -275,6 +287,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           fetchAvailability();
           apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
           apiFetch('/api/caregivers/platform-config').then(r => r?.ok && r.json().then(c => setPlatformConfig(c))).catch(() => {});
+          // Fetch referral data and milestones
+          apiFetch('/api/referrals/my-code').then(r => r?.ok && r.json().then(d => setReferralData(d))).catch(() => {});
+          apiFetch('/api/referrals/list').then(r => r?.ok && r.json().then(d => setReferralList(d.referrals || []))).catch(() => {});
+          apiFetch('/api/referrals/milestones').then(r => r?.ok && r.json().then(d => { setMilestones(d.milestones || []); setUnackedMilestones(d.unacknowledged || []); })).catch(() => {});
         } else if (res?.status === 404) {
           setNoProfile(true);
         }
@@ -1125,6 +1141,42 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           This is your home hub. When you finish onboarding you'll see available jobs and your calendar!
         </div>
       )}
+
+      {/* Milestone Celebration Banner */}
+      {unackedMilestones.length > 0 && (() => {
+        const ms = unackedMilestones[0];
+        const milestoneLabels = { 10: 'First 10 Sessions!', 25: '25 Sessions!', 50: '50 Sessions!', 100: 'Century Club!', 250: '250 Sessions!', 500: '500 Sessions!' };
+        const milestoneEmojis = { 10: '\u{1F389}', 25: '\u{1F31F}', 50: '\u{1F525}', 100: '\u{1F3C6}', 250: '\u{1F48E}', 500: '\u{1F451}' };
+        const label = milestoneLabels[ms.milestone_value] || `${ms.milestone_value} Sessions!`;
+        const emoji = milestoneEmojis[ms.milestone_value] || '\u{1F389}';
+        const handleAck = async () => {
+          try {
+            await apiFetch(`/api/referrals/milestones/${ms.id}/acknowledge`, { method: 'POST' });
+            setUnackedMilestones(prev => prev.filter(m => m.id !== ms.id));
+          } catch (e) { console.error('Milestone ack error:', e); }
+        };
+        return (
+          <div style={{
+            marginBottom: 16, padding: '18px 20px',
+            background: 'linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%)',
+            border: '2px solid #ffa726', borderRadius: 14,
+            boxShadow: '0 2px 12px rgba(255,167,38,0.2)',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 36, marginBottom: 6 }}>{emoji}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#e65100', marginBottom: 4 }}>
+              {label}
+            </div>
+            <div style={{ fontSize: 13, color: '#bf360c', marginBottom: 12 }}>
+              Congratulations! You've completed {ms.milestone_value} care sessions on inPlace. Thank you for the incredible work you do.
+            </div>
+            <button onClick={handleAck} style={{
+              padding: '8px 24px', background: '#e65100', color: '#fff', border: 'none',
+              borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>Awesome!</button>
+          </div>
+        );
+      })()}
 
       {/* Status Banner — only shows when there's an actionable status (skip if admin overrode to available) */}
       {!profile.isAvailable && (() => {
@@ -2220,6 +2272,132 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         </div>
       )}
+
+      {/* ─── Refer a Caregiver ─── */}
+      <div style={{ marginBottom: 16 }}>
+        <div onClick={() => setShowReferralSection(!showReferralSection)} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          cursor: 'pointer', padding: '14px 18px',
+          background: showReferralSection ? 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)' : '#fff',
+          border: '1px solid #c8e6c9', borderRadius: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 22 }}>{'\u{1F91D}'}</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#1b6b5a' }}>Refer a Caregiver</div>
+              <div style={{ fontSize: 12, color: '#888' }}>
+                {referralData ? `${referralData.totalClaimed || 0} joined` : 'Invite friends to join inPlace'}
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: 18, color: '#999', transform: showReferralSection ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
+        </div>
+        {showReferralSection && (
+          <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '18px' }}>
+            {/* Referral link */}
+            {referralData && (
+              <div style={{ marginBottom: 16, padding: '12px 14px', background: '#f8fdf8', border: '1px solid #c8e6c9', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#1b6b5a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Your Referral Link</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="text" readOnly value={referralData.referralLink || ''} style={{
+                    flex: 1, padding: '8px 10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, color: '#555', background: '#fff',
+                  }} />
+                  <button onClick={() => {
+                    navigator.clipboard?.writeText(referralData.referralLink || '');
+                    showToast('Link copied!', 'success');
+                  }} style={{
+                    padding: '8px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}>Copy</button>
+                </div>
+                <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Share this link — anyone who signs up through it is automatically credited to you.</div>
+              </div>
+            )}
+
+            {/* Send referral form */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 8 }}>Send a Referral Invite</div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <input type="text" value={refName} onChange={(e) => setRefName(e.target.value)}
+                  placeholder="Friend's name" style={{ padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+                <input type="email" value={refEmail} onChange={(e) => setRefEmail(e.target.value)}
+                  placeholder="Email address" style={{ padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+                <input type="tel" value={refPhone} onChange={(e) => setRefPhone(e.target.value)}
+                  placeholder="Phone (optional)" style={{ padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              {refMsg && <div style={{ fontSize: 12, color: refMsg.includes('error') || refMsg.includes('already') ? '#c62828' : '#2e7d32', marginTop: 6 }}>{refMsg}</div>}
+              <button onClick={async () => {
+                if (!refEmail.trim()) { setRefMsg('Email is required'); return; }
+                setRefSending(true); setRefMsg('');
+                try {
+                  const res = await apiFetch('/api/referrals/send', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: refEmail.trim(), phone: refPhone.trim() || null, name: refName.trim() || null }),
+                  });
+                  if (res?.ok) {
+                    setRefMsg('Referral sent!');
+                    setRefName(''); setRefEmail(''); setRefPhone('');
+                    // Refresh referral list
+                    apiFetch('/api/referrals/list').then(r => r?.ok && r.json().then(d => setReferralList(d.referrals || []))).catch(() => {});
+                    apiFetch('/api/referrals/my-code').then(r => r?.ok && r.json().then(d => setReferralData(d))).catch(() => {});
+                  } else {
+                    const d = await res.json().catch(() => ({}));
+                    setRefMsg(d.error || 'Failed to send referral');
+                  }
+                } catch (err) { setRefMsg('Failed to send referral'); }
+                setRefSending(false);
+              }} disabled={refSending} style={{
+                marginTop: 10, padding: '10px 20px', background: refSending ? '#ccc' : '#1b6b5a', color: '#fff',
+                border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: refSending ? 'wait' : 'pointer',
+              }}>{refSending ? 'Sending...' : 'Send Invite'}</button>
+            </div>
+
+            {/* Sent referrals list */}
+            {referralList.length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                  Sent Referrals ({referralList.length})
+                </div>
+                {referralList.slice(0, 10).map(r => (
+                  <div key={r.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 10px', borderBottom: '1px solid #f0f0f0', fontSize: 13,
+                  }}>
+                    <div>
+                      <span style={{ color: '#333' }}>{r.referred_email || r.referred_phone || '—'}</span>
+                      {r.claimed_first_name && <span style={{ color: '#1b6b5a', fontWeight: 600, marginLeft: 6 }}>{r.claimed_first_name} {r.claimed_last_name}</span>}
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                      background: r.status === 'claimed' ? '#e8f5e9' : '#fff8e1',
+                      color: r.status === 'claimed' ? '#2e7d32' : '#f57c00',
+                    }}>{r.status === 'claimed' ? '\u2713 Joined' : 'Pending'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Milestones summary */}
+            {milestones.length > 0 && (
+              <div style={{ marginTop: 16, padding: '12px 14px', background: '#fff8e1', borderRadius: 10, border: '1px solid #ffe082' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#f57c00', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Your Milestones</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {[10, 25, 50, 100, 250, 500].map(v => {
+                    const achieved = milestones.find(m => m.milestone_value === v);
+                    return (
+                      <div key={v} style={{
+                        padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600,
+                        background: achieved ? '#4caf50' : '#f5f5f5',
+                        color: achieved ? '#fff' : '#bbb',
+                        border: achieved ? 'none' : '1px solid #e0e0e0',
+                      }}>{v} sessions</div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Calendar — always rendered */}
       <div ref={calendarRef} style={{ marginBottom: 16 }}>

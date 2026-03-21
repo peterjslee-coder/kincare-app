@@ -862,6 +862,28 @@ async function initializeDatabase() {
     )`,
     // v1.50.42 — Notes on cost entries
     `ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS notes TEXT`,
+
+    // v1.50.78 — Referrals & milestones
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT`,
+    `CREATE TABLE IF NOT EXISTS referrals (
+      id TEXT PRIMARY KEY,
+      referrer_user_id TEXT NOT NULL REFERENCES users(id),
+      referred_email TEXT,
+      referred_phone TEXT,
+      referred_user_id TEXT REFERENCES users(id),
+      referral_code TEXT,
+      status TEXT DEFAULT 'pending',
+      sent_at TIMESTAMPTZ DEFAULT NOW(),
+      claimed_at TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS milestones (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      milestone_type TEXT NOT NULL,
+      milestone_value INTEGER NOT NULL,
+      acknowledged INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

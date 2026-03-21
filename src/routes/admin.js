@@ -67,7 +67,7 @@ router.use(authenticate, checkAdmin, requireAdmin);
 router.get("/alerts", async (req, res) => {
   try {
     const db = await getDb();
-    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, checkrAlerts, userRow] = await Promise.all([
+    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, checkrAlerts, recentReferrals, recentMilestones, userRow] = await Promise.all([
       db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1 AND created_at > '2026-02-20'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1 AND COALESCE(checkr_status, 'pending') != 'rejected'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
@@ -75,6 +75,10 @@ router.get("/alerts", async (req, res) => {
       db.prepare(`SELECT COUNT(*) as count FROM safety_flags WHERE status = 'pending'`).get().catch(() => ({ count: 0 })),
       // Unread Checkr webhook events in the last 7 days
       db.prepare(`SELECT COUNT(*) as count FROM activity_feed WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired', 'checkr_suspended', 'checkr_resumed', 'checkr_disputed') AND is_read = 0 AND created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
+      // Referral stats (last 7 days)
+      db.prepare(`SELECT COUNT(*) as count FROM referrals WHERE claimed_at > NOW() - INTERVAL '7 days' AND status = 'claimed'`).get().catch(() => ({ count: 0 })),
+      // Recent milestones (last 7 days)
+      db.prepare(`SELECT COUNT(*) as count FROM milestones WHERE created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
       // Fetch admin's last-seen snapshot
       db.prepare(`SELECT admin_alerts_snapshot FROM users WHERE id = ?`).get(req.user.id).catch(() => null),
     ]);
@@ -86,6 +90,8 @@ router.get("/alerts", async (req, res) => {
       newFeedback: parseInt(newFeedback.count) || 0,
       safetyFlags: parseInt(safetyFlags.count) || 0,
       checkrAlerts: parseInt(checkrAlerts.count) || 0,
+      recentReferrals: parseInt(recentReferrals.count) || 0,
+      recentMilestones: parseInt(recentMilestones.count) || 0,
     };
 
     // Calculate delta from last-seen snapshot — only badge genuinely new items
