@@ -609,4 +609,259 @@ Rules: Under 250 words. No markdown symbols of any kind. No headers. No bullet l
   }
 });
 
+// ─── GET /api/care-recipients/:id/doctor-summary ───
+// Generate a doctor-ready care summary PDF (observable patterns, not PHI)
+router.get("/:id/doctor-summary", async (req, res) => {
+  try {
+    const db = await getDb();
+    const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+    if (recipient.family_user_id !== req.user.id) return res.status(403).json({ error: "Not authorized" });
+
+    const PDFDocument = require("pdfkit");
+
+    // ── Gather data ──
+    const name = `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || 'Care Recipient';
+    const age = recipient.age || null;
+    const location = [recipient.location_city, recipient.location_state].filter(Boolean).join(', ');
+
+    let healthConditions = [];
+    try { healthConditions = JSON.parse(recipient.health_conditions || '[]'); } catch { healthConditions = []; }
+
+    let medications = [];
+    try { medications = JSON.parse(recipient.medications || '[]'); } catch { medications = []; }
+
+    let preferences = {};
+    try { preferences = JSON.parse(recipient.care_preferences || '{}'); } catch { preferences = {}; }
+
+    let details = {};
+    try { details = JSON.parse(recipient.care_preference_details || '{}'); } catch { details = {}; }
+
+    // Fetch recent visit logs (last 20)
+    const visits = await db.prepare(`
+      SELECT vl.*, cs.scheduled_date, u.first_name AS cg_first, u.last_name AS cg_last
+      FROM visit_logs vl
+      JOIN care_sessions cs ON vl.session_id = cs.id
+      JOIN users u ON vl.caregiver_id = u.id
+      WHERE cs.care_recipient_id = ? AND vl.check_out_time IS NOT NULL
+      ORDER BY vl.check_in_time DESC LIMIT 20
+    `).all(req.params.id);
+
+    // Fetch care notes (last 15)
+    const notes = await db.prepare(`
+      SELECT rn.*, u.first_name AS author_first, u.last_name AS author_last
+      FROM recipient_notes rn
+      JOIN users u ON rn.author_id = u.id
+      WHERE rn.care_recipient_id = ?
+      ORDER BY rn.created_at DESC LIMIT 15
+    `).all(req.params.id);
+
+    // Preference labels
+    const prefLabels = {
+      meal_prep: 'Meal preparation & cooking', housekeeping: 'Light housekeeping',
+      errands: 'Grocery shopping & errands', med_reminders: 'Medication reminders',
+      bathing: 'Help with bathing, grooming & dressing', fall_prevention: 'Fall prevention & mobility assistance',
+      transportation: 'Transportation to appointments', overnight: 'Overnight or evening supervision',
+      wandering: 'Wandering prevention', vitals: 'Vital signs monitoring',
+      exercise: 'Exercise & physical therapy support', companionship: 'Companionship & conversation',
+      hobbies: 'Engaging in hobbies & activities', social_outings: 'Social outing accompaniment',
+      patience: 'Patience with repetition & confusion', daily_updates: 'Daily updates & photos to family',
+      consistent_caregiver: 'Consistent same-caregiver scheduling', condition_experience: 'Experience with specific conditions',
+      pets: 'Comfortable with pets', gardening: 'Gardening or light yard work',
+      outdoor_walks: 'Outdoor walks & fresh air', socializing_out: 'Socializing away from home',
+      tech_help: 'Technology help', spiritual: 'Spiritual or religious practice support',
+    };
+    const ratingLabels = { 0: 'Not needed', 1: 'Nice to have', 2: 'Important', 3: 'Must have' };
+
+    // ── Build PDF ──
+    const doc = new PDFDocument({ size: 'LETTER', margins: { top: 50, bottom: 50, left: 55, right: 55 } });
+
+    // Stream to response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Care_Summary_${(recipient.first_name || 'Recipient').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf"`);
+    doc.pipe(res);
+
+    const primaryColor = '#1b6b5a';
+    const darkText = '#222';
+    const grayText = '#666';
+    const lightBg = '#f0f7f5';
+
+    // ── Header ──
+    doc.rect(0, 0, doc.page.width, 90).fill(primaryColor);
+    doc.fontSize(22).fillColor('#fff').text('Care Summary for Healthcare Provider', 55, 25, { align: 'left' });
+    doc.fontSize(10).fillColor('rgba(255,255,255,0.85)').text('Prepared by InPlace Home Care Coordination', 55, 52, { align: 'left' });
+    doc.fontSize(9).text(`Generated: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`, 55, 66, { align: 'left' });
+    doc.fillColor(darkText);
+
+    let y = 105;
+
+    // Helper: section header
+    const sectionHeader = (title) => {
+      if (y > 680) { doc.addPage(); y = 50; }
+      doc.rect(55, y, doc.page.width - 110, 24).fill(lightBg);
+      doc.fontSize(12).fillColor(primaryColor).text(title, 65, y + 6);
+      doc.fillColor(darkText);
+      y += 32;
+    };
+
+    // Helper: add line with label + value
+    const addField = (label, value) => {
+      if (!value) return;
+      if (y > 720) { doc.addPage(); y = 50; }
+      doc.fontSize(9).fillColor(grayText).text(label, 65, y, { continued: true });
+      doc.fillColor(darkText).text(`  ${value}`, { continued: false });
+      y += 16;
+    };
+
+    // ── Recipient Info ──
+    sectionHeader('Patient Information');
+    addField('Name:', name);
+    if (age) addField('Age:', String(age));
+    if (location) addField('Location:', location);
+    if (recipient.emergency_contact_name) addField('Emergency Contact:', `${recipient.emergency_contact_name}${recipient.emergency_contact_phone ? ' — ' + recipient.emergency_contact_phone : ''}`);
+    if (recipient.food_allergies) addField('Food Allergies:', recipient.food_allergies);
+    if (recipient.pet_allergies) addField('Pet Allergies:', recipient.pet_allergies);
+    if (recipient.pets) addField('Pets in Home:', recipient.pets);
+    y += 6;
+
+    // ── Health Conditions ──
+    if (healthConditions.length > 0) {
+      sectionHeader('Reported Health Conditions');
+      doc.fontSize(9).fillColor(darkText);
+      healthConditions.forEach(c => {
+        if (y > 720) { doc.addPage(); y = 50; }
+        doc.text(`•  ${c}`, 65, y);
+        y += 14;
+      });
+      y += 6;
+    }
+
+    // ── Medications ──
+    if (medications.length > 0) {
+      sectionHeader('Current Medications (as reported by family)');
+      doc.fontSize(9).fillColor(darkText);
+      medications.forEach(m => {
+        if (y > 720) { doc.addPage(); y = 50; }
+        doc.text(`•  ${m}`, 65, y);
+        y += 14;
+      });
+      y += 6;
+    }
+
+    // ── Care Needs & Preferences ──
+    const ratedPrefs = Object.entries(preferences).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+    if (ratedPrefs.length > 0) {
+      sectionHeader('Daily Living & Care Needs (rated by family)');
+      doc.fontSize(9).fillColor(darkText);
+      ratedPrefs.forEach(([key, val]) => {
+        if (y > 720) { doc.addPage(); y = 50; }
+        const label = prefLabels[key] || key;
+        const rating = ratingLabels[val] || String(val);
+        doc.fillColor(darkText).text(`•  ${label}`, 65, y, { continued: true });
+        const ratingColor = val === 3 ? '#c62828' : val === 2 ? '#e65100' : '#666';
+        doc.fillColor(ratingColor).text(` — ${rating}`, { continued: false });
+        if (details[key]) {
+          y += 13;
+          doc.fillColor(grayText).fontSize(8).text(`     Note: ${details[key]}`, 75, y);
+          doc.fontSize(9);
+        }
+        y += 15;
+      });
+      y += 6;
+    }
+
+    // ── AI Care Summary ──
+    if (recipient.ai_care_summary) {
+      sectionHeader('AI-Generated Care Profile');
+      doc.fontSize(9).fillColor(darkText);
+      const summaryLines = doc.heightOfString(recipient.ai_care_summary, { width: doc.page.width - 130 });
+      if (y + summaryLines > 720) { doc.addPage(); y = 50; }
+      doc.text(recipient.ai_care_summary, 65, y, { width: doc.page.width - 130, lineGap: 3 });
+      y += summaryLines + 12;
+    }
+
+    // ── Recent Caregiver Observations ──
+    if (visits.length > 0) {
+      sectionHeader('Recent Caregiver Observations');
+      doc.fontSize(8).fillColor(grayText).text('Based on caregiver visit logs — observable patterns only, not clinical assessments.', 65, y);
+      y += 16;
+
+      visits.slice(0, 10).forEach(v => {
+        if (y > 700) { doc.addPage(); y = 50; }
+        const date = v.check_in_time ? new Date(v.check_in_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown date';
+        const caregiver = `${v.cg_first || ''} ${v.cg_last || ''}`.trim();
+
+        doc.fontSize(9).fillColor(primaryColor).text(`${date}  —  ${caregiver}`, 65, y);
+        y += 14;
+
+        if (v.arrival_mood || v.departure_mood) {
+          doc.fontSize(8).fillColor(grayText).text(`Mood: ${v.arrival_mood || '?'} on arrival → ${v.departure_mood || '?'} on departure`, 75, y);
+          y += 12;
+        }
+        if (v.summary) {
+          doc.fontSize(8).fillColor(darkText);
+          const h = doc.heightOfString(v.summary, { width: doc.page.width - 150 });
+          if (y + h > 720) { doc.addPage(); y = 50; }
+          doc.text(v.summary, 75, y, { width: doc.page.width - 150, lineGap: 2 });
+          y += h + 4;
+        }
+        if (v.notes) {
+          doc.fontSize(8).fillColor(grayText);
+          const h = doc.heightOfString(v.notes, { width: doc.page.width - 150 });
+          if (y + h > 720) { doc.addPage(); y = 50; }
+          doc.text(v.notes, 75, y, { width: doc.page.width - 150, lineGap: 2 });
+          y += h + 4;
+        }
+        if (v.condition_tags) {
+          try {
+            const tags = JSON.parse(v.condition_tags);
+            if (Array.isArray(tags) && tags.length > 0) {
+              doc.fontSize(8).fillColor(grayText).text(`Observed: ${tags.join(', ')}`, 75, y);
+              y += 12;
+            }
+          } catch {}
+        }
+        y += 6;
+      });
+    }
+
+    // ── Family Care Notes ──
+    if (notes.length > 0) {
+      sectionHeader('Family & Caregiver Notes');
+      notes.slice(0, 10).forEach(n => {
+        if (y > 700) { doc.addPage(); y = 50; }
+        const date = n.created_at ? new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        const author = `${n.author_first || ''} ${n.author_last || ''}`.trim();
+
+        doc.fontSize(8).fillColor(grayText).text(`${date} — ${author}`, 65, y);
+        y += 12;
+        doc.fontSize(9).fillColor(darkText);
+        const h = doc.heightOfString(n.content, { width: doc.page.width - 130 });
+        if (y + h > 720) { doc.addPage(); y = 50; }
+        doc.text(n.content, 75, y, { width: doc.page.width - 140, lineGap: 2 });
+        y += h + 10;
+      });
+    }
+
+    // ── Footer / Disclaimer ──
+    if (y > 680) { doc.addPage(); y = 50; }
+    y += 10;
+    doc.rect(55, y, doc.page.width - 110, 1).fill('#ddd');
+    y += 10;
+    doc.fontSize(7.5).fillColor(grayText).text(
+      'DISCLAIMER: This document contains observations and daily living information reported by family members and home caregivers through InPlace. ' +
+      'It is not a clinical assessment and should not replace medical evaluation. InPlace is a home care coordination platform, not a healthcare provider. ' +
+      'All information is provided to support continuity of care communication between families and healthcare providers.',
+      55, y, { width: doc.page.width - 110, lineGap: 2, align: 'center' }
+    );
+    y += 50;
+    doc.fontSize(8).fillColor(primaryColor).text('Prepared via InPlace  •  yourinplace.com', 55, y, { align: 'center', width: doc.page.width - 110 });
+
+    doc.end();
+  } catch (err) {
+    console.error("Generate doctor summary error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Failed to generate summary" });
+  }
+});
+
 module.exports = router;

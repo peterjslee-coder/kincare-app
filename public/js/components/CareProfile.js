@@ -24,7 +24,35 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [editingSummary, setEditingSummary] = useState(false);
   const [editedSummary, setEditedSummary] = useState('');
   const [savingSummary, setSavingSummary] = useState(false);
+  const [doctorPdfLoading, setDoctorPdfLoading] = useState(false);
   const { showToast } = useToast();
+
+  const handleDoctorSummary = async () => {
+    if (!profile?.id) return;
+    setDoctorPdfLoading(true);
+    try {
+      const res = await apiFetch(`/api/care-recipients/${profile.id}/doctor-summary`);
+      if (res?.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Care_Summary_${(profile.first_name || 'Recipient').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        if (typeof showToast === 'function') showToast('Doctor summary PDF downloaded', 'success');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        if (typeof showToast === 'function') showToast(err.error || 'Failed to generate PDF', 'error');
+      }
+    } catch (e) {
+      console.error('Doctor summary error:', e);
+      if (typeof showToast === 'function') showToast('Failed to generate doctor summary', 'error');
+    }
+    setDoctorPdfLoading(false);
+  };
 
   const CARE_PREFS_LIST = [
     { id: 'meal_prep', label: 'Meal preparation & cooking', icon: '\uD83C\uDF73' },
@@ -597,6 +625,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 color: '#fff', fontWeight: 600, fontSize: 13,
                 cursor: (generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3) ? 'default' : 'pointer',
               }}>{generatingAI ? 'Generating...' : '\u2728 Generate Care Summary with inPlace\'s AI tool'}</button>
+              <button onClick={handleDoctorSummary} disabled={doctorPdfLoading} style={{
+                padding: '10px 20px', borderRadius: 8, border: '1px dashed #999',
+                background: '#f8f9fa', color: '#555', fontWeight: 600, fontSize: 13,
+                cursor: doctorPdfLoading ? 'wait' : 'pointer',
+              }}>{doctorPdfLoading ? 'Generating PDF...' : '\uD83E\uDE7A Testing: Care Summary for Doctor'}</button>
             </div>
           </div>
         )}

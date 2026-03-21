@@ -96,6 +96,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Payout speed managed by Stripe directly — no surcharge from InPlace
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
+  // Celebration state — congrats banner when all first steps complete
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationFading, setCelebrationFading] = useState(false);
+
   // Documents state
   const [documents, setDocuments] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
@@ -1062,9 +1066,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const onboardingGated = false;
   const shouldBlur = false;
 
-  // Celebration state — show congrats banner when all steps just completed
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [celebrationFading, setCelebrationFading] = useState(false);
+  // Celebration effect — show congrats banner when all steps just completed
   useEffect(() => {
     if (!allStepsDone) return;
     const dismissed = localStorage.getItem('inplace_first_steps_celebrated');
