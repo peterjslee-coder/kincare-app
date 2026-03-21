@@ -625,11 +625,6 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 color: '#fff', fontWeight: 600, fontSize: 13,
                 cursor: (generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3) ? 'default' : 'pointer',
               }}>{generatingAI ? 'Generating...' : '\u2728 Generate Care Summary with inPlace\'s AI tool'}</button>
-              <button onClick={handleDoctorSummary} disabled={doctorPdfLoading} style={{
-                padding: '10px 20px', borderRadius: 8, border: '1px dashed #999',
-                background: '#f8f9fa', color: '#555', fontWeight: 600, fontSize: 13,
-                cursor: doctorPdfLoading ? 'wait' : 'pointer',
-              }}>{doctorPdfLoading ? 'Generating PDF...' : '\uD83E\uDE7A Testing: Care Summary for Doctor'}</button>
             </div>
           </div>
         )}
@@ -669,6 +664,28 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           <p style={{ color: '#999', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
         )}
       </div>
+
+      {/* ─── Doctor Summary PDF (testing) ─── */}
+      {canEdit && profile && (
+        <div className="card" style={{ border: '1px dashed #999', background: '#fafafa' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#333', marginBottom: 4 }}>
+                {'\uD83E\uDE7A'} Care Summary for Doctor
+              </div>
+              <div style={{ fontSize: 12, color: '#888', lineHeight: 1.4 }}>
+                Generate a PDF with {profile.first_name}'s care profile, preferences, caregiver observations, and notes — designed to share with healthcare providers.
+              </div>
+            </div>
+            <button onClick={handleDoctorSummary} disabled={doctorPdfLoading} style={{
+              padding: '10px 20px', borderRadius: 8, border: 'none',
+              background: doctorPdfLoading ? '#999' : '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 13,
+              cursor: doctorPdfLoading ? 'wait' : 'pointer', whiteSpace: 'nowrap',
+            }}>{doctorPdfLoading ? 'Generating...' : 'Download PDF'}</button>
+          </div>
+          <div style={{ fontSize: 10, color: '#bbb', marginTop: 8, fontStyle: 'italic' }}>Testing — this feature is in development</div>
+        </div>
+      )}
 
       {/* ─── 6. Permission Controls (owner only, bottom) ─── */}
       {canEdit && (
