@@ -43,7 +43,7 @@ function stripPlusTag(email) {
   return email.replace(/\+[^@]*@/, "@");
 }
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, replyTo }) {
   to = stripPlusTag(to);
   const resend = getResend();
 
@@ -62,7 +62,9 @@ async function sendEmail({ to, subject, html }) {
   }
 
   try {
-    const result = await resend.emails.send({ from, to, subject, html });
+    const payload = { from, to, subject, html };
+    if (replyTo) payload.reply_to = replyTo;
+    const result = await resend.emails.send(payload);
     console.log(`  [email] ✅ Sent "${subject}" to ${to} (id: ${result.data?.id || "unknown"})`);
     return { success: true, id: result.data?.id };
   } catch (err) {

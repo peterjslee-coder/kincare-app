@@ -780,13 +780,22 @@ FAMILY CONTACT: ${familyName}, ${familyPhone}, ${familyEmail}` }],
   <div style="padding: 16px 28px; background: #f8f9fa; border-radius: 0 0 12px 12px; border: 1px solid #e0e0e0; border-top: none; text-align: center;">
     <p style="margin: 0; color: #1b6b5a; font-size: 12px; font-weight: 600;">Prepared via InPlace — yourinplace.com</p>
     <p style="margin: 4px 0 0; color: #aaa; font-size: 11px;">Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+    <p style="margin: 8px 0 0; color: #888; font-size: 11px; line-height: 1.5;">
+      Have instructions or observations for ${name}'s care team? Simply reply to this email and your guidance will be added to their care record.
+    </p>
   </div>
 </div>`;
+
+      // reply-to encodes care recipient ID for future inbound webhook routing
+      const replyToAddr = process.env.REPLY_EMAIL_PREFIX
+        ? `${process.env.REPLY_EMAIL_PREFIX}+${req.params.id}@${(process.env.FROM_EMAIL || 'care@yourinplace.com').split('@')[1]}`
+        : undefined;
 
       emailResult = await sendEmail({
         to: doctorEmail.trim(),
         subject: `Home Care Report: ${name} — ${appointmentType.trim()} appointment`,
         html: emailHtml,
+        ...(replyToAddr ? { replyTo: replyToAddr } : {}),
       });
     }
 
