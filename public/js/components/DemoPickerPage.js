@@ -91,6 +91,9 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
         </div>
       </nav>
 
+      {/* ── See It In Action walkthrough ── */}
+      <CareStoryWalkthrough onNavigate={onNavigate} compact={true} />
+
       {/* Content */}
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '48px 24px' }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
@@ -98,7 +101,7 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
             Try the Live Demo
           </h1>
           <p style={{ fontSize: '17px', color: '#666', maxWidth: '560px', margin: '0 auto', lineHeight: 1.6 }}>
-            Choose a persona below to explore inPlace from their perspective. Each role sees a different dashboard and set of features. No sign-up required.
+            Now see it for yourself. Choose a persona below to explore inPlace from their perspective. Each role sees a different dashboard and set of features. No sign-up required.
           </p>
         </div>
 

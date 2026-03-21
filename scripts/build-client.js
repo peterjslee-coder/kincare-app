@@ -17,6 +17,7 @@ const scripts = [
   "js/utils.js",
   "js/components/TimezoneHelper.js",
   "js/components/InPlaceIcon.js",
+  "js/components/CareStoryWalkthrough.js",
   "js/components/SplashPage.js",
   "js/components/InviteLandingPage.js",
   "js/components/LoginPage.js",
