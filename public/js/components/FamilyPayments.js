@@ -4,7 +4,7 @@ const FamilyPayments = window.FamilyPayments = () => {
   const [totalSpent, setTotalSpent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [stripeStatus, setStripeStatus] = useState(null); // null | 'not_setup' | 'pending' | 'complete'
-  const [cardInfo, setCardInfo] = useState(null); // { brand, last4, expMonth, expYear }
+  const [methods, setMethods] = useState([]); // all saved payment methods
   const [setupLoading, setSetupLoading] = useState(false);
 
   useEffect(() => {
@@ -13,7 +13,7 @@ const FamilyPayments = window.FamilyPayments = () => {
       if (r?.ok) {
         const d = await r.json();
         setStripeStatus(d.status || 'not_setup');
-        if (d.card) setCardInfo(d.card);
+        setMethods(d.methods || (d.card ? [d.card] : []));
       } else {
         setStripeStatus('not_setup');
       }
@@ -59,6 +59,14 @@ const FamilyPayments = window.FamilyPayments = () => {
     catch { return d; }
   };
 
+  const methodLabel = (m) => {
+    if (m.isLink) return `Stripe Link${m.last4 && m.last4 !== 'link' && m.last4 !== '****' ? ` \u2022\u2022\u2022\u2022 ${m.last4}` : ''}`;
+    if (m.isBank) return `${m.brand} \u2022\u2022\u2022\u2022 ${m.last4}`;
+    return `${m.brand} \u2022\u2022\u2022\u2022 ${m.last4}`;
+  };
+
+  const methodIcon = (m) => m.isBank ? '\uD83C\uDFE6' : '\uD83D\uDCB3';
+
   const statusBadge = (status) => {
     const colors = {
       completed: { bg: '#e8f5e9', color: '#2e7d32', label: 'Paid' },
@@ -85,12 +93,12 @@ const FamilyPayments = window.FamilyPayments = () => {
 
   return (
     <div>
-      {/* Payment Method Card */}
+      {/* Payment Methods Card */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Payment Method</span>
+          <span>Payment Methods</span>
           {stripeStatus === 'complete'
-            ? <span style={{ fontSize: 11, fontWeight: 600, color: '#2e7d32', background: '#e8f5e9', padding: '2px 10px', borderRadius: 12 }}>Connected</span>
+            ? <span style={{ fontSize: 11, fontWeight: 600, color: '#2e7d32', background: '#e8f5e9', padding: '2px 10px', borderRadius: 12 }}>{methods.length} saved</span>
             : stripeStatus === 'pending'
               ? <span style={{ fontSize: 11, fontWeight: 600, color: '#e65100', background: '#fff3e0', padding: '2px 10px', borderRadius: 12 }}>In Progress</span>
               : <span style={{ fontSize: 11, fontWeight: 600, color: '#888', background: '#f0f0f0', padding: '2px 10px', borderRadius: 12 }}>Not Set Up</span>
@@ -98,30 +106,28 @@ const FamilyPayments = window.FamilyPayments = () => {
         </div>
         {stripeStatus === 'complete' ? (
           <div>
-            {cardInfo && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: '#f8f9fa', borderRadius: 8 }}>
-                <span style={{ fontSize: 22 }}>{cardInfo.isBank ? '🏦' : '💳'}</span>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize' }}>
-                    {cardInfo.isLink
-                      ? `Stripe Link${cardInfo.last4 && cardInfo.last4 !== 'link' && cardInfo.last4 !== '****' ? ` •••• ${cardInfo.last4}` : ''}`
-                      : cardInfo.isBank
-                        ? `${cardInfo.brand} •••• ${cardInfo.last4}`
-                        : `${cardInfo.brand} •••• ${cardInfo.last4}`}
+            {methods.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {methods.map((m, i) => (
+                  <div key={m.id || i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#f8f9fa', borderRadius: 8 }}>
+                    <span style={{ fontSize: 22 }}>{methodIcon(m)}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize' }}>{methodLabel(m)}</div>
+                      {m.expMonth && m.expYear && (
+                        <div style={{ fontSize: 12, color: '#888' }}>Expires {m.expMonth}/{m.expYear}</div>
+                      )}
+                      {m.isLink && (
+                        <div style={{ fontSize: 12, color: '#888' }}>{m.email ? `Linked to ${m.email}` : 'Saved securely via Stripe Link'}</div>
+                      )}
+                    </div>
                   </div>
-                  {cardInfo.expMonth && cardInfo.expYear && (
-                    <div style={{ fontSize: 12, color: '#888' }}>Expires {cardInfo.expMonth}/{cardInfo.expYear}</div>
-                  )}
-                  {cardInfo.isLink && (
-                    <div style={{ fontSize: 12, color: '#888' }}>{cardInfo.email ? `Linked to ${cardInfo.email}` : 'Saved securely via Stripe Link'}</div>
-                  )}
-                </div>
+                ))}
               </div>
             )}
             <p style={{ margin: '0 0 10px', fontSize: 14, color: '#666' }}>Your payment method is connected. You can pay caregivers securely through InPlace.</p>
             <button onClick={handleStripeSetup} disabled={setupLoading}
               style={{ padding: '8px 16px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              {setupLoading ? 'Loading...' : 'Update Payment Method'}
+              {setupLoading ? 'Loading...' : 'Add Payment Method'}
             </button>
           </div>
         ) : stripeStatus === 'pending' ? (
@@ -149,7 +155,7 @@ const FamilyPayments = window.FamilyPayments = () => {
         border: '1px solid #a5d6a7', marginBottom: '20px',
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
-          <div style={{ fontSize: '32px', lineHeight: 1 }}>🏦</div>
+          <div style={{ fontSize: '32px', lineHeight: 1 }}>{'\uD83C\uDFE6'}</div>
           <div>
             <h3 style={{ margin: '0 0 8px', color: '#1b5e20', fontSize: '16px' }}>Save with Bank Transfer (ACH)</h3>
             <p style={{ margin: '0 0 12px', color: '#2e7d32', fontSize: '14px', lineHeight: 1.5 }}>
@@ -191,7 +197,7 @@ const FamilyPayments = window.FamilyPayments = () => {
         <h3 style={{ margin: '0 0 16px', fontSize: '16px' }}>Payment History</h3>
         {payments.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
-            <div style={{ fontSize: '48px', marginBottom: '12px' }}>📋</div>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>{'\uD83D\uDCCB'}</div>
             <p style={{ margin: 0 }}>No payments yet. Payments will appear here after your first care session.</p>
           </div>
         ) : (

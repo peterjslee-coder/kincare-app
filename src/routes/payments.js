@@ -260,75 +260,83 @@ router.get("/family/status", requireRole("family"), async (req, res) => {
   const user = await db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(req.user.id);
 
   if (!user?.stripe_customer_id) {
-    return res.json({ status: "not_setup", hasPaymentMethod: false });
+    return res.json({ status: "not_setup", hasPaymentMethod: false, methods: [] });
   }
 
   try {
     const stripe = getStripe();
+    const methods = [];
 
-    // Check for card payment methods first
+    // Fetch all card payment methods
     const cardMethods = await stripe.paymentMethods.list({
       customer: user.stripe_customer_id,
       type: "card",
-      limit: 1,
+      limit: 10,
     });
-
-    if (cardMethods.data.length > 0) {
-      const pm = cardMethods.data[0];
-      return res.json({
-        status: "complete",
-        hasPaymentMethod: true,
-        card: { brand: pm.card.brand, last4: pm.card.last4, expMonth: pm.card.exp_month, expYear: pm.card.exp_year },
+    for (const pm of cardMethods.data) {
+      methods.push({
+        id: pm.id,
+        type: "card",
+        brand: pm.card.brand,
+        last4: pm.card.last4,
+        expMonth: pm.card.exp_month,
+        expYear: pm.card.exp_year,
       });
     }
 
-    // Check for Stripe Link payment methods
+    // Fetch Stripe Link payment methods
     try {
       const linkMethods = await stripe.paymentMethods.list({
         customer: user.stripe_customer_id,
         type: "link",
-        limit: 1,
+        limit: 10,
       });
-      if (linkMethods.data.length > 0) {
-        const pm = linkMethods.data[0];
-        // Link methods may have a card object with real details
+      for (const pm of linkMethods.data) {
         const linkCard = pm.link || {};
-        return res.json({
-          status: "complete",
-          hasPaymentMethod: true,
-          card: {
-            brand: linkCard.brand || "Stripe Link",
-            last4: linkCard.last4 || pm.card?.last4 || "link",
-            expMonth: linkCard.exp_month || pm.card?.exp_month || null,
-            expYear: linkCard.exp_year || pm.card?.exp_year || null,
-            isLink: true,
-            email: pm.link?.email || null,
-          },
+        methods.push({
+          id: pm.id,
+          type: "link",
+          brand: linkCard.brand || "Stripe Link",
+          last4: linkCard.last4 || pm.card?.last4 || null,
+          expMonth: linkCard.exp_month || pm.card?.exp_month || null,
+          expYear: linkCard.exp_year || pm.card?.exp_year || null,
+          isLink: true,
+          email: pm.link?.email || null,
         });
       }
     } catch { /* Link type may not be supported on all API versions */ }
 
-    // Check for US bank account (ACH)
+    // Fetch US bank account (ACH) methods
     try {
       const bankMethods = await stripe.paymentMethods.list({
         customer: user.stripe_customer_id,
         type: "us_bank_account",
-        limit: 1,
+        limit: 10,
       });
-      if (bankMethods.data.length > 0) {
-        const pm = bankMethods.data[0];
-        return res.json({
-          status: "complete",
-          hasPaymentMethod: true,
-          card: { brand: pm.us_bank_account.bank_name || "Bank Account", last4: pm.us_bank_account.last4, expMonth: null, expYear: null, isBank: true },
+      for (const pm of bankMethods.data) {
+        methods.push({
+          id: pm.id,
+          type: "bank",
+          brand: pm.us_bank_account.bank_name || "Bank Account",
+          last4: pm.us_bank_account.last4,
+          expMonth: null,
+          expYear: null,
+          isBank: true,
         });
       }
     } catch { /* bank type may not be available */ }
 
-    return res.json({ status: "pending", hasPaymentMethod: false });
+    // Backwards compat: still return "card" as the first method found
+    const first = methods[0] || null;
+    return res.json({
+      status: methods.length > 0 ? "complete" : "pending",
+      hasPaymentMethod: methods.length > 0,
+      card: first,
+      methods,
+    });
   } catch (err) {
     console.error("Family payment status error:", err);
-    return res.json({ status: "not_setup", hasPaymentMethod: false });
+    return res.json({ status: "not_setup", hasPaymentMethod: false, methods: [] });
   }
 });
 
