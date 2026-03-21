@@ -271,13 +271,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         if (res?.ok) {
           const d = await res.json();
           setData(d);
-          // If onboarding incomplete, fetch availability + stripe for accurate step tracking
-          if (d.profile && !d.profile.onboardingComplete) {
-            fetchAvailability();
-            apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
-            // Check which platform services are configured
-            apiFetch('/api/caregivers/platform-config').then(r => r?.ok && r.json().then(c => setPlatformConfig(c))).catch(() => {});
-          }
+          // Always fetch availability, stripe status, and platform config for accurate step tracking
+          fetchAvailability();
+          apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
+          apiFetch('/api/caregivers/platform-config').then(r => r?.ok && r.json().then(c => setPlatformConfig(c))).catch(() => {});
         } else if (res?.status === 404) {
           setNoProfile(true);
         }
