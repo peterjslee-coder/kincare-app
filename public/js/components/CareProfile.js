@@ -531,6 +531,16 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             </div>
           </div>
         )}
+        {!editing && canEdit && profile && (
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 12, color: '#888' }}>{'\uD83E\uDE7A'} Generate a care summary PDF for {profile.first_name}'s doctor</div>
+            <button onClick={handleDoctorSummary} disabled={doctorPdfLoading} style={{
+              padding: '7px 16px', borderRadius: 6, border: '1px dashed #1b6b5a',
+              background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 12,
+              cursor: doctorPdfLoading ? 'wait' : 'pointer', whiteSpace: 'nowrap',
+            }}>{doctorPdfLoading ? 'Generating...' : 'Download PDF'}</button>
+          </div>
+        )}
       </div>
 
       {/* ─── 4. Care Preferences (collapsible) ─── */}
@@ -664,28 +674,6 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           <p style={{ color: '#999', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
         )}
       </div>
-
-      {/* ─── Doctor Summary PDF (testing) ─── */}
-      {canEdit && profile && (
-        <div className="card" style={{ border: '1px dashed #999', background: '#fafafa' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#333', marginBottom: 4 }}>
-                {'\uD83E\uDE7A'} Care Summary for Doctor
-              </div>
-              <div style={{ fontSize: 12, color: '#888', lineHeight: 1.4 }}>
-                Generate a PDF with {profile.first_name}'s care profile, preferences, caregiver observations, and notes — designed to share with healthcare providers.
-              </div>
-            </div>
-            <button onClick={handleDoctorSummary} disabled={doctorPdfLoading} style={{
-              padding: '10px 20px', borderRadius: 8, border: 'none',
-              background: doctorPdfLoading ? '#999' : '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 13,
-              cursor: doctorPdfLoading ? 'wait' : 'pointer', whiteSpace: 'nowrap',
-            }}>{doctorPdfLoading ? 'Generating...' : 'Download PDF'}</button>
-          </div>
-          <div style={{ fontSize: 10, color: '#bbb', marginTop: 8, fontStyle: 'italic' }}>Testing — this feature is in development</div>
-        </div>
-      )}
 
       {/* ─── 6. Permission Controls (owner only, bottom) ─── */}
       {canEdit && (
