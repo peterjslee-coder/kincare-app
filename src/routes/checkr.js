@@ -118,9 +118,13 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
       console.log(`[checkr] Staging: auto-marked background_check_paid for user ${req.user.id}`);
     }
 
-    // Verify consent
-    if (!profile.background_check_consent) {
+    // Verify consent (staging can bypass)
+    if (!profile.background_check_consent && !isStaging) {
       return res.status(400).json({ error: "Background check consent required" });
+    }
+    if (!profile.background_check_consent && isStaging) {
+      await db.prepare("UPDATE caregiver_profiles SET background_check_consent = 1, background_check_consent_at = NOW(), updated_at = NOW() WHERE user_id = ?").run(req.user.id);
+      console.log(`[checkr] Staging: auto-set background_check_consent for user ${req.user.id}`);
     }
 
     // Check if already initiated — allow re-initiation for expired, canceled, rejected, or did_not_pass
@@ -152,6 +156,19 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
       });
     }
 
+    // Determine email for Checkr candidate
+    // In staging: use override email from request body, or strip plus-addressing from account email
+    let checkrEmail = user.email;
+    if (isStaging) {
+      if (req.body.checkrEmail) {
+        checkrEmail = req.body.checkrEmail;
+      } else {
+        // Strip plus-addressing: peter+nick@yourinplace.com → peter@yourinplace.com
+        checkrEmail = user.email.replace(/\+[^@]*@/, '@');
+      }
+      console.log(`[checkr] Staging: using email ${checkrEmail} for Checkr (account email: ${user.email})`);
+    }
+
     // Step 1: Create or reuse candidate in Checkr
     // Certification requires: first_name, middle_name OR no_middle_name, last_name, zip, phone, email, custom_id
     let candidate;
@@ -165,7 +182,7 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
         first_name: profile.legal_first_name,
         last_name: profile.legal_last_name,
         no_middle_name: !profile.legal_middle_name,
-        email: user.email,
+        email: checkrEmail,
         phone: user.phone || undefined,
         dob: profile.date_of_birth,
         ssn: profile.ssn_last4,

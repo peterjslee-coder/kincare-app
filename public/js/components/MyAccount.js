@@ -212,6 +212,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   const [checkrStatus, setCheckrStatus] = useState(null); // null | 'not_initiated' | 'in_progress' | 'complete' | 'error'
   const [checkrError, setCheckrError] = useState(null);
   const [checkrStaging, setCheckrStaging] = useState(false);
+  const [checkrStagingEmail, setCheckrStagingEmail] = useState('');
 
   // Caregiver - Documents state
   const [documents, setDocuments] = useState([]);
@@ -1593,10 +1594,23 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <div style={{ padding: 16, background: '#fff8f0', border: '1px solid #ffcc80', borderRadius: 10 }}>
                     <div style={{ color: '#e65100', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Staging Mode</div>
                     <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>In production, caregivers pay $30 here via Stripe. For staging testing, skip payment and go straight to the Checkr flow.</div>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Checkr invitation email (auto-strips plus-address if blank):</label>
+                      <input type="email" value={checkrStagingEmail} onChange={e => setCheckrStagingEmail(e.target.value)}
+                        placeholder="Leave blank to auto-strip plus-address"
+                        style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                    </div>
                     <button onClick={async () => {
                       try {
-                        const res = await apiFetch('/api/checkr/initiate', { method: 'POST' });
+                        const body = {};
+                        if (checkrStagingEmail.trim()) body.checkrEmail = checkrStagingEmail.trim();
+                        const res = await apiFetch('/api/checkr/initiate', { method: 'POST', body: JSON.stringify(body) });
                         const data = await res.json();
+                        if (!res.ok) {
+                          if (typeof showToast === 'function') showToast(data.error || 'Failed to initiate', 'error');
+                          setCheckrError(data.error || 'Initiation failed');
+                          return;
+                        }
                         if (data.invitationUrl) {
                           window.open(data.invitationUrl, '_blank');
                           setBgCheckPaid(true);
