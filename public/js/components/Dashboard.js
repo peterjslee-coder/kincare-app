@@ -596,7 +596,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       )}
 
       {/* Quick-access explore ideas for users who haven't filled out profile yet */}
-      {!isDemo && !hasProfile && !isTileDismissed('onboarding', 'v2') && (
+      {!isDemo && user && !hasProfile && !isTileDismissed('onboarding', 'v2') && (
         <div className="card" style={{ borderLeft: '4px solid #e8724a', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
