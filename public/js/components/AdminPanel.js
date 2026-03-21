@@ -1639,8 +1639,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                                 Reject
                               </button>
                             </div>
-                          ) : u.is_admin ? (
+                          ) : u.is_admin && u.role !== 'caregiver' ? (
                             <span style={{ fontSize: '11px', color: '#999' }}>{'\u2014'}</span>
+                          ) : u.is_admin && u.role === 'caregiver' ? (
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
+                              <button onClick={() => openOnboardingModal(u.id)}
+                                style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                Manage
+                              </button>
+                            </div>
                           ) : u.role === 'caregiver' ? (
                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                               <button onClick={() => openOnboardingModal(u.id)}
