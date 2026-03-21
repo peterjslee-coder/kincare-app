@@ -107,9 +107,15 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
 
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
-    // Verify payment was made
-    if (!profile.background_check_paid) {
+    // Verify payment was made (staging can bypass)
+    const isStaging = process.env.CHECKR_STAGING === "true";
+    if (!profile.background_check_paid && !isStaging) {
       return res.status(400).json({ error: "Background check payment required first" });
+    }
+    if (!profile.background_check_paid && isStaging) {
+      // In staging, auto-mark as paid so the flow continues
+      await db.prepare("UPDATE caregiver_profiles SET background_check_paid = 1, updated_at = NOW() WHERE user_id = ?").run(req.user.id);
+      console.log(`[checkr] Staging: auto-marked background_check_paid for user ${req.user.id}`);
     }
 
     // Verify consent
@@ -273,6 +279,7 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
 
     const response = {
       checkrConfigured: !!process.env.CHECKR_API_KEY,
+      staging: process.env.CHECKR_STAGING === "true",
       paid: !!profile.background_check_paid,
       status: profile.is_background_checked ? "complete" : (profile.checkr_status || "pending"),
       cleared: !!profile.is_background_checked,

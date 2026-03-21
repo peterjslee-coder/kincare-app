@@ -211,6 +211,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   // Caregiver - Checkr Background Check state
   const [checkrStatus, setCheckrStatus] = useState(null); // null | 'not_initiated' | 'in_progress' | 'complete' | 'error'
   const [checkrError, setCheckrError] = useState(null);
+  const [checkrStaging, setCheckrStaging] = useState(false);
 
   // Caregiver - Documents state
   const [documents, setDocuments] = useState([]);
@@ -486,7 +487,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       }).catch(() => {});
       // Fetch Checkr status
       apiFetch('/api/checkr/status').then(async r => {
-        if (r?.ok) { const d = await r.json(); setCheckrStatus(d.status || 'not_initiated'); }
+        if (r?.ok) { const d = await r.json(); setCheckrStatus(d.status || 'not_initiated'); setCheckrStaging(!!d.staging); if (d.paid) setBgCheckPaid(true); }
       }).catch(() => { setCheckrStatus('not_initiated'); });
       apiFetch('/api/caregivers/me').then(async r => {
         if (r?.ok) { const d = await r.json(); setEditRates({ daytime: d.profile?.rate_daytime || '24', nighttime: d.profile?.rate_nighttime || '28', overnight: d.profile?.rate_overnight || '30' }); }
@@ -1553,12 +1554,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           {/* Background Check Card */}
           <div className="card">
             <div className="card-header">Background Check</div>
-            {checkrStatus === 'complete' || bgCheckPaid ? (
+            {checkrStatus === 'complete' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 18 }}>✓</span>
                 <span style={{ fontSize: 14, color: '#1b6b5a', fontWeight: 600 }}>Background check complete</span>
               </div>
-            ) : checkrStatus === 'in_progress' ? (
+            ) : checkrStatus === 'in_progress' || checkrStatus === 'processing' || checkrStatus === 'invitation_created' ? (
               <div style={{ color: '#666', fontSize: 14 }}>
                 <div style={{ marginBottom: 12 }}>
                   <strong style={{ color: '#1b6b5a' }}>Processing your background check...</strong>
@@ -1567,7 +1568,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   We're reviewing your information. You'll receive an email when the process is complete.
                 </p>
                 <p style={{ margin: 0, fontSize: 13, color: '#888' }}>
-                  Status: <strong>In Progress</strong>
+                  Status: <strong>{checkrStatus === 'invitation_created' ? 'Check your email to complete' : 'In Progress'}</strong>
                 </p>
               </div>
             ) : checkrError ? (
@@ -1580,18 +1581,76 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : !bgCheckPaid ? (
               <div>
-                <p style={{ fontSize: 14, color: '#666', margin: '0 0 12px' }}>
+                <p style={{ fontSize: 14, color: '#666', margin: '0 0 4px' }}>
                   <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>$30</span> one-time fee. Refunded after 10 completed sessions.
                 </p>
-                <div style={{ marginBottom: 16, padding: 16, background: '#f9f9f9', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+                <p style={{ fontSize: 13, color: '#888', margin: '0 0 16px' }}>
+                  A background check is required to participate on InPlace. Your report is reviewed fairly — you'll be given a chance to provide context on anything that comes up.
+                </p>
+                {checkrStaging ? (
+                  <div style={{ padding: 16, background: '#fff8f0', border: '1px solid #ffcc80', borderRadius: 10 }}>
+                    <div style={{ color: '#e65100', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Staging Mode</div>
+                    <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>In production, caregivers pay $30 here via Stripe. For staging testing, skip payment and go straight to the Checkr flow.</div>
+                    <button onClick={async () => {
+                      try {
+                        const res = await apiFetch('/api/checkr/initiate', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.invitationUrl) {
+                          window.open(data.invitationUrl, '_blank');
+                          setBgCheckPaid(true);
+                          setCheckrStatus('invitation_created');
+                        } else if (data.status === 'already_initiated') {
+                          setBgCheckPaid(true);
+                          setCheckrStatus('in_progress');
+                          if (typeof showToast === 'function') showToast('Background check already in progress', 'info');
+                        } else {
+                          setBgCheckPaid(true);
+                          if (typeof showToast === 'function') showToast(data.message || 'Check your email for the Checkr invitation', 'info');
+                          setCheckrStatus('invitation_created');
+                        }
+                      } catch (err) {
+                        if (typeof showToast === 'function') showToast('Failed to initiate. Contact support.', 'error');
+                      }
+                    }} style={{ padding: '10px 20px', background: '#e65100', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                      Skip Payment & Start Checkr (Staging)
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ padding: 16, background: '#f9f9f9', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+                    {typeof StripePaymentForm !== 'undefined' ? React.createElement(StripePaymentForm, {
+                      amount: 30,
+                      description: 'Background check fee — one-time, refunded after 10 sessions.',
+                      buttonText: 'Pay $30.00 — Start Background Check',
+                      onSuccess: (intent) => {
+                        console.log('BG check payment success:', intent);
+                        setBgCheckPaid(true);
+                        if (typeof showToast === 'function') showToast('Payment received! Starting background check...', 'success');
+                      },
+                      onError: (msg) => {
+                        console.error('BG check payment error:', msg);
+                        setCheckrError(msg || 'Payment failed');
+                      },
+                    }) : (
+                      <div style={{ padding: 12, color: '#888', fontSize: 13, textAlign: 'center' }}>
+                        Loading payment form...
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 16, color: '#1b6b5a' }}>✓</span>
+                  <span style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600 }}>Payment received</span>
+                </div>
+                <div style={{ padding: 16, background: '#f9f9f9', borderRadius: 8, border: '1px solid #e0e0e0' }}>
                   {typeof CheckrEmbed !== 'undefined' ? React.createElement(CheckrEmbed, {
                     onComplete: (data) => {
-                      console.log('Background check complete:', data);
-                      setCheckrStatus('complete');
-                      setBgCheckPaid(true);
-                      if (onNavigate) onNavigate('payments');
+                      console.log('Background check initiated:', data);
+                      setCheckrStatus('in_progress');
                     },
                     onError: (err) => {
                       console.error('Background check error:', err);
