@@ -290,10 +290,20 @@ router.get("/family/status", requireRole("family"), async (req, res) => {
         limit: 1,
       });
       if (linkMethods.data.length > 0) {
+        const pm = linkMethods.data[0];
+        // Link methods may have a card object with real details
+        const linkCard = pm.link || {};
         return res.json({
           status: "complete",
           hasPaymentMethod: true,
-          card: { brand: "Stripe Link", last4: "****", expMonth: null, expYear: null, isLink: true },
+          card: {
+            brand: linkCard.brand || "Stripe Link",
+            last4: linkCard.last4 || pm.card?.last4 || "link",
+            expMonth: linkCard.exp_month || pm.card?.exp_month || null,
+            expYear: linkCard.exp_year || pm.card?.exp_year || null,
+            isLink: true,
+            email: pm.link?.email || null,
+          },
         });
       }
     } catch { /* Link type may not be supported on all API versions */ }

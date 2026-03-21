@@ -103,13 +103,17 @@ const FamilyPayments = window.FamilyPayments = () => {
                 <span style={{ fontSize: 22 }}>{cardInfo.isBank ? '🏦' : '💳'}</span>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize' }}>
-                    {cardInfo.isLink ? 'Stripe Link (one-click checkout)' : cardInfo.isBank ? `${cardInfo.brand} ending in ${cardInfo.last4}` : `${cardInfo.brand} ending in ${cardInfo.last4}`}
+                    {cardInfo.isLink
+                      ? `Stripe Link${cardInfo.last4 && cardInfo.last4 !== 'link' && cardInfo.last4 !== '****' ? ` •••• ${cardInfo.last4}` : ''}`
+                      : cardInfo.isBank
+                        ? `${cardInfo.brand} •••• ${cardInfo.last4}`
+                        : `${cardInfo.brand} •••• ${cardInfo.last4}`}
                   </div>
                   {cardInfo.expMonth && cardInfo.expYear && (
                     <div style={{ fontSize: 12, color: '#888' }}>Expires {cardInfo.expMonth}/{cardInfo.expYear}</div>
                   )}
                   {cardInfo.isLink && (
-                    <div style={{ fontSize: 12, color: '#888' }}>Your card is saved securely via Stripe Link</div>
+                    <div style={{ fontSize: 12, color: '#888' }}>{cardInfo.email ? `Linked to ${cardInfo.email}` : 'Saved securely via Stripe Link'}</div>
                   )}
                 </div>
               </div>
