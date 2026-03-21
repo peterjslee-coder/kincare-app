@@ -483,6 +483,10 @@ router.post("/:id/generate-summary", async (req, res) => {
     if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
     if (recipient.family_user_id !== req.user.id) return res.status(403).json({ error: "Not authorized" });
 
+    // Demo accounts can't use AI features
+    const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+    if (me?.is_demo) return res.status(403).json({ error: "AI care summaries are not available in demo mode. Sign up for a free account to try this feature!" });
+
     // Rate limit: if summary already exists, require at least 1 completed visit since last generation
     if (recipient.ai_care_summary && recipient.ai_care_summary_updated_at) {
       const completedSince = await db.prepare(`
@@ -617,6 +621,10 @@ router.post("/:id/doctor-report", async (req, res) => {
     const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
     if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
     if (recipient.family_user_id !== req.user.id) return res.status(403).json({ error: "Not authorized" });
+
+    // Demo accounts can't use AI features (costs real API credits)
+    const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+    if (me?.is_demo) return res.status(403).json({ error: "AI doctor reports are not available in demo mode. Sign up for a free account to try this feature!" });
 
     const { appointmentType, appointmentDetails, doctorEmail } = req.body;
     if (!appointmentType || !appointmentType.trim()) return res.status(400).json({ error: "Appointment type is required" });
