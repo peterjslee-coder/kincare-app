@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { authenticate } = require("../middleware/auth");
 
 // Ensure user has a referral code (lazy-generate on first access)
 async function ensureReferralCode(db, userId) {
@@ -18,7 +19,7 @@ async function ensureReferralCode(db, userId) {
 }
 
 // ─── GET /api/referrals/my-code — Get current user's referral code + stats ───
-router.get("/my-code", async (req, res) => {
+router.get("/my-code", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const code = await ensureReferralCode(db, req.user.id);
@@ -42,7 +43,7 @@ router.get("/my-code", async (req, res) => {
 });
 
 // ─── POST /api/referrals/send — Send a referral email ───
-router.post("/send", async (req, res) => {
+router.post("/send", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const { email, phone, name } = req.body;
@@ -97,7 +98,7 @@ router.post("/send", async (req, res) => {
 });
 
 // ─── GET /api/referrals/list — List user's sent referrals ───
-router.get("/list", async (req, res) => {
+router.get("/list", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const referrals = await db.prepare(`
@@ -118,7 +119,7 @@ router.get("/list", async (req, res) => {
 
 // ─── POST /api/referrals/claim — Claim a referral during registration ───
 // Called with either { referralCode } or { referrerSearch } (name search)
-router.post("/claim", async (req, res) => {
+router.post("/claim", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const { referralCode, referrerSearch } = req.body;
@@ -189,7 +190,7 @@ router.post("/claim", async (req, res) => {
 });
 
 // ─── POST /api/referrals/select-referrer — Finalize referrer selection by user ID ───
-router.post("/select-referrer", async (req, res) => {
+router.post("/select-referrer", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const { referrerUserId } = req.body;
@@ -276,7 +277,7 @@ async function checkSessionMilestones(db, caregiverId) {
 }
 
 // ─── GET /api/referrals/milestones — Get user's milestones ───
-router.get("/milestones", async (req, res) => {
+router.get("/milestones", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const milestones = await db.prepare(`
@@ -295,7 +296,7 @@ router.get("/milestones", async (req, res) => {
 });
 
 // ─── POST /api/referrals/milestones/:id/acknowledge ───
-router.post("/milestones/:id/acknowledge", async (req, res) => {
+router.post("/milestones/:id/acknowledge", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     await db.prepare("UPDATE milestones SET acknowledged = 1 WHERE id = ? AND user_id = ?").run(req.params.id, req.user.id);
