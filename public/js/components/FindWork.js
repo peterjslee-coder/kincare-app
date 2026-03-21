@@ -911,10 +911,16 @@ const FindWork = window.FindWork = () => {
                         <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
                       )}
                       {matchScore > 0 && (
-                        <span title="AI-powered match score" style={{
+                        <span title={matchScore >= 80
+                          ? 'Great match — your experience and preferences align well with this care request'
+                          : matchScore >= 60
+                          ? 'Good match — review the care notes to see if this is a good fit for you'
+                          : 'Lower match — review care notes and health tags carefully to make sure you\'re comfortable with this job'
+                        } style={{
                           background: matchScore >= 80 ? '#c8e6c9' : matchScore >= 60 ? '#fff9c4' : '#ffccbc',
                           color: matchScore >= 80 ? '#2e7d32' : matchScore >= 60 ? '#f57f17' : '#d84315',
                           padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                          cursor: 'help',
                         }}>✓ {matchScore}%</span>
                       )}
                       {hasConflict ? (
