@@ -1053,6 +1053,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     { id: 'photo', label: 'Review your account page and add a profile picture', desc: 'Families want to see who they\'re inviting into their home', done: hasPhoto, missing: !hasPhoto ? 'Upload a profile photo' : null },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
+  const allStepsDone = firstStepsDone === firstSteps.length;
   // Show checklist whenever steps remain — disappears when ALL done (or admin overrides all fields)
   const showFirstSteps = firstStepsDone < firstSteps.length;
   // Expose to parent (app.js) so bottom nav can grey out Find Work
@@ -1060,6 +1061,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // NEVER gate/blur the dashboard — checklist is motivational, not a lock
   const onboardingGated = false;
   const shouldBlur = false;
+
+  // Celebration state — show congrats banner when all steps just completed
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationFading, setCelebrationFading] = useState(false);
+  useEffect(() => {
+    if (!allStepsDone) return;
+    const dismissed = localStorage.getItem('inplace_first_steps_celebrated');
+    if (dismissed) return;
+    setShowCelebration(true);
+    localStorage.setItem('inplace_first_steps_celebrated', '1');
+    // Start fade after 5s, remove after 6s
+    const fadeTimer = setTimeout(() => setCelebrationFading(true), 5000);
+    const removeTimer = setTimeout(() => setShowCelebration(false), 6000);
+    return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer); };
+  }, [allStepsDone]);
 
   // Average hourly rate from completed sessions
   const totalHours = completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0);
@@ -1264,6 +1280,36 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Celebration Banner — shown once when all First Steps complete */}
+      {showCelebration && <style>{`
+        @keyframes celebrationPop {
+          0% { opacity: 0; transform: scale(0.9) translateY(10px); }
+          60% { opacity: 1; transform: scale(1.02) translateY(-2px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+      `}</style>}
+      {showCelebration && (
+        <div style={{
+          background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 40%, #a5d6a7 100%)',
+          borderRadius: '14px', border: '2px solid #66bb6a',
+          padding: '28px 22px', marginBottom: '20px',
+          textAlign: 'center',
+          boxShadow: '0 4px 20px rgba(76, 175, 80, 0.2)',
+          opacity: celebrationFading ? 0 : 1,
+          transform: celebrationFading ? 'translateY(-10px) scale(0.98)' : 'translateY(0) scale(1)',
+          transition: 'opacity 0.8s ease, transform 0.8s ease',
+          animation: celebrationFading ? 'none' : 'celebrationPop 0.5s ease-out',
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '8px' }}>{'\uD83C\uDF89'}</div>
+          <h3 style={{ margin: '0 0 6px', fontSize: '20px', fontWeight: 700, color: '#2e7d32' }}>
+            You're all set!
+          </h3>
+          <p style={{ margin: 0, fontSize: '14px', color: '#388e3c', lineHeight: 1.5 }}>
+            Your profile is complete. You can now browse and accept care requests.
+          </p>
         </div>
       )}
 
