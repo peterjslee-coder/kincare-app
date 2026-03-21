@@ -2195,7 +2195,7 @@ router.post("/caregivers/:id/approve-bgcheck", requireAdmin, async (req, res) =>
       UPDATE caregiver_profiles
       SET is_background_checked = 1, bg_check_admin_approved = 1,
           bg_check_admin_approved_by = ?, bg_check_admin_approved_at = NOW(),
-          checkr_status = COALESCE(NULLIF(checkr_status, 'pending'), 'clear'),
+          checkr_status = CASE WHEN checkr_status IS NULL OR checkr_status = 'pending' THEN 'clear' ELSE checkr_status END,
           background_check_consent = 1
       WHERE user_id = ?
     `).run(req.user.id, id);
