@@ -59,11 +59,13 @@ const FamilyPayments = window.FamilyPayments = () => {
     catch { return d; }
   };
 
+  const isRealLast4 = (v) => v && v !== 'link' && v !== '****' && v !== '0000' && !/^0+$/.test(v);
   const methodLabel = (m) => {
-    if (m.isLink) return `Stripe Link${m.last4 && m.last4 !== 'link' && m.last4 !== '****' ? ` \u2022\u2022\u2022\u2022 ${m.last4}` : ''}`;
+    if (m.isLink) return `Stripe Link${isRealLast4(m.last4) ? ` \u2022\u2022\u2022\u2022 ${m.last4}` : ''}`;
     if (m.isBank) return `${m.brand} \u2022\u2022\u2022\u2022 ${m.last4}`;
     return `${m.brand} \u2022\u2022\u2022\u2022 ${m.last4}`;
   };
+  const isPlaceholderExpiry = (m) => m.isLink && m.expMonth === 12 && m.expYear >= 2040;
 
   const methodIcon = (m) => m.isBank ? '\uD83C\uDFE6' : '\uD83D\uDCB3';
 
@@ -113,11 +115,11 @@ const FamilyPayments = window.FamilyPayments = () => {
                     <span style={{ fontSize: 22 }}>{methodIcon(m)}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize' }}>{methodLabel(m)}</div>
-                      {m.expMonth && m.expYear && (
+                      {m.expMonth && m.expYear && !isPlaceholderExpiry(m) && (
                         <div style={{ fontSize: 12, color: '#888' }}>Expires {m.expMonth}/{m.expYear}</div>
                       )}
                       {m.isLink && (
-                        <div style={{ fontSize: 12, color: '#888' }}>{m.email ? `Linked to ${m.email}` : 'Saved securely via Stripe Link'}</div>
+                        <div style={{ fontSize: 12, color: '#888' }}>{m.email ? `Linked to ${m.email}` : 'Your card is saved securely via Stripe Link'}</div>
                       )}
                     </div>
                   </div>

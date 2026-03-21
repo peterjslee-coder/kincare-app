@@ -292,16 +292,22 @@ router.get("/family/status", requireRole("family"), async (req, res) => {
         limit: 10,
       });
       for (const pm of linkMethods.data) {
-        const linkCard = pm.link || {};
+        // Link methods often have dummy card values (0000, 12/2040) — prefer real link details
+        const linkObj = pm.link || {};
+        const cardFallback = pm.card || {};
+        // Only use card last4 if it's not a placeholder
+        const realLast4 = linkObj.last4 || (cardFallback.last4 && cardFallback.last4 !== "0000" ? cardFallback.last4 : null);
+        const realExpMonth = linkObj.exp_month || (cardFallback.exp_year && cardFallback.exp_year < 2040 ? cardFallback.exp_month : null);
+        const realExpYear = linkObj.exp_year || (cardFallback.exp_year && cardFallback.exp_year < 2040 ? cardFallback.exp_year : null);
         methods.push({
           id: pm.id,
           type: "link",
-          brand: linkCard.brand || "Stripe Link",
-          last4: linkCard.last4 || pm.card?.last4 || null,
-          expMonth: linkCard.exp_month || pm.card?.exp_month || null,
-          expYear: linkCard.exp_year || pm.card?.exp_year || null,
+          brand: "Stripe Link",
+          last4: realLast4,
+          expMonth: realExpMonth,
+          expYear: realExpYear,
           isLink: true,
-          email: pm.link?.email || null,
+          email: linkObj.email || pm.billing_details?.email || null,
         });
       }
     } catch { /* Link type may not be supported on all API versions */ }
