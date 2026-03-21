@@ -274,7 +274,7 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
     const response = {
       checkrConfigured: !!process.env.CHECKR_API_KEY,
       paid: !!profile.background_check_paid,
-      status: profile.checkr_status || "pending",
+      status: profile.is_background_checked ? "complete" : (profile.checkr_status || "pending"),
       cleared: !!profile.is_background_checked,
       candidateId: profile.checkr_candidate_id || null,
       invitationId: profile.checkr_invitation_id || null,

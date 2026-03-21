@@ -722,8 +722,29 @@ router.delete("/users/:id/nuke", async (req, res) => {
     // 3. HARD DELETE everything in a transaction
     // IMPORTANT: Order matters — delete child rows before parent rows to avoid FK violations.
     await db.transaction(async (tx) => {
-      const cgProfile = await tx.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(id);
+      const cgProfile = await tx.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(id);
       const cgId = cgProfile?.id;
+
+      // Archive background check data BEFORE deleting (permanent record)
+      if (cgId && (cgProfile.checkr_candidate_id || cgProfile.checkr_report_id || cgProfile.is_background_checked || cgProfile.background_check_paid)) {
+        const { v4: archiveUuid } = require("uuid");
+        await tx.prepare(`
+          INSERT INTO background_check_archive (
+            id, user_id, user_email, user_first_name, user_last_name,
+            caregiver_profile_id, checkr_candidate_id, checkr_report_id, checkr_invitation_id,
+            checkr_status, is_background_checked, background_check_paid,
+            bg_check_admin_approved, bg_check_admin_approved_by, bg_check_admin_approved_at,
+            legal_first_name, legal_last_name, archived_at, archived_reason, original_created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'user_deleted', ?)
+        `).run(
+          archiveUuid(), id, user.email, user.first_name, user.last_name,
+          cgId, cgProfile.checkr_candidate_id, cgProfile.checkr_report_id, cgProfile.checkr_invitation_id,
+          cgProfile.checkr_status, cgProfile.is_background_checked ? 1 : 0, cgProfile.background_check_paid ? 1 : 0,
+          cgProfile.bg_check_admin_approved ? 1 : 0, cgProfile.bg_check_admin_approved_by || null, cgProfile.bg_check_admin_approved_at || null,
+          cgProfile.legal_first_name, cgProfile.legal_last_name, cgProfile.created_at
+        );
+        console.log(`  [NUKE] Archived background check for ${user.email}: candidate=${cgProfile.checkr_candidate_id}, report=${cgProfile.checkr_report_id}, status=${cgProfile.checkr_status}`);
+      }
 
       // Caregiver-specific tables
       if (cgId) {

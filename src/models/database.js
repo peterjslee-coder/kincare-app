@@ -884,6 +884,31 @@ async function initializeDatabase() {
       acknowledged INTEGER DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
+
+    // v1.50.80 — Background check archive (permanent record that survives user deletion)
+    `CREATE TABLE IF NOT EXISTS background_check_archive (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      user_email TEXT,
+      user_first_name TEXT,
+      user_last_name TEXT,
+      caregiver_profile_id TEXT,
+      checkr_candidate_id TEXT,
+      checkr_report_id TEXT,
+      checkr_invitation_id TEXT,
+      checkr_status TEXT,
+      is_background_checked INTEGER DEFAULT 0,
+      background_check_paid INTEGER DEFAULT 0,
+      bg_check_admin_approved INTEGER DEFAULT 0,
+      bg_check_admin_approved_by TEXT,
+      bg_check_admin_approved_at TIMESTAMPTZ,
+      legal_first_name TEXT,
+      legal_last_name TEXT,
+      archived_at TIMESTAMPTZ DEFAULT NOW(),
+      archived_reason TEXT,
+      original_created_at TIMESTAMPTZ,
+      metadata JSONB
+    )`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
