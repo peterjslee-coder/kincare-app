@@ -609,258 +609,195 @@ Rules: Under 250 words. No markdown symbols of any kind. No headers. No bullet l
   }
 });
 
-// ─── GET /api/care-recipients/:id/doctor-summary ───
-// Generate a doctor-ready care summary PDF (observable patterns, not PHI)
-router.get("/:id/doctor-summary", async (req, res) => {
+// ─── POST /api/care-recipients/:id/doctor-report ───
+// AI-generated, appointment-specific report for a healthcare provider
+router.post("/:id/doctor-report", async (req, res) => {
   try {
     const db = await getDb();
     const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
     if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
     if (recipient.family_user_id !== req.user.id) return res.status(403).json({ error: "Not authorized" });
 
-    const PDFDocument = require("pdfkit");
+    const { appointmentType, appointmentDetails, doctorEmail } = req.body;
+    if (!appointmentType || !appointmentType.trim()) return res.status(400).json({ error: "Appointment type is required" });
 
-    // ── Gather data ──
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "AI service not configured" });
+
+    // ── Gather all data ──
     const name = `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || 'Care Recipient';
-    const age = recipient.age || null;
-    const location = [recipient.location_city, recipient.location_state].filter(Boolean).join(', ');
+    const firstName = recipient.first_name || 'the patient';
+    const age = recipient.age || 'unknown age';
 
     let healthConditions = [];
     try { healthConditions = JSON.parse(recipient.health_conditions || '[]'); } catch { healthConditions = []; }
-
     let medications = [];
     try { medications = JSON.parse(recipient.medications || '[]'); } catch { medications = []; }
-
     let preferences = {};
     try { preferences = JSON.parse(recipient.care_preferences || '{}'); } catch { preferences = {}; }
-
     let details = {};
     try { details = JSON.parse(recipient.care_preference_details || '{}'); } catch { details = {}; }
 
-    // Fetch recent visit logs (last 20)
+    const prefLabels = {
+      meal_prep: 'Meal preparation & cooking', housekeeping: 'Light housekeeping',
+      errands: 'Grocery shopping & errands', med_reminders: 'Medication reminders',
+      bathing: 'Help with bathing/grooming/dressing', fall_prevention: 'Fall prevention & mobility assistance',
+      transportation: 'Transportation to appointments', overnight: 'Overnight supervision',
+      wandering: 'Wandering prevention', vitals: 'Vital signs monitoring',
+      exercise: 'Exercise & physical therapy support', companionship: 'Companionship & conversation',
+      hobbies: 'Hobbies & activities', social_outings: 'Social outing accompaniment',
+      patience: 'Patience with repetition & confusion', daily_updates: 'Daily updates to family',
+      consistent_caregiver: 'Consistent caregiver scheduling', condition_experience: 'Condition-specific experience',
+      pets: 'Comfortable with pets', gardening: 'Gardening or yard work',
+      outdoor_walks: 'Outdoor walks', socializing_out: 'Socializing away from home',
+      tech_help: 'Technology help', spiritual: 'Spiritual/religious practice support',
+    };
+    const ratingLabels = { 0: 'Not needed', 1: 'Nice to have', 2: 'Important', 3: 'Must have' };
+
+    // Visits (last 30 for deeper pattern analysis)
     const visits = await db.prepare(`
       SELECT vl.*, cs.scheduled_date, u.first_name AS cg_first, u.last_name AS cg_last
       FROM visit_logs vl
       JOIN care_sessions cs ON vl.session_id = cs.id
       JOIN users u ON vl.caregiver_id = u.id
       WHERE cs.care_recipient_id = ? AND vl.check_out_time IS NOT NULL
-      ORDER BY vl.check_in_time DESC LIMIT 20
+      ORDER BY vl.check_in_time DESC LIMIT 30
     `).all(req.params.id);
 
-    // Fetch care notes (last 15)
+    // Notes (last 20)
     const notes = await db.prepare(`
       SELECT rn.*, u.first_name AS author_first, u.last_name AS author_last
       FROM recipient_notes rn
       JOIN users u ON rn.author_id = u.id
       WHERE rn.care_recipient_id = ?
-      ORDER BY rn.created_at DESC LIMIT 15
+      ORDER BY rn.created_at DESC LIMIT 20
     `).all(req.params.id);
 
-    // Preference labels
-    const prefLabels = {
-      meal_prep: 'Meal preparation & cooking', housekeeping: 'Light housekeeping',
-      errands: 'Grocery shopping & errands', med_reminders: 'Medication reminders',
-      bathing: 'Help with bathing, grooming & dressing', fall_prevention: 'Fall prevention & mobility assistance',
-      transportation: 'Transportation to appointments', overnight: 'Overnight or evening supervision',
-      wandering: 'Wandering prevention', vitals: 'Vital signs monitoring',
-      exercise: 'Exercise & physical therapy support', companionship: 'Companionship & conversation',
-      hobbies: 'Engaging in hobbies & activities', social_outings: 'Social outing accompaniment',
-      patience: 'Patience with repetition & confusion', daily_updates: 'Daily updates & photos to family',
-      consistent_caregiver: 'Consistent same-caregiver scheduling', condition_experience: 'Experience with specific conditions',
-      pets: 'Comfortable with pets', gardening: 'Gardening or light yard work',
-      outdoor_walks: 'Outdoor walks & fresh air', socializing_out: 'Socializing away from home',
-      tech_help: 'Technology help', spiritual: 'Spiritual or religious practice support',
-    };
-    const ratingLabels = { 0: 'Not needed', 1: 'Nice to have', 2: 'Important', 3: 'Must have' };
-
-    // ── Build PDF ──
-    const doc = new PDFDocument({ size: 'LETTER', margins: { top: 50, bottom: 50, left: 55, right: 55 } });
-
-    // Stream to response
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Care_Summary_${(recipient.first_name || 'Recipient').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf"`);
-    doc.pipe(res);
-
-    const primaryColor = '#1b6b5a';
-    const darkText = '#222';
-    const grayText = '#666';
-    const lightBg = '#f0f7f5';
-
-    // ── Header ──
-    doc.rect(0, 0, doc.page.width, 90).fill(primaryColor);
-    doc.fontSize(22).fillColor('#fff').text('Care Summary for Healthcare Provider', 55, 25, { align: 'left' });
-    doc.fontSize(10).fillColor('rgba(255,255,255,0.85)').text('Prepared by InPlace Home Care Coordination', 55, 52, { align: 'left' });
-    doc.fontSize(9).text(`Generated: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`, 55, 66, { align: 'left' });
-    doc.fillColor(darkText);
-
-    let y = 105;
-
-    // Helper: section header
-    const sectionHeader = (title) => {
-      if (y > 680) { doc.addPage(); y = 50; }
-      doc.rect(55, y, doc.page.width - 110, 24).fill(lightBg);
-      doc.fontSize(12).fillColor(primaryColor).text(title, 65, y + 6);
-      doc.fillColor(darkText);
-      y += 32;
-    };
-
-    // Helper: add line with label + value
-    const addField = (label, value) => {
-      if (!value) return;
-      if (y > 720) { doc.addPage(); y = 50; }
-      doc.fontSize(9).fillColor(grayText).text(label, 65, y, { continued: true });
-      doc.fillColor(darkText).text(`  ${value}`, { continued: false });
-      y += 16;
-    };
-
-    // ── Recipient Info ──
-    sectionHeader('Patient Information');
-    addField('Name:', name);
-    if (age) addField('Age:', String(age));
-    if (location) addField('Location:', location);
-    if (recipient.emergency_contact_name) addField('Emergency Contact:', `${recipient.emergency_contact_name}${recipient.emergency_contact_phone ? ' — ' + recipient.emergency_contact_phone : ''}`);
-    if (recipient.food_allergies) addField('Food Allergies:', recipient.food_allergies);
-    if (recipient.pet_allergies) addField('Pet Allergies:', recipient.pet_allergies);
-    if (recipient.pets) addField('Pets in Home:', recipient.pets);
-    y += 6;
-
-    // ── Health Conditions ──
-    if (healthConditions.length > 0) {
-      sectionHeader('Reported Health Conditions');
-      doc.fontSize(9).fillColor(darkText);
-      healthConditions.forEach(c => {
-        if (y > 720) { doc.addPage(); y = 50; }
-        doc.text(`•  ${c}`, 65, y);
-        y += 14;
-      });
-      y += 6;
-    }
-
-    // ── Medications ──
-    if (medications.length > 0) {
-      sectionHeader('Current Medications (as reported by family)');
-      doc.fontSize(9).fillColor(darkText);
-      medications.forEach(m => {
-        if (y > 720) { doc.addPage(); y = 50; }
-        doc.text(`•  ${m}`, 65, y);
-        y += 14;
-      });
-      y += 6;
-    }
-
-    // ── Care Needs & Preferences ──
-    const ratedPrefs = Object.entries(preferences).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
-    if (ratedPrefs.length > 0) {
-      sectionHeader('Daily Living & Care Needs (rated by family)');
-      doc.fontSize(9).fillColor(darkText);
-      ratedPrefs.forEach(([key, val]) => {
-        if (y > 720) { doc.addPage(); y = 50; }
+    // Build context for AI
+    const prefLines = Object.entries(preferences).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a)
+      .map(([key, val]) => {
         const label = prefLabels[key] || key;
-        const rating = ratingLabels[val] || String(val);
-        doc.fillColor(darkText).text(`•  ${label}`, 65, y, { continued: true });
-        const ratingColor = val === 3 ? '#c62828' : val === 2 ? '#e65100' : '#666';
-        doc.fillColor(ratingColor).text(` — ${rating}`, { continued: false });
-        if (details[key]) {
-          y += 13;
-          doc.fillColor(grayText).fontSize(8).text(`     Note: ${details[key]}`, 75, y);
-          doc.fontSize(9);
-        }
-        y += 15;
+        const rating = ratingLabels[val] || val;
+        const detail = details[key] ? ` — "${details[key]}"` : '';
+        return `- ${label}: ${rating}${detail}`;
+      }).join('\n');
+
+    const visitSummaries = visits.map(v => {
+      const date = v.check_in_time ? new Date(v.check_in_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '?';
+      const caregiver = `${v.cg_first || ''} ${v.cg_last || ''}`.trim();
+      let tags = [];
+      try { tags = JSON.parse(v.condition_tags || '[]'); } catch {}
+      return `[${date} — ${caregiver}] Mood: ${v.arrival_mood || '?'} → ${v.departure_mood || '?'}. ${v.summary || ''} ${v.notes || ''} ${tags.length > 0 ? 'Tags: ' + tags.join(', ') : ''}`.trim();
+    }).join('\n');
+
+    const noteSummaries = notes.map(n => {
+      const date = n.created_at ? new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      const author = `${n.author_first || ''} ${n.author_last || ''}`.trim();
+      return `[${date} — ${author}] ${n.content}`;
+    }).join('\n');
+
+    const familyUser = await db.prepare("SELECT first_name, last_name, phone, email FROM users WHERE id = ?").get(recipient.family_user_id);
+    const familyName = familyUser ? `${familyUser.first_name} ${familyUser.last_name}` : 'Family member';
+    const familyPhone = familyUser?.phone || '';
+    const familyEmail = familyUser?.email || '';
+
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-5-20250514",
+      max_tokens: 2000,
+      system: `You are a clinical communication specialist helping families share relevant home care observations with healthcare providers. You write professional, concise reports that doctors actually read and find useful.
+
+Your job: Given information about a care recipient's daily life — observed by home caregivers and family — produce a focused report tailored to a SPECIFIC type of medical appointment. You are NOT diagnosing. You are surfacing observable patterns that a clinician should know about.
+
+RULES:
+- Write in professional clinical-adjacent language. Not medical jargon, but the tone a nurse or care coordinator would use.
+- Be SPECIFIC about what was observed and when. Cite dates and caregiver names when available.
+- For the given specialty/appointment type, think about what that doctor would want to know from daily home observations. A podiatrist cares about foot issues, mobility, fall risk, shoe fit. A neurologist cares about cognitive patterns, confusion episodes, sleep, mood swings. A cardiologist cares about activity levels, breathing, swelling, fatigue.
+- If the data does NOT contain strong indicators relevant to the specialty, SAY SO clearly. e.g., "Based on the home care observations available, there are no strong indicators of [specialty-relevant symptoms]. The family and caregivers have not documented [specific things]. You may want to ask the family about [suggestions]."
+- Include a "Questions for the Doctor" section with 2-4 specific questions the family could ask, tailored to the appointment type and what you've seen in the data.
+- Keep it to about one page of content. Doctors are busy.
+- End with family contact info and a note that this was prepared through InPlace.
+- Use plain text paragraphs. NO markdown, NO bullet points, NO asterisks, NO headers with #. Use ALL CAPS for section titles on their own line.`,
+      messages: [{ role: "user", content: `Generate a doctor visit report for the following appointment:
+
+APPOINTMENT TYPE: ${appointmentType.trim()}
+${appointmentDetails ? `APPOINTMENT DETAILS: ${appointmentDetails.trim()}` : ''}
+
+PATIENT: ${name}, age ${age}
+KNOWN CONDITIONS: ${healthConditions.length > 0 ? healthConditions.join(', ') : 'None listed'}
+MEDICATIONS: ${medications.length > 0 ? medications.join(', ') : 'None listed'}
+ALLERGIES: Food: ${recipient.food_allergies || 'None'}. Pet: ${recipient.pet_allergies || 'None'}.
+EMERGENCY CONTACT: ${recipient.emergency_contact_name || 'Not listed'} ${recipient.emergency_contact_phone || ''}
+
+DAILY LIVING CARE NEEDS (rated by family):
+${prefLines || 'No preferences rated'}
+
+AI CARE PROFILE:
+${recipient.ai_care_summary || 'Not generated yet'}
+
+RECENT CAREGIVER VISIT OBSERVATIONS (most recent first):
+${visitSummaries || 'No visit logs recorded yet'}
+
+FAMILY AND CAREGIVER NOTES:
+${noteSummaries || 'No notes recorded yet'}
+
+FAMILY CONTACT: ${familyName}, ${familyPhone}, ${familyEmail}` }],
+    });
+
+    const report = message.content[0]?.text || 'Unable to generate report';
+
+    // If email requested, send branded email to doctor
+    let emailResult = null;
+    if (doctorEmail && doctorEmail.trim()) {
+      const { sendEmail } = require("../utils/email");
+
+      const emailHtml = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto;">
+  <div style="background: #1b6b5a; padding: 24px 28px; border-radius: 12px 12px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 20px;">Home Care Report for ${name}</h1>
+    <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">
+      Prepared for: ${appointmentType.trim()} appointment
+    </p>
+  </div>
+  <div style="padding: 28px; background: #ffffff; border: 1px solid #e0e0e0; border-top: none;">
+    <p style="color: #333; font-size: 13px; margin: 0 0 4px;">
+      <strong>Patient:</strong> ${name}, age ${age}
+    </p>
+    ${healthConditions.length > 0 ? `<p style="color: #333; font-size: 13px; margin: 0 0 4px;"><strong>Known conditions:</strong> ${healthConditions.join(', ')}</p>` : ''}
+    ${medications.length > 0 ? `<p style="color: #333; font-size: 13px; margin: 0 0 4px;"><strong>Current medications:</strong> ${medications.join(', ')}</p>` : ''}
+    <p style="color: #333; font-size: 13px; margin: 0 0 16px;">
+      <strong>Family contact:</strong> ${familyName}${familyPhone ? ' — ' + familyPhone : ''}${familyEmail ? ' — ' + familyEmail : ''}
+    </p>
+    <hr style="border: none; border-top: 1px solid #eee; margin: 0 0 16px;" />
+    <div style="color: #333; font-size: 14px; line-height: 1.7; white-space: pre-wrap;">${report.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0 16px;" />
+    <p style="color: #999; font-size: 11px; line-height: 1.5; margin: 0;">
+      This report contains observations from home caregivers and family members, collected through InPlace (yourinplace.com), a home care coordination platform. It is not a clinical assessment and should not replace medical evaluation. All observations are documented by non-clinical caregivers during routine home care visits.
+    </p>
+  </div>
+  <div style="padding: 16px 28px; background: #f8f9fa; border-radius: 0 0 12px 12px; border: 1px solid #e0e0e0; border-top: none; text-align: center;">
+    <p style="margin: 0; color: #1b6b5a; font-size: 12px; font-weight: 600;">Prepared via InPlace — yourinplace.com</p>
+    <p style="margin: 4px 0 0; color: #aaa; font-size: 11px;">Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+  </div>
+</div>`;
+
+      emailResult = await sendEmail({
+        to: doctorEmail.trim(),
+        subject: `Home Care Report: ${name} — ${appointmentType.trim()} appointment`,
+        html: emailHtml,
       });
-      y += 6;
     }
 
-    // ── AI Care Summary ──
-    if (recipient.ai_care_summary) {
-      sectionHeader('AI-Generated Care Profile');
-      doc.fontSize(9).fillColor(darkText);
-      const summaryLines = doc.heightOfString(recipient.ai_care_summary, { width: doc.page.width - 130 });
-      if (y + summaryLines > 720) { doc.addPage(); y = 50; }
-      doc.text(recipient.ai_care_summary, 65, y, { width: doc.page.width - 130, lineGap: 3 });
-      y += summaryLines + 12;
-    }
-
-    // ── Recent Caregiver Observations ──
-    if (visits.length > 0) {
-      sectionHeader('Recent Caregiver Observations');
-      doc.fontSize(8).fillColor(grayText).text('Based on caregiver visit logs — observable patterns only, not clinical assessments.', 65, y);
-      y += 16;
-
-      visits.slice(0, 10).forEach(v => {
-        if (y > 700) { doc.addPage(); y = 50; }
-        const date = v.check_in_time ? new Date(v.check_in_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown date';
-        const caregiver = `${v.cg_first || ''} ${v.cg_last || ''}`.trim();
-
-        doc.fontSize(9).fillColor(primaryColor).text(`${date}  —  ${caregiver}`, 65, y);
-        y += 14;
-
-        if (v.arrival_mood || v.departure_mood) {
-          doc.fontSize(8).fillColor(grayText).text(`Mood: ${v.arrival_mood || '?'} on arrival → ${v.departure_mood || '?'} on departure`, 75, y);
-          y += 12;
-        }
-        if (v.summary) {
-          doc.fontSize(8).fillColor(darkText);
-          const h = doc.heightOfString(v.summary, { width: doc.page.width - 150 });
-          if (y + h > 720) { doc.addPage(); y = 50; }
-          doc.text(v.summary, 75, y, { width: doc.page.width - 150, lineGap: 2 });
-          y += h + 4;
-        }
-        if (v.notes) {
-          doc.fontSize(8).fillColor(grayText);
-          const h = doc.heightOfString(v.notes, { width: doc.page.width - 150 });
-          if (y + h > 720) { doc.addPage(); y = 50; }
-          doc.text(v.notes, 75, y, { width: doc.page.width - 150, lineGap: 2 });
-          y += h + 4;
-        }
-        if (v.condition_tags) {
-          try {
-            const tags = JSON.parse(v.condition_tags);
-            if (Array.isArray(tags) && tags.length > 0) {
-              doc.fontSize(8).fillColor(grayText).text(`Observed: ${tags.join(', ')}`, 75, y);
-              y += 12;
-            }
-          } catch {}
-        }
-        y += 6;
-      });
-    }
-
-    // ── Family Care Notes ──
-    if (notes.length > 0) {
-      sectionHeader('Family & Caregiver Notes');
-      notes.slice(0, 10).forEach(n => {
-        if (y > 700) { doc.addPage(); y = 50; }
-        const date = n.created_at ? new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-        const author = `${n.author_first || ''} ${n.author_last || ''}`.trim();
-
-        doc.fontSize(8).fillColor(grayText).text(`${date} — ${author}`, 65, y);
-        y += 12;
-        doc.fontSize(9).fillColor(darkText);
-        const h = doc.heightOfString(n.content, { width: doc.page.width - 130 });
-        if (y + h > 720) { doc.addPage(); y = 50; }
-        doc.text(n.content, 75, y, { width: doc.page.width - 140, lineGap: 2 });
-        y += h + 10;
-      });
-    }
-
-    // ── Footer / Disclaimer ──
-    if (y > 680) { doc.addPage(); y = 50; }
-    y += 10;
-    doc.rect(55, y, doc.page.width - 110, 1).fill('#ddd');
-    y += 10;
-    doc.fontSize(7.5).fillColor(grayText).text(
-      'DISCLAIMER: This document contains observations and daily living information reported by family members and home caregivers through InPlace. ' +
-      'It is not a clinical assessment and should not replace medical evaluation. InPlace is a home care coordination platform, not a healthcare provider. ' +
-      'All information is provided to support continuity of care communication between families and healthcare providers.',
-      55, y, { width: doc.page.width - 110, lineGap: 2, align: 'center' }
-    );
-    y += 50;
-    doc.fontSize(8).fillColor(primaryColor).text('Prepared via InPlace  •  yourinplace.com', 55, y, { align: 'center', width: doc.page.width - 110 });
-
-    doc.end();
+    res.json({
+      report,
+      emailSent: emailResult?.success || false,
+      emailError: emailResult && !emailResult.success ? emailResult.error : null,
+    });
   } catch (err) {
-    console.error("Generate doctor summary error:", err);
-    if (!res.headersSent) res.status(500).json({ error: "Failed to generate summary" });
+    console.error("Generate doctor report error:", err);
+    res.status(500).json({ error: "Failed to generate report" });
   }
 });
 

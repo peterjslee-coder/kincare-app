@@ -24,34 +24,52 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [editingSummary, setEditingSummary] = useState(false);
   const [editedSummary, setEditedSummary] = useState('');
   const [savingSummary, setSavingSummary] = useState(false);
-  const [doctorPdfLoading, setDoctorPdfLoading] = useState(false);
+  const [doctorReportOpen, setDoctorReportOpen] = useState(false);
+  const [doctorApptType, setDoctorApptType] = useState('');
+  const [doctorApptDetails, setDoctorApptDetails] = useState('');
+  const [doctorEmail, setDoctorEmail] = useState('');
+  const [doctorReportLoading, setDoctorReportLoading] = useState(false);
+  const [doctorReport, setDoctorReport] = useState('');
+  const [doctorEmailSent, setDoctorEmailSent] = useState(false);
   const { showToast } = useToast();
 
-  const handleDoctorSummary = async () => {
-    if (!profile?.id) return;
-    setDoctorPdfLoading(true);
+  const handleGenerateDoctorReport = async () => {
+    if (!profile?.id || !doctorApptType.trim()) {
+      if (typeof showToast === 'function') showToast('Please enter the type of appointment', 'error');
+      return;
+    }
+    setDoctorReportLoading(true);
+    setDoctorReport('');
+    setDoctorEmailSent(false);
     try {
-      const res = await apiFetch(`/api/care-recipients/${profile.id}/doctor-summary`);
-      if (res?.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Care_Summary_${(profile.first_name || 'Recipient').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        if (typeof showToast === 'function') showToast('Doctor summary PDF downloaded', 'success');
+      const res = await apiFetch(`/api/care-recipients/${profile.id}/doctor-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentType: doctorApptType.trim(),
+          appointmentDetails: doctorApptDetails.trim() || undefined,
+          doctorEmail: doctorEmail.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.report) {
+        setDoctorReport(data.report);
+        if (data.emailSent) {
+          setDoctorEmailSent(true);
+          if (typeof showToast === 'function') showToast(`Report emailed to ${doctorEmail.trim()}`, 'success');
+        } else if (data.emailError) {
+          if (typeof showToast === 'function') showToast(`Report ready but email failed: ${data.emailError}`, 'error');
+        } else {
+          if (typeof showToast === 'function') showToast('Doctor report generated', 'success');
+        }
       } else {
-        const err = await res.json().catch(() => ({}));
-        if (typeof showToast === 'function') showToast(err.error || 'Failed to generate PDF', 'error');
+        if (typeof showToast === 'function') showToast(data.error || 'Failed to generate report', 'error');
       }
     } catch (e) {
-      console.error('Doctor summary error:', e);
-      if (typeof showToast === 'function') showToast('Failed to generate doctor summary', 'error');
+      console.error('Doctor report error:', e);
+      if (typeof showToast === 'function') showToast('Failed to generate doctor report', 'error');
     }
-    setDoctorPdfLoading(false);
+    setDoctorReportLoading(false);
   };
 
   const CARE_PREFS_LIST = [
@@ -532,13 +550,71 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           </div>
         )}
         {!editing && canEdit && profile && (
-          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ fontSize: 12, color: '#888' }}>{'\uD83E\uDE7A'} Generate a care summary PDF for {profile.first_name}'s doctor</div>
-            <button onClick={handleDoctorSummary} disabled={doctorPdfLoading} style={{
-              padding: '7px 16px', borderRadius: 6, border: '1px dashed #1b6b5a',
-              background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 12,
-              cursor: doctorPdfLoading ? 'wait' : 'pointer', whiteSpace: 'nowrap',
-            }}>{doctorPdfLoading ? 'Generating...' : 'Download PDF'}</button>
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+            <div onClick={() => { setDoctorReportOpen(!doctorReportOpen); setDoctorReport(''); }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '6px 0' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#1b6b5a' }}>
+                {'\uD83E\uDE7A'} AI Report for {profile.first_name}'s Doctor
+              </div>
+              <span style={{ fontSize: 11, color: '#999', transform: doctorReportOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
+            </div>
+            {doctorReportOpen && (
+              <div style={{ marginTop: 8, padding: 12, background: '#f8faf9', borderRadius: 10, border: '1px solid #e0ebe7' }}>
+                <p style={{ fontSize: 12, color: '#666', margin: '0 0 10px', lineHeight: 1.5 }}>
+                  Generate an AI-powered report tailored for a specific medical appointment.
+                  InPlace analyzes {profile.first_name}'s care notes, visit logs, and health data to surface what's relevant for the specialist.
+                </p>
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555', display: 'block', marginBottom: 3 }}>Type of Appointment *</label>
+                  <input value={doctorApptType} onChange={e => setDoctorApptType(e.target.value)}
+                    placeholder="e.g. Podiatrist, Neurologist, Primary Care, Urologist..."
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555', display: 'block', marginBottom: 3 }}>Appointment Details (optional)</label>
+                  <textarea value={doctorApptDetails} onChange={e => setDoctorApptDetails(e.target.value)}
+                    placeholder="Purpose of visit, specific concerns, questions you want addressed..."
+                    rows={3}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555', display: 'block', marginBottom: 3 }}>Doctor's Email (optional — sends report directly)</label>
+                  <input value={doctorEmail} onChange={e => setDoctorEmail(e.target.value)}
+                    placeholder="doctor@clinic.com"
+                    type="email"
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+                <button onClick={handleGenerateDoctorReport} disabled={doctorReportLoading}
+                  style={{
+                    width: '100%', padding: '10px 16px', borderRadius: 8,
+                    border: 'none', background: doctorReportLoading ? '#a0c4b8' : '#1b6b5a',
+                    color: '#fff', fontWeight: 700, fontSize: 13, cursor: doctorReportLoading ? 'wait' : 'pointer',
+                    transition: 'background 0.2s',
+                  }}>
+                  {doctorReportLoading ? 'Analyzing care data...' : doctorEmail.trim() ? 'Generate & Email Report' : 'Generate Report'}
+                </button>
+                {doctorEmailSent && (
+                  <div style={{ marginTop: 8, padding: '8px 10px', background: '#e8f5e9', borderRadius: 6, fontSize: 12, color: '#2e7d32' }}>
+                    {'\u2709\uFE0F'} Report emailed to {doctorEmail.trim()}
+                  </div>
+                )}
+                {doctorReport && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#333' }}>Generated Report</span>
+                      <button onClick={() => { navigator.clipboard.writeText(doctorReport); if (typeof showToast === 'function') showToast('Report copied to clipboard', 'success'); }}
+                        style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid #ddd', background: '#fff', fontSize: 11, cursor: 'pointer', color: '#555' }}>
+                        Copy
+                      </button>
+                    </div>
+                    <div style={{
+                      padding: 14, background: '#fff', borderRadius: 8, border: '1px solid #e0e0e0',
+                      fontSize: 13, lineHeight: 1.7, color: '#333', whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto',
+                    }}>{doctorReport}</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
