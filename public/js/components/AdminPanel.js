@@ -37,6 +37,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [bgCheckCandidates, setBgCheckCandidates] = useState([]);
   const [bgCheckLoading, setBgCheckLoading] = useState(false);
   const [checkrAlertCount, setCheckrAlertCount] = useState(0);
+  const [bgCheckActionItems, setBgCheckActionItems] = useState([]);
 
   const loadBgChecks = async () => {
     setBgCheckLoading(true);
@@ -451,6 +452,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         setNewFeedbackCount(d.newFeedback || 0);
         setSafetyFlagCount(d.safetyFlags || 0);
         setCheckrAlertCount(d.checkrAlerts || 0);
+        setBgCheckActionItems(d.bgCheckActionItems || []);
       }
     }).catch(() => {});
     // Fetch current user for settings tab
@@ -1091,12 +1093,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       </div>
 
       {/* ── ACTION REQUIRED BANNER — always visible when pending approvals exist ── */}
-      {(pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 || safetyFlagCount > 0) && (
+      {(pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 || bgCheckActionItems.length > 0 || safetyFlagCount > 0) && (
         <div style={{ marginBottom: 16, padding: 16, background: safetyFlagCount > 0 ? 'linear-gradient(135deg, #fce4ec, #ffcdd2)' : 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: safetyFlagCount > 0 ? '2px solid #c62828' : '2px solid #ff9800', borderRadius: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: safetyFlagCount > 0 ? '#c62828' : '#e65100', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             {safetyFlagCount > 0 ? '\u{1F6A8}' : '\u{1F514}'} Action Required
             <span style={{ background: safetyFlagCount > 0 ? '#c62828' : '#e65100', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
-              {pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount + safetyFlagCount}
+              {pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount + bgCheckActionItems.length + safetyFlagCount}
             </span>
           </div>
 
@@ -1241,21 +1243,86 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             </div>
           ))}
 
-          {/* Background check updates */}
-          {checkrAlertCount > 0 && (
+          {/* Background check updates — individual cards like safety flags */}
+          {(bgCheckActionItems.length > 0 || checkrAlertCount > 0) && (
             <>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Background Checks</div>
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#fff', borderRadius: 10, border: '1px solid #ffe0b2', cursor: 'pointer',
-              }} onClick={() => { setActiveTab('bgchecks'); loadBgChecks(); }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#1565c0' }}>
-                    {'\u{1F50D}'} {checkrAlertCount} background check update{checkrAlertCount !== 1 ? 's' : ''}
+              {bgCheckActionItems.map(item => {
+                const statusLabel = (item.checkrStatus || '').replace(/_/g, ' ');
+                const isConsider = item.checkrStatus === 'consider';
+                const isRejected = item.checkrStatus === 'did_not_pass' || item.checkrStatus === 'suspended';
+                return (
+                <div key={item.userId} style={{
+                  padding: '12px 14px', marginBottom: 6, background: isRejected ? '#fef3f3' : '#f0f4ff', borderRadius: 10,
+                  border: isRejected ? '2px solid #c62828' : '2px solid #5c6bc0',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ flex: '1 1 200px' }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: isRejected ? '#c62828' : '#283593' }}>
+                        {isRejected ? '\u{1F6D1}' : '\u{1F50D}'}{' '}
+                        {item.name}
+                        <span style={{ marginLeft: 6, padding: '1px 8px', background: isRejected ? '#c62828' : isConsider ? '#ef6c00' : '#5c6bc0', color: '#fff', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{statusLabel}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{item.email}</div>
+                      <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : ''}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      {isConsider && (
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!confirm('Approve ' + item.name + ' despite "consider" status?')) return;
+                          try {
+                            const r = await fetch('/api/admin/caregivers/' + item.userId + '/approve-bgcheck', {
+                              method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': window.__ADMIN_API_KEY || '' }
+                            });
+                            if (r.ok) { alert(item.name + ' approved!'); loadAlerts(); } else { const d = await r.json(); alert(d.error || 'Failed'); }
+                          } catch (err) { alert('Error: ' + err.message); }
+                        }}
+                          style={{ padding: '6px 12px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                          {'\u2713'} Approve
+                        </button>
+                      )}
+                      <button onClick={async (e) => {
+                        e.stopPropagation();
+                        const reason = prompt('Rejection reason for ' + item.name + ':');
+                        if (!reason) return;
+                        try {
+                          const r = await fetch('/api/admin/users/' + item.userId + '/reject-bgcheck', {
+                            method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-api-key': window.__ADMIN_API_KEY || '' },
+                            body: JSON.stringify({ reason })
+                          });
+                          if (r.ok) { alert(item.name + ' rejected.'); loadAlerts(); } else { const d = await r.json(); alert(d.error || 'Failed'); }
+                        } catch (err) { alert('Error: ' + err.message); }
+                      }}
+                        style={{ padding: '6px 12px', background: isRejected ? '#c62828' : '#f5f5f5', color: isRejected ? '#fff' : '#888', border: isRejected ? 'none' : '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                        {'\u2717'} Reject
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); setAdminMsgTarget({ userId: item.userId, name: item.name }); setAdminMsgText(''); }}
+                        style={{ padding: '6px 12px', background: '#f5f5f5', color: '#1b6b5a', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                        {'\u{1F4AC}'} Message
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); setActiveTab('bgchecks'); loadBgChecks(); }}
+                        style={{ padding: '6px 12px', background: '#f5f5f5', color: '#5c6bc0', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                        View Details
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#888' }}>Click to review in BG Checks tab</div>
                 </div>
-                <span style={{ background: '#1565c0', color: '#fff', borderRadius: 20, padding: '4px 12px', fontSize: 13, fontWeight: 700 }}>{checkrAlertCount}</span>
-              </div>
+                );
+              })}
+              {/* Generic count for any other checkr alerts not in the action items */}
+              {checkrAlertCount > bgCheckActionItems.length && (
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#fff', borderRadius: 10, border: '1px solid #ffe0b2', cursor: 'pointer',
+                }} onClick={() => { setActiveTab('bgchecks'); loadBgChecks(); }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1565c0' }}>
+                      {'\u{1F50D}'} {checkrAlertCount - bgCheckActionItems.length} more background check update{(checkrAlertCount - bgCheckActionItems.length) !== 1 ? 's' : ''}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#888' }}>Click to review in BG Checks tab</div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 

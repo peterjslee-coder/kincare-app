@@ -109,11 +109,32 @@ router.get("/alerts", async (req, res) => {
     const total = delta.pendingUsers + delta.pausedCaregivers + delta.pendingConsent +
       delta.newFeedback + delta.safetyFlags + delta.checkrAlerts;
 
+    // Fetch caregivers with BG check results needing admin action
+    const bgCheckActionItems = await db.prepare(`
+      SELECT cp.user_id, cp.checkr_status, cp.is_background_checked, cp.bg_check_admin_approved,
+        u.first_name, u.last_name, u.email, cp.updated_at
+      FROM caregiver_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.checkr_status IN ('consider', 'adverse_action', 'disputed', 'suspended', 'did_not_pass')
+        AND COALESCE(cp.is_background_checked, 0) = 0
+        AND COALESCE(cp.bg_check_admin_approved, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0
+      ORDER BY cp.updated_at DESC
+    `).all().catch(() => []);
+
     res.json({
       total,
       ...delta,
       // Raw counts for the snapshot when dismissing
       _raw: counts,
+      // Caregivers with BG check results needing review
+      bgCheckActionItems: bgCheckActionItems.map(c => ({
+        userId: c.user_id,
+        name: `${c.first_name} ${c.last_name}`,
+        email: c.email,
+        checkrStatus: c.checkr_status,
+        updatedAt: c.updated_at,
+      })),
     });
   } catch (err) {
     console.error("Admin alerts error:", err);
