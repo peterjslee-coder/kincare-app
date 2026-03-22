@@ -1249,6 +1249,13 @@ const Messages = window.Messages = () => {
                       ));
                     })()}
                   </div>
+                ) : (c.name === 'InPlace Support' || c.name === 'iPAi') ? (
+                  <div style={{
+                    width: '44px', height: '44px', borderRadius: '50%',
+                    background: '#1b6b5a',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'white', fontSize: '20px', fontWeight: 700,
+                  }}>iP</div>
                 ) : c.profilePhoto ? (
                   <img src={c.profilePhoto} alt={c.name} style={{
                     width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover',
@@ -1406,7 +1413,9 @@ const Messages = window.Messages = () => {
           )}
           {activeConv && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-              {!isGroup && activeConv.profilePhoto ? (
+              {!isGroup && (activeConv.name === 'InPlace Support' || activeConv.name === 'iPAi') ? (
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 15, fontWeight: 700, flexShrink: 0 }}>iP</div>
+              ) : !isGroup && activeConv.profilePhoto ? (
                 <img src={activeConv.profilePhoto} alt={activeConv.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
               ) : (
               <div style={{
@@ -1555,7 +1564,10 @@ const Messages = window.Messages = () => {
                       {showSenderName && !isSent && (() => {
                         const senderMember = activeConv?.members?.find(mb => mb.id === m.sender_id);
                         const senderPhoto = senderMember?.profilePhoto || null;
-                        return senderPhoto ? (
+                        const isSupport = m.senderLabel === 'InPlace Support' || activeConv?.name === 'InPlace Support' || activeConv?.name === 'iPAi';
+                        return isSupport ? (
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11, fontWeight: 700, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>iP</div>
+                        ) : senderPhoto ? (
                           <img src={senderPhoto} alt={m.senderName} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }} />
                         ) : (
                           <div style={{ width: 28, height: 28, borderRadius: '50%', background: getAvatarColor(m.senderName || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 10, fontWeight: 600, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>

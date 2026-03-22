@@ -429,11 +429,11 @@ const FindWork = window.FindWork = () => {
           <div style="font-size:12px;color:#666;margin-bottom:2px">${service}</div>
           <div style="font-size:12px;color:#666;margin-bottom:2px">📅 ${dateStr} 🕐 ${time || ''}</div>
           ${cost ? '<div style="font-size:14px;font-weight:700;color:#1b6b5a;margin-top:4px">$' + Math.round(parseFloat(s.caregiverPayout || s.caregiver_payout || cost)) + ' <span style=\\"font-size:10px;font-weight:600;color:#1b6b5a\\">your earnings</span></div>' : ''}
-          <button onclick="${accountPaused ? '' : "document.dispatchEvent(new CustomEvent('findwork-claim',{detail:'" + s.id + "'}));"}" style="
+          ${!caregiverCleared ? '<div style="margin-top:8px;padding:6px 10px;background:#f5f5f5;border-radius:6px;text-align:center;font-size:11px;color:#888;">Complete setup to accept jobs</div>' : `<button onclick="${accountPaused ? '' : "document.dispatchEvent(new CustomEvent('findwork-claim',{detail:'" + s.id + "'}));"}" style="
             margin-top:8px;width:100%;padding:8px;background:${accountPaused ? '#ccc' : '#1b6b5a'};color:#fff;border:none;border-radius:6px;
             font-size:13px;font-weight:600;cursor:${accountPaused ? 'not-allowed' : 'pointer'};opacity:${accountPaused ? 0.6 : 1};
           " ${accountPaused ? 'disabled title="Your account is paused. Contact support for assistance."' : ''}>${accountPaused ? '❌ Account Paused' : 'Accept Request'}</button>
-          ${accountPaused ? '<div style="margin-top:6px;font-size:11px;color:#c62828;font-weight:600;text-align:center;">Your account is paused. Contact support.</div>' : ''}
+          ${accountPaused ? '<div style="margin-top:6px;font-size:11px;color:#c62828;font-weight:600;text-align:center;">Your account is paused. Contact support.</div>' : ''}`}
         </div>
       `);
       markersRef.current.push(marker);
@@ -691,33 +691,27 @@ const FindWork = window.FindWork = () => {
       {/* ═══ OPEN JOBS SUB-TAB ═══ */}
       {subTab === 'jobs' && <>
 
-      {/* Clearance gate — must pass BG check + Stripe before seeing job details */}
+      {/* Clearance banner — shown when BG check or Stripe not done */}
       {!caregiverCleared && (
-        <div className="card" style={{
-          padding: '32px 24px', textAlign: 'center', marginBottom: '24px',
-          borderLeft: '4px solid #f59e0b',
+        <div style={{
+          padding: '12px 16px', marginBottom: 12, background: '#fff8e1', border: '1px solid #ffe082',
+          borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔒</div>
-          {openRequests.length > 0 && (
-            <div style={{ fontSize: 28, fontWeight: 700, color: '#1b6b5a', marginBottom: 8 }}>
-              {openRequests.length} open job{openRequests.length !== 1 ? 's' : ''} near you
-            </div>
-          )}
-          <h3 style={{ color: '#92400e', margin: '0 0 8px', fontSize: '18px' }}>Complete Your Setup to View Jobs</h3>
-          <p style={{ color: '#78716c', fontSize: '14px', margin: '0 0 16px', maxWidth: '400px', marginLeft: 'auto', marginRight: 'auto', lineHeight: '1.6' }}>
-            To protect our care recipients, you need to complete your background check and set up payment before you can view job details or accept care requests.
-          </p>
+          <span style={{ fontSize: 18 }}>🔒</span>
+          <div style={{ flex: 1, fontSize: 13, color: '#6d4c00', lineHeight: 1.4 }}>
+            Complete your background check and payment setup to accept jobs.
+          </div>
           <button onClick={() => {
             window.__accountTab = 'payments';
             window.__navigateTo && window.__navigateTo('account');
           }} style={{
-            padding: '12px 28px', background: '#1b6b5a', color: '#fff', border: 'none',
-            borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+            padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none',
+            borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
           }}>Complete Setup</button>
         </div>
       )}
 
-      {caregiverCleared && <>
+      {true && <>
       {/* Controls bar: view toggle, zip, date range, service filter, sort, refresh */}
       <div style={{
         display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center',
@@ -1009,6 +1003,11 @@ const FindWork = window.FindWork = () => {
 
                     {isExpanded && (
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                        {!caregiverCleared ? (
+                          <div style={{ padding: '12px 16px', background: '#f5f5f5', borderRadius: 8, textAlign: 'center', fontSize: 13, color: '#888' }}>
+                            Complete your background check and payment setup to accept jobs.
+                          </div>
+                        ) : (
                         <button onClick={(e) => { if (!accountPaused) { e.stopPropagation(); handleClaim(s.id); } }}
                           disabled={claimingId === s.id || accountPaused}
                           title={accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
@@ -1020,6 +1019,7 @@ const FindWork = window.FindWork = () => {
                           }}>
                           {accountPaused ? '❌ Account Paused' : claimingId === s.id ? 'Accepting...' : s.interviewRequired ? '\uD83C\uDFA5 Accept & Interview' : '\u2713 Accept This Job'}
                         </button>
+                        )}
                         {accountPaused && (
                           <div style={{ marginTop: 8, padding: '8px 12px', background: '#fff5f5', border: '1px solid #ef5350', borderRadius: 8, fontSize: 12, color: '#c62828', fontWeight: 600, textAlign: 'center' }}>
                             Your account is paused. Contact support for assistance.
