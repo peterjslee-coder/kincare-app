@@ -1654,6 +1654,50 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   </div>
                 )}
               </div>
+            ) : checkrStaging ? (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 16, color: '#1b6b5a' }}>✓</span>
+                  <span style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600 }}>Payment received</span>
+                </div>
+                <div style={{ padding: 16, background: '#fff8f0', border: '1px solid #ffcc80', borderRadius: 10 }}>
+                  <div style={{ color: '#e65100', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Staging Mode — Start Checkr via Email</div>
+                  <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>The in-app Checkr form doesn't work in staging. Click below to send the Checkr invitation via email instead.</div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Checkr invitation email (auto-strips plus-address if blank):</label>
+                    <input type="email" value={checkrStagingEmail} onChange={e => setCheckrStagingEmail(e.target.value)}
+                      placeholder="Leave blank to auto-strip plus-address"
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                  </div>
+                  <button onClick={async () => {
+                    try {
+                      const body = {};
+                      if (checkrStagingEmail.trim()) body.checkrEmail = checkrStagingEmail.trim();
+                      const res = await apiFetch('/api/checkr/initiate', { method: 'POST', body: JSON.stringify(body) });
+                      const data = await res.json();
+                      if (!res.ok) {
+                        if (typeof showToast === 'function') showToast(data.error || 'Failed to initiate', 'error');
+                        setCheckrError(data.error || 'Initiation failed');
+                        return;
+                      }
+                      if (data.invitationUrl) {
+                        window.open(data.invitationUrl, '_blank');
+                        setCheckrStatus('invitation_created');
+                      } else if (data.status === 'already_initiated') {
+                        setCheckrStatus('in_progress');
+                        if (typeof showToast === 'function') showToast('Background check already in progress', 'info');
+                      } else {
+                        if (typeof showToast === 'function') showToast(data.message || 'Check your email for the Checkr invitation', 'info');
+                        setCheckrStatus('invitation_created');
+                      }
+                    } catch (err) {
+                      if (typeof showToast === 'function') showToast('Failed to initiate. Contact support.', 'error');
+                    }
+                  }} style={{ padding: '10px 20px', background: '#e65100', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                    Start Checkr via Email (Staging)
+                  </button>
+                </div>
+              </div>
             ) : (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
