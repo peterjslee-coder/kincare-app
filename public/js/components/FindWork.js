@@ -14,6 +14,7 @@ const FindWork = window.FindWork = () => {
   const [rangeDays, setRangeDays] = useState(14);
   const [lastFetched, setLastFetched] = useState(null);
   const [bgCheckPaid, setBgCheckPaid] = useState(null);
+  const [caregiverCleared, setCaregiverCleared] = useState(false);
   const [accountPaused, setAccountPaused] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
   const [zipFilter, setZipFilter] = useState('');
@@ -176,6 +177,7 @@ const FindWork = window.FindWork = () => {
         if (dashRes?.ok) {
           const data = await dashRes.json();
           setBgCheckPaid(!!data?.profile?.background_check_paid || !!data?.profile?.isBackgroundChecked);
+          setCaregiverCleared(!!data?.profile?.caregiverCleared);
           setAccountPaused(!!data?.profile?.accountPaused);
         } else {
           setBgCheckPaid(false);
@@ -210,6 +212,7 @@ const FindWork = window.FindWork = () => {
       if (res?.ok) {
         const d = await res.json();
         setAccountPaused(!!d?.profile?.accountPaused);
+        setCaregiverCleared(!!d?.profile?.caregiverCleared);
         // openJobs from dashboard already has matchQuality, distanceMiles, healthTags, careSummary, etc.
         // Client-side safety: filter out jobs whose start time has already passed
         const now = new Date();
@@ -688,28 +691,33 @@ const FindWork = window.FindWork = () => {
       {/* ═══ OPEN JOBS SUB-TAB ═══ */}
       {subTab === 'jobs' && <>
 
-      {/* Background check gate */}
-      {!bgCheckPaid && (
+      {/* Clearance gate — must pass BG check + Stripe before seeing job details */}
+      {!caregiverCleared && (
         <div className="card" style={{
           padding: '32px 24px', textAlign: 'center', marginBottom: '24px',
           borderLeft: '4px solid #f59e0b',
         }}>
           <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔒</div>
-          <h3 style={{ color: '#92400e', margin: '0 0 8px', fontSize: '18px' }}>Background Check Required</h3>
+          {openRequests.length > 0 && (
+            <div style={{ fontSize: 28, fontWeight: 700, color: '#1b6b5a', marginBottom: 8 }}>
+              {openRequests.length} open job{openRequests.length !== 1 ? 's' : ''} near you
+            </div>
+          )}
+          <h3 style={{ color: '#92400e', margin: '0 0 8px', fontSize: '18px' }}>Complete Your Setup to View Jobs</h3>
           <p style={{ color: '#78716c', fontSize: '14px', margin: '0 0 16px', maxWidth: '400px', marginLeft: 'auto', marginRight: 'auto', lineHeight: '1.6' }}>
-            You need to complete your background check payment before you can view available care requests or accept jobs on the platform.
+            To protect our care recipients, you need to complete your background check and set up payment before you can view job details or accept care requests.
           </p>
           <button onClick={() => {
-            if (typeof setPage === 'function') setPage('caretaker-hub');
-            else if (typeof window.navigateTo === 'function') window.navigateTo('caretaker-hub');
+            window.__accountTab = 'payments';
+            window.__navigateTo && window.__navigateTo('account');
           }} style={{
             padding: '12px 28px', background: '#1b6b5a', color: '#fff', border: 'none',
             borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
-          }}>Go to Dashboard to Complete</button>
+          }}>Complete Setup</button>
         </div>
       )}
 
-      {bgCheckPaid && <>
+      {caregiverCleared && <>
       {/* Controls bar: view toggle, zip, date range, service filter, sort, refresh */}
       <div style={{
         display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center',

@@ -577,6 +577,8 @@ async function caregiverDashboard(db, userId, res) {
       background_check_paid: !!profile.background_check_paid,
       isBackgroundChecked: !!profile.is_background_checked,
       checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
+      stripeConnected: !!profile.stripe_onboard_complete,
+      caregiverCleared: !!profile.is_background_checked && !!profile.stripe_onboard_complete,
       bgCheckRejectionReason: profile.bg_check_rejection_reason || null,
       legalFirstName: profile.legal_first_name,
       legalMiddleName: profile.legal_middle_name || '',
@@ -650,7 +652,8 @@ async function caregiverDashboard(db, userId, res) {
       createdAt: r.created_at,
     })),
     openJobs: await (async () => {
-      const bgCleared = !!profile.background_check_paid || !!profile.is_background_checked;
+      // Caregiver must have passed BG check AND completed Stripe to see sensitive job details
+      const bgCleared = !!profile.is_background_checked && !!profile.stripe_onboard_complete;
       const results = [];
 
       for (const s of openJobs) {
