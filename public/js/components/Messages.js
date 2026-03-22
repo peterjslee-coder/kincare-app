@@ -7,6 +7,7 @@ const Messages = window.Messages = () => {
   const draftsRef = useRef({});
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [messagingLimited, setMessagingLimited] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [contacts, setContacts] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -69,6 +70,7 @@ const Messages = window.Messages = () => {
       if (res?.ok) {
         const data = await res.json();
         setConversations(data.conversations || []);
+        if (data.messagingLimited) setMessagingLimited(true);
         if (!isMobile && !activeConvId && data.conversations?.length > 0) {
           const first = data.conversations[0];
           setActiveConvId(first.id);
@@ -1810,6 +1812,12 @@ const Messages = window.Messages = () => {
       <>
         {renderIncomingCallBanner()}
         {callOverlay}
+        {messagingLimited && !activeConvId && (
+          <div style={{ padding: '10px 16px', background: '#fff8e1', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>🔒</span>
+            <span style={{ fontSize: 13, color: '#6d4c00' }}>Messaging limited to InPlace Support until your background check is approved.</span>
+          </div>
+        )}
         {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : activeConvId ? renderChatView() : renderConversationList()}
       </>
     );
@@ -1820,7 +1828,13 @@ const Messages = window.Messages = () => {
     <>
       {renderIncomingCallBanner()}
       {callOverlay}
-      <div style={{ display: 'flex', height: 'calc(100vh - 120px)', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
+      {messagingLimited && (
+        <div style={{ padding: '10px 16px', background: '#fff8e1', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8, borderRadius: '12px 12px 0 0' }}>
+          <span style={{ fontSize: 16 }}>🔒</span>
+          <span style={{ fontSize: 13, color: '#6d4c00' }}>Messaging is limited to InPlace Support until your background check is approved.</span>
+        </div>
+      )}
+      <div style={{ display: 'flex', height: messagingLimited ? 'calc(100vh - 160px)' : 'calc(100vh - 120px)', background: 'white', borderRadius: messagingLimited ? '0 0 12px 12px' : '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
         <div style={{ width: '320px', borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
           {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : renderConversationList()}
         </div>

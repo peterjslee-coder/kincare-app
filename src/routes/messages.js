@@ -8,10 +8,33 @@ const { screenMessage } = require("../utils/messageSafety");
 const router = express.Router();
 router.use(authenticate);
 
+// Helper: check if caregiver is cleared (BG check passed + approved)
+// Returns true for non-caregivers (they have no restrictions)
+async function isCaregiverCleared(db, user) {
+  const roles = user.roles || [user.role];
+  if (!roles.includes("caregiver")) return true; // non-caregivers always cleared
+  const profile = await db.prepare(
+    "SELECT is_background_checked FROM caregiver_profiles WHERE user_id = ?"
+  ).get(user.id);
+  return !!profile?.is_background_checked;
+}
+
+// Helper: check if a conversation includes an admin member
+async function conversationHasAdmin(db, conversationId) {
+  const adminMember = await db.prepare(`
+    SELECT u.id FROM conversation_members cm
+    JOIN users u ON cm.user_id = u.id
+    WHERE cm.conversation_id = ? AND u.is_admin = 1
+    LIMIT 1
+  `).get(conversationId);
+  return !!adminMember;
+}
+
 // ─── GET /api/messages/conversations ─── List all conversations for current user
 router.get("/conversations", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
+  const cleared = await isCaregiverCleared(db, req.user);
 
   // Get conversations from the conversations table (new model)
   const convRows = await db.prepare(`
@@ -135,6 +158,21 @@ router.get("/conversations", async (req, res) => {
     return bTime - aTime;
   });
 
+  // Uncleared caregivers can only see conversations with admin/support
+  if (!cleared) {
+    const filtered = [];
+    for (const conv of conversations) {
+      // Check if conversation name is InPlace Support or if any member is admin
+      if (conv.name === "InPlace Support" || conv.name === "iPAi") {
+        filtered.push(conv);
+      } else {
+        const hasAdmin = await conversationHasAdmin(db, conv.id);
+        if (hasAdmin) filtered.push(conv);
+      }
+    }
+    return res.json({ conversations: filtered, messagingLimited: true });
+  }
+
   res.json({ conversations });
 });
 
@@ -145,6 +183,20 @@ router.post("/conversations", async (req, res) => {
 
   if (!memberIds.length) return res.status(400).json({ error: "At least one member is required" });
   if (type === "group" && !name) return res.status(400).json({ error: "Group name is required" });
+
+  // Uncleared caregivers can only create conversations with admin
+  const cleared = await isCaregiverCleared(db, req.user);
+  if (!cleared) {
+    // Check if any target member is admin
+    let hasAdminTarget = false;
+    for (const mid of memberIds) {
+      const u = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(mid);
+      if (u?.is_admin) { hasAdminTarget = true; break; }
+    }
+    if (!hasAdminTarget) {
+      return res.status(403).json({ error: "Messaging is limited to InPlace Support until your background check is approved." });
+    }
+  }
 
   // For direct conversations, check if one already exists
   if (type === "direct" && memberIds.length === 1) {
@@ -193,6 +245,20 @@ router.get("/contacts", async (req, res) => {
   // Look up requesting user's demo flag
   const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(userId);
   const isDemo = me && me.is_demo ? 1 : 0;
+
+  // Uncleared caregivers can only see admin contacts
+  const cleared = await isCaregiverCleared(db, req.user);
+  if (!cleared) {
+    const admins = await db.prepare(`
+      SELECT id, first_name, last_name, role, email, profile_photo FROM users
+      WHERE is_admin = 1 AND is_active = 1 AND COALESCE(is_demo, 0) = ?
+      ORDER BY first_name ASC
+    `).all(isDemo);
+    return res.json({
+      contacts: admins.map(u => ({ id: u.id, name: `${u.first_name} ${u.last_name}`, role: u.role, email: u.email, profilePhoto: u.profile_photo || null })),
+      messagingLimited: true,
+    });
+  }
 
   // Build list of connected user IDs from care teams and caregiver assignments
   // 1. Users in the same care team
@@ -375,6 +441,15 @@ router.post("/conversations/:id", async (req, res) => {
   const { content, replyToId } = req.body;
 
   if (!content || !content.trim()) return res.status(400).json({ error: "Message content is required" });
+
+  // Uncleared caregivers can only message in conversations with admin
+  const cleared = await isCaregiverCleared(db, req.user);
+  if (!cleared && !convId.startsWith("legacy-")) {
+    const hasAdmin = await conversationHasAdmin(db, convId);
+    if (!hasAdmin) {
+      return res.status(403).json({ error: "Messaging is limited to InPlace Support until your background check is approved." });
+    }
+  }
 
   // Handle legacy conversations — auto-migrate to real conversation
   if (convId.startsWith("legacy-")) {
