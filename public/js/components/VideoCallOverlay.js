@@ -8,7 +8,7 @@
  *
  * Call types: 'video' or 'voice' (voice = video room with camera off)
  *
- * Uses Twilio Video SDK loaded via CDN (window.Twilio.Video).
+ * Uses Twilio Video SDK loaded from self-hosted /vendor/ (window.Twilio.Video).
  */
 const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, currentUserId }) => {
   const [status, setStatus] = useState('connecting'); // connecting | ringing | connected | ended
@@ -53,29 +53,30 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
 
         if (cancelled) return;
 
-        // Check if Twilio Video SDK is loaded — try multiple CDNs if needed
+        // Check if Twilio Video SDK is loaded — self-hosted primary, CDN fallback
         if (!window.Twilio || !window.Twilio.Video) {
-          const cdnUrls = [
+          const sdkUrls = [
+            '/vendor/twilio-video.min.js',  // self-hosted (primary)
             'https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js',
             'https://unpkg.com/twilio-video@2.28.1/dist/twilio-video.min.js',
             'https://cdn.jsdelivr.net/npm/twilio-video@2.28.1/dist/twilio-video.min.js',
           ];
           let loaded = false;
-          for (const cdnUrl of cdnUrls) {
+          for (const url of sdkUrls) {
             if (window.Twilio && window.Twilio.Video) { loaded = true; break; }
             try {
               await new Promise((resolve, reject) => {
                 const s = document.createElement('script');
-                s.src = cdnUrl;
+                s.src = url;
                 s.onload = resolve;
                 s.onerror = reject;
                 document.head.appendChild(s);
               });
               if (window.Twilio && window.Twilio.Video) { loaded = true; break; }
-            } catch { /* try next CDN */ }
+            } catch { /* try next source */ }
           }
           if (!loaded || !window.Twilio || !window.Twilio.Video) {
-            throw new Error('Video SDK could not be loaded from any source. Check your internet connection and try again.');
+            throw new Error('Video SDK could not be loaded. Please refresh the page and try again.');
           }
         }
 

@@ -1,11 +1,12 @@
 // InPlace Service Worker — v1.50.40
-const CACHE_NAME = 'inplace-v1.50.99';
-const SW_VERSION = '1.50.99';
+const CACHE_NAME = 'inplace-v1.51.0';
+const SW_VERSION = '1.51.0';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
   '/vendor/react.production.min.js',
   '/vendor/react-dom.production.min.js',
+  '/vendor/twilio-video.min.js',
   '/js-compiled/bundle.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
