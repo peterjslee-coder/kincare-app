@@ -1403,7 +1403,7 @@ const Messages = window.Messages = () => {
   const renderChatView = () => {
     const isGroup = isGroupConv(activeConv);
     return (
-      <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'calc(100vh - 110px)' : '100%', overflow: 'hidden' }}>
         <div className="msg-chat-header">
           {(isMobile || !conversations.length) && (
             <button className="msg-back-btn" onClick={handleBack}

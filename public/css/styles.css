@@ -707,6 +707,10 @@
       border-bottom: 1px solid #e8e8e8;
       background: white;
       min-height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      flex-shrink: 0;
     }
 
     .msg-conv-item {
