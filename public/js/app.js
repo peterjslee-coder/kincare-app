@@ -1084,7 +1084,7 @@ const App = () => {
       return [
         { id: 'dashboard', icon: '🏠', label: 'Home' },
         { id: 'find-work', icon: '🔍', label: 'Find Work', isAction: true, disabled: !cgOnboarded },
-        { id: 'messages', icon: '💬', label: 'Messages', disabled: !cgOnboarded },
+        { id: 'messages', icon: '💬', label: 'Messages' },
       ];
     }
     if (role === 'care_for') {
@@ -1170,7 +1170,7 @@ const App = () => {
       return [
         { id: 'dashboard', icon: '🏠', label: 'Home' },
         { id: 'find-work', icon: '🔍', label: 'Find Work', isAccent: true, disabled: !cgOnboarded || firstStepsRemain },
-        { id: 'messages', icon: '💬', label: 'Messages', disabled: !cgOnboarded },
+        { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'account', icon: '👤', label: 'Account' },
       ];
     }
