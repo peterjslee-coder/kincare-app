@@ -39530,8 +39530,8 @@ const CaretakerHub = window.CaretakerHub = ({
         color: '#333'
       }
     }, checkInSession.special_instructions || checkInSession.specialInstructions)) : null,
-    // ── Recent notes ──
-    bd !== null && bd !== void 0 && bd.recentNotes && bd.recentNotes.length > 0 ? React.createElement('div', {
+    // ── Care notes — AI synthesis with expandable raw notes ──
+    bd !== null && bd !== void 0 && bd.notesSynthesis || bd !== null && bd !== void 0 && bd.recentNotes && bd.recentNotes.length > 0 ? React.createElement('div', {
       style: {
         padding: 12,
         background: '#f8f4ff',
@@ -39544,9 +39544,16 @@ const CaretakerHub = window.CaretakerHub = ({
         fontSize: 12,
         fontWeight: 600,
         color: '#6b21a8',
-        marginBottom: 4
+        marginBottom: 6
       }
-    }, 'Recent care notes'), bd.recentNotes.slice(0, 3).map((n, i) => React.createElement('div', {
+    }, 'Care Note Insights'), bd.notesSynthesis ? React.createElement('div', {
+      style: {
+        fontSize: 13,
+        color: '#333',
+        lineHeight: 1.5,
+        whiteSpace: 'pre-wrap'
+      }
+    }, bd.notesSynthesis) : bd.recentNotes.slice(0, 3).map((n, i) => React.createElement('div', {
       key: i,
       style: {
         fontSize: 12,
@@ -39554,7 +39561,32 @@ const CaretakerHub = window.CaretakerHub = ({
         marginTop: i > 0 ? 4 : 2,
         lineHeight: 1.4
       }
-    }, n.content))) : null,
+    }, n.content)), bd.notesSynthesis && bd.recentNotes && bd.recentNotes.length > 0 ? React.createElement('details', {
+      style: {
+        marginTop: 8
+      }
+    }, React.createElement('summary', {
+      style: {
+        fontSize: 11,
+        color: '#8b5cf6',
+        cursor: 'pointer',
+        fontWeight: 600
+      }
+    }, `View ${bd.recentNotes.length} original note${bd.recentNotes.length !== 1 ? 's' : ''}`), React.createElement('div', {
+      style: {
+        marginTop: 6,
+        paddingLeft: 8,
+        borderLeft: '2px solid #e8daff'
+      }
+    }, bd.recentNotes.map((n, i) => React.createElement('div', {
+      key: i,
+      style: {
+        fontSize: 11,
+        color: '#666',
+        marginTop: i > 0 ? 4 : 0,
+        lineHeight: 1.4
+      }
+    }, n.content)))) : null) : null,
     // ── Acknowledge checkbox ──
     React.createElement('label', {
       style: {

@@ -1044,12 +1044,45 @@ router.get("/:id/care-briefing", async (req, res) => {
     const visitCount = visitHistory?.visit_count || 0;
     const isExperienced = visitCount >= 3;
 
-    // Recent care notes (last 5)
+    // Recent care notes (last 15 for AI synthesis, show last 5 raw as fallback)
     const recentNotes = await db.prepare(`
-      SELECT content, created_at FROM recipient_notes
+      SELECT content, created_at, note_type FROM recipient_notes
       WHERE care_recipient_id = ?
-      ORDER BY created_at DESC LIMIT 5
+      ORDER BY created_at DESC LIMIT 15
     `).all(session.care_recipient_id);
+
+    // AI-synthesized care note trends (non-blocking — falls back to raw notes if AI unavailable)
+    let notesSynthesis = null;
+    if (recentNotes.length >= 2) {
+      try {
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        if (apiKey) {
+          const Anthropic = require("@anthropic-ai/sdk");
+          const client = new Anthropic({ apiKey });
+          const notesText = recentNotes.map((n, i) => {
+            const d = new Date(n.created_at);
+            const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return `[${dateStr}] ${n.content}`;
+          }).join('\n');
+
+          const aiResult = await client.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 250,
+            system: `You are a care coordination assistant. Analyze care notes about a care recipient and produce a brief summary for an incoming caregiver. Your job:
+1. Identify PERSISTENT patterns or EMERGING trends (e.g., sleep changes, appetite shifts, mood patterns, mobility changes, medication effects)
+2. Highlight anything a caregiver should be aware of heading into today's visit
+3. Be factual — only reference what's actually in the notes. No speculation, no medical advice, no diagnoses.
+4. Keep it to 2-4 short bullet points. Use plain language.
+5. If notes are too sparse or routine to identify any trends, say so in one line.
+6. Refer to the care recipient by first name: ${recipientName}.`,
+            messages: [{ role: "user", content: `Here are the recent care notes:\n\n${notesText}\n\nSummarize trends and anything notable for today's caregiver.` }],
+          });
+          notesSynthesis = aiResult.content?.[0]?.text || null;
+        }
+      } catch (err) {
+        console.warn("Care notes AI synthesis failed (non-blocking):", err.message);
+      }
+    }
 
     // Recent visit moods (last 5 visits by any caregiver) — pattern data
     const recentMoods = await db.prepare(`
@@ -1094,7 +1127,8 @@ router.get("/:id/care-briefing", async (req, res) => {
       foodAllergies: session.food_allergies || null,
       pets: session.pets || null,
       preferences: session.preferences || null,
-      recentNotes: recentNotes.map(n => ({ content: n.content, createdAt: n.created_at })),
+      recentNotes: recentNotes.slice(0, 5).map(n => ({ content: n.content, createdAt: n.created_at })),
+      notesSynthesis,
       recentMoods: recentMoods.map(m => ({
         arrivalMood: m.arrival_mood,
         departureMood: m.departure_mood,
