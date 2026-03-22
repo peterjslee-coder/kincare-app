@@ -30,6 +30,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [earlyDepartureAcked, setEarlyDepartureAcked] = useState(false);
   const [checkInLocation, setCheckInLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
+  // Live countdown tick state — interval set up later after sessions are derived
+  const [countdownTick, setCountdownTick] = useState(0);
+
   // Care briefing state (pre-check-in review)
   const [briefingData, setBriefingData] = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
@@ -866,6 +869,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const dataReviews = data.reviews || [];
   const stats = data.stats || {};
 
+  // Live countdown tick — re-renders every 30s when there's an active in-progress session
+  useEffect(() => {
+    const hasActive = sessions.some(s => s.status === 'in_progress');
+    if (!hasActive) return;
+    const iv = setInterval(() => setCountdownTick(t => t + 1), 30000);
+    return () => clearInterval(iv);
+  }, [sessions.map(s => s.status).join(',')]);
+
   // Find sessions ready for check-in (confirmed, today, within 15 min of start or past start)
   // All times are care-location times — use TimezoneHelper
   const readyToCheckIn = sessions.filter(s => {
@@ -1664,7 +1675,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '180px' }}>
-                      {isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>In Progress Now</div>}
+                      {isActive && (() => {
+                        const startMs = s.checkInTime ? new Date(s.checkInTime).getTime() : sessionStartET.getTime();
+                        const endMs = startMs + ((duration || 2) * 3600000);
+                        const leftMs = endMs - Date.now();
+                        const totalSec = Math.max(0, Math.floor(leftMs / 1000));
+                        const hrs = Math.floor(totalSec / 3600);
+                        const mins = Math.floor((totalSec % 3600) / 60);
+                        const remainLabel = leftMs > 0 ? (hrs > 0 ? `${hrs}h ${mins}m remaining` : `${mins}m remaining`) : 'Expected end time passed';
+                        const isPast = leftMs <= 0;
+                        return React.createElement(React.Fragment, null,
+                          React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 } }, 'In Progress Now'),
+                          React.createElement('span', { style: {
+                            display: 'inline-block', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, marginBottom: 4,
+                            color: isPast ? '#c62828' : '#1b6b5a',
+                            background: isPast ? '#ffebee' : '#e8f5e9',
+                          }}, remainLabel)
+                        );
+                      })()}
                       {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
                       {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>{countdownLabel}</div>}
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
@@ -1732,7 +1760,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                                 const d = await r.json();
                                 showToast(d.message || 'Family no-show flagged. Wait 30 minutes.', 'info');
                                 // Refresh data
-                                try { const dr = await apiFetch('/api/dashboard/caregiver'); if (dr?.ok) setData(await dr.json()); } catch {}
+                                try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
                               } else {
                                 const err = await r?.json().catch(() => ({}));
                                 showToast(err?.error || 'Failed to flag no-show', 'error');
@@ -2872,7 +2900,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         showToast('Checked in! Session started.', 'success');
                         setCheckInSession(null);
                         try {
-                          const refreshRes = await apiFetch('/api/dashboard/caregiver');
+                          const refreshRes = await apiFetch('/api/dashboard');
                           if (refreshRes?.ok) setData(await refreshRes.json());
                         } catch (e) { /* refresh is best-effort */ }
                       } else {

@@ -393,11 +393,13 @@ async function caregiverDashboard(db, userId, res) {
       cr.longitude AS recipient_lng,
       fu.first_name || ' ' || fu.last_name AS family_name,
       cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
-      cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight
+      cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight,
+      vl.check_in_time
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     LEFT JOIN users fu ON cs.family_user_id = fu.id
+    LEFT JOIN visit_logs vl ON vl.session_id = cs.id
     WHERE cs.caregiver_id = ? AND cs.scheduled_date >= ? AND cs.status IN ('pending', 'confirmed', 'in_progress')
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 20
@@ -642,6 +644,7 @@ async function caregiverDashboard(db, userId, res) {
         interviewRequired: !!s.interview_required,
         interviewType: s.interview_type || null,
         interviewStatus: s.interview_status || null,
+        checkInTime: s.check_in_time || null,
       };
     }),
     reviews: reviews.map(r => ({
