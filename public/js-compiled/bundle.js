@@ -35765,6 +35765,15 @@ const CaretakerHub = window.CaretakerHub = ({
     }
     setSubmittingLog(false);
   };
+
+  // Live countdown tick — re-renders every 30s when there's an active in-progress session
+  const _sessions = (data === null || data === void 0 ? void 0 : data.upcomingSessions) || [];
+  useEffect(() => {
+    const hasActive = _sessions.some(s => s.status === 'in_progress');
+    if (!hasActive) return;
+    const iv = setInterval(() => setCountdownTick(t => t + 1), 30000);
+    return () => clearInterval(iv);
+  }, [_sessions.map(s => s.status).join(',')]);
   if (loading) return /*#__PURE__*/React.createElement(LoadingSpinner, {
     text: "Loading your dashboard..."
   });
@@ -35956,14 +35965,6 @@ const CaretakerHub = window.CaretakerHub = ({
   const openJobs = data.openJobs || [];
   const dataReviews = data.reviews || [];
   const stats = data.stats || {};
-
-  // Live countdown tick — re-renders every 30s when there's an active in-progress session
-  useEffect(() => {
-    const hasActive = sessions.some(s => s.status === 'in_progress');
-    if (!hasActive) return;
-    const iv = setInterval(() => setCountdownTick(t => t + 1), 30000);
-    return () => clearInterval(iv);
-  }, [sessions.map(s => s.status).join(',')]);
 
   // Find sessions ready for check-in (confirmed, today, within 15 min of start or past start)
   // All times are care-location times — use TimezoneHelper
