@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.50.40
-const CACHE_NAME = 'inplace-v1.50.40';
-const SW_VERSION = '1.50.98';
+const CACHE_NAME = 'inplace-v1.50.99';
+const SW_VERSION = '1.50.99';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -85,18 +85,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // CDN assets: cache-first (versioned, they never change)
+  // CDN assets: network-first with cache fallback (ensures fresh SDK loads)
   if (url.hostname.includes('cdnjs') || url.hostname.includes('unpkg') ||
       url.hostname.includes('cdn.socket.io') || url.hostname.includes('sdk.twilio.com')) {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
+      fetch(event.request).then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => {
+        return caches.match(event.request).then((cached) => {
+          return cached || new Response('', { status: 503 });
         });
       })
     );

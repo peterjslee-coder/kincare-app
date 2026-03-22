@@ -19452,9 +19452,32 @@ const VideoCallOverlay = window.VideoCallOverlay = ({
         } = await tokenRes.json();
         if (cancelled) return;
 
-        // Check if Twilio Video SDK is loaded
+        // Check if Twilio Video SDK is loaded — try multiple CDNs if needed
         if (!window.Twilio || !window.Twilio.Video) {
-          throw new Error('Video SDK not loaded — please refresh the page');
+          const cdnUrls = ['https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js', 'https://unpkg.com/twilio-video@2.28.1/dist/twilio-video.min.js', 'https://cdn.jsdelivr.net/npm/twilio-video@2.28.1/dist/twilio-video.min.js'];
+          let loaded = false;
+          for (const cdnUrl of cdnUrls) {
+            if (window.Twilio && window.Twilio.Video) {
+              loaded = true;
+              break;
+            }
+            try {
+              await new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = cdnUrl;
+                s.onload = resolve;
+                s.onerror = reject;
+                document.head.appendChild(s);
+              });
+              if (window.Twilio && window.Twilio.Video) {
+                loaded = true;
+                break;
+              }
+            } catch {/* try next CDN */}
+          }
+          if (!loaded || !window.Twilio || !window.Twilio.Video) {
+            throw new Error('Video SDK could not be loaded from any source. Check your internet connection and try again.');
+          }
         }
         const Video = window.Twilio.Video;
 

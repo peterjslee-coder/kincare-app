@@ -236,6 +236,16 @@
 - [ ] **Calendar import (Apple/Google/Microsoft).** Caregivers want to import existing calendar events and see them alongside InPlace availability on one unified view. *(Feedback #3)*
 - [ ] **Financials/payments tab for caregivers.** Visible "Financials" or "Payments" sidebar link beyond just the Earnings sub-tab. Link bank account, view payment history, see Stripe status. *(Feedback #1)*
 - [ ] **Push notification debugging.** Pete gets emails but never push notifications. Debug SW registration, verify push subscriptions are created, test end-to-end. *(Feedback #5)*
+- [ ] **Session safety recording (Uber RideCheck-style).** Local encrypted audio recording during care sessions for safety accountability. Modeled after Uber's Ride Safe feature — audio is recorded and encrypted on-device, never accessible to anyone unless a safety incident is reported, at which point it's uploaded for admin review.
+  - **Approach:** Local-only encrypted recording. No real-time streaming or AI monitoring. Audio captured on caregiver's phone during check-in → check-out window. Encrypted with device-specific key, stored in app sandboxed storage. Auto-deleted after 7–14 days if no safety report filed.
+  - **Requires native app shell:** PWA cannot reliably record audio in the background (browsers suspend tabs when screen off). Needs a thin native wrapper (Capacitor, React Native, or Swift/Kotlin shell) with background audio session capability. Existing web UI loads in WebView — native layer only handles microphone + encrypted local storage.
+  - **Upload trigger:** Audio segments only uploaded to server if a safety flag is raised (by caregiver, family, or admin). Admin reviews through Admin Panel with full audit trail. Segments are encrypted at rest on server (S3/R2).
+  - **Consent flow:** Both caregiver and family must acknowledge recording capability during onboarding (new terms version bump). For two-party consent states (CA, FL, IL, etc.), explicit per-session opt-in or standing consent on file. Store consent status per user (`recording_consent_accepted_at`, `recording_consent_version`).
+  - **Data model:** New `session_recordings` table: session_id, device_id, segment_index, encrypted_blob_url, encryption_key_hash, created_at, uploaded_at, reviewed_by, reviewed_at, auto_delete_after. New columns on `care_sessions`: `recording_enabled` (boolean), `recording_consent_confirmed` (boolean).
+  - **Admin review UI:** New section in safety flag evidence thread — "Session Recording" with play controls, timeline scrubber, and audit logging (who listened, when). Passkey-protected like resolve/dismiss.
+  - **Depends on:** Native app shell (see App Store Release section), S3/R2 object storage, consent flow infrastructure.
+  - **Privacy safeguards:** No human listens unless safety incident filed. Admin review is passkey-gated and audit-logged. Auto-deletion enforced server-side. Caregiver and family both notified if recording is accessed. Cannot be used for performance review — safety incidents only.
+  - *(Pete — Mar 22, 2026)*
 
 ## Dev Best Practices
 

@@ -44,12 +44,12 @@
   <script src="https://js.stripe.com/v3/"></script>
   <!-- Stripe Connect.js for embedded onboarding (no SRI — dynamic) -->
   <script src="https://connect-js.stripe.com/v1.0/connect.js" async></script>
-  <!-- Twilio Video SDK for in-app video/voice calls -->
-  <script crossorigin="anonymous" src="https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js"></script>
+  <!-- Twilio Video SDK for in-app video/voice calls (async, fallback CDNs in VideoCallOverlay) -->
+  <script async src="https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js"></script>
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
-  <script>window.APP_VERSION = '1.50.98';</script>
-  <script src="/js-compiled/bundle.js?v=1.50.98"></script>
+  <script>window.APP_VERSION = '1.50.99';</script>
+  <script src="/js-compiled/bundle.js?v=1.50.99"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version
