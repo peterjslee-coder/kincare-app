@@ -13,21 +13,24 @@ const {
 const RP_ID = process.env.RP_ID || (process.env.APP_URL ? new URL(process.env.APP_URL).hostname : "yourinplace.com");
 const ORIGIN = process.env.APP_URL || "https://yourinplace.com";
 
-// In-memory challenge store for nuke confirmations (short-lived)
-const nukeChallenges = new Map();
-function setNukeChallenge(key, value) {
-  nukeChallenges.set(key, { value, expires: Date.now() + 2 * 60 * 1000 }); // 2 min TTL
-  for (const [k, v] of nukeChallenges) {
-    if (v.expires < Date.now()) nukeChallenges.delete(k);
+// In-memory challenge store for passkey-protected actions (short-lived, 2-min TTL)
+const passkeyChallenges = new Map();
+function setPasskeyChallenge(key, value) {
+  passkeyChallenges.set(key, { value, expires: Date.now() + 2 * 60 * 1000 });
+  for (const [k, v] of passkeyChallenges) {
+    if (v.expires < Date.now()) passkeyChallenges.delete(k);
   }
 }
-function getNukeChallenge(key) {
-  const entry = nukeChallenges.get(key);
+function getPasskeyChallenge(key) {
+  const entry = passkeyChallenges.get(key);
   if (!entry) return null;
-  nukeChallenges.delete(key); // one-time use
+  passkeyChallenges.delete(key); // one-time use
   if (entry.expires < Date.now()) return null;
   return entry.value;
 }
+// Aliases for backward compat
+const setNukeChallenge = setPasskeyChallenge;
+const getNukeChallenge = getPasskeyChallenge;
 
 const router = express.Router();
 
@@ -2788,6 +2791,103 @@ router.put("/safety-flags/:id", authenticate, checkAdmin, requireAdmin, async (r
 
     res.json({ success: true });
   } catch (err) {
+    res.status(500).json({ error: "Failed to update safety flag" });
+  }
+});
+
+// ─── POST /api/admin/safety-flags/:id/challenge — Generate passkey challenge for resolve/dismiss ───
+router.post("/safety-flags/:id/challenge", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const flag = await db.prepare("SELECT id FROM safety_flags WHERE id = ?").get(req.params.id);
+    if (!flag) return res.status(404).json({ error: "Safety flag not found" });
+
+    const passkeys = await db.prepare(
+      "SELECT credential_id, transports FROM user_passkeys WHERE user_id = ?"
+    ).all(req.user.id);
+    if (passkeys.length === 0) {
+      return res.status(400).json({ error: "You need a registered passkey. Set one up in My Account → Security." });
+    }
+
+    const allowCredentials = passkeys.map(pk => ({
+      id: pk.credential_id,
+      transports: pk.transports ? JSON.parse(pk.transports) : [],
+    }));
+
+    const options = await generateAuthenticationOptions({
+      rpID: RP_ID,
+      allowCredentials,
+      userVerification: "required",
+    });
+
+    const challengeKey = `safetyflag_${req.user.id}_${req.params.id}_${Date.now()}`;
+    setPasskeyChallenge(challengeKey, {
+      challenge: options.challenge,
+      adminId: req.user.id,
+      flagId: req.params.id,
+    });
+
+    res.json({ ...options, _challengeKey: challengeKey });
+  } catch (err) {
+    console.error("Safety flag challenge error:", err);
+    res.status(500).json({ error: "Failed to generate passkey challenge" });
+  }
+});
+
+// ─── PUT /api/admin/safety-flags/:id/verified — Resolve/dismiss safety flag (requires passkey) ───
+router.put("/safety-flags/:id/verified", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const { _challengeKey, status, admin_notes, ...authResponse } = req.body;
+    if (!status) return res.status(400).json({ error: "Status is required" });
+
+    // 1. Verify passkey challenge
+    const stored = getPasskeyChallenge(_challengeKey);
+    if (!stored) {
+      return res.status(401).json({ error: "Passkey challenge expired. Please try again." });
+    }
+    if (stored.adminId !== req.user.id || stored.flagId !== req.params.id) {
+      return res.status(401).json({ error: "Challenge mismatch." });
+    }
+
+    const db = await getDb();
+    const passkey = await db.prepare(
+      "SELECT pk.*, u.id as uid FROM user_passkeys pk JOIN users u ON pk.user_id = u.id WHERE pk.credential_id = ?"
+    ).get(authResponse.id);
+    if (!passkey || passkey.uid !== req.user.id) {
+      return res.status(401).json({ error: "Passkey not found or doesn't belong to you." });
+    }
+
+    const verification = await verifyAuthenticationResponse({
+      response: authResponse,
+      expectedChallenge: stored.challenge,
+      expectedOrigin: ORIGIN,
+      expectedRPID: RP_ID,
+      credential: { id: passkey.credential_id, publicKey: Buffer.from(passkey.public_key, "base64"), counter: passkey.counter || 0 },
+    });
+
+    if (!verification.verified) {
+      return res.status(401).json({ error: "Passkey verification failed." });
+    }
+
+    // Update counter
+    await db.prepare("UPDATE user_passkeys SET counter = ? WHERE credential_id = ?")
+      .run(verification.authenticationInfo.newCounter, passkey.credential_id).catch(() => {});
+
+    // 2. Perform the actual flag update
+    await db.prepare(`
+      UPDATE safety_flags SET status = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW()
+      WHERE id = ?
+    `).run(status, admin_notes || null, req.user.id, req.params.id);
+
+    await db.prepare(
+      "INSERT INTO safety_flag_events (id, safety_flag_id, event_type, actor_id, actor_label, content, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())"
+    ).run(uuid(), req.params.id, `status_${status}`, req.user.id, "Admin (passkey verified)",
+      admin_notes ? `Status changed to ${status} (passkey verified). Notes: ${admin_notes}` : `Status changed to ${status} (passkey verified)`
+    ).catch(() => {});
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Safety flag verified review error:", err);
     res.status(500).json({ error: "Failed to update safety flag" });
   }
 });

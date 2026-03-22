@@ -2,7 +2,7 @@
 // Full audit trail for safety flags: original conversation, admin outreach, notes, timestamps.
 // Designed for court-admissible evidence preservation.
 
-const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, handleReviewFlag, loadSafetyFlags, apiFetch, showToast, currentUserId }) => {
+const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, handleReviewFlag, loadSafetyFlags, apiFetch, showToast, currentUserId, flagPasskeyConfirm, flagPasskeyLoading, flagPasskeyError }) => {
   const [expandedFlag, setExpandedFlag] = useState(null); // flag ID currently expanded
   const [threadData, setThreadData] = useState(null); // { flag, evidenceMessages, outreachMessages, events, participants }
   const [threadLoading, setThreadLoading] = useState(false);
@@ -169,13 +169,23 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
           style: { padding: '6px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
         }, '\u{1F6A8} Escalate'),
         React.createElement('button', {
-          onClick: () => { handleReviewFlag(f.id, 'resolved'); loadSafetyFlags(); },
-          style: { padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
-        }, '\u2713 Resolve'),
+          onClick: () => { handleReviewFlag(f.id, 'resolved'); },
+          disabled: flagPasskeyLoading,
+          style: { padding: '6px 14px', background: (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'resolved') ? '#145a4a' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 },
+        }, (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'resolved')
+          ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to resolve')
+          : '\u2713 Resolve'),
         React.createElement('button', {
-          onClick: () => { handleReviewFlag(f.id, 'dismissed'); loadSafetyFlags(); },
-          style: { padding: '6px 14px', background: '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' },
-        }, 'Dismiss'),
+          onClick: () => { handleReviewFlag(f.id, 'dismissed'); },
+          disabled: flagPasskeyLoading,
+          style: { padding: '6px 14px', background: (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'dismissed') ? '#e0e0e0' : '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 },
+        }, (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'dismissed')
+          ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to dismiss')
+          : 'Dismiss'),
+        // Passkey error display
+        flagPasskeyError && flagPasskeyConfirm?.flagId === f.id && React.createElement('div', {
+          style: { fontSize: 11, color: '#c62828', width: '100%' },
+        }, flagPasskeyError),
       ),
 
       // ── Expanded evidence thread ──

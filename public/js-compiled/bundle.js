@@ -51651,7 +51651,10 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
   loadSafetyFlags,
   apiFetch,
   showToast,
-  currentUserId
+  currentUserId,
+  flagPasskeyConfirm,
+  flagPasskeyLoading,
+  flagPasskeyError
 }) => {
   const [expandedFlag, setExpandedFlag] = useState(null); // flag ID currently expanded
   const [threadData, setThreadData] = useState(null); // { flag, evidenceMessages, outreachMessages, events, participants }
@@ -51920,33 +51923,43 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
     }, '\u{1F6A8} Escalate'), React.createElement('button', {
       onClick: () => {
         handleReviewFlag(f.id, 'resolved');
-        loadSafetyFlags();
       },
+      disabled: flagPasskeyLoading,
       style: {
         padding: '6px 14px',
-        background: '#1b6b5a',
+        background: (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === f.id && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.status) === 'resolved' ? '#145a4a' : '#1b6b5a',
         color: '#fff',
         border: 'none',
         borderRadius: 6,
         fontWeight: 600,
         fontSize: 12,
-        cursor: 'pointer'
+        cursor: 'pointer',
+        opacity: flagPasskeyLoading ? 0.6 : 1
       }
-    }, '\u2713 Resolve'), React.createElement('button', {
+    }, (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === f.id && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.status) === 'resolved' ? flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to resolve' : '\u2713 Resolve'), React.createElement('button', {
       onClick: () => {
         handleReviewFlag(f.id, 'dismissed');
-        loadSafetyFlags();
       },
+      disabled: flagPasskeyLoading,
       style: {
         padding: '6px 14px',
-        background: '#f5f5f5',
+        background: (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === f.id && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.status) === 'dismissed' ? '#e0e0e0' : '#f5f5f5',
         color: '#888',
         border: '1px solid #ddd',
         borderRadius: 6,
         fontSize: 12,
-        cursor: 'pointer'
+        cursor: 'pointer',
+        opacity: flagPasskeyLoading ? 0.6 : 1
       }
-    }, 'Dismiss')),
+    }, (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === f.id && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.status) === 'dismissed' ? flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to dismiss' : 'Dismiss'),
+    // Passkey error display
+    flagPasskeyError && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === f.id && React.createElement('div', {
+      style: {
+        fontSize: 11,
+        color: '#c62828',
+        width: '100%'
+      }
+    }, flagPasskeyError)),
     // ── Expanded evidence thread ──
     isExpanded && React.createElement('div', {
       style: {
@@ -52403,21 +52416,95 @@ const AdminPanel = window.AdminPanel = ({
     } catch {}
     setSafetyLoading(false);
   };
+
+  // Safety flag passkey state
+  const [flagPasskeyConfirm, setFlagPasskeyConfirm] = useState(null); // { flagId, status }
+  const [flagPasskeyLoading, setFlagPasskeyLoading] = useState(false);
+  const [flagPasskeyError, setFlagPasskeyError] = useState(null);
   const handleReviewFlag = async (flagId, status) => {
+    // Escalate does NOT require passkey — it's raising priority, not closing
+    if (status === 'escalated') {
+      try {
+        const res = await apiFetch(`/api/admin/safety-flags/${flagId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            status,
+            admin_notes: safetyReviewNotes
+          })
+        });
+        if (res !== null && res !== void 0 && res.ok) {
+          showToast('Flag escalated', 'success');
+          setSafetyReviewNotes('');
+          loadSafetyFlags();
+          loadAlerts();
+        }
+      } catch {}
+      return;
+    }
+
+    // Resolve / Dismiss require passkey verification
+    // First click — show confirm state
+    if (!flagPasskeyConfirm || flagPasskeyConfirm.flagId !== flagId || flagPasskeyConfirm.status !== status) {
+      setFlagPasskeyConfirm({
+        flagId,
+        status
+      });
+      setFlagPasskeyError(null);
+      return;
+    }
+
+    // Second click — trigger passkey
+    setFlagPasskeyLoading(true);
+    setFlagPasskeyError(null);
     try {
-      const res = await apiFetch(`/api/admin/safety-flags/${flagId}`, {
+      const SimpleWebAuthnBrowser = window.SimpleWebAuthnBrowser;
+      if (!SimpleWebAuthnBrowser) throw new Error('Passkey library not loaded. Refresh the page.');
+
+      // 1. Get challenge
+      const challengeRes = await apiFetch(`/api/admin/safety-flags/${flagId}/challenge`, {
+        method: 'POST'
+      });
+      if (!(challengeRes !== null && challengeRes !== void 0 && challengeRes.ok)) {
+        const err = await challengeRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to start passkey challenge');
+      }
+      const options = await challengeRes.json();
+      const challengeKey = options._challengeKey;
+
+      // 2. Trigger biometric/passkey prompt
+      const authResp = await SimpleWebAuthnBrowser.startAuthentication({
+        optionsJSON: options
+      });
+
+      // 3. Send verified response
+      const verifyRes = await apiFetch(`/api/admin/safety-flags/${flagId}/verified`, {
         method: 'PUT',
         body: JSON.stringify({
+          ...authResp,
+          _challengeKey: challengeKey,
           status,
           admin_notes: safetyReviewNotes
         })
       });
-      if (res !== null && res !== void 0 && res.ok) {
-        showToast('Flag updated', 'success');
+      if (verifyRes !== null && verifyRes !== void 0 && verifyRes.ok) {
+        showToast(`Flag ${status}`, 'success');
         setSafetyReviewNotes('');
+        setFlagPasskeyConfirm(null);
         loadSafetyFlags();
+        loadAlerts();
+      } else {
+        const data = await verifyRes.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update flag');
       }
-    } catch {}
+    } catch (err) {
+      if (err.name === 'NotAllowedError') {
+        setFlagPasskeyError('Passkey prompt cancelled.');
+      } else {
+        setFlagPasskeyError(err.message || 'Failed');
+      }
+      console.error('Safety flag passkey error:', err);
+    }
+    setFlagPasskeyLoading(false);
   };
 
   // Blocked emails state
@@ -54352,32 +54439,43 @@ const AdminPanel = window.AdminPanel = ({
         e.stopPropagation();
         handleReviewFlag(flag.id, 'resolved');
       },
+      disabled: flagPasskeyLoading,
       style: {
         padding: '6px 12px',
-        background: '#4caf50',
+        background: (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === flag.id && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.status) === 'resolved' ? '#2e7d32' : '#4caf50',
         color: '#fff',
         border: 'none',
         borderRadius: 8,
         fontWeight: 600,
         fontSize: 12,
-        cursor: 'pointer'
+        cursor: 'pointer',
+        opacity: flagPasskeyLoading ? 0.6 : 1
       }
-    }, '\u2713', " Resolve"), /*#__PURE__*/React.createElement("button", {
+    }, (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === flag.id && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.status) === 'resolved' ? flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to resolve' : '\u2713 Resolve'), /*#__PURE__*/React.createElement("button", {
       onClick: e => {
         e.stopPropagation();
         handleReviewFlag(flag.id, 'dismissed');
       },
+      disabled: flagPasskeyLoading,
       style: {
         padding: '6px 12px',
-        background: '#f5f5f5',
+        background: (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === flag.id && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.status) === 'dismissed' ? '#e0e0e0' : '#f5f5f5',
         color: '#888',
         border: '1px solid #ddd',
         borderRadius: 8,
         fontWeight: 600,
         fontSize: 12,
-        cursor: 'pointer'
+        cursor: 'pointer',
+        opacity: flagPasskeyLoading ? 0.6 : 1
       }
-    }, "Dismiss"))), flag.participants && flag.participants.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === flag.id && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.status) === 'dismissed' ? flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to dismiss' : 'Dismiss'))), flagPasskeyError && (flagPasskeyConfirm === null || flagPasskeyConfirm === void 0 ? void 0 : flagPasskeyConfirm.flagId) === flag.id && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: '#c62828',
+        marginTop: 4,
+        textAlign: 'right'
+      }
+    }, flagPasskeyError), flag.participants && flag.participants.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: 8,
         paddingTop: 8,
@@ -59539,7 +59637,10 @@ const AdminPanel = window.AdminPanel = ({
     loadSafetyFlags,
     apiFetch,
     showToast,
-    currentUserId: currentUser === null || currentUser === void 0 ? void 0 : currentUser.id
+    currentUserId: currentUser === null || currentUser === void 0 ? void 0 : currentUser.id,
+    flagPasskeyConfirm,
+    flagPasskeyLoading,
+    flagPasskeyError
   }) : React.createElement('div', {
     style: {
       padding: 40,

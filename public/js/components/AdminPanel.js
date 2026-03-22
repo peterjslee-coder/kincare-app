@@ -70,18 +70,80 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     setSafetyLoading(false);
   };
 
+  // Safety flag passkey state
+  const [flagPasskeyConfirm, setFlagPasskeyConfirm] = useState(null); // { flagId, status }
+  const [flagPasskeyLoading, setFlagPasskeyLoading] = useState(false);
+  const [flagPasskeyError, setFlagPasskeyError] = useState(null);
+
   const handleReviewFlag = async (flagId, status) => {
+    // Escalate does NOT require passkey — it's raising priority, not closing
+    if (status === 'escalated') {
+      try {
+        const res = await apiFetch(`/api/admin/safety-flags/${flagId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ status, admin_notes: safetyReviewNotes }),
+        });
+        if (res?.ok) {
+          showToast('Flag escalated', 'success');
+          setSafetyReviewNotes('');
+          loadSafetyFlags();
+          loadAlerts();
+        }
+      } catch {}
+      return;
+    }
+
+    // Resolve / Dismiss require passkey verification
+    // First click — show confirm state
+    if (!flagPasskeyConfirm || flagPasskeyConfirm.flagId !== flagId || flagPasskeyConfirm.status !== status) {
+      setFlagPasskeyConfirm({ flagId, status });
+      setFlagPasskeyError(null);
+      return;
+    }
+
+    // Second click — trigger passkey
+    setFlagPasskeyLoading(true);
+    setFlagPasskeyError(null);
     try {
-      const res = await apiFetch(`/api/admin/safety-flags/${flagId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status, admin_notes: safetyReviewNotes }),
-      });
-      if (res?.ok) {
-        showToast('Flag updated', 'success');
-        setSafetyReviewNotes('');
-        loadSafetyFlags();
+      const SimpleWebAuthnBrowser = window.SimpleWebAuthnBrowser;
+      if (!SimpleWebAuthnBrowser) throw new Error('Passkey library not loaded. Refresh the page.');
+
+      // 1. Get challenge
+      const challengeRes = await apiFetch(`/api/admin/safety-flags/${flagId}/challenge`, { method: 'POST' });
+      if (!challengeRes?.ok) {
+        const err = await challengeRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to start passkey challenge');
       }
-    } catch {}
+      const options = await challengeRes.json();
+      const challengeKey = options._challengeKey;
+
+      // 2. Trigger biometric/passkey prompt
+      const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: options });
+
+      // 3. Send verified response
+      const verifyRes = await apiFetch(`/api/admin/safety-flags/${flagId}/verified`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...authResp, _challengeKey: challengeKey, status, admin_notes: safetyReviewNotes }),
+      });
+      if (verifyRes?.ok) {
+        showToast(`Flag ${status}`, 'success');
+        setSafetyReviewNotes('');
+        setFlagPasskeyConfirm(null);
+        loadSafetyFlags();
+        loadAlerts();
+      } else {
+        const data = await verifyRes.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update flag');
+      }
+    } catch (err) {
+      if (err.name === 'NotAllowedError') {
+        setFlagPasskeyError('Passkey prompt cancelled.');
+      } else {
+        setFlagPasskeyError(err.message || 'Failed');
+      }
+      console.error('Safety flag passkey error:', err);
+    }
+    setFlagPasskeyLoading(false);
   };
 
   // Blocked emails state
@@ -1364,15 +1426,24 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         </button>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'resolved'); }}
-                        style={{ padding: '6px 12px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
-                        {'\u2713'} Resolve
+                        disabled={flagPasskeyLoading}
+                        style={{ padding: '6px 12px', background: (flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'resolved') ? '#2e7d32' : '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 }}>
+                        {(flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'resolved')
+                          ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to resolve')
+                          : '\u2713 Resolve'}
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'dismissed'); }}
-                        style={{ padding: '6px 12px', background: '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
-                        Dismiss
+                        disabled={flagPasskeyLoading}
+                        style={{ padding: '6px 12px', background: (flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'dismissed') ? '#e0e0e0' : '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 }}>
+                        {(flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'dismissed')
+                          ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to dismiss')
+                          : 'Dismiss'}
                       </button>
                     </div>
                   </div>
+                  {flagPasskeyError && flagPasskeyConfirm?.flagId === flag.id && (
+                    <div style={{ fontSize: 11, color: '#c62828', marginTop: 4, textAlign: 'right' }}>{flagPasskeyError}</div>
+                  )}
                   {/* Conversation participants — message anyone involved */}
                   {flag.participants && flag.participants.length > 0 && (
                     <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #eee', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
@@ -3749,6 +3820,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               safetyFlags, safetyLoading, safetyFlagCount,
               handleReviewFlag, loadSafetyFlags,
               apiFetch, showToast, currentUserId: currentUser?.id,
+              flagPasskeyConfirm, flagPasskeyLoading, flagPasskeyError,
             })
           : React.createElement('div', { style: { padding: 40, textAlign: 'center', color: '#888' } }, 'Safety flags component loading... Please refresh the page.')
       )}
