@@ -89,7 +89,7 @@ router.get("/config", authenticate, async (req, res) => {
 // ─── POST /api/checkr/initiate ───
 // Called after background check payment succeeds.
 // Creates a Checkr candidate and sends them an invitation to complete the check.
-// Caregiver must have: legal name, DOB, SSN last 4, address, and consent.
+// Caregiver must have: legal name, DOB, address, and consent. SSN is collected by Checkr's invitation flow.
 router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
 
@@ -147,7 +147,6 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
     if (!profile.legal_first_name) missing.push("legal first name");
     if (!profile.legal_last_name) missing.push("legal last name");
     if (!profile.date_of_birth) missing.push("date of birth");
-    if (!profile.ssn_last4) missing.push("SSN last 4");
     if (!user.email) missing.push("email");
     if (missing.length > 0) {
       return res.status(400).json({
@@ -185,7 +184,7 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
         email: checkrEmail,
         phone: user.phone || undefined,
         dob: profile.date_of_birth,
-        ssn: profile.ssn_last4,
+        // SSN not sent here — candidate provides full SSN via Checkr's invitation flow
         zipcode: profile.zip || undefined,
         custom_id: req.user.id,
         driver_license_number: profile.dl_number || undefined,
