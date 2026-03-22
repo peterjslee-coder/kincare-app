@@ -719,20 +719,21 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {/* ─── 5. Care Notes ─── */}
       <div className="card">
         <div className="card-header"><span className="card-icon">{'\uD83D\uDCDD'}</span>Care Notes</div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: notes.length > 0 ? 12 : 0 }}>
-          <input value={newNote} onChange={(e) => setNewNote(e.target.value)}
+        <div style={{ marginBottom: notes.length > 0 ? 12 : 0 }}>
+          <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
             placeholder="Add a note about care, observations, updates..."
-            style={{ flex: 1, padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit' }}
-            onKeyDown={(e) => { if (e.key === 'Enter' && newNote.trim()) handleAddNote(); }} />
+            rows={3}
+            style={{ width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && newNote.trim()) { e.preventDefault(); handleAddNote(); } }} />
           <button onClick={handleAddNote} disabled={addingNote || !newNote.trim()}
             style={{ padding: '10px 20px', background: addingNote ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
-            {addingNote ? '...' : 'Add'}
+            {addingNote ? '...' : 'Add Note'}
           </button>
         </div>
         {notes.length > 0 ? notes.map((n) => (
           <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5 }}>{n.content}</div>
+              <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.content}</div>
               <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
                 {n.author_first_name} {n.author_last_name}
                 {' \u00B7 '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}

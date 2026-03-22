@@ -10991,24 +10991,30 @@ const CareProfile = window.CareProfile = ({
     className: "card-icon"
   }, '\uD83D\uDCDD'), "Care Notes"), /*#__PURE__*/React.createElement("div", {
     style: {
-      display: 'flex',
-      gap: 8,
       marginBottom: notes.length > 0 ? 12 : 0
     }
-  }, /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement("textarea", {
     value: newNote,
     onChange: e => setNewNote(e.target.value),
     placeholder: "Add a note about care, observations, updates...",
+    rows: 3,
     style: {
-      flex: 1,
+      width: '100%',
+      minHeight: 80,
       padding: '10px 12px',
       border: '1px solid #d0d0d0',
       borderRadius: 8,
       fontSize: 14,
-      fontFamily: 'inherit'
+      fontFamily: 'inherit',
+      resize: 'vertical',
+      boxSizing: 'border-box',
+      marginBottom: 8
     },
     onKeyDown: e => {
-      if (e.key === 'Enter' && newNote.trim()) handleAddNote();
+      if (e.key === 'Enter' && !e.shiftKey && newNote.trim()) {
+        e.preventDefault();
+        handleAddNote();
+      }
     }
   }), /*#__PURE__*/React.createElement("button", {
     onClick: handleAddNote,
@@ -11024,7 +11030,7 @@ const CareProfile = window.CareProfile = ({
       cursor: addingNote ? 'wait' : 'pointer',
       whiteSpace: 'nowrap'
     }
-  }, addingNote ? '...' : 'Add')), notes.length > 0 ? notes.map(n => /*#__PURE__*/React.createElement("div", {
+  }, addingNote ? '...' : 'Add Note')), notes.length > 0 ? notes.map(n => /*#__PURE__*/React.createElement("div", {
     key: n.id,
     style: {
       padding: '10px 0',
@@ -11042,7 +11048,9 @@ const CareProfile = window.CareProfile = ({
     style: {
       fontSize: 14,
       color: '#333',
-      lineHeight: 1.5
+      lineHeight: 1.5,
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word'
     }
   }, n.content), /*#__PURE__*/React.createElement("div", {
     style: {
