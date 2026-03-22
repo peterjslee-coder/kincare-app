@@ -682,15 +682,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         if (logPhotos.length > 0 && logData.visitLog?.id) {
           const formData = new FormData();
           logPhotos.forEach(f => formData.append('photos', f));
-          const token = window.AUTH_TOKEN;
           const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
-          const _csrfH = _csrf ? { 'X-CSRF-Token': _csrf } : {};
-          await fetch(`${API_BASE}/api/photos/visit/${logData.visitLog.id}`, {
+          const _photoHeaders = {};
+          if (_csrf) _photoHeaders['X-CSRF-Token'] = _csrf;
+          const _photoRes = await fetch(`${API_BASE}/api/photos/visit/${logData.visitLog.id}`, {
             method: 'POST',
             credentials: 'same-origin',
-            headers: { 'Authorization': `Bearer ${token}`, ..._csrfH },
+            headers: _photoHeaders,
             body: formData,
           });
+          if (!_photoRes.ok) showToast('Photos could not be saved', 'error');
         }
         setVisitLogSession(null);
         setLogSummary('');
@@ -3162,16 +3163,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       try {
                         const formData = new FormData();
                         checkOutPhotos.forEach(f => formData.append('photos', f));
-                        const token = window.AUTH_TOKEN;
                         const __csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
-                        const __csrfH = __csrf ? { 'X-CSRF-Token': __csrf } : {};
+                        const photoHeaders = {};
+                        if (__csrf) photoHeaders['X-CSRF-Token'] = __csrf;
                         const photoRes = await fetch(`${API_BASE}/api/photos/visit/${checkOutData.visitLog.id}`, {
                           method: 'POST',
                           credentials: 'same-origin',
-                          headers: { 'Authorization': `Bearer ${token}`, ...__csrfH },
+                          headers: photoHeaders,
                           body: formData,
                         });
-                        if (!photoRes.ok) console.warn('Photo upload failed:', photoRes.status);
+                        if (!photoRes.ok) {
+                          console.warn('Photo upload failed:', photoRes.status);
+                          showToast('Photos could not be saved — please try again', 'error');
+                        }
                       } catch (photoErr) { console.warn('Photo upload failed:', photoErr); showToast('Photos could not be uploaded', 'error'); }
                     }
                     checkOutPhotoUrls.forEach(u => URL.revokeObjectURL(u));
