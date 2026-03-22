@@ -301,7 +301,7 @@ app.use("/api/ipai", require("./routes/ipaiChat"));
 app.use("/api/referrals", require("./routes/referrals"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.50.85";
+const APP_VERSION = "1.50.86";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

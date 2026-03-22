@@ -1050,6 +1050,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const securityReviewed = !!localStorage.getItem('inplace_security_reviewed');
   const stripeConnected = stripeStatus?.status === 'active';
   const bgPaid = !!profile.background_check_paid || !!profile.isBackgroundChecked;
+  const bgCheckSubmitted = !!profile.isBackgroundChecked || (profile.checkrStatus && profile.checkrStatus !== 'pending' && profile.checkrStatus !== 'not_initiated');
   const idVerified = idVerification.verified;
   const hasPreferences = !!stoplightData && Object.keys(stoplightData).length > 0;
 
@@ -1062,8 +1063,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     { id: 'background-check',
       label: 'Start your background check',
       desc: 'A background check is required to participate on InPlace. This is a one-time $30 fee that is refunded after 10 completed sessions. Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
-      done: bgPaid,
-      missing: !bgPaid ? (stripeConnected ? 'Pay for background check ($30)' : 'Complete Stripe setup first') : null },
+      done: bgCheckSubmitted,
+      missing: !bgCheckSubmitted ? (bgPaid ? 'Complete the background check form' : (stripeConnected ? 'Pay for background check ($30)' : 'Complete Stripe setup first')) : null },
     { id: 'security', label: 'Make your account more secure', desc: 'Set up two-factor authentication or biometrics to protect your account', done: securityReviewed, missing: !securityReviewed ? 'Enable 2FA or biometrics in Settings' : null },
     { id: 'preferences', label: 'Select your care preferences', desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
     { id: 'avail-rates', label: 'Set your availability and rates', desc: 'Tell families when you\'re free and what you charge', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
