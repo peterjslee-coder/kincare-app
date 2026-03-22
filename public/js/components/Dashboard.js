@@ -23,6 +23,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // Tick counter for live countdown on in-progress and imminent sessions (re-renders every 30-60s)
   const [tick, setTick] = useState(0);
   const [imminentId, setImminentId] = useState(null); // track which session is the hero card
+  const [lightboxPhoto, setLightboxPhoto] = useState(null); // full-screen photo viewer
 
   // Review gating state
   const [pendingReviews, setPendingReviews] = useState([]);
@@ -1395,6 +1396,63 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           onClick={() => onNavigate && onNavigate('activity')}>
           <span style={{ fontSize: '20px' }}>🔔</span>
           <span style={{ fontSize: '14px', color: '#e65100' }}>{stats.unreadNotifications} unread notification{stats.unreadNotifications > 1 ? 's' : ''}</span>
+        </div>
+      )}
+
+      {/* Recent Visit Photos */}
+      {data.recentPhotos && data.recentPhotos.length > 0 && (
+        <div className="card">
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span><span className="card-icon">📸</span>Recent Visit Photos</span>
+            <span style={{ fontSize: 12, color: '#888' }}>{data.recentPhotos.length} photo{data.recentPhotos.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, padding: '4px 0' }}>
+            {data.recentPhotos.map((p, i) => (
+              <div key={p.id || i} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid #eee', cursor: 'pointer' }}
+                onClick={() => setLightboxPhoto(p)}>
+                <img src={p.photoUrl} alt={p.caption || 'Visit photo'}
+                  style={{ width: '100%', height: 90, objectFit: 'cover', display: 'block' }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', padding: '12px 6px 4px', color: '#fff', fontSize: 10, lineHeight: 1.3 }}>
+                  {p.caregiverName}
+                </div>
+              </div>
+            ))}
+          </div>
+          {data.recentPhotos.length > 0 && (
+            <div style={{ fontSize: 11, color: '#888', marginTop: 6, textAlign: 'center' }}>
+              Tap a photo to view full size • Photos are from recent visits
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Photo lightbox */}
+      {lightboxPhoto && (
+        <div onClick={() => setLightboxPhoto(null)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 2000, cursor: 'pointer', flexDirection: 'column',
+        }}>
+          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '80vh' }}>
+            <img src={lightboxPhoto.photoUrl} alt={lightboxPhoto.caption || 'Visit photo'}
+              style={{ maxWidth: '90vw', maxHeight: '78vh', borderRadius: 8, objectFit: 'contain' }} />
+            <button onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null); }} style={{
+              position: 'absolute', top: -12, right: -12, width: 32, height: 32,
+              background: '#fff', color: '#333', border: 'none', borderRadius: '50%',
+              fontSize: 18, cursor: 'pointer', fontWeight: 700,
+            }}>×</button>
+          </div>
+          <div style={{ color: '#fff', marginTop: 10, textAlign: 'center', maxWidth: '80vw' }}>
+            {lightboxPhoto.caption && <div style={{ fontSize: 14, marginBottom: 4 }}>{lightboxPhoto.caption}</div>}
+            <div style={{ fontSize: 12, opacity: 0.7 }}>
+              {lightboxPhoto.caregiverName} • {lightboxPhoto.sessionDate ? new Date(lightboxPhoto.sessionDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+            </div>
+            {lightboxPhoto.sessionId && (
+              <div onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null); setVisitDetailSessionId(lightboxPhoto.sessionId); }}
+                style={{ fontSize: 12, color: '#4fc3a1', cursor: 'pointer', marginTop: 6, fontWeight: 600 }}>
+                View visit details →
+              </div>
+            )}
+          </div>
         </div>
       )}
 

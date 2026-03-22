@@ -169,6 +169,28 @@ async function familyDashboard(db, userId, res) {
       `SELECT COUNT(*) as count FROM activity_feed WHERE (family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})) AND is_read = 0`
     ).get(userId, ...allRecipientIds);
 
+    // Recent visit photos (last 14 days) — for the dashboard "Recent Photos" section
+    let recentPhotos = [];
+    try {
+      recentPhotos = await db.prepare(`
+        SELECT vp.id, vp.photo_url, vp.caption, vp.created_at,
+          u.first_name || ' ' || u.last_name AS caregiver_name,
+          cr.first_name || ' ' || cr.last_name AS recipient_name,
+          cs.id AS session_id, cs.scheduled_date
+        FROM visit_photos vp
+        JOIN visit_logs vl ON vp.visit_log_id = vl.id
+        JOIN care_sessions cs ON vl.session_id = cs.id
+        JOIN caregiver_profiles cp ON vl.caregiver_id = cp.id
+        JOIN users u ON cp.user_id = u.id
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+        ORDER BY vp.created_at DESC
+        LIMIT 12
+      `).all(userId, ...allRecipientIds);
+    } catch (e) {
+      console.log('Recent photos query skipped:', e.message);
+    }
+
     // Pending time proposals from caregivers for this family's sessions
     let pendingProposals = [];
     try {
@@ -304,6 +326,16 @@ async function familyDashboard(db, userId, res) {
         recipientName: p.recipient_name,
         createdAt: p.created_at,
         expiresAt: p.expires_at,
+      })),
+      recentPhotos: recentPhotos.map(p => ({
+        id: p.id,
+        photoUrl: p.photo_url,
+        caption: p.caption,
+        createdAt: p.created_at,
+        caregiverName: p.caregiver_name,
+        recipientName: p.recipient_name,
+        sessionId: p.session_id,
+        sessionDate: p.scheduled_date,
       })),
       recentlyCompleted: await Promise.all(recentCompleted.map(async (s) => {
         let condTags = [];

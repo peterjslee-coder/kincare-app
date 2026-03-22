@@ -76,7 +76,7 @@ router.post(
     // Real-time: notify family that photos were added
     const session = await db
       .prepare(
-        "SELECT cs.family_user_id FROM care_sessions cs JOIN visit_logs vl ON vl.session_id = cs.id WHERE vl.id = ?"
+        "SELECT cs.family_user_id, u.first_name || ' ' || u.last_name AS caregiver_name FROM care_sessions cs JOIN visit_logs vl ON vl.session_id = cs.id JOIN caregiver_profiles cp ON vl.caregiver_id = cp.id JOIN users u ON cp.user_id = u.id WHERE vl.id = ?"
       )
       .get(visitLogId);
     if (session) {
@@ -87,6 +87,19 @@ router.post(
           photoCount: photos.length,
         });
       }
+      // Push notification so family knows photos arrived
+      try {
+        const { sendPushToUser } = require("../utils/push");
+        if (sendPushToUser) {
+          await sendPushToUser(
+            db,
+            session.family_user_id,
+            `${session.caregiver_name} added photos`,
+            `${photos.length} visit photo${photos.length > 1 ? 's' : ''} uploaded`,
+            { type: 'visit_photos', visitLogId }
+          );
+        }
+      } catch {}
     }
 
     res.status(201).json({ photos, count: photos.length });

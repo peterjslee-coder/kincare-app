@@ -2646,13 +2646,13 @@ router.post("/message/:userId", authenticate, checkAdmin, requireAdmin, async (r
     const targetUser = await db.prepare("SELECT id, first_name, last_name FROM users WHERE id = ?").get(req.params.userId);
     if (!targetUser) return res.status(404).json({ error: "User not found" });
 
-    // Find or create a direct conversation between admin and target user
+    // Find or create a dedicated "InPlace Support" conversation (NOT the personal DM)
     let convId;
     const existing = await db.prepare(`
       SELECT c.id FROM conversations c
       JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
       JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
-      WHERE c.type = 'direct'
+      WHERE c.type = 'direct' AND c.name = 'InPlace Support'
     `).get(req.user.id, req.params.userId);
 
     if (existing) {
