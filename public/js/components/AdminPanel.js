@@ -1778,7 +1778,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                               </button>
                             </div>
                           ) : u.is_admin && u.role !== 'caregiver' ? (
-                            <span style={{ fontSize: '11px', color: '#999' }}>{'\u2014'}</span>
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
+                              <button onClick={() => { setAdminMsgTarget({ userId: u.id, name: `${u.first_name} ${u.last_name}` }); setAdminMsgText(''); }}
+                                style={{ padding: '4px 8px', background: '#fff', color: '#1b6b5a', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                title="Message as InPlace Support">
+                                {'\u{1F4AC}'}
+                              </button>
+                            </div>
                           ) : u.is_admin && u.role === 'caregiver' ? (
                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                               <button onClick={() => openOnboardingModal(u.id)}
@@ -1831,7 +1837,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                               </button>
                             </div>
                           ) : (
-                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
+                              <button onClick={() => { setAdminMsgTarget({ userId: u.id, name: `${u.first_name} ${u.last_name}` }); setAdminMsgText(''); }}
+                                style={{ padding: '4px 8px', background: '#fff', color: '#1b6b5a', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                title="Message as InPlace Support">
+                                {'\u{1F4AC}'}
+                              </button>
                               <button onClick={() => handleForcePasswordReset(u.id, u.email)} disabled={resetPwLoading === u.id}
                                 style={{ padding: '4px 8px', background: '#fff', color: '#d97706', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
                                 title="Send password reset email">
