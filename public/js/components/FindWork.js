@@ -123,9 +123,9 @@ const FindWork = window.FindWork = () => {
           const d = await r.json();
           const p = d.profile || d.caregiver || {};
           setRates({
-            daytime: p.hourly_rate || p.hourlyRate || '',
-            nighttime: p.nighttime_rate || p.nighttimeRate || '',
-            overnight: p.overnight_rate || p.overnightRate || '',
+            daytime: p.rate_daytime || p.rateDaytime || p.hourly_rate || p.hourlyRate || '',
+            nighttime: p.rate_nighttime || p.rateNighttime || '',
+            overnight: p.rate_overnight || p.rateOvernight || '',
           });
           setMinOvernightHours(p.min_overnight_hours || 6);
           setRatesLoaded(true);
