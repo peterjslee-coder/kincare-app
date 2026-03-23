@@ -3,7 +3,8 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cancelling, setCancelling] = useState(false);
-  const [showPhotos, setShowPhotos] = useState(false);
+  const [showPhotos, setShowPhotos] = useState(true);
+  const [lightboxIdx, setLightboxIdx] = useState(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -240,23 +241,51 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
               {/* Photos */}
               {photos.length > 0 && (
                 <div style={{ border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1b6b5a' }}>Visit Photos ({photos.length})</div>
-                    <button type="button" onClick={() => setShowPhotos(!showPhotos)}
-                      style={{ background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                      {showPhotos ? 'Hide' : 'Show'}
-                    </button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1b6b5a' }}>{'\uD83D\uDCF7'} Visit Photos ({photos.length})</div>
+                    {photos.length > 6 && (
+                      <button type="button" onClick={() => setShowPhotos(!showPhotos)}
+                        style={{ background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                        {showPhotos ? 'Show less' : `Show all ${photos.length}`}
+                      </button>
+                    )}
                   </div>
-                  {showPhotos && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
-                      {photos.map((p, i) => (
-                        <div key={i} style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #eee' }}>
-                          <img src={p.photo_url} alt={p.caption || 'Visit photo'} style={{ width: '100%', height: 100, objectFit: 'cover' }} />
-                          {p.caption && <div style={{ fontSize: 11, color: '#666', padding: '4px 6px' }}>{p.caption}</div>}
-                        </div>
-                      ))}
-                    </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+                    {(showPhotos ? photos : photos.slice(0, 6)).map((p, i) => (
+                      <div key={i} onClick={() => setLightboxIdx(i)} style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #eee', cursor: 'pointer', position: 'relative' }}>
+                        <img src={p.photo_url} alt={p.caption || 'Visit photo'} style={{ width: '100%', height: 90, objectFit: 'cover', display: 'block' }} />
+                        {p.caption && (
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', padding: '12px 6px 4px', fontSize: 10, color: '#fff', lineHeight: 1.3 }}>{p.caption}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Photo Lightbox */}
+              {lightboxIdx !== null && photos[lightboxIdx] && (
+                <div onClick={() => setLightboxIdx(null)} style={{
+                  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+                  background: 'rgba(0,0,0,0.9)', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', padding: 20,
+                }}>
+                  <button onClick={(e) => { e.stopPropagation(); setLightboxIdx(null); }}
+                    style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', color: '#fff', fontSize: 28, cursor: 'pointer', zIndex: 10000 }}>{'\u2715'}</button>
+                  {photos.length > 1 && lightboxIdx > 0 && (
+                    <button onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }}
+                      style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', fontSize: 28, borderRadius: '50%', width: 44, height: 44, cursor: 'pointer' }}>{'\u2039'}</button>
                   )}
+                  {photos.length > 1 && lightboxIdx < photos.length - 1 && (
+                    <button onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }}
+                      style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', fontSize: 28, borderRadius: '50%', width: 44, height: 44, cursor: 'pointer' }}>{'\u203A'}</button>
+                  )}
+                  <img src={photos[lightboxIdx].photo_url} alt="" onClick={(e) => e.stopPropagation()}
+                    style={{ maxWidth: '90%', maxHeight: '75vh', borderRadius: 10, objectFit: 'contain' }} />
+                  {photos[lightboxIdx].caption && (
+                    <div style={{ color: '#fff', fontSize: 14, marginTop: 12, textAlign: 'center', maxWidth: 500 }}>{photos[lightboxIdx].caption}</div>
+                  )}
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 6 }}>{lightboxIdx + 1} of {photos.length}</div>
                 </div>
               )}
 
