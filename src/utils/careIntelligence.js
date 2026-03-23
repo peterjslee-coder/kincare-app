@@ -14,6 +14,13 @@
 const { getDb } = require("../models/database");
 const { MODEL_HAIKU } = require("./aiModels");
 
+// Parse mood value — handles both legacy single strings and new JSON arrays
+function parseMoodDisplay(val) {
+  if (!val) return null;
+  try { const p = JSON.parse(val); if (Array.isArray(p)) return p.join(", "); } catch {}
+  return val;
+}
+
 /**
  * Helper: call Claude API using the Anthropic SDK (same as working careRecipients.js)
  */
@@ -196,7 +203,7 @@ async function generateCareIntelligence(careRecipientId) {
   const visitSummaries = visits.slice(0, 15).map(v => {
     const tags = (() => { try { return JSON.parse(v.condition_tags || "[]"); } catch { return []; } })();
     return `${v.scheduled_date} ${v.scheduled_time || ""} with ${v.caregiver_first}: ` +
-      `arrival mood=${v.arrival_mood || "?"}, departure mood=${v.departure_mood || "?"}, ` +
+      `arrival mood=${parseMoodDisplay(v.arrival_mood) || "?"}, departure mood=${parseMoodDisplay(v.departure_mood) || "?"}, ` +
       `tags=[${tags.join(", ")}], ` +
       `notes: "${(v.care_feedback || v.summary || v.notes || "").substring(0, 200)}"`;
   }).join("\n");
@@ -321,8 +328,8 @@ VISIT DETAILS:
 - Date: ${session.scheduled_date} at ${session.scheduled_time}
 - Duration: ${session.duration_hours} hours
 - Service: ${session.service_type}
-- Arrival mood: ${session.arrival_mood || "not recorded"}
-- Departure mood: ${session.departure_mood || "not recorded"}
+- Arrival mood: ${parseMoodDisplay(session.arrival_mood) || "not recorded"}
+- Departure mood: ${parseMoodDisplay(session.departure_mood) || "not recorded"}
 - Condition tags: ${tags.join(", ") || "none"}
 - Caregiver notes: "${session.care_feedback}"
 ${session.service_feedback ? `- Service notes: "${session.service_feedback}"` : ""}
@@ -379,7 +386,7 @@ async function generateCarePlan(careRecipientId) {
   const visitSummaries = visits.slice(0, 20).map(v => {
     const tags = (() => { try { return JSON.parse(v.condition_tags || "[]"); } catch { return []; } })();
     return `${v.scheduled_date} with ${v.caregiver_first}: ` +
-      `arrival mood=${v.arrival_mood || "?"}, departure mood=${v.departure_mood || "?"}, ` +
+      `arrival mood=${parseMoodDisplay(v.arrival_mood) || "?"}, departure mood=${parseMoodDisplay(v.departure_mood) || "?"}, ` +
       `tags=[${tags.join(", ")}], ` +
       `notes: "${(v.care_feedback || v.summary || "").substring(0, 150)}"`;
   }).join("\n");
@@ -539,7 +546,7 @@ async function generateCaregiverCoaching(sessionId) {
 
   const pastContext = pastVisits.map(v => {
     const t = (() => { try { return JSON.parse(v.condition_tags || "[]"); } catch { return []; } })();
-    return `${v.scheduled_date}: mood=${v.departure_mood || "?"}, tags=[${t.join(",")}], notes="${(v.care_feedback || "").substring(0, 100)}"`;
+    return `${v.scheduled_date}: mood=${parseMoodDisplay(v.departure_mood) || "?"}, tags=[${t.join(",")}], notes="${(v.care_feedback || "").substring(0, 100)}"`;
   }).join("\n");
 
   const familyContext = familyNotes.map(n => `- "${(n.content || "").substring(0, 150)}"`).join("\n");
@@ -553,8 +560,8 @@ CARE RECIPIENT:
 - Mobility: ${session.mobility || "unknown"}
 
 TODAY'S SESSION:
-- Arrival mood: ${session.arrival_mood || "not recorded"}
-- Departure mood: ${session.departure_mood || "not recorded"}
+- Arrival mood: ${parseMoodDisplay(session.arrival_mood) || "not recorded"}
+- Departure mood: ${parseMoodDisplay(session.departure_mood) || "not recorded"}
 - Condition tags: ${tags.join(", ") || "none"}
 - ${session.caregiver_name}'s notes: "${session.care_feedback || ""}"
 

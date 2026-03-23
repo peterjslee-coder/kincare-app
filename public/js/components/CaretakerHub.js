@@ -14,10 +14,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const photoInputRef = useRef(null);
   // Check-in/check-out state
   const [checkInSession, setCheckInSession] = useState(null);
-  const [checkInMood, setCheckInMood] = useState('');
+  const [checkInMood, setCheckInMood] = useState([]);
   const [checkInNotes, setCheckInNotes] = useState(null);
   const [checkOutSession, setCheckOutSession] = useState(null);
-  const [checkOutMood, setCheckOutMood] = useState('');
+  const [checkOutMood, setCheckOutMood] = useState([]);
   const [checkOutTags, setCheckOutTags] = useState([]);
   const [checkOutCareFeedback, setCheckOutCareFeedback] = useState('');
   const [checkOutServiceFeedback, setCheckOutServiceFeedback] = useState('');
@@ -1777,7 +1777,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )}
                       {isActive && (<>
                         <button onClick={() => {
-                          setCheckOutMood('');
+                          setCheckOutMood([]);
                           setCheckOutTags([]);
                           setCheckOutCareFeedback('');
                           setCheckOutServiceFeedback('');
@@ -1816,7 +1816,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )}
                       {isReady && !isActive && (
                         <button onClick={async () => {
-                          setCheckInMood('');
+                          setCheckInMood([]);
                           setCheckInNotes(null);
                           setCheckInLocation(null);
                           setLocationError(null);
@@ -2491,7 +2491,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           earlyCheckInAllowed={profile.earlyCheckInAllowed}
           onLogVisit={(s) => {
             if (s.action === 'check-in') {
-              setCheckInMood('');
+              setCheckInMood([]);
               setCheckInNotes(null);
               setCheckInLocation(null);
               setLocationError(null);
@@ -2507,7 +2507,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               }
               setCheckInSession(s);
             } else if (s.action === 'check-out') {
-              setCheckOutMood('');
+              setCheckOutMood([]);
               setCheckOutTags([]);
               setCheckOutCareFeedback('');
               setCheckOutServiceFeedback('');
@@ -2886,7 +2886,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
               React.createElement('div', { style: { marginBottom: 20 } },
                 React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 } },
-                  'How is ' + ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'the care recipient') + ' right now?'
+                  'How is ' + ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'the care recipient') + ' right now? (tap all that apply)'
                 ),
                 React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8 } },
                   [
@@ -2899,12 +2899,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     { key: 'upset', emoji: '😠', label: 'Upset' },
                   ].map(m =>
                     React.createElement('button', {
-                      key: m.key, onClick: () => setCheckInMood(m.key),
+                      key: m.key, onClick: () => setCheckInMood(prev => prev.includes(m.key) ? prev.filter(k => k !== m.key) : [...prev, m.key]),
                       style: {
                         padding: '8px 14px', borderRadius: 20,
-                        border: checkInMood === m.key ? '2px solid #e8724a' : '2px solid #eee',
-                        background: checkInMood === m.key ? '#fff3ed' : '#fafafa', cursor: 'pointer', fontSize: 13,
-                        fontWeight: checkInMood === m.key ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
+                        border: checkInMood.includes(m.key) ? '2px solid #e8724a' : '2px solid #eee',
+                        background: checkInMood.includes(m.key) ? '#fff3ed' : '#fafafa', cursor: 'pointer', fontSize: 13,
+                        fontWeight: checkInMood.includes(m.key) ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
                       }
                     }, React.createElement('span', { style: { fontSize: 18 } }, m.emoji), ' ' + m.label)
                   )
@@ -2932,7 +2932,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
                         method: 'POST',
                         body: JSON.stringify({
-                          arrivalMood: checkInMood || null,
+                          arrivalMood: checkInMood.length > 0 ? checkInMood : null,
                           checkInLatitude: checkInLocation?.lat || null,
                           checkInLongitude: checkInLocation?.lng || null,
                           briefingAcknowledged: true,
@@ -2987,7 +2987,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                How is {(checkOutSession.recipientName || checkOutSession.recipient_name || '').split(' ')[0] || 'the care recipient'} now?
+                How is {(checkOutSession.recipientName || checkOutSession.recipient_name || '').split(' ')[0] || 'the care recipient'} now? (tap all that apply)
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {[
@@ -2999,10 +2999,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   { key: 'sad', emoji: '😢', label: 'Sad' },
                   { key: 'upset', emoji: '😠', label: 'Upset' },
                 ].map(m => (
-                  <button key={m.key} onClick={() => setCheckOutMood(m.key)} style={{
-                    padding: '8px 14px', borderRadius: 20, border: checkOutMood === m.key ? '2px solid #c62828' : '2px solid #eee',
-                    background: checkOutMood === m.key ? '#ffebee' : '#fafafa', cursor: 'pointer', fontSize: 13,
-                    fontWeight: checkOutMood === m.key ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
+                  <button key={m.key} onClick={() => setCheckOutMood(prev => prev.includes(m.key) ? prev.filter(k => k !== m.key) : [...prev, m.key])} style={{
+                    padding: '8px 14px', borderRadius: 20, border: checkOutMood.includes(m.key) ? '2px solid #c62828' : '2px solid #eee',
+                    background: checkOutMood.includes(m.key) ? '#ffebee' : '#fafafa', cursor: 'pointer', fontSize: 13,
+                    fontWeight: checkOutMood.includes(m.key) ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
                   }}>
                     <span style={{ fontSize: 18 }}>{m.emoji}</span> {m.label}
                   </button>
@@ -3186,7 +3186,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     method: 'POST',
                     signal: controller.signal,
                     body: JSON.stringify({
-                      departureMood: checkOutMood || null,
+                      departureMood: checkOutMood.length > 0 ? checkOutMood : null,
                       conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
                       careFeedback: checkOutCareFeedback.trim() || null,
                       serviceFeedback: checkOutServiceFeedback.trim() || null,

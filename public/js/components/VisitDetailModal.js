@@ -169,20 +169,35 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                   </div>
 
                   {/* Moods */}
-                  {(v.arrival_mood || v.departure_mood) && (
-                    <div style={{ display: 'flex', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
-                      {v.arrival_mood && (
-                        <div style={{ background: '#e8f5e9', padding: '4px 10px', borderRadius: 16, fontSize: 13 }}>
-                          Arrival: <strong>{v.arrival_mood}</strong>
-                        </div>
-                      )}
-                      {v.departure_mood && (
-                        <div style={{ background: '#e3f2fd', padding: '4px 10px', borderRadius: 16, fontSize: 13 }}>
-                          Departure: <strong>{v.departure_mood}</strong>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {(v.arrival_mood || v.departure_mood) && (() => {
+                    const parseMoods = (val) => {
+                      if (!val) return [];
+                      try { const p = JSON.parse(val); if (Array.isArray(p)) return p; } catch {}
+                      return [val];
+                    };
+                    const arrMoods = parseMoods(v.arrival_mood);
+                    const depMoods = parseMoods(v.departure_mood);
+                    return (
+                      <div style={{ display: 'flex', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+                        {arrMoods.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 12, color: '#888', marginRight: 2 }}>Arrival:</span>
+                            {arrMoods.map((m, i) => (
+                              <span key={i} style={{ background: '#e8f5e9', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 500 }}>{m}</span>
+                            ))}
+                          </div>
+                        )}
+                        {depMoods.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 12, color: '#888', marginRight: 2 }}>Departure:</span>
+                            {depMoods.map((m, i) => (
+                              <span key={i} style={{ background: '#e3f2fd', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 500 }}>{m}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Condition tags */}
                   {conditionTags.length > 0 && (

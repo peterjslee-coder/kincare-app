@@ -1219,7 +1219,7 @@ router.post("/:id/check-in", async (req, res) => {
     await db.prepare(`
       INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, briefing_acknowledged_at, created_at)
       VALUES (?, ?, ?, NOW(), ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, NOW())
-    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood || null, checkInLatitude || null, checkInLongitude || null);
+    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, checkInLatitude || null, checkInLongitude || null);
 
     // Get special instructions and recent notes for the caregiver
     const notes = await db.prepare(
@@ -1402,12 +1402,12 @@ router.post("/:id/check-out", async (req, res) => {
           early_departure_minutes = ?
         WHERE id = ?
       `).run(
-        departureMood || null,
+        departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
         conditionTags ? JSON.stringify(conditionTags) : null,
         careFeedback || null,
         serviceFeedback || null,
         summary || null,
-        departureMood || null,
+        departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
         earlyMinutes > 15 ? (earlyDepartureReason || null) : null,
         earlyMinutes > 15 ? Math.round(earlyMinutes) : null,
         visitLog.id
