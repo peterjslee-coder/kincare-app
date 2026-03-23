@@ -540,6 +540,20 @@
 
 ---
 
+## Completed — v1.51.5–v1.51.12: Feedback P1 Blitz (2026-03-22)
+
+- [x] **Background check "consider" warning display (v1.51.5):** CaretakerHub First Steps now shows warning messages for `consider`, `processing`, and `disputed` Checkr statuses. Status banner added for each state. Green checkmark still shows when step is done, but amber warning appears below with instructions to check email.
+- [x] **Doctor report generation fix (v1.51.6):** Fixed 404 error from deprecated Anthropic model ID `claude-sonnet-4-5-20250514`. Updated to `claude-sonnet-4-6`.
+- [x] **Centralized AI model config (v1.51.7):** Created `src/utils/aiModels.js` with `MODEL_SONNET` and `MODEL_HAIKU` exports. All 9 files with hardcoded model strings now import from central config. Models controllable via `ANTHROPIC_MODEL_SONNET` and `ANTHROPIC_MODEL_HAIKU` env vars — no deploy needed to change models.
+- [x] **Visit photo thumbnails in session detail (v1.51.8):** Photos now show as always-visible thumbnail grid in VisitDetailModal. Tap opens full-screen lightbox with prev/next navigation. "Show all" toggle only appears when >6 photos.
+- [x] **Caregiver rates loading fix (v1.51.9):** Fixed field name mismatch — frontend looked for `nighttime_rate`/`nighttimeRate` but API returns `rate_nighttime`/`rateNighttime`. Rates saved correctly but displayed empty on reload.
+- [x] **Block messaging between unconnected users (v1.51.10):** Added connection validation to `POST /conversations` — checks care team membership, caregiver assignment, or accepted connection. Also filters legacy messages from unconnected users. Admins bypass all checks. Privacy/safety fix.
+- [x] **Android push notification icon fix (v1.51.11):** Changed notification icons from `badge-monochrome-96.png` to `icon-192.png` (icon) and `icon-maskable-96.png` (badge) in both sw.js and push.js. Fixes white square on Android.
+- [x] **Overdue checkout reminder (v1.51.11):** Added `overdue_check_out` reminder type. Fires 15 minutes after session scheduled end time — push + SMS to caregiver, push to family.
+- [x] **Desktop push health check fix (v1.51.12):** `checkPushHealth()` checked `window.AUTH_TOKEN` (always null) instead of closure `AUTH_TOKEN`. The 30-minute health check never ran, so stale push subscriptions were never re-synced with the server. Root cause of Sara Huber's desktop push issue.
+
+---
+
 ## Next Up — v1.30.0: Caregiver Experience Polish
 
 Priority: **HIGH** — Real user (Cary Taker) feedback + remaining UX items.
