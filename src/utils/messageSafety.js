@@ -14,6 +14,7 @@
 
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { MODEL_HAIKU } = require("./aiModels");
 
 const SAFETY_SYSTEM_PROMPT = `You are a safety classifier for InPlace, a caregiving platform that connects families with caregivers for elderly and vulnerable adults.
 
@@ -101,7 +102,7 @@ async function screenMessage(messageContent, senderId, conversationId, senderInf
     const Anthropic = require("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey });
     const result = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: MODEL_HAIKU,
       max_tokens: 200,
       system: SAFETY_SYSTEM_PROMPT,
       messages: [{ role: "user", content: messageContent }],

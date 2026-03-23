@@ -9,6 +9,8 @@
  * admin sign-off for consent documents.
  */
 
+const { MODEL_SONNET } = require("./aiModels");
+
 const SYSTEM_PROMPT = `You are a document verification specialist for a care coordination platform called InPlace. Your job is to examine uploaded documents and classify them accurately.
 
 You will receive:
@@ -97,7 +99,7 @@ async function classifyDocument(base64Data, mimeType, expectedType) {
     ];
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-6-20250514",
+      model: MODEL_SONNET,
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content }],

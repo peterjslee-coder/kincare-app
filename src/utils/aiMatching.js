@@ -11,6 +11,7 @@
  */
 
 const { haversineDistance } = require('./geocode');
+const { MODEL_HAIKU } = require("./aiModels");
 
 /**
  * Score a caregiver-recipient match for a specific session.
@@ -361,7 +362,7 @@ Explanation (1-2 sentences, conversational tone):`;
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: MODEL_HAIKU,
         max_tokens: 150,
         messages: [{ role: 'user', content: prompt }],
       }),

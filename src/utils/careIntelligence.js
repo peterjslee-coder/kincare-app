@@ -12,6 +12,7 @@
  */
 
 const { getDb } = require("../models/database");
+const { MODEL_HAIKU } = require("./aiModels");
 
 /**
  * Helper: call Claude API using the Anthropic SDK (same as working careRecipients.js)
@@ -275,7 +276,7 @@ IMPORTANT: Return ONLY the JSON object, no markdown formatting or code blocks.`;
       analysis,
       generatedAt: new Date().toISOString(),
       recipientName,
-      model: "claude-haiku-4-5-20251001",
+      model: MODEL_HAIKU,
     };
   } catch (err) {
     console.error("[iPAi] Care intelligence error:", err);

@@ -7,6 +7,7 @@ const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("../utils/timezone");
+const { MODEL_HAIKU } = require("../utils/aiModels");
 
 const router = express.Router();
 router.use(authenticate);
@@ -1066,7 +1067,7 @@ router.get("/:id/care-briefing", async (req, res) => {
           }).join('\n');
 
           const aiResult = await client.messages.create({
-            model: "claude-haiku-4-5-20251001",
+            model: MODEL_HAIKU,
             max_tokens: 250,
             system: `You are a care coordination assistant. Analyze care notes about a care recipient and produce a brief summary for an incoming caregiver. Your job:
 1. Identify PERSISTENT patterns or EMERGING trends (e.g., sleep changes, appetite shifts, mood patterns, mobility changes, medication effects)

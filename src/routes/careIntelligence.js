@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticate } = require("../middleware/auth");
 const { getDb } = require("../models/database");
 const { generateCareIntelligence, generateSessionSummary, analyzePatterns, gatherVisitData, generateCarePlan } = require("../utils/careIntelligence");
+const { MODEL_HAIKU } = require("../utils/aiModels");
 
 // ─── GET /api/care-intelligence/:recipientId — Generate full care intelligence report ───
 router.get("/:recipientId", authenticate, async (req, res) => {
@@ -63,12 +64,12 @@ router.get("/test/ai", authenticate, async (req, res) => {
     const Anthropic = require("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey });
     const result = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: MODEL_HAIKU,
       max_tokens: 50,
       messages: [{ role: "user", content: "Say 'iPAi is working' and nothing else." }],
     });
     const text = result.content?.[0]?.text || "";
-    res.json({ success: true, response: text, model: "claude-haiku-4-5-20251001" });
+    res.json({ success: true, response: text, model: MODEL_HAIKU });
   } catch (err) {
     res.json({ error: err.message, type: err.constructor.name, stack: err.stack?.split("\n").slice(0, 3) });
   }
@@ -126,7 +127,7 @@ router.get("/test/data/:recipientId", authenticate, async (req, res) => {
         const Anthropic = require("@anthropic-ai/sdk");
         const client = new Anthropic({ apiKey });
         const result = await client.messages.create({
-          model: "claude-haiku-4-5-20251001",
+          model: MODEL_HAIKU,
           max_tokens: 100,
           messages: [{ role: "user", content: `Say "Ready to analyze ${recipient.first_name}'s care data" and nothing else.` }],
         });

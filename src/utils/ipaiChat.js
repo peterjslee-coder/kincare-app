@@ -16,6 +16,7 @@
  */
 
 const { getDb } = require("../models/database");
+const { MODEL_HAIKU } = require("./aiModels");
 const { parseSchedulingIntent, suggestMatches } = require("./nlScheduling");
 const { gatherVisitData } = require("./careIntelligence");
 
@@ -52,7 +53,7 @@ async function callClaudeChat(apiKey, system, messages, maxTokens = 300) {
   const Anthropic = require("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey });
   const result = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: MODEL_HAIKU,
     max_tokens: maxTokens,
     system: system + IPAI_GUARDRAILS,
     messages,

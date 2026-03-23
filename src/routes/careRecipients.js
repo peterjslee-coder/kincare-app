@@ -4,6 +4,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 
+const { MODEL_SONNET, MODEL_HAIKU } = require("../utils/aiModels");
 const router = express.Router();
 
 // All routes require authentication
@@ -579,7 +580,7 @@ ${prefLines || 'No preferences rated yet'}
 `.trim();
 
     const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: MODEL_HAIKU,
       max_tokens: 800,
       system: `You are iPAi — inPlace's care intelligence assistant. You help families introduce their loved one to caregivers.
 
@@ -713,7 +714,7 @@ router.post("/:id/doctor-report", async (req, res) => {
     const client = new Anthropic({ apiKey });
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6-20250514",
+      model: MODEL_SONNET,
       max_tokens: 2000,
       system: `You are a clinical communication specialist helping families share relevant home care observations with healthcare providers. You write professional, concise reports that doctors actually read and find useful.
 
