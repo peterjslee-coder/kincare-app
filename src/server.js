@@ -301,7 +301,7 @@ app.use("/api/ipai", require("./routes/ipaiChat"));
 app.use("/api/referrals", require("./routes/referrals"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.51.10";
+const APP_VERSION = "1.51.11";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -616,6 +616,37 @@ async function start() {
           await sendSessionReminders(s.id, "overdue_check_in");
         }
       }
+      // ─── Overdue check-out alerts ───
+      // In-progress sessions past their scheduled end time where caregiver hasn't checked out
+      const checkOutOverdueCandidates = await pollDb.prepare(`
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.notifications_sent,
+          cr.timezone AS care_timezone
+        FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
+        WHERE cs.status = 'in_progress'
+          AND cs.scheduled_date BETWEEN ? AND ?
+          AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%overdue_check_out%')
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
+      `).all(dateRangeStart, dateRangeEnd);
+
+      for (const s of checkOutOverdueCandidates) {
+        if (!s.scheduled_time || !s.duration_hours) continue;
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
+        const sessionEnd = new Date(sessionStart.getTime() + s.duration_hours * 60 * 60000);
+        const overdueTime = new Date(sessionEnd.getTime() + REMINDER_WINDOW_MINUTES * 60000);
+        const maxOverdueWindow = new Date(sessionEnd.getTime() + MAX_OVERDUE_WINDOW * 60000);
+        // Send if 15 min past scheduled end but within 2h overdue window
+        if (careNow >= overdueTime && careNow <= maxOverdueWindow) {
+          await sendSessionReminders(s.id, "overdue_check_out");
+        }
+      }
+
       // ─── Interview reminders (48h, 24h, 2h before session) ───
       try {
         const pendingInterviews = await pollDb.prepare(`

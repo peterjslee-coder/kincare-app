@@ -282,8 +282,8 @@ async function sendPushToUser(userId, payload, eventType) {
     const notificationPayload = JSON.stringify({
       title: payload.title || "InPlace",
       body: payload.body || "",
-      icon: "/icons/badge-monochrome-96.png",
-      badge: "/icons/badge-monochrome-96.png",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-maskable-96.png",
       data: payload.data || {},
     });
 
@@ -493,6 +493,36 @@ async function sendSessionReminders(sessionId, reminderType) {
       }
 
       console.log(`  Session reminders (overdue_check_in) sent for session ${sessionId} → caregiver + ${teamUserIds.length} team members`);
+    } else if (reminderType === "overdue_check_out") {
+      // ─── Session is past scheduled end but caregiver hasn't checked out ───
+
+      // 1. To caregiver: urgent push
+      if (session.caregiver_user_id) {
+        await sendPushToUser(session.caregiver_user_id, {
+          title: "Don't Forget to Check Out",
+          body: `Your session with ${recipientName} has passed its scheduled end time — please check out when you're done`,
+          data: { type: "overdue_check_out", sessionId, page: "schedule" },
+        }, "overdue_check_out");
+
+        // SMS the caregiver too
+        const cgUser = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.caregiver_user_id);
+        if (cgUser?.phone) {
+          const { sendSms } = require("../utils/sms");
+          await sendSms(cgUser.phone, `InPlace: Don't forget to check out from your session with ${recipientName}. Open the app to complete checkout.`);
+        }
+      }
+
+      // 2. Notify family that session is running over
+      for (const userId of teamUserIds) {
+        if (userId === session.caregiver_user_id) continue;
+        await sendPushToUser(userId, {
+          title: "Session Running Over",
+          body: `${caregiverName}'s session with ${recipientName} has passed its scheduled end time`,
+          data: { type: "overdue_check_out_family", sessionId, page: "dashboard" },
+        }, "overdue_check_out_family");
+      }
+
+      console.log(`  Session reminders (overdue_check_out) sent for session ${sessionId} → caregiver + ${teamUserIds.length} team members`);
     }
 
     // Mark this reminder as sent on the session (prevents duplicates)
