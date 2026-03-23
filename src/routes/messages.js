@@ -119,8 +119,27 @@ router.get("/conversations", async (req, res) => {
     if (existingConv) continue;
 
     // Build a virtual conversation from legacy messages
-    const partner = await db.prepare("SELECT id, first_name, last_name, role, profile_photo FROM users WHERE id = ?").get(row.partner_id);
+    const partner = await db.prepare("SELECT id, first_name, last_name, role, profile_photo, is_admin FROM users WHERE id = ?").get(row.partner_id);
     if (!partner) continue;
+
+    // Skip legacy conversations with unconnected users (unless admin)
+    const reqUser = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+    if (!partner.is_admin && !reqUser?.is_admin) {
+      const connected = await db.prepare(`
+        SELECT 1 FROM care_team_members ctm1
+        JOIN care_team_members ctm2 ON ctm1.care_team_id = ctm2.care_team_id
+        WHERE ctm1.user_id = ? AND ctm2.user_id = ?
+        UNION ALL
+        SELECT 1 FROM caregiver_assignments ca
+        JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+        WHERE (cp.user_id = ? OR ca.family_user_id = ?) AND (cp.user_id = ? OR ca.family_user_id = ?) AND ca.is_active = 1
+        UNION ALL
+        SELECT 1 FROM connections
+        WHERE ((requester_id = ? AND recipient_id = ?) OR (requester_id = ? AND recipient_id = ?)) AND status = 'accepted'
+        LIMIT 1
+      `).get(userId, row.partner_id, userId, userId, row.partner_id, row.partner_id, userId, row.partner_id, row.partner_id, userId);
+      if (!connected) continue;
+    }
 
     const lastMsg = await db.prepare(`
       SELECT content, created_at FROM messages
@@ -195,6 +214,50 @@ router.post("/conversations", async (req, res) => {
     }
     if (!hasAdminTarget) {
       return res.status(403).json({ error: "Messaging is limited to InPlace Support until your background check is approved." });
+    }
+  }
+
+  // ── Connection check: only allow messaging connected users (or admins) ──
+  if (type === "direct") {
+    for (const memberId of memberIds) {
+      if (memberId === req.user.id) continue;
+
+      // Admins are always messageable
+      const targetUser = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(memberId);
+      if (targetUser?.is_admin) continue;
+
+      // If the requesting user is admin, they can message anyone
+      const me = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+      if (me?.is_admin) continue;
+
+      // Check care team membership
+      const sameTeam = await db.prepare(`
+        SELECT 1 FROM care_team_members ctm1
+        JOIN care_team_members ctm2 ON ctm1.care_team_id = ctm2.care_team_id
+        WHERE ctm1.user_id = ? AND ctm2.user_id = ?
+      `).get(req.user.id, memberId);
+      if (sameTeam) continue;
+
+      // Check caregiver assignment
+      const hasAssignment = await db.prepare(`
+        SELECT 1 FROM caregiver_assignments ca
+        JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+        WHERE (cp.user_id = ? OR ca.family_user_id = ?)
+          AND (cp.user_id = ? OR ca.family_user_id = ?)
+          AND ca.is_active = 1
+      `).get(req.user.id, req.user.id, memberId, memberId);
+      if (hasAssignment) continue;
+
+      // Check accepted connection
+      const hasConnection = await db.prepare(`
+        SELECT 1 FROM connections
+        WHERE ((requester_id = ? AND recipient_id = ?) OR (requester_id = ? AND recipient_id = ?))
+          AND status = 'accepted'
+      `).get(req.user.id, memberId, memberId, req.user.id);
+      if (hasConnection) continue;
+
+      // No valid relationship — block conversation creation
+      return res.status(403).json({ error: "You can only message people you're connected with." });
     }
   }
 
