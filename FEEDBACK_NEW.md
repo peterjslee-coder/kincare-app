@@ -7,8 +7,8 @@
 ## Summary
 
 - **Total items:** 165
-- **By status:** 0 new (none this run), 84 reviewed, 15 planned, 59 done, 7 dismissed
-- **Items moved to "done" this run:** 5 — `6427410d` rates fix (v1.51.9), `e5baf771` messaging privacy (v1.51.10), `f6cce253` checkout reminder (v1.51.11), `8cb25f75` Android icon (v1.51.11), `1790f9c0` desktop push (v1.51.12)
+- **By status:** 0 new (none this run), 80 reviewed, 15 planned, 63 done, 7 dismissed
+- **Items moved to "done" this run:** 9 — `6427410d` rates fix (v1.51.9), `e5baf771` messaging privacy (v1.51.10), `f6cce253` checkout reminder (v1.51.11), `8cb25f75` Android icon (v1.51.11), `1790f9c0` desktop push (v1.51.12), `c1652aa6` + `6a1d00af` admin messaging identity (v1.51.13), `d1907f87` + `ef5b463a` visit photos (confirmed fixed)
 - **Items promoted to "planned" this run:** 0
 - **Priority tags applied this run:** ~25 items tagged across P1/P2/P3/P4
 
@@ -18,9 +18,9 @@
 
 Top 5 things needing attention **right now:**
 
-1. **`c1652aa6` + `6a1d00af` — Admin messages sent as Pete Lee, not InPlace Support** (P1, Mar 20). Cary sees replies from "Peter" in chat. Needs separate sender identity + dedicated support thread. High trust issue.
+1. ~~**`c1652aa6` + `6a1d00af` — Admin messages sent as Pete Lee, not InPlace Support**~~ ✅ **Fixed v1.51.13** — Admin message button added to all user rows; messaging identity resolved. Pete confirmed.
 
-2. **`d1907f87` + `ef5b463a` — Visit photos not visible to families** (P1, Mar 18 + Mar 9). Two users confirmed: caregivers upload, families can't see. TASKS.md L32.
+2. ~~**`d1907f87` + `ef5b463a` — Visit photos not visible to families**~~ ✅ **Confirmed fixed by Pete** — Photos working end-to-end.
 
 3. ~~**`e5baf771` — Users can message strangers without connection**~~ ✅ **Fixed v1.51.10** — Connection validation added to conversation creation + legacy message filtering.
 
@@ -40,10 +40,10 @@ Top 5 things needing attention **right now:**
 
 | ID | Date | Description |
 |----|------|-------------|
-| `c1652aa6` | Mar 20 | Admin support reply appears as "Peter" not "InPlace Support" to Cary |
-| `6a1d00af` | Mar 20 | InPlace support needs a separate chat window, not from Peter |
-| `d1907f87` | Mar 18 | Caregivers attach visit pics — family sees nothing, can't download |
-| `ef5b463a` | Mar 9 | Can't upload visit pics from CaretakerHub during active session |
+| ~~`c1652aa6`~~ | Mar 20 | ~~Admin support reply appears as "Peter" not "InPlace Support"~~ ✅ Fixed v1.51.13 |
+| ~~`6a1d00af`~~ | Mar 20 | ~~InPlace support needs a separate chat window~~ ✅ Fixed v1.51.13 |
+| ~~`d1907f87`~~ | Mar 18 | ~~Caregivers attach visit pics — family sees nothing~~ ✅ Confirmed fixed |
+| ~~`ef5b463a`~~ | Mar 9 | ~~Can't upload visit pics from CaretakerHub during active session~~ ✅ Confirmed fixed |
 | `c07d0394` | Mar 14 | Cary not notified when her reschedule proposal is already pending |
 | `f5af3c57` | Mar 2 | Cancellation flow puts session in conflicting/broken state |
 | `9d44901f` | Mar 5 | No popup/alert when session overruns 15+ min (call caretaker option) |
@@ -138,6 +138,10 @@ Top 5 things needing attention **right now:**
 
 | ID | Version | Description |
 |----|---------|-------------|
+| `c1652aa6` | v1.51.13 ✅ | Admin messaging identity — messages now sent as InPlace Support, not Pete |
+| `6a1d00af` | v1.51.13 ✅ | Admin message button added to all user rows in People tab |
+| `d1907f87` | ✅ | Visit photos visible to families — confirmed fixed by Pete |
+| `ef5b463a` | ✅ | Visit photo upload from CaretakerHub — confirmed fixed by Pete |
 | `6427410d` | v1.51.9 ✅ | Fix caregiver rates not loading — field name mismatch |
 | `e5baf771` | v1.51.10 ✅ | Block messaging between unconnected users — privacy/safety fix |
 | `f6cce253` | v1.51.11 ✅ | Add overdue checkout reminder (push + SMS) |
@@ -159,9 +163,9 @@ Top 5 things needing attention **right now:**
 
 **✅ Push Notifications (4+ reports)** — `f6cce253`, `1790f9c0`, `8cb25f75` all resolved in v1.51.11–v1.51.12. Android icon fixed, checkout reminder added, desktop push health check fixed.
 
-**📷 Visit Photos (2 reports)** — `d1907f87` (family can't view) + `ef5b463a` (can't upload during session). Feature exists but broken end-to-end.
+**✅ Visit Photos (2 reports)** — `d1907f87` + `ef5b463a` both confirmed fixed by Pete. Photos working end-to-end.
 
-**💬 Admin Messaging Identity (2 reports, same day)** — `c1652aa6` + `6a1d00af`, both Mar 20. Single fix, high trust impact.
+**✅ Admin Messaging Identity (2 reports, same day)** — `c1652aa6` + `6a1d00af` resolved in v1.51.13. Message button on all user rows, support identity fixed.
 
 **📅 Appointment Tile Info (2 reports)** — `7bd5127e` + `c15335fa`. Combined demand for tap-for-detail on appointments.
 
