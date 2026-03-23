@@ -1077,7 +1077,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       label: 'Start your background check',
       desc: 'A background check is required to participate on InPlace. This is a one-time $30 fee that is refunded after 10 completed sessions. Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
       done: bgCheckSubmitted,
-      missing: !bgCheckSubmitted ? (bgPaid ? 'Complete the background check form' : (stripeConnected ? 'Pay for background check ($30)' : 'Complete Stripe setup first')) : null },
+      missing: !bgCheckSubmitted ? (bgPaid ? 'Complete the background check form' : (stripeConnected ? 'Pay for background check ($30)' : 'Complete Stripe setup first')) : null,
+      warning: bgCheckSubmitted && profile.checkrStatus === 'consider'
+        ? 'Your background check needs additional information. Please check your email for instructions from Checkr on how to complete the review process.'
+        : (bgCheckSubmitted && profile.checkrStatus === 'processing'
+          ? 'Your background check is being processed. This usually takes 2–5 business days.'
+          : (bgCheckSubmitted && profile.checkrStatus === 'disputed'
+            ? 'Your dispute is being reviewed. We\'ll notify you when there\'s an update.'
+            : null)) },
     { id: 'security', label: 'Make your account more secure', desc: 'Set up two-factor authentication or biometrics to protect your account', done: securityReviewed, missing: !securityReviewed ? 'Enable 2FA or biometrics in Settings' : null },
     { id: 'preferences', label: 'Select your care preferences', desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
     { id: 'avail-rates', label: 'Set your availability and rates', desc: 'Tell families when you\'re free and what you charge', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
@@ -1240,6 +1247,35 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             </div>
           </div>
         );
+        if (checkrStatus === 'consider') return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>{'\u26A0\uFE0F'}</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#92400e' }}>Background Check — Action Needed</div>
+              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>
+                Your background check requires additional information. Please check your email for instructions from Checkr on how to complete the review process.
+              </div>
+            </div>
+          </div>
+        );
+        if (checkrStatus === 'processing') return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #3b82f6', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>🔄</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Background Check Processing</div>
+              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>Your background check is being processed. This usually takes 2–5 business days.</div>
+            </div>
+          </div>
+        );
+        if (checkrStatus === 'disputed') return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #8b5cf6', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>{'\u{1F4DD}'}</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Background Check — Dispute Under Review</div>
+              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>Your dispute is being reviewed by Checkr. We'll notify you when there's an update.</div>
+            </div>
+          </div>
+        );
         return null;
       })()}
 
@@ -1324,6 +1360,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   {!s.done && s.missing && (
                     <div style={{ marginTop: '6px', padding: '6px 10px', background: '#fff8f0', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '13px' }}>{'\u26A0\uFE0F'}</span> {s.missing}
+                    </div>
+                  )}
+                  {s.done && s.warning && (
+                    <div style={{ marginTop: '6px', padding: '8px 10px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '6px', fontSize: '12px', color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                      <span style={{ fontSize: '13px', flexShrink: 0 }}>{'\u26A0\uFE0F'}</span> <span>{s.warning}</span>
                     </div>
                   )}
                 </div>
