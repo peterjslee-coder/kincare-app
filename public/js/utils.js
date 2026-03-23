@@ -509,7 +509,7 @@ const checkPushHealth = window.checkPushHealth = async () => {
     }
 
     // Verify server knows about this subscription
-    if (!window.AUTH_TOKEN) return; // not logged in
+    if (!AUTH_TOKEN) return; // not logged in
 
     const statusRes = await apiFetch('/api/push/status');
     if (statusRes && statusRes.ok) {
