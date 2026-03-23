@@ -713,7 +713,7 @@ router.post("/:id/doctor-report", async (req, res) => {
     const client = new Anthropic({ apiKey });
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-5-20250514",
+      model: "claude-sonnet-4-6-20250514",
       max_tokens: 2000,
       system: `You are a clinical communication specialist helping families share relevant home care observations with healthcare providers. You write professional, concise reports that doctors actually read and find useful.
 
