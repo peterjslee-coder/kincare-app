@@ -302,7 +302,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/voice-companion", require("./routes/voiceCompanion"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.51.23";
+const APP_VERSION = "1.51.24";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

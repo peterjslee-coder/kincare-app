@@ -183,7 +183,8 @@ async function getVoiceForMessage(db, careRecipientId, messageType = "conversati
 // ── Helper: Get voice preferences ──────────────────────────────────
 
 async function getVoicePreferences(db, careRecipientId) {
-  const defaults = { speed: 0.85, stability: 0.5, similarity_boost: 0.8 };
+  // Tuned for elder care: slower pace, high stability (consistent/warm), high similarity (sounds like Pete)
+  const defaults = { speed: 0.82, stability: 0.65, similarity_boost: 0.85 };
   try {
     let prefs = await db.prepare(
       "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
