@@ -1188,8 +1188,11 @@ const App = () => {
       { id: 'dashboard', icon: '🏠', label: 'Home' },
       { id: 'care-profile', icon: '🌷', label: 'Loved One' },
       { id: 'messages', icon: '💬', label: 'Messages' },
-      { id: 'account', icon: '👤', label: 'Account' },
     ];
+    if (currentUser?.companionAccess || currentUser?.isAdmin) {
+      familyBottom.push({ id: '_launch_companion', icon: '🎙️', label: 'Companion', isCompanion: true });
+    }
+    familyBottom.push({ id: 'account', icon: '👤', label: 'Account' });
     if (currentUser?.isAdmin) {
       familyBottom.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
     }
@@ -1428,7 +1431,7 @@ const App = () => {
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav">
         {getBottomNavItems().map(item => (
-          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: '#e8724a' } : {}) }}>
+          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : item.isCompanion ? () => window.open(`/companion?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: '#e8724a' } : {}), ...(item.isCompanion ? { color: '#1A5276' } : {}) }}>
             <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: '#fff3ed', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
             {item.id === 'messages' && unreadMsgCount > 0 && (
               <span style={{

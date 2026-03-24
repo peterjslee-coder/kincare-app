@@ -64015,11 +64015,20 @@ const App = () => {
       id: 'messages',
       icon: '💬',
       label: 'Messages'
-    }, {
+    }];
+    if (currentUser !== null && currentUser !== void 0 && currentUser.companionAccess || currentUser !== null && currentUser !== void 0 && currentUser.isAdmin) {
+      familyBottom.push({
+        id: '_launch_companion',
+        icon: '🎙️',
+        label: 'Companion',
+        isCompanion: true
+      });
+    }
+    familyBottom.push({
       id: 'account',
       icon: '👤',
       label: 'Account'
-    }];
+    });
     if (currentUser !== null && currentUser !== void 0 && currentUser.isAdmin) {
       familyBottom.push({
         id: 'admin',
@@ -64464,7 +64473,7 @@ const App = () => {
   }, getBottomNavItems().map(item => /*#__PURE__*/React.createElement("button", {
     key: item.id,
     className: `bottom-nav-item ${currentPage === item.id ? 'active' : ''}`,
-    onClick: item.disabled ? undefined : () => handlePageChange(item.id),
+    onClick: item.disabled ? undefined : item.isCompanion ? () => window.open(`/companion?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id),
     style: {
       position: 'relative',
       ...(item.disabled ? {
@@ -64473,6 +64482,9 @@ const App = () => {
       } : {}),
       ...(item.isAccent && currentPage !== item.id && !item.disabled ? {
         color: '#e8724a'
+      } : {}),
+      ...(item.isCompanion ? {
+        color: '#1A5276'
       } : {})
     }
   }, /*#__PURE__*/React.createElement("span", {
