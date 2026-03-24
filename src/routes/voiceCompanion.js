@@ -30,6 +30,20 @@ const { handleCompanionMessage } = require("../utils/voiceCompanion");
 const router = express.Router();
 router.use(authenticate);
 
+// Companion access gate: user must have companion_access=1 or be admin
+router.use(async (req, res, next) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare("SELECT companion_access, is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (!user || (!user.companion_access && !user.is_admin)) {
+      return res.status(403).json({ error: "Companion access not enabled for this account" });
+    }
+    next();
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to verify companion access" });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════
 // INITIALIZATION — Create tables if they don't exist
 // ═══════════════════════════════════════════════════════════
@@ -703,6 +717,32 @@ router.put("/admin/ipai-access/:userId", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("[iPAi Access] Error:", err.message);
     return res.status(500).json({ error: "Failed to update iPAi access" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// PUT /admin/companion-access/:userId — Toggle companion access for a user
+// ═══════════════════════════════════════════════════════════
+
+router.put("/admin/companion-access/:userId", requireAdmin, async (req, res) => {
+  const { userId } = req.params;
+  const { enabled } = req.body;
+  const db = await getDb();
+
+  try {
+    await db.prepare(`
+      UPDATE users SET companion_access = ?, updated_at = NOW()
+      WHERE id = ?
+    `).run(enabled ? 1 : 0, userId);
+
+    const user = await db.prepare(
+      "SELECT id, email, first_name, last_name, companion_access FROM users WHERE id = ?"
+    ).get(userId);
+
+    return res.json({ user });
+  } catch (err) {
+    console.error("[Companion Access] Error:", err.message);
+    return res.status(500).json({ error: "Failed to update companion access" });
   }
 });
 

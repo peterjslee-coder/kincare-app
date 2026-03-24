@@ -361,14 +361,19 @@ app.get("/api", (req, res) => {
 });
 
 // ─── Voice Companion PWA (separate app for care recipients) ───
-// Auth-gated: requires valid JWT in cookie or query param, otherwise redirects to login
-app.get("/companion", (req, res) => {
+// Auth-gated: requires valid JWT + companion_access flag (admins always pass)
+app.get("/companion", async (req, res) => {
   const token = req.cookies?.token || req.query.token;
   if (!token) {
     return res.redirect("/?redirect=companion");
   }
   try {
-    jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const db = await getDb();
+    const user = await db.prepare("SELECT companion_access, is_admin FROM users WHERE id = ?").get(decoded.id);
+    if (!user || (!user.companion_access && !user.is_admin)) {
+      return res.status(403).send("Access denied. Companion access has not been enabled for your account.");
+    }
     res.sendFile(path.join(__dirname, "../companion/index.html"));
   } catch {
     return res.redirect("/?redirect=companion");

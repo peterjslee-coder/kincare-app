@@ -909,6 +909,9 @@ async function initializeDatabase() {
       original_created_at TIMESTAMPTZ,
       metadata JSONB
     )`,
+
+    // v1.51.15 — Voice Companion access flag
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS companion_access INTEGER DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
