@@ -210,10 +210,15 @@ router.post("/chat", async (req, res) => {
   }
 
   try {
-    // Get voice profile to use
-    const voiceProfile = await getVoiceForMessage(db, care_recipient_id, message_type);
+    // Get voice profile to use (fall back to Pete's cloned voice for Phase 0)
+    let voiceProfile = await getVoiceForMessage(db, care_recipient_id, message_type);
     if (!voiceProfile) {
-      return res.status(404).json({ error: "No voice profile configured for this care recipient" });
+      // Phase 0 fallback: use Pete's ElevenLabs cloned voice directly
+      voiceProfile = {
+        id: null,
+        provider_voice_id: process.env.ELEVENLABS_VOICE_ID || "c2liOZ7MsLVLDpKuwIY5",
+        display_name: "Pete (default)",
+      };
     }
 
     // Get voice preferences for audio generation
@@ -224,33 +229,38 @@ router.post("/chat", async (req, res) => {
 
     // Handle the message through the companion brain (Claude)
     const chatResult = await handleCompanionMessage(transcript, care_recipient_id, convId);
+    // handleCompanionMessage returns { text, intent, shouldSpeak, ... }
+    const companionText = chatResult.text || chatResult.response || "I'm sorry, I couldn't process that.";
 
     // Generate audio for the response
-    const audioBuffer = await generateSpeech(chatResult.response, voiceProfile.provider_voice_id, {
+    const audioBuffer = await generateSpeech(companionText, voiceProfile.provider_voice_id, {
       speed: voicePrefs.speed || 1.0,
       stability: voicePrefs.stability || 0.5,
       similarity_boost: voicePrefs.similarity_boost || 0.8,
     });
 
     const audioBase64 = audioBuffer.toString("base64");
-    const creditsUsed = calculateCredits(chatResult.response);
+    const creditsUsed = calculateCredits(companionText);
 
-    // Store user's message
-    const userMessageId = uuid();
-    await db.prepare(`
-      INSERT INTO companion_messages (id, care_recipient_id, conversation_id, role, content, created_at)
-      VALUES (?, ?, ?, 'user', ?, NOW())
-    `).run(userMessageId, care_recipient_id, convId, transcript);
-
-    // Store companion's response
+    // Store messages (non-blocking — don't let DB errors prevent the response)
     const companionMessageId = uuid();
-    await db.prepare(`
-      INSERT INTO companion_messages (id, care_recipient_id, conversation_id, role, content, voice_profile_id, credits_used, created_at)
-      VALUES (?, ?, ?, 'companion', ?, ?, ?, NOW())
-    `).run(companionMessageId, care_recipient_id, convId, chatResult.response, voiceProfile.id, creditsUsed);
+    try {
+      const userMessageId = uuid();
+      await db.prepare(`
+        INSERT INTO companion_messages (id, care_recipient_id, conversation_id, role, content, created_at)
+        VALUES (?, ?, ?, 'user', ?, NOW())
+      `).run(userMessageId, care_recipient_id, convId, transcript);
+
+      await db.prepare(`
+        INSERT INTO companion_messages (id, care_recipient_id, conversation_id, role, content, voice_profile_id, credits_used, created_at)
+        VALUES (?, ?, ?, 'companion', ?, ?, ?, NOW())
+      `).run(companionMessageId, care_recipient_id, convId, companionText, voiceProfile.id || null, creditsUsed);
+    } catch (storeErr) {
+      console.error("[Voice Companion Chat] Message storage error (non-fatal):", storeErr.message);
+    }
 
     return res.json({
-      text: chatResult.response,
+      text: companionText,
       audio: audioBase64,
       voice_used: voiceProfile.display_name,
       message_id: companionMessageId,
