@@ -923,6 +923,7 @@
         try {
           const resp = await fetch('/api/care-recipients', {
             headers: { 'Authorization': `Bearer ${token}` },
+            credentials: 'same-origin',
           });
           if (resp.ok) {
             const recipients = await resp.json();
@@ -948,6 +949,29 @@
     /**
      * Make authenticated API request
      */
+    /**
+     * Refresh the JWT token using the httpOnly refresh cookie
+     */
+    async function refreshToken() {
+      try {
+        const resp = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.token) {
+            app.token = data.token;
+            sessionStorage.setItem('companionToken', data.token);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.error('Token refresh failed:', err);
+      }
+      return false;
+    }
+
     async function apiCall(endpoint, options = {}) {
       const url = `/api/voice-companion${endpoint}`;
       const headers = {
@@ -960,7 +984,23 @@
         const response = await fetch(url, {
           ...options,
           headers,
+          credentials: 'same-origin',
         });
+
+        // If 401, try refreshing the token and retry once
+        if (response.status === 401) {
+          const refreshed = await refreshToken();
+          if (refreshed) {
+            headers['Authorization'] = `Bearer ${app.token}`;
+            const retry = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+            if (!retry.ok) throw new Error(`API error: ${retry.status}`);
+            return await retry.json();
+          } else {
+            // Can't refresh — redirect to login
+            window.location.href = '/?redirect=companion';
+            return;
+          }
+        }
 
         if (!response.ok) {
           throw new Error(`API error: ${response.status}`);
