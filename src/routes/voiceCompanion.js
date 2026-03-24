@@ -433,6 +433,28 @@ router.post("/profiles", async (req, res) => {
   }
 });
 
+// ── GET /api/voice-companion/available-voices ─────────────────────
+// List all ElevenLabs voices (cloned + pre-made) for voice routing selection
+router.get("/available-voices", async (req, res) => {
+  try {
+    const { listVoices } = require("../utils/voiceService");
+    const voices = await listVoices();
+    // Return a simplified list: id, name, category, labels
+    const simplified = voices.map(v => ({
+      voice_id: v.voice_id,
+      name: v.name,
+      category: v.category || "premade",
+      description: v.description || "",
+      labels: v.labels || {},
+      preview_url: v.preview_url || null,
+    }));
+    return res.json({ voices: simplified });
+  } catch (err) {
+    console.error("[Voice Companion] listVoices error:", err.message);
+    return res.status(500).json({ error: "Failed to fetch voices", message: err.message });
+  }
+});
+
 // ── GET /api/voice-companion/conversations ─────────────────────────
 router.get("/conversations", async (req, res) => {
   const db = await getDb();
