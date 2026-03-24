@@ -904,21 +904,43 @@
     /**
      * Extract and validate auth parameters from URL
      */
-    function initializeAuth() {
+    async function initializeAuth() {
       const params = new URLSearchParams(window.location.search);
       // Try URL params first, fall back to sessionStorage (survives refresh)
       const token = params.get('token') || sessionStorage.getItem('companionToken');
-      const recipientId = params.get('recipient') || sessionStorage.getItem('recipientId');
 
-      if (!token || !recipientId) {
-        // No auth — redirect to InPlace login
+      if (!token) {
         window.location.href = '/?redirect=companion';
         return false;
       }
 
       app.token = token;
-      app.recipientId = recipientId;
       sessionStorage.setItem('companionToken', token);
+
+      // Recipient: try URL param, sessionStorage, or auto-fetch from API
+      let recipientId = params.get('recipient') || sessionStorage.getItem('recipientId');
+      if (!recipientId) {
+        try {
+          const resp = await fetch('/api/care-recipients', {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          if (resp.ok) {
+            const recipients = await resp.json();
+            if (recipients.length > 0) {
+              recipientId = recipients[0].id;
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch care recipients:', err);
+        }
+      }
+
+      if (!recipientId) {
+        showError('No care recipient found for your account.');
+        return false;
+      }
+
+      app.recipientId = recipientId;
       sessionStorage.setItem('recipientId', recipientId);
       return true;
     }
@@ -1514,7 +1536,7 @@
      */
     async function initialize() {
       // Check auth
-      if (!initializeAuth()) {
+      if (!(await initializeAuth())) {
         return;
       }
 

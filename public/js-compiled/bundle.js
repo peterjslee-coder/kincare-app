@@ -62379,6 +62379,7 @@ const App = () => {
             isAdmin: !!data.user.is_admin,
             is_tester: !!data.user.is_tester,
             account_approved: !!data.user.account_approved,
+            companionAccess: !!data.user.companion_access,
             onboardingComplete: data.user.onboarding_complete
           });
           // Sync active role: use saved preference if valid, else default to first role
@@ -62604,6 +62605,7 @@ const App = () => {
             isAdmin: !!data.user.is_admin,
             is_tester: !!data.user.is_tester,
             account_approved: !!data.user.account_approved,
+            companionAccess: !!data.user.companion_access,
             onboardingComplete: data.user.onboarding_complete
           });
           // Sync activeRole to new user's primary role
@@ -62796,7 +62798,8 @@ const App = () => {
                   emailVerified: !!data.user.email_verified,
                   isDemo: false,
                   isAdmin: !!data.user.is_admin,
-                  is_tester: !!data.user.is_tester
+                  is_tester: !!data.user.is_tester,
+                  companionAccess: !!data.user.companion_access
                 });
                 // Check if disclaimer needs to be accepted
                 if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
@@ -62869,7 +62872,8 @@ const App = () => {
                   emailVerified: !!data.user.email_verified,
                   isDemo: false,
                   isAdmin: !!data.user.is_admin,
-                  is_tester: !!data.user.is_tester
+                  is_tester: !!data.user.is_tester,
+                  companionAccess: !!data.user.companion_access
                 });
                 // Check if disclaimer needs to be accepted
                 if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
@@ -63072,6 +63076,14 @@ const App = () => {
       icon: '💬',
       label: 'Messages'
     }];
+    if (currentUser !== null && currentUser !== void 0 && currentUser.companionAccess || currentUser !== null && currentUser !== void 0 && currentUser.isAdmin) {
+      familyNav.push({
+        id: '_launch_companion',
+        icon: '🎙️',
+        label: 'Companion',
+        isAction: true
+      });
+    }
     if (currentUser !== null && currentUser !== void 0 && currentUser.isAdmin) {
       familyNav.push({
         id: 'admin',
@@ -63406,6 +63418,9 @@ const App = () => {
       const actionClick = item.disabled ? () => {} : item.id === '_request_care' ? () => {
         handlePageChange('schedule');
         setSidebarOpen(false);
+      } : item.id === '_launch_companion' ? () => {
+        window.open(`/companion?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank');
+        setSidebarOpen(false);
       } : () => {
         handlePageChange(item.id);
         setSidebarOpen(false);
@@ -63422,12 +63437,16 @@ const App = () => {
           fontWeight: 600,
           cursor: 'not-allowed',
           opacity: 0.5
+        } : item.id === '_launch_companion' ? {
+          background: '#1A5276',
+          color: '#fff',
+          fontWeight: 600
         } : {
           background: '#e8724a',
           color: '#fff',
           fontWeight: 600
         },
-        title: item.disabled ? 'Complete your profile first' : ''
+        title: item.disabled ? 'Complete your profile first' : item.id === '_launch_companion' ? 'Open Voice Companion (new tab)' : ''
       }, /*#__PURE__*/React.createElement("span", {
         className: "nav-icon"
       }, item.icon), " ", item.label, " ", item.disabled && '🔒'));

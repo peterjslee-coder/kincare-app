@@ -607,7 +607,7 @@ const App = () => {
               profilePhoto: data.user.profile_photo || null,
               emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
               isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
-              account_approved: !!data.user.account_approved,
+              account_approved: !!data.user.account_approved, companionAccess: !!data.user.companion_access,
               onboardingComplete: data.user.onboarding_complete,
             });
             // Sync active role: use saved preference if valid, else default to first role
@@ -797,7 +797,7 @@ const App = () => {
             profilePhoto: data.user.profile_photo || null,
             emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
             isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
-            account_approved: !!data.user.account_approved,
+            account_approved: !!data.user.account_approved, companionAccess: !!data.user.companion_access,
             onboardingComplete: data.user.onboarding_complete,
           });
           // Sync activeRole to new user's primary role
@@ -960,7 +960,7 @@ const App = () => {
                 firstName: data.user.first_name, lastName: data.user.last_name,
                 profilePhoto: data.user.profile_photo || null,
                 emailVerified: !!data.user.email_verified, isDemo: false,
-                isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
+                isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester, companionAccess: !!data.user.companion_access,
               });
               // Check if disclaimer needs to be accepted
               if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
@@ -1013,7 +1013,7 @@ const App = () => {
                 firstName: data.user.first_name, lastName: data.user.last_name,
                 profilePhoto: data.user.profile_photo || null,
                 emailVerified: !!data.user.email_verified, isDemo: false,
-                isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
+                isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester, companionAccess: !!data.user.companion_access,
               });
               // Check if disclaimer needs to be accepted
               if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
@@ -1104,6 +1104,9 @@ const App = () => {
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
+    if (currentUser?.companionAccess || currentUser?.isAdmin) {
+      familyNav.push({ id: '_launch_companion', icon: '🎙️', label: 'Companion', isAction: true });
+    }
     if (currentUser?.isAdmin) {
       familyNav.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
     }
@@ -1264,10 +1267,12 @@ const App = () => {
               if (item.isAction) {
                 const actionClick = item.disabled ? () => {} : item.id === '_request_care'
                   ? () => { handlePageChange('schedule'); setSidebarOpen(false); }
+                  : item.id === '_launch_companion'
+                  ? () => { window.open(`/companion?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank'); setSidebarOpen(false); }
                   : () => { handlePageChange(item.id); setSidebarOpen(false); };
                 return (
                   <li key={item.id} className="nav-item">
-                    <button onClick={actionClick} className="nav-link" style={item.disabled ? { background: '#999', color: 'rgba(255,255,255,0.5)', fontWeight: 600, cursor: 'not-allowed', opacity: 0.5 } : { background: '#e8724a', color: '#fff', fontWeight: 600 }} title={item.disabled ? 'Complete your profile first' : ''}>
+                    <button onClick={actionClick} className="nav-link" style={item.disabled ? { background: '#999', color: 'rgba(255,255,255,0.5)', fontWeight: 600, cursor: 'not-allowed', opacity: 0.5 } : item.id === '_launch_companion' ? { background: '#1A5276', color: '#fff', fontWeight: 600 } : { background: '#e8724a', color: '#fff', fontWeight: 600 }} title={item.disabled ? 'Complete your profile first' : item.id === '_launch_companion' ? 'Open Voice Companion (new tab)' : ''}>
                       <span className="nav-icon">{item.icon}</span> {item.label} {item.disabled && '🔒'}
                     </button>
                   </li>

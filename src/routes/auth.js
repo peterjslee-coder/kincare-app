@@ -366,6 +366,7 @@ router.post("/login", validateLogin, async (req, res) => {
         emailVerified: !!user.email_verified,
         isDemo: !!user.is_demo,
         isAdmin: !!user.is_admin,
+        companionAccess: !!user.companion_access,
       },
       token,
     };
@@ -535,7 +536,7 @@ router.post("/change-password", authenticate, async (req, res) => {
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
   const user = await db.prepare(
-    "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, accessibility_prefs, email_verified, is_demo, is_admin, is_tester, account_approved, password_changed_at, disclaimer_accepted_at, disclaimer_version, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?"
+    "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, accessibility_prefs, email_verified, is_demo, is_admin, is_tester, account_approved, companion_access, password_changed_at, disclaimer_accepted_at, disclaimer_version, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?"
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -571,6 +572,7 @@ router.get("/me", authenticate, async (req, res) => {
       is_admin: !!user.is_admin,
       is_tester: !!user.is_tester,
       account_approved: !!user.account_approved,
+      companion_access: !!user.companion_access,
       twoFactorEnabled: !!(twoFa?.is_enabled),
       linkedAccounts: oauthAccounts || [],
       onboarding_complete: onboardingComplete,
