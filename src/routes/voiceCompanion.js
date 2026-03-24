@@ -183,8 +183,8 @@ async function getVoiceForMessage(db, careRecipientId, messageType = "conversati
 // ── Helper: Get voice preferences ──────────────────────────────────
 
 async function getVoicePreferences(db, careRecipientId) {
-  // Tuned for elder care: slower pace, high stability (consistent/warm), high similarity (sounds like Pete)
-  const defaults = { speed: 0.82, stability: 0.65, similarity_boost: 0.85 };
+  // Tuned for elder care: slow pace, high stability (warm/consistent), high similarity (sounds like Pete)
+  const defaults = { speed: 0.75, stability: 0.65, similarity_boost: 0.85 };
   try {
     let prefs = await db.prepare(
       "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
@@ -259,13 +259,21 @@ router.post("/chat", async (req, res) => {
     // Handle the message through the companion brain (Claude)
     const chatResult = await handleCompanionMessage(transcript, care_recipient_id, convId);
     // handleCompanionMessage returns { text, intent, shouldSpeak, ... }
-    const companionText = chatResult.text || chatResult.response || "I'm sorry, I couldn't process that.";
+    const rawText = chatResult.text || chatResult.response || "I'm sorry, I couldn't process that.";
+
+    // Add natural pauses between sentences for elder care pacing.
+    // ElevenLabs respects "..." as a breath pause. Replace ". " with "... "
+    // so there's a gentle beat between each thought.
+    const companionText = rawText
+      .replace(/\. /g, "... ")       // pause between sentences
+      .replace(/\? /g, "?... ")      // pause after questions
+      .replace(/! /g, "!... ");      // pause after exclamations
 
     // Generate audio for the response
     const audioBuffer = await generateSpeech(companionText, voiceProfile.provider_voice_id, {
-      speed: voicePrefs.speed || 0.85,
-      stability: voicePrefs.stability || 0.5,
-      similarity_boost: voicePrefs.similarity_boost || 0.8,
+      speed: voicePrefs.speed || 0.75,
+      stability: voicePrefs.stability || 0.65,
+      similarity_boost: voicePrefs.similarity_boost || 0.85,
     });
 
     const audioBase64 = audioBuffer.toString("base64");
