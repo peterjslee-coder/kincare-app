@@ -302,7 +302,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/voice-companion", require("./routes/voiceCompanion"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.51.15";
+const APP_VERSION = "1.51.16";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -374,6 +374,9 @@ app.get("/companion", async (req, res) => {
     if (!user || (!user.companion_access && !user.is_admin)) {
       return res.status(403).send("Access denied. Companion access has not been enabled for your account.");
     }
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     res.sendFile(path.join(__dirname, "../companion/index.html"));
   } catch {
     return res.redirect("/?redirect=companion");
