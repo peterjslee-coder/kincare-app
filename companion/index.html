@@ -700,7 +700,7 @@
       <div class="home-header">
         <div class="home-header-top">
           <div>
-            <div class="home-header-greeting">Good morning</div>
+            <div class="home-header-greeting" id="greeting"></div>
             <div class="home-header-name" id="recipientName">Betty</div>
           </div>
           <div class="home-avatar" id="recipientAvatar">B</div>
@@ -1587,6 +1587,13 @@
 
       // Setup event listeners
       setupEventListeners();
+
+      // Time-aware greeting
+      const hour = new Date().getHours();
+      const greetEl = document.getElementById('greeting');
+      if (greetEl) {
+        greetEl.textContent = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+      }
 
       // Update recipient display
       dom.recipientAvatar.textContent = app.recipientName.charAt(0).toUpperCase();
