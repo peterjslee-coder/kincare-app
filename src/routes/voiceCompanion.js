@@ -183,7 +183,7 @@ async function getVoiceForMessage(db, careRecipientId, messageType = "conversati
 // ── Helper: Get voice preferences ──────────────────────────────────
 
 async function getVoicePreferences(db, careRecipientId) {
-  const defaults = { speed: 1.0, stability: 0.5, similarity_boost: 0.8 };
+  const defaults = { speed: 0.85, stability: 0.5, similarity_boost: 0.8 };
   try {
     let prefs = await db.prepare(
       "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
@@ -262,7 +262,7 @@ router.post("/chat", async (req, res) => {
 
     // Generate audio for the response
     const audioBuffer = await generateSpeech(companionText, voiceProfile.provider_voice_id, {
-      speed: voicePrefs.speed || 1.0,
+      speed: voicePrefs.speed || 0.85,
       stability: voicePrefs.stability || 0.5,
       similarity_boost: voicePrefs.similarity_boost || 0.8,
     });

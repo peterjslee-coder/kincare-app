@@ -49,34 +49,41 @@ async function loadCareContext(careRecipientId) {
       return null;
     }
 
-    // Load recent visits with caregiver info
-    const recentVisits = await db
-      .prepare(
-        `
-      SELECT v.id, v.caregiver_id, u.first_name, u.last_name, v.visit_date,
-             v.summary, v.mood_rating, v.duration_minutes
-      FROM visits v
-      JOIN caregivers cg ON v.caregiver_id = cg.id
-      JOIN users u ON cg.user_id = u.id
-      WHERE v.care_recipient_id = ?
-      ORDER BY v.visit_date DESC
-      LIMIT 5
-    `
-      )
-      .all(careRecipientId);
+    // Load recent care sessions with caregiver info
+    let recentVisits = [];
+    try {
+      recentVisits = await db
+        .prepare(
+          `SELECT cs.id, cs.caregiver_id, u.first_name, u.last_name, cs.scheduled_date as visit_date,
+                  cs.special_instructions as summary, cs.duration_hours, cs.status
+           FROM care_sessions cs
+           LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+           LEFT JOIN users u ON cp.user_id = u.id
+           WHERE cs.care_recipient_id = ? AND cs.status = 'completed'
+           ORDER BY cs.scheduled_date DESC
+           LIMIT 5`
+        )
+        .all(careRecipientId);
+    } catch (e) {
+      console.error("[Voice Companion] care_sessions query failed (non-fatal):", e.message);
+    }
 
-    // Load care team members (primary voice owner + other caregivers)
-    const careTeam = await db
-      .prepare(
-        `
-      SELECT DISTINCT u.id, u.first_name, u.last_name, u.role
-      FROM caregivers cg
-      JOIN users u ON cg.user_id = u.id
-      WHERE cg.care_recipient_id = ?
-      LIMIT 10
-    `
-      )
-      .all(careRecipientId);
+    // Load care team members
+    let careTeam = [];
+    try {
+      careTeam = await db
+        .prepare(
+          `SELECT DISTINCT u.id, u.first_name, u.last_name, u.role
+           FROM caregiver_assignments ca
+           JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+           JOIN users u ON cp.user_id = u.id
+           WHERE ca.care_recipient_id = ? AND ca.is_active = 1
+           LIMIT 10`
+        )
+        .all(careRecipientId);
+    } catch (e) {
+      console.error("[Voice Companion] careTeam query failed (non-fatal):", e.message);
+    }
 
     // Load pending reminders
     // Load reminders (table may not exist yet — non-fatal)
@@ -409,7 +416,7 @@ async function handleCompanionMessage(transcript, careRecipientId, conversationI
     // Get voice owner info (for now, assume single primary voice - Pete)
     // In production, this comes from voice_profiles table
     const voiceOwner = await db
-      .prepare("SELECT first_name FROM users WHERE id = (SELECT created_by FROM care_recipients WHERE id = ?)")
+      .prepare("SELECT first_name FROM users WHERE id = (SELECT family_user_id FROM care_recipients WHERE id = ?)")
       .get(careRecipientId);
 
     const voiceOwnerName = voiceOwner?.first_name || "Pete";
