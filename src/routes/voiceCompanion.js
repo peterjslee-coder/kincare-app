@@ -49,12 +49,13 @@ router.use(async (req, res, next) => {
 // ═══════════════════════════════════════════════════════════
 
 async function initializeTables() {
-  try {
-    const db = await getDb();
+  const db = await getDb();
 
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS voice_profiles (
-        id UUID PRIMARY KEY,
+  const tables = [
+    {
+      name: "voice_profiles",
+      sql: `CREATE TABLE IF NOT EXISTS voice_profiles (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL,
         care_recipient_id UUID,
         provider TEXT DEFAULT 'elevenlabs',
@@ -66,27 +67,26 @@ async function initializeTables() {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(user_id, provider_voice_id)
-      );
-    `);
-
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS companion_messages (
-        id UUID PRIMARY KEY,
+      );`,
+    },
+    {
+      name: "companion_messages",
+      sql: `CREATE TABLE IF NOT EXISTS companion_messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         care_recipient_id UUID NOT NULL,
         conversation_id UUID,
         role TEXT NOT NULL CHECK (role IN ('user', 'companion')),
         content TEXT NOT NULL,
         audio_url TEXT,
-        voice_profile_id UUID REFERENCES voice_profiles(id),
+        voice_profile_id UUID,
         credits_used INTEGER DEFAULT 0,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        FOREIGN KEY (voice_profile_id) REFERENCES voice_profiles(id) ON DELETE SET NULL
-      );
-    `);
-
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS voice_reminders (
-        id UUID PRIMARY KEY,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );`,
+    },
+    {
+      name: "voice_reminders",
+      sql: `CREATE TABLE IF NOT EXISTS voice_reminders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         care_recipient_id UUID NOT NULL,
         message_text TEXT NOT NULL,
         scheduled_for TIMESTAMPTZ NOT NULL,
@@ -94,28 +94,26 @@ async function initializeTables() {
         status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'delivered', 'skipped', 'cancelled')),
         delivered_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW(),
-        created_by UUID,
-        FOREIGN KEY (voice_profile_id) REFERENCES voice_profiles(id) ON DELETE SET NULL
-      );
-    `);
-
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS voice_routing (
-        id UUID PRIMARY KEY,
+        created_by UUID
+      );`,
+    },
+    {
+      name: "voice_routing",
+      sql: `CREATE TABLE IF NOT EXISTS voice_routing (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         care_recipient_id UUID NOT NULL,
         message_type TEXT NOT NULL,
         voice_profile_id UUID,
         priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(care_recipient_id, message_type),
-        FOREIGN KEY (voice_profile_id) REFERENCES voice_profiles(id) ON DELETE SET NULL
-      );
-    `);
-
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS voice_preferences (
-        id UUID PRIMARY KEY,
+        UNIQUE(care_recipient_id, message_type)
+      );`,
+    },
+    {
+      name: "voice_preferences",
+      sql: `CREATE TABLE IF NOT EXISTS voice_preferences (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         care_recipient_id UUID NOT NULL UNIQUE,
         speed REAL DEFAULT 1.0,
         stability REAL DEFAULT 0.5,
@@ -126,15 +124,34 @@ async function initializeTables() {
         baseline_similarity_boost REAL DEFAULT 0.8,
         last_adjusted_at TIMESTAMPTZ,
         adjustment_log JSONB DEFAULT '[]'::jsonb,
-        updated_at TIMESTAMPTZ DEFAULT NOW(),
-        FOREIGN KEY (care_recipient_id) REFERENCES users(id) ON DELETE CASCADE
-      );
-    `);
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );`,
+    },
+    {
+      name: "voice_escalations",
+      sql: `CREATE TABLE IF NOT EXISTS voice_escalations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        care_recipient_id UUID NOT NULL,
+        conversation_id UUID,
+        message_content TEXT,
+        companion_response TEXT,
+        escalation_reason TEXT,
+        resolved BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );`,
+    },
+  ];
 
-    console.log("[Voice Companion] Database tables initialized");
-  } catch (err) {
-    console.error("[Voice Companion] Table initialization error:", err.message);
+  for (const table of tables) {
+    try {
+      await db.exec(table.sql);
+      console.log(`[Voice Companion] Table ${table.name} ready`);
+    } catch (err) {
+      console.error(`[Voice Companion] Failed to create ${table.name}:`, err.message);
+    }
   }
+
+  console.log("[Voice Companion] Database initialization complete");
 }
 
 // Initialize on module load
@@ -166,22 +183,33 @@ async function getVoiceForMessage(db, careRecipientId, messageType = "conversati
 // ── Helper: Get voice preferences ──────────────────────────────────
 
 async function getVoicePreferences(db, careRecipientId) {
-  let prefs = await db.prepare(
-    "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
-  ).get(careRecipientId);
-
-  if (!prefs) {
-    // Create default preferences
-    const id = uuid();
-    await db.prepare(`
-      INSERT INTO voice_preferences (id, care_recipient_id) VALUES (?, ?)
-    `).run(id, careRecipientId);
-    prefs = await db.prepare(
+  const defaults = { speed: 1.0, stability: 0.5, similarity_boost: 0.8 };
+  try {
+    let prefs = await db.prepare(
       "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
     ).get(careRecipientId);
-  }
 
-  return prefs;
+    if (!prefs) {
+      // Try to create default preferences
+      try {
+        const id = uuid();
+        await db.prepare(`
+          INSERT INTO voice_preferences (id, care_recipient_id) VALUES (?, ?)
+        `).run(id, careRecipientId);
+        prefs = await db.prepare(
+          "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
+        ).get(careRecipientId);
+      } catch (insertErr) {
+        console.error("[Voice Companion] Could not insert voice prefs:", insertErr.message);
+      }
+    }
+
+    return prefs || defaults;
+  } catch (err) {
+    // Table may not exist yet — return sensible defaults
+    console.error("[Voice Companion] voice_preferences query failed (using defaults):", err.message);
+    return defaults;
+  }
 }
 
 // ── Helper: Calculate credits for text ─────────────────────────────

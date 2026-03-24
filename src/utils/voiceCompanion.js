@@ -79,30 +79,34 @@ async function loadCareContext(careRecipientId) {
       .all(careRecipientId);
 
     // Load pending reminders
-    const upcomingReminders = await db
-      .prepare(
-        `
-      SELECT id, reminder_text, scheduled_for
-      FROM voice_reminders
-      WHERE care_recipient_id = ? AND scheduled_for > NOW() AND is_active = true
-      ORDER BY scheduled_for ASC
-      LIMIT 3
-    `
-      )
-      .all(careRecipientId);
+    // Load reminders (table may not exist yet — non-fatal)
+    let upcomingReminders = [];
+    try {
+      upcomingReminders = await db
+        .prepare(
+          `SELECT id, message_text as reminder_text, scheduled_for
+           FROM voice_reminders
+           WHERE care_recipient_id = ? AND scheduled_for > NOW() AND status = 'pending'
+           ORDER BY scheduled_for ASC LIMIT 3`
+        )
+        .all(careRecipientId);
+    } catch (e) {
+      console.error("[Voice Companion] voice_reminders query failed (non-fatal):", e.message);
+    }
 
-    // Load voice preferences (speed, stability adjustments)
-    const voicePreferences = await db
-      .prepare(
-        `
-      SELECT speed, stability, similarity_boost, volume_offset, adjusted_at, adjustment_reason
-      FROM voice_preferences
-      WHERE care_recipient_id = ?
-      ORDER BY adjusted_at DESC
-      LIMIT 1
-    `
-      )
-      .get(careRecipientId);
+    // Load voice preferences (table may not exist yet — non-fatal)
+    let voicePreferences = null;
+    try {
+      voicePreferences = await db
+        .prepare(
+          `SELECT speed, stability, similarity_boost, app_volume_gain, last_adjusted_at, adjustment_log
+           FROM voice_preferences
+           WHERE care_recipient_id = ? LIMIT 1`
+        )
+        .get(careRecipientId);
+    } catch (e) {
+      console.error("[Voice Companion] voice_preferences query failed (non-fatal):", e.message);
+    }
 
     return {
       recipient,
