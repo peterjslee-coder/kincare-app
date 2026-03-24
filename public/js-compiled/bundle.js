@@ -674,7 +674,7 @@ const checkPushHealth = window.checkPushHealth = async () => {
     }
 
     // Verify server knows about this subscription
-    if (!window.AUTH_TOKEN) return; // not logged in
+    if (!AUTH_TOKEN) return; // not logged in
 
     const statusRes = await apiFetch('/api/push/status');
     if (statusRes && statusRes.ok) {
@@ -6543,6 +6543,7 @@ const Dashboard = window.Dashboard = ({
   // Tick counter for live countdown on in-progress and imminent sessions (re-renders every 30-60s)
   const [tick, setTick] = useState(0);
   const [imminentId, setImminentId] = useState(null); // track which session is the hero card
+  const [lightboxPhoto, setLightboxPhoto] = useState(null); // full-screen photo viewer
 
   // Review gating state
   const [pendingReviews, setPendingReviews] = useState([]);
@@ -9081,7 +9082,148 @@ const Dashboard = window.Dashboard = ({
       fontSize: '14px',
       color: '#e65100'
     }
-  }, stats.unreadNotifications, " unread notification", stats.unreadNotifications > 1 ? 's' : '')), activity.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, stats.unreadNotifications, " unread notification", stats.unreadNotifications > 1 ? 's' : '')), data.recentPhotos && data.recentPhotos.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header",
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
+    className: "card-icon"
+  }, "\uD83D\uDCF8"), "Recent Visit Photos"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: '#888'
+    }
+  }, data.recentPhotos.length, " photo", data.recentPhotos.length !== 1 ? 's' : '')), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+      gap: 8,
+      padding: '4px 0'
+    }
+  }, data.recentPhotos.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    key: p.id || i,
+    style: {
+      position: 'relative',
+      borderRadius: 8,
+      overflow: 'hidden',
+      border: '1px solid #eee',
+      cursor: 'pointer'
+    },
+    onClick: () => setLightboxPhoto(p)
+  }, /*#__PURE__*/React.createElement("img", {
+    src: p.photoUrl,
+    alt: p.caption || 'Visit photo',
+    style: {
+      width: '100%',
+      height: 90,
+      objectFit: 'cover',
+      display: 'block'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      background: 'linear-gradient(transparent, rgba(0,0,0,0.6))',
+      padding: '12px 6px 4px',
+      color: '#fff',
+      fontSize: 10,
+      lineHeight: 1.3
+    }
+  }, p.caregiverName)))), data.recentPhotos.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#888',
+      marginTop: 6,
+      textAlign: 'center'
+    }
+  }, "Tap a photo to view full size \u2022 Photos are from recent visits")), lightboxPhoto && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setLightboxPhoto(null),
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.85)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2000,
+      cursor: 'pointer',
+      flexDirection: 'column'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative',
+      maxWidth: '90vw',
+      maxHeight: '80vh'
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: lightboxPhoto.photoUrl,
+    alt: lightboxPhoto.caption || 'Visit photo',
+    style: {
+      maxWidth: '90vw',
+      maxHeight: '78vh',
+      borderRadius: 8,
+      objectFit: 'contain'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      setLightboxPhoto(null);
+    },
+    style: {
+      position: 'absolute',
+      top: -12,
+      right: -12,
+      width: 32,
+      height: 32,
+      background: '#fff',
+      color: '#333',
+      border: 'none',
+      borderRadius: '50%',
+      fontSize: 18,
+      cursor: 'pointer',
+      fontWeight: 700
+    }
+  }, "\xD7")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#fff',
+      marginTop: 10,
+      textAlign: 'center',
+      maxWidth: '80vw'
+    }
+  }, lightboxPhoto.caption && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      marginBottom: 4
+    }
+  }, lightboxPhoto.caption), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      opacity: 0.7
+    }
+  }, lightboxPhoto.caregiverName, " \u2022 ", lightboxPhoto.sessionDate ? new Date(lightboxPhoto.sessionDate + 'T12:00:00').toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  }) : ''), lightboxPhoto.sessionId && /*#__PURE__*/React.createElement("div", {
+    onClick: e => {
+      e.stopPropagation();
+      setLightboxPhoto(null);
+      setVisitDetailSessionId(lightboxPhoto.sessionId);
+    },
+    style: {
+      fontSize: 12,
+      color: '#4fc3a1',
+      cursor: 'pointer',
+      marginTop: 6,
+      fontWeight: 600
+    }
+  }, "View visit details \u2192"))), activity.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header",
@@ -19399,7 +19541,7 @@ const Documents = window.Documents = ({
  *
  * Call types: 'video' or 'voice' (voice = video room with camera off)
  *
- * Uses Twilio Video SDK loaded via CDN (window.Twilio.Video).
+ * Uses Twilio Video SDK loaded from self-hosted /vendor/ (window.Twilio.Video).
  */
 const VideoCallOverlay = window.VideoCallOverlay = ({
   callState,
@@ -19452,11 +19594,13 @@ const VideoCallOverlay = window.VideoCallOverlay = ({
         } = await tokenRes.json();
         if (cancelled) return;
 
-        // Check if Twilio Video SDK is loaded — try multiple CDNs if needed
+        // Check if Twilio Video SDK is loaded — self-hosted primary, CDN fallback
         if (!window.Twilio || !window.Twilio.Video) {
-          const cdnUrls = ['https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js', 'https://unpkg.com/twilio-video@2.28.1/dist/twilio-video.min.js', 'https://cdn.jsdelivr.net/npm/twilio-video@2.28.1/dist/twilio-video.min.js'];
+          const sdkUrls = ['/vendor/twilio-video.min.js',
+          // self-hosted (primary)
+          'https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js', 'https://unpkg.com/twilio-video@2.28.1/dist/twilio-video.min.js', 'https://cdn.jsdelivr.net/npm/twilio-video@2.28.1/dist/twilio-video.min.js'];
           let loaded = false;
-          for (const cdnUrl of cdnUrls) {
+          for (const url of sdkUrls) {
             if (window.Twilio && window.Twilio.Video) {
               loaded = true;
               break;
@@ -19464,7 +19608,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({
             try {
               await new Promise((resolve, reject) => {
                 const s = document.createElement('script');
-                s.src = cdnUrl;
+                s.src = url;
                 s.onload = resolve;
                 s.onerror = reject;
                 document.head.appendChild(s);
@@ -19473,10 +19617,10 @@ const VideoCallOverlay = window.VideoCallOverlay = ({
                 loaded = true;
                 break;
               }
-            } catch {/* try next CDN */}
+            } catch {/* try next source */}
           }
           if (!loaded || !window.Twilio || !window.Twilio.Video) {
-            throw new Error('Video SDK could not be loaded from any source. Check your internet connection and try again.');
+            throw new Error('Video SDK could not be loaded. Please refresh the page and try again.');
           }
         }
         const Video = window.Twilio.Video;
@@ -22210,7 +22354,8 @@ const Messages = window.Messages = () => {
       style: {
         display: 'flex',
         flexDirection: 'column',
-        height: '100%'
+        height: isMobile ? 'calc(100vh - 110px)' : '100%',
+        overflow: 'hidden'
       }
     }, /*#__PURE__*/React.createElement("div", {
       className: "msg-chat-header"
@@ -24635,7 +24780,8 @@ const VisitDetailModal = window.VisitDetailModal = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cancelling, setCancelling] = useState(false);
-  const [showPhotos, setShowPhotos] = useState(false);
+  const [showPhotos, setShowPhotos] = useState(true);
+  const [lightboxIdx, setLightboxIdx] = useState(null);
   useEffect(() => {
     if (!sessionId) return;
     const fetchDetail = async () => {
@@ -24917,28 +25063,70 @@ const VisitDetailModal = window.VisitDetailModal = ({
       style: {
         fontWeight: 500
       }
-    }, formatDateTime(v.check_out_time)))), (v.arrival_mood || v.departure_mood) && /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        gap: 12,
-        marginBottom: 10,
-        flexWrap: 'wrap'
-      }
-    }, v.arrival_mood && /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: '#e8f5e9',
-        padding: '4px 10px',
-        borderRadius: 16,
-        fontSize: 13
-      }
-    }, "Arrival: ", /*#__PURE__*/React.createElement("strong", null, v.arrival_mood)), v.departure_mood && /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: '#e3f2fd',
-        padding: '4px 10px',
-        borderRadius: 16,
-        fontSize: 13
-      }
-    }, "Departure: ", /*#__PURE__*/React.createElement("strong", null, v.departure_mood))), conditionTags.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, formatDateTime(v.check_out_time)))), (v.arrival_mood || v.departure_mood) && (() => {
+      const parseMoods = val => {
+        if (!val) return [];
+        try {
+          const p = JSON.parse(val);
+          if (Array.isArray(p)) return p;
+        } catch {}
+        return [val];
+      };
+      const arrMoods = parseMoods(v.arrival_mood);
+      const depMoods = parseMoods(v.departure_mood);
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 12,
+          marginBottom: 10,
+          flexWrap: 'wrap'
+        }
+      }, arrMoods.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 4,
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 12,
+          color: '#888',
+          marginRight: 2
+        }
+      }, "Arrival:"), arrMoods.map((m, i) => /*#__PURE__*/React.createElement("span", {
+        key: i,
+        style: {
+          background: '#e8f5e9',
+          padding: '3px 10px',
+          borderRadius: 12,
+          fontSize: 12,
+          fontWeight: 500
+        }
+      }, m))), depMoods.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 4,
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 12,
+          color: '#888',
+          marginRight: 2
+        }
+      }, "Departure:"), depMoods.map((m, i) => /*#__PURE__*/React.createElement("span", {
+        key: i,
+        style: {
+          background: '#e3f2fd',
+          padding: '3px 10px',
+          borderRadius: 12,
+          fontSize: 12,
+          fontWeight: 500
+        }
+      }, m))));
+    })(), conditionTags.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 10
       }
@@ -25051,7 +25239,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8
+        marginBottom: 10
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -25059,7 +25247,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
         fontWeight: 600,
         color: '#1b6b5a'
       }
-    }, "Visit Photos (", photos.length, ")"), /*#__PURE__*/React.createElement("button", {
+    }, '\uD83D\uDCF7', " Visit Photos (", photos.length, ")"), photos.length > 6 && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: () => setShowPhotos(!showPhotos),
       style: {
@@ -25067,37 +25255,141 @@ const VisitDetailModal = window.VisitDetailModal = ({
         border: 'none',
         color: '#1b6b5a',
         cursor: 'pointer',
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: 600
       }
-    }, showPhotos ? 'Hide' : 'Show')), showPhotos && /*#__PURE__*/React.createElement("div", {
+    }, showPhotos ? 'Show less' : `Show all ${photos.length}`)), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
         gap: 8
       }
-    }, photos.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    }, (showPhotos ? photos : photos.slice(0, 6)).map((p, i) => /*#__PURE__*/React.createElement("div", {
       key: i,
+      onClick: () => setLightboxIdx(i),
       style: {
         borderRadius: 8,
         overflow: 'hidden',
-        border: '1px solid #eee'
+        border: '1px solid #eee',
+        cursor: 'pointer',
+        position: 'relative'
       }
     }, /*#__PURE__*/React.createElement("img", {
       src: p.photo_url,
       alt: p.caption || 'Visit photo',
       style: {
         width: '100%',
-        height: 100,
-        objectFit: 'cover'
+        height: 90,
+        objectFit: 'cover',
+        display: 'block'
       }
     }), p.caption && /*#__PURE__*/React.createElement("div", {
       style: {
-        fontSize: 11,
-        color: '#666',
-        padding: '4px 6px'
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: 'linear-gradient(transparent, rgba(0,0,0,0.6))',
+        padding: '12px 6px 4px',
+        fontSize: 10,
+        color: '#fff',
+        lineHeight: 1.3
       }
-    }, p.caption))))), cost && role === 'caregiver' && /*#__PURE__*/React.createElement("div", {
+    }, p.caption))))), lightboxIdx !== null && photos[lightboxIdx] && /*#__PURE__*/React.createElement("div", {
+      onClick: () => setLightboxIdx(null),
+      style: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        background: 'rgba(0,0,0,0.9)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        setLightboxIdx(null);
+      },
+      style: {
+        position: 'absolute',
+        top: 16,
+        right: 20,
+        background: 'none',
+        border: 'none',
+        color: '#fff',
+        fontSize: 28,
+        cursor: 'pointer',
+        zIndex: 10000
+      }
+    }, '\u2715'), photos.length > 1 && lightboxIdx > 0 && /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        setLightboxIdx(lightboxIdx - 1);
+      },
+      style: {
+        position: 'absolute',
+        left: 12,
+        top: '50%',
+        transform: 'translateY(-50%)',
+        background: 'rgba(255,255,255,0.2)',
+        border: 'none',
+        color: '#fff',
+        fontSize: 28,
+        borderRadius: '50%',
+        width: 44,
+        height: 44,
+        cursor: 'pointer'
+      }
+    }, '\u2039'), photos.length > 1 && lightboxIdx < photos.length - 1 && /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        setLightboxIdx(lightboxIdx + 1);
+      },
+      style: {
+        position: 'absolute',
+        right: 12,
+        top: '50%',
+        transform: 'translateY(-50%)',
+        background: 'rgba(255,255,255,0.2)',
+        border: 'none',
+        color: '#fff',
+        fontSize: 28,
+        borderRadius: '50%',
+        width: 44,
+        height: 44,
+        cursor: 'pointer'
+      }
+    }, '\u203A'), /*#__PURE__*/React.createElement("img", {
+      src: photos[lightboxIdx].photo_url,
+      alt: "",
+      onClick: e => e.stopPropagation(),
+      style: {
+        maxWidth: '90%',
+        maxHeight: '75vh',
+        borderRadius: 10,
+        objectFit: 'contain'
+      }
+    }), photos[lightboxIdx].caption && /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: '#fff',
+        fontSize: 14,
+        marginTop: 12,
+        textAlign: 'center',
+        maxWidth: 500
+      }
+    }, photos[lightboxIdx].caption), /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: 'rgba(255,255,255,0.5)',
+        fontSize: 12,
+        marginTop: 6
+      }
+    }, lightboxIdx + 1, " of ", photos.length)), cost && role === 'caregiver' && /*#__PURE__*/React.createElement("div", {
       style: {
         background: '#fff',
         border: '1px solid #e0e0e0',
@@ -35035,10 +35327,10 @@ const CaretakerHub = window.CaretakerHub = ({
   const photoInputRef = useRef(null);
   // Check-in/check-out state
   const [checkInSession, setCheckInSession] = useState(null);
-  const [checkInMood, setCheckInMood] = useState('');
+  const [checkInMood, setCheckInMood] = useState([]);
   const [checkInNotes, setCheckInNotes] = useState(null);
   const [checkOutSession, setCheckOutSession] = useState(null);
-  const [checkOutMood, setCheckOutMood] = useState('');
+  const [checkOutMood, setCheckOutMood] = useState([]);
   const [checkOutTags, setCheckOutTags] = useState([]);
   const [checkOutCareFeedback, setCheckOutCareFeedback] = useState('');
   const [checkOutServiceFeedback, setCheckOutServiceFeedback] = useState('');
@@ -35758,20 +36050,16 @@ const CaretakerHub = window.CaretakerHub = ({
         if (logPhotos.length > 0 && (_logData$visitLog = logData.visitLog) !== null && _logData$visitLog !== void 0 && _logData$visitLog.id) {
           const formData = new FormData();
           logPhotos.forEach(f => formData.append('photos', f));
-          const token = window.AUTH_TOKEN;
           const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : window.getCsrfToken ? window.getCsrfToken() : null;
-          const _csrfH = _csrf ? {
-            'X-CSRF-Token': _csrf
-          } : {};
-          await fetch(`${API_BASE}/api/photos/visit/${logData.visitLog.id}`, {
+          const _photoHeaders = {};
+          if (_csrf) _photoHeaders['X-CSRF-Token'] = _csrf;
+          const _photoRes = await fetch(`${API_BASE}/api/photos/visit/${logData.visitLog.id}`, {
             method: 'POST',
             credentials: 'same-origin',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              ..._csrfH
-            },
+            headers: _photoHeaders,
             body: formData
           });
+          if (!_photoRes.ok) showToast('Photos could not be saved', 'error');
         }
         setVisitLogSession(null);
         setLogSummary('');
@@ -36229,7 +36517,8 @@ const CaretakerHub = window.CaretakerHub = ({
     label: 'Start your background check',
     desc: 'A background check is required to participate on InPlace. This is a one-time $30 fee that is refunded after 10 completed sessions. Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
     done: bgCheckSubmitted,
-    missing: !bgCheckSubmitted ? bgPaid ? 'Complete the background check form' : stripeConnected ? 'Pay for background check ($30)' : 'Complete Stripe setup first' : null
+    missing: !bgCheckSubmitted ? bgPaid ? 'Complete the background check form' : stripeConnected ? 'Pay for background check ($30)' : 'Complete Stripe setup first' : null,
+    warning: bgCheckSubmitted && profile.checkrStatus === 'consider' ? 'Your background check needs additional information. Please check your email for instructions from Checkr on how to complete the review process.' : bgCheckSubmitted && profile.checkrStatus === 'processing' ? 'Your background check is being processed. This usually takes 2–5 business days.' : bgCheckSubmitted && profile.checkrStatus === 'disputed' ? 'Your dispute is being reviewed. We\'ll notify you when there\'s an update.' : null
   }, {
     id: 'security',
     label: 'Make your account more secure',
@@ -36610,6 +36899,84 @@ const CaretakerHub = window.CaretakerHub = ({
         marginTop: 4
       }
     }, "If you believe this is an error or would like to provide additional context, please check your Messages \u2014 we've sent you details and you can reply to appeal."));
+    if (checkrStatus === 'consider') return /*#__PURE__*/React.createElement("div", {
+      className: "card",
+      style: {
+        marginBottom: 16,
+        borderLeft: '4px solid #f59e0b',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 24
+      }
+    }, '\u26A0\uFE0F'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 14,
+        color: '#92400e'
+      }
+    }, "Background Check \u2014 Action Needed"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#555',
+        marginTop: 2
+      }
+    }, "Your background check requires additional information. Please check your email for instructions from Checkr on how to complete the review process.")));
+    if (checkrStatus === 'processing') return /*#__PURE__*/React.createElement("div", {
+      className: "card",
+      style: {
+        marginBottom: 16,
+        borderLeft: '4px solid #3b82f6',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 24
+      }
+    }, "\uD83D\uDD04"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 14,
+        color: '#333'
+      }
+    }, "Background Check Processing"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#555',
+        marginTop: 2
+      }
+    }, "Your background check is being processed. This usually takes 2\u20135 business days.")));
+    if (checkrStatus === 'disputed') return /*#__PURE__*/React.createElement("div", {
+      className: "card",
+      style: {
+        marginBottom: 16,
+        borderLeft: '4px solid #8b5cf6',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 24
+      }
+    }, '\u{1F4DD}'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 14,
+        color: '#333'
+      }
+    }, "Background Check \u2014 Dispute Under Review"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#555',
+        marginTop: 2
+      }
+    }, "Your dispute is being reviewed by Checkr. We'll notify you when there's an update.")));
     return null;
   })(), profile.accountPaused && /*#__PURE__*/React.createElement("div", {
     className: "card",
@@ -36820,7 +37187,25 @@ const CaretakerHub = window.CaretakerHub = ({
     style: {
       fontSize: '13px'
     }
-  }, '\u26A0\uFE0F'), " ", s.missing)), !s.done && /*#__PURE__*/React.createElement("span", {
+  }, '\u26A0\uFE0F'), " ", s.missing), s.done && s.warning && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '6px',
+      padding: '8px 10px',
+      background: '#fffbeb',
+      border: '1px solid #f59e0b',
+      borderRadius: '6px',
+      fontSize: '12px',
+      color: '#92400e',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '6px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '13px',
+      flexShrink: 0
+    }
+  }, '\u26A0\uFE0F'), " ", /*#__PURE__*/React.createElement("span", null, s.warning))), !s.done && /*#__PURE__*/React.createElement("span", {
     style: {
       color: '#ccc',
       fontSize: '18px',
@@ -37557,7 +37942,7 @@ const CaretakerHub = window.CaretakerHub = ({
         }
       }, "$", (s.caregiverPayout || parseFloat(s.estimatedCost) || 0).toFixed(2)), isActive && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
         onClick: () => {
-          setCheckOutMood('');
+          setCheckOutMood([]);
           setCheckOutTags([]);
           setCheckOutCareFeedback('');
           setCheckOutServiceFeedback('');
@@ -37619,7 +38004,7 @@ const CaretakerHub = window.CaretakerHub = ({
         }
       }, "Nobody Home"), isReady && !isActive && /*#__PURE__*/React.createElement("button", {
         onClick: async () => {
-          setCheckInMood('');
+          setCheckInMood([]);
           setCheckInNotes(null);
           setCheckInLocation(null);
           setLocationError(null);
@@ -39095,7 +39480,7 @@ const CaretakerHub = window.CaretakerHub = ({
     earlyCheckInAllowed: profile.earlyCheckInAllowed,
     onLogVisit: s => {
       if (s.action === 'check-in') {
-        setCheckInMood('');
+        setCheckInMood([]);
         setCheckInNotes(null);
         setCheckInLocation(null);
         setLocationError(null);
@@ -39117,7 +39502,7 @@ const CaretakerHub = window.CaretakerHub = ({
         }
         setCheckInSession(s);
       } else if (s.action === 'check-out') {
-        setCheckOutMood('');
+        setCheckOutMood([]);
         setCheckOutTags([]);
         setCheckOutCareFeedback('');
         setCheckOutServiceFeedback('');
@@ -39911,7 +40296,7 @@ const CaretakerHub = window.CaretakerHub = ({
       fontWeight: 600,
       marginBottom: 8
     }
-  }, 'How is ' + ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'the care recipient') + ' right now?'), React.createElement('div', {
+  }, 'How is ' + ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'the care recipient') + ' right now? (tap all that apply)'), React.createElement('div', {
     style: {
       display: 'flex',
       flexWrap: 'wrap',
@@ -39947,15 +40332,15 @@ const CaretakerHub = window.CaretakerHub = ({
     label: 'Upset'
   }].map(m => React.createElement('button', {
     key: m.key,
-    onClick: () => setCheckInMood(m.key),
+    onClick: () => setCheckInMood(prev => prev.includes(m.key) ? prev.filter(k => k !== m.key) : [...prev, m.key]),
     style: {
       padding: '8px 14px',
       borderRadius: 20,
-      border: checkInMood === m.key ? '2px solid #e8724a' : '2px solid #eee',
-      background: checkInMood === m.key ? '#fff3ed' : '#fafafa',
+      border: checkInMood.includes(m.key) ? '2px solid #e8724a' : '2px solid #eee',
+      background: checkInMood.includes(m.key) ? '#fff3ed' : '#fafafa',
       cursor: 'pointer',
       fontSize: 13,
-      fontWeight: checkInMood === m.key ? 700 : 400,
+      fontWeight: checkInMood.includes(m.key) ? 700 : 400,
       display: 'flex',
       alignItems: 'center',
       gap: 6
@@ -40022,7 +40407,7 @@ const CaretakerHub = window.CaretakerHub = ({
         const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
           method: 'POST',
           body: JSON.stringify({
-            arrivalMood: checkInMood || null,
+            arrivalMood: checkInMood.length > 0 ? checkInMood : null,
             checkInLatitude: (checkInLocation === null || checkInLocation === void 0 ? void 0 : checkInLocation.lat) || null,
             checkInLongitude: (checkInLocation === null || checkInLocation === void 0 ? void 0 : checkInLocation.lng) || null,
             briefingAcknowledged: true
@@ -40110,7 +40495,7 @@ const CaretakerHub = window.CaretakerHub = ({
       fontWeight: 600,
       marginBottom: 8
     }
-  }, "How is ", (checkOutSession.recipientName || checkOutSession.recipient_name || '').split(' ')[0] || 'the care recipient', " now?"), /*#__PURE__*/React.createElement("div", {
+  }, "How is ", (checkOutSession.recipientName || checkOutSession.recipient_name || '').split(' ')[0] || 'the care recipient', " now? (tap all that apply)"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flexWrap: 'wrap',
@@ -40146,15 +40531,15 @@ const CaretakerHub = window.CaretakerHub = ({
     label: 'Upset'
   }].map(m => /*#__PURE__*/React.createElement("button", {
     key: m.key,
-    onClick: () => setCheckOutMood(m.key),
+    onClick: () => setCheckOutMood(prev => prev.includes(m.key) ? prev.filter(k => k !== m.key) : [...prev, m.key]),
     style: {
       padding: '8px 14px',
       borderRadius: 20,
-      border: checkOutMood === m.key ? '2px solid #c62828' : '2px solid #eee',
-      background: checkOutMood === m.key ? '#ffebee' : '#fafafa',
+      border: checkOutMood.includes(m.key) ? '2px solid #c62828' : '2px solid #eee',
+      background: checkOutMood.includes(m.key) ? '#ffebee' : '#fafafa',
       cursor: 'pointer',
       fontSize: 13,
-      fontWeight: checkOutMood === m.key ? 700 : 400,
+      fontWeight: checkOutMood.includes(m.key) ? 700 : 400,
       display: 'flex',
       alignItems: 'center',
       gap: 6
@@ -40488,7 +40873,7 @@ const CaretakerHub = window.CaretakerHub = ({
           method: 'POST',
           signal: controller.signal,
           body: JSON.stringify({
-            departureMood: checkOutMood || null,
+            departureMood: checkOutMood.length > 0 ? checkOutMood : null,
             conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
             careFeedback: checkOutCareFeedback.trim() || null,
             serviceFeedback: checkOutServiceFeedback.trim() || null,
@@ -40507,21 +40892,19 @@ const CaretakerHub = window.CaretakerHub = ({
             try {
               const formData = new FormData();
               checkOutPhotos.forEach(f => formData.append('photos', f));
-              const token = window.AUTH_TOKEN;
               const __csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : window.getCsrfToken ? window.getCsrfToken() : null;
-              const __csrfH = __csrf ? {
-                'X-CSRF-Token': __csrf
-              } : {};
+              const photoHeaders = {};
+              if (__csrf) photoHeaders['X-CSRF-Token'] = __csrf;
               const photoRes = await fetch(`${API_BASE}/api/photos/visit/${checkOutData.visitLog.id}`, {
                 method: 'POST',
                 credentials: 'same-origin',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  ...__csrfH
-                },
+                headers: photoHeaders,
                 body: formData
               });
-              if (!photoRes.ok) console.warn('Photo upload failed:', photoRes.status);
+              if (!photoRes.ok) {
+                console.warn('Photo upload failed:', photoRes.status);
+                showToast('Photos could not be saved — please try again', 'error');
+              }
             } catch (photoErr) {
               console.warn('Photo upload failed:', photoErr);
               showToast('Photos could not be uploaded', 'error');
@@ -41322,9 +41705,9 @@ const FindWork = window.FindWork = () => {
           const d = await r.json();
           const p = d.profile || d.caregiver || {};
           setRates({
-            daytime: p.hourly_rate || p.hourlyRate || '',
-            nighttime: p.nighttime_rate || p.nighttimeRate || '',
-            overnight: p.overnight_rate || p.overnightRate || ''
+            daytime: p.rate_daytime || p.rateDaytime || p.hourly_rate || p.hourlyRate || '',
+            nighttime: p.rate_nighttime || p.rateNighttime || '',
+            overnight: p.rate_overnight || p.rateOvernight || ''
           });
           setMinOvernightHours(p.min_overnight_hours || 6);
           setRatesLoaded(true);
@@ -55121,6 +55504,13 @@ const AdminPanel = window.AdminPanel = ({
   }, "Tester"), /*#__PURE__*/React.createElement("th", {
     style: {
       padding: '10px 12px',
+      textAlign: 'center',
+      color: '#666',
+      fontWeight: 600
+    }
+  }, "Companion"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '10px 12px',
       textAlign: 'left',
       color: '#666',
       fontWeight: 600
@@ -55252,6 +55642,39 @@ const AdminPanel = window.AdminPanel = ({
     }, u.is_tester ? '\u2713 Yes' : 'No')), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: '10px 12px',
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: async () => {
+        try {
+          const res = await apiFetch(`/api/admin/users/${u.id}/companion-access`, {
+            method: 'PUT'
+          });
+          if (res !== null && res !== void 0 && res.ok) {
+            const data = await res.json();
+            setUsers(prev => prev.map(usr => usr.id === u.id ? {
+              ...usr,
+              companion_access: data.companion_access ? 1 : 0
+            } : usr));
+          }
+        } catch (err) {
+          console.error('Toggle companion error:', err);
+        }
+      },
+      style: {
+        padding: '3px 8px',
+        borderRadius: '12px',
+        fontSize: '11px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        border: 'none',
+        background: u.companion_access ? '#e3f2fd' : '#f5f5f5',
+        color: u.companion_access ? '#1565c0' : '#999'
+      },
+      title: u.companion_access ? 'Click to revoke companion access' : 'Click to grant companion access'
+    }, u.companion_access ? '\u2713 Yes' : 'No')), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 12px',
         color: '#888',
         fontSize: '12px'
       }
@@ -55290,12 +55713,32 @@ const AdminPanel = window.AdminPanel = ({
         fontSize: 12,
         cursor: 'pointer'
       }
-    }, "Reject")) : u.is_admin && u.role !== 'caregiver' ? /*#__PURE__*/React.createElement("span", {
+    }, "Reject")) : u.is_admin && u.role !== 'caregiver' ? /*#__PURE__*/React.createElement("div", {
       style: {
-        fontSize: '11px',
-        color: '#999'
+        display: 'flex',
+        gap: '4px',
+        justifyContent: 'center',
+        flexWrap: 'nowrap'
       }
-    }, '\u2014') : u.is_admin && u.role === 'caregiver' ? /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setAdminMsgTarget({
+          userId: u.id,
+          name: `${u.first_name} ${u.last_name}`
+        });
+        setAdminMsgText('');
+      },
+      style: {
+        padding: '4px 8px',
+        background: '#fff',
+        color: '#1b6b5a',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer'
+      },
+      title: "Message as InPlace Support"
+    }, '\u{1F4AC}')) : u.is_admin && u.role === 'caregiver' ? /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         gap: '4px',
@@ -55435,9 +55878,28 @@ const AdminPanel = window.AdminPanel = ({
       style: {
         display: 'flex',
         gap: '4px',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        flexWrap: 'nowrap'
       }
     }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setAdminMsgTarget({
+          userId: u.id,
+          name: `${u.first_name} ${u.last_name}`
+        });
+        setAdminMsgText('');
+      },
+      style: {
+        padding: '4px 8px',
+        background: '#fff',
+        color: '#1b6b5a',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        fontSize: '11px',
+        cursor: 'pointer'
+      },
+      title: "Message as InPlace Support"
+    }, '\u{1F4AC}'), /*#__PURE__*/React.createElement("button", {
       onClick: () => handleForcePasswordReset(u.id, u.email),
       disabled: resetPwLoading === u.id,
       style: {

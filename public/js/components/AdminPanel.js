@@ -1700,6 +1700,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Status</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Tester</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Companion</th>
                       <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Joined</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
                     </tr>
@@ -1760,6 +1761,23 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             color: u.is_tester ? '#1b6b5a' : '#999',
                           }} title={u.is_tester ? 'Click to remove tester access' : 'Click to grant tester access'}>
                             {u.is_tester ? '\u2713 Yes' : 'No'}
+                          </button>
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <button onClick={async () => {
+                            try {
+                              const res = await apiFetch(`/api/admin/users/${u.id}/companion-access`, { method: 'PUT' });
+                              if (res?.ok) {
+                                const data = await res.json();
+                                setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, companion_access: data.companion_access ? 1 : 0 } : usr));
+                              }
+                            } catch (err) { console.error('Toggle companion error:', err); }
+                          }} style={{
+                            padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: 'none',
+                            background: u.companion_access ? '#e3f2fd' : '#f5f5f5',
+                            color: u.companion_access ? '#1565c0' : '#999',
+                          }} title={u.companion_access ? 'Click to revoke companion access' : 'Click to grant companion access'}>
+                            {u.companion_access ? '\u2713 Yes' : 'No'}
                           </button>
                         </td>
                         <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>

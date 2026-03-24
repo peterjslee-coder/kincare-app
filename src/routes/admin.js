@@ -239,7 +239,7 @@ router.get("/users", async (req, res) => {
 
     // Build query dynamically
     let sql = `
-      SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, is_admin, is_tester, is_active, created_at, updated_at
+      SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, is_admin, is_tester, is_active, companion_access, created_at, updated_at
       FROM users WHERE 1=1
     `;
     const params = [];
@@ -1345,6 +1345,23 @@ router.put("/users/:id/tester", async (req, res) => {
   } catch (err) {
     console.error("Admin tester toggle error:", err);
     res.status(500).json({ error: "Failed to toggle tester status" });
+  }
+});
+
+// ─── PUT /api/admin/users/:id/companion-access — Toggle companion_access flag ───
+router.put("/users/:id/companion-access", async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, email, companion_access FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const newValue = user.companion_access ? 0 : 1;
+    await db.prepare("UPDATE users SET companion_access = ? WHERE id = ?").run(newValue, req.params.id);
+
+    res.json({ success: true, companion_access: !!newValue, email: user.email });
+  } catch (err) {
+    console.error("Admin companion-access toggle error:", err);
+    res.status(500).json({ error: "Failed to toggle companion access" });
   }
 });
 
