@@ -219,16 +219,19 @@ function verifyCsrf(req, res, next) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
   // Skip for admin API key auth (server-to-server, no cookie)
   if (req.headers["x-admin-api-key"]) return next();
+  // Use originalUrl for path checks — req.path is relative to mount point
+  // (e.g. mounted at /api means req.path strips the /api prefix)
+  const fullPath = req.originalUrl || req.path;
   // Skip for public auth endpoints (login, register, demo-login, etc.)
   // These are entry points that may be called with a stale auth cookie from a previous session
   const publicAuthPaths = ["/api/auth/login", "/api/auth/register", "/api/auth/demo-login",
     "/api/auth/verify-email", "/api/auth/refresh", "/api/auth/passkey-login",
     "/api/auth/passkey-login-verify", "/api/auth/logout"];
-  if (publicAuthPaths.some(p => req.path === p)) return next();
+  if (publicAuthPaths.some(p => fullPath === p || fullPath.startsWith(p + "?"))) return next();
   // Skip for webhook endpoints (server-to-server, no cookie/CSRF)
-  if (req.path === "/api/checkr/webhook" || req.path === "/api/payments/webhook") return next();
+  if (fullPath.startsWith("/api/checkr/webhook") || fullPath.startsWith("/api/payments/webhook")) return next();
   // Skip for voice companion (separate PWA, uses JWT + companion_access gate instead)
-  if (req.path.startsWith("/api/voice-companion")) return next();
+  if (fullPath.startsWith("/api/voice-companion")) return next();
   // Skip if no auth cookie present
   if (!req.cookies?.auth_token) return next();
 
