@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>inPlace Admin — Redesign Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7f6; color: #333; }
+
+  .admin-shell { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+  /* Header */
+  .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .admin-header h1 { font-size: 20px; display: flex; align-items: center; gap: 10px; }
+  .admin-badge { background: #1b6b5a; color: white; padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+
+  /* ── ACTION REQUIRED BANNER ── always visible at top */
+  .action-banner { background: linear-gradient(135deg, #fff3e0, #ffe0b2); border: 2px solid #ff9800; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .action-banner-title { font-size: 15px; font-weight: 700; color: #e65100; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .action-banner-title .count { background: #e65100; color: #fff; border-radius: 20px; padding: 2px 10px; font-size: 13px; }
+  .action-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #fff; border-radius: 10px; margin-bottom: 6px; border: 1px solid #ffe0b2; }
+  .action-item:last-child { margin-bottom: 0; }
+  .action-name { font-weight: 600; font-size: 14px; color: #333; }
+  .action-meta { font-size: 12px; color: #888; margin-top: 2px; }
+  .action-buttons { display: flex; gap: 8px; }
+  .btn-approve { padding: 6px 16px; background: #4caf50; color: #fff; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .btn-reject { padding: 6px 12px; background: #f5f5f5; color: #c62828; border: 1px solid #ddd; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; }
+
+  /* ── UNIVERSAL SEARCH ── */
+  .search-bar { position: relative; margin-bottom: 16px; }
+  .search-bar input { width: 100%; padding: 14px 16px 14px 44px; border: 2px solid #e0e0e0; border-radius: 12px; font-size: 15px; background: #fff; outline: none; transition: border-color 0.2s; }
+  .search-bar input:focus { border-color: #1b6b5a; }
+  .search-bar .search-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 18px; color: #999; }
+  .search-bar .search-hint { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #bbb; }
+
+  /* ── TAB NAV ── Grouped into sections */
+  .tab-sections { margin-bottom: 20px; }
+  .tab-group { margin-bottom: 10px; }
+  .tab-group-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 6px; padding-left: 4px; }
+  .tab-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tab-btn { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border: none; border-radius: 10px; cursor: pointer; background: #f0f0f0; color: #555; font-size: 13px; font-weight: 600; transition: all 0.15s; position: relative; }
+  .tab-btn.active { background: #1b6b5a; color: #fff; box-shadow: 0 2px 8px rgba(27,107,90,0.3); }
+  .tab-btn .tab-icon { font-size: 16px; }
+  .tab-btn .badge { position: absolute; top: -4px; right: -4px; background: #e65100; color: #fff; font-size: 10px; font-weight: 700; border-radius: 10px; padding: 1px 6px; min-width: 18px; text-align: center; }
+
+  /* ── CONTENT AREA ── */
+  .content-area { background: #fff; border-radius: 14px; padding: 20px; min-height: 300px; border: 1px solid #e8e8e8; }
+
+  /* People tab sub-navigation */
+  .sub-tabs { display: flex; gap: 4px; margin-bottom: 16px; background: #f5f5f5; border-radius: 10px; padding: 4px; }
+  .sub-tab { flex: 1; padding: 10px; text-align: center; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: #666; background: transparent; transition: all 0.15s; }
+  .sub-tab.active { background: #fff; color: #1b6b5a; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .sub-tab .sub-badge { background: #e65100; color: #fff; border-radius: 10px; padding: 1px 6px; font-size: 10px; margin-left: 4px; }
+
+  /* User cards */
+  .user-card { display: flex; align-items: center; padding: 14px; border-radius: 10px; border: 1px solid #f0f0f0; margin-bottom: 8px; transition: background 0.15s; }
+  .user-card:hover { background: #f9faf9; }
+  .user-card.needs-action { border-left: 4px solid #ff9800; background: #fffbf5; }
+  .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: #e8f5e9; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #1b6b5a; font-size: 15px; flex-shrink: 0; margin-right: 12px; }
+  .user-info { flex: 1; min-width: 0; }
+  .user-info .name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .user-info .email { font-size: 12px; color: #888; margin-top: 1px; }
+  .user-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+  .tag { padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+  .tag-family { background: #e3f2fd; color: #1565c0; }
+  .tag-caregiver { background: #e8f5e9; color: #2e7d32; }
+  .tag-pending { background: #fff3e0; color: #e65100; }
+  .tag-verified { background: #e8f5e9; color: #2e7d32; }
+  .tag-tester { background: #f3e5f5; color: #7b1fa2; }
+  .user-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .user-actions button { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #e0e0e0; background: #fff; color: #555; transition: all 0.15s; }
+  .user-actions button:hover { background: #f5f5f5; }
+  .user-actions .primary { background: #1b6b5a; color: #fff; border-color: #1b6b5a; }
+
+  /* Section headers */
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .section-title { font-size: 16px; font-weight: 700; color: #333; }
+  .section-count { font-size: 13px; color: #888; }
+
+  /* View toggle */
+  .view-toggle { display: flex; gap: 4px; }
+  .view-toggle button { padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; font-size: 12px; }
+  .view-toggle button.active { background: #1b6b5a; color: #fff; border-color: #1b6b5a; }
+
+  /* Demo interactivity */
+  .clickable { cursor: pointer; }
+  .demo-note { text-align: center; padding: 20px; color: #999; font-size: 13px; font-style: italic; }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .action-item { flex-direction: column; gap: 8px; align-items: flex-start; }
+    .action-buttons { width: 100%; }
+    .action-buttons button { flex: 1; }
+    .user-card { flex-wrap: wrap; }
+    .user-actions { width: 100%; margin-top: 8px; }
+    .user-actions button { flex: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="admin-shell" id="app"></div>
+
+<script>
+const state = {
+  activeTab: 'overview',
+  peopleSubTab: 'users',
+  searchQuery: '',
+  bannerDismissed: false,
+};
+
+const pendingApprovals = [
+  { name: 'Cathyrine Armandie', email: 'cathyrine@example.com', role: 'family', date: 'Mar 14, 2026', phone: '(540) 555-1234' },
+];
+
+const recentUsers = [
+  { name: 'Cathyrine Armandie', email: 'cathyrine@example.com', role: 'family', status: 'pending', date: 'Mar 14', initials: 'CA' },
+  { name: 'Pete Lee', email: 'peterjslee@gmail.com', role: 'family', status: 'approved', tester: true, admin: true, date: 'Jan 5', initials: 'PL' },
+  { name: 'Cary Taker', email: 'peter@yourinplace.com', role: 'caregiver', status: 'approved', tester: true, date: 'Feb 1', initials: 'CT' },
+  { name: 'Sara Huber', email: 'sara@example.com', role: 'family', status: 'approved', date: 'Feb 25', initials: 'SH' },
+  { name: 'Angela Smith', email: 'angela@example.com', role: 'family', status: 'approved', date: 'Feb 27', initials: 'AS' },
+  { name: 'Son Tester', email: 'son@example.com', role: 'family', status: 'approved', tester: true, date: 'Mar 5', initials: 'ST' },
+];
+
+const waitlistEntries = [
+  { email: 'maria.g@example.com', name: 'Maria Garcia', role: 'caregiver', source: 'Splash page', date: 'Mar 10' },
+  { email: 'john.d@example.com', name: 'John Davis', role: 'family', source: 'Referral', date: 'Mar 12' },
+];
+
+function renderTabs() {
+  const tabGroups = [
+    { label: 'Core', tabs: [
+      { id: 'overview', label: 'Overview', icon: '📊' },
+      { id: 'people', label: 'People', icon: '👥', badge: pendingApprovals.length || null },
+      { id: 'sessions', label: 'Sessions', icon: '📅' },
+    ]},
+    { label: 'Trust & Safety', tabs: [
+      { id: 'authorizations', label: 'Auth', icon: '🔒' },
+      { id: 'customerservice', label: 'Support', icon: '🛎️' },
+      { id: 'security', label: 'Security', icon: '🛡️' },
+      { id: 'blocked', label: 'Blocked', icon: '🚫' },
+    ]},
+    { label: 'Content & Config', tabs: [
+      { id: 'feedback', label: 'Feedback', icon: '💬' },
+      { id: 'help', label: 'Help/FAQ', icon: '❓' },
+      { id: 'financials', label: 'Financials', icon: '💰' },
+      { id: 'onboarding', label: 'Events', icon: '🚦' },
+      { id: 'settings', label: 'Settings', icon: '⚙️' },
+    ]},
+  ];
+
+  return tabGroups.map(g => `
+    <div class="tab-group">
+      <div class="tab-group-label">${g.label}</div>
+      <div class="tab-row">
+        ${g.tabs.map(t => `
+          <button class="tab-btn ${state.activeTab === t.id ? 'active' : ''}" onclick="setTab('${t.id}')">
+            <span class="tab-icon">${t.icon}</span>
+            ${t.label}
+            ${t.badge ? `<span class="badge">${t.badge}</span>` : ''}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderActionBanner() {
+  if (pendingApprovals.length === 0 || state.bannerDismissed) return '';
+  return `
+    <div class="action-banner">
+      <div class="action-banner-title">
+        🔔 Action Required <span class="count">${pendingApprovals.length}</span>
+      </div>
+      ${pendingApprovals.map(u => `
+        <div class="action-item">
+          <div>
+            <div class="action-name">${u.name}</div>
+            <div class="action-meta">${u.email} · ${u.role} · signed up ${u.date}</div>
+          </div>
+          <div class="action-buttons">
+            <button class="btn-approve" onclick="alert('✅ ${u.name} approved! They will be notified via push + WebSocket.')">✓ Approve</button>
+            <button class="btn-reject" onclick="alert('Account rejected and deactivated.')">Reject</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderSearch() {
+  return `
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <input type="text" placeholder="Search people by name or email..."
+        value="${state.searchQuery}"
+        oninput="state.searchQuery = this.value; if(state.activeTab !== 'people') { state.activeTab = 'people'; } render();">
+      <span class="search-hint">searches users, waitlist & invites</span>
+    </div>
+  `;
+}
+
+function renderPeopleTab() {
+  const filtered = state.searchQuery
+    ? recentUsers.filter(u => u.name.toLowerCase().includes(state.searchQuery.toLowerCase()) || u.email.toLowerCase().includes(state.searchQuery.toLowerCase()))
+    : recentUsers;
+
+  const filteredWaitlist = state.searchQuery
+    ? waitlistEntries.filter(u => (u.name || '').toLowerCase().includes(state.searchQuery.toLowerCase()) || u.email.toLowerCase().includes(state.searchQuery.toLowerCase()))
+    : waitlistEntries;
+
+  return `
+    <div class="sub-tabs">
+      <button class="sub-tab ${state.peopleSubTab === 'users' ? 'active' : ''}" onclick="state.peopleSubTab='users'; render()">
+        Users (${recentUsers.length})
+        ${pendingApprovals.length ? `<span class="sub-badge">${pendingApprovals.length} new</span>` : ''}
+      </button>
+      <button class="sub-tab ${state.peopleSubTab === 'waitlist' ? 'active' : ''}" onclick="state.peopleSubTab='waitlist'; render()">
+        Waitlist (${waitlistEntries.length})
+      </button>
+      <button class="sub-tab ${state.peopleSubTab === 'invites' ? 'active' : ''}" onclick="state.peopleSubTab='invites'; render()">
+        Invites
+      </button>
+    </div>
+
+    ${state.peopleSubTab === 'users' ? `
+      <div class="section-header">
+        <div class="section-title">All Users</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <select style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;">
+            <option>All roles</option><option>Family</option><option>Caregiver</option><option>Care Recipient</option>
+          </select>
+        </div>
+      </div>
+      ${filtered.map(u => `
+        <div class="user-card ${u.status === 'pending' ? 'needs-action' : ''}">
+          <div class="user-avatar">${u.initials}</div>
+          <div class="user-info">
+            <div class="name">
+              ${u.name}
+              ${u.admin ? '<span style="background:#1b6b5a;color:#fff;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;">ADMIN</span>' : ''}
+            </div>
+            <div class="email">${u.email} · joined ${u.date}</div>
+            <div class="user-tags">
+              <span class="tag ${u.role === 'family' ? 'tag-family' : 'tag-caregiver'}">${u.role}</span>
+              ${u.status === 'pending' ? '<span class="tag tag-pending">⏳ Pending approval</span>' : '<span class="tag tag-verified">✓ Approved</span>'}
+              ${u.tester ? '<span class="tag tag-tester">Tester</span>' : ''}
+            </div>
+          </div>
+          <div class="user-actions">
+            ${u.status === 'pending' ? `
+              <button class="primary" onclick="alert('✅ Approved!')">Approve</button>
+              <button onclick="alert('Rejected')">Reject</button>
+            ` : `
+              <button onclick="alert('User profile: ${u.name}\\n\\nFrom here you can:\\n• Toggle tester / verified\\n• Manage caregiver onboarding\\n• Force password reset\\n• View activity log\\n• Block / delete')">Manage</button>
+            `}
+          </div>
+        </div>
+      `).join('')}
+    ` : ''}
+
+    ${state.peopleSubTab === 'waitlist' ? `
+      <div class="section-header">
+        <div class="section-title">Waitlist</div>
+        <div class="section-count">${filteredWaitlist.length} entries</div>
+      </div>
+      ${filteredWaitlist.map(w => `
+        <div class="user-card">
+          <div class="user-avatar" style="background:#f3e5f5;color:#7b1fa2;">${w.name ? w.name[0] : '?'}</div>
+          <div class="user-info">
+            <div class="name">${w.name || w.email}</div>
+            <div class="email">${w.email} · ${w.source} · ${w.date}</div>
+            <div class="user-tags">
+              <span class="tag ${w.role === 'family' ? 'tag-family' : 'tag-caregiver'}">${w.role}</span>
+            </div>
+          </div>
+          <div class="user-actions">
+            <button class="primary" onclick="alert('Send platform invite to ${w.email}')">Invite</button>
+            <button onclick="alert('Removed from waitlist')">Remove</button>
+          </div>
+        </div>
+      `).join('')}
+    ` : ''}
+
+    ${state.peopleSubTab === 'invites' ? `
+      <div class="section-header">
+        <div class="section-title">Sent Invites</div>
+      </div>
+      <div class="demo-note">Invite management — same as current People tab<br>(Platform invites + Care team invites + Search & send)</div>
+    ` : ''}
+  `;
+}
+
+function renderOverview() {
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+      <div style="background:#f0faf8;border-radius:12px;padding:20px;text-align:center;">
+        <div style="font-size:28px;">👥</div>
+        <div style="font-size:28px;font-weight:700;color:#1b6b5a;">${recentUsers.length}</div>
+        <div style="font-size:12px;color:#888;">Registered Users</div>
+      </div>
+      <div style="background:#f0faf8;border-radius:12px;padding:20px;text-align:center;">
+        <div style="font-size:28px;">📋</div>
+        <div style="font-size:28px;font-weight:700;color:#1b6b5a;">${waitlistEntries.length}</div>
+        <div style="font-size:12px;color:#888;">Waitlist</div>
+      </div>
+      <div style="background:#f0faf8;border-radius:12px;padding:20px;text-align:center;">
+        <div style="font-size:28px;">📅</div>
+        <div style="font-size:28px;font-weight:700;color:#1b6b5a;">12</div>
+        <div style="font-size:12px;color:#888;">Sessions</div>
+      </div>
+      <div style="background:#f0faf8;border-radius:12px;padding:20px;text-align:center;">
+        <div style="font-size:28px;">🤝</div>
+        <div style="font-size:28px;font-weight:700;color:#1b6b5a;">3</div>
+        <div style="font-size:12px;color:#888;">Caregivers</div>
+      </div>
+    </div>
+    <div class="demo-note">Charts, trends, and 30-day analytics remain here — same as current Overview</div>
+  `;
+}
+
+function renderContent() {
+  if (state.activeTab === 'overview') return renderOverview();
+  if (state.activeTab === 'people') return renderPeopleTab();
+  return `<div class="demo-note">[ ${state.activeTab.charAt(0).toUpperCase() + state.activeTab.slice(1)} tab — unchanged from current ]</div>`;
+}
+
+function render() {
+  document.getElementById('app').innerHTML = `
+    <div class="admin-header">
+      <div>
+        <h1><span class="admin-badge">ADMIN</span> Platform Dashboard</h1>
+        <div style="color:#666;font-size:13px;margin-top:2px;">Manage users, approvals, and platform operations</div>
+      </div>
+      <button style="padding:8px 16px;background:#fff;color:#1b6b5a;border:2px solid #1b6b5a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">⚙️ My Account</button>
+    </div>
+
+    ${renderActionBanner()}
+    ${renderSearch()}
+
+    <div class="tab-sections">
+      ${renderTabs()}
+    </div>
+
+    <div class="content-area">
+      ${renderContent()}
+    </div>
+
+    <div style="text-align:center;padding:24px;color:#bbb;font-size:12px;">
+      ↑ Interactive mockup — click tabs, search, and buttons to explore the flow
+    </div>
+  `;
+}
+
+function setTab(id) {
+  state.activeTab = id;
+  if (id === 'people' && !state.peopleSubTab) state.peopleSubTab = 'users';
+  render();
+}
+
+render();
+</script>
+</body>
+</html>

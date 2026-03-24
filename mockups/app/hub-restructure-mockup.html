@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caregiver Hub – Chronological Restructure Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 16px; max-width: 420px; margin: 0 auto; }
+  .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; margin-top: 18px; }
+  .card { border-radius: 12px; padding: 16px 18px; margin-bottom: 10px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; color: #fff; }
+  .divider { height: 1px; background: #e5e7eb; margin: 20px 0 6px; }
+  .order-num { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: #e5e7eb; color: #666; font-size: 11px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 6px; }
+  .arrow { text-align: center; color: #999; font-size: 18px; margin: 2px 0; }
+</style>
+</head>
+<body>
+
+<div style="text-align: center; margin-bottom: 20px;">
+  <div style="font-size: 18px; font-weight: 700; color: #333;">Caregiver Hub — New Order</div>
+  <div style="font-size: 12px; color: #888; margin-top: 4px;">v1.42.5 Chronological Restructure</div>
+</div>
+
+<!-- 1. Header -->
+<div class="card" style="border-left: 4px solid #1b6b5a;">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <div style="font-size: 18px; font-weight: 700; color: #333;">Welcome, Cary!</div>
+      <div style="font-size: 13px; color: #666;">Sacramento, CA 95814</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="padding: 4px 12px; background: #e8f5e9; color: #2e7d32; border-radius: 20px; font-size: 12px; font-weight: 600;">Available</div>
+      <div style="font-size: 11px; color: #999; margin-top: 4px;">⭐ 4.8 · 12 reviews</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 2. EXCLUSIVE "Just for You" — NEW top-level section -->
+<div class="section-label" style="color: #7c3aed;"><span class="order-num" style="background: #7c3aed; color: #fff;">1</span>✨ Just for You</div>
+<div class="card" style="border: 2px solid #7c3aed; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); box-shadow: 0 2px 8px rgba(124,58,237,0.15);">
+  <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
+    <span class="badge" style="background: #7c3aed; padding: 3px 10px; font-size: 12px;">✨ JUST FOR YOU · 47 min left</span>
+  </div>
+  <div style="font-size: 16px; font-weight: 700; color: #333;">Companion Care</div>
+  <div style="font-size: 14px; color: #555; margin-top: 3px;">
+    Today at 2:00 PM • 3hr • <span style="font-weight: 800; color: #1b6b5a; font-size: 22px;">$90</span>
+  </div>
+  <div style="font-size: 12px; color: #888; margin-top: 2px;">📍 Elk Grove</div>
+  <div style="font-size: 12px; color: #888; margin-top: 1px;">Requested by Angela Lee</div>
+  <div style="margin-top: 10px; text-align: right;">
+    <button style="padding: 12px 24px; background: #7c3aed; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(124,58,237,0.3);">Accept Job</button>
+  </div>
+</div>
+<div style="font-size: 11px; color: #999; text-align: center; margin-bottom: 4px; font-style: italic;">↑ Exclusive offers trump chronological order (about to expire)</div>
+
+<div class="arrow">↓</div>
+
+<!-- 3. My Proposals -->
+<div class="section-label" style="color: #7b61ff;"><span class="order-num" style="background: #7b61ff; color: #fff;">2</span>📨 My Proposals (1 waiting)</div>
+<div class="card" style="border: 2px solid #7b61ff; background: #f5f0ff;">
+  <div style="font-weight: 600; font-size: 14px; color: #333; margin-bottom: 4px;">
+    Tony Nav <span style="font-weight: 400; font-size: 12px; color: #888;">(Angela Lee)</span>
+  </div>
+  <div style="display: flex; gap: 16px; margin-bottom: 4px;">
+    <div>
+      <div style="font-size: 11px; color: #999; font-weight: 600; text-transform: uppercase;">Original</div>
+      <div style="font-size: 13px; color: #888; text-decoration: line-through;">Thu 3/19 at 10:00 AM</div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #7b61ff; font-weight: 600; text-transform: uppercase;">You Proposed</div>
+      <div style="font-size: 14px; color: #7b61ff; font-weight: 600;">Thu 3/19 at 2:00 PM</div>
+    </div>
+  </div>
+  <div style="font-size: 12px; color: #7b61ff; font-weight: 600; margin-top: 6px;">⏳ Waiting for family to respond</div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 4. UP NEXT (<24hr) -->
+<div class="section-label" style="color: #e8724a;"><span class="order-num" style="background: #e8724a; color: #fff;">3</span>Up Next</div>
+<div class="card" style="border: 2px solid #e8724a;">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <div style="font-size: 11px; font-weight: 600; color: #e8724a;">IN 3 HOURS</div>
+      <div style="font-size: 15px; font-weight: 600; color: #333;">Betty Smith</div>
+      <div style="font-size: 13px; color: #666; margin-top: 2px;">Today at 11:00 AM • 2hr • Personal Care</div>
+      <div style="font-size: 12px; color: #888; margin-top: 2px;">📍 123 Oak Ave, Sacramento</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 20px; font-weight: 800; color: #1b6b5a;">$65.00</div>
+      <span style="padding: 5px 12px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #e8f5e9; color: #2e7d32;">Confirmed</span>
+    </div>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 5. Scheduled (>24hr) — NOW BEFORE Find Work -->
+<div class="section-label" style="color: #999;"><span class="order-num" style="background: #1b6b5a; color: #fff;">4</span>Scheduled</div>
+<div class="card" style="border: 2px solid #1b6b5a;">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <div style="font-size: 11px; font-weight: 600; color: #888;">in 3 days</div>
+      <div style="font-size: 15px; font-weight: 600; color: #333;">Margaret Jones</div>
+      <div style="font-size: 13px; color: #666; margin-top: 2px;">Tue Mar 17 at 9:00 AM • 4hr • Companion Care</div>
+      <div style="font-size: 12px; color: #888; margin-top: 2px;">📍 Elk Grove</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 20px; font-weight: 800; color: #1b6b5a;">$120.00</div>
+      <span style="padding: 5px 12px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #e8f5e9; color: #2e7d32;">Confirmed</span>
+    </div>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 6. Find Work — NOW AFTER Scheduled -->
+<div style="border-radius: 14px; overflow: hidden; margin-bottom: 10px; border: 1px solid #d4edda; background: #fff;">
+  <div style="background: linear-gradient(135deg, #1b6b5a 0%, #24897a 100%); color: #fff; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;">
+    <div>
+      <div style="font-weight: 700; font-size: 17px;"><span class="order-num" style="background: rgba(255,255,255,0.3); color: #fff;">5</span>🔍 Find Work</div>
+      <div style="font-size: 12px; opacity: 0.9; margin-top: 2px;">4 open jobs near you</div>
+    </div>
+    <span style="font-size: 22px; opacity: 0.7;">→</span>
+  </div>
+  <div style="padding: 4px 0;">
+    <div style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+          <span class="badge" style="background: #1b6b5a;">GREAT MATCH</span>
+          <span style="background: #c8e6c9; color: #2e7d32; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">✓ No Conflicts</span>
+        </div>
+        <div style="font-size: 15px; font-weight: 600; color: #333;">Personal Care</div>
+        <div style="font-size: 13px; color: #666;">Wed Mar 18 at 10:00 AM • 3hr • <span style="font-weight: 800; color: #1b6b5a; font-size: 18px;">$90</span></div>
+      </div>
+      <button style="padding: 10px 20px; background: #e8724a; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer;">Accept Job</button>
+    </div>
+    <div style="padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+          <span class="badge" style="background: #e8724a;">BONUS PAY</span>
+          <span style="background: #c8e6c9; color: #2e7d32; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">✓ No Conflicts</span>
+        </div>
+        <div style="font-size: 15px; font-weight: 600; color: #333;">Companion Care</div>
+        <div style="font-size: 13px; color: #666;">Thu Mar 19 at 1:00 PM • 2hr • <span style="font-weight: 800; color: #1b6b5a; font-size: 18px;">$75</span></div>
+      </div>
+      <button style="padding: 10px 20px; background: #e8724a; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer;">Accept Job</button>
+    </div>
+  </div>
+  <div style="text-align: center; padding: 10px; border-top: 1px solid #f0f0f0;">
+    <span style="font-size: 13px; color: #1b6b5a; font-weight: 600; cursor: pointer;">View all jobs, map & availability →</span>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 7. Completed -->
+<div class="section-label" style="color: #999;"><span class="order-num" style="background: #999; color: #fff;">6</span>Completed</div>
+<div style="padding: 14px 18px; border-radius: 12px; margin-bottom: 8px; background: #fafafa; border: 1px solid #e5e7eb;">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <div style="font-size: 14px; font-weight: 600; color: #333;">Ruth Williams</div>
+      <div style="font-size: 12px; color: #888;">Yesterday at 2:00 PM • 3hr • Companion Care</div>
+    </div>
+    <div style="text-align: right;">
+      <span style="padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #e8f5e9; color: #2e7d32;">✓ Done</span>
+      <div style="font-size: 22px; font-weight: 800; color: #1b6b5a; background: #e8f5e9; padding: 4px 10px; border-radius: 8px; margin-top: 4px;">$97.50</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 8. First Steps -->
+<div class="section-label" style="color: #999;"><span class="order-num" style="background: #b45309; color: #fff;">7</span>First Steps (if onboarding)</div>
+
+<div style="margin-top: 30px; padding: 16px; background: #fff; border-radius: 12px; border: 2px dashed #e5e7eb;">
+  <div style="font-size: 14px; font-weight: 700; color: #333; margin-bottom: 10px;">Section Order Summary:</div>
+  <div style="font-size: 13px; color: #555; line-height: 2;">
+    <span style="color: #7c3aed; font-weight: 700;">①</span> <strong>Just for You</strong> — exclusive offers with countdown (purple)<br>
+    <span style="color: #7b61ff; font-weight: 700;">②</span> <strong>My Proposals</strong> — pending counter-proposals (purple)<br>
+    <span style="color: #e8724a; font-weight: 700;">③</span> <strong>Up Next</strong> — sessions &lt;24hr + in-progress (orange/green)<br>
+    <span style="color: #1b6b5a; font-weight: 700;">④</span> <strong>Scheduled</strong> — sessions &gt;24hr away (green) <span style="background: #fff3e0; color: #e65100; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 700;">MOVED UP</span><br>
+    <span style="color: #1b6b5a; font-weight: 700;">⑤</span> <strong>Find Work</strong> — open jobs, no exclusive offers (green) <span style="background: #fff3e0; color: #e65100; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 700;">MOVED DOWN</span><br>
+    <span style="color: #999; font-weight: 700;">⑥</span> <strong>Completed</strong> — recent sessions (gray)<br>
+    <span style="color: #b45309; font-weight: 700;">⑦</span> <strong>First Steps</strong> — onboarding (if applicable)
+  </div>
+  <div style="margin-top: 12px; padding: 10px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #1b6b5a;">
+    <div style="font-size: 12px; color: #333; line-height: 1.5;">
+      <strong>Key changes:</strong><br>
+      • Exclusive "Just for You" offers pulled out of Find Work → own purple section at top<br>
+      • Scheduled sessions moved ABOVE Find Work (chronological priority)<br>
+      • No duplicate tiles — proposals replace session cards, accepted proposals revert to normal<br>
+      • Find Work only shows regular open jobs (exclusive offers removed)
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

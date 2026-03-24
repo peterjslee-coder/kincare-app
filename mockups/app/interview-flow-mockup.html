@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>inPlace — Interview Flow Mockup v3</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #1a1a2e; }
+  .screen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 32px; padding: 24px; max-width: 1600px; margin: 0 auto; }
+  .screen-wrapper { background: #fff; border-radius: 16px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); overflow: hidden; }
+  .screen-label { background: #1a1a2e; color: #fff; padding: 12px 20px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .screen-label .flow-tag { display: inline-block; background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 10px; font-size: 10px; margin-left: 8px; vertical-align: middle; }
+  .phone-frame { max-width: 390px; margin: 0 auto; padding: 20px 16px; min-height: 500px; }
+  .card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .section-header { font-size: 12px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .btn { display: inline-block; padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; }
+  .btn-green { background: #1b6b5a; color: #fff; }
+  .btn-outline { background: #fff; color: #1b6b5a; border: 2px solid #1b6b5a; }
+  .btn-outline-purple { background: #fff; color: #7b1fa2; border: 2px solid #9c27b0; }
+  .btn-purple { background: #7b1fa2; color: #fff; }
+  .btn-sm { padding: 6px 16px; font-size: 12px; }
+  .btn-full { display: block; width: 100%; }
+  .btn-gray { background: #f0f0f0; color: #666; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 700; }
+  .badge-green { background: #e8f5e9; color: #2e7d32; }
+  .badge-orange { background: #fff3e0; color: #e65100; }
+  .badge-purple { background: #f3e5f5; color: #7b1fa2; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #f8f8f8; border-radius: 10px; margin-bottom: 10px; }
+  .toggle-row.active { background: #f3e5f5; border: 2px solid #ce93d8; }
+  .toggle { width: 44px; height: 24px; border-radius: 12px; background: #ccc; position: relative; flex-shrink: 0; }
+  .toggle.on { background: #9c27b0; }
+  .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #fff; top: 2px; left: 2px; }
+  .toggle.on::after { left: 22px; }
+  .pill { padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 2px solid #e0e0e0; background: #fff; color: #666; }
+  .pill.selected { border-color: #9c27b0; background: #f3e5f5; color: #7b1fa2; }
+  .chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.4; margin-bottom: 8px; }
+  .chat-system { max-width: 90%; margin: 0 auto 12px; padding: 12px 16px; background: #f3e5f5; border: 1px solid #ce93d8; border-radius: 12px; text-align: center; font-size: 12px; color: #7b1fa2; line-height: 1.4; }
+  .chat-left { background: #f0f0f0; color: #333; border-bottom-left-radius: 4px; margin-right: auto; }
+  .chat-right { background: #1b6b5a; color: #fff; border-bottom-right-radius: 4px; margin-left: auto; }
+  .chat-sender { font-size: 10px; font-weight: 600; color: #999; margin-bottom: 3px; }
+  .call-screen { background: linear-gradient(180deg, #1a1a2e 0%, #2d2d5e 100%); border-radius: 12px; padding: 32px 20px; text-align: center; color: #fff; }
+  .call-avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #1b6b5a, #2e9e85); margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #fff; }
+  .call-timer { font-size: 32px; font-weight: 200; letter-spacing: 2px; margin: 12px 0; font-variant-numeric: tabular-nums; }
+  .call-actions { display: flex; justify-content: center; gap: 24px; margin-top: 20px; }
+  .call-btn { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; border: none; cursor: pointer; }
+  .call-btn-red { background: #c62828; color: #fff; }
+  .call-btn-mute { background: rgba(255,255,255,0.15); color: #fff; }
+  .divider { height: 1px; background: #e8e8e8; margin: 12px 0; }
+  .header-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .page-title { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+  .subtitle { font-size: 12px; color: #888; margin-top: 2px; }
+  .notification-card { display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: #f3e5f5; border: 1px solid #ce93d8; border-radius: 12px; margin-bottom: 14px; }
+  .notification-icon { width: 36px; height: 36px; border-radius: 50%; background: #9c27b0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .master-title { text-align: center; padding: 32px 24px 8px; max-width: 1600px; margin: 0 auto; }
+  .master-title h1 { font-size: 28px; font-weight: 700; color: #1b6b5a; }
+  .master-title p { font-size: 14px; color: #888; margin-top: 6px; }
+  .flow-divider { grid-column: 1 / -1; padding: 20px 0 4px; border-top: 2px solid #e0e0e0; margin-top: 8px; }
+  .flow-divider:first-of-type { border-top: none; }
+  .flow-divider h2 { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+  .flow-divider p { font-size: 13px; color: #888; margin-top: 4px; }
+  .interview-required-banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: linear-gradient(135deg, #f3e5f5, #ede7f6); border: 1px solid #ce93d8; border-radius: 10px; margin-bottom: 12px; }
+  .cancel-policy { display: flex; align-items: flex-start; gap: 6px; padding: 8px 12px; background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; font-size: 11px; color: #f57f17; margin-top: 10px; line-height: 1.4; }
+  .reminder-card { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fff3e0; border: 1px solid #ffb74d; border-radius: 10px; margin-bottom: 10px; }
+  .state-arrow { text-align: center; font-size: 11px; color: #999; margin: 8px 0 12px; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+  .notes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .notes-grid h3 { font-size: 14px; font-weight: 700; color: #1b6b5a; margin-bottom: 8px; }
+  .notes-grid .note-body { font-size: 13px; color: #555; line-height: 1.6; }
+
+  /* Care history card styles */
+  .care-history {
+    margin-top: 12px;
+    padding: 14px;
+    background: #f0faf7;
+    border: 1px solid #a5d6a7;
+    border-radius: 12px;
+  }
+  .care-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+  }
+  .care-history-header .left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .visit-card {
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    margin-top: 8px;
+    cursor: pointer;
+  }
+  .visit-card:hover {
+    border-color: #1b6b5a;
+  }
+  .mood-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 3px;
+  }
+  .mood-great { background: #4caf50; }
+  .mood-good { background: #8bc34a; }
+  .mood-ok { background: #ffc107; }
+  .mood-low { background: #ff9800; }
+</style>
+</head>
+<body>
+
+<div class="master-title">
+  <h1>inPlace — Interview Flow v3</h1>
+  <p>Care history + repeat caregiver nudge on both sides &middot; Expandable visit notes</p>
+</div>
+
+<div class="screen-grid">
+
+  <!-- ═══ FLOW A ═══ -->
+  <div class="flow-divider">
+    <h2>Flow A — Family Requests Interview During Care Request</h2>
+    <p>Peter is booking care for Betty. The nudge reminds him Cary has history with Betty — interview may not be needed.</p>
+  </div>
+
+  <!-- Screen 1: Peter's Request Care with care history nudge (PRIMARY) -->
+  <div class="screen-wrapper">
+    <div class="screen-label">1. Request Care — Care History Nudge <span class="flow-tag">Peter's View</span></div>
+    <div class="phone-frame">
+      <div class="page-title">Request Care for Betty</div>
+      <div class="subtitle" style="margin-bottom: 16px;">Companionship &middot; Tue, Mar 17 &middot; 10:00 AM &middot; 3hr</div>
+
+      <div class="card" style="border-color: #e0e0e0;">
+        <div style="font-size: 13px; font-weight: 600; color: #555; margin-bottom: 8px;">Service Details</div>
+        <div style="font-size: 12px; color: #888; line-height: 1.6;">
+          <div><strong>Type:</strong> Companionship</div>
+          <div><strong>Date:</strong> Tuesday, March 17, 2026</div>
+          <div><strong>Time:</strong> 10:00 AM – 1:00 PM</div>
+          <div><strong>Budget:</strong> Up to $26/hr</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- INTERVIEW TOGGLE -->
+      <div class="toggle-row active">
+        <div>
+          <div style="font-weight: 600; font-size: 14px; color: #7b1fa2;">🎥 Request an Interview</div>
+          <div style="font-size: 11px; color: #999; margin-top: 2px;">Caregiver must agree before accepting this job</div>
+        </div>
+        <div class="toggle on"></div>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 10px; padding-left: 4px;">
+        <div class="pill">🔊 Audio Only</div>
+        <div class="pill selected">🎥 Video Call</div>
+      </div>
+
+      <!-- ★ PRIMARY NUDGE — Care history with expandable notes ★ -->
+      <div class="care-history">
+        <div class="care-history-header">
+          <div class="left">
+            <span style="font-size: 18px;">🔄</span>
+            <div>
+              <div style="font-weight: 700; font-size: 13px; color: #1b6b5a;">Cary has cared for Betty 4 times</div>
+              <div style="font-size: 11px; color: #888; margin-top: 1px;">1 previous interview &middot; Tap to review visit notes</div>
+            </div>
+          </div>
+          <span style="font-size: 14px; color: #1b6b5a;">▼</span>
+        </div>
+
+        <!-- Expanded: last 5 visit cards -->
+        <div style="margin-top: 10px; border-top: 1px solid #c8e6c9; padding-top: 10px;">
+          <div class="visit-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600; font-size: 12px; color: #333;">Thu, Mar 13 &middot; Companionship &middot; 3hr</div>
+                <div style="font-size: 11px; color: #888; margin-top: 2px;">
+                  <span class="mood-dot mood-good"></span> Arrived: Good
+                  &nbsp;&rarr;&nbsp;
+                  <span class="mood-dot mood-great"></span> Left: Great
+                </div>
+              </div>
+              <span style="font-size: 14px; font-weight: 700; color: #1b6b5a;">$78</span>
+            </div>
+            <div style="font-size: 11px; color: #555; margin-top: 6px; padding: 6px 8px; background: #f8f8f8; border-radius: 6px; font-style: italic; line-height: 1.4;">
+              "Betty was in great spirits. We played two rounds of dominoes and watched Wheel of Fortune. She asked about her grandson's baseball game."
+            </div>
+          </div>
+
+          <div class="visit-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600; font-size: 12px; color: #333;">Tue, Mar 10 &middot; Companionship &middot; 4hr</div>
+                <div style="font-size: 11px; color: #888; margin-top: 2px;">
+                  <span class="mood-dot mood-ok"></span> Arrived: OK
+                  &nbsp;&rarr;&nbsp;
+                  <span class="mood-dot mood-good"></span> Left: Good
+                </div>
+              </div>
+              <span style="font-size: 14px; font-weight: 700; color: #1b6b5a;">$105</span>
+            </div>
+            <div style="font-size: 11px; color: #555; margin-top: 6px; padding: 6px 8px; background: #f8f8f8; border-radius: 6px; font-style: italic; line-height: 1.4;">
+              "Betty was a bit tired at first but perked up after lunch. We did a short walk around the block."
+            </div>
+          </div>
+
+          <div class="visit-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600; font-size: 12px; color: #333;">Sat, Mar 8 &middot; Housekeeping &middot; 2hr</div>
+                <div style="font-size: 11px; color: #888; margin-top: 2px;">
+                  <span class="mood-dot mood-good"></span> Arrived: Good
+                  &nbsp;&rarr;&nbsp;
+                  <span class="mood-dot mood-good"></span> Left: Good
+                </div>
+              </div>
+              <span style="font-size: 14px; font-weight: 700; color: #1b6b5a;">$52</span>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin-top: 8px;">
+            <span style="font-size: 11px; color: #1b6b5a; font-weight: 600; cursor: pointer; text-decoration: underline;">View all 4 visits →</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cancel-policy">
+        <span style="flex-shrink: 0;">⚠️</span>
+        <span>Either party can cancel up to <strong>24 hours</strong> before if the interview hasn't happened.</span>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <button class="btn btn-green btn-full">Send Care Request</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 2: Cary sees request with interview + her own repeat count -->
+  <div class="screen-wrapper">
+    <div class="screen-label">2. Care Request Card <span class="flow-tag">Cary's View</span></div>
+    <div class="phone-frame">
+      <div class="section-header">🔍 Find Work</div>
+
+      <div class="card" style="border: 2px solid #ce93d8;">
+        <div class="interview-required-banner">
+          <span style="font-size: 20px;">🎥</span>
+          <div>
+            <div style="font-weight: 700; font-size: 13px; color: #7b1fa2;">Interview Required</div>
+            <div style="font-size: 11px; color: #999;">Family requests a video call before this session</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap;">
+          <span class="badge badge-green">GREAT MATCH</span>
+          <span class="badge badge-purple">INTERVIEW</span>
+          <span style="font-size: 12px; color: #888;">1.4 mi</span>
+          <span style="font-size: 12px; font-weight: 600; color: #1b6b5a;">$26/hr</span>
+        </div>
+        <div style="font-weight: 700; font-size: 15px;">Companionship</div>
+        <div style="font-size: 12px; color: #666; margin-top: 2px;">
+          Tue, Mar 17 at 10:00 AM &middot; 3hr &middot; <strong style="font-size: 14px;">$78</strong>
+        </div>
+        <div style="font-size: 12px; color: #888; margin-top: 2px;">📍 Fairlawn</div>
+        <div style="font-size: 11px; color: #555; margin-top: 4px;">Requested by Peter Lee</div>
+
+        <!-- Cary's repeat caregiver nudge with expandable notes -->
+        <div style="margin-top: 10px; padding: 8px 12px; background: #f0faf7; border: 1px solid #a5d6a7; border-radius: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span>🔄</span>
+              <span style="font-size: 12px; font-weight: 600; color: #1b6b5a;">You've cared for Betty 4 times</span>
+            </div>
+            <span style="font-size: 11px; color: #1b6b5a; cursor: pointer;">Review ▼</span>
+          </div>
+          <!-- Collapsed by default, expandable to show last visits -->
+          <div style="margin-top: 8px; border-top: 1px solid #c8e6c9; padding-top: 6px;">
+            <div style="font-size: 11px; color: #666; line-height: 1.6;">
+              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+                <span>Mar 13 &middot; Companionship &middot; 3hr</span>
+                <span><span class="mood-dot mood-good"></span>→<span class="mood-dot mood-great"></span></span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+                <span>Mar 10 &middot; Companionship &middot; 4hr</span>
+                <span><span class="mood-dot mood-ok"></span>→<span class="mood-dot mood-good"></span></span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+                <span>Mar 8 &middot; Housekeeping &middot; 2hr</span>
+                <span><span class="mood-dot mood-good"></span>→<span class="mood-dot mood-good"></span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cancel-policy">
+          <span style="flex-shrink: 0;">⚠️</span>
+          <span>Either party can cancel up to <strong>24 hrs</strong> before if the interview doesn't happen.</span>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 14px;">
+          <button class="btn btn-purple" style="flex: 1;">Accept &amp; Interview</button>
+          <button class="btn btn-gray btn-sm">Decline</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 3: Chat auto-opens -->
+  <div class="screen-wrapper">
+    <div class="screen-label">3. Chat — Interview Coordination <span class="flow-tag">Both Sides</span></div>
+    <div class="phone-frame">
+      <div class="header-bar">
+        <div>
+          <div class="page-title" style="font-size: 16px;">💬 Peter Lee</div>
+          <div class="subtitle">Betty's care team</div>
+        </div>
+        <span class="badge badge-purple">🎥 Interview Pending</span>
+      </div>
+
+      <div class="chat-system">
+        <div style="font-weight: 700; margin-bottom: 4px;">🎥 Interview Connected</div>
+        This chat was created to check in with the care team before <strong>Betty Lee</strong>'s <strong>Companionship</strong> appointment on <strong>Tue, Mar 17, 2026</strong>.
+        <div style="margin-top: 8px; font-size: 11px; color: #9c27b0;">Video calls are limited to 5 minutes &middot; Coordinate a time below</div>
+      </div>
+
+      <div class="chat-sender">Peter</div>
+      <div class="chat-bubble chat-left">Hi Cary! Thanks for accepting. I'd love to chat briefly about Betty's routine. When works for you?</div>
+      <div class="chat-sender" style="text-align: right;">Cary</div>
+      <div class="chat-bubble chat-right">Hi Peter! I'm free this evening after 6, or tomorrow morning before 9. Either work?</div>
+      <div class="chat-sender">Peter</div>
+      <div class="chat-bubble chat-left">Tonight at 7 would be great!</div>
+      <div class="chat-sender" style="text-align: right;">Cary</div>
+      <div class="chat-bubble chat-right">Perfect, talk then! 👋</div>
+
+      <div style="margin-top: 16px; display: flex; gap: 8px;">
+        <button class="btn btn-purple btn-full" style="display: flex; align-items: center; justify-content: center; gap: 8px;">🎥 Start Video Call</button>
+      </div>
+      <div style="text-align: center; margin-top: 6px;">
+        <button class="btn btn-outline-purple btn-sm" style="border-width: 1px;">🔊 Audio Only</button>
+      </div>
+      <div style="text-align: center; margin-top: 12px;">
+        <span style="font-size: 11px; color: #999; cursor: pointer; text-decoration: underline;">Cancel interview</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 4: Video call -->
+  <div class="screen-wrapper">
+    <div class="screen-label">4. Video Call — 5 Min Cap <span class="flow-tag">In-Call View</span></div>
+    <div class="phone-frame" style="padding: 16px;">
+      <div class="call-screen">
+        <div style="font-size: 11px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Interview Call</div>
+        <div class="call-avatar">PL</div>
+        <div style="font-size: 18px; font-weight: 600;">Peter Lee</div>
+        <div style="font-size: 12px; color: rgba(255,255,255,0.6);">Betty's family &middot; Companionship &middot; Mar 17</div>
+        <div class="call-timer">3:42</div>
+        <div style="font-size: 11px; color: rgba(255,255,255,0.4);">of 5:00 max</div>
+        <div style="margin: 12px auto; max-width: 200px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden;">
+          <div style="width: 74%; height: 100%; background: linear-gradient(90deg, #1b6b5a, #ffb74d); border-radius: 2px;"></div>
+        </div>
+        <div class="call-actions">
+          <button class="call-btn call-btn-mute">🔇</button>
+          <button class="call-btn call-btn-red">📞</button>
+          <button class="call-btn call-btn-mute">🎥</button>
+        </div>
+      </div>
+      <div style="margin-top: 16px;">
+        <div style="font-size: 11px; color: #999; text-align: center; margin-bottom: 8px;">At 4:30, both see:</div>
+        <div style="background: #fff3e0; border: 1px solid #ffb74d; border-radius: 10px; padding: 10px 14px; text-align: center;">
+          <div style="font-size: 13px; font-weight: 600; color: #e65100;">⏱ 30 seconds remaining</div>
+          <div style="font-size: 11px; color: #888; margin-top: 2px;">Video will end automatically at 5:00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ FLOW B ═══ -->
+  <div class="flow-divider">
+    <h2>Flow B — Caregiver Requests Interview After Accepting</h2>
+    <p>Cary accepted a job, then wants to meet Peter. If Peter declines, session stays confirmed, no interview.</p>
+  </div>
+
+  <!-- Screen 5: Cary requests interview -->
+  <div class="screen-wrapper">
+    <div class="screen-label">5. Confirmed Session — Request Interview <span class="flow-tag">Cary's View</span></div>
+    <div class="phone-frame">
+      <div class="section-header">📋 Up Next</div>
+
+      <div class="card" style="border-left: 4px solid #42a5f5;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <div style="font-weight: 700; font-size: 15px;">Betty Lee</div>
+            <div style="font-size: 12px; color: #666; margin-top: 2px;">Wed, Mar 18 at 2:00 PM &middot; 2hr &middot; Housekeeping</div>
+            <div style="font-size: 12px; color: #888; margin-top: 2px;">📍 7420 Gate 10 Road, Fairlawn</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 18px; font-weight: 700; color: #1b6b5a;">$52</div>
+            <span class="badge badge-green">Confirmed</span>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn btn-outline-purple btn-sm" style="display: flex; align-items: center; gap: 4px;">🎥 Request Interview</button>
+          <button class="btn btn-outline btn-sm">View Care Profile</button>
+        </div>
+      </div>
+
+      <div class="state-arrow">▼ After tapping "Request Interview" ▼</div>
+
+      <div class="card" style="border-left: 4px solid #9c27b0;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <div style="font-weight: 700; font-size: 15px;">Betty Lee</div>
+            <div style="font-size: 12px; color: #666; margin-top: 2px;">Wed, Mar 18 at 2:00 PM &middot; 2hr &middot; Housekeeping</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 18px; font-weight: 700; color: #1b6b5a;">$52</div>
+            <span class="badge badge-green">Confirmed</span>
+          </div>
+        </div>
+        <div style="margin-top: 10px; padding: 8px 12px; background: #f3e5f5; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">🎥</span>
+          <div style="flex: 1;">
+            <div style="font-size: 12px; font-weight: 600; color: #7b1fa2;">Interview Requested</div>
+            <div style="font-size: 11px; color: #999;">Waiting for Peter to accept</div>
+          </div>
+          <span style="font-size: 11px; color: #999; cursor: pointer; text-decoration: underline;">Cancel</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 6: Peter sees request -->
+  <div class="screen-wrapper">
+    <div class="screen-label">6. Interview Request Notification <span class="flow-tag">Peter's View</span></div>
+    <div class="phone-frame">
+      <div class="page-title" style="margin-bottom: 4px;">Betty's Care</div>
+      <div class="subtitle" style="margin-bottom: 16px;">Dashboard</div>
+
+      <div class="notification-card">
+        <div class="notification-icon">🎥</div>
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 14px; color: #7b1fa2;">Interview Request</div>
+          <div style="font-size: 12px; color: #555; margin-top: 2px; line-height: 1.4;">
+            <strong>Cary C.</strong> would like a video interview before Betty's <strong>Housekeeping</strong> on <strong>Wed, Mar 18</strong>.
+          </div>
+
+          <!-- Care history nudge right here in the notification -->
+          <div style="margin-top: 8px; padding: 6px 10px; background: #f0faf7; border: 1px solid #a5d6a7; border-radius: 6px; font-size: 11px; color: #1b6b5a; display: flex; align-items: center; gap: 6px;">
+            <span>🔄</span>
+            <span><strong>Cary has cared for Betty 4 times</strong> &middot; <span style="text-decoration: underline; cursor: pointer;">Review notes</span></span>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button class="btn btn-purple btn-sm">Accept Interview</button>
+            <button class="btn btn-gray btn-sm">Decline</button>
+          </div>
+          <div style="font-size: 10px; color: #999; margin-top: 6px;">Declining won't cancel the session — just skips the interview.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ REMINDERS ═══ -->
+  <div class="flow-divider">
+    <h2>Reminders &amp; Cancellation</h2>
+    <p>Gentle nudges. Either party can cancel up to 24 hours before if the interview hasn't happened.</p>
+  </div>
+
+  <!-- Screen 7: Reminders -->
+  <div class="screen-wrapper">
+    <div class="screen-label">7. Gentle Reminders <span class="flow-tag">Push + In-App</span></div>
+    <div class="phone-frame">
+      <div style="font-size: 13px; font-weight: 600; color: #555; margin-bottom: 12px;">Reminder timeline:</div>
+
+      <div class="reminder-card">
+        <span style="font-size: 18px; flex-shrink: 0;">🔔</span>
+        <div>
+          <div style="font-weight: 600; font-size: 12px; color: #e65100;">48 hours before</div>
+          <div style="font-size: 11px; color: #666; margin-top: 2px;">"Reminder: You have a pending interview with <strong>Cary C.</strong> before Betty's appointment Tuesday."</div>
+        </div>
+      </div>
+
+      <div class="reminder-card" style="background: #fff8e1; border-color: #ffe082;">
+        <span style="font-size: 18px; flex-shrink: 0;">⚠️</span>
+        <div>
+          <div style="font-weight: 600; font-size: 12px; color: #f57f17;">24 hours — cancel deadline</div>
+          <div style="font-size: 11px; color: #666; margin-top: 2px;">"Interview hasn't happened yet. You can still cancel — after this, standard cancellation policy applies."</div>
+        </div>
+      </div>
+
+      <div class="reminder-card" style="background: #fce4ec; border-color: #ef9a9a;">
+        <span style="font-size: 18px; flex-shrink: 0;">🚨</span>
+        <div>
+          <div style="font-weight: 600; font-size: 12px; color: #c62828;">2 hours before</div>
+          <div style="font-size: 11px; color: #666; margin-top: 2px;">"Interview still pending. Session will proceed as scheduled with or without the interview."</div>
+        </div>
+      </div>
+
+      <div class="divider" style="margin: 16px 0;"></div>
+      <div style="font-size: 12px; color: #666; line-height: 1.8;">
+        <div>• Cancel up to <strong>24 hours before</strong> if interview hasn't happened</div>
+        <div>• After 24hr mark, session is locked — interview becomes optional</div>
+        <div>• No penalty if interview doesn't happen — session still goes</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 8: Complete state -->
+  <div class="screen-wrapper">
+    <div class="screen-label">8. Interview Complete <span class="flow-tag">Both Sides</span></div>
+    <div class="phone-frame">
+      <div class="header-bar">
+        <div>
+          <div class="page-title" style="font-size: 16px;">💬 Peter Lee</div>
+          <div class="subtitle">Betty's care team</div>
+        </div>
+        <span class="badge badge-green">✓ Interviewed</span>
+      </div>
+
+      <div class="chat-system" style="background: #e8f5e9; border-color: #a5d6a7;">
+        <div style="font-weight: 700; margin-bottom: 4px; color: #2e7d32;">✓ Interview Complete</div>
+        <span style="color: #2e7d32;">Video call completed (4:12). You're all set for Betty's Companionship appointment on Tue, Mar 17.</span>
+      </div>
+
+      <div class="chat-sender" style="text-align: right;">Cary</div>
+      <div class="chat-bubble chat-right">Great chatting with you Peter! I'll see Betty Tuesday. Should I bring anything for dominoes?</div>
+      <div class="chat-sender">Peter</div>
+      <div class="chat-bubble chat-left">We have everything here. She'll be excited to meet you! Thanks Cary 😊</div>
+
+      <div class="divider" style="margin: 16px 0;"></div>
+      <div style="text-align: center; font-size: 12px; color: #888; margin-bottom: 8px;">This chat stays open through the session</div>
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 1; height: 40px; background: #f8f8f8; border-radius: 20px; border: 1px solid #e0e0e0; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: #999;">Message...</div>
+        <button class="btn btn-green btn-sm" style="border-radius: 20px;">Send</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Implementation Notes -->
+<div style="max-width: 1600px; margin: 32px auto; padding: 0 24px 48px;">
+  <div style="background: #fff; border-radius: 16px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); padding: 24px 28px;">
+    <h2 style="font-size: 18px; font-weight: 700; color: #1a1a2e; margin-bottom: 16px;">Implementation Notes</h2>
+    <div class="notes-grid">
+      <div>
+        <h3>Care History API</h3>
+        <div class="note-body">
+          New endpoint: <code>GET /api/sessions/history/:caregiverId/:recipientId</code><br><br>
+          Returns: count of completed sessions, last 5 sessions with visit_log summary, moods, duration, date, service type, and interview count. One query with JOIN on visit_logs. Served to both family dashboard (Peter sees it) and caregiver dashboard (Cary sees it on open jobs).
+        </div>
+      </div>
+      <div>
+        <h3>Caregiver-Side Count</h3>
+        <div class="note-body">
+          Dashboard API adds a batch query: <code>SELECT care_recipient_id, COUNT(*) FROM care_sessions WHERE caregiver_id = ? AND status = 'completed' GROUP BY care_recipient_id</code>. Each openJob card gets a <code>previousVisitCount</code> field. One extra query per dashboard load — not per job.
+        </div>
+      </div>
+      <div>
+        <h3>Database</h3>
+        <div class="note-body">
+          New <code>interviews</code> table: id, session_id, requested_by_user_id, requested_by_role, interview_type (audio/video), status (pending→accepted→completed/declined/cancelled), call_duration_secs, created_at, accepted_at, completed_at.<br><br>
+          Add <code>interview_required BOOLEAN</code> + <code>interview_type VARCHAR</code> to care_sessions.
+        </div>
+      </div>
+      <div>
+        <h3>Cancellation &amp; Reminders</h3>
+        <div class="note-body">
+          <strong>24-hour rule:</strong> Either party can cancel up to 24hr before. After that, session proceeds — interview optional.<br><br>
+          <strong>Reminders:</strong> 48hr gentle push, 24hr cancel-deadline warning, 2hr final nudge. Session always proceeds as confirmed.
+        </div>
+      </div>
+      <div>
+        <h3>Chat &amp; Twilio Video</h3>
+        <div class="note-body">
+          Auto-create chat thread on interview accept. System message with session context. "Start Video Call" triggers Twilio room with 5-min server-side timeout. 30-second warning at 4:30. Audio fallback. Duration logged. No recording. Chat persists through session.
+        </div>
+      </div>
+      <div>
+        <h3>Repeat Caregiver Nudge</h3>
+        <div class="note-body">
+          <strong>Peter's side (primary):</strong> Shows in Request Care modal and on interview request notifications. "Cary has cared for Betty 4 times · 1 previous interview." Expandable to show last 5 visits with mood, summary, cost. Tappable to open full VisitDetailModal.<br><br>
+          <strong>Cary's side:</strong> Compact version on job cards in Find Work. "You've cared for Betty 4 times." Expandable to show date/mood dots for last 3-5 visits.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

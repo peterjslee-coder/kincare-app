@@ -299,6 +299,7 @@ app.use("/api/care-intelligence", require("./routes/careIntelligence"));
 app.use("/api/scheduling", require("./routes/nlScheduling"));
 app.use("/api/ipai", require("./routes/ipaiChat"));
 app.use("/api/referrals", require("./routes/referrals"));
+app.use("/api/voice-companion", require("./routes/voiceCompanion"));
 
 // ─── App version check (lightweight, no auth) ───
 const APP_VERSION = "1.51.14";
@@ -357,6 +358,21 @@ app.get("/api", (req, res) => {
       },
     },
   });
+});
+
+// ─── Voice Companion PWA (separate app for care recipients) ───
+// Auth-gated: requires valid JWT in cookie or query param, otherwise redirects to login
+app.get("/companion", (req, res) => {
+  const token = req.cookies?.token || req.query.token;
+  if (!token) {
+    return res.redirect("/?redirect=companion");
+  }
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+    res.sendFile(path.join(__dirname, "../companion/index.html"));
+  } catch {
+    return res.redirect("/?redirect=companion");
+  }
 });
 
 // ─── Catch-all: serve frontend for any non-API route ───

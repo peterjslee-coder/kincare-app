@@ -247,6 +247,40 @@
   - **Privacy safeguards:** No human listens unless safety incident filed. Admin review is passkey-gated and audit-logged. Auto-deletion enforced server-side. Caregiver and family both notified if recording is accessed. Cannot be used for performance review — safety incidents only.
   - *(Pete — Mar 22, 2026)*
 
+## iPAi Voice Companion — Feature Track
+
+> **Source of truth:** `/mnt/Claude Working Folder/VOICE_ASSISTANT_PROTOTYPE_ROADMAP.md`
+> **Business model:** `/mnt/Claude Working Folder/VOICE_COMPANION_BUSINESS_MODEL.md`
+> **Status:** Planning complete. Stubs in place. No implementation yet. Blocked on Pete's voice recording.
+
+### Phase 0 — Validation (before writing code)
+- [ ] **Pete records voice sample for ElevenLabs clone.** 2–5 minutes of natural speech. Clone via Instant Voice Clone (30 seconds to process). Test output with a Betty-style reminder phrase.
+- [ ] **Play test voice for Betty and observe reaction.** This is the go/no-go gate for the entire feature. If Betty's face lights up → build it. If she's confused or uncomfortable → adjust approach.
+
+### Phase 1 — Prototype (3-week sprint, starts after Phase 0 validation)
+- [ ] **Backend: voice_profiles, voice_routing, voice_preferences, companion_messages tables** — SQL in roadmap, stubs in `src/routes/voiceCompanion.js`
+- [ ] **Backend: ElevenLabs TTS integration** — `src/utils/voiceService.js` (generateSpeech, cloneVoice, listVoices)
+- [ ] **Backend: Companion brain** — `src/utils/voiceCompanion.js` (system prompt with identity framework, care context injection)
+- [ ] **Backend: Whisper STT integration** — speech-to-text for Betty's responses
+- [ ] **Frontend: Betty's companion PWA** — approved mockup at `mockups/companion/voice-companion-mockup.html` (.jsx source also there), push-to-talk, single screen
+- [ ] **Frontend: Care team admin panel** — mockup at `mockups/companion/companion-admin-mockup.html` (.jsx source also there), voice routing, voice tuning, usage tracking
+- [ ] **Consent flow: Voice cloning consent + Digital Voice Directive** — recording consent, posthumous use clause (default opt-out), designated decision-maker
+
+### Key Design Decisions (settled, documented in roadmap)
+- **Companion identity:** NOT Pete. Speaks in Pete's voice but has its own role ("from Pete"). Never says "I love you, Mom" — says "Pete loves you, Mom." See Identity Framework in roadmap.
+- **Pronoun rules:** Third-person for care messages ("Pete wanted me to remind you"), own identity for companionship ("How's your day, Mom? Pete was asking about you"). Never first-person as Pete.
+- **Real person deference:** Companion goes quiet before real calls, asks about them after, actively encourages real contact, never competes with real Pete.
+- **Death framework:** Digital Voice Directive in consent flow. Default opt-out (voice stops). Opt-in requires directive + decision-maker + payer. Never-Dark Guarantee (no payment-failure cutoffs).
+- **Competitive positioning:** Moat is being un-catchable, not un-copyable. Consent-as-product, compounding care context, first-mover category ownership.
+- **Architecture:** Separate PWA now, shared Railway backend, merge later. Frontend is throwaway, backend is permanent.
+- **Cost:** ~$10-14/user/month optimized. $19.99/mo flat rate. ElevenLabs OEM agreement needed for production.
+
+### Pete's Action Items — Voice Companion
+- [ ] **Record voice sample** (2–5 min of natural speech to Betty)
+- [ ] **Test clone output** with ElevenLabs dashboard
+- [ ] **Play for Betty** — validation gate
+- [ ] **Contact ElevenLabs re: OEM agreement** (when ready for paying customers)
+
 ## Dev Best Practices
 
 > Patterns and conventions learned the hard way. Claude should follow these when building new features.

@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="iPAi Companion">
+  <meta name="theme-color" content="#1A5276">
+  <title>iPAi Companion</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+      background-color: #FAFCFE;
+      color: #2C3E50;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    /* Animations */
+    @keyframes wave {
+      0% { transform: scaleY(0.4); }
+      100% { transform: scaleY(1); }
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(1); opacity: 0.4; }
+      100% { transform: scale(1.3); opacity: 0; }
+    }
+
+    @keyframes gentle-bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Main container */
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 480px;
+      height: 100vh;
+      max-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-color: #FAFCFE;
+    }
+
+    /* View classes */
+    .view {
+      display: none;
+      flex-direction: column;
+      min-height: 100vh;
+      width: 100%;
+    }
+
+    .view.active {
+      display: flex;
+    }
+
+    /* ── HOME VIEW ── */
+    .home-header {
+      padding: 32px 24px 16px;
+    }
+
+    .home-header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .home-header-greeting {
+      color: #95A5A6;
+      font-size: 14px;
+    }
+
+    .home-header-name {
+      font-size: 32px;
+      font-weight: bold;
+      color: #2C3E50;
+    }
+
+    .home-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background-color: #1A5276;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .status-card {
+      margin: 0 24px 24px;
+      border-radius: 16px;
+      padding: 20px;
+      background-color: #EBF5FB;
+      border: 1px solid #D6EAF8;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .status-card-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #27AE60;
+      animation: gentle-bob 2s ease-in-out infinite;
+    }
+
+    .status-card-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #1A5276;
+    }
+
+    .status-card-subtitle {
+      font-size: 14px;
+      color: #5D6D7E;
+    }
+
+    /* Talk button layout */
+    .button-center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      margin-top: -16px;
+    }
+
+    .button-container {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .pulse-ring {
+      position: absolute;
+      border-radius: 50%;
+      animation: pulse-ring 1.5s ease-out infinite;
+    }
+
+    .pulse-ring-outer {
+      border: 3px solid;
+      opacity: 0.4;
+      inset: 0;
+    }
+
+    .pulse-ring-inner {
+      border: 2px solid;
+      opacity: 0.2;
+      inset: -12px;
+    }
+
+    .talk-button {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(26, 82, 118, 0.2);
+      transition: all 300ms ease;
+      font-size: 0;
+      padding: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .talk-button:active {
+      transform: scale(0.95);
+    }
+
+    .talk-button.listening {
+      transform: scale(1.05);
+    }
+
+    .button-icon {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Waveform animation */
+    .waveform {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 48px;
+    }
+
+    .waveform-bar {
+      width: 6px;
+      border-radius: 3px;
+      background-color: white;
+      transition: all 300ms ease;
+    }
+
+    .waveform-bar.active {
+      opacity: 0.8;
+      animation: wave 0.8s ease-in-out infinite alternate;
+    }
+
+    .waveform-bar.inactive {
+      opacity: 0.25;
+      height: 6px;
+    }
+
+    /* Thinking dots */
+    .thinking-dots {
+      display: flex;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: white;
+      opacity: 0.8;
+      animation: gentle-bob 0.8s ease-in-out infinite;
+    }
+
+    .dot:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .dot:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    /* Button label */
+    .button-label {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      transition: color 300ms ease;
+    }
+
+    .button-sublabel {
+      font-size: 16px;
+      color: #95A5A6;
+    }
+
+    /* Quick actions */
+    .quick-actions {
+      padding: 0 24px 16px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .quick-action-btn {
+      flex: 1;
+      padding: 16px 0;
+      border-radius: 12px;
+      background-color: white;
+      border: 1px solid #E8EEF2;
+      text-align: center;
+      cursor: pointer;
+      transition: all 200ms ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .quick-action-btn:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .quick-action-emoji {
+      font-size: 24px;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .quick-action-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: #2C3E50;
+    }
+
+    /* Bottom bar */
+    .bottom-bar {
+      background-color: #F4F6F7;
+      border-top: 1px solid #E8EEF2;
+      padding: 12px 24px;
+      text-align: center;
+    }
+
+    .bottom-bar-text {
+      font-size: 12px;
+      color: #ABB2B9;
+    }
+
+    /* ── CHAT VIEW ── */
+    .chat-header {
+      padding: 24px;
+      border-bottom: 1px solid #E8EEF2;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .back-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: #EBF5FB;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 200ms ease;
+    }
+
+    .back-btn:hover {
+      background-color: #D6EAF8;
+    }
+
+    .chat-header-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .chat-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background-color: #1A5276;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .chat-header-info {
+      flex: 1;
+    }
+
+    .chat-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #2C3E50;
+    }
+
+    .chat-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #27AE60;
+    }
+
+    .status-text {
+      font-size: 12px;
+      color: #27AE60;
+    }
+
+    /* Chat messages */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .chat-date {
+      text-align: center;
+      font-size: 12px;
+      color: #ABB2B9;
+      margin-bottom: 16px;
+    }
+
+    .message {
+      display: flex;
+      margin-bottom: 12px;
+      animation: fade-in 300ms ease;
+    }
+
+    .message.from-companion {
+      justify-content: flex-start;
+    }
+
+    .message.from-betty {
+      justify-content: flex-end;
+    }
+
+    .message-bubble {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .message.from-companion .message-bubble {
+      background-color: #EBF5FB;
+      border-bottom-left-radius: 4px;
+    }
+
+    .message.from-betty .message-bubble {
+      background-color: #F0F4F0;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-text {
+      font-size: 16px;
+      line-height: 1.5;
+      color: #2C3E50;
+      word-wrap: break-word;
+    }
+
+    .message-time {
+      font-size: 12px;
+      color: #95A5A6;
+      margin-top: 4px;
+    }
+
+    /* Chat footer */
+    .chat-footer {
+      background-color: white;
+      border-top: 1px solid #E8EEF2;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .chat-talk-container {
+      position: relative;
+    }
+
+    .chat-talk-button {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(26, 82, 118, 0.15);
+      transition: all 200ms ease;
+      font-size: 0;
+      padding: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .chat-talk-button:active {
+      transform: scale(0.95);
+    }
+
+    .chat-talk-button.listening {
+      transform: scale(1.08);
+    }
+
+    .chat-sublabel {
+      font-size: 14px;
+      color: #95A5A6;
+    }
+
+    /* ── REMINDERS VIEW ── */
+    .reminders-header {
+      padding: 24px;
+      border-bottom: 1px solid #E8EEF2;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .reminders-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #2C3E50;
+    }
+
+    .reminders-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 24px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .reminders-section-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #95A5A6;
+      margin-bottom: 12px;
+      margin-top: 16px;
+    }
+
+    .reminders-section-label:first-child {
+      margin-top: 0;
+    }
+
+    .reminder-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background-color: #FEF9E7;
+      border: 1px solid #F9E79F;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .reminder-card.completed {
+      opacity: 0.6;
+      background-color: #F0F4F0;
+      border-color: #E0E8E0;
+    }
+
+    .reminder-icon {
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .reminder-content {
+      flex: 1;
+    }
+
+    .reminder-time {
+      font-size: 13px;
+      font-weight: 600;
+      color: #7D6608;
+    }
+
+    .reminder-card.completed .reminder-time {
+      text-decoration: line-through;
+    }
+
+    .reminder-text {
+      font-size: 16px;
+      color: #2C3E50;
+      margin-top: 2px;
+    }
+
+    .reminder-card.completed .reminder-text {
+      text-decoration: line-through;
+    }
+
+    .reminders-note {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 14px;
+      color: #ABB2B9;
+    }
+
+    .reminders-footer {
+      background-color: white;
+      border-top: 1px solid #E8EEF2;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .primary-btn {
+      padding: 12px 32px;
+      border-radius: 24px;
+      background-color: #1A5276;
+      color: white;
+      border: none;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(26, 82, 118, 0.15);
+      transition: all 200ms ease;
+    }
+
+    .primary-btn:hover {
+      box-shadow: 0 6px 16px rgba(26, 82, 118, 0.25);
+    }
+
+    /* Error and loading states */
+    .error-message {
+      background-color: #FADBD8;
+      border: 1px solid #F5B7B1;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 16px 24px;
+      color: #78281F;
+      font-size: 14px;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Transcript display (chat input area) */
+    .transcript-display {
+      background-color: #F4F6F7;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      color: #2C3E50;
+      max-height: 80px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .transcript-display.interim {
+      color: #95A5A6;
+      font-style: italic;
+    }
+
+    /* Scroll behavior */
+    .chat-messages::-webkit-scrollbar,
+    .reminders-content::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .chat-messages::-webkit-scrollbar-track,
+    .reminders-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb,
+    .reminders-content::-webkit-scrollbar-thumb {
+      background: #D6EAF8;
+      border-radius: 2px;
+    }
+
+    /* Accessibility */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- HOME VIEW -->
+    <div id="homeView" class="view active">
+      <div class="home-header">
+        <div class="home-header-top">
+          <div>
+            <div class="home-header-greeting">Good morning</div>
+            <div class="home-header-name" id="recipientName">Betty</div>
+          </div>
+          <div class="home-avatar" id="recipientAvatar">B</div>
+        </div>
+      </div>
+
+      <div class="status-card">
+        <div class="status-card-top">
+          <div class="status-dot"></div>
+          <div class="status-card-title">Pete's companion is active</div>
+        </div>
+        <div class="status-card-subtitle" id="statusSubtitle">
+          Last check-in: — · Next reminder: —
+        </div>
+      </div>
+
+      <div class="button-center">
+        <div class="button-container">
+          <div class="pulse-ring pulse-ring-outer" id="pulseRing1"></div>
+          <div class="pulse-ring pulse-ring-inner" id="pulseRing2"></div>
+          <button id="talkButton" class="talk-button" aria-label="Talk to companion">
+            <div class="button-icon" id="buttonIcon">
+              <!-- SVG icon injected here -->
+            </div>
+          </button>
+        </div>
+        <div class="button-label" id="buttonLabel">Talk to Pete</div>
+        <div class="button-sublabel" id="buttonSublabel">Hold to speak</div>
+      </div>
+
+      <div class="quick-actions">
+        <button class="quick-action-btn" id="chatHistoryBtn">
+          <span class="quick-action-emoji">💬</span>
+          <span class="quick-action-text">Chat History</span>
+        </button>
+        <button class="quick-action-btn" id="remindersBtn">
+          <span class="quick-action-emoji">🔔</span>
+          <span class="quick-action-text">Reminders</span>
+        </button>
+        <button class="quick-action-btn" id="callPeteBtn">
+          <span class="quick-action-emoji">📞</span>
+          <span class="quick-action-text">Call Pete</span>
+        </button>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="bottom-bar-text">iPAi Voice Companion · Set up by Pete</div>
+      </div>
+    </div>
+
+    <!-- CHAT VIEW -->
+    <div id="chatView" class="view">
+      <div class="chat-header">
+        <button class="back-btn" id="chatBackBtn" aria-label="Back to home">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1A5276" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <div class="chat-header-content">
+          <div class="chat-avatar">P</div>
+          <div class="chat-header-info">
+            <div class="chat-title">Pete's Companion</div>
+            <div class="chat-status">
+              <div class="status-indicator"></div>
+              <div class="status-text">Active</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-date" id="chatDate">Today, March 23</div>
+      </div>
+
+      <div class="chat-footer">
+        <div class="chat-talk-container">
+          <div class="pulse-ring pulse-ring-outer" id="chatPulseRing1"></div>
+          <div class="pulse-ring pulse-ring-inner" id="chatPulseRing2"></div>
+          <button id="chatTalkButton" class="chat-talk-button" aria-label="Talk to companion">
+            <div class="button-icon" id="chatButtonIcon">
+              <!-- SVG icon injected here -->
+            </div>
+          </button>
+        </div>
+        <div class="chat-sublabel" id="chatSublabel">Hold to speak</div>
+      </div>
+    </div>
+
+    <!-- REMINDERS VIEW -->
+    <div id="remindersView" class="view">
+      <div class="reminders-header">
+        <button class="back-btn" id="remindersBackBtn" aria-label="Back to home">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1A5276" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <div class="reminders-title">Today's Reminders</div>
+      </div>
+
+      <div class="reminders-content" id="remindersContent">
+        <!-- Reminders loaded here -->
+      </div>
+
+      <div class="reminders-footer">
+        <button class="primary-btn" id="remindersHomBtn">Talk to Pete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── CONFIGURATION & STATE ──
+    const STATES = {
+      IDLE: 'idle',
+      LISTENING: 'listening',
+      THINKING: 'thinking',
+      SPEAKING: 'speaking',
+    };
+
+    const STATE_CONFIG = {
+      [STATES.IDLE]: {
+        label: 'Talk to Pete',
+        sublabel: 'Hold to speak',
+        color: '#1A5276',
+        bgColor: '#1A5276',
+      },
+      [STATES.LISTENING]: {
+        label: 'Listening...',
+        sublabel: 'Release when done',
+        color: '#27AE60',
+        bgColor: '#27AE60',
+      },
+      [STATES.THINKING]: {
+        label: 'Thinking...',
+        sublabel: '',
+        color: '#E67E22',
+        bgColor: '#E67E22',
+      },
+      [STATES.SPEAKING]: {
+        label: 'Pete is speaking',
+        sublabel: '',
+        color: '#1A5276',
+        bgColor: '#D6EAF8',
+      },
+    };
+
+    // ── GLOBAL STATE ──
+    const app = {
+      state: STATES.IDLE,
+      currentView: 'home',
+      token: null,
+      recipientId: null,
+      recipientName: 'Betty',
+      messages: [],
+      reminders: [],
+      isListening: false,
+      isPlaying: false,
+      transcript: '',
+      interimTranscript: '',
+      lastCheckInTime: null,
+      nextReminderTime: null,
+      voicePreferences: {
+        app_volume_gain: 1.0,
+      },
+      recognition: null,
+      audioContext: null,
+    };
+
+    // ── DOM ELEMENTS ──
+    const dom = {
+      app: document.getElementById('app'),
+      homeView: document.getElementById('homeView'),
+      chatView: document.getElementById('chatView'),
+      remindersView: document.getElementById('remindersView'),
+      talkButton: document.getElementById('talkButton'),
+      buttonLabel: document.getElementById('buttonLabel'),
+      buttonSublabel: document.getElementById('buttonSublabel'),
+      buttonIcon: document.getElementById('buttonIcon'),
+      recipientName: document.getElementById('recipientName'),
+      recipientAvatar: document.getElementById('recipientAvatar'),
+      statusSubtitle: document.getElementById('statusSubtitle'),
+      pulseRing1: document.getElementById('pulseRing1'),
+      pulseRing2: document.getElementById('pulseRing2'),
+      chatHistoryBtn: document.getElementById('chatHistoryBtn'),
+      remindersBtn: document.getElementById('remindersBtn'),
+      callPeteBtn: document.getElementById('callPeteBtn'),
+      chatBackBtn: document.getElementById('chatBackBtn'),
+      remindersBackBtn: document.getElementById('remindersBackBtn'),
+      remindersHomBtn: document.getElementById('remindersHomBtn'),
+      chatMessages: document.getElementById('chatMessages'),
+      chatDate: document.getElementById('chatDate'),
+      chatTalkButton: document.getElementById('chatTalkButton'),
+      chatButtonIcon: document.getElementById('chatButtonIcon'),
+      chatSublabel: document.getElementById('chatSublabel'),
+      chatPulseRing1: document.getElementById('chatPulseRing1'),
+      chatPulseRing2: document.getElementById('chatPulseRing2'),
+      remindersContent: document.getElementById('remindersContent'),
+    };
+
+    // ── UTILITY FUNCTIONS ──
+
+    /**
+     * Extract and validate auth parameters from URL
+     */
+    function initializeAuth() {
+      const params = new URLSearchParams(window.location.search);
+      // Try URL params first, fall back to sessionStorage (survives refresh)
+      const token = params.get('token') || sessionStorage.getItem('companionToken');
+      const recipientId = params.get('recipient') || sessionStorage.getItem('recipientId');
+
+      if (!token || !recipientId) {
+        // No auth — redirect to InPlace login
+        window.location.href = '/?redirect=companion';
+        return false;
+      }
+
+      app.token = token;
+      app.recipientId = recipientId;
+      sessionStorage.setItem('companionToken', token);
+      sessionStorage.setItem('recipientId', recipientId);
+      return true;
+    }
+
+    /**
+     * Make authenticated API request
+     */
+    async function apiCall(endpoint, options = {}) {
+      const url = `/api/voice-companion${endpoint}`;
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${app.token}`,
+        ...options.headers,
+      };
+
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers,
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        return await response.json();
+      } catch (error) {
+        console.error('API call failed:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * Format time for display
+     */
+    function formatTime(date) {
+      if (!date) return '';
+      const d = new Date(date);
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+
+    /**
+     * Create microphone SVG icon
+     */
+    function createMicIcon() {
+      return `
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+          <rect x="9" y="2" width="6" height="11" rx="3" />
+          <path d="M5 10a7 7 0 0 0 14 0" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+      `;
+    }
+
+    /**
+     * Create waveform bars for speaking state
+     */
+    function createWaveform(barCount = 5) {
+      const bars = Array.from({ length: barCount })
+        .map((_, i) => `<div class="waveform-bar active"></div>`)
+        .join('');
+      return `<div class="waveform">${bars}</div>`;
+    }
+
+    /**
+     * Create thinking dots animation
+     */
+    function createThinkingDots() {
+      return `
+        <div class="thinking-dots">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      `;
+    }
+
+    /**
+     * Show error message to user
+     */
+    function showError(message) {
+      console.error('Error:', message);
+      // In production, show a friendly toast or dialog
+      if (document.querySelector('.error-message')) {
+        document.querySelector('.error-message').textContent = message;
+      }
+    }
+
+    // ── VIEW MANAGEMENT ──
+
+    /**
+     * Switch to a view
+     */
+    function switchView(viewName) {
+      // Hide all views
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+
+      // Show target view
+      if (viewName === 'home') dom.homeView.classList.add('active');
+      else if (viewName === 'chat') dom.chatView.classList.add('active');
+      else if (viewName === 'reminders') dom.remindersView.classList.add('active');
+
+      app.currentView = viewName;
+
+      // Load data if needed
+      if (viewName === 'chat') {
+        loadChatHistory();
+      } else if (viewName === 'reminders') {
+        loadReminders();
+      }
+    }
+
+    // ── APP STATE MANAGEMENT ──
+
+    /**
+     * Update app state and UI
+     */
+    function setState(newState) {
+      app.state = newState;
+      updateButtonUI();
+      updatePulseRings();
+    }
+
+    /**
+     * Update button UI based on state
+     */
+    function updateButtonUI() {
+      const config = STATE_CONFIG[app.state];
+
+      // Update main button
+      dom.buttonLabel.textContent = config.label;
+      dom.buttonLabel.style.color = config.color;
+      dom.buttonSublabel.textContent = config.sublabel;
+      dom.talkButton.style.backgroundColor = config.bgColor;
+
+      // Update icon
+      if (app.state === STATES.SPEAKING) {
+        dom.buttonIcon.innerHTML = createWaveform(7);
+      } else if (app.state === STATES.LISTENING) {
+        dom.buttonIcon.innerHTML = createMicIcon();
+      } else if (app.state === STATES.THINKING) {
+        dom.buttonIcon.innerHTML = createThinkingDots();
+      } else {
+        dom.buttonIcon.innerHTML = createMicIcon();
+      }
+
+      // Update scale
+      if (app.state === STATES.LISTENING) {
+        dom.talkButton.classList.add('listening');
+      } else {
+        dom.talkButton.classList.remove('listening');
+      }
+
+      // Update chat button similarly
+      if (app.currentView === 'chat') {
+        updateChatButtonUI();
+      }
+    }
+
+    /**
+     * Update chat view button UI
+     */
+    function updateChatButtonUI() {
+      const config = STATE_CONFIG[app.state];
+
+      dom.chatSublabel.textContent = config.sublabel || config.label;
+      dom.chatTalkButton.style.backgroundColor = config.bgColor;
+
+      if (app.state === STATES.SPEAKING) {
+        dom.chatButtonIcon.innerHTML = createWaveform(3);
+      } else {
+        dom.chatButtonIcon.innerHTML = createMicIcon();
+      }
+
+      if (app.state === STATES.LISTENING) {
+        dom.chatTalkButton.classList.add('listening');
+      } else {
+        dom.chatTalkButton.classList.remove('listening');
+      }
+    }
+
+    /**
+     * Update pulse rings visibility
+     */
+    function updatePulseRings() {
+      const showPulse = app.state === STATES.LISTENING;
+
+      dom.pulseRing1.style.display = showPulse ? 'block' : 'none';
+      dom.pulseRing2.style.display = showPulse ? 'block' : 'none';
+
+      dom.chatPulseRing1.style.display = showPulse ? 'block' : 'none';
+      dom.chatPulseRing2.style.display = showPulse ? 'block' : 'none';
+    }
+
+    // ── SPEECH RECOGNITION ──
+
+    /**
+     * Initialize Web Speech API
+     */
+    function initializeSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (!SpeechRecognition) {
+        showError('Speech recognition not supported. Please use Chrome or Safari.');
+        return false;
+      }
+
+      app.recognition = new SpeechRecognition();
+      app.recognition.continuous = false;
+      app.recognition.interimResults = true;
+      app.recognition.lang = 'en-US';
+
+      app.recognition.onstart = () => {
+        app.isListening = true;
+        app.transcript = '';
+        app.interimTranscript = '';
+        setState(STATES.LISTENING);
+      };
+
+      app.recognition.onresult = (event) => {
+        app.interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+
+          if (event.results[i].isFinal) {
+            app.transcript += transcript + ' ';
+          } else {
+            app.interimTranscript += transcript;
+          }
+        }
+      };
+
+      app.recognition.onerror = (event) => {
+        if (event.error !== 'no-speech' && event.error !== 'network') {
+          showError(`Speech error: ${event.error}`);
+        }
+      };
+
+      app.recognition.onend = () => {
+        app.isListening = false;
+
+        // If we got a transcript, send it to the backend
+        if (app.transcript.trim()) {
+          sendMessage(app.transcript.trim());
+        } else {
+          setState(STATES.IDLE);
+        }
+      };
+
+      return true;
+    }
+
+    /**
+     * Start listening
+     */
+    function startListening() {
+      if (!app.recognition) {
+        showError('Speech recognition not initialized');
+        return;
+      }
+
+      app.transcript = '';
+      app.interimTranscript = '';
+      app.recognition.start();
+    }
+
+    /**
+     * Stop listening
+     */
+    function stopListening() {
+      if (app.recognition && app.isListening) {
+        app.recognition.stop();
+      }
+    }
+
+    // ── CHAT & MESSAGING ──
+
+    /**
+     * Send message to backend and get response
+     */
+    async function sendMessage(text) {
+      setState(STATES.THINKING);
+
+      try {
+        const response = await apiCall('/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            care_recipient_id: app.recipientId,
+            message: text,
+          }),
+        });
+
+        // Add user message
+        app.messages.push({
+          text,
+          from: 'betty',
+          timestamp: new Date(),
+        });
+
+        // Add companion response
+        if (response.reply) {
+          app.messages.push({
+            text: response.reply,
+            from: 'companion',
+            timestamp: new Date(),
+          });
+
+          // Update UI
+          if (app.currentView === 'chat') {
+            renderChatMessages();
+          }
+
+          // Play audio response
+          if (response.audio_base64) {
+            await playAudio(response.audio_base64);
+          }
+        }
+
+        setState(STATES.IDLE);
+      } catch (error) {
+        showError('Failed to send message. Please try again.');
+        setState(STATES.IDLE);
+      }
+    }
+
+    /**
+     * Load chat history from backend
+     */
+    async function loadChatHistory() {
+      try {
+        const response = await apiCall(`/conversations?care_recipient_id=${app.recipientId}`);
+
+        if (response.conversations && Array.isArray(response.conversations)) {
+          app.messages = response.conversations.map(msg => ({
+            text: msg.message || msg.text,
+            from: msg.from_role === 'companion' ? 'companion' : 'betty',
+            timestamp: new Date(msg.created_at),
+          }));
+
+          renderChatMessages();
+        }
+      } catch (error) {
+        showError('Failed to load chat history');
+      }
+    }
+
+    /**
+     * Render chat messages
+     */
+    function renderChatMessages() {
+      // Clear existing messages (keep date)
+      const messages = dom.chatMessages.querySelectorAll('.message');
+      messages.forEach(m => m.remove());
+
+      // Add messages
+      app.messages.forEach((msg, index) => {
+        const div = document.createElement('div');
+        div.className = `message from-${msg.from}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+
+        const textEl = document.createElement('div');
+        textEl.className = 'message-text';
+        textEl.textContent = msg.text;
+
+        const timeEl = document.createElement('div');
+        timeEl.className = 'message-time';
+        timeEl.textContent = formatTime(msg.timestamp);
+
+        bubble.appendChild(textEl);
+        bubble.appendChild(timeEl);
+        div.appendChild(bubble);
+
+        dom.chatMessages.appendChild(div);
+      });
+
+      // Scroll to bottom
+      dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+    }
+
+    // ── REMINDERS ──
+
+    /**
+     * Load reminders from backend
+     */
+    async function loadReminders() {
+      try {
+        const response = await apiCall(`/reminders?care_recipient_id=${app.recipientId}`);
+
+        if (response.reminders && Array.isArray(response.reminders)) {
+          app.reminders = response.reminders;
+          renderReminders();
+        }
+      } catch (error) {
+        showError('Failed to load reminders');
+      }
+    }
+
+    /**
+     * Render reminders
+     */
+    function renderReminders() {
+      dom.remindersContent.innerHTML = '';
+
+      const completed = [];
+      const upcoming = [];
+
+      app.reminders.forEach(reminder => {
+        const obj = {
+          text: reminder.title || reminder.text,
+          time: reminder.scheduled_time ? formatTime(reminder.scheduled_time) : '—',
+          icon: reminder.icon || '📝',
+        };
+
+        if (reminder.completed) {
+          completed.push(obj);
+        } else {
+          upcoming.push(obj);
+        }
+      });
+
+      // Completed section
+      if (completed.length > 0) {
+        const label = document.createElement('div');
+        label.className = 'reminders-section-label';
+        label.textContent = 'COMPLETED';
+        dom.remindersContent.appendChild(label);
+
+        completed.forEach(r => {
+          const card = createReminderCard(r, true);
+          dom.remindersContent.appendChild(card);
+        });
+      }
+
+      // Upcoming section
+      if (upcoming.length > 0) {
+        const label = document.createElement('div');
+        label.className = 'reminders-section-label';
+        label.textContent = 'UPCOMING';
+        dom.remindersContent.appendChild(label);
+
+        upcoming.forEach(r => {
+          const card = createReminderCard(r, false);
+          dom.remindersContent.appendChild(card);
+        });
+      }
+
+      // Note
+      if (app.reminders.length === 0) {
+        const note = document.createElement('div');
+        note.className = 'reminders-note';
+        note.textContent = 'No reminders for today';
+        dom.remindersContent.appendChild(note);
+      } else {
+        const note = document.createElement('div');
+        note.className = 'reminders-note';
+        note.textContent = 'Reminders set by Pete and the care team';
+        dom.remindersContent.appendChild(note);
+      }
+    }
+
+    /**
+     * Create reminder card element
+     */
+    function createReminderCard(reminder, isCompleted) {
+      const card = document.createElement('div');
+      card.className = `reminder-card ${isCompleted ? 'completed' : ''}`;
+
+      card.innerHTML = `
+        <div class="reminder-icon">${reminder.icon}</div>
+        <div class="reminder-content">
+          <div class="reminder-time">${reminder.time}</div>
+          <div class="reminder-text">${reminder.text}</div>
+        </div>
+      `;
+
+      return card;
+    }
+
+    // ── AUDIO PLAYBACK ──
+
+    /**
+     * Initialize Web Audio API
+     */
+    function initializeAudio() {
+      if (!app.audioContext) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          app.audioContext = new AudioContext();
+        }
+      }
+    }
+
+    /**
+     * Play base64 audio from backend
+     */
+    async function playAudio(base64Audio) {
+      initializeAudio();
+
+      if (!app.audioContext) {
+        showError('Audio not supported');
+        return;
+      }
+
+      try {
+        setState(STATES.SPEAKING);
+        app.isPlaying = true;
+
+        // Decode base64
+        const binaryString = atob(base64Audio);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        // Decode audio
+        const audioBuffer = await app.audioContext.decodeAudioData(bytes.buffer);
+
+        // Create source and gain node
+        const source = app.audioContext.createBufferSource();
+        const gain = app.audioContext.createGain();
+
+        source.buffer = audioBuffer;
+        gain.gain.value = app.voicePreferences.app_volume_gain;
+
+        // Connect and play
+        source.connect(gain);
+        gain.connect(app.audioContext.destination);
+
+        return new Promise((resolve) => {
+          source.onended = () => {
+            app.isPlaying = false;
+            setState(STATES.IDLE);
+            resolve();
+          };
+
+          source.start(0);
+        });
+      } catch (error) {
+        showError('Failed to play audio');
+        setState(STATES.IDLE);
+      }
+    }
+
+    // ── EVENT LISTENERS ──
+
+    /**
+     * Setup button event listeners
+     */
+    function setupEventListeners() {
+      // Home talk button
+      dom.talkButton.addEventListener('mousedown', () => startListening());
+      dom.talkButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        startListening();
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (app.state === STATES.LISTENING) stopListening();
+      });
+
+      document.addEventListener('touchend', () => {
+        if (app.state === STATES.LISTENING) stopListening();
+      });
+
+      // Chat button
+      dom.chatTalkButton.addEventListener('mousedown', () => startListening());
+      dom.chatTalkButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        startListening();
+      });
+
+      // Navigation
+      dom.chatHistoryBtn.addEventListener('click', () => switchView('chat'));
+      dom.remindersBtn.addEventListener('click', () => switchView('reminders'));
+      dom.chatBackBtn.addEventListener('click', () => switchView('home'));
+      dom.remindersBackBtn.addEventListener('click', () => switchView('home'));
+      dom.remindersHomBtn.addEventListener('click', () => switchView('home'));
+
+      // Call Pete button
+      dom.callPeteBtn.addEventListener('click', () => {
+        // In production, this would initiate a call
+        alert('Calling Pete...');
+      });
+    }
+
+    // ── INITIALIZATION ──
+
+    /**
+     * Initialize the app
+     */
+    async function initialize() {
+      // Check auth
+      if (!initializeAuth()) {
+        return;
+      }
+
+      // Setup speech recognition
+      if (!initializeSpeechRecognition()) {
+        showError('Speech recognition not available. Please use a supported browser.');
+      }
+
+      // Setup event listeners
+      setupEventListeners();
+
+      // Update recipient display
+      dom.recipientAvatar.textContent = app.recipientName.charAt(0).toUpperCase();
+
+      // Update status
+      updateStatusCard();
+
+      // Set initial button UI
+      updateButtonUI();
+    }
+
+    /**
+     * Update status card
+     */
+    function updateStatusCard() {
+      const lastCheck = app.lastCheckInTime ? formatTime(app.lastCheckInTime) : '—';
+      const nextReminder = app.nextReminderTime ? formatTime(app.nextReminderTime) : '—';
+
+      dom.statusSubtitle.textContent = `Last check-in: ${lastCheck} · Next reminder: ${nextReminder}`;
+    }
+
+    // Start app when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initialize);
+    } else {
+      initialize();
+    }
+  </script>
+</body>
+</html>
