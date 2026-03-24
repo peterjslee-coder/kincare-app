@@ -1274,7 +1274,7 @@
           method: 'POST',
           body: JSON.stringify({
             care_recipient_id: app.recipientId,
-            message: text,
+            transcript: text,
           }),
         });
 
@@ -1285,10 +1285,10 @@
           timestamp: new Date(),
         });
 
-        // Add companion response
-        if (response.reply) {
+        // Add companion response (backend returns { text, audio })
+        if (response.text) {
           app.messages.push({
-            text: response.reply,
+            text: response.text,
             from: 'companion',
             timestamp: new Date(),
           });
@@ -1298,14 +1298,15 @@
             renderChatMessages();
           }
 
-          // Play audio response
-          if (response.audio_base64) {
-            await playAudio(response.audio_base64);
+          // Play audio response (Pete's cloned voice via ElevenLabs)
+          if (response.audio) {
+            await playAudio(response.audio);
           }
         }
 
         setState(STATES.IDLE);
       } catch (error) {
+        console.error('sendMessage error:', error);
         showError('Failed to send message. Please try again.');
         setState(STATES.IDLE);
       }
