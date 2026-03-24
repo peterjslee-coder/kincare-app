@@ -926,9 +926,13 @@
             credentials: 'same-origin',
           });
           if (resp.ok) {
-            const recipients = await resp.json();
-            if (recipients.length > 0) {
-              recipientId = recipients[0].id;
+            const data = await resp.json();
+            // API returns { careRecipients: [...] }
+            const recipients = data.careRecipients || data;
+            const list = Array.isArray(recipients) ? recipients : [];
+            if (list.length > 0) {
+              recipientId = list[0].id;
+              app.recipientName = list[0].first_name || app.recipientName;
             }
           }
         } catch (err) {
