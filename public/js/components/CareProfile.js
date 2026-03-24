@@ -31,6 +31,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [doctorReportLoading, setDoctorReportLoading] = useState(false);
   const [doctorReport, setDoctorReport] = useState('');
   const [doctorEmailSent, setDoctorEmailSent] = useState(false);
+  // Voice Companion panel state
+  const [companionOpen, setCompanionOpen] = useState(false);
+  const [companionTab, setCompanionTab] = useState('conversations');
+  const [companionConvos, setCompanionConvos] = useState([]);
+  const [companionConvosLoading, setCompanionConvosLoading] = useState(false);
+  const [expandedConvo, setExpandedConvo] = useState(null);
+  const [voicePrefs, setVoicePrefs] = useState({ speed: 1.0, stability: 0.5, similarity_boost: 0.8 });
+  const [voicePrefsLoading, setVoicePrefsLoading] = useState(false);
+  const [savingVoicePrefs, setSavingVoicePrefs] = useState(false);
+  const [companionUsage, setCompanionUsage] = useState(null);
+  const [usageLoading, setUsageLoading] = useState(false);
   const { showToast } = useToast();
 
   const handleGenerateDoctorReport = async () => {
@@ -70,6 +81,78 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       if (typeof showToast === 'function') showToast('Failed to generate doctor report', 'error');
     }
     setDoctorReportLoading(false);
+  };
+
+  // ── Voice Companion data fetchers ──
+  const fetchCompanionConversations = async (recipientId) => {
+    if (!recipientId) return;
+    setCompanionConvosLoading(true);
+    try {
+      const res = await apiFetch(`/api/voice-companion/conversations?care_recipient_id=${recipientId}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setCompanionConvos(data.conversations || []);
+      }
+    } catch (e) { console.error('Companion conversations fetch error:', e); }
+    setCompanionConvosLoading(false);
+  };
+
+  const fetchVoicePreferences = async (recipientId) => {
+    if (!recipientId) return;
+    setVoicePrefsLoading(true);
+    try {
+      const res = await apiFetch(`/api/voice-companion/admin/voice-preferences?care_recipient_id=${recipientId}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setVoicePrefs({
+          speed: data.speed ?? 1.0,
+          stability: data.stability ?? 0.5,
+          similarity_boost: data.similarity_boost ?? 0.8,
+        });
+      }
+    } catch (e) { console.error('Voice preferences fetch error:', e); }
+    setVoicePrefsLoading(false);
+  };
+
+  const saveVoicePreferences = async () => {
+    if (!profile?.id) return;
+    setSavingVoicePrefs(true);
+    try {
+      const res = await apiFetch('/api/voice-companion/admin/voice-preferences', {
+        method: 'PUT',
+        body: JSON.stringify({
+          care_recipient_id: profile.id,
+          speed: voicePrefs.speed,
+          stability: voicePrefs.stability,
+          similarity_boost: voicePrefs.similarity_boost,
+        }),
+      });
+      if (res?.ok) showToast('Voice preferences saved', 'success');
+      else showToast('Failed to save voice preferences', 'error');
+    } catch { showToast('Failed to save voice preferences', 'error'); }
+    setSavingVoicePrefs(false);
+  };
+
+  const fetchCompanionUsage = async (recipientId) => {
+    if (!recipientId) return;
+    setUsageLoading(true);
+    try {
+      const res = await apiFetch(`/api/voice-companion/admin/usage?care_recipient_id=${recipientId}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setCompanionUsage(data);
+      }
+    } catch (e) { console.error('Companion usage fetch error:', e); }
+    setUsageLoading(false);
+  };
+
+  const handleCompanionOpen = () => {
+    setCompanionOpen(true);
+    if (profile?.id) {
+      fetchCompanionConversations(profile.id);
+      fetchVoicePreferences(profile.id);
+      fetchCompanionUsage(profile.id);
+    }
   };
 
   const CARE_PREFS_LIST = [
@@ -751,6 +834,303 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           <p style={{ color: '#999', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
         )}
       </div>
+
+      {/* ─── 5b. Voice Companion Panel ─── */}
+      {canEdit && (
+        <div className="card" style={{ overflow: 'visible', position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+            onClick={() => companionOpen ? setCompanionOpen(false) : handleCompanionOpen()}>
+            <div className="card-header" style={{ margin: 0 }}>
+              <span className="card-icon">{'\uD83C\uDFA4'}</span>Voice Companion
+              {companionConvos.length > 0 && (
+                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1A5276', background: '#D6EAF8', padding: '2px 8px', borderRadius: 10 }}>
+                  {companionConvos.length} conversation{companionConvos.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: 18, color: '#999', transition: 'transform 0.2s', transform: companionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
+          </div>
+
+          {companionOpen && (
+            <div style={{ marginTop: 16 }}>
+              {/* Tabs */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 16, padding: 4, background: '#E8EEF2', borderRadius: 10 }}>
+                {[
+                  { id: 'conversations', label: '\uD83D\uDCAC Conversations' },
+                  { id: 'voice-settings', label: '\uD83C\uDF9B\uFE0F Voice Settings' },
+                  { id: 'usage', label: '\uD83D\uDCCA Usage' },
+                ].map(tab => (
+                  <button key={tab.id} onClick={(e) => { e.stopPropagation(); setCompanionTab(tab.id); }}
+                    style={{
+                      flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      background: companionTab === tab.id ? '#fff' : 'transparent',
+                      color: companionTab === tab.id ? '#1A5276' : '#7F8C8D',
+                      boxShadow: companionTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      transition: 'all 0.2s',
+                    }}>
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Conversations Tab ── */}
+              {companionTab === 'conversations' && (
+                <div>
+                  <p style={{ fontSize: 12, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>
+                    Review {profile?.first_name}'s conversations with the voice companion. These logs help you understand what {profile?.first_name} talks about and how the companion responds.
+                  </p>
+                  {companionConvosLoading ? (
+                    <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>Loading conversations...</div>
+                  ) : companionConvos.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: 24, color: '#999', background: '#fafafa', borderRadius: 10 }}>
+                      <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83C\uDFA4'}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#666', marginBottom: 4 }}>No conversations yet</div>
+                      <div style={{ fontSize: 12, color: '#999' }}>When {profile?.first_name} talks to the companion, conversations will appear here.</div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {companionConvos.map((convo) => {
+                        const isExpanded = expandedConvo === convo.conversation_id;
+                        const firstMsg = convo.messages?.[0];
+                        const preview = firstMsg ? (firstMsg.content.length > 80 ? firstMsg.content.slice(0, 80) + '...' : firstMsg.content) : '';
+                        const startDate = convo.started_at ? new Date(convo.started_at) : null;
+                        return (
+                          <div key={convo.conversation_id} style={{ border: '1px solid #E8EEF2', borderRadius: 10, overflow: 'hidden', transition: 'all 0.2s' }}>
+                            <div onClick={(e) => { e.stopPropagation(); setExpandedConvo(isExpanded ? null : convo.conversation_id); }}
+                              style={{ padding: '12px 14px', cursor: 'pointer', background: isExpanded ? '#EBF5FB' : '#fff', display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#D6EAF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+                                {'\uD83D\uDCAC'}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#2C3E50' }}>
+                                  {startDate ? startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Conversation'}
+                                  <span style={{ fontWeight: 400, color: '#999', marginLeft: 6 }}>
+                                    {startDate ? startDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''}
+                                  </span>
+                                </div>
+                                {!isExpanded && preview && (
+                                  <div style={{ fontSize: 12, color: '#7F8C8D', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{preview}</div>
+                                )}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                <span style={{ fontSize: 11, color: '#7F8C8D', background: '#F4F6F7', padding: '2px 8px', borderRadius: 8 }}>
+                                  {convo.message_count} msg{convo.message_count !== 1 ? 's' : ''}
+                                </span>
+                                <span style={{ fontSize: 12, color: '#999', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
+                              </div>
+                            </div>
+                            {isExpanded && convo.messages && (
+                              <div style={{ padding: '8px 14px 14px', borderTop: '1px solid #E8EEF2', background: '#FAFCFE' }}>
+                                {convo.messages.map((msg, mi) => (
+                                  <div key={msg.id || mi} style={{
+                                    display: 'flex', gap: 10, padding: '8px 0',
+                                    borderBottom: mi < convo.messages.length - 1 ? '1px solid #f0f0f0' : 'none',
+                                  }}>
+                                    <div style={{
+                                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                                      background: msg.role === 'user' ? '#E8F8F0' : '#D6EAF8',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
+                                    }}>
+                                      {msg.role === 'user' ? '\uD83D\uDC64' : '\uD83C\uDFA4'}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ fontSize: 11, fontWeight: 600, color: msg.role === 'user' ? '#27AE60' : '#1A5276', marginBottom: 2 }}>
+                                        {msg.role === 'user' ? profile?.first_name || 'Care Recipient' : 'Companion'}
+                                        {msg.created_at && (
+                                          <span style={{ fontWeight: 400, color: '#999', marginLeft: 6 }}>
+                                            {new Date(msg.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div style={{ fontSize: 13, color: '#333', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {companionConvos.length > 0 && (
+                    <button onClick={(e) => { e.stopPropagation(); fetchCompanionConversations(profile?.id); }}
+                      style={{ marginTop: 12, padding: '8px 16px', border: '1px solid #E8EEF2', borderRadius: 8, background: '#fff', color: '#1A5276', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {'\u21BB'} Refresh
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* ── Voice Settings Tab ── */}
+              {companionTab === 'voice-settings' && (
+                <div>
+                  <p style={{ fontSize: 12, color: '#888', margin: '0 0 16px', lineHeight: 1.5 }}>
+                    Adjust how the companion speaks to {profile?.first_name}. These are the baseline settings; the companion also adapts in real time when {profile?.first_name} asks it to speak differently.
+                  </p>
+                  {voicePrefsLoading ? (
+                    <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>Loading voice settings...</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                      {/* Speed slider */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#2C3E50' }}>Speaking Speed</div>
+                            <div style={{ fontSize: 11, color: '#7F8C8D' }}>0.7 (very slow) to 1.2 (brisk)</div>
+                          </div>
+                          <span style={{ fontSize: 18, fontWeight: 700, color: '#1A5276' }}>{voicePrefs.speed.toFixed(2)}x</span>
+                        </div>
+                        <input type="range" min="0.7" max="1.2" step="0.05" value={voicePrefs.speed}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setVoicePrefs(p => ({ ...p, speed: parseFloat(e.target.value) }))}
+                          style={{ width: '100%', accentColor: '#1A5276' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#999', marginTop: 2 }}>
+                          <span>Slower</span><span>Default</span><span>Faster</span>
+                        </div>
+                      </div>
+
+                      {/* Stability slider */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#2C3E50' }}>Voice Stability</div>
+                            <div style={{ fontSize: 11, color: '#7F8C8D' }}>Higher = more consistent. Lower = more expressive.</div>
+                          </div>
+                          <span style={{ fontSize: 18, fontWeight: 700, color: '#1A5276' }}>{(voicePrefs.stability * 100).toFixed(0)}%</span>
+                        </div>
+                        <input type="range" min="0" max="1" step="0.05" value={voicePrefs.stability}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setVoicePrefs(p => ({ ...p, stability: parseFloat(e.target.value) }))}
+                          style={{ width: '100%', accentColor: '#1A5276' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#999', marginTop: 2 }}>
+                          <span>Expressive</span><span>Balanced</span><span>Consistent</span>
+                        </div>
+                      </div>
+
+                      {/* Similarity slider */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#2C3E50' }}>Voice Similarity</div>
+                            <div style={{ fontSize: 11, color: '#7F8C8D' }}>How closely the output matches the original recording.</div>
+                          </div>
+                          <span style={{ fontSize: 18, fontWeight: 700, color: '#1A5276' }}>{(voicePrefs.similarity_boost * 100).toFixed(0)}%</span>
+                        </div>
+                        <input type="range" min="0" max="1" step="0.05" value={voicePrefs.similarity_boost}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setVoicePrefs(p => ({ ...p, similarity_boost: parseFloat(e.target.value) }))}
+                          style={{ width: '100%', accentColor: '#1A5276' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#999', marginTop: 2 }}>
+                          <span>Less alike</span><span>Balanced</span><span>Most alike</span>
+                        </div>
+                      </div>
+
+                      <button onClick={(e) => { e.stopPropagation(); saveVoicePreferences(); }} disabled={savingVoicePrefs}
+                        style={{
+                          padding: '10px 20px', borderRadius: 8, border: 'none',
+                          background: savingVoicePrefs ? '#a0c4b8' : '#1A5276', color: '#fff',
+                          fontWeight: 700, fontSize: 13, cursor: savingVoicePrefs ? 'wait' : 'pointer', alignSelf: 'flex-start',
+                        }}>
+                        {savingVoicePrefs ? 'Saving...' : 'Save Voice Settings'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Usage Tab ── */}
+              {companionTab === 'usage' && (
+                <div>
+                  <p style={{ fontSize: 12, color: '#888', margin: '0 0 16px', lineHeight: 1.5 }}>
+                    Track voice companion usage and ElevenLabs credit consumption.
+                  </p>
+                  {usageLoading ? (
+                    <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>Loading usage data...</div>
+                  ) : !companionUsage ? (
+                    <div style={{ textAlign: 'center', padding: 24, color: '#999', background: '#fafafa', borderRadius: 10 }}>No usage data yet</div>
+                  ) : (
+                    <div>
+                      {/* Summary cards */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
+                        {[
+                          { label: 'Total Messages', value: companionUsage.summary?.total_messages || 0, icon: '\uD83D\uDCAC', color: '#1A5276' },
+                          { label: 'Conversations', value: companionUsage.summary?.conversation_count || 0, icon: '\uD83D\uDDE3\uFE0F', color: '#27AE60' },
+                          { label: 'Credits Used', value: companionUsage.summary?.total_credits_used || 0, icon: '\uD83D\uDCB0', color: '#E67E22' },
+                          { label: 'Proj. Monthly', value: companionUsage.summary?.projected_monthly_credits || 0, icon: '\uD83D\uDCC8', color: '#8E44AD' },
+                        ].map((stat, i) => (
+                          <div key={i} style={{ textAlign: 'center', padding: 14, background: '#F4F6F7', borderRadius: 10 }}>
+                            <div style={{ fontSize: 20, marginBottom: 4 }}>{stat.icon}</div>
+                            <div style={{ fontSize: 20, fontWeight: 700, color: stat.color }}>{typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}</div>
+                            <div style={{ fontSize: 11, color: '#7F8C8D', marginTop: 2 }}>{stat.label}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Daily breakdown */}
+                      {companionUsage.daily_breakdown && companionUsage.daily_breakdown.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#2C3E50', marginBottom: 8 }}>Past 7 Days</div>
+                          <div style={{ border: '1px solid #E8EEF2', borderRadius: 10, overflow: 'hidden' }}>
+                            {companionUsage.daily_breakdown.map((day, i) => (
+                              <div key={i} style={{
+                                display: 'flex', alignItems: 'center', padding: '10px 14px', gap: 12,
+                                borderBottom: i < companionUsage.daily_breakdown.length - 1 ? '1px solid #f0f0f0' : 'none',
+                                background: i % 2 === 0 ? '#fff' : '#FAFCFE',
+                              }}>
+                                <span style={{ fontSize: 13, color: '#2C3E50', fontWeight: 500, width: 90 }}>
+                                  {new Date(day.day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                                </span>
+                                <div style={{ flex: 1, height: 8, background: '#F4F6F7', borderRadius: 4, overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', background: '#1A5276', borderRadius: 4, width: `${Math.min(100, (day.credits_used / Math.max(1, ...companionUsage.daily_breakdown.map(d => d.credits_used))) * 100)}%` }} />
+                                </div>
+                                <span style={{ fontSize: 11, color: '#7F8C8D', width: 60, textAlign: 'right' }}>
+                                  {(day.credits_used || 0).toLocaleString()} cr
+                                </span>
+                                <span style={{ fontSize: 11, color: '#7F8C8D', width: 50, textAlign: 'right' }}>
+                                  {day.message_count} msg
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ElevenLabs plan info */}
+                      <div style={{ marginTop: 16, padding: 14, background: '#EBF5FB', borderRadius: 10, border: '1px solid #D6EAF8' }}>
+                        <div style={{ fontSize: 13, color: '#2C3E50', lineHeight: 1.5 }}>
+                          <strong>ElevenLabs Starter Plan:</strong> 40,000 credits/month ($5/mo).
+                          {companionUsage.summary?.projected_monthly_credits > 40000 && (
+                            <span style={{ color: '#E67E22', fontWeight: 600 }}>
+                              {' '}Projected usage exceeds plan. Consider upgrading or routing more messages to generic voices.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Launch companion link */}
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f0f0', display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button onClick={(e) => {
+                  e.stopPropagation();
+                  const token = window.AUTH_TOKEN || '';
+                  window.open(`/companion?token=${encodeURIComponent(token)}`, '_blank');
+                }} style={{
+                  padding: '8px 16px', borderRadius: 8, border: '2px solid #1A5276',
+                  background: '#fff', color: '#1A5276', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  {'\uD83C\uDFA4'} Open Companion App
+                </button>
+                <span style={{ fontSize: 12, color: '#999' }}>Opens {profile?.first_name}'s voice companion in a new tab</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── 6. Permission Controls (owner only, bottom) ─── */}
       {canEdit && (
