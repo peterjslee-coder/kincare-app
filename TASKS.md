@@ -251,14 +251,15 @@
 
 > **Source of truth:** `/mnt/Claude Working Folder/VOICE_ASSISTANT_PROTOTYPE_ROADMAP.md`
 > **Business model:** `/mnt/Claude Working Folder/VOICE_COMPANION_BUSINESS_MODEL.md`
-> **Status:** v1.51.15 — Companion app live. Backend + frontend + auth gating deployed. Voice cloned. Awaiting Betty test.
+> **Status:** v1.51.22 — **End-to-end working.** Talk to Pete → records → Claude thinks → responds in Pete's cloned voice. Awaiting Betty test.
 
 ### Phase 0 — Validation
 - [x] **Pete records voice sample for ElevenLabs clone.** Done — 1.5 min recording, Instant Voice Clone. Voice ID: `c2liOZ7MsLVLDpKuwIY5`. Sounds good.
+- [x] **End-to-end pipeline working (v1.51.22, Mar 23).** Press "Talk to Pete" → Web Speech API transcribes → POST /chat → Claude Haiku (companion brain) → ElevenLabs TTS (Pete's voice) → audio playback. Four bugs fixed to get here: (1) CSRF 403 — verifyCsrf used req.path which strips /api prefix at mount point, switched to req.originalUrl; (2) chatResult.response undefined — handleCompanionMessage returns {text} not {response}; (3) voice_preferences table missing — initializeTables had all CREATEs in one try/catch, split to per-table; (4) loadCareContext queried nonexistent "visits"/"caregivers" tables, fixed to care_sessions/caregiver_profiles.
 - [ ] **Play test voice for Betty and observe reaction.** Go/no-go gate. If Betty's face lights up → proceed. If confused → adjust.
 
-### Phase 1 — Built (v1.51.15)
-- [x] **Backend: All 5 tables** — voice_profiles, voice_routing, voice_preferences, companion_messages, voice_reminders. Auto-created on module load.
+### Phase 1 — Built (v1.51.22)
+- [x] **Backend: All 6 tables** — voice_profiles, voice_routing, voice_preferences, companion_messages, voice_reminders, voice_escalations. Auto-created individually on module load (each with own try/catch).
 - [x] **Backend: ElevenLabs TTS** — `src/utils/voiceService.js` (generateSpeech, streamSpeech, listVoices, getVoice, getUsage)
 - [x] **Backend: Companion brain** — `src/utils/voiceCompanion.js` (identity framework, care context, distress detection, voice adaptation)
 - [x] **Backend: STT** — Web Speech API (browser-native, free). ElevenLabs Scribe available as upgrade path.
@@ -266,15 +267,22 @@
 - [x] **Frontend: Companion PWA** — `companion/index.html`, push-to-talk, auth-gated
 - [x] **Auth: companion_access flag** — per-user toggle in admin panel, JWT + companion_access required
 - [x] **Nav: Companion launch button** — in sidebar for family users with access
+- [x] **Frontend: Companion admin pop-out on My Loved One page** — conversations, voice settings, usage tabs. Opens from CareProfile.js.
+- [x] **Phase 0 fallback: No voice_profiles row needed** — defaults to Pete's ElevenLabs voice ID when no profile configured.
+- [x] **Default voice speed: 0.85** — slowed from 1.0 for elder care clarity. Pete confirmed "a little fast" at 1.0.
+
+### Phase 1.5 — Companion Tone & Personality (NEXT — Mar 24)
+- [ ] **Warmer, slower conversational tone.** Current responses are robotic. Need: warmth, patience, gentle pacing appropriate for dementia care. Adjust system prompt language rules, add example exchanges, tune response length.
+- [ ] **Dementia-aware communication patterns.** Short sentences, simple words, no corrections, validation over accuracy, gentle repetition OK, don't quiz or test, redirect from distress, always reassuring.
+- [ ] **Voice speed tuning.** 0.85 may still be fast for Betty. Test 0.75–0.80 range. Add per-recipient voice speed in admin panel.
+- [ ] **Response length control.** Keep responses short (1-3 sentences). Long responses lose dementia patients. Prompt engineering for brevity.
 
 ### Phase 1 — Remaining
-- [ ] **Frontend: Companion admin panel in InPlace** — voice routing, voice tuning, usage. Mockup at `mockups/companion/companion-admin-mockup.html`. API endpoints exist, no UI yet.
 - [ ] **Consent flow: Voice cloning consent + Digital Voice Directive** — recording consent, posthumous use clause (default opt-out), designated decision-maker
 - [ ] **Reminders: Pull from InPlace appointments** — If no manual reminders set, show upcoming care sessions from InPlace calendar. Companion should read these to Betty.
 - [ ] **"My Loved One" → Reminders tab** — Let family set reminders for the care recipient's calendar from the InPlace app. If Betty had an account, her entries would show here too.
 - [ ] **Chat History: Repurpose for iPAi conversations** — Betty has no account, so no traditional chat history. Options: (a) hide from Betty's view, (b) show companion conversation history so family can review what Betty and the companion talked about, (c) let Betty chat with iPAi via text too.
 - [ ] **Recipient name: Dynamic from care_recipients table** — Currently hardcoded "Betty". Should pull from profile.
-- [ ] **ELEVENLABS_API_KEY: Add to Railway env vars** — Pete must do this manually.
 
 ### Key Design Decisions (settled, documented in roadmap)
 - **Companion identity:** NOT Pete. Speaks in Pete's voice but has its own role ("from Pete"). Never says "I love you, Mom" — says "Pete loves you, Mom." See Identity Framework in roadmap.
@@ -288,8 +296,9 @@
 ### Pete's Action Items — Voice Companion
 - [x] **Record voice sample** — done, voice_id: c2liOZ7MsLVLDpKuwIY5
 - [x] **Test clone output** — sounds good
+- [x] **Add ELEVENLABS_API_KEY to Railway env vars** — done (working as of v1.51.22)
+- [x] **First live test (Mar 23)** — end-to-end working. Pete confirmed voice sounds "pretty good, if I'm being honest. A little fast." Speed reduced to 0.85.
 - [ ] **Play for Betty** — validation gate
-- [ ] **Add ELEVENLABS_API_KEY to Railway env vars**
 - [ ] **Contact ElevenLabs re: OEM agreement** (when ready for paying customers)
 
 ## Dev Best Practices
