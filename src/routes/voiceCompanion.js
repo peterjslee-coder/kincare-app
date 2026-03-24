@@ -433,6 +433,26 @@ router.post("/profiles", async (req, res) => {
   }
 });
 
+// ── GET /api/voice-companion/preview-voice/:voiceId ───────────────
+// Generate a sample audio clip for a voice (admin only, for voice selection)
+router.get("/preview-voice/:voiceId", async (req, res) => {
+  try {
+    const { generateSpeech } = require("../utils/voiceService");
+    const sampleText = req.query.text || "Hi Mom... it's time for your afternoon medication... don't forget to take it with a glass of water, okay?";
+    const audioBuffer = await generateSpeech(sampleText, req.params.voiceId, {
+      speed: 0.75,
+      stability: 0.65,
+      similarity_boost: 0.8,
+    });
+    res.set("Content-Type", "audio/mpeg");
+    res.set("Content-Disposition", `inline; filename="preview-${req.params.voiceId}.mp3"`);
+    return res.send(audioBuffer);
+  } catch (err) {
+    console.error("[Voice Companion] Preview error:", err.message);
+    return res.status(500).json({ error: "Failed to generate preview", message: err.message });
+  }
+});
+
 // ── GET /api/voice-companion/available-voices ─────────────────────
 // List all ElevenLabs voices (cloned + pre-made) for voice routing selection
 router.get("/available-voices", async (req, res) => {
