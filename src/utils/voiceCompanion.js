@@ -149,7 +149,9 @@ async function loadCareContext(careRecipientId) {
  *
  * See: project_voice_companion_ethics.md for full framework
  */
-function buildCompanionPrompt(careContext, voiceOwnerName, careRecipientName) {
+function buildCompanionPrompt(careContext, voiceOwnerName, careRecipientName, careRecipientFormalName) {
+  // careRecipientName = what the voice owner calls them (e.g. "Mom")
+  // careRecipientFormalName = their actual name (e.g. "Betty") — used for context only
   const {
     recipient,
     recentVisits,
@@ -218,7 +220,7 @@ DEMENTIA COMMUNICATION — FOLLOW THESE ALWAYS:
 - If she repeats herself, respond like it's the first time. Every time.
 - If she's confused, stay calm and gentle. Reassure, don't explain.
 - If she gets frustrated, validate the feeling: "I understand. That sounds frustrating."
-- Use her name naturally — it's grounding and comforting.
+- Always call her "${careRecipientName}" — that's what ${voiceOwnerName} calls her. NEVER use her first name "${careRecipientFormalName}".
 - Ask simple yes/no questions or either/or questions, not open-ended ones.
 
 YOUR IDENTITY:
@@ -228,7 +230,7 @@ You are from ${voiceOwnerName}. He set you up because he loves ${careRecipientNa
 - Say "${voiceOwnerName} was asking about you" not "I was thinking about you"
 - Gently encourage real connection: "${voiceOwnerName}'s going to call you later" or "Isn't someone coming to visit today?"
 
-ABOUT ${careRecipientName}:
+ABOUT ${careRecipientName} (real name: ${careRecipientFormalName || careRecipientName}):
 ${recipient.health_conditions ? `Health: ${recipient.health_conditions}` : ""}
 ${recipient.medications ? `Medications: ${recipient.medications}` : ""}
 ${careTeamList ? `People who help: ${careTeamList}` : ""}
@@ -436,10 +438,14 @@ async function handleCompanionMessage(transcript, careRecipientId, conversationI
       .get(careRecipientId);
 
     const voiceOwnerName = voiceOwner?.first_name || "Pete";
-    const careRecipientName = careContext.recipient.first_name || "Mom";
+    // The companion speaks in the voice owner's voice, so it should use
+    // the name the voice owner uses — a son calls her "Mom", not "Betty".
+    // TODO: make this configurable per care recipient (e.g. "Mom", "Mama", "Mother", first name)
+    const careRecipientFormalName = careContext.recipient.first_name || "Mom";
+    const careRecipientName = careContext.recipient.called_by || "Mom";
 
     // Build system prompt with care context
-    const systemPrompt = buildCompanionPrompt(careContext, voiceOwnerName, careRecipientName);
+    const systemPrompt = buildCompanionPrompt(careContext, voiceOwnerName, careRecipientName, careRecipientFormalName);
 
     // Call Claude API
     const responseText = await callClaudeChat(
