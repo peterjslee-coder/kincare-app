@@ -1320,16 +1320,28 @@
         const response = await apiCall(`/conversations?care_recipient_id=${app.recipientId}`);
 
         if (response.conversations && Array.isArray(response.conversations)) {
-          app.messages = response.conversations.map(msg => ({
-            text: msg.message || msg.text,
-            from: msg.from_role === 'companion' ? 'companion' : 'betty',
-            timestamp: new Date(msg.created_at),
-          }));
-
+          // Backend returns grouped conversations, each with a messages array
+          // Flatten all messages into a single chronological list
+          const allMessages = [];
+          for (const conv of response.conversations) {
+            if (conv.messages && Array.isArray(conv.messages)) {
+              for (const msg of conv.messages) {
+                allMessages.push({
+                  text: msg.content || msg.text || msg.message || '',
+                  from: msg.role === 'companion' ? 'companion' : 'betty',
+                  timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
+                });
+              }
+            }
+          }
+          // Sort chronologically and keep most recent
+          allMessages.sort((a, b) => a.timestamp - b.timestamp);
+          app.messages = allMessages.slice(-50);
           renderChatMessages();
         }
       } catch (error) {
-        showError('Failed to load chat history');
+        console.error('Failed to load chat history:', error);
+        // Non-fatal — just means no history displayed
       }
     }
 
