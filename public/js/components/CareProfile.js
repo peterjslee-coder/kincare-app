@@ -9,6 +9,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [permTier, setPermTier] = useState('full');
   const [visSettings, setVisSettings] = useState(null);
@@ -846,39 +847,56 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         )}
       </div>
 
-      {/* ─── 5. Care Notes ─── */}
+      {/* ─── 5. Care Notes (collapsible) ─── */}
       <div className="card">
-        <div className="card-header"><span className="card-icon">{'\uD83D\uDCDD'}</span>Care Notes</div>
-        <div style={{ marginBottom: notes.length > 0 ? 12 : 0 }}>
-          <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
-            placeholder="Add a note about care, observations, updates..."
-            rows={3}
-            style={{ width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && newNote.trim()) { e.preventDefault(); handleAddNote(); } }} />
-          <button onClick={handleAddNote} disabled={addingNote || !newNote.trim()}
-            style={{ padding: '10px 20px', background: addingNote ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
-            {addingNote ? '...' : 'Add Note'}
-          </button>
-        </div>
-        {notes.length > 0 ? notes.map((n) => (
-          <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.content}</div>
-              <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
-                {n.author_first_name} {n.author_last_name}
-                {' \u00B7 '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-              </div>
-            </div>
-            {canEdit && (
-              <button onClick={async () => {
-                if (!confirm('Delete this note?')) return;
-                const res = await apiFetch(`/api/notes/${n.id}`, { method: 'DELETE' });
-                if (res?.ok) fetchNotes(profile.id);
-              }} style={{ padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: 4, cursor: 'pointer', fontSize: 11, color: '#c00', whiteSpace: 'nowrap', flexShrink: 0 }}>Delete</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+          onClick={() => setNotesOpen(!notesOpen)}>
+          <div className="card-header" style={{ margin: 0 }}>
+            <span className="card-icon">{'\uD83D\uDCDD'}</span>Care Notes
+            {notes.length > 0 && (
+              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1b6b5a', background: '#E8F8F0', padding: '2px 8px', borderRadius: 10 }}>
+                {notes.length}
+              </span>
             )}
           </div>
-        )) : (
-          <p style={{ color: '#999', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
+          <span style={{ fontSize: 18, color: '#999', transition: 'transform 0.2s', transform: notesOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
+        </div>
+        {notesOpen && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ marginBottom: notes.length > 0 ? 12 : 0 }}>
+              <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Add a note about care, observations, updates..."
+                rows={3}
+                style={{ width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && newNote.trim()) { e.preventDefault(); handleAddNote(); } }} />
+              <button onClick={(e) => { e.stopPropagation(); handleAddNote(); }} disabled={addingNote || !newNote.trim()}
+                style={{ padding: '10px 20px', background: addingNote ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                {addingNote ? '...' : 'Add Note'}
+              </button>
+            </div>
+            {notes.length > 0 ? notes.map((n) => (
+              <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.content}</div>
+                  <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
+                    {n.author_first_name} {n.author_last_name}
+                    {' \u00B7 '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </div>
+                </div>
+                {canEdit && (
+                  <button onClick={async (e) => {
+                    e.stopPropagation();
+                    if (!confirm('Delete this note?')) return;
+                    const res = await apiFetch(`/api/notes/${n.id}`, { method: 'DELETE' });
+                    if (res?.ok) fetchNotes(profile.id);
+                  }} style={{ padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: 4, cursor: 'pointer', fontSize: 11, color: '#c00', whiteSpace: 'nowrap', flexShrink: 0 }}>Delete</button>
+                )}
+              </div>
+            )) : (
+              <p style={{ color: '#999', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
+            )}
+          </div>
         )}
       </div>
 
