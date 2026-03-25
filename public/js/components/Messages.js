@@ -183,6 +183,53 @@ const Messages = window.Messages = () => {
     showToast('Conversation restored', 'success');
   };
 
+  // Delete a conversation (permanent, server-side)
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, convId }
+
+  const handleDelete = async (convId) => {
+    setDeleting(true);
+    try {
+      const res = await apiFetch(`/api/messages/conversations/${convId}`, { method: 'DELETE' });
+      if (res?.ok) {
+        setConversations(prev => prev.filter(c => c.id !== convId));
+        const updatedArchived = archivedIds.filter(id => id !== convId);
+        setArchivedIds(updatedArchived);
+        localStorage.setItem('msg_archived', JSON.stringify(updatedArchived));
+        if (activeConvId === convId) { setActiveConvId(null); setMessages([]); }
+        showToast('Conversation deleted', 'success');
+      } else {
+        showToast('Failed to delete conversation', 'error');
+      }
+    } catch { showToast('Failed to delete conversation', 'error'); }
+    setDeleting(false);
+    setDeleteConfirmId(null);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    setDeleting(true);
+    let deleted = 0;
+    for (const id of selectedIds) {
+      try {
+        const res = await apiFetch(`/api/messages/conversations/${id}`, { method: 'DELETE' });
+        if (res?.ok) deleted++;
+      } catch {}
+    }
+    if (deleted > 0) {
+      setConversations(prev => prev.filter(c => !selectedIds.includes(c.id)));
+      const updatedArchived = archivedIds.filter(id => !selectedIds.includes(id));
+      setArchivedIds(updatedArchived);
+      localStorage.setItem('msg_archived', JSON.stringify(updatedArchived));
+      if (selectedIds.includes(activeConvId)) { setActiveConvId(null); setMessages([]); }
+      showToast(`${deleted} conversation${deleted > 1 ? 's' : ''} deleted`, 'success');
+    }
+    setSelectedIds([]);
+    setSelectMode(false);
+    setDeleting(false);
+  };
+
   const [showArchived, setShowArchived] = useState(false);
 
   const toggleSelectId = (id) => {
@@ -1076,6 +1123,11 @@ const Messages = window.Messages = () => {
                 style={{ background: selectedIds.length > 0 ? '#e65100' : '#ccc', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
                 Archive{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
               </button>
+              <button onClick={() => selectedIds.length > 0 && setDeleteConfirmId('__bulk__')}
+                disabled={selectedIds.length === 0}
+                style={{ background: selectedIds.length > 0 ? '#dc2626' : '#ccc', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
+                Delete{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
+              </button>
               <button onClick={() => { setSelectMode(false); setSelectedIds([]); }}
                 style={{ background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
@@ -1187,19 +1239,26 @@ const Messages = window.Messages = () => {
           const isSwiping = swipingId === c.id;
           return (
             <div key={c.id} style={{ position: 'relative', overflow: 'hidden' }}>
-              {/* Archive background revealed on swipe */}
+              {/* Archive + Delete background revealed on swipe */}
               <div style={{
                 position: 'absolute', top: 0, right: 0, bottom: 0, width: 120,
-                background: '#e65100', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontWeight: 600, fontSize: 13,
+                display: 'flex', alignItems: 'stretch',
                 opacity: isSwiping && swipeOffset < -30 ? 1 : 0,
                 transition: 'opacity 0.15s',
               }}>
-                Archive
+                <div onClick={(e) => { e.stopPropagation(); handleArchive(c.id); setSwipingId(null); setSwipeOffset(0); }}
+                  style={{ flex: 1, background: '#e65100', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                  Archive
+                </div>
+                <div onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(c.id); setSwipingId(null); setSwipeOffset(0); }}
+                  style={{ flex: 1, background: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                  Delete
+                </div>
               </div>
               <div
                 className={`msg-conv-item ${activeConvId === c.id ? 'active' : ''}`}
-                onClick={() => selectMode ? toggleSelectId(c.id) : handleSelectConversation(c)}
+                onClick={() => { setContextMenu(null); selectMode ? toggleSelectId(c.id) : handleSelectConversation(c); }}
+                onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, convId: c.id }); }}
                 onTouchStart={(e) => !selectMode && onConvTouchStart(e, c.id)}
                 onTouchMove={(e) => !selectMode && onConvTouchMove(e, c.id)}
                 onTouchEnd={() => !selectMode && onConvTouchEnd(c.id)}
@@ -1389,6 +1448,10 @@ const Messages = window.Messages = () => {
                       style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       Restore
                     </button>
+                    <button onClick={() => setDeleteConfirmId(c.id)}
+                      style={{ background: '#fff', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      Delete
+                    </button>
                   </div>
                 );
               })}
@@ -1396,6 +1459,64 @@ const Messages = window.Messages = () => {
           );
         })()}
       </div>
+
+      {/* Right-click context menu (desktop) */}
+      {contextMenu && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }}
+          onClick={() => setContextMenu(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            position: 'fixed', left: contextMenu.x, top: contextMenu.y,
+            background: '#fff', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+            padding: '4px 0', minWidth: 160, zIndex: 10000,
+          }}>
+            <div onClick={() => { handleArchive(contextMenu.convId); setContextMenu(null); }}
+              style={{ padding: '10px 16px', fontSize: 14, color: '#333', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+              <span style={{ fontSize: 16 }}>&#128230;</span> Archive
+            </div>
+            <div onClick={() => { setDeleteConfirmId(contextMenu.convId); setContextMenu(null); }}
+              style={{ padding: '10px 16px', fontSize: 14, color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+              <span style={{ fontSize: 16 }}>&#128465;</span> Delete
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deleteConfirmId && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10000,
+        }} onClick={() => setDeleteConfirmId(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: '#fff', borderRadius: 16, padding: '24px', width: '90%', maxWidth: 340,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#333', marginBottom: 8 }}>Delete Conversation?</div>
+            <div style={{ fontSize: 14, color: '#666', marginBottom: 20, lineHeight: 1.4 }}>
+              {deleteConfirmId === '__bulk__'
+                ? `This will permanently delete ${selectedIds.length} conversation${selectedIds.length > 1 ? 's' : ''} and all messages. This can't be undone.`
+                : 'This will permanently delete this conversation and all messages. This can\'t be undone.'}
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setDeleteConfirmId(null)}
+                style={{ background: '#f3f4f6', color: '#555', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button
+                disabled={deleting}
+                onClick={() => deleteConfirmId === '__bulk__' ? handleDeleteSelected() : handleDelete(deleteConfirmId)}
+                style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}>
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 

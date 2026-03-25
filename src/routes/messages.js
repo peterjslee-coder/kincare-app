@@ -826,4 +826,34 @@ router.post("/:messageId/reactions", async (req, res) => {
   res.json({ reactions: reactionData, action });
 });
 
+// ─── DELETE /api/messages/conversations/:id ─── Delete a conversation and all its messages
+router.delete("/conversations/:id", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+  const convId = req.params.id;
+
+  try {
+    // Verify user is a member of this conversation (or is admin)
+    const member = await db.prepare(
+      "SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+    ).get(convId, userId);
+    const user = await db.prepare("SELECT role FROM users WHERE id = ?").get(userId);
+
+    if (!member && user?.role !== 'admin') {
+      return res.status(403).json({ error: "Not a member of this conversation" });
+    }
+
+    // Delete messages, members, then conversation
+    await db.prepare("DELETE FROM message_reactions WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)").run(convId);
+    await db.prepare("DELETE FROM messages WHERE conversation_id = ?").run(convId);
+    await db.prepare("DELETE FROM conversation_members WHERE conversation_id = ?").run(convId);
+    await db.prepare("DELETE FROM conversations WHERE id = ?").run(convId);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Messages] Delete conversation error:", err);
+    res.status(500).json({ error: "Failed to delete conversation" });
+  }
+});
+
 module.exports = router;
