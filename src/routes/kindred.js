@@ -382,7 +382,7 @@ router.post("/chat", async (req, res) => {
       console.error("[Kindred Chat] Message storage error (non-fatal):", storeErr.message);
     }
 
-    // ── Relay message: push notification to care team when Betty asks Kindred to tell someone something ──
+    // ── Relay message: push + in-app message when Betty asks Kindred to tell someone something ──
     if (chatResult.relayMessage) {
       try {
         const relay = chatResult.relayMessage;
@@ -392,10 +392,9 @@ router.post("/chat", async (req, res) => {
         const recipient = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(care_recipient_id);
         const recipientName = recipient?.first_name || "Your loved one";
 
-        // Find care team members to notify — try to match the target name, otherwise notify all family/admin
+        // Find care team members to notify — try to match the target name, otherwise notify family user
         let targetUsers = [];
         try {
-          // First try: exact name match among care team members
           targetUsers = await db.prepare(`
             SELECT DISTINCT u.id, u.first_name FROM users u
             JOIN caregiver_assignments ca ON ca.caregiver_profile_id = (SELECT id FROM caregiver_profiles WHERE user_id = u.id)
@@ -408,34 +407,81 @@ router.post("/chat", async (req, res) => {
             JOIN users u ON cr.family_user_id = u.id
             WHERE cr.id = ? AND LOWER(u.first_name) = ?
           `).all(care_recipient_id, targetNameLower, targetNameLower, care_recipient_id, targetNameLower);
-        } catch (e) {
-          // Query structure may vary — fall through
-        }
+        } catch (e) { /* fall through */ }
 
-        // If no match, notify the family user (primary contact)
         if (targetUsers.length === 0) {
           try {
             targetUsers = await db.prepare(`
               SELECT u.id, u.first_name FROM care_recipients cr
-              JOIN users u ON cr.family_user_id = u.id
-              WHERE cr.id = ?
+              JOIN users u ON cr.family_user_id = u.id WHERE cr.id = ?
             `).all(care_recipient_id);
           } catch (e) {
             console.error("[Kindred Relay] Fallback user query failed:", e.message);
           }
         }
 
+        // Get or create a Kindred system user (like iPAi has one)
+        let kindredUser = await db.prepare("SELECT id FROM users WHERE email = 'kindred@yourinplace.com'").get();
+        if (!kindredUser) {
+          const kindredUserId = uuid();
+          await db.prepare(
+            "INSERT INTO users (id, email, first_name, last_name, role, is_demo, is_active, password_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+          ).run(kindredUserId, "kindred@yourinplace.com", "Kindred", `(${recipientName})`, "system", 0, 1, "disabled");
+          kindredUser = { id: kindredUserId };
+        }
+
+        const messageContent = `${recipientName} said: "${relay.originalMessage}"`;
+
         for (const user of targetUsers) {
+          // Send push notification
           await sendPushToUser(user.id, {
             title: `Message from ${recipientName}`,
-            body: `${recipientName} asked Kindred: "${relay.originalMessage}"`,
+            body: messageContent,
             data: { type: "kindred_relay", care_recipient_id, conversation_id: convId },
           }, "kindred_relay").catch(err => {
             console.error(`[Kindred Relay] Push failed for ${user.first_name}:`, err.message);
           });
+
+          // Create in-app message so it shows up in Messages
+          try {
+            // Find or create a direct conversation between Kindred system user and target
+            let conv = await db.prepare(`
+              SELECT c.id FROM conversations c
+              JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
+              JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
+              WHERE c.type = 'direct' LIMIT 1
+            `).get(kindredUser.id, user.id);
+
+            let relayConvId;
+            if (conv) {
+              relayConvId = conv.id;
+            } else {
+              relayConvId = uuid();
+              await db.prepare(
+                "INSERT INTO conversations (id, type, name, created_by, created_at, updated_at) VALUES (?, 'direct', ?, ?, NOW(), NOW())"
+              ).run(relayConvId, `Kindred (${recipientName})`, kindredUser.id);
+              await db.prepare(
+                "INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at) VALUES (?, ?, ?, 'member', NOW())"
+              ).run(uuid(), relayConvId, kindredUser.id);
+              await db.prepare(
+                "INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at) VALUES (?, ?, ?, 'member', NOW())"
+              ).run(uuid(), relayConvId, user.id);
+            }
+
+            // Insert the relay message
+            await db.prepare(
+              "INSERT INTO messages (id, sender_id, recipient_id, conversation_id, content, sender_label, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())"
+            ).run(uuid(), kindredUser.id, user.id, relayConvId, messageContent, `Kindred (${recipientName})`);
+
+            await db.prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?").run(relayConvId);
+
+            console.log(`[Kindred Relay] In-app message sent to ${user.first_name}`);
+          } catch (msgErr) {
+            console.error(`[Kindred Relay] In-app message failed for ${user.first_name}:`, msgErr.message);
+          }
         }
 
-        console.log(`[Kindred Relay] Sent push to ${targetUsers.length} user(s) for relay from ${recipientName}: "${relay.originalMessage}"`);
+        console.log(`[Kindred Relay] Sent to ${targetUsers.length} user(s): "${relay.originalMessage}"`);
       } catch (relayErr) {
         console.error("[Kindred Relay] Error (non-fatal):", relayErr.message);
       }

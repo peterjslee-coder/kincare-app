@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.50.40
-const CACHE_NAME = 'inplace-v1.51.37';
-const SW_VERSION = '1.51.37';
+const CACHE_NAME = 'inplace-v1.51.38';
+const SW_VERSION = '1.51.38';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -167,6 +167,10 @@ self.addEventListener('notificationclick', (event) => {
     targetUrl = `/?conversation=${data.conversationId}`;
   } else if (data.type === 'new_job') {
     targetUrl = '/?page=find-work';
+  } else if (data.type === 'kindred_relay') {
+    targetUrl = '/?page=messages';
+  } else if (data.type === 'admin_setting_change') {
+    targetUrl = '/?page=dashboard';
   }
 
   event.waitUntil(

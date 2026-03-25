@@ -9725,7 +9725,7 @@ const Dashboard = window.Dashboard = ({
 const CareProfile = window.CareProfile = ({
   onNavigate
 }) => {
-  var _profile$first_name, _profile$last_name, _companionUsage$summa, _companionUsage$summa2, _companionUsage$summa3, _companionUsage$summa4, _companionUsage$summa5;
+  var _profile$first_name, _profile$last_name, _kindredSummary$abuse, _kindredSummary$medic, _kindredSummary$care_, _companionUsage$summa, _companionUsage$summa2, _companionUsage$summa3, _companionUsage$summa4, _companionUsage$summa5;
   const [profile, setProfile] = useState(null);
   const [allRecipients, setAllRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -9736,6 +9736,7 @@ const CareProfile = window.CareProfile = ({
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [permTier, setPermTier] = useState('full');
   const [visSettings, setVisSettings] = useState(null);
@@ -9758,7 +9759,7 @@ const CareProfile = window.CareProfile = ({
   const [doctorReportLoading, setDoctorReportLoading] = useState(false);
   const [doctorReport, setDoctorReport] = useState('');
   const [doctorEmailSent, setDoctorEmailSent] = useState(false);
-  // Voice Companion panel state
+  // Kindred panel state
   const [companionOpen, setCompanionOpen] = useState(false);
   const [companionTab, setCompanionTab] = useState('conversations');
   const [companionConvos, setCompanionConvos] = useState([]);
@@ -9773,6 +9774,26 @@ const CareProfile = window.CareProfile = ({
   const [savingVoicePrefs, setSavingVoicePrefs] = useState(false);
   const [companionUsage, setCompanionUsage] = useState(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  // Kindred summary + conversation management
+  const [kindredSummary, setKindredSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [selectedConvos, setSelectedConvos] = useState(new Set());
+  const [deletingConvos, setDeletingConvos] = useState(false);
+  // Voice routing
+  const [voiceRouting, setVoiceRouting] = useState([]);
+  const [voiceRoutingLoading, setVoiceRoutingLoading] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [savingRoute, setSavingRoute] = useState(null);
+  const [routeDropdown, setRouteDropdown] = useState(null);
+  // Care team instructions for Kindred
+  const [kindredInstructions, setKindredInstructions] = useState('');
+  const [kindredInstructionsDraft, setKindredInstructionsDraft] = useState('');
+  const [instructionsLoading, setInstructionsLoading] = useState(false);
+  const [savingInstructions, setSavingInstructions] = useState(false);
+  const [instructionsMeta, setInstructionsMeta] = useState({
+    updated_at: null,
+    updated_by_name: null
+  });
   const {
     showToast
   } = useToast();
@@ -9817,12 +9838,12 @@ const CareProfile = window.CareProfile = ({
     setDoctorReportLoading(false);
   };
 
-  // ── Voice Companion data fetchers ──
+  // ── Kindred data fetchers ──
   const fetchCompanionConversations = async recipientId => {
     if (!recipientId) return;
     setCompanionConvosLoading(true);
     try {
-      const res = await apiFetch(`/api/voice-companion/conversations?care_recipient_id=${recipientId}`);
+      const res = await apiFetch(`/api/kindred/conversations?care_recipient_id=${recipientId}`);
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
         setCompanionConvos(data.conversations || []);
@@ -9836,7 +9857,7 @@ const CareProfile = window.CareProfile = ({
     if (!recipientId) return;
     setVoicePrefsLoading(true);
     try {
-      const res = await apiFetch(`/api/voice-companion/admin/voice-preferences?care_recipient_id=${recipientId}`);
+      const res = await apiFetch(`/api/kindred/admin/voice-preferences?care_recipient_id=${recipientId}`);
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
         setVoicePrefs({
@@ -9854,7 +9875,7 @@ const CareProfile = window.CareProfile = ({
     if (!(profile !== null && profile !== void 0 && profile.id)) return;
     setSavingVoicePrefs(true);
     try {
-      const res = await apiFetch('/api/voice-companion/admin/voice-preferences', {
+      const res = await apiFetch('/api/kindred/admin/voice-preferences', {
         method: 'PUT',
         body: JSON.stringify({
           care_recipient_id: profile.id,
@@ -9869,11 +9890,108 @@ const CareProfile = window.CareProfile = ({
     }
     setSavingVoicePrefs(false);
   };
+  const fetchKindredSummary = async recipientId => {
+    if (!recipientId) return;
+    setSummaryLoading(true);
+    try {
+      const res = await apiFetch('/api/kindred/admin/summarize', {
+        method: 'POST',
+        body: JSON.stringify({
+          care_recipient_id: recipientId
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setKindredSummary(data);
+      }
+    } catch (e) {
+      console.error('Kindred summary fetch error:', e);
+    }
+    setSummaryLoading(false);
+  };
+  const deleteSelectedConversations = async () => {
+    if (selectedConvos.size === 0 || !(profile !== null && profile !== void 0 && profile.id)) return;
+    setDeletingConvos(true);
+    try {
+      const res = await apiFetch('/api/kindred/conversations', {
+        method: 'DELETE',
+        body: JSON.stringify({
+          conversation_ids: Array.from(selectedConvos),
+          care_recipient_id: profile.id
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        showToast(`Deleted ${data.deleted_conversations} conversation(s)`, 'success');
+        setSelectedConvos(new Set());
+        fetchCompanionConversations(profile.id);
+        // Refresh summary after deletion
+        fetchKindredSummary(profile.id);
+      } else {
+        showToast('Failed to delete conversations', 'error');
+      }
+    } catch (e) {
+      showToast('Failed to delete conversations', 'error');
+    }
+    setDeletingConvos(false);
+  };
+  const fetchVoiceRouting = async recipientId => {
+    if (!recipientId) return;
+    setVoiceRoutingLoading(true);
+    try {
+      const res = await apiFetch(`/api/kindred/admin/voice-routing?care_recipient_id=${recipientId}`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setVoiceRouting(data.routing || []);
+      }
+    } catch (e) {
+      console.error('Voice routing fetch error:', e);
+    }
+    setVoiceRoutingLoading(false);
+  };
+  const fetchAvailableVoices = async () => {
+    try {
+      const res = await apiFetch('/api/kindred/available-voices');
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setAvailableVoices(data.voices || []);
+      }
+    } catch (e) {
+      console.error('Available voices fetch error:', e);
+    }
+  };
+  const saveVoiceRoute = async (messageType, voiceProfileId, priority) => {
+    if (!(profile !== null && profile !== void 0 && profile.id)) return;
+    setSavingRoute(messageType);
+    try {
+      const res = await apiFetch('/api/kindred/admin/voice-routing', {
+        method: 'PUT',
+        body: JSON.stringify({
+          care_recipient_id: profile.id,
+          routing: [{
+            message_type: messageType,
+            provider_voice_id: voiceProfileId,
+            priority: priority || 'medium'
+          }]
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast('Voice routing updated', 'success');
+        fetchVoiceRouting(profile.id);
+      } else {
+        showToast('Failed to update routing', 'error');
+      }
+    } catch (e) {
+      showToast('Failed to update routing', 'error');
+    }
+    setSavingRoute(null);
+    setRouteDropdown(null);
+  };
   const fetchCompanionUsage = async recipientId => {
     if (!recipientId) return;
     setUsageLoading(true);
     try {
-      const res = await apiFetch(`/api/voice-companion/admin/usage?care_recipient_id=${recipientId}`);
+      const res = await apiFetch(`/api/kindred/admin/usage?care_recipient_id=${recipientId}`);
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
         setCompanionUsage(data);
@@ -9883,12 +10001,66 @@ const CareProfile = window.CareProfile = ({
     }
     setUsageLoading(false);
   };
+  const fetchKindredInstructions = async recipientId => {
+    if (!recipientId) return;
+    setInstructionsLoading(true);
+    try {
+      const res = await apiFetch(`/api/kindred/admin/instructions?care_recipient_id=${recipientId}`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setKindredInstructions(data.instructions || '');
+        setKindredInstructionsDraft(data.instructions || '');
+        setInstructionsMeta({
+          updated_at: data.updated_at,
+          updated_by_name: data.updated_by_name
+        });
+      }
+    } catch (e) {
+      console.error('Kindred instructions fetch error:', e);
+    }
+    setInstructionsLoading(false);
+  };
+  const saveKindredInstructions = async () => {
+    if (!(profile !== null && profile !== void 0 && profile.id)) return;
+    setSavingInstructions(true);
+    try {
+      const res = await apiFetch('/api/kindred/admin/instructions', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          care_recipient_id: profile.id,
+          instructions: kindredInstructionsDraft
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setKindredInstructions(data.instructions);
+        setInstructionsMeta({
+          updated_at: data.updated_at,
+          updated_by_name: data.updated_by_name
+        });
+        showToast('Kindred instructions updated', 'success');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.error || 'Failed to save instructions', 'error');
+      }
+    } catch (e) {
+      showToast('Failed to save instructions', 'error');
+    }
+    setSavingInstructions(false);
+  };
   const handleCompanionOpen = () => {
     setCompanionOpen(true);
     if (profile !== null && profile !== void 0 && profile.id) {
       fetchCompanionConversations(profile.id);
       fetchVoicePreferences(profile.id);
       fetchCompanionUsage(profile.id);
+      fetchKindredSummary(profile.id);
+      fetchVoiceRouting(profile.id);
+      fetchAvailableVoices();
+      fetchKindredInstructions(profile.id);
     }
   };
   const CARE_PREFS_LIST = [{
@@ -11218,16 +11390,49 @@ const CareProfile = window.CareProfile = ({
   }, generatingAI ? 'Generating...' : '\u2728 Generate Care Summary with inPlace\'s AI tool')))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "card-header"
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      cursor: 'pointer'
+    },
+    onClick: () => setNotesOpen(!notesOpen)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header",
+    style: {
+      margin: 0
+    }
   }, /*#__PURE__*/React.createElement("span", {
     className: "card-icon"
-  }, '\uD83D\uDCDD'), "Care Notes"), /*#__PURE__*/React.createElement("div", {
+  }, '\uD83D\uDCDD'), "Care Notes", notes.length > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#1b6b5a',
+      background: '#E8F8F0',
+      padding: '2px 8px',
+      borderRadius: 10
+    }
+  }, notes.length)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 18,
+      color: '#999',
+      transition: 'transform 0.2s',
+      transform: notesOpen ? 'rotate(180deg)' : 'rotate(0)'
+    }
+  }, '\u25BC')), notesOpen && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: notes.length > 0 ? 12 : 0
     }
   }, /*#__PURE__*/React.createElement("textarea", {
     value: newNote,
     onChange: e => setNewNote(e.target.value),
+    onClick: e => e.stopPropagation(),
     placeholder: "Add a note about care, observations, updates...",
     rows: 3,
     style: {
@@ -11249,7 +11454,10 @@ const CareProfile = window.CareProfile = ({
       }
     }
   }), /*#__PURE__*/React.createElement("button", {
-    onClick: handleAddNote,
+    onClick: e => {
+      e.stopPropagation();
+      handleAddNote();
+    },
     disabled: addingNote || !newNote.trim(),
     style: {
       padding: '10px 20px',
@@ -11295,7 +11503,8 @@ const CareProfile = window.CareProfile = ({
     day: 'numeric',
     year: 'numeric'
   }))), canEdit && /*#__PURE__*/React.createElement("button", {
-    onClick: async () => {
+    onClick: async e => {
+      e.stopPropagation();
       if (!confirm('Delete this note?')) return;
       const res = await apiFetch(`/api/notes/${n.id}`, {
         method: 'DELETE'
@@ -11319,7 +11528,7 @@ const CareProfile = window.CareProfile = ({
       fontSize: 13,
       margin: '8px 0 0'
     }
-  }, "No notes yet. Add one to share care observations with your team.")), canEdit && /*#__PURE__*/React.createElement("div", {
+  }, "No notes yet. Add one to share care observations with your team."))), canEdit && /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       overflow: 'visible',
@@ -11340,7 +11549,7 @@ const CareProfile = window.CareProfile = ({
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "card-icon"
-  }, '\uD83C\uDFA4'), "Voice Companion", companionConvos.length > 0 && /*#__PURE__*/React.createElement("span", {
+  }, '\uD83C\uDFA4'), "Kindred", companionConvos.length > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       marginLeft: 8,
       fontSize: 12,
@@ -11374,6 +11583,9 @@ const CareProfile = window.CareProfile = ({
     id: 'conversations',
     label: '\uD83D\uDCAC Conversations'
   }, {
+    id: 'voice-routing',
+    label: '\uD83D\uDD0A Voice Routing'
+  }, {
     id: 'voice-settings',
     label: '\uD83C\uDF9B\uFE0F Voice Settings'
   }, {
@@ -11398,20 +11610,181 @@ const CareProfile = window.CareProfile = ({
       boxShadow: companionTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
       transition: 'all 0.2s'
     }
-  }, tab.label))), companionTab === 'conversations' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+  }, tab.label))), companionTab === 'conversations' && /*#__PURE__*/React.createElement("div", null, (kindredSummary === null || kindredSummary === void 0 || (_kindredSummary$abuse = kindredSummary.abuse_flags) === null || _kindredSummary$abuse === void 0 ? void 0 : _kindredSummary$abuse.length) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '12px 16px',
+      background: '#FDEDEC',
+      border: '2px solid #E74C3C',
+      borderRadius: 10,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: '#C0392B',
+      marginBottom: 6,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, '\u26A0\uFE0F', " Safety Alert"), kindredSummary.abuse_flags.map((flag, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      fontSize: 13,
+      color: '#922B21',
+      lineHeight: 1.5,
+      padding: '4px 0'
+    }
+  }, '\u2022', " ", flag))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16,
+      padding: '14px 16px',
+      background: '#FFF8E1',
+      border: '1px solid #FFE082',
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: '#F57F17',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, '\uD83D\uDCDD', " Guidance for Kindred"), instructionsMeta.updated_at && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      color: '#999'
+    }
+  }, instructionsMeta.updated_by_name ? `${instructionsMeta.updated_by_name} \u2022 ` : '', new Date(instructionsMeta.updated_at).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }))), /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 12,
-      color: '#888',
-      margin: '0 0 12px',
-      lineHeight: 1.5
+      color: '#8D6E08',
+      marginBottom: 8,
+      lineHeight: 1.4
     }
-  }, "Review ", profile === null || profile === void 0 ? void 0 : profile.first_name, "'s conversations with the voice companion. These logs help you understand what ", profile === null || profile === void 0 ? void 0 : profile.first_name, " talks about and how the companion responds."), companionConvosLoading ? /*#__PURE__*/React.createElement("div", {
+  }, "Tell Kindred what's happening today. It will adapt how it talks to ", (profile === null || profile === void 0 ? void 0 : profile.first_name) || 'your loved one', "."), /*#__PURE__*/React.createElement("textarea", {
+    value: kindredInstructionsDraft,
+    onChange: e => setKindredInstructionsDraft(e.target.value),
+    onClick: e => e.stopPropagation(),
+    placeholder: `e.g., "${(profile === null || profile === void 0 ? void 0 : profile.first_name) || 'Betty'}'s best friend went to the hospital last night and she's emotionally fragile today. Check in with her more often, but leave her alone if she doesn't want to talk."`,
+    maxLength: 2000,
+    style: {
+      width: '100%',
+      minHeight: 80,
+      padding: '10px 12px',
+      border: '1px solid #FFE082',
+      borderRadius: 8,
+      fontSize: 13,
+      fontFamily: 'inherit',
+      resize: 'vertical',
+      background: '#FFFDE7',
+      color: '#333',
+      lineHeight: 1.5,
+      outline: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: '#999'
+    }
+  }, kindredInstructionsDraft.length, "/2000"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, kindredInstructionsDraft !== kindredInstructions && /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      setKindredInstructionsDraft(kindredInstructions);
+    },
+    style: {
+      padding: '4px 12px',
+      border: '1px solid #ddd',
+      borderRadius: 6,
+      background: '#fff',
+      color: '#666',
+      fontSize: 11,
+      cursor: 'pointer'
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      saveKindredInstructions();
+    },
+    disabled: savingInstructions || kindredInstructionsDraft === kindredInstructions,
+    style: {
+      padding: '4px 14px',
+      border: 'none',
+      borderRadius: 6,
+      fontSize: 11,
+      fontWeight: 600,
+      cursor: savingInstructions || kindredInstructionsDraft === kindredInstructions ? 'default' : 'pointer',
+      background: kindredInstructionsDraft !== kindredInstructions ? '#F57F17' : '#E0E0E0',
+      color: kindredInstructionsDraft !== kindredInstructions ? '#fff' : '#999',
+      transition: 'all 0.2s'
+    }
+  }, savingInstructions ? 'Saving...' : 'Update')))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: '#2C3E50'
+    }
+  }, "Care Intelligence"), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      fetchKindredSummary(profile === null || profile === void 0 ? void 0 : profile.id);
+    },
+    disabled: summaryLoading,
+    style: {
+      padding: '4px 12px',
+      border: '1px solid #E8EEF2',
+      borderRadius: 6,
+      background: '#fff',
+      color: '#1A5276',
+      fontSize: 11,
+      fontWeight: 600,
+      cursor: summaryLoading ? 'wait' : 'pointer'
+    }
+  }, summaryLoading ? 'Analyzing...' : '\u21BB Refresh Summary')), summaryLoading && !kindredSummary ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       padding: 24,
       color: '#999'
     }
-  }, "Loading conversations...") : companionConvos.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "Analyzing conversations...") : !kindredSummary || kindredSummary.message === 'No conversations to summarize' ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       padding: 24,
@@ -11436,177 +11809,507 @@ const CareProfile = window.CareProfile = ({
       fontSize: 12,
       color: '#999'
     }
-  }, "When ", profile === null || profile === void 0 ? void 0 : profile.first_name, " talks to the companion, conversations will appear here.")) : /*#__PURE__*/React.createElement("div", {
+  }, "When ", profile === null || profile === void 0 ? void 0 : profile.first_name, " talks to Kindred, care insights will appear here.")) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flexDirection: 'column',
-      gap: 8
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '14px 16px',
+      background: '#F8FFFE',
+      border: '1px solid #D5F5E3',
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16
+    }
+  }, kindredSummary.mood_trend === 'positive' ? '\uD83D\uDE0A' : kindredSummary.mood_trend === 'concerning' ? '\uD83D\uDE1F' : kindredSummary.mood_trend === 'declining' ? '\uD83D\uDE14' : '\uD83D\uDE10'), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: kindredSummary.mood_trend === 'positive' ? '#27AE60' : kindredSummary.mood_trend === 'concerning' ? '#E74C3C' : kindredSummary.mood_trend === 'declining' ? '#E67E22' : '#7F8C8D',
+      textTransform: 'capitalize'
+    }
+  }, kindredSummary.mood_trend, " mood"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: '#999',
+      marginLeft: 'auto'
+    }
+  }, kindredSummary.message_count, " messages analyzed")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#333',
+      lineHeight: 1.6
+    }
+  }, kindredSummary.summary)), ((_kindredSummary$medic = kindredSummary.medical_alerts) === null || _kindredSummary$medic === void 0 ? void 0 : _kindredSummary$medic.length) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '12px 16px',
+      background: '#FEF9E7',
+      border: '1px solid #F9E79F',
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: '#7D6608',
+      marginBottom: 6
+    }
+  }, '\uD83C\uDFE5', " Medical Alerts"), kindredSummary.medical_alerts.map((alert, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      fontSize: 13,
+      color: '#7D6608',
+      lineHeight: 1.5,
+      padding: '3px 0'
+    }
+  }, '\u2022', " ", alert))), ((_kindredSummary$care_ = kindredSummary.care_insights) === null || _kindredSummary$care_ === void 0 ? void 0 : _kindredSummary$care_.length) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '12px 16px',
+      background: '#EBF5FB',
+      border: '1px solid #D6EAF8',
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: '#1A5276',
+      marginBottom: 6
+    }
+  }, '\uD83D\uDCA1', " Care Insights"), kindredSummary.care_insights.map((insight, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      fontSize: 13,
+      color: '#1A5276',
+      lineHeight: 1.5,
+      padding: '3px 0'
+    }
+  }, '\u2022', " ", insight))), kindredSummary.generated_at && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#999',
+      textAlign: 'right'
+    }
+  }, "Last updated: ", new Date(kindredSummary.generated_at).toLocaleString()))), companionConvos.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: '1px solid #E8EEF2',
+      paddingTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: '#666'
+    }
+  }, "Conversation Log (", companionConvos.length, ")"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      alignItems: 'center'
+    }
+  }, selectedConvos.size > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      if (confirm(`Delete ${selectedConvos.size} conversation(s)? This cannot be undone.`)) deleteSelectedConversations();
+    },
+    disabled: deletingConvos,
+    style: {
+      padding: '4px 12px',
+      border: 'none',
+      borderRadius: 6,
+      background: '#E74C3C',
+      color: '#fff',
+      fontSize: 11,
+      fontWeight: 600,
+      cursor: deletingConvos ? 'wait' : 'pointer'
+    }
+  }, deletingConvos ? 'Deleting...' : `Delete ${selectedConvos.size} selected`), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      if (selectedConvos.size === companionConvos.length) {
+        setSelectedConvos(new Set());
+      } else {
+        setSelectedConvos(new Set(companionConvos.map(c => c.conversation_id)));
+      }
+    },
+    style: {
+      padding: '4px 10px',
+      border: '1px solid #ddd',
+      borderRadius: 6,
+      background: '#fff',
+      color: '#666',
+      fontSize: 11,
+      cursor: 'pointer'
+    }
+  }, selectedConvos.size === companionConvos.length ? 'Deselect all' : 'Select all'))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4
     }
   }, companionConvos.map(convo => {
-    var _convo$messages;
-    const isExpanded = expandedConvo === convo.conversation_id;
-    const firstMsg = (_convo$messages = convo.messages) === null || _convo$messages === void 0 ? void 0 : _convo$messages[0];
-    const preview = firstMsg ? firstMsg.content.length > 80 ? firstMsg.content.slice(0, 80) + '...' : firstMsg.content : '';
+    const isSelected = selectedConvos.has(convo.conversation_id);
     const startDate = convo.started_at ? new Date(convo.started_at) : null;
     return /*#__PURE__*/React.createElement("div", {
       key: convo.conversation_id,
       style: {
-        border: '1px solid #E8EEF2',
-        borderRadius: 10,
-        overflow: 'hidden',
-        transition: 'all 0.2s'
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 12px',
+        borderRadius: 8,
+        border: isSelected ? '1px solid #E74C3C' : '1px solid #f0f0f0',
+        background: isSelected ? '#FEF5F5' : '#fff',
+        transition: 'all 0.15s'
       }
-    }, /*#__PURE__*/React.createElement("div", {
-      onClick: e => {
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: isSelected,
+      onClick: e => e.stopPropagation(),
+      onChange: e => {
         e.stopPropagation();
-        setExpandedConvo(isExpanded ? null : convo.conversation_id);
+        const next = new Set(selectedConvos);
+        isSelected ? next.delete(convo.conversation_id) : next.add(convo.conversation_id);
+        setSelectedConvos(next);
       },
       style: {
-        padding: '12px 14px',
+        width: 16,
+        height: 16,
         cursor: 'pointer',
-        background: isExpanded ? '#EBF5FB' : '#fff',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10
+        accentColor: '#E74C3C'
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }), /*#__PURE__*/React.createElement("div", {
       style: {
-        width: 36,
-        height: 36,
-        borderRadius: '50%',
-        background: '#D6EAF8',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 16,
-        flexShrink: 0
+        flex: 1
       }
-    }, '\uD83D\uDCAC'), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", {
       style: {
-        flex: 1,
-        minWidth: 0
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 13,
-        fontWeight: 600,
+        fontSize: 12,
+        fontWeight: 500,
         color: '#2C3E50'
       }
     }, startDate ? startDate.toLocaleDateString(undefined, {
       month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    }) : 'Conversation', /*#__PURE__*/React.createElement("span", {
+      day: 'numeric'
+    }) : 'Conversation'), /*#__PURE__*/React.createElement("span", {
       style: {
-        fontWeight: 400,
+        fontSize: 11,
         color: '#999',
         marginLeft: 6
       }
     }, startDate ? startDate.toLocaleTimeString(undefined, {
       hour: 'numeric',
       minute: '2-digit'
-    }) : '')), !isExpanded && preview && /*#__PURE__*/React.createElement("div", {
+    }) : '')), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: '#999',
+        background: '#F4F6F7',
+        padding: '2px 6px',
+        borderRadius: 6
+      }
+    }, convo.message_count, " msg", convo.message_count !== 1 ? 's' : ''));
+  })), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 11,
+      color: '#999',
+      marginTop: 8,
+      lineHeight: 1.4
+    }
+  }, "Raw conversations are not visible to the care team. Only the AI-generated care summary above is shared. Select conversations to delete them permanently."))), companionTab === 'voice-routing' && (() => {
+    const MESSAGE_TYPES = [{
+      id: 'conversation',
+      label: 'Conversation responses',
+      desc: `When ${(profile === null || profile === void 0 ? void 0 : profile.first_name) || 'care recipient'} talks to Kindred`,
+      priority: 'high'
+    }, {
+      id: 'reminder',
+      label: 'Medication reminders',
+      desc: 'Scheduled pill & medication reminders',
+      priority: 'high'
+    }, {
+      id: 'medication',
+      label: 'Health check-ins',
+      desc: 'How are you feeling, pain checks',
+      priority: 'high'
+    }, {
+      id: 'alert',
+      label: 'Appointment alerts',
+      desc: 'Caregiver visits, doctor appointments',
+      priority: 'medium'
+    }, {
+      id: 'check_in',
+      label: 'Daily check-ins',
+      desc: 'Morning greeting, evening wind-down',
+      priority: 'medium'
+    }];
+
+    // Built-in voices (Pete's clone + pre-made picks)
+    const KNOWN_VOICES = [{
+      id: '__pete__',
+      provider_voice_id: 'c2liOZ7MsLVLDpKuwIY5',
+      name: "Pete's voice",
+      icon: '\uD83C\uDFA4'
+    }, {
+      id: '__sarah__',
+      provider_voice_id: 'EXAVITQu4vr4xnSDxMaL',
+      name: 'Sarah (warm, reassuring)',
+      icon: '\uD83D\uDD0A'
+    }, {
+      id: '__brian__',
+      provider_voice_id: 'nPczCjzI2devNBz1zQrb',
+      name: 'Brian (calm, comforting)',
+      icon: '\uD83D\uDD0A'
+    }];
+
+    // Merge with any DB voice profiles
+    const allVoiceOptions = [...KNOWN_VOICES];
+    availableVoices.forEach(v => {
+      if (!KNOWN_VOICES.some(k => k.provider_voice_id === v.voice_id)) {
+        allVoiceOptions.push({
+          id: v.voice_id,
+          provider_voice_id: v.voice_id,
+          name: v.name,
+          icon: '\uD83D\uDD0A'
+        });
+      }
+    });
+
+    // Find which voice is assigned to each message type
+    const getAssignedVoice = messageType => {
+      const route = voiceRouting.find(r => r.message_type === messageType);
+      if (route !== null && route !== void 0 && route.voice_profile_id) {
+        // Match by display_name from the joined query (most reliable)
+        const displayName = (route.display_name || '').toLowerCase();
+        if (displayName.includes('pete')) return KNOWN_VOICES[0];
+        if (displayName.includes('sarah')) return KNOWN_VOICES[1];
+        if (displayName.includes('brian')) return KNOWN_VOICES[2];
+        // Fallback: check other available voices
+        const match = allVoiceOptions.find(v => v.id === route.voice_profile_id);
+        return match || {
+          name: route.display_name || 'Custom',
+          icon: '\uD83D\uDD0A'
+        };
+      }
+      // Defaults (no routing row saved)
+      if (messageType === 'conversation') return KNOWN_VOICES[0]; // Pete
+      if (messageType === 'reminder' || messageType === 'medication') return KNOWN_VOICES[1]; // Sarah
+      if (messageType === 'alert' || messageType === 'check_in') return KNOWN_VOICES[2]; // Brian
+      return KNOWN_VOICES[0];
+    };
+    const peteCount = MESSAGE_TYPES.filter(t => getAssignedVoice(t.id).name.includes('Pete')).length;
+    const otherCount = MESSAGE_TYPES.length - peteCount;
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
       style: {
         fontSize: 12,
-        color: '#7F8C8D',
-        marginTop: 2,
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis'
+        color: '#888',
+        margin: '0 0 12px',
+        lineHeight: 1.5
       }
-    }, preview)), /*#__PURE__*/React.createElement("div", {
+    }, "Choose which voice speaks for each message type. Pete's cloned voice uses more credits; pre-made voices are lower cost."), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
-        alignItems: 'center',
         gap: 8,
-        flexShrink: 0
+        alignItems: 'center',
+        padding: '8px 12px',
+        background: '#EBF5FB',
+        borderRadius: 8,
+        marginBottom: 12
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 11,
-        color: '#7F8C8D',
-        background: '#F4F6F7',
+        fontWeight: 600,
+        color: '#1A5276',
+        background: '#D6EAF8',
         padding: '2px 8px',
-        borderRadius: 8
+        borderRadius: 10
       }
-    }, convo.message_count, " msg", convo.message_count !== 1 ? 's' : ''), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 12,
-        color: '#999',
-        transition: 'transform 0.2s',
-        transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)'
-      }
-    }, '\u25BC'))), isExpanded && convo.messages && /*#__PURE__*/React.createElement("div", {
-      style: {
-        padding: '8px 14px 14px',
-        borderTop: '1px solid #E8EEF2',
-        background: '#FAFCFE'
-      }
-    }, convo.messages.map((msg, mi) => /*#__PURE__*/React.createElement("div", {
-      key: msg.id || mi,
-      style: {
-        display: 'flex',
-        gap: 10,
-        padding: '8px 0',
-        borderBottom: mi < convo.messages.length - 1 ? '1px solid #f0f0f0' : 'none'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: 28,
-        height: 28,
-        borderRadius: '50%',
-        flexShrink: 0,
-        background: msg.role === 'user' ? '#E8F8F0' : '#D6EAF8',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 12
-      }
-    }, msg.role === 'user' ? '\uD83D\uDC64' : '\uD83C\uDFA4'), /*#__PURE__*/React.createElement("div", {
-      style: {
-        flex: 1
-      }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, peteCount, " use Pete's voice"), /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 11,
         fontWeight: 600,
-        color: msg.role === 'user' ? '#27AE60' : '#1A5276',
-        marginBottom: 2
+        color: '#666',
+        background: '#F4F6F7',
+        padding: '2px 8px',
+        borderRadius: 10
       }
-    }, msg.role === 'user' ? (profile === null || profile === void 0 ? void 0 : profile.first_name) || 'Care Recipient' : 'Companion', msg.created_at && /*#__PURE__*/React.createElement("span", {
+    }, otherCount, " use pre-made voice"), otherCount > 0 && /*#__PURE__*/React.createElement("span", {
       style: {
-        fontWeight: 400,
-        color: '#999',
-        marginLeft: 6
+        fontSize: 11,
+        color: '#7F8C8D',
+        marginLeft: 'auto'
       }
-    }, new Date(msg.created_at).toLocaleTimeString(undefined, {
-      hour: 'numeric',
-      minute: '2-digit'
-    }))), /*#__PURE__*/React.createElement("div", {
+    }, "~", Math.round(otherCount / MESSAGE_TYPES.length * 100), "% credit savings")), /*#__PURE__*/React.createElement("div", {
       style: {
-        fontSize: 13,
-        color: '#333',
-        lineHeight: 1.5,
-        whiteSpace: 'pre-wrap'
+        border: '1px solid #E8EEF2',
+        borderRadius: 10,
+        overflow: 'visible'
       }
-    }, msg.content))))));
-  })), companionConvos.length > 0 && /*#__PURE__*/React.createElement("button", {
-    onClick: e => {
-      e.stopPropagation();
-      fetchCompanionConversations(profile === null || profile === void 0 ? void 0 : profile.id);
-    },
-    style: {
-      marginTop: 12,
-      padding: '8px 16px',
-      border: '1px solid #E8EEF2',
-      borderRadius: 8,
-      background: '#fff',
-      color: '#1A5276',
-      fontSize: 12,
-      fontWeight: 600,
-      cursor: 'pointer'
-    }
-  }, '\u21BB', " Refresh")), companionTab === 'voice-settings' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    }, MESSAGE_TYPES.map((mt, i) => {
+      const assigned = getAssignedVoice(mt.id);
+      const isOpen = routeDropdown === mt.id;
+      return /*#__PURE__*/React.createElement("div", {
+        key: mt.id,
+        style: {
+          padding: '12px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          borderBottom: i < MESSAGE_TYPES.length - 1 ? '1px solid #f0f0f0' : 'none',
+          background: i % 2 === 0 ? '#fff' : '#FAFCFE'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1,
+          minWidth: 0
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          fontWeight: 600,
+          color: '#2C3E50'
+        }
+      }, mt.label), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: '#7F8C8D'
+        }
+      }, mt.desc)), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 10,
+          fontWeight: 600,
+          padding: '2px 8px',
+          borderRadius: 10,
+          background: mt.priority === 'high' ? '#E8F8F0' : '#FEF3E2',
+          color: mt.priority === 'high' ? '#27AE60' : '#E67E22'
+        }
+      }, mt.priority), /*#__PURE__*/React.createElement("div", {
+        style: {
+          position: 'relative'
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          setRouteDropdown(isOpen ? null : mt.id);
+        },
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '6px 12px',
+          borderRadius: 8,
+          border: '1px solid #E8EEF2',
+          fontSize: 12,
+          cursor: 'pointer',
+          minWidth: 170,
+          background: assigned.name.includes('Pete') ? '#EBF5FB' : '#F4F6F7',
+          color: '#2C3E50'
+        }
+      }, /*#__PURE__*/React.createElement("span", null, assigned.icon), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1,
+          textAlign: 'left'
+        }
+      }, assigned.name), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 10,
+          color: '#999'
+        }
+      }, '\u25BC')), isOpen && /*#__PURE__*/React.createElement("div", {
+        style: {
+          position: 'absolute',
+          right: 0,
+          top: '100%',
+          marginTop: 4,
+          background: '#fff',
+          borderRadius: 10,
+          border: '1px solid #E8EEF2',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          zIndex: 9999,
+          width: 220,
+          overflow: 'hidden'
+        }
+      }, KNOWN_VOICES.map((voice, vi) => /*#__PURE__*/React.createElement("button", {
+        key: voice.id,
+        onClick: e => {
+          e.stopPropagation();
+          // Always save with provider_voice_id — backend resolves to DB profile
+          saveVoiceRoute(mt.id, voice.provider_voice_id, mt.priority);
+        },
+        style: {
+          width: '100%',
+          textAlign: 'left',
+          padding: '10px 14px',
+          border: 'none',
+          background: assigned.name === voice.name ? '#EBF5FB' : 'transparent',
+          cursor: savingRoute === mt.id ? 'wait' : 'pointer',
+          fontSize: 12,
+          color: '#2C3E50',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          borderBottom: vi < KNOWN_VOICES.length - 1 ? '1px solid #f8f8f8' : 'none'
+        }
+      }, /*#__PURE__*/React.createElement("span", null, voice.icon), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1
+        }
+      }, voice.name), assigned.name === voice.name && /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: '#27AE60',
+          fontWeight: 700
+        }
+      }, '\u2713'))))));
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 14,
+        padding: '12px 14px',
+        background: '#FEF9E7',
+        border: '1px solid #F9E79F',
+        borderRadius: 10,
+        display: 'flex',
+        gap: 10,
+        alignItems: 'flex-start'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16
+      }
+    }, '\uD83D\uDCA1'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600,
+        color: '#7D6608'
+      }
+    }, "Credit-saving tip"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#2C3E50',
+        marginTop: 2,
+        lineHeight: 1.5
+      }
+    }, "Daily check-ins and alerts happen frequently but don't need Pete's voice to feel personal. Using Sarah or Brian for these saves roughly 40% of monthly credits without affecting ", profile === null || profile === void 0 ? void 0 : profile.first_name, "'s experience."))));
+  })(), companionTab === 'voice-settings' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 12,
       color: '#888',
@@ -11951,7 +12654,7 @@ const CareProfile = window.CareProfile = ({
     onClick: e => {
       e.stopPropagation();
       const token = window.AUTH_TOKEN || '';
-      window.open(`/companion?token=${encodeURIComponent(token)}`, '_blank');
+      window.open(`/kindred?token=${encodeURIComponent(token)}`, '_blank');
     },
     style: {
       padding: '8px 16px',
@@ -11966,12 +12669,12 @@ const CareProfile = window.CareProfile = ({
       alignItems: 'center',
       gap: 6
     }
-  }, '\uD83C\uDFA4', " Open Companion App"), /*#__PURE__*/React.createElement("span", {
+  }, '\uD83C\uDFA4', " Open Kindred"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 12,
       color: '#999'
     }
-  }, "Opens ", profile === null || profile === void 0 ? void 0 : profile.first_name, "'s voice companion in a new tab")))), canEdit && (profile !== null && profile !== void 0 && profile.linked_user_id ? /*#__PURE__*/React.createElement("div", {
+  }, "Opens ", profile === null || profile === void 0 ? void 0 : profile.first_name, "'s Kindred in a new tab")))), canEdit && (profile !== null && profile !== void 0 && profile.linked_user_id ? /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: 16,
@@ -56250,7 +56953,7 @@ const AdminPanel = window.AdminPanel = ({
       color: '#666',
       fontWeight: 600
     }
-  }, "Companion"), /*#__PURE__*/React.createElement("th", {
+  }, "Kindred"), /*#__PURE__*/React.createElement("th", {
     style: {
       padding: '10px 12px',
       textAlign: 'left',
@@ -56413,7 +57116,7 @@ const AdminPanel = window.AdminPanel = ({
         background: u.companion_access ? '#e3f2fd' : '#f5f5f5',
         color: u.companion_access ? '#1565c0' : '#999'
       },
-      title: u.companion_access ? 'Click to revoke companion access' : 'Click to grant companion access'
+      title: u.companion_access ? 'Click to revoke Kindred access' : 'Click to grant Kindred access'
     }, u.companion_access ? '\u2713 Yes' : 'No')), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: '10px 12px',
@@ -63311,6 +64014,13 @@ const App = () => {
             setCurrentPage('find-work');
           } else if (d.type === 'check_in_reminder' || d.type === 'check_out_reminder' || d.type === 'caregiver_arriving' || d.type === 'caregiver_arriving_recipient') {
             setCurrentPage('dashboard');
+          } else if (d.type === 'kindred_relay') {
+            setCurrentPage('messages');
+          } else if (d.type === 'admin_setting_change') {
+            setCurrentPage('dashboard');
+          } else if (d.type === 'video_call' && d.conversationId) {
+            window.__pendingConversation = d.conversationId;
+            setCurrentPage('messages');
           }
         }
       });
@@ -63820,9 +64530,9 @@ const App = () => {
     }];
     if (currentUser !== null && currentUser !== void 0 && currentUser.companionAccess || currentUser !== null && currentUser !== void 0 && currentUser.isAdmin) {
       familyNav.push({
-        id: '_launch_companion',
+        id: '_launch_kindred',
         icon: '🎙️',
-        label: 'Companion',
+        label: 'Kindred',
         isAction: true
       });
     }
@@ -64018,10 +64728,10 @@ const App = () => {
     }];
     if (currentUser !== null && currentUser !== void 0 && currentUser.companionAccess || currentUser !== null && currentUser !== void 0 && currentUser.isAdmin) {
       familyBottom.push({
-        id: '_launch_companion',
+        id: '_launch_kindred',
         icon: '🎙️',
-        label: 'Companion',
-        isCompanion: true
+        label: 'Kindred',
+        isKindred: true
       });
     }
     familyBottom.push({
@@ -64169,8 +64879,8 @@ const App = () => {
       const actionClick = item.disabled ? () => {} : item.id === '_request_care' ? () => {
         handlePageChange('schedule');
         setSidebarOpen(false);
-      } : item.id === '_launch_companion' ? () => {
-        window.open(`/companion?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank');
+      } : item.id === '_launch_kindred' ? () => {
+        window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank');
         setSidebarOpen(false);
       } : () => {
         handlePageChange(item.id);
@@ -64188,7 +64898,7 @@ const App = () => {
           fontWeight: 600,
           cursor: 'not-allowed',
           opacity: 0.5
-        } : item.id === '_launch_companion' ? {
+        } : item.id === '_launch_kindred' ? {
           background: '#1A5276',
           color: '#fff',
           fontWeight: 600
@@ -64197,7 +64907,7 @@ const App = () => {
           color: '#fff',
           fontWeight: 600
         },
-        title: item.disabled ? 'Complete your profile first' : item.id === '_launch_companion' ? 'Open Voice Companion (new tab)' : ''
+        title: item.disabled ? 'Complete your profile first' : item.id === '_launch_kindred' ? 'Open Kindred (new tab)' : ''
       }, /*#__PURE__*/React.createElement("span", {
         className: "nav-icon"
       }, item.icon), " ", item.label, " ", item.disabled && '🔒'));
@@ -64473,7 +65183,7 @@ const App = () => {
   }, getBottomNavItems().map(item => /*#__PURE__*/React.createElement("button", {
     key: item.id,
     className: `bottom-nav-item ${currentPage === item.id ? 'active' : ''}`,
-    onClick: item.disabled ? undefined : item.isCompanion ? () => window.open(`/companion?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id),
+    onClick: item.disabled ? undefined : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id),
     style: {
       position: 'relative',
       ...(item.disabled ? {
@@ -64483,7 +65193,7 @@ const App = () => {
       ...(item.isAccent && currentPage !== item.id && !item.disabled ? {
         color: '#e8724a'
       } : {}),
-      ...(item.isCompanion ? {
+      ...(item.isKindred ? {
         color: '#1A5276'
       } : {})
     }

@@ -769,6 +769,13 @@ const App = () => {
             setCurrentPage('find-work');
           } else if (d.type === 'check_in_reminder' || d.type === 'check_out_reminder' || d.type === 'caregiver_arriving' || d.type === 'caregiver_arriving_recipient') {
             setCurrentPage('dashboard');
+          } else if (d.type === 'kindred_relay') {
+            setCurrentPage('messages');
+          } else if (d.type === 'admin_setting_change') {
+            setCurrentPage('dashboard');
+          } else if (d.type === 'video_call' && d.conversationId) {
+            window.__pendingConversation = d.conversationId;
+            setCurrentPage('messages');
           }
         }
       });
