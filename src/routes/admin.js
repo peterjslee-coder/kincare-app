@@ -1335,11 +1335,22 @@ router.put("/users/:id/photo", async (req, res) => {
 router.put("/users/:id/tester", async (req, res) => {
   try {
     const db = await getDb();
-    const user = await db.prepare("SELECT id, email, is_tester FROM users WHERE id = ?").get(req.params.id);
+    const user = await db.prepare("SELECT id, email, first_name, is_tester FROM users WHERE id = ?").get(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const newValue = user.is_tester ? 0 : 1;
     await db.prepare("UPDATE users SET is_tester = ? WHERE id = ?").run(newValue, req.params.id);
+
+    // Notify the user
+    try {
+      const { sendPushToUser } = require("./push");
+      const statusText = newValue ? "enabled" : "removed";
+      await sendPushToUser(req.params.id, {
+        title: "Account Updated",
+        body: `An admin has ${statusText} Feedback Tester access for your account.`,
+        data: { type: "admin_setting_change", setting: "is_tester", value: !!newValue },
+      }, "admin_update");
+    } catch (pushErr) { console.log("Push notify skipped:", pushErr.message); }
 
     res.json({ success: true, is_tester: !!newValue, email: user.email });
   } catch (err) {
@@ -1352,11 +1363,22 @@ router.put("/users/:id/tester", async (req, res) => {
 router.put("/users/:id/companion-access", async (req, res) => {
   try {
     const db = await getDb();
-    const user = await db.prepare("SELECT id, email, companion_access FROM users WHERE id = ?").get(req.params.id);
+    const user = await db.prepare("SELECT id, email, first_name, companion_access FROM users WHERE id = ?").get(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const newValue = user.companion_access ? 0 : 1;
     await db.prepare("UPDATE users SET companion_access = ? WHERE id = ?").run(newValue, req.params.id);
+
+    // Notify the user
+    try {
+      const { sendPushToUser } = require("./push");
+      const statusText = newValue ? "enabled" : "removed";
+      await sendPushToUser(req.params.id, {
+        title: "Account Updated",
+        body: `An admin has ${statusText} Kindred access for your account.`,
+        data: { type: "admin_setting_change", setting: "companion_access", value: !!newValue },
+      }, "admin_update");
+    } catch (pushErr) { console.log("Push notify skipped:", pushErr.message); }
 
     res.json({ success: true, companion_access: !!newValue, email: user.email });
   } catch (err) {
