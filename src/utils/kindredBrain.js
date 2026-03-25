@@ -115,11 +115,23 @@ async function loadCareContext(careRecipientId) {
       console.error("[Kindred] voice_preferences query failed (non-fatal):", e.message);
     }
 
+    // Load care team instructions (real-time guidance from care team)
+    let careTeamInstructions = "";
+    try {
+      const instrRow = await db
+        .prepare("SELECT instructions FROM kindred_instructions WHERE care_recipient_id = ? LIMIT 1")
+        .get(careRecipientId);
+      careTeamInstructions = instrRow?.instructions || "";
+    } catch (e) {
+      console.error("[Kindred] kindred_instructions query failed (non-fatal):", e.message);
+    }
+
     return {
       recipient,
       recentVisits,
       careTeam,
       upcomingReminders,
+      careTeamInstructions,
       voicePreferences: voicePreferences || {
         speed: 1.0,
         stability: 0.65,
@@ -157,6 +169,7 @@ function buildKindredPrompt(careContext, voiceOwnerName, careRecipientName, care
     recentVisits,
     careTeam,
     upcomingReminders,
+    careTeamInstructions,
     voicePreferences,
   } = careContext;
 
@@ -236,7 +249,10 @@ ${recipient.medications ? `Medications: ${recipient.medications}` : ""}
 ${careTeamList ? `People who help: ${careTeamList}` : ""}
 ${visitsSummary ? `\nRecent visits:\n${visitsSummary}` : ""}
 ${remindersSummary ? `\nReminders for today:\n${remindersSummary}` : ""}
-
+${careTeamInstructions ? `
+CARE TEAM GUIDANCE (updated by the care team — follow these closely):
+${careTeamInstructions}
+` : ""}
 IF SHE SEEMS UPSET OR IN PAIN:
 Stay calm. Say something like: "I'm sorry you're not feeling good, ${careRecipientName}. I'm going to let ${voiceOwnerName} know so someone can check on you, okay?"
 Then flag intent as "distress_alert".

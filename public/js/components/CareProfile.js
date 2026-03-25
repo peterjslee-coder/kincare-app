@@ -54,6 +54,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [availableVoices, setAvailableVoices] = useState([]);
   const [savingRoute, setSavingRoute] = useState(null);
   const [routeDropdown, setRouteDropdown] = useState(null);
+  // Care team instructions for Kindred
+  const [kindredInstructions, setKindredInstructions] = useState('');
+  const [kindredInstructionsDraft, setKindredInstructionsDraft] = useState('');
+  const [instructionsLoading, setInstructionsLoading] = useState(false);
+  const [savingInstructions, setSavingInstructions] = useState(false);
+  const [instructionsMeta, setInstructionsMeta] = useState({ updated_at: null, updated_by_name: null });
   const { showToast } = useToast();
 
   const handleGenerateDoctorReport = async () => {
@@ -244,6 +250,46 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     setUsageLoading(false);
   };
 
+  const fetchKindredInstructions = async (recipientId) => {
+    if (!recipientId) return;
+    setInstructionsLoading(true);
+    try {
+      const res = await apiFetch(`/api/kindred/admin/instructions?care_recipient_id=${recipientId}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setKindredInstructions(data.instructions || '');
+        setKindredInstructionsDraft(data.instructions || '');
+        setInstructionsMeta({ updated_at: data.updated_at, updated_by_name: data.updated_by_name });
+      }
+    } catch (e) { console.error('Kindred instructions fetch error:', e); }
+    setInstructionsLoading(false);
+  };
+
+  const saveKindredInstructions = async () => {
+    if (!profile?.id) return;
+    setSavingInstructions(true);
+    try {
+      const res = await apiFetch('/api/kindred/admin/instructions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          care_recipient_id: profile.id,
+          instructions: kindredInstructionsDraft,
+        }),
+      });
+      if (res?.ok) {
+        const data = await res.json();
+        setKindredInstructions(data.instructions);
+        setInstructionsMeta({ updated_at: data.updated_at, updated_by_name: data.updated_by_name });
+        showToast('Kindred instructions updated', 'success');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.error || 'Failed to save instructions', 'error');
+      }
+    } catch (e) { showToast('Failed to save instructions', 'error'); }
+    setSavingInstructions(false);
+  };
+
   const handleCompanionOpen = () => {
     setCompanionOpen(true);
     if (profile?.id) {
@@ -253,6 +299,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       fetchKindredSummary(profile.id);
       fetchVoiceRouting(profile.id);
       fetchAvailableVoices();
+      fetchKindredInstructions(profile.id);
     }
   };
 
@@ -1008,6 +1055,59 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       ))}
                     </div>
                   )}
+
+                  {/* ── Care Team Instructions for Kindred ── */}
+                  <div style={{ marginBottom: 16, padding: '14px 16px', background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#F57F17', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {'\uD83D\uDCDD'} Guidance for Kindred
+                      </div>
+                      {instructionsMeta.updated_at && (
+                        <span style={{ fontSize: 10, color: '#999' }}>
+                          {instructionsMeta.updated_by_name ? `${instructionsMeta.updated_by_name} \u2022 ` : ''}
+                          {new Date(instructionsMeta.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 12, color: '#8D6E08', marginBottom: 8, lineHeight: 1.4 }}>
+                      Tell Kindred what's happening today. It will adapt how it talks to {profile?.first_name || 'your loved one'}.
+                    </p>
+                    <textarea
+                      value={kindredInstructionsDraft}
+                      onChange={(e) => setKindredInstructionsDraft(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder={`e.g., "${profile?.first_name || 'Betty'}'s best friend went to the hospital last night and she's emotionally fragile today. Check in with her more often, but leave her alone if she doesn't want to talk."`}
+                      maxLength={2000}
+                      style={{
+                        width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid #FFE082', borderRadius: 8,
+                        fontSize: 13, fontFamily: 'inherit', resize: 'vertical', background: '#FFFDE7',
+                        color: '#333', lineHeight: 1.5, outline: 'none',
+                      }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                      <span style={{ fontSize: 11, color: '#999' }}>
+                        {kindredInstructionsDraft.length}/2000
+                      </span>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {kindredInstructionsDraft !== kindredInstructions && (
+                          <button onClick={(e) => { e.stopPropagation(); setKindredInstructionsDraft(kindredInstructions); }}
+                            style={{ padding: '4px 12px', border: '1px solid #ddd', borderRadius: 6, background: '#fff', color: '#666', fontSize: 11, cursor: 'pointer' }}>
+                            Cancel
+                          </button>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); saveKindredInstructions(); }}
+                          disabled={savingInstructions || kindredInstructionsDraft === kindredInstructions}
+                          style={{
+                            padding: '4px 14px', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: savingInstructions || kindredInstructionsDraft === kindredInstructions ? 'default' : 'pointer',
+                            background: kindredInstructionsDraft !== kindredInstructions ? '#F57F17' : '#E0E0E0',
+                            color: kindredInstructionsDraft !== kindredInstructions ? '#fff' : '#999',
+                            transition: 'all 0.2s',
+                          }}>
+                          {savingInstructions ? 'Saving...' : 'Update'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
 
                   {/* ── AI Care Summary ── */}
                   <div style={{ marginBottom: 16 }}>

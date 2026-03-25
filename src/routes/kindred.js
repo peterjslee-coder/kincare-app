@@ -12,6 +12,8 @@
  * GET  /api/kindred/conversations — Conversation history
  *
  * ── Admin / Care Team (InPlace app settings) ──
+ * GET  /api/kindred/admin/instructions       — Get care team instructions for Kindred
+ * PUT  /api/kindred/admin/instructions       — Update care team instructions
  * GET  /api/kindred/admin/voice-routing     — Get voice routing config
  * PUT  /api/kindred/admin/voice-routing      — Update which voices speak for which message types
  * GET  /api/kindred/admin/voice-preferences  — Get care recipient's adaptive voice prefs
@@ -138,6 +140,19 @@ async function initializeTables() {
         escalation_reason TEXT,
         resolved BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT NOW()
+      );`,
+    },
+    {
+      name: "kindred_instructions",
+      sql: `CREATE TABLE IF NOT EXISTS kindred_instructions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        care_recipient_id UUID NOT NULL,
+        instructions TEXT NOT NULL DEFAULT '',
+        updated_by UUID,
+        updated_by_name TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(care_recipient_id)
       );`,
     },
   ];
@@ -732,6 +747,86 @@ PRIVACY RULES:
   } catch (err) {
     console.error("[Kindred Summarize] Error:", err.message);
     return res.status(500).json({ error: "Failed to generate summary" });
+  }
+});
+
+// ── GET /api/kindred/admin/instructions ─────────────────────────
+// Get current care team instructions for Kindred
+router.get("/admin/instructions", async (req, res) => {
+  const db = await getDb();
+  const { care_recipient_id } = req.query;
+
+  if (!care_recipient_id) {
+    return res.status(400).json({ error: "care_recipient_id is required" });
+  }
+
+  try {
+    const row = await db.prepare(
+      "SELECT * FROM kindred_instructions WHERE care_recipient_id = ? LIMIT 1"
+    ).get(care_recipient_id);
+
+    return res.json({
+      instructions: row?.instructions || "",
+      updated_at: row?.updated_at || null,
+      updated_by_name: row?.updated_by_name || null,
+    });
+  } catch (err) {
+    console.error("[Kindred Instructions GET] Error:", err.message);
+    return res.status(500).json({ error: "Failed to fetch instructions" });
+  }
+});
+
+// ── PUT /api/kindred/admin/instructions ──────────────────────────
+// Update care team instructions for Kindred (any care team member can update)
+router.put("/admin/instructions", async (req, res) => {
+  const db = await getDb();
+  const { care_recipient_id, instructions } = req.body;
+
+  if (!care_recipient_id) {
+    return res.status(400).json({ error: "care_recipient_id is required" });
+  }
+  if (typeof instructions !== "string") {
+    return res.status(400).json({ error: "instructions must be a string" });
+  }
+  if (instructions.length > 2000) {
+    return res.status(400).json({ error: "Instructions must be under 2000 characters" });
+  }
+
+  try {
+    // Get the updater's name for the audit trail
+    const updater = await db.prepare(
+      "SELECT first_name, last_name FROM users WHERE id = ?"
+    ).get(req.user.id);
+    const updaterName = updater ? `${updater.first_name} ${updater.last_name}`.trim() : "Unknown";
+
+    // Upsert — one row per care recipient
+    const existing = await db.prepare(
+      "SELECT id FROM kindred_instructions WHERE care_recipient_id = ? LIMIT 1"
+    ).get(care_recipient_id);
+
+    if (existing) {
+      await db.prepare(`
+        UPDATE kindred_instructions
+        SET instructions = ?, updated_by = ?, updated_by_name = ?, updated_at = NOW()
+        WHERE care_recipient_id = ?
+      `).run(instructions, req.user.id, updaterName, care_recipient_id);
+    } else {
+      await db.prepare(`
+        INSERT INTO kindred_instructions (id, care_recipient_id, instructions, updated_by, updated_by_name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+      `).run(uuid(), care_recipient_id, instructions, req.user.id, updaterName);
+    }
+
+    console.log(`[Kindred] Instructions updated for ${care_recipient_id} by ${updaterName}`);
+
+    return res.json({
+      instructions,
+      updated_at: new Date().toISOString(),
+      updated_by_name: updaterName,
+    });
+  } catch (err) {
+    console.error("[Kindred Instructions PUT] Error:", err.message);
+    return res.status(500).json({ error: "Failed to update instructions" });
   }
 });
 
