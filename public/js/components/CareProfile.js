@@ -1157,7 +1157,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
                 // Built-in voices (Pete's clone + pre-made picks)
                 const KNOWN_VOICES = [
-                  { id: '__pete__', provider_voice_id: process.env?.ELEVENLABS_VOICE_ID || 'c2liOZ7MsLVLDpKuwIY5', name: "Pete's voice", icon: '\uD83C\uDFA4' },
+                  { id: '__pete__', provider_voice_id: 'c2liOZ7MsLVLDpKuwIY5', name: "Pete's voice", icon: '\uD83C\uDFA4' },
                   { id: '__sarah__', provider_voice_id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah (warm, reassuring)', icon: '\uD83D\uDD0A' },
                   { id: '__brian__', provider_voice_id: 'nPczCjzI2devNBz1zQrb', name: 'Brian (calm, comforting)', icon: '\uD83D\uDD0A' },
                 ];
