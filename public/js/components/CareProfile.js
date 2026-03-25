@@ -42,6 +42,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [savingVoicePrefs, setSavingVoicePrefs] = useState(false);
   const [companionUsage, setCompanionUsage] = useState(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  // Kindred summary + conversation management
+  const [kindredSummary, setKindredSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [selectedConvos, setSelectedConvos] = useState(new Set());
+  const [deletingConvos, setDeletingConvos] = useState(false);
   const { showToast } = useToast();
 
   const handleGenerateDoctorReport = async () => {
@@ -133,6 +138,47 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     setSavingVoicePrefs(false);
   };
 
+  const fetchKindredSummary = async (recipientId) => {
+    if (!recipientId) return;
+    setSummaryLoading(true);
+    try {
+      const res = await apiFetch('/api/kindred/admin/summarize', {
+        method: 'POST',
+        body: JSON.stringify({ care_recipient_id: recipientId }),
+      });
+      if (res?.ok) {
+        const data = await res.json();
+        setKindredSummary(data);
+      }
+    } catch (e) { console.error('Kindred summary fetch error:', e); }
+    setSummaryLoading(false);
+  };
+
+  const deleteSelectedConversations = async () => {
+    if (selectedConvos.size === 0 || !profile?.id) return;
+    setDeletingConvos(true);
+    try {
+      const res = await apiFetch('/api/kindred/conversations', {
+        method: 'DELETE',
+        body: JSON.stringify({
+          conversation_ids: Array.from(selectedConvos),
+          care_recipient_id: profile.id,
+        }),
+      });
+      if (res?.ok) {
+        const data = await res.json();
+        showToast(`Deleted ${data.deleted_conversations} conversation(s)`, 'success');
+        setSelectedConvos(new Set());
+        fetchCompanionConversations(profile.id);
+        // Refresh summary after deletion
+        fetchKindredSummary(profile.id);
+      } else {
+        showToast('Failed to delete conversations', 'error');
+      }
+    } catch (e) { showToast('Failed to delete conversations', 'error'); }
+    setDeletingConvos(false);
+  };
+
   const fetchCompanionUsage = async (recipientId) => {
     if (!recipientId) return;
     setUsageLoading(true);
@@ -152,6 +198,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       fetchCompanionConversations(profile.id);
       fetchVoicePreferences(profile.id);
       fetchCompanionUsage(profile.id);
+      fetchKindredSummary(profile.id);
     }
   };
 
@@ -876,88 +923,152 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               {/* ── Conversations Tab ── */}
               {companionTab === 'conversations' && (
                 <div>
-                  <p style={{ fontSize: 12, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>
-                    Review {profile?.first_name}'s conversations with the voice companion. These logs help you understand what {profile?.first_name} talks about and how the companion responds.
-                  </p>
-                  {companionConvosLoading ? (
-                    <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>Loading conversations...</div>
-                  ) : companionConvos.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 24, color: '#999', background: '#fafafa', borderRadius: 10 }}>
-                      <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83C\uDFA4'}</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#666', marginBottom: 4 }}>No conversations yet</div>
-                      <div style={{ fontSize: 12, color: '#999' }}>When {profile?.first_name} talks to the companion, conversations will appear here.</div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {companionConvos.map((convo) => {
-                        const isExpanded = expandedConvo === convo.conversation_id;
-                        const firstMsg = convo.messages?.[0];
-                        const preview = firstMsg ? (firstMsg.content.length > 80 ? firstMsg.content.slice(0, 80) + '...' : firstMsg.content) : '';
-                        const startDate = convo.started_at ? new Date(convo.started_at) : null;
-                        return (
-                          <div key={convo.conversation_id} style={{ border: '1px solid #E8EEF2', borderRadius: 10, overflow: 'hidden', transition: 'all 0.2s' }}>
-                            <div onClick={(e) => { e.stopPropagation(); setExpandedConvo(isExpanded ? null : convo.conversation_id); }}
-                              style={{ padding: '12px 14px', cursor: 'pointer', background: isExpanded ? '#EBF5FB' : '#fff', display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#D6EAF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-                                {'\uD83D\uDCAC'}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: '#2C3E50' }}>
-                                  {startDate ? startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Conversation'}
-                                  <span style={{ fontWeight: 400, color: '#999', marginLeft: 6 }}>
-                                    {startDate ? startDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''}
-                                  </span>
-                                </div>
-                                {!isExpanded && preview && (
-                                  <div style={{ fontSize: 12, color: '#7F8C8D', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{preview}</div>
-                                )}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                <span style={{ fontSize: 11, color: '#7F8C8D', background: '#F4F6F7', padding: '2px 8px', borderRadius: 8 }}>
-                                  {convo.message_count} msg{convo.message_count !== 1 ? 's' : ''}
-                                </span>
-                                <span style={{ fontSize: 12, color: '#999', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
-                              </div>
-                            </div>
-                            {isExpanded && convo.messages && (
-                              <div style={{ padding: '8px 14px 14px', borderTop: '1px solid #E8EEF2', background: '#FAFCFE' }}>
-                                {convo.messages.map((msg, mi) => (
-                                  <div key={msg.id || mi} style={{
-                                    display: 'flex', gap: 10, padding: '8px 0',
-                                    borderBottom: mi < convo.messages.length - 1 ? '1px solid #f0f0f0' : 'none',
-                                  }}>
-                                    <div style={{
-                                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                                      background: msg.role === 'user' ? '#E8F8F0' : '#D6EAF8',
-                                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
-                                    }}>
-                                      {msg.role === 'user' ? '\uD83D\uDC64' : '\uD83C\uDFA4'}
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                      <div style={{ fontSize: 11, fontWeight: 600, color: msg.role === 'user' ? '#27AE60' : '#1A5276', marginBottom: 2 }}>
-                                        {msg.role === 'user' ? profile?.first_name || 'Care Recipient' : 'Companion'}
-                                        {msg.created_at && (
-                                          <span style={{ fontWeight: 400, color: '#999', marginLeft: 6 }}>
-                                            {new Date(msg.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div style={{ fontSize: 13, color: '#333', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                  {/* ── Abuse Alert Banner (top priority) ── */}
+                  {kindredSummary?.abuse_flags?.length > 0 && (
+                    <div style={{ padding: '12px 16px', background: '#FDEDEC', border: '2px solid #E74C3C', borderRadius: 10, marginBottom: 16 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#C0392B', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {'\u26A0\uFE0F'} Safety Alert
+                      </div>
+                      {kindredSummary.abuse_flags.map((flag, i) => (
+                        <div key={i} style={{ fontSize: 13, color: '#922B21', lineHeight: 1.5, padding: '4px 0' }}>
+                          {'\u2022'} {flag}
+                        </div>
+                      ))}
                     </div>
                   )}
+
+                  {/* ── AI Care Summary ── */}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#2C3E50' }}>Care Intelligence</div>
+                      <button onClick={(e) => { e.stopPropagation(); fetchKindredSummary(profile?.id); }}
+                        disabled={summaryLoading}
+                        style={{ padding: '4px 12px', border: '1px solid #E8EEF2', borderRadius: 6, background: '#fff', color: '#1A5276', fontSize: 11, fontWeight: 600, cursor: summaryLoading ? 'wait' : 'pointer' }}>
+                        {summaryLoading ? 'Analyzing...' : '\u21BB Refresh Summary'}
+                      </button>
+                    </div>
+
+                    {summaryLoading && !kindredSummary ? (
+                      <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>Analyzing conversations...</div>
+                    ) : !kindredSummary || kindredSummary.message === 'No conversations to summarize' ? (
+                      <div style={{ textAlign: 'center', padding: 24, color: '#999', background: '#fafafa', borderRadius: 10 }}>
+                        <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83C\uDFA4'}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#666', marginBottom: 4 }}>No conversations yet</div>
+                        <div style={{ fontSize: 12, color: '#999' }}>When {profile?.first_name} talks to Kindred, care insights will appear here.</div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {/* Mood + summary card */}
+                        <div style={{ padding: '14px 16px', background: '#F8FFFE', border: '1px solid #D5F5E3', borderRadius: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <span style={{ fontSize: 16 }}>
+                              {kindredSummary.mood_trend === 'positive' ? '\uD83D\uDE0A' : kindredSummary.mood_trend === 'concerning' ? '\uD83D\uDE1F' : kindredSummary.mood_trend === 'declining' ? '\uD83D\uDE14' : '\uD83D\uDE10'}
+                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: kindredSummary.mood_trend === 'positive' ? '#27AE60' : kindredSummary.mood_trend === 'concerning' ? '#E74C3C' : kindredSummary.mood_trend === 'declining' ? '#E67E22' : '#7F8C8D', textTransform: 'capitalize' }}>
+                              {kindredSummary.mood_trend} mood
+                            </span>
+                            <span style={{ fontSize: 11, color: '#999', marginLeft: 'auto' }}>
+                              {kindredSummary.message_count} messages analyzed
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 13, color: '#333', lineHeight: 1.6 }}>{kindredSummary.summary}</div>
+                        </div>
+
+                        {/* Medical alerts */}
+                        {kindredSummary.medical_alerts?.length > 0 && (
+                          <div style={{ padding: '12px 16px', background: '#FEF9E7', border: '1px solid #F9E79F', borderRadius: 10 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#7D6608', marginBottom: 6 }}>{'\uD83C\uDFE5'} Medical Alerts</div>
+                            {kindredSummary.medical_alerts.map((alert, i) => (
+                              <div key={i} style={{ fontSize: 13, color: '#7D6608', lineHeight: 1.5, padding: '3px 0' }}>
+                                {'\u2022'} {alert}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Care insights */}
+                        {kindredSummary.care_insights?.length > 0 && (
+                          <div style={{ padding: '12px 16px', background: '#EBF5FB', border: '1px solid #D6EAF8', borderRadius: 10 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1A5276', marginBottom: 6 }}>{'\uD83D\uDCA1'} Care Insights</div>
+                            {kindredSummary.care_insights.map((insight, i) => (
+                              <div key={i} style={{ fontSize: 13, color: '#1A5276', lineHeight: 1.5, padding: '3px 0' }}>
+                                {'\u2022'} {insight}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {kindredSummary.generated_at && (
+                          <div style={{ fontSize: 11, color: '#999', textAlign: 'right' }}>
+                            Last updated: {new Date(kindredSummary.generated_at).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Conversation Management (select + delete) ── */}
                   {companionConvos.length > 0 && (
-                    <button onClick={(e) => { e.stopPropagation(); fetchCompanionConversations(profile?.id); }}
-                      style={{ marginTop: 12, padding: '8px 16px', border: '1px solid #E8EEF2', borderRadius: 8, background: '#fff', color: '#1A5276', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                      {'\u21BB'} Refresh
-                    </button>
+                    <div style={{ borderTop: '1px solid #E8EEF2', paddingTop: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#666' }}>
+                          Conversation Log ({companionConvos.length})
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          {selectedConvos.size > 0 && (
+                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${selectedConvos.size} conversation(s)? This cannot be undone.`)) deleteSelectedConversations(); }}
+                              disabled={deletingConvos}
+                              style={{ padding: '4px 12px', border: 'none', borderRadius: 6, background: '#E74C3C', color: '#fff', fontSize: 11, fontWeight: 600, cursor: deletingConvos ? 'wait' : 'pointer' }}>
+                              {deletingConvos ? 'Deleting...' : `Delete ${selectedConvos.size} selected`}
+                            </button>
+                          )}
+                          <button onClick={(e) => {
+                            e.stopPropagation();
+                            if (selectedConvos.size === companionConvos.length) {
+                              setSelectedConvos(new Set());
+                            } else {
+                              setSelectedConvos(new Set(companionConvos.map(c => c.conversation_id)));
+                            }
+                          }} style={{ padding: '4px 10px', border: '1px solid #ddd', borderRadius: 6, background: '#fff', color: '#666', fontSize: 11, cursor: 'pointer' }}>
+                            {selectedConvos.size === companionConvos.length ? 'Deselect all' : 'Select all'}
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {companionConvos.map((convo) => {
+                          const isSelected = selectedConvos.has(convo.conversation_id);
+                          const startDate = convo.started_at ? new Date(convo.started_at) : null;
+                          return (
+                            <div key={convo.conversation_id}
+                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: isSelected ? '1px solid #E74C3C' : '1px solid #f0f0f0', background: isSelected ? '#FEF5F5' : '#fff', transition: 'all 0.15s' }}>
+                              <input type="checkbox" checked={isSelected}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  const next = new Set(selectedConvos);
+                                  isSelected ? next.delete(convo.conversation_id) : next.add(convo.conversation_id);
+                                  setSelectedConvos(next);
+                                }}
+                                style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#E74C3C' }} />
+                              <div style={{ flex: 1 }}>
+                                <span style={{ fontSize: 12, fontWeight: 500, color: '#2C3E50' }}>
+                                  {startDate ? startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Conversation'}
+                                </span>
+                                <span style={{ fontSize: 11, color: '#999', marginLeft: 6 }}>
+                                  {startDate ? startDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: 10, color: '#999', background: '#F4F6F7', padding: '2px 6px', borderRadius: 6 }}>
+                                {convo.message_count} msg{convo.message_count !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p style={{ fontSize: 11, color: '#999', marginTop: 8, lineHeight: 1.4 }}>
+                        Raw conversations are not visible to the care team. Only the AI-generated care summary above is shared. Select conversations to delete them permanently.
+                      </p>
+                    </div>
                   )}
                 </div>
               )}
@@ -1117,15 +1228,15 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 <button onClick={(e) => {
                   e.stopPropagation();
                   const token = window.AUTH_TOKEN || '';
-                  window.open(`/companion?token=${encodeURIComponent(token)}`, '_blank');
+                  window.open(`/kindred?token=${encodeURIComponent(token)}`, '_blank');
                 }} style={{
                   padding: '8px 16px', borderRadius: 8, border: '2px solid #1A5276',
                   background: '#fff', color: '#1A5276', fontWeight: 700, fontSize: 13, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 6,
                 }}>
-                  {'\uD83C\uDFA4'} Open Companion App
+                  {'\uD83C\uDFA4'} Open Kindred
                 </button>
-                <span style={{ fontSize: 12, color: '#999' }}>Opens {profile?.first_name}'s voice companion in a new tab</span>
+                <span style={{ fontSize: 12, color: '#999' }}>Opens {profile?.first_name}'s Kindred in a new tab</span>
               </div>
             </div>
           )}

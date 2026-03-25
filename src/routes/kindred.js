@@ -593,6 +593,148 @@ router.get("/conversations", async (req, res) => {
   }
 });
 
+// ── DELETE /api/kindred/conversations ──────────────────────────
+// Delete selected conversations by conversation_id (admin only)
+router.delete("/conversations", async (req, res) => {
+  const db = await getDb();
+  const { conversation_ids, care_recipient_id } = req.body;
+
+  if (!conversation_ids || !Array.isArray(conversation_ids) || conversation_ids.length === 0) {
+    return res.status(400).json({ error: "conversation_ids array is required" });
+  }
+  if (!care_recipient_id) {
+    return res.status(400).json({ error: "care_recipient_id is required" });
+  }
+
+  try {
+    // Verify user is admin
+    const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (!user?.is_admin) {
+      return res.status(403).json({ error: "Admin access required to delete conversations" });
+    }
+
+    const placeholders = conversation_ids.map(() => '?').join(', ');
+    const result = await db.prepare(
+      `DELETE FROM companion_messages WHERE conversation_id IN (${placeholders}) AND care_recipient_id = ?`
+    ).run(...conversation_ids, care_recipient_id);
+
+    console.log(`[Kindred] Deleted ${result.changes || 0} messages from ${conversation_ids.length} conversations`);
+    return res.json({ success: true, deleted_conversations: conversation_ids.length, deleted_messages: result.changes || 0 });
+  } catch (err) {
+    console.error("[Kindred Conversations DELETE] Error:", err.message);
+    return res.status(500).json({ error: "Failed to delete conversations" });
+  }
+});
+
+// ── POST /api/kindred/admin/summarize ─────────────────────────
+// Generate AI summary of conversations — only care-relevant info, medical alerts, abuse detection
+router.post("/admin/summarize", async (req, res) => {
+  const db = await getDb();
+  const { care_recipient_id } = req.body;
+
+  if (!care_recipient_id) {
+    return res.status(400).json({ error: "care_recipient_id is required" });
+  }
+
+  try {
+    // Verify admin
+    const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (!user?.is_admin) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    // Get care recipient name
+    const recipient = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(care_recipient_id);
+    const recipientName = recipient?.first_name || "the care recipient";
+
+    // Get all conversations
+    const messages = await db.prepare(`
+      SELECT role, content, created_at
+      FROM companion_messages
+      WHERE care_recipient_id = ?
+      ORDER BY created_at ASC
+    `).all(care_recipient_id);
+
+    if (!messages || messages.length === 0) {
+      return res.json({
+        summary: null,
+        care_insights: [],
+        medical_alerts: [],
+        abuse_flags: [],
+        message: "No conversations to summarize",
+      });
+    }
+
+    // Format conversations for Claude
+    const conversationText = messages.map(m => {
+      const role = m.role === 'user' ? recipientName : 'Kindred';
+      const time = m.created_at ? new Date(m.created_at).toLocaleString() : '';
+      return `[${time}] ${role}: ${m.content}`;
+    }).join('\n');
+
+    // Call Claude to generate care-relevant summary
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const aiResponse = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 600,
+      system: `You are a care intelligence assistant for InPlace, a family caregiving platform. You analyze conversations between a care recipient with dementia (${recipientName}) and an AI voice companion called Kindred that speaks in her son Pete's voice.
+
+Your job is to extract ONLY information relevant to ${recipientName}'s care. You must return valid JSON with this exact structure:
+{
+  "care_summary": "A 2-3 sentence summary of ${recipientName}'s emotional state, recurring topics, and general wellbeing based on conversations. Only include care-relevant observations.",
+  "care_insights": ["Array of specific care-relevant observations, e.g. 'Mentioned hip pain twice this week', 'Asked about lunch 3 times in one conversation (possible confusion)', 'Seemed happy talking about grandchildren'"],
+  "medical_alerts": ["Array of any mentions of pain, medication issues, falls, confusion, or health concerns that the care team should know about. Empty array if none."],
+  "abuse_flags": ["Array of any signs of distress, fear, mentions of being hurt, yelled at, or mistreated by anyone. This is critical for safety. Empty array if none detected."],
+  "mood_trend": "one word: positive, neutral, declining, or concerning"
+}
+
+PRIVACY RULES:
+- Do NOT include exact quotes from ${recipientName}. Paraphrase everything.
+- Do NOT include personal stories or private details that aren't care-relevant.
+- Focus on: health mentions, mood patterns, confusion indicators, safety concerns, medication compliance.
+- The care team needs actionable information, not transcripts.`,
+      messages: [
+        {
+          role: "user",
+          content: `Analyze these conversations and return the JSON summary:\n\n${conversationText}`,
+        },
+      ],
+    });
+
+    let parsed;
+    try {
+      const responseText = aiResponse.content[0].text;
+      // Extract JSON from response (Claude sometimes wraps in markdown code blocks)
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error("[Kindred Summarize] JSON parse error:", parseErr.message);
+      parsed = {
+        care_summary: aiResponse.content[0].text,
+        care_insights: [],
+        medical_alerts: [],
+        abuse_flags: [],
+        mood_trend: "neutral",
+      };
+    }
+
+    return res.json({
+      summary: parsed.care_summary || null,
+      care_insights: parsed.care_insights || [],
+      medical_alerts: parsed.medical_alerts || [],
+      abuse_flags: parsed.abuse_flags || [],
+      mood_trend: parsed.mood_trend || "neutral",
+      message_count: messages.length,
+      generated_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("[Kindred Summarize] Error:", err.message);
+    return res.status(500).json({ error: "Failed to generate summary" });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════
 // ADMIN / CARE TEAM ENDPOINTS (InPlace app settings)
 // ═══════════════════════════════════════════════════════════════════
