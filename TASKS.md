@@ -247,11 +247,11 @@
   - **Privacy safeguards:** No human listens unless safety incident filed. Admin review is passkey-gated and audit-logged. Auto-deletion enforced server-side. Caregiver and family both notified if recording is accessed. Cannot be used for performance review — safety incidents only.
   - *(Pete — Mar 22, 2026)*
 
-## iPAi Voice Companion — Feature Track
+## iPAi Kindred — Feature Track
 
 > **Source of truth:** `/mnt/Claude Working Folder/VOICE_ASSISTANT_PROTOTYPE_ROADMAP.md`
 > **Business model:** `/mnt/Claude Working Folder/VOICE_COMPANION_BUSINESS_MODEL.md`
-> **Status:** v1.51.22 — **End-to-end working.** Talk to Pete → records → Claude thinks → responds in Pete's cloned voice. Awaiting Betty test.
+> **Status:** v1.51.30 — **End-to-end working.** Renamed from "Voice Companion" to "Kindred" (v1.51.30, Mar 24). Talk to Pete → records → Claude thinks → responds in Pete's cloned voice. Sarah (reminders) + Brian (alerts) wired as pre-made voices to save clone costs. Awaiting Betty test.
 
 ### Phase 0 — Validation
 - [x] **Pete records voice sample for ElevenLabs clone.** Done — 1.5 min recording, Instant Voice Clone. Voice ID: `c2liOZ7MsLVLDpKuwIY5`. Sounds good.
@@ -261,39 +261,44 @@
 ### Phase 1 — Built (v1.51.22)
 - [x] **Backend: All 6 tables** — voice_profiles, voice_routing, voice_preferences, companion_messages, voice_reminders, voice_escalations. Auto-created individually on module load (each with own try/catch).
 - [x] **Backend: ElevenLabs TTS** — `src/utils/voiceService.js` (generateSpeech, streamSpeech, listVoices, getVoice, getUsage)
-- [x] **Backend: Companion brain** — `src/utils/voiceCompanion.js` (identity framework, care context, distress detection, voice adaptation)
+- [x] **Backend: Kindred brain** — `src/utils/kindredBrain.js` (identity framework, care context, distress detection, voice adaptation)
 - [x] **Backend: STT** — Web Speech API (browser-native, free). ElevenLabs Scribe available as upgrade path.
-- [x] **Backend: 12 REST endpoints** — `src/routes/voiceCompanion.js` (chat, reminders, profiles, admin)
-- [x] **Frontend: Companion PWA** — `companion/index.html`, push-to-talk, auth-gated
-- [x] **Auth: companion_access flag** — per-user toggle in admin panel, JWT + companion_access required
-- [x] **Nav: Companion launch button** — in sidebar for family users with access
-- [x] **Frontend: Companion admin pop-out on My Loved One page** — conversations, voice settings, usage tabs. Opens from CareProfile.js.
+- [x] **Backend: 12 REST endpoints** — `src/routes/kindred.js` (chat, reminders, profiles, admin) — route: `/api/kindred/`
+- [x] **Frontend: Kindred PWA** — `kindred/index.html`, push-to-talk, auth-gated — route: `/kindred`
+- [x] **Auth: companion_access flag** — per-user toggle in admin panel (column: "Kindred"), JWT + companion_access required
+- [x] **Nav: Kindred launch button** — in sidebar + bottom nav for family users with access
+- [x] **Frontend: Kindred admin pop-out on My Loved One page** — conversations, voice settings, usage tabs. Opens from CareProfile.js.
 - [x] **Phase 0 fallback: No voice_profiles row needed** — defaults to Pete's ElevenLabs voice ID when no profile configured.
 - [x] **Default voice speed: 0.85** — slowed from 1.0 for elder care clarity. Pete confirmed "a little fast" at 1.0.
 
-### Phase 1.5 — Companion Tone & Personality (NEXT — Mar 24)
-- [ ] **Warmer, slower conversational tone.** Current responses are robotic. Need: warmth, patience, gentle pacing appropriate for dementia care. Adjust system prompt language rules, add example exchanges, tune response length.
-- [ ] **Dementia-aware communication patterns.** Short sentences, simple words, no corrections, validation over accuracy, gentle repetition OK, don't quiz or test, redirect from distress, always reassuring.
-- [ ] **Voice speed tuning.** 0.85 may still be fast for Betty. Test 0.75–0.80 range. Add per-recipient voice speed in admin panel.
-- [ ] **Response length control.** Keep responses short (1-3 sentences). Long responses lose dementia patients. Prompt engineering for brevity.
+### Phase 1.5 — Kindred Tone & Personality (v1.51.29, Mar 23–24)
+- [x] **Warmer, slower conversational tone.** System prompt rewritten for warmth, patience, gentle pacing. Uses "Mom" not "Betty." Breath pauses ("...") injected between sentences. *(v1.51.26)*
+- [x] **Dementia-aware communication patterns.** Prompt includes: never correct memory, never quiz, validate feelings, short 1-2 sentence responses, simple yes/no questions, redirect from distress, always reassuring. *(v1.51.26)*
+- [x] **Voice speed tuning.** Dropped from 1.0 → 0.85 → 0.75. Breath pauses added via `"... "` post-processing before TTS. *(v1.51.28)*
+- [x] **Response length control.** max_tokens reduced to 150. Prompt engineered for 1-2 sentence replies. *(v1.51.26)*
+- [x] **Product rename: "Companion" → "Kindred."** All routes, files, UI labels, PWA directory renamed. DB column `companion_access` kept as-is. *(v1.51.30)*
+- [x] **Voice routing: Sarah + Brian as pre-made defaults.** Sarah (EXAVITQu4vr4xnSDxMaL) for reminders/medication, Brian (nPczCjzI2devNBz1zQrb) for alerts/check-ins. Pete's clone reserved for conversations only. Auto-seeded on startup. *(v1.51.30)*
 
-### Phase 1 — Remaining
+### Phase 2 — Remaining
 - [ ] **Consent flow: Voice cloning consent + Digital Voice Directive** — recording consent, posthumous use clause (default opt-out), designated decision-maker
-- [ ] **Reminders: Pull from InPlace appointments** — If no manual reminders set, show upcoming care sessions from InPlace calendar. Companion should read these to Betty.
+- [ ] **Reminders: Pull from InPlace appointments** — If no manual reminders set, show upcoming care sessions from InPlace calendar. Kindred should read these to Betty.
 - [ ] **"My Loved One" → Reminders tab** — Let family set reminders for the care recipient's calendar from the InPlace app. If Betty had an account, her entries would show here too.
-- [ ] **Chat History: Repurpose for iPAi conversations** — Betty has no account, so no traditional chat history. Options: (a) hide from Betty's view, (b) show companion conversation history so family can review what Betty and the companion talked about, (c) let Betty chat with iPAi via text too.
+- [ ] **Chat History: Repurpose for iPAi conversations** — Betty has no account, so no traditional chat history. Options: (a) hide from Betty's view, (b) show Kindred conversation history so family can review what Betty talked about, (c) let Betty chat with iPAi via text too.
 - [ ] **Recipient name: Dynamic from care_recipients table** — Currently hardcoded "Betty". Should pull from profile.
+- [ ] **Voice routing admin UI** — Let Pete assign voices to message types from the Kindred admin panel (currently auto-defaults to Sarah/Brian).
+- [ ] **"called_by" configurability** — Make "Mom"/"Mama"/etc. editable per care recipient in admin.
 
 ### Key Design Decisions (settled, documented in roadmap)
-- **Companion identity:** NOT Pete. Speaks in Pete's voice but has its own role ("from Pete"). Never says "I love you, Mom" — says "Pete loves you, Mom." See Identity Framework in roadmap.
+- **Kindred identity:** NOT Pete. Speaks in Pete's voice but has its own role ("from Pete"). Never says "I love you, Mom" — says "Pete loves you, Mom." See Identity Framework in roadmap.
 - **Pronoun rules:** Third-person for care messages ("Pete wanted me to remind you"), own identity for companionship ("How's your day, Mom? Pete was asking about you"). Never first-person as Pete.
-- **Real person deference:** Companion goes quiet before real calls, asks about them after, actively encourages real contact, never competes with real Pete.
+- **Real person deference:** Kindred goes quiet before real calls, asks about them after, actively encourages real contact, never competes with real Pete.
+- **Voice routing cost strategy:** Pete's clone ($$$) for conversations only. Pre-made voices (free tier / much cheaper) for reminders, alerts, check-ins. Sarah = warm female (reminders), Brian = calm male (alerts).
 - **Death framework:** Digital Voice Directive in consent flow. Default opt-out (voice stops). Opt-in requires directive + decision-maker + payer. Never-Dark Guarantee (no payment-failure cutoffs).
 - **Competitive positioning:** Moat is being un-catchable, not un-copyable. Consent-as-product, compounding care context, first-mover category ownership.
 - **Architecture:** Separate PWA now, shared Railway backend, merge later. Frontend is throwaway, backend is permanent.
 - **Cost:** ~$10-14/user/month optimized. $19.99/mo flat rate. ElevenLabs OEM agreement needed for production.
 
-### Pete's Action Items — Voice Companion
+### Pete's Action Items — Kindred
 - [x] **Record voice sample** — done, voice_id: c2liOZ7MsLVLDpKuwIY5
 - [x] **Test clone output** — sounds good
 - [x] **Add ELEVENLABS_API_KEY to Railway env vars** — done (working as of v1.51.22)

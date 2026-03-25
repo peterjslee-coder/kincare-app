@@ -1700,7 +1700,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Status</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Tester</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Companion</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Kindred</th>
                       <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Joined</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
                     </tr>
@@ -1776,7 +1776,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: 'none',
                             background: u.companion_access ? '#e3f2fd' : '#f5f5f5',
                             color: u.companion_access ? '#1565c0' : '#999',
-                          }} title={u.companion_access ? 'Click to revoke companion access' : 'Click to grant companion access'}>
+                          }} title={u.companion_access ? 'Click to revoke Kindred access' : 'Click to grant Kindred access'}>
                             {u.companion_access ? '\u2713 Yes' : 'No'}
                           </button>
                         </td>

@@ -1105,7 +1105,7 @@ const App = () => {
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
     if (currentUser?.companionAccess || currentUser?.isAdmin) {
-      familyNav.push({ id: '_launch_companion', icon: '🎙️', label: 'Companion', isAction: true });
+      familyNav.push({ id: '_launch_kindred', icon: '🎙️', label: 'Kindred', isAction: true });
     }
     if (currentUser?.isAdmin) {
       familyNav.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
@@ -1190,7 +1190,7 @@ const App = () => {
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
     if (currentUser?.companionAccess || currentUser?.isAdmin) {
-      familyBottom.push({ id: '_launch_companion', icon: '🎙️', label: 'Companion', isCompanion: true });
+      familyBottom.push({ id: '_launch_kindred', icon: '🎙️', label: 'Kindred', isKindred: true });
     }
     familyBottom.push({ id: 'account', icon: '👤', label: 'Account' });
     if (currentUser?.isAdmin) {
@@ -1270,12 +1270,12 @@ const App = () => {
               if (item.isAction) {
                 const actionClick = item.disabled ? () => {} : item.id === '_request_care'
                   ? () => { handlePageChange('schedule'); setSidebarOpen(false); }
-                  : item.id === '_launch_companion'
-                  ? () => { window.open(`/companion?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank'); setSidebarOpen(false); }
+                  : item.id === '_launch_kindred'
+                  ? () => { window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank'); setSidebarOpen(false); }
                   : () => { handlePageChange(item.id); setSidebarOpen(false); };
                 return (
                   <li key={item.id} className="nav-item">
-                    <button onClick={actionClick} className="nav-link" style={item.disabled ? { background: '#999', color: 'rgba(255,255,255,0.5)', fontWeight: 600, cursor: 'not-allowed', opacity: 0.5 } : item.id === '_launch_companion' ? { background: '#1A5276', color: '#fff', fontWeight: 600 } : { background: '#e8724a', color: '#fff', fontWeight: 600 }} title={item.disabled ? 'Complete your profile first' : item.id === '_launch_companion' ? 'Open Voice Companion (new tab)' : ''}>
+                    <button onClick={actionClick} className="nav-link" style={item.disabled ? { background: '#999', color: 'rgba(255,255,255,0.5)', fontWeight: 600, cursor: 'not-allowed', opacity: 0.5 } : item.id === '_launch_kindred' ? { background: '#1A5276', color: '#fff', fontWeight: 600 } : { background: '#e8724a', color: '#fff', fontWeight: 600 }} title={item.disabled ? 'Complete your profile first' : item.id === '_launch_kindred' ? 'Open Kindred (new tab)' : ''}>
                       <span className="nav-icon">{item.icon}</span> {item.label} {item.disabled && '🔒'}
                     </button>
                   </li>
@@ -1431,7 +1431,7 @@ const App = () => {
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav">
         {getBottomNavItems().map(item => (
-          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : item.isCompanion ? () => window.open(`/companion?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: '#e8724a' } : {}), ...(item.isCompanion ? { color: '#1A5276' } : {}) }}>
+          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: '#e8724a' } : {}), ...(item.isKindred ? { color: '#1A5276' } : {}) }}>
             <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: '#fff3ed', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
             {item.id === 'messages' && unreadMsgCount > 0 && (
               <span style={{

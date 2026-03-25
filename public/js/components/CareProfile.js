@@ -31,7 +31,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [doctorReportLoading, setDoctorReportLoading] = useState(false);
   const [doctorReport, setDoctorReport] = useState('');
   const [doctorEmailSent, setDoctorEmailSent] = useState(false);
-  // Voice Companion panel state
+  // Kindred panel state
   const [companionOpen, setCompanionOpen] = useState(false);
   const [companionTab, setCompanionTab] = useState('conversations');
   const [companionConvos, setCompanionConvos] = useState([]);
@@ -83,12 +83,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     setDoctorReportLoading(false);
   };
 
-  // ── Voice Companion data fetchers ──
+  // ── Kindred data fetchers ──
   const fetchCompanionConversations = async (recipientId) => {
     if (!recipientId) return;
     setCompanionConvosLoading(true);
     try {
-      const res = await apiFetch(`/api/voice-companion/conversations?care_recipient_id=${recipientId}`);
+      const res = await apiFetch(`/api/kindred/conversations?care_recipient_id=${recipientId}`);
       if (res?.ok) {
         const data = await res.json();
         setCompanionConvos(data.conversations || []);
@@ -101,7 +101,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     if (!recipientId) return;
     setVoicePrefsLoading(true);
     try {
-      const res = await apiFetch(`/api/voice-companion/admin/voice-preferences?care_recipient_id=${recipientId}`);
+      const res = await apiFetch(`/api/kindred/admin/voice-preferences?care_recipient_id=${recipientId}`);
       if (res?.ok) {
         const data = await res.json();
         setVoicePrefs({
@@ -118,7 +118,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     if (!profile?.id) return;
     setSavingVoicePrefs(true);
     try {
-      const res = await apiFetch('/api/voice-companion/admin/voice-preferences', {
+      const res = await apiFetch('/api/kindred/admin/voice-preferences', {
         method: 'PUT',
         body: JSON.stringify({
           care_recipient_id: profile.id,
@@ -137,7 +137,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     if (!recipientId) return;
     setUsageLoading(true);
     try {
-      const res = await apiFetch(`/api/voice-companion/admin/usage?care_recipient_id=${recipientId}`);
+      const res = await apiFetch(`/api/kindred/admin/usage?care_recipient_id=${recipientId}`);
       if (res?.ok) {
         const data = await res.json();
         setCompanionUsage(data);
@@ -835,13 +835,13 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         )}
       </div>
 
-      {/* ─── 5b. Voice Companion Panel ─── */}
+      {/* ─── 5b. Kindred Panel ─── */}
       {canEdit && (
         <div className="card" style={{ overflow: 'visible', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
             onClick={() => companionOpen ? setCompanionOpen(false) : handleCompanionOpen()}>
             <div className="card-header" style={{ margin: 0 }}>
-              <span className="card-icon">{'\uD83C\uDFA4'}</span>Voice Companion
+              <span className="card-icon">{'\uD83C\uDFA4'}</span>Kindred
               {companionConvos.length > 0 && (
                 <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1A5276', background: '#D6EAF8', padding: '2px 8px', borderRadius: 10 }}>
                   {companionConvos.length} conversation{companionConvos.length !== 1 ? 's' : ''}

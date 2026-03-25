@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="iPAi Companion">
+  <meta name="apple-mobile-web-app-title" content="iPAi Kindred">
   <meta name="theme-color" content="#1A5276">
-  <title>iPAi Companion</title>
+  <title>iPAi Kindred</title>
   <style>
     * {
       margin: 0;
@@ -430,7 +430,7 @@
       animation: fade-in 300ms ease;
     }
 
-    .message.from-companion {
+    .message.from-kindred {
       justify-content: flex-start;
     }
 
@@ -445,7 +445,7 @@
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
 
-    .message.from-companion .message-bubble {
+    .message.from-kindred .message-bubble {
       background-color: #EBF5FB;
       border-bottom-left-radius: 4px;
     }
@@ -710,7 +710,7 @@
       <div class="status-card">
         <div class="status-card-top">
           <div class="status-dot"></div>
-          <div class="status-card-title">Pete's companion is active</div>
+          <div class="status-card-title">Pete's Kindred is active</div>
         </div>
         <div class="status-card-subtitle" id="statusSubtitle">
           Last check-in: — · Next reminder: —
@@ -721,7 +721,7 @@
         <div class="button-container">
           <div class="pulse-ring pulse-ring-outer" id="pulseRing1"></div>
           <div class="pulse-ring pulse-ring-inner" id="pulseRing2"></div>
-          <button id="talkButton" class="talk-button" aria-label="Talk to companion">
+          <button id="talkButton" class="talk-button" aria-label="Talk to Kindred">
             <div class="button-icon" id="buttonIcon">
               <!-- SVG icon injected here -->
             </div>
@@ -747,7 +747,7 @@
       </div>
 
       <div class="bottom-bar">
-        <div class="bottom-bar-text">iPAi Voice Companion · Set up by Pete</div>
+        <div class="bottom-bar-text">iPAi Kindred · Set up by Pete</div>
       </div>
     </div>
 
@@ -762,7 +762,7 @@
         <div class="chat-header-content">
           <div class="chat-avatar">P</div>
           <div class="chat-header-info">
-            <div class="chat-title">Pete's Companion</div>
+            <div class="chat-title">Pete's Kindred</div>
             <div class="chat-status">
               <div class="status-indicator"></div>
               <div class="status-text">Active</div>
@@ -779,7 +779,7 @@
         <div class="chat-talk-container">
           <div class="pulse-ring pulse-ring-outer" id="chatPulseRing1"></div>
           <div class="pulse-ring pulse-ring-inner" id="chatPulseRing2"></div>
-          <button id="chatTalkButton" class="chat-talk-button" aria-label="Talk to companion">
+          <button id="chatTalkButton" class="chat-talk-button" aria-label="Talk to Kindred">
             <div class="button-icon" id="chatButtonIcon">
               <!-- SVG icon injected here -->
             </div>
@@ -907,15 +907,15 @@
     async function initializeAuth() {
       const params = new URLSearchParams(window.location.search);
       // Try URL params first, fall back to sessionStorage (survives refresh)
-      const token = params.get('token') || sessionStorage.getItem('companionToken');
+      const token = params.get('token') || sessionStorage.getItem('kindredToken');
 
       if (!token) {
-        window.location.href = '/?redirect=companion';
+        window.location.href = '/?redirect=kindred';
         return false;
       }
 
       app.token = token;
-      sessionStorage.setItem('companionToken', token);
+      sessionStorage.setItem('kindredToken', token);
 
       // Recipient: try URL param, sessionStorage, or auto-fetch from API
       let recipientId = params.get('recipient') || sessionStorage.getItem('recipientId');
@@ -966,7 +966,7 @@
           const data = await resp.json();
           if (data.token) {
             app.token = data.token;
-            sessionStorage.setItem('companionToken', data.token);
+            sessionStorage.setItem('kindredToken', data.token);
             return true;
           }
         }
@@ -977,7 +977,7 @@
     }
 
     async function apiCall(endpoint, options = {}) {
-      const url = `/api/voice-companion${endpoint}`;
+      const url = `/api/kindred${endpoint}`;
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${app.token}`,
@@ -1001,7 +1001,7 @@
             return await retry.json();
           } else {
             // Can't refresh — redirect to login
-            window.location.href = '/?redirect=companion';
+            window.location.href = '/?redirect=kindred';
             return;
           }
         }
@@ -1285,11 +1285,11 @@
           timestamp: new Date(),
         });
 
-        // Add companion response (backend returns { text, audio })
+        // Add Kindred response (backend returns { text, audio })
         if (response.text) {
           app.messages.push({
             text: response.text,
-            from: 'companion',
+            from: 'kindred',
             timestamp: new Date(),
           });
 
@@ -1328,7 +1328,7 @@
               for (const msg of conv.messages) {
                 allMessages.push({
                   text: msg.content || msg.text || msg.message || '',
-                  from: msg.role === 'companion' ? 'companion' : 'betty',
+                  from: msg.role === 'kindred' ? 'kindred' : 'betty',
                   timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
                 });
               }

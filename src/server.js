@@ -299,10 +299,10 @@ app.use("/api/care-intelligence", require("./routes/careIntelligence"));
 app.use("/api/scheduling", require("./routes/nlScheduling"));
 app.use("/api/ipai", require("./routes/ipaiChat"));
 app.use("/api/referrals", require("./routes/referrals"));
-app.use("/api/voice-companion", require("./routes/voiceCompanion"));
+app.use("/api/kindred", require("./routes/kindred"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.51.29";
+const APP_VERSION = "1.51.30";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -360,26 +360,26 @@ app.get("/api", (req, res) => {
   });
 });
 
-// ─── Voice Companion PWA (separate app for care recipients) ───
+// ─── Kindred PWA (separate app for care recipients) ───
 // Auth-gated: requires valid JWT + companion_access flag (admins always pass)
-app.get("/companion", async (req, res) => {
+app.get("/kindred", async (req, res) => {
   const token = req.cookies?.token || req.query.token;
   if (!token) {
-    return res.redirect("/?redirect=companion");
+    return res.redirect("/?redirect=kindred");
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const db = await getDb();
     const user = await db.prepare("SELECT companion_access, is_admin FROM users WHERE id = ?").get(decoded.id);
     if (!user || (!user.companion_access && !user.is_admin)) {
-      return res.status(403).send("Access denied. Companion access has not been enabled for your account.");
+      return res.status(403).send("Access denied. Kindred access has not been enabled for your account.");
     }
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
-    res.sendFile(path.join(__dirname, "../companion/index.html"));
+    res.sendFile(path.join(__dirname, "../kindred/index.html"));
   } catch {
-    return res.redirect("/?redirect=companion");
+    return res.redirect("/?redirect=kindred");
   }
 });
 

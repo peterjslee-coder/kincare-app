@@ -70,8 +70,8 @@
         btn.textContent = 'Loading...';
 
         try {
-          const token = sessionStorage.getItem('companionToken') || localStorage.getItem('auth_token') || '';
-          const resp = await fetch(`/api/voice-companion/preview-voice/${voice.id}`, {
+          const token = sessionStorage.getItem('kindredToken') || localStorage.getItem('auth_token') || '';
+          const resp = await fetch(`/api/kindred/preview-voice/${voice.id}`, {
             headers: { 'Authorization': 'Bearer ' + token },
             credentials: 'same-origin',
           });

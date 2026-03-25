@@ -230,8 +230,8 @@ function verifyCsrf(req, res, next) {
   if (publicAuthPaths.some(p => fullPath === p || fullPath.startsWith(p + "?"))) return next();
   // Skip for webhook endpoints (server-to-server, no cookie/CSRF)
   if (fullPath.startsWith("/api/checkr/webhook") || fullPath.startsWith("/api/payments/webhook")) return next();
-  // Skip for voice companion (separate PWA, uses JWT + companion_access gate instead)
-  if (fullPath.startsWith("/api/voice-companion")) return next();
+  // Skip for Kindred (separate PWA, uses JWT + companion_access gate instead)
+  if (fullPath.startsWith("/api/kindred")) return next();
   // Skip if no auth cookie present
   if (!req.cookies?.auth_token) return next();
 

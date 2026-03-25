@@ -1,23 +1,23 @@
 /**
- * Voice Companion Routes
+ * Kindred Routes
  *
- * Endpoints for the care-recipient-facing voice companion.
+ * Endpoints for the care-recipient-facing Kindred voice service.
  * Shares auth and database with the main InPlace app.
  *
- * POST /api/voice-companion/chat        — Send transcript, get text + audio response
- * GET  /api/voice-companion/reminders   — Today's reminders for care recipient
- * POST /api/voice-companion/reminders   — Care team creates a reminder
- * GET  /api/voice-companion/profile     — Active voice profile for care recipient
- * POST /api/voice-companion/profiles    — Create/update voice profile
- * GET  /api/voice-companion/conversations — Conversation history
+ * POST /api/kindred/chat        — Send transcript, get text + audio response
+ * GET  /api/kindred/reminders   — Today's reminders for care recipient
+ * POST /api/kindred/reminders   — Care team creates a reminder
+ * GET  /api/kindred/profile     — Active voice profile for care recipient
+ * POST /api/kindred/profiles    — Create/update voice profile
+ * GET  /api/kindred/conversations — Conversation history
  *
  * ── Admin / Care Team (InPlace app settings) ──
- * GET  /api/voice-companion/admin/voice-routing     — Get voice routing config
- * PUT  /api/voice-companion/admin/voice-routing      — Update which voices speak for which message types
- * GET  /api/voice-companion/admin/voice-preferences  — Get care recipient's adaptive voice prefs
- * PUT  /api/voice-companion/admin/voice-preferences  — Set baseline voice prefs (speed, stability, etc)
- * GET  /api/voice-companion/admin/usage              — Credit usage stats
- * PUT  /api/voice-companion/admin/ipai-access/:userId — Toggle iPAi sidebar access for a team member
+ * GET  /api/kindred/admin/voice-routing     — Get voice routing config
+ * PUT  /api/kindred/admin/voice-routing      — Update which voices speak for which message types
+ * GET  /api/kindred/admin/voice-preferences  — Get care recipient's adaptive voice prefs
+ * PUT  /api/kindred/admin/voice-preferences  — Set baseline voice prefs (speed, stability, etc)
+ * GET  /api/kindred/admin/usage              — Credit usage stats
+ * PUT  /api/kindred/admin/ipai-access/:userId — Toggle iPAi sidebar access for a team member
  */
 
 const express = require("express");
@@ -25,7 +25,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { generateSpeech } = require("../utils/voiceService");
-const { handleCompanionMessage } = require("../utils/voiceCompanion");
+const { handleKindredMessage } = require("../utils/kindredBrain");
 
 const router = express.Router();
 router.use(authenticate);
@@ -145,39 +145,107 @@ async function initializeTables() {
   for (const table of tables) {
     try {
       await db.exec(table.sql);
-      console.log(`[Voice Companion] Table ${table.name} ready`);
+      console.log(`[Kindred] Table ${table.name} ready`);
     } catch (err) {
-      console.error(`[Voice Companion] Failed to create ${table.name}:`, err.message);
+      console.error(`[Kindred] Failed to create ${table.name}:`, err.message);
     }
   }
 
-  console.log("[Voice Companion] Database initialization complete");
+  console.log("[Kindred] Database initialization complete");
+
+  // Seed default pre-made voice profiles (Sarah & Brian — Pete's picks for reminders/alerts)
+  // These use ElevenLabs pre-made voices (no clone cost) for non-conversation messages
+  await seedDefaultVoices(db);
+}
+
+async function seedDefaultVoices(db) {
+  const premadeVoices = [
+    { provider_voice_id: "EXAVITQu4vr4xnSDxMaL", display_name: "Sarah", description: "Mature, reassuring — medication & health reminders" },
+    { provider_voice_id: "nPczCjzI2devNBz1zQrb", display_name: "Brian", description: "Deep, comforting — calm alerts & check-ins" },
+  ];
+
+  for (const voice of premadeVoices) {
+    try {
+      // Check if this pre-made voice already exists (use a system user_id placeholder)
+      const existing = await db.prepare(
+        "SELECT id FROM voice_profiles WHERE provider_voice_id = ? LIMIT 1"
+      ).get(voice.provider_voice_id);
+
+      if (!existing) {
+        const id = uuid();
+        // Use a system placeholder for user_id since pre-made voices aren't owned by a user
+        await db.prepare(`
+          INSERT INTO voice_profiles (id, user_id, provider, provider_voice_id, display_name, is_active, created_at, updated_at)
+          VALUES (?, 'system', 'elevenlabs_premade', ?, ?, true, NOW(), NOW())
+        `).run(id, voice.provider_voice_id, voice.display_name);
+        console.log(`[Kindred] Seeded pre-made voice: ${voice.display_name} (${voice.provider_voice_id})`);
+      }
+    } catch (err) {
+      // Unique constraint or other — skip silently
+      console.log(`[Kindred] Voice ${voice.display_name} already exists or seed skipped: ${err.message}`);
+    }
+  }
 }
 
 // Initialize on module load
-initializeTables().catch(err => console.error("[Voice Companion] Init failed:", err));
+initializeTables().catch(err => console.error("[Kindred] Init failed:", err));
 
 // ── Helper: Determine voice to use for message ─────────────────────
 
 async function getVoiceForMessage(db, careRecipientId, messageType = "conversation") {
   // Look up voice routing config for this care recipient + message type
-  const routing = await db.prepare(
-    "SELECT voice_profile_id FROM voice_routing WHERE care_recipient_id = ? AND message_type = ? LIMIT 1"
-  ).get(careRecipientId, messageType);
+  try {
+    const routing = await db.prepare(
+      "SELECT voice_profile_id FROM voice_routing WHERE care_recipient_id = ? AND message_type = ? LIMIT 1"
+    ).get(careRecipientId, messageType);
 
-  if (routing?.voice_profile_id) {
-    const profile = await db.prepare(
-      "SELECT * FROM voice_profiles WHERE id = ? AND is_active = true"
-    ).get(routing.voice_profile_id);
-    if (profile) return profile;
+    if (routing?.voice_profile_id) {
+      const profile = await db.prepare(
+        "SELECT * FROM voice_profiles WHERE id = ? AND is_active = true"
+      ).get(routing.voice_profile_id);
+      if (profile) return profile;
+    }
+  } catch (err) {
+    console.log("[Kindred] voice_routing lookup failed (using defaults):", err.message);
   }
 
-  // Fallback: get any active profile for this care recipient (primary/Pete's voice)
-  const defaultProfile = await db.prepare(
-    "SELECT * FROM voice_profiles WHERE care_recipient_id = ? AND is_active = true ORDER BY created_at ASC LIMIT 1"
-  ).get(careRecipientId);
+  // For non-conversation types, use pre-made voices (cheaper than Pete's clone)
+  // Sarah = reminders/medication, Brian = alerts/check-ins
+  const premadeDefaults = {
+    reminder: "EXAVITQu4vr4xnSDxMaL",      // Sarah — reassuring, medication reminders
+    medication: "EXAVITQu4vr4xnSDxMaL",     // Sarah
+    alert: "nPczCjzI2devNBz1zQrb",           // Brian — calm, grounding alerts
+    check_in: "nPczCjzI2devNBz1zQrb",        // Brian
+  };
 
-  return defaultProfile;
+  if (premadeDefaults[messageType]) {
+    try {
+      const premade = await db.prepare(
+        "SELECT * FROM voice_profiles WHERE provider_voice_id = ? AND is_active = true LIMIT 1"
+      ).get(premadeDefaults[messageType]);
+      if (premade) return premade;
+    } catch (err) {
+      // Fall through to clone fallback
+    }
+    // If the profile isn't in DB yet, return an inline fallback
+    return {
+      id: null,
+      provider_voice_id: premadeDefaults[messageType],
+      display_name: messageType.includes("alert") || messageType === "check_in" ? "Brian" : "Sarah",
+    };
+  }
+
+  // Conversation type: fall back to care recipient's primary voice (Pete's clone)
+  try {
+    const defaultProfile = await db.prepare(
+      "SELECT * FROM voice_profiles WHERE care_recipient_id = ? AND is_active = true ORDER BY created_at ASC LIMIT 1"
+    ).get(careRecipientId);
+    if (defaultProfile) return defaultProfile;
+  } catch (err) {
+    // Fall through to null (Phase 0 hardcoded fallback handles this)
+  }
+
+  return null;
 }
 
 // ── Helper: Get voice preferences ──────────────────────────────────
@@ -201,14 +269,14 @@ async function getVoicePreferences(db, careRecipientId) {
           "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
         ).get(careRecipientId);
       } catch (insertErr) {
-        console.error("[Voice Companion] Could not insert voice prefs:", insertErr.message);
+        console.error("[Kindred] Could not insert voice prefs:", insertErr.message);
       }
     }
 
     return prefs || defaults;
   } catch (err) {
     // Table may not exist yet — return sensible defaults
-    console.error("[Voice Companion] voice_preferences query failed (using defaults):", err.message);
+    console.error("[Kindred] voice_preferences query failed (using defaults):", err.message);
     return defaults;
   }
 }
@@ -221,10 +289,10 @@ function calculateCredits(text) {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// CARE RECIPIENT ENDPOINTS (Voice Companion PWA)
+// CARE RECIPIENT ENDPOINTS (Kindred PWA)
 // ───────────────────────────────────────────────────────────────────
 
-// ── POST /api/voice-companion/chat ────────────────────────────────
+// ── POST /api/kindred/chat ────────────────────────────────
 // Main conversation endpoint
 router.post("/chat", async (req, res) => {
   const db = await getDb();
@@ -257,8 +325,8 @@ router.post("/chat", async (req, res) => {
     const convId = conversation_id || uuid();
 
     // Handle the message through the companion brain (Claude)
-    const chatResult = await handleCompanionMessage(transcript, care_recipient_id, convId);
-    // handleCompanionMessage returns { text, intent, shouldSpeak, ... }
+    const chatResult = await handleKindredMessage(transcript, care_recipient_id, convId);
+    // handleKindredMessage returns { text, intent, shouldSpeak, ... }
     const rawText = chatResult.text || chatResult.response || "I'm sorry, I couldn't process that.";
 
     // Add natural pauses between sentences for elder care pacing.
@@ -293,7 +361,7 @@ router.post("/chat", async (req, res) => {
         VALUES (?, ?, ?, 'companion', ?, ?, ?, NOW())
       `).run(companionMessageId, care_recipient_id, convId, companionText, voiceProfile.id || null, creditsUsed);
     } catch (storeErr) {
-      console.error("[Voice Companion Chat] Message storage error (non-fatal):", storeErr.message);
+      console.error("[Kindred Chat] Message storage error (non-fatal):", storeErr.message);
     }
 
     return res.json({
@@ -307,7 +375,7 @@ router.post("/chat", async (req, res) => {
       actions: chatResult.actions || [],
     });
   } catch (err) {
-    console.error("[Voice Companion Chat] Error:", err.message);
+    console.error("[Kindred Chat] Error:", err.message);
     return res.status(500).json({
       error: "Failed to process message",
       message: err.message,
@@ -315,7 +383,7 @@ router.post("/chat", async (req, res) => {
   }
 });
 
-// ── GET /api/voice-companion/reminders ─────────────────────────────
+// ── GET /api/kindred/reminders ─────────────────────────────
 router.get("/reminders", async (req, res) => {
   const db = await getDb();
   const { care_recipient_id } = req.query;
@@ -339,12 +407,12 @@ router.get("/reminders", async (req, res) => {
 
     return res.json({ reminders });
   } catch (err) {
-    console.error("[Voice Companion Reminders GET] Error:", err.message);
+    console.error("[Kindred Reminders GET] Error:", err.message);
     return res.status(500).json({ error: "Failed to fetch reminders" });
   }
 });
 
-// ── POST /api/voice-companion/reminders ────────────────────────────
+// ── POST /api/kindred/reminders ────────────────────────────
 router.post("/reminders", async (req, res) => {
   const db = await getDb();
   const { care_recipient_id, message_text, scheduled_for, voice_profile_id } = req.body;
@@ -376,12 +444,12 @@ router.post("/reminders", async (req, res) => {
 
     return res.status(201).json(reminder);
   } catch (err) {
-    console.error("[Voice Companion Reminders POST] Error:", err.message);
+    console.error("[Kindred Reminders POST] Error:", err.message);
     return res.status(500).json({ error: "Failed to create reminder" });
   }
 });
 
-// ── GET /api/voice-companion/profile ───────────────────────────────
+// ── GET /api/kindred/profile ───────────────────────────────
 router.get("/profile", async (req, res) => {
   const db = await getDb();
   const { care_recipient_id } = req.query;
@@ -401,12 +469,12 @@ router.get("/profile", async (req, res) => {
 
     return res.json(profile);
   } catch (err) {
-    console.error("[Voice Companion Profile GET] Error:", err.message);
+    console.error("[Kindred Profile GET] Error:", err.message);
     return res.status(500).json({ error: "Failed to fetch profile" });
   }
 });
 
-// ── POST /api/voice-companion/profiles ─────────────────────────────
+// ── POST /api/kindred/profiles ─────────────────────────────
 router.post("/profiles", async (req, res) => {
   const db = await getDb();
   const { provider_voice_id, display_name, care_recipient_id, consent_recorded_at } = req.body;
@@ -428,12 +496,12 @@ router.post("/profiles", async (req, res) => {
 
     return res.status(201).json(profile);
   } catch (err) {
-    console.error("[Voice Companion Profiles POST] Error:", err.message);
+    console.error("[Kindred Profiles POST] Error:", err.message);
     return res.status(500).json({ error: "Failed to create profile" });
   }
 });
 
-// ── GET /api/voice-companion/preview-voice/:voiceId ───────────────
+// ── GET /api/kindred/preview-voice/:voiceId ───────────────
 // Generate a sample audio clip for a voice (admin only, for voice selection)
 router.get("/preview-voice/:voiceId", async (req, res) => {
   try {
@@ -448,12 +516,12 @@ router.get("/preview-voice/:voiceId", async (req, res) => {
     res.set("Content-Disposition", `inline; filename="preview-${req.params.voiceId}.mp3"`);
     return res.send(audioBuffer);
   } catch (err) {
-    console.error("[Voice Companion] Preview error:", err.message);
+    console.error("[Kindred] Preview error:", err.message);
     return res.status(500).json({ error: "Failed to generate preview", message: err.message });
   }
 });
 
-// ── GET /api/voice-companion/available-voices ─────────────────────
+// ── GET /api/kindred/available-voices ─────────────────────
 // List all ElevenLabs voices (cloned + pre-made) for voice routing selection
 router.get("/available-voices", async (req, res) => {
   try {
@@ -470,12 +538,12 @@ router.get("/available-voices", async (req, res) => {
     }));
     return res.json({ voices: simplified });
   } catch (err) {
-    console.error("[Voice Companion] listVoices error:", err.message);
+    console.error("[Kindred] listVoices error:", err.message);
     return res.status(500).json({ error: "Failed to fetch voices", message: err.message });
   }
 });
 
-// ── GET /api/voice-companion/conversations ─────────────────────────
+// ── GET /api/kindred/conversations ─────────────────────────
 router.get("/conversations", async (req, res) => {
   const db = await getDb();
   const { care_recipient_id, limit = 50, offset = 0 } = req.query;
@@ -520,7 +588,7 @@ router.get("/conversations", async (req, res) => {
 
     return res.json({ conversations: result });
   } catch (err) {
-    console.error("[Voice Companion Conversations] Error:", err.message);
+    console.error("[Kindred Conversations] Error:", err.message);
     return res.status(500).json({ error: "Failed to fetch conversations" });
   }
 });
@@ -546,12 +614,12 @@ async function requireAdmin(req, res, next) {
     }
     next();
   } catch (err) {
-    console.error("[Voice Companion] Admin check error:", err.message);
+    console.error("[Kindred] Admin check error:", err.message);
     return res.status(500).json({ error: "Admin check failed" });
   }
 }
 
-// ── GET /api/voice-companion/admin/voice-routing ──────────────────
+// ── GET /api/kindred/admin/voice-routing ──────────────────
 router.get("/admin/voice-routing", requireAdmin, async (req, res) => {
   const db = await getDb();
   const { care_recipient_id } = req.query;
@@ -576,7 +644,7 @@ router.get("/admin/voice-routing", requireAdmin, async (req, res) => {
   }
 });
 
-// ── PUT /api/voice-companion/admin/voice-routing ───────────────────
+// ── PUT /api/kindred/admin/voice-routing ───────────────────
 router.put("/admin/voice-routing", requireAdmin, async (req, res) => {
   const db = await getDb();
   const { care_recipient_id, routing } = req.body;
@@ -638,7 +706,7 @@ router.put("/admin/voice-routing", requireAdmin, async (req, res) => {
   }
 });
 
-// ── GET /api/voice-companion/admin/voice-preferences ───────────────
+// ── GET /api/kindred/admin/voice-preferences ───────────────
 router.get("/admin/voice-preferences", requireAdmin, async (req, res) => {
   const db = await getDb();
   const { care_recipient_id } = req.query;
@@ -656,7 +724,7 @@ router.get("/admin/voice-preferences", requireAdmin, async (req, res) => {
   }
 });
 
-// ── PUT /api/voice-companion/admin/voice-preferences ───────────────
+// ── PUT /api/kindred/admin/voice-preferences ───────────────
 router.put("/admin/voice-preferences", requireAdmin, async (req, res) => {
   const db = await getDb();
   const { care_recipient_id, speed, stability, similarity_boost } = req.body;
@@ -709,7 +777,7 @@ router.put("/admin/voice-preferences", requireAdmin, async (req, res) => {
   }
 });
 
-// ── GET /api/voice-companion/admin/usage ────────────────────────────
+// ── GET /api/kindred/admin/usage ────────────────────────────
 router.get("/admin/usage", requireAdmin, async (req, res) => {
   const db = await getDb();
   const { care_recipient_id } = req.query;
@@ -776,7 +844,7 @@ router.get("/admin/usage", requireAdmin, async (req, res) => {
   }
 });
 
-// ── PUT /api/voice-companion/admin/ipai-access/:userId ──────────────
+// ── PUT /api/kindred/admin/ipai-access/:userId ──────────────
 router.put("/admin/ipai-access/:userId", requireAdmin, async (req, res) => {
   const db = await getDb();
   const { userId } = req.params;

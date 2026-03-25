@@ -910,7 +910,7 @@ async function initializeDatabase() {
       metadata JSONB
     )`,
 
-    // v1.51.15 — Voice Companion access flag
+    // v1.51.15 — Kindred access flag
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS companion_access INTEGER DEFAULT 0`,
   ];
   for (const sql of migrations) {

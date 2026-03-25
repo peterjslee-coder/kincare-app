@@ -1,14 +1,14 @@
 /**
- * Voice Companion — Conversation logic
+ * Kindred — Conversation logic
  *
  * The "brain" for care-recipient-facing conversations.
- * Builds the companion system prompt, injects care context,
+ * Builds the Kindred system prompt, injects care context,
  * and manages conversation state.
  *
  * Separate from ipaiChat.js (which serves the care team).
  * Same Claude API, different persona and context.
  *
- * Key design principle: The companion speaks in the cloned voice but is NOT
+ * Key design principle: Kindred speaks in the cloned voice but is NOT
  * the voice owner. It's "from" them. It reinforces real relationships, defers
  * to real people, and never competes for the care recipient's attention.
  * See project_voice_companion_ethics.md for the full identity framework.
@@ -65,7 +65,7 @@ async function loadCareContext(careRecipientId) {
         )
         .all(careRecipientId);
     } catch (e) {
-      console.error("[Voice Companion] care_sessions query failed (non-fatal):", e.message);
+      console.error("[Kindred] care_sessions query failed (non-fatal):", e.message);
     }
 
     // Load care team members
@@ -82,7 +82,7 @@ async function loadCareContext(careRecipientId) {
         )
         .all(careRecipientId);
     } catch (e) {
-      console.error("[Voice Companion] careTeam query failed (non-fatal):", e.message);
+      console.error("[Kindred] careTeam query failed (non-fatal):", e.message);
     }
 
     // Load pending reminders
@@ -98,7 +98,7 @@ async function loadCareContext(careRecipientId) {
         )
         .all(careRecipientId);
     } catch (e) {
-      console.error("[Voice Companion] voice_reminders query failed (non-fatal):", e.message);
+      console.error("[Kindred] voice_reminders query failed (non-fatal):", e.message);
     }
 
     // Load voice preferences (table may not exist yet — non-fatal)
@@ -112,7 +112,7 @@ async function loadCareContext(careRecipientId) {
         )
         .get(careRecipientId);
     } catch (e) {
-      console.error("[Voice Companion] voice_preferences query failed (non-fatal):", e.message);
+      console.error("[Kindred] voice_preferences query failed (non-fatal):", e.message);
     }
 
     return {
@@ -128,7 +128,7 @@ async function loadCareContext(careRecipientId) {
       },
     };
   } catch (err) {
-    console.error("[Voice Companion] Error loading care context:", err.message);
+    console.error("[Kindred] Error loading care context:", err.message);
     return null;
   }
 }
@@ -149,7 +149,7 @@ async function loadCareContext(careRecipientId) {
  *
  * See: project_voice_companion_ethics.md for full framework
  */
-function buildCompanionPrompt(careContext, voiceOwnerName, careRecipientName, careRecipientFormalName) {
+function buildKindredPrompt(careContext, voiceOwnerName, careRecipientName, careRecipientFormalName) {
   // careRecipientName = what the voice owner calls them (e.g. "Mom")
   // careRecipientFormalName = their actual name (e.g. "Betty") — used for context only
   const {
@@ -211,7 +211,7 @@ Examples of how you should sound:
   "That sounds like a nice outing. Did you get anything good?"
 
   "${careRecipientName} says: Is that you, ${voiceOwnerName}?"
-  "It's me, your companion — ${voiceOwnerName} set me up so you'd always have someone to talk to. He'll call you soon."
+  "It's me, Kindred — ${voiceOwnerName} set me up so you'd always have someone to talk to. He'll call you soon."
 
 DEMENTIA COMMUNICATION — FOLLOW THESE ALWAYS:
 - NEVER correct her memory. If she says something that isn't true, go with it warmly. Her reality is valid.
@@ -370,14 +370,14 @@ async function saveVoicePreferences(careRecipientId, preferences) {
         );
     }
   } catch (err) {
-    console.error("[Voice Companion] Error saving voice preferences:", err.message);
+    console.error("[Kindred] Error saving voice preferences:", err.message);
   }
 }
 
 /**
  * Store companion message in database
  */
-async function storeCompanionMessage(careRecipientId, conversationId, transcript, response, intent) {
+async function storeKindredMessage(careRecipientId, conversationId, transcript, response, intent) {
   const db = await getDb();
 
   try {
@@ -391,26 +391,26 @@ async function storeCompanionMessage(careRecipientId, conversationId, transcript
       )
       .run(careRecipientId, conversationId, transcript, response, intent);
   } catch (err) {
-    console.error("[Voice Companion] Error storing message:", err.message);
+    console.error("[Kindred] Error storing message:", err.message);
   }
 }
 
 /**
- * Main handler: handleCompanionMessage(transcript, careRecipientId, conversationId)
+ * Main handler: handleKindredMessage(transcript, careRecipientId, conversationId)
  *
- * This is the entry point for voice companion conversations.
+ * This is the entry point for voice Kindred conversations.
  * It:
  * 1. Loads care context (medications, schedule, recent visits, care team, voice prefs)
- * 2. Builds the system prompt with the Companion Identity Framework
+ * 2. Builds the system prompt with the Kindred Identity Framework
  * 3. Calls Claude API with Haiku (cost-efficient)
  * 4. Detects voice adaptation triggers (Betty says "what?", "slow down", etc.)
  * 5. Returns { text, intent, shouldSpeak, voiceAdjustments, showVolumeControl }
  */
-async function handleCompanionMessage(transcript, careRecipientId, conversationId) {
+async function handleKindredMessage(transcript, careRecipientId, conversationId) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
-    console.error("[Voice Companion] ANTHROPIC_API_KEY not set");
+    console.error("[Kindred] ANTHROPIC_API_KEY not set");
     return {
       text: "I'm having trouble connecting. Please try again.",
       intent: "error",
@@ -445,7 +445,7 @@ async function handleCompanionMessage(transcript, careRecipientId, conversationI
     const careRecipientName = careContext.recipient.called_by || "Mom";
 
     // Build system prompt with care context
-    const systemPrompt = buildCompanionPrompt(careContext, voiceOwnerName, careRecipientName, careRecipientFormalName);
+    const systemPrompt = buildKindredPrompt(careContext, voiceOwnerName, careRecipientName, careRecipientFormalName);
 
     // Call Claude API
     const responseText = await callClaudeChat(
@@ -507,7 +507,7 @@ async function handleCompanionMessage(transcript, careRecipientId, conversationI
     }
 
     // Store the message in database
-    await storeCompanionMessage(careRecipientId, conversationId, transcript, responseText, intent);
+    await storeKindredMessage(careRecipientId, conversationId, transcript, responseText, intent);
 
     // If distress detected, flag for escalation
     if (shouldEscalate) {
@@ -537,7 +537,7 @@ async function handleCompanionMessage(transcript, careRecipientId, conversationI
             escalationData.escalation_reason
           );
       } catch (err) {
-        console.error("[Voice Companion] Error logging escalation:", err.message);
+        console.error("[Kindred] Error logging escalation:", err.message);
       }
     }
 
@@ -549,7 +549,7 @@ async function handleCompanionMessage(transcript, careRecipientId, conversationI
       shouldEscalate,
     };
   } catch (err) {
-    console.error("[Voice Companion] Unhandled error:", err.message);
+    console.error("[Kindred] Unhandled error:", err.message);
     return {
       text: "I encountered an error. Let me try that again.",
       intent: "error",
@@ -562,8 +562,8 @@ async function handleCompanionMessage(transcript, careRecipientId, conversationI
  * Export functions for routes and external callers
  */
 module.exports = {
-  handleCompanionMessage,
-  buildCompanionPrompt,
+  handleKindredMessage,
+  buildKindredPrompt,
   detectVoiceAdaptation,
   loadCareContext,
   saveVoicePreferences,

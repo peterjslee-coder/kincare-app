@@ -1348,7 +1348,7 @@ router.put("/users/:id/tester", async (req, res) => {
   }
 });
 
-// ─── PUT /api/admin/users/:id/companion-access — Toggle companion_access flag ───
+// ─── PUT /api/admin/users/:id/companion-access — Toggle Kindred access flag ───
 router.put("/users/:id/companion-access", async (req, res) => {
   try {
     const db = await getDb();
