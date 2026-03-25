@@ -738,7 +738,11 @@
       background: #fafafa;
       display: flex;
       flex-direction: column;
-      justify-content: flex-end;
+    }
+
+    .msg-messages-area::before {
+      content: '';
+      flex: 1;
     }
 
     .msg-input-area {

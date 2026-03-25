@@ -1274,11 +1274,16 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 const getAssignedVoice = (messageType) => {
                   const route = voiceRouting.find(r => r.message_type === messageType);
                   if (route?.voice_profile_id) {
-                    // Find matching known voice or DB profile
+                    // Match by display_name from the joined query (most reliable)
+                    const displayName = (route.display_name || '').toLowerCase();
+                    if (displayName.includes('pete')) return KNOWN_VOICES[0];
+                    if (displayName.includes('sarah')) return KNOWN_VOICES[1];
+                    if (displayName.includes('brian')) return KNOWN_VOICES[2];
+                    // Fallback: check other available voices
                     const match = allVoiceOptions.find(v => v.id === route.voice_profile_id);
                     return match || { name: route.display_name || 'Custom', icon: '\uD83D\uDD0A' };
                   }
-                  // Defaults
+                  // Defaults (no routing row saved)
                   if (messageType === 'conversation') return KNOWN_VOICES[0]; // Pete
                   if (messageType === 'reminder' || messageType === 'medication') return KNOWN_VOICES[1]; // Sarah
                   if (messageType === 'alert' || messageType === 'check_in') return KNOWN_VOICES[2]; // Brian
@@ -1310,7 +1315,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     </div>
 
                     {/* Route rows */}
-                    <div style={{ border: '1px solid #E8EEF2', borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ border: '1px solid #E8EEF2', borderRadius: 10, overflow: 'visible' }}>
                       {MESSAGE_TYPES.map((mt, i) => {
                         const assigned = getAssignedVoice(mt.id);
                         const isOpen = routeDropdown === mt.id;
@@ -1353,16 +1358,14 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                               {isOpen && (
                                 <div style={{
                                   position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#fff',
-                                  borderRadius: 10, border: '1px solid #E8EEF2', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                  zIndex: 20, width: 220, overflow: 'hidden',
+                                  borderRadius: 10, border: '1px solid #E8EEF2', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                  zIndex: 9999, width: 220, overflow: 'hidden',
                                 }}>
                                   {KNOWN_VOICES.map((voice, vi) => (
                                     <button key={voice.id} onClick={(e) => {
                                       e.stopPropagation();
-                                      // For Pete, pass null to clear routing (falls back to default)
-                                      // For others, we need to find the voice_profile_id from DB
-                                      // For now, save with the provider_voice_id lookup
-                                      saveVoiceRoute(mt.id, voice.id === '__pete__' ? null : voice.provider_voice_id, mt.priority);
+                                      // Always save with provider_voice_id — backend resolves to DB profile
+                                      saveVoiceRoute(mt.id, voice.provider_voice_id, mt.priority);
                                     }}
                                       style={{
                                         width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none',

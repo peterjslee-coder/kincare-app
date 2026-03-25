@@ -253,6 +253,9 @@ ${careTeamInstructions ? `
 CARE TEAM GUIDANCE (updated by the care team — follow these closely):
 ${careTeamInstructions}
 ` : ""}
+IF SHE WANTS TO TELL SOMEONE SOMETHING:
+If ${careRecipientName} says something like "tell ${voiceOwnerName} I need him" or "ask Sara to come visit" or "let ${voiceOwnerName} know I'm thinking about him" — say something warm and simple like: "I'll let ${voiceOwnerName} know right now, ${careRecipientName}." The system will automatically send them a notification with her message. You CAN make this promise — it works.
+
 IF SHE SEEMS UPSET OR IN PAIN:
 Stay calm. Say something like: "I'm sorry you're not feeling good, ${careRecipientName}. I'm going to let ${voiceOwnerName} know so someone can check on you, okay?"
 Then flag intent as "distress_alert".
@@ -474,6 +477,7 @@ async function handleKindredMessage(transcript, careRecipientId, conversationId)
     // Detect distress or escalation intent
     let intent = "conversation";
     let shouldEscalate = false;
+    let relayMessage = null;
 
     if (
       responseText.toLowerCase().includes("concerned") ||
@@ -482,6 +486,37 @@ async function handleKindredMessage(transcript, careRecipientId, conversationId)
     ) {
       intent = "distress_alert";
       shouldEscalate = true;
+    }
+
+    // Detect message relay intent — Betty asking Kindred to tell someone something
+    const lowerTranscript = (transcript || "").toLowerCase();
+    const relayPatterns = [
+      /(?:tell|ask|let|remind|message)\s+(\w+)/i,
+      /(?:can you|could you|please)\s+(?:tell|ask|let|remind|message)\s+(\w+)/i,
+      /(?:i need|i want)\s+(?:to talk to|to see|to tell)\s+(\w+)/i,
+      /(?:call|get)\s+(\w+)\s+(?:for me|please)/i,
+    ];
+    const relayKeywords = ["tell", "ask", "let know", "remind", "message", "call", "need him", "need her", "get him", "get her", "talk to"];
+    const hasRelayIntent = relayKeywords.some(kw => lowerTranscript.includes(kw));
+
+    if (hasRelayIntent) {
+      // Extract who Betty is trying to reach and what she wants to say
+      let targetName = null;
+      for (const pattern of relayPatterns) {
+        const match = transcript.match(pattern);
+        if (match?.[1]) {
+          targetName = match[1];
+          break;
+        }
+      }
+      // Default to voice owner (Pete) if no specific name detected
+      targetName = targetName || voiceOwnerName;
+      relayMessage = {
+        target: targetName,
+        originalMessage: transcript,
+        recipientName: careRecipientFormalName,
+      };
+      intent = "relay_message";
     }
 
     // Detect voice adaptation triggers from Betty's transcript
@@ -563,6 +598,7 @@ async function handleKindredMessage(transcript, careRecipientId, conversationId)
       shouldSpeak: true,
       voiceAdjustments,
       shouldEscalate,
+      relayMessage,
     };
   } catch (err) {
     console.error("[Kindred] Unhandled error:", err.message);

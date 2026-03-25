@@ -29,6 +29,8 @@ const { authenticate } = require("../middleware/auth");
 const { generateSpeech } = require("../utils/voiceService");
 const { handleKindredMessage } = require("../utils/kindredBrain");
 
+const { sendPushToUser } = require("./push");
+
 const router = express.Router();
 router.use(authenticate);
 
@@ -177,6 +179,7 @@ async function seedDefaultVoices(db) {
   const premadeVoices = [
     { provider_voice_id: "EXAVITQu4vr4xnSDxMaL", display_name: "Sarah", description: "Mature, reassuring — medication & health reminders" },
     { provider_voice_id: "nPczCjzI2devNBz1zQrb", display_name: "Brian", description: "Deep, comforting — calm alerts & check-ins" },
+    { provider_voice_id: "c2liOZ7MsLVLDpKuwIY5", display_name: "Pete", description: "Pete's cloned voice — conversations" },
   ];
 
   for (const voice of premadeVoices) {
@@ -377,6 +380,65 @@ router.post("/chat", async (req, res) => {
       `).run(companionMessageId, care_recipient_id, convId, companionText, voiceProfile.id || null, creditsUsed);
     } catch (storeErr) {
       console.error("[Kindred Chat] Message storage error (non-fatal):", storeErr.message);
+    }
+
+    // ── Relay message: push notification to care team when Betty asks Kindred to tell someone something ──
+    if (chatResult.relayMessage) {
+      try {
+        const relay = chatResult.relayMessage;
+        const targetNameLower = (relay.target || "").toLowerCase();
+
+        // Find the care recipient's name for the notification
+        const recipient = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(care_recipient_id);
+        const recipientName = recipient?.first_name || "Your loved one";
+
+        // Find care team members to notify — try to match the target name, otherwise notify all family/admin
+        let targetUsers = [];
+        try {
+          // First try: exact name match among care team members
+          targetUsers = await db.prepare(`
+            SELECT DISTINCT u.id, u.first_name FROM users u
+            JOIN caregiver_assignments ca ON ca.caregiver_profile_id = (SELECT id FROM caregiver_profiles WHERE user_id = u.id)
+            WHERE ca.care_recipient_id = ? AND LOWER(u.first_name) = ?
+            UNION
+            SELECT DISTINCT u.id, u.first_name FROM users u
+            WHERE u.is_admin = true AND LOWER(u.first_name) = ?
+            UNION
+            SELECT DISTINCT u.id, u.first_name FROM care_recipients cr
+            JOIN users u ON cr.family_user_id = u.id
+            WHERE cr.id = ? AND LOWER(u.first_name) = ?
+          `).all(care_recipient_id, targetNameLower, targetNameLower, care_recipient_id, targetNameLower);
+        } catch (e) {
+          // Query structure may vary — fall through
+        }
+
+        // If no match, notify the family user (primary contact)
+        if (targetUsers.length === 0) {
+          try {
+            targetUsers = await db.prepare(`
+              SELECT u.id, u.first_name FROM care_recipients cr
+              JOIN users u ON cr.family_user_id = u.id
+              WHERE cr.id = ?
+            `).all(care_recipient_id);
+          } catch (e) {
+            console.error("[Kindred Relay] Fallback user query failed:", e.message);
+          }
+        }
+
+        for (const user of targetUsers) {
+          await sendPushToUser(user.id, {
+            title: `Message from ${recipientName}`,
+            body: `${recipientName} asked Kindred: "${relay.originalMessage}"`,
+            data: { type: "kindred_relay", care_recipient_id, conversation_id: convId },
+          }, "kindred_relay").catch(err => {
+            console.error(`[Kindred Relay] Push failed for ${user.first_name}:`, err.message);
+          });
+        }
+
+        console.log(`[Kindred Relay] Sent push to ${targetUsers.length} user(s) for relay from ${recipientName}: "${relay.originalMessage}"`);
+      } catch (relayErr) {
+        console.error("[Kindred Relay] Error (non-fatal):", relayErr.message);
+      }
     }
 
     return res.json({

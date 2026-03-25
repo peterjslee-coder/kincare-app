@@ -41,6 +41,11 @@
 - [x] **"Now open to all caregivers" text showing on accepted appointments.** After a caregiver accepts a private request, the family dashboard Next Up card still shows "Now open to all caregivers" in orange once the exclusive timer expires. Should show nothing (the card already says "with Cary" and "confirmed"). *(Found — Mar 19, v1.50.18)* **P1** ✅ Fixed v1.50.19
 - [x] **Early checkout duration miscalculated due to device timezone mismatch.** Cary checked out 1 hour early from a 4-hour session, but the app displayed it as 2 hours early because her phone clock was 1 hour behind EST. Duration calculation relied on client-side time comparison. Fix: compute all session durations server-side using UTC timestamps converted to the care recipient's timezone. *(Found — Mar 19)* **P1** ✅ Fixed v1.50.21 — check-out `earlyMinutes` now uses `buildDateTimeInZone` with care recipient's timezone.
 
+- [x] **Kindred promises to deliver messages but can't.** ✅ Fixed v1.51.37 — Added relay_message intent detection. When Betty says "tell Pete..." Kindred sends a push notification to the target care team member with Betty's message. System prompt updated so Kindred knows it CAN make this promise. *(Feedback — Pete, Mar 25)* **P1**
+- [x] **Voice routing dropdown hidden behind credit-saving tip.** ✅ Fixed v1.51.37 — Changed container `overflow: visible`, bumped dropdown z-index to 9999. *(Feedback — Pete, Mar 25)* **P1**
+- [x] **Voice routing save shows toast but reverts to previous voice.** ✅ Fixed v1.51.37 — Pete's clone added to seedDefaultVoices so voice_profiles row exists. Fixed save to pass provider_voice_id (not null). Fixed getAssignedVoice to match by display_name. *(Feedback — Pete, Mar 25)* **P1**
+- [x] **Mobile chat keyboard pushes content off screen.** ✅ Fixed v1.51.37 — Replaced `justify-content: flex-end` with `::before { flex: 1 }` spacer. Header stays visible when keyboard opens. *(Feedback — Cary Taker, Mar 23)* **P1**
+
 ### P2
 
 - [ ] **Caregiver dashboard too cluttered — icon/text overload.** The CaretakerHub tab bar (My Families, Area Map, Earnings, Reviews, etc.) has too many small icons with text labels crammed together. Suggestion: use larger, more illustrative icons without text labels, and show the text label on hover (tooltip) or when selected. Reduce visual noise so the dashboard feels cleaner.
@@ -57,6 +62,8 @@
 - [ ] **Family cancellation charge acknowledgment.** Families must click something acknowledging they'll be charged if cancelling inside 24 hours. *(Feedback — Cary, Mar 6)* **P2**
 
 - [ ] **Caregiver referral bonus program.** Add referral mechanism: caregiver gets a bonus when they refer a new caregiver who completes X sessions. Show on splash page as recruiting incentive. Needs: referral code/link system, tracking referral source on signup, bonus payout trigger after threshold, splash page callout. *(Feedback — Cary Taker, Mar 18)* **P2**
+- [ ] **My Account page overflows container on mobile.** Content doesn't fit inside the container on mobile view. Seen from admin page on v1.51.29. *(Feedback — Pete, Mar 23)* **P2**
+- [ ] **Kindred reminder announcements tied to calendar.** Set reminders with an option to "use Kindred to announce to Betty XX minutes before." Calendar-based, with rules (every day, weekends only, etc) and adjustable time/type. Ties to Kindred Phase 2 reminders. *(Feedback — Pete, Mar 25)* **P2**
 
 ### P3
 
@@ -64,6 +71,7 @@
 - [ ] **Checkout feedback flows into care record with care team comments.** After session checkout, caregiver feedback should go into the care record. Care team members can comment on it (e.g., "oh yeah, we can unlock the door for you"). AI reads all comments for care profile insights. Ties into check-in/check-out feature spec. *(Feedback — Pete, Feb 27)* **P3**
 - [ ] **Caregiver tardiness feedback mechanism.** After a caregiver is late (detected by overdue check-in), send a supportive follow-up: "You were late today — is there anything we could do to help?" Collect reasons (traffic, car trouble, personal, etc.) to improve scheduling and support. Ties into overdue_check_in notification system (v1.34.46). *(Feedback — Cary Taker, Mar 1)* **P2**
 - [ ] **No consent summary page for family members.** After a family member completes the consent/attestation flow, there's no page showing what they signed up for or what the care recipient consented to. Need a "what was agreed" summary view in the care team or documents section. *(Feedback — Consent Tester, Mar 4)* **P2**
+- [ ] **Doctor prep report management — keep/discard.** Allow users to keep or discard previously generated doctor prep reports in CareProfile. Currently no way to manage old reports. *(Feedback — Pete, Mar 23)* **P3**
 
 ### P4
 
