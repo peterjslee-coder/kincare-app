@@ -798,19 +798,28 @@ router.put("/admin/voice-routing", requireAdmin, async (req, res) => {
   try {
     await db.transaction(async (tx) => {
       for (const entry of routing) {
-        const { message_type, voice_profile_id, priority = "medium" } = entry;
+        const { message_type, voice_profile_id, provider_voice_id, priority = "medium" } = entry;
 
         if (!message_type) {
           throw new Error("message_type is required for each routing entry");
         }
 
-        // Validate voice profile if provided
-        if (voice_profile_id) {
+        // Resolve voice profile — accept either voice_profile_id (UUID) or provider_voice_id (ElevenLabs ID)
+        let resolvedProfileId = voice_profile_id || null;
+        if (!resolvedProfileId && provider_voice_id) {
+          const byProvider = await tx.prepare(
+            "SELECT id FROM voice_profiles WHERE provider_voice_id = ? AND is_active = true LIMIT 1"
+          ).get(provider_voice_id);
+          resolvedProfileId = byProvider?.id || null;
+        }
+
+        // Validate voice profile if resolved
+        if (resolvedProfileId) {
           const profile = await tx.prepare(
             "SELECT id FROM voice_profiles WHERE id = ? AND is_active = true"
-          ).get(voice_profile_id);
+          ).get(resolvedProfileId);
           if (!profile) {
-            throw new Error(`Voice profile ${voice_profile_id} not found or inactive`);
+            throw new Error(`Voice profile ${resolvedProfileId} not found or inactive`);
           }
         }
 
@@ -823,12 +832,12 @@ router.put("/admin/voice-routing", requireAdmin, async (req, res) => {
           await tx.prepare(`
             UPDATE voice_routing SET voice_profile_id = ?, priority = ?, updated_at = NOW()
             WHERE care_recipient_id = ? AND message_type = ?
-          `).run(voice_profile_id || null, priority, care_recipient_id, message_type);
+          `).run(resolvedProfileId, priority, care_recipient_id, message_type);
         } else {
           await tx.prepare(`
             INSERT INTO voice_routing (id, care_recipient_id, message_type, voice_profile_id, priority, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, NOW(), NOW())
-          `).run(uuid(), care_recipient_id, message_type, voice_profile_id || null, priority);
+          `).run(uuid(), care_recipient_id, message_type, resolvedProfileId, priority);
         }
       }
     });

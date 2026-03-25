@@ -48,6 +48,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [selectedConvos, setSelectedConvos] = useState(new Set());
   const [deletingConvos, setDeletingConvos] = useState(false);
+  // Voice routing
+  const [voiceRouting, setVoiceRouting] = useState([]);
+  const [voiceRoutingLoading, setVoiceRoutingLoading] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [savingRoute, setSavingRoute] = useState(null);
+  const [routeDropdown, setRouteDropdown] = useState(null);
   const { showToast } = useToast();
 
   const handleGenerateDoctorReport = async () => {
@@ -180,6 +186,51 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     setDeletingConvos(false);
   };
 
+  const fetchVoiceRouting = async (recipientId) => {
+    if (!recipientId) return;
+    setVoiceRoutingLoading(true);
+    try {
+      const res = await apiFetch(`/api/kindred/admin/voice-routing?care_recipient_id=${recipientId}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setVoiceRouting(data.routing || []);
+      }
+    } catch (e) { console.error('Voice routing fetch error:', e); }
+    setVoiceRoutingLoading(false);
+  };
+
+  const fetchAvailableVoices = async () => {
+    try {
+      const res = await apiFetch('/api/kindred/available-voices');
+      if (res?.ok) {
+        const data = await res.json();
+        setAvailableVoices(data.voices || []);
+      }
+    } catch (e) { console.error('Available voices fetch error:', e); }
+  };
+
+  const saveVoiceRoute = async (messageType, voiceProfileId, priority) => {
+    if (!profile?.id) return;
+    setSavingRoute(messageType);
+    try {
+      const res = await apiFetch('/api/kindred/admin/voice-routing', {
+        method: 'PUT',
+        body: JSON.stringify({
+          care_recipient_id: profile.id,
+          routing: [{ message_type: messageType, provider_voice_id: voiceProfileId, priority: priority || 'medium' }],
+        }),
+      });
+      if (res?.ok) {
+        showToast('Voice routing updated', 'success');
+        fetchVoiceRouting(profile.id);
+      } else {
+        showToast('Failed to update routing', 'error');
+      }
+    } catch (e) { showToast('Failed to update routing', 'error'); }
+    setSavingRoute(null);
+    setRouteDropdown(null);
+  };
+
   const fetchCompanionUsage = async (recipientId) => {
     if (!recipientId) return;
     setUsageLoading(true);
@@ -200,6 +251,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       fetchVoicePreferences(profile.id);
       fetchCompanionUsage(profile.id);
       fetchKindredSummary(profile.id);
+      fetchVoiceRouting(profile.id);
+      fetchAvailableVoices();
     }
   };
 
@@ -922,6 +975,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               <div style={{ display: 'flex', gap: 4, marginBottom: 16, padding: 4, background: '#E8EEF2', borderRadius: 10 }}>
                 {[
                   { id: 'conversations', label: '\uD83D\uDCAC Conversations' },
+                  { id: 'voice-routing', label: '\uD83D\uDD0A Voice Routing' },
                   { id: 'voice-settings', label: '\uD83C\uDF9B\uFE0F Voice Settings' },
                   { id: 'usage', label: '\uD83D\uDCCA Usage' },
                 ].map(tab => (
@@ -1090,6 +1144,159 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   )}
                 </div>
               )}
+
+              {/* ── Voice Routing Tab ── */}
+              {companionTab === 'voice-routing' && (() => {
+                const MESSAGE_TYPES = [
+                  { id: 'conversation', label: 'Conversation responses', desc: `When ${profile?.first_name || 'care recipient'} talks to Kindred`, priority: 'high' },
+                  { id: 'reminder', label: 'Medication reminders', desc: 'Scheduled pill & medication reminders', priority: 'high' },
+                  { id: 'medication', label: 'Health check-ins', desc: 'How are you feeling, pain checks', priority: 'high' },
+                  { id: 'alert', label: 'Appointment alerts', desc: 'Caregiver visits, doctor appointments', priority: 'medium' },
+                  { id: 'check_in', label: 'Daily check-ins', desc: 'Morning greeting, evening wind-down', priority: 'medium' },
+                ];
+
+                // Built-in voices (Pete's clone + pre-made picks)
+                const KNOWN_VOICES = [
+                  { id: '__pete__', provider_voice_id: process.env?.ELEVENLABS_VOICE_ID || 'c2liOZ7MsLVLDpKuwIY5', name: "Pete's voice", icon: '\uD83C\uDFA4' },
+                  { id: '__sarah__', provider_voice_id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah (warm, reassuring)', icon: '\uD83D\uDD0A' },
+                  { id: '__brian__', provider_voice_id: 'nPczCjzI2devNBz1zQrb', name: 'Brian (calm, comforting)', icon: '\uD83D\uDD0A' },
+                ];
+
+                // Merge with any DB voice profiles
+                const allVoiceOptions = [...KNOWN_VOICES];
+                availableVoices.forEach(v => {
+                  if (!KNOWN_VOICES.some(k => k.provider_voice_id === v.voice_id)) {
+                    allVoiceOptions.push({ id: v.voice_id, provider_voice_id: v.voice_id, name: v.name, icon: '\uD83D\uDD0A' });
+                  }
+                });
+
+                // Find which voice is assigned to each message type
+                const getAssignedVoice = (messageType) => {
+                  const route = voiceRouting.find(r => r.message_type === messageType);
+                  if (route?.voice_profile_id) {
+                    // Find matching known voice or DB profile
+                    const match = allVoiceOptions.find(v => v.id === route.voice_profile_id);
+                    return match || { name: route.display_name || 'Custom', icon: '\uD83D\uDD0A' };
+                  }
+                  // Defaults
+                  if (messageType === 'conversation') return KNOWN_VOICES[0]; // Pete
+                  if (messageType === 'reminder' || messageType === 'medication') return KNOWN_VOICES[1]; // Sarah
+                  if (messageType === 'alert' || messageType === 'check_in') return KNOWN_VOICES[2]; // Brian
+                  return KNOWN_VOICES[0];
+                };
+
+                const peteCount = MESSAGE_TYPES.filter(t => getAssignedVoice(t.id).name.includes('Pete')).length;
+                const otherCount = MESSAGE_TYPES.length - peteCount;
+
+                return (
+                  <div>
+                    <p style={{ fontSize: 12, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>
+                      Choose which voice speaks for each message type. Pete's cloned voice uses more credits; pre-made voices are lower cost.
+                    </p>
+
+                    {/* Summary bar */}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', background: '#EBF5FB', borderRadius: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#1A5276', background: '#D6EAF8', padding: '2px 8px', borderRadius: 10 }}>
+                        {peteCount} use Pete's voice
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#666', background: '#F4F6F7', padding: '2px 8px', borderRadius: 10 }}>
+                        {otherCount} use pre-made voice
+                      </span>
+                      {otherCount > 0 && (
+                        <span style={{ fontSize: 11, color: '#7F8C8D', marginLeft: 'auto' }}>
+                          ~{Math.round(otherCount / MESSAGE_TYPES.length * 100)}% credit savings
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Route rows */}
+                    <div style={{ border: '1px solid #E8EEF2', borderRadius: 10, overflow: 'hidden' }}>
+                      {MESSAGE_TYPES.map((mt, i) => {
+                        const assigned = getAssignedVoice(mt.id);
+                        const isOpen = routeDropdown === mt.id;
+                        return (
+                          <div key={mt.id} style={{
+                            padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
+                            borderBottom: i < MESSAGE_TYPES.length - 1 ? '1px solid #f0f0f0' : 'none',
+                            background: i % 2 === 0 ? '#fff' : '#FAFCFE',
+                          }}>
+                            {/* Message type info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: '#2C3E50' }}>{mt.label}</div>
+                              <div style={{ fontSize: 11, color: '#7F8C8D' }}>{mt.desc}</div>
+                            </div>
+
+                            {/* Priority badge */}
+                            <span style={{
+                              fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                              background: mt.priority === 'high' ? '#E8F8F0' : '#FEF3E2',
+                              color: mt.priority === 'high' ? '#27AE60' : '#E67E22',
+                            }}>
+                              {mt.priority}
+                            </span>
+
+                            {/* Voice selector */}
+                            <div style={{ position: 'relative' }}>
+                              <button onClick={(e) => { e.stopPropagation(); setRouteDropdown(isOpen ? null : mt.id); }}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
+                                  border: '1px solid #E8EEF2', fontSize: 12, cursor: 'pointer', minWidth: 170,
+                                  background: assigned.name.includes('Pete') ? '#EBF5FB' : '#F4F6F7',
+                                  color: '#2C3E50',
+                                }}>
+                                <span>{assigned.icon}</span>
+                                <span style={{ flex: 1, textAlign: 'left' }}>{assigned.name}</span>
+                                <span style={{ fontSize: 10, color: '#999' }}>{'\u25BC'}</span>
+                              </button>
+
+                              {/* Dropdown */}
+                              {isOpen && (
+                                <div style={{
+                                  position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#fff',
+                                  borderRadius: 10, border: '1px solid #E8EEF2', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                  zIndex: 20, width: 220, overflow: 'hidden',
+                                }}>
+                                  {KNOWN_VOICES.map((voice, vi) => (
+                                    <button key={voice.id} onClick={(e) => {
+                                      e.stopPropagation();
+                                      // For Pete, pass null to clear routing (falls back to default)
+                                      // For others, we need to find the voice_profile_id from DB
+                                      // For now, save with the provider_voice_id lookup
+                                      saveVoiceRoute(mt.id, voice.id === '__pete__' ? null : voice.provider_voice_id, mt.priority);
+                                    }}
+                                      style={{
+                                        width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none',
+                                        background: assigned.name === voice.name ? '#EBF5FB' : 'transparent',
+                                        cursor: savingRoute === mt.id ? 'wait' : 'pointer', fontSize: 12, color: '#2C3E50',
+                                        display: 'flex', alignItems: 'center', gap: 8,
+                                        borderBottom: vi < KNOWN_VOICES.length - 1 ? '1px solid #f8f8f8' : 'none',
+                                      }}>
+                                      <span>{voice.icon}</span>
+                                      <span style={{ flex: 1 }}>{voice.name}</span>
+                                      {assigned.name === voice.name && <span style={{ color: '#27AE60', fontWeight: 700 }}>{'\u2713'}</span>}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Credit-saving tip */}
+                    <div style={{ marginTop: 14, padding: '12px 14px', background: '#FEF9E7', border: '1px solid #F9E79F', borderRadius: 10, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: 16 }}>{'\uD83D\uDCA1'}</span>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#7D6608' }}>Credit-saving tip</div>
+                        <div style={{ fontSize: 12, color: '#2C3E50', marginTop: 2, lineHeight: 1.5 }}>
+                          Daily check-ins and alerts happen frequently but don't need Pete's voice to feel personal. Using Sarah or Brian for these saves roughly 40% of monthly credits without affecting {profile?.first_name}'s experience.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ── Voice Settings Tab ── */}
               {companionTab === 'voice-settings' && (
