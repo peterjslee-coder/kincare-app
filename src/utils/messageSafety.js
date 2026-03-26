@@ -87,15 +87,33 @@ async function screenMessage(messageContent, senderId, conversationId, senderInf
       "broken", "bleeding", "unconscious",
       // Sexual
       "inappropriat", "touched", "molest",
-      // Circumvention
-      "phone number", "pay cash", "outside the app", "off.?platform",
-      "don't need the app", "contact info", "personal email", "text them directly",
-      "meet outside", "skip the app", "pay them directly", "venmo", "zelle",
+      // Circumvention — off-platform care arrangement signals
+      "phone number", "my number", "call me at", "text me at", "reach me at",
+      "pay cash", "cash only", "pay you direct", "pay them direct", "pay her direct", "pay him direct",
+      "outside the app", "off.?platform", "around the app", "without the app", "skip the app",
+      "don't need the app", "don't use the app", "cut out the middleman",
+      "contact info", "personal email", "personal number",
+      "text them directly", "text me directly", "call me directly",
+      "meet outside", "arrange outside", "book outside",
+      "venmo", "zelle", "cashapp", "cash app", "paypal", "pay pal",
+      "under the table", "side deal", "private arrangement", "work something out privately",
+      "here's my cell", "here's my email", "my gmail", "my yahoo", "my hotmail",
+      "@gmail", "@yahoo", "@hotmail", "@outlook", "@icloud",
     ];
-    const hasSignal = quickSignals.some(s => {
+    let hasSignal = quickSignals.some(s => {
       if (s.includes("?")) return new RegExp(s).test(lc); // regex signals
       return lc.includes(s);
     });
+
+    // Also check for phone number patterns (7+ consecutive digits, with optional separators)
+    if (!hasSignal) {
+      const phonePattern = /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}/;
+      const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+      if (phonePattern.test(messageContent) || emailPattern.test(messageContent)) {
+        hasSignal = true;
+      }
+    }
+
     if (!hasSignal) return; // No signals → skip AI call
 
     // Call Claude Haiku for contextual analysis

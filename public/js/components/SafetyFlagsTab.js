@@ -93,6 +93,9 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
     return () => clearInterval(interval);
   }, [expandedFlag]);
 
+  const [typeFilter, setTypeFilter] = useState('all'); // 'all', 'safety', 'circumvention'
+  const [statusFilter, setStatusFilter] = useState('active'); // 'active', 'all', 'resolved', 'dismissed'
+
   if (safetyLoading) {
     return React.createElement('div', { style: { textAlign: 'center', padding: 40, color: '#888' } }, 'Loading safety flags...');
   }
@@ -103,7 +106,49 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
     );
   }
 
-  return React.createElement('div', null, safetyFlags.map(f => {
+  const filteredFlags = safetyFlags.filter(f => {
+    // Type filter
+    const isCircumvention = f.flag_type === 'circumvention_signal';
+    if (typeFilter === 'circumvention' && !isCircumvention) return false;
+    if (typeFilter === 'safety' && isCircumvention) return false;
+    // Status filter
+    if (statusFilter === 'active' && f.status !== 'pending' && f.status !== 'escalated') return false;
+    if (statusFilter === 'resolved' && f.status !== 'resolved') return false;
+    if (statusFilter === 'dismissed' && f.status !== 'dismissed') return false;
+    return true;
+  });
+
+  const circumventionCount = safetyFlags.filter(f => f.flag_type === 'circumvention_signal' && (f.status === 'pending' || f.status === 'escalated')).length;
+  const safetyCount = safetyFlags.filter(f => f.flag_type !== 'circumvention_signal' && (f.status === 'pending' || f.status === 'escalated')).length;
+
+  const filterBtn = (label, value, filterType, count) => React.createElement('button', {
+    onClick: () => filterType === 'type' ? setTypeFilter(value) : setStatusFilter(value),
+    style: {
+      padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+      background: (filterType === 'type' ? typeFilter : statusFilter) === value ? '#1b6b5a' : '#f3f4f6',
+      color: (filterType === 'type' ? typeFilter : statusFilter) === value ? '#fff' : '#555',
+    },
+  }, label + (count !== undefined ? ` (${count})` : ''));
+
+  return React.createElement('div', null,
+    // Filter bar
+    React.createElement('div', { style: { display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' } },
+      React.createElement('span', { style: { fontSize: 12, color: '#888', fontWeight: 600, marginRight: 4 } }, 'Type:'),
+      filterBtn('All', 'all', 'type'),
+      filterBtn('\u{1F6A8} Safety', 'safety', 'type', safetyCount),
+      filterBtn('\u26A0\uFE0F Off-Platform', 'circumvention', 'type', circumventionCount),
+      React.createElement('span', { style: { fontSize: 12, color: '#888', fontWeight: 600, marginLeft: 12, marginRight: 4 } }, 'Status:'),
+      filterBtn('Active', 'active', 'status'),
+      filterBtn('Resolved', 'resolved', 'status'),
+      filterBtn('Dismissed', 'dismissed', 'status'),
+      filterBtn('All', 'all', 'status'),
+    ),
+
+    filteredFlags.length === 0
+      ? React.createElement('div', { style: { textAlign: 'center', padding: 30, color: '#999', fontSize: 13 } }, 'No flags match this filter.')
+      : null,
+
+    filteredFlags.map(f => {
     const isAbuse = f.flag_type?.includes('abuse') || f.flag_type?.includes('neglect') || f.flag_type?.includes('threat') || f.flag_type?.includes('exploitation');
     const isPending = f.status === 'pending';
     const isEscalated = f.status === 'escalated';
@@ -363,5 +408,6 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
           ),
       ),
     );
-  }));
+  })
+  );
 };
