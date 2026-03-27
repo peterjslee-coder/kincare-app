@@ -402,13 +402,14 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
 router.get("/can-book/:caregiverId", requireRole("family"), async (req, res) => {
   try {
     const db = await getDb();
+    // Only block rebooking for completed sessions — no-show reviews are optional (shown on dashboard but don't gate booking)
     const unreviewed = await db.prepare(`
       SELECT id FROM care_sessions
       WHERE family_user_id = ?
         AND caregiver_id = ?
         AND review_required = 1
         AND review_completed = 0
-        AND (status = 'completed' OR (status = 'cancelled' AND caregiver_no_show = 1))
+        AND status = 'completed'
       LIMIT 1
     `).get(req.user.id, req.params.caregiverId);
 
