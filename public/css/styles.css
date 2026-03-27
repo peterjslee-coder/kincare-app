@@ -2230,9 +2230,9 @@
 
     /* ===== Splash page mobile fixes ===== */
     @media (max-width: 768px) {
-      /* Nav: tighter padding, smaller gap */
+      /* Nav: tighter padding, smaller gap, safe area aware */
       .splash-nav-bar {
-        padding: 10px 12px !important;
+        padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px 12px !important;
       }
       .splash-nav-actions {
         gap: 4px !important;
@@ -2515,19 +2515,24 @@
       }
     }
 
-    /* ===== Standalone PWA: adjust for no browser chrome ===== */
-    @media all and (display-mode: standalone) {
-      .splash-page {
-        padding-top: env(safe-area-inset-top, 20px);
-      }
+    /* ===== Safe area insets: PWA standalone + Capacitor native ===== */
+    /* env(safe-area-inset-*) resolves to 0px in normal browsers,
+       so these rules are safe to apply unconditionally. */
+    .splash-nav-bar {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 14px) !important;
+    }
 
-      .main-content {
-        padding-top: max(16px, env(safe-area-inset-top, 0px));
-      }
+    .main-content {
+      padding-top: max(16px, env(safe-area-inset-top, 0px));
+    }
 
-      .bottom-nav {
-        height: calc(64px + env(safe-area-inset-bottom, 0px));
-      }
+    .mobile-header {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+    }
+
+    .bottom-nav {
+      height: calc(64px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
     /* ─── Print Styles (Hour Reports) ─── */
