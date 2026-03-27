@@ -302,7 +302,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.51.41";
+const APP_VERSION = "1.51.42";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -761,6 +761,82 @@ async function start() {
     }
   }, NOTIFICATION_POLL_INTERVAL);
   console.log("  Accountability poller started (payment auth, late check-ins, no-shows)");
+
+  // ─── Kindred Reminder Delivery Poller ───
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      const fiveMinAgo = new Date(now.getTime() - 5 * 60000).toISOString();
+      const nowISO = now.toISOString();
+
+      // Find pending reminders whose scheduled_for is in the past (within 5 min window)
+      const dueReminders = await db.prepare(`
+        SELECT vr.*, cr.first_name AS recipient_name, cr.id AS recipient_id
+        FROM voice_reminders vr
+        LEFT JOIN care_recipients cr ON vr.care_recipient_id = cr.id
+        WHERE vr.status = 'pending'
+          AND vr.scheduled_for <= ?
+          AND vr.scheduled_for >= ?
+      `).all(nowISO, fiveMinAgo);
+
+      for (const reminder of dueReminders) {
+        // Mark as delivered
+        await db.prepare("UPDATE voice_reminders SET status = 'delivered', delivered_at = ? WHERE id = ?")
+          .run(nowISO, reminder.id);
+
+        // If recurring, schedule the next occurrence
+        if (reminder.recurrence && reminder.recurrence !== 'none') {
+          const recTime = reminder.recurrence_time || '09:00';
+          const recDays = (reminder.recurrence_days || 'mon,tue,wed,thu,fri,sat,sun').split(',');
+          const dayMap = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+          const reverseDayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+          // Find next valid day
+          let nextDate = new Date(now);
+          nextDate.setDate(nextDate.getDate() + 1); // start from tomorrow
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const dayName = reverseDayMap[nextDate.getDay()];
+            let validDay = false;
+            if (reminder.recurrence === 'daily') validDay = true;
+            else if (reminder.recurrence === 'weekdays') validDay = nextDate.getDay() >= 1 && nextDate.getDay() <= 5;
+            else if (reminder.recurrence === 'weekends') validDay = nextDate.getDay() === 0 || nextDate.getDay() === 6;
+            else if (reminder.recurrence === 'custom') validDay = recDays.includes(dayName);
+
+            if (validDay) break;
+            nextDate.setDate(nextDate.getDate() + 1);
+          }
+
+          const nextDateStr = nextDate.toISOString().split('T')[0];
+          const nextScheduledFor = `${nextDateStr}T${recTime}:00`;
+          const { v4: uuid } = require("uuid");
+          await db.prepare(`
+            INSERT INTO voice_reminders (id, care_recipient_id, message_text, scheduled_for, status, recurrence, recurrence_time, recurrence_days, label, source)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+          `).run(uuid(), reminder.care_recipient_id, reminder.message_text, nextScheduledFor, reminder.recurrence, reminder.recurrence_time, reminder.recurrence_days, reminder.label, reminder.source || 'manual');
+        }
+
+        // Emit real-time event (family dashboard will show delivery status)
+        if (emitToUser) {
+          // Find the family user associated with this care recipient
+          try {
+            const family = await db.prepare("SELECT family_user_id FROM care_recipients WHERE id = ?").get(reminder.care_recipient_id);
+            if (family?.family_user_id) {
+              emitToUser(family.family_user_id, "reminder_delivered", {
+                reminderId: reminder.id,
+                recipientName: reminder.recipient_name,
+                message: reminder.message_text,
+              });
+            }
+          } catch {}
+        }
+      }
+    } catch (err) {
+      if (err.message && !err.message.includes("no such table") && !err.message.includes("no such column")) {
+        console.error("  Kindred reminder poller error:", err.message);
+      }
+    }
+  }, 60000); // Check every minute
+  console.log("  Kindred reminder delivery poller started");
 
   // ─── Backfill missing caregiver coordinates from zip/city/state ───
   // One-time pass on startup: geocode caregivers who have zip but no lat/lng

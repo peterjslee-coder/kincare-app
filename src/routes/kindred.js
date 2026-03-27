@@ -98,7 +98,12 @@ async function initializeTables() {
         status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'delivered', 'skipped', 'cancelled')),
         delivered_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW(),
-        created_by UUID
+        created_by UUID,
+        recurrence TEXT DEFAULT 'none',
+        recurrence_time TEXT,
+        recurrence_days TEXT,
+        label TEXT,
+        source TEXT DEFAULT 'manual'
       );`,
     },
     {
@@ -166,6 +171,18 @@ async function initializeTables() {
     } catch (err) {
       console.error(`[Kindred] Failed to create ${table.name}:`, err.message);
     }
+  }
+
+  // Migration: add recurrence columns to voice_reminders if missing
+  const migrationCols = [
+    { col: "recurrence", sql: "ALTER TABLE voice_reminders ADD COLUMN recurrence TEXT DEFAULT 'none'" },
+    { col: "recurrence_time", sql: "ALTER TABLE voice_reminders ADD COLUMN recurrence_time TEXT" },
+    { col: "recurrence_days", sql: "ALTER TABLE voice_reminders ADD COLUMN recurrence_days TEXT" },
+    { col: "label", sql: "ALTER TABLE voice_reminders ADD COLUMN label TEXT" },
+    { col: "source", sql: "ALTER TABLE voice_reminders ADD COLUMN source TEXT DEFAULT 'manual'" },
+  ];
+  for (const m of migrationCols) {
+    try { await db.exec(m.sql); } catch (_) { /* column already exists */ }
   }
 
   console.log("[Kindred] Database initialization complete");
@@ -538,7 +555,7 @@ router.get("/reminders", async (req, res) => {
 // ── POST /api/kindred/reminders ────────────────────────────
 router.post("/reminders", async (req, res) => {
   const db = await getDb();
-  const { care_recipient_id, message_text, scheduled_for, voice_profile_id } = req.body;
+  const { care_recipient_id, message_text, scheduled_for, voice_profile_id, recurrence, recurrence_time, recurrence_days, label } = req.body;
 
   if (!care_recipient_id || !message_text || !scheduled_for) {
     return res.status(400).json({ error: "care_recipient_id, message_text, and scheduled_for are required" });
@@ -557,9 +574,10 @@ router.post("/reminders", async (req, res) => {
 
     const reminderId = uuid();
     await db.prepare(`
-      INSERT INTO voice_reminders (id, care_recipient_id, message_text, scheduled_for, voice_profile_id, created_by, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, NOW())
-    `).run(reminderId, care_recipient_id, message_text, scheduled_for, voice_profile_id || null, req.user.id);
+      INSERT INTO voice_reminders (id, care_recipient_id, message_text, scheduled_for, voice_profile_id, created_by, created_at, recurrence, recurrence_time, recurrence_days, label, source)
+      VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, 'manual')
+    `).run(reminderId, care_recipient_id, message_text, scheduled_for, voice_profile_id || null, req.user.id,
+      recurrence || 'none', recurrence_time || null, recurrence_days || null, label || null);
 
     const reminder = await db.prepare(
       "SELECT * FROM voice_reminders WHERE id = ?"
@@ -569,6 +587,83 @@ router.post("/reminders", async (req, res) => {
   } catch (err) {
     console.error("[Kindred Reminders POST] Error:", err.message);
     return res.status(500).json({ error: "Failed to create reminder" });
+  }
+});
+
+// ── GET /api/kindred/reminders/all ─────────────────────────
+// Get ALL reminders (not just today's) for admin management
+router.get("/reminders/all", async (req, res) => {
+  const db = await getDb();
+  const { care_recipient_id } = req.query;
+  if (!care_recipient_id) return res.status(400).json({ error: "care_recipient_id is required" });
+
+  try {
+    const reminders = await db.prepare(`
+      SELECT vr.*, vp.display_name as voice_display_name,
+        u.first_name || ' ' || u.last_name as created_by_name
+      FROM voice_reminders vr
+      LEFT JOIN voice_profiles vp ON vr.voice_profile_id = vp.id
+      LEFT JOIN users u ON vr.created_by = u.id
+      WHERE vr.care_recipient_id = ?
+        AND vr.status != 'cancelled'
+      ORDER BY
+        CASE WHEN vr.recurrence != 'none' AND vr.recurrence IS NOT NULL THEN 0 ELSE 1 END,
+        vr.scheduled_for ASC
+    `).all(care_recipient_id);
+    return res.json({ reminders });
+  } catch (err) {
+    console.error("[Kindred Reminders GET all] Error:", err.message);
+    return res.status(500).json({ error: "Failed to fetch reminders" });
+  }
+});
+
+// ── PUT /api/kindred/reminders/:id ────────────────────────
+router.put("/reminders/:id", async (req, res) => {
+  const db = await getDb();
+  const { id } = req.params;
+  const { message_text, scheduled_for, voice_profile_id, recurrence, recurrence_time, recurrence_days, label, status } = req.body;
+
+  try {
+    const existing = await db.prepare("SELECT * FROM voice_reminders WHERE id = ?").get(id);
+    if (!existing) return res.status(404).json({ error: "Reminder not found" });
+
+    const updates = [];
+    const values = [];
+    if (message_text !== undefined) { updates.push("message_text = ?"); values.push(message_text); }
+    if (scheduled_for !== undefined) { updates.push("scheduled_for = ?"); values.push(scheduled_for); }
+    if (voice_profile_id !== undefined) { updates.push("voice_profile_id = ?"); values.push(voice_profile_id || null); }
+    if (recurrence !== undefined) { updates.push("recurrence = ?"); values.push(recurrence); }
+    if (recurrence_time !== undefined) { updates.push("recurrence_time = ?"); values.push(recurrence_time); }
+    if (recurrence_days !== undefined) { updates.push("recurrence_days = ?"); values.push(recurrence_days); }
+    if (label !== undefined) { updates.push("label = ?"); values.push(label); }
+    if (status !== undefined) { updates.push("status = ?"); values.push(status); }
+
+    if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
+
+    values.push(id);
+    await db.prepare(`UPDATE voice_reminders SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+
+    const updated = await db.prepare("SELECT * FROM voice_reminders WHERE id = ?").get(id);
+    return res.json(updated);
+  } catch (err) {
+    console.error("[Kindred Reminders PUT] Error:", err.message);
+    return res.status(500).json({ error: "Failed to update reminder" });
+  }
+});
+
+// ── DELETE /api/kindred/reminders/:id ─────────────────────
+router.delete("/reminders/:id", async (req, res) => {
+  const db = await getDb();
+  try {
+    const existing = await db.prepare("SELECT * FROM voice_reminders WHERE id = ?").get(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Reminder not found" });
+
+    // Soft-delete: mark as cancelled
+    await db.prepare("UPDATE voice_reminders SET status = 'cancelled' WHERE id = ?").run(req.params.id);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("[Kindred Reminders DELETE] Error:", err.message);
+    return res.status(500).json({ error: "Failed to delete reminder" });
   }
 });
 

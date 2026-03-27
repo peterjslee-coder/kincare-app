@@ -9778,6 +9778,16 @@ const CareProfile = window.CareProfile = ({
   const [savingVoicePrefs, setSavingVoicePrefs] = useState(false);
   const [companionUsage, setCompanionUsage] = useState(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  // Kindred reminders
+  const [kindredReminders, setKindredReminders] = useState([]);
+  const [remindersLoading, setRemindersLoading] = useState(false);
+  const [showAddReminder, setShowAddReminder] = useState(false);
+  const [newReminderText, setNewReminderText] = useState('');
+  const [newReminderTime, setNewReminderTime] = useState('09:00');
+  const [newReminderRecurrence, setNewReminderRecurrence] = useState('daily');
+  const [newReminderDays, setNewReminderDays] = useState('mon,tue,wed,thu,fri,sat,sun');
+  const [newReminderLabel, setNewReminderLabel] = useState('');
+  const [savingReminder, setSavingReminder] = useState(false);
   // Kindred summary + conversation management
   const [kindredSummary, setKindredSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -10055,6 +10065,65 @@ const CareProfile = window.CareProfile = ({
     }
     setSavingInstructions(false);
   };
+  const fetchKindredReminders = async recipientId => {
+    setRemindersLoading(true);
+    try {
+      const res = await apiFetch(`/api/kindred/reminders/all?care_recipient_id=${recipientId}`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setKindredReminders(data.reminders || []);
+      }
+    } catch (err) {
+      console.error('Failed to load reminders:', err);
+    }
+    setRemindersLoading(false);
+  };
+  const handleSaveReminder = async () => {
+    if (!newReminderText.trim() || !(profile !== null && profile !== void 0 && profile.id)) return;
+    setSavingReminder(true);
+    try {
+      // Build scheduled_for from time + today's date
+      const today = new Date().toISOString().split('T')[0];
+      const scheduled_for = `${today}T${newReminderTime}:00`;
+      const body = {
+        care_recipient_id: profile.id,
+        message_text: newReminderText.trim(),
+        scheduled_for,
+        recurrence: newReminderRecurrence,
+        recurrence_time: newReminderTime,
+        recurrence_days: newReminderRecurrence !== 'none' ? newReminderDays : null,
+        label: newReminderLabel.trim() || null
+      };
+      const res = await apiFetch('/api/kindred/reminders', {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        setShowAddReminder(false);
+        setNewReminderText('');
+        setNewReminderTime('09:00');
+        setNewReminderRecurrence('daily');
+        setNewReminderDays('mon,tue,wed,thu,fri,sat,sun');
+        setNewReminderLabel('');
+        fetchKindredReminders(profile.id);
+        if (typeof showToast === 'function') showToast('Reminder saved!', 'success');
+      }
+    } catch (err) {
+      console.error('Save reminder error:', err);
+    }
+    setSavingReminder(false);
+  };
+  const handleDeleteReminder = async reminderId => {
+    if (!confirm('Delete this reminder?')) return;
+    try {
+      const res = await apiFetch(`/api/kindred/reminders/${reminderId}`, {
+        method: 'DELETE'
+      });
+      if (res !== null && res !== void 0 && res.ok && profile !== null && profile !== void 0 && profile.id) fetchKindredReminders(profile.id);
+    } catch (err) {
+      console.error('Delete reminder error:', err);
+    }
+  };
   const handleCompanionOpen = () => {
     setCompanionOpen(true);
     if (profile !== null && profile !== void 0 && profile.id) {
@@ -10065,6 +10134,7 @@ const CareProfile = window.CareProfile = ({
       fetchVoiceRouting(profile.id);
       fetchAvailableVoices();
       fetchKindredInstructions(profile.id);
+      fetchKindredReminders(profile.id);
     }
   };
   const CARE_PREFS_LIST = [{
@@ -11584,6 +11654,9 @@ const CareProfile = window.CareProfile = ({
       borderRadius: 10
     }
   }, [{
+    id: 'reminders',
+    label: '\u23F0 Reminders'
+  }, {
     id: 'conversations',
     label: '\uD83D\uDCAC Conversations'
   }, {
@@ -11614,7 +11687,393 @@ const CareProfile = window.CareProfile = ({
       boxShadow: companionTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
       transition: 'all 0.2s'
     }
-  }, tab.label))), companionTab === 'conversations' && /*#__PURE__*/React.createElement("div", null, (kindredSummary === null || kindredSummary === void 0 || (_kindredSummary$abuse = kindredSummary.abuse_flags) === null || _kindredSummary$abuse === void 0 ? void 0 : _kindredSummary$abuse.length) > 0 && /*#__PURE__*/React.createElement("div", {
+  }, tab.label))), companionTab === 'reminders' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: '#1A5276'
+    }
+  }, '\u23F0', " Scheduled Reminders"), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      setShowAddReminder(!showAddReminder);
+    },
+    style: {
+      padding: '6px 14px',
+      borderRadius: 8,
+      border: 'none',
+      background: showAddReminder ? '#E8EEF2' : '#1A5276',
+      color: showAddReminder ? '#666' : '#fff',
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, showAddReminder ? 'Cancel' : '+ Add Reminder')), showAddReminder && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 16,
+      background: '#F0F7FF',
+      borderRadius: 12,
+      marginBottom: 16,
+      border: '1px solid #D6EAF8'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#555',
+      display: 'block',
+      marginBottom: 4
+    }
+  }, "Label (optional)"), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: newReminderLabel,
+    onChange: e => setNewReminderLabel(e.target.value),
+    onClick: e => e.stopPropagation(),
+    placeholder: "e.g., Morning medication, Physical therapy",
+    style: {
+      width: '100%',
+      padding: '8px 12px',
+      borderRadius: 8,
+      border: '1px solid #D6EAF8',
+      fontSize: 13,
+      outline: 'none'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#555',
+      display: 'block',
+      marginBottom: 4
+    }
+  }, "Reminder message *"), /*#__PURE__*/React.createElement("textarea", {
+    value: newReminderText,
+    onChange: e => setNewReminderText(e.target.value),
+    onClick: e => e.stopPropagation(),
+    placeholder: "What should Kindred say? e.g., Time to take your morning pills!",
+    style: {
+      width: '100%',
+      minHeight: 60,
+      padding: '8px 12px',
+      borderRadius: 8,
+      border: '1px solid #D6EAF8',
+      fontSize: 13,
+      fontFamily: 'inherit',
+      resize: 'vertical',
+      outline: 'none'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 12,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#555',
+      display: 'block',
+      marginBottom: 4
+    }
+  }, "Time"), /*#__PURE__*/React.createElement("input", {
+    type: "time",
+    value: newReminderTime,
+    onChange: e => setNewReminderTime(e.target.value),
+    onClick: e => e.stopPropagation(),
+    style: {
+      width: '100%',
+      padding: '8px 12px',
+      borderRadius: 8,
+      border: '1px solid #D6EAF8',
+      fontSize: 13,
+      outline: 'none'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#555',
+      display: 'block',
+      marginBottom: 4
+    }
+  }, "Repeats"), /*#__PURE__*/React.createElement("select", {
+    value: newReminderRecurrence,
+    onChange: e => setNewReminderRecurrence(e.target.value),
+    onClick: e => e.stopPropagation(),
+    style: {
+      width: '100%',
+      padding: '8px 12px',
+      borderRadius: 8,
+      border: '1px solid #D6EAF8',
+      fontSize: 13,
+      outline: 'none',
+      background: '#fff'
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "none"
+  }, "One-time"), /*#__PURE__*/React.createElement("option", {
+    value: "daily"
+  }, "Daily"), /*#__PURE__*/React.createElement("option", {
+    value: "weekdays"
+  }, "Weekdays"), /*#__PURE__*/React.createElement("option", {
+    value: "weekends"
+  }, "Weekends"), /*#__PURE__*/React.createElement("option", {
+    value: "custom"
+  }, "Custom days")))), newReminderRecurrence === 'custom' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#555',
+      display: 'block',
+      marginBottom: 6
+    }
+  }, "Select days"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 4
+    }
+  }, [{
+    key: 'mon',
+    label: 'M'
+  }, {
+    key: 'tue',
+    label: 'T'
+  }, {
+    key: 'wed',
+    label: 'W'
+  }, {
+    key: 'thu',
+    label: 'T'
+  }, {
+    key: 'fri',
+    label: 'F'
+  }, {
+    key: 'sat',
+    label: 'S'
+  }, {
+    key: 'sun',
+    label: 'S'
+  }].map(d => {
+    const days = newReminderDays.split(',').filter(Boolean);
+    const active = days.includes(d.key);
+    return React.createElement('button', {
+      key: d.key,
+      onClick: e => {
+        e.stopPropagation();
+        const updated = active ? days.filter(x => x !== d.key) : [...days, d.key];
+        setNewReminderDays(updated.join(','));
+      },
+      style: {
+        width: 36,
+        height: 36,
+        borderRadius: '50%',
+        border: active ? '2px solid #1A5276' : '1px solid #ccc',
+        background: active ? '#1A5276' : '#fff',
+        color: active ? '#fff' : '#666',
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }
+    }, d.label);
+  }))), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      handleSaveReminder();
+    },
+    disabled: savingReminder || !newReminderText.trim(),
+    style: {
+      width: '100%',
+      padding: '10px 16px',
+      borderRadius: 8,
+      border: 'none',
+      background: newReminderText.trim() ? '#1A5276' : '#ccc',
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: newReminderText.trim() ? 'pointer' : 'not-allowed'
+    }
+  }, savingReminder ? 'Saving...' : 'Save Reminder')), remindersLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: 20,
+      color: '#999',
+      fontSize: 13
+    }
+  }, "Loading reminders...") : kindredReminders.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: '30px 20px',
+      background: '#F8F9FA',
+      borderRadius: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 32,
+      marginBottom: 8
+    }
+  }, '\u23F0'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 600,
+      color: '#555',
+      marginBottom: 4
+    }
+  }, "No reminders yet"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#999',
+      lineHeight: 1.5
+    }
+  }, "Set up voice reminders for ", (profile === null || profile === void 0 ? void 0 : profile.first_name) || 'your loved one', ". Kindred will call at the scheduled time to deliver the message in a familiar voice.")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8
+    }
+  }, kindredReminders.map(r => {
+    const recLabel = r.recurrence === 'daily' ? 'Daily' : r.recurrence === 'weekdays' ? 'Weekdays' : r.recurrence === 'weekends' ? 'Weekends' : r.recurrence === 'custom' ? `Custom (${(r.recurrence_days || '').split(',').map(d => d.charAt(0).toUpperCase() + d.slice(1, 3)).join(', ')})` : 'One-time';
+    const timeStr = r.recurrence_time || (r.scheduled_for ? new Date(r.scheduled_for).toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit'
+    }) : '');
+    const isPending = r.status === 'pending';
+    const isDelivered = r.status === 'delivered';
+    return React.createElement('div', {
+      key: r.id,
+      style: {
+        padding: '12px 14px',
+        background: '#fff',
+        borderRadius: 10,
+        border: '1px solid #E8EEF2',
+        opacity: isDelivered && r.recurrence === 'none' ? 0.6 : 1
+      }
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start'
+      }
+    }, React.createElement('div', {
+      style: {
+        flex: 1
+      }
+    }, r.label && React.createElement('div', {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: '#1A5276',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 2
+      }
+    }, r.label), React.createElement('div', {
+      style: {
+        fontSize: 13,
+        color: '#333',
+        lineHeight: 1.4,
+        marginBottom: 4
+      }
+    }, r.message_text), React.createElement('div', {
+      style: {
+        display: 'flex',
+        gap: 8,
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }
+    }, React.createElement('span', {
+      style: {
+        fontSize: 11,
+        color: '#888',
+        background: '#F0F0F0',
+        padding: '2px 8px',
+        borderRadius: 6
+      }
+    }, timeStr), React.createElement('span', {
+      style: {
+        fontSize: 11,
+        color: '#888',
+        background: '#F0F0F0',
+        padding: '2px 8px',
+        borderRadius: 6
+      }
+    }, recLabel), isPending && React.createElement('span', {
+      style: {
+        fontSize: 11,
+        color: '#27AE60',
+        fontWeight: 600
+      }
+    }, '\u2022 Active'), isDelivered && r.recurrence === 'none' && React.createElement('span', {
+      style: {
+        fontSize: 11,
+        color: '#999'
+      }
+    }, '\u2713 Delivered'), r.source === 'calendar' && React.createElement('span', {
+      style: {
+        fontSize: 11,
+        color: '#8E44AD',
+        background: '#F4ECF7',
+        padding: '2px 8px',
+        borderRadius: 6
+      }
+    }, '\uD83D\uDCC5 Auto'))), React.createElement('button', {
+      onClick: e => {
+        e.stopPropagation();
+        handleDeleteReminder(r.id);
+      },
+      style: {
+        padding: '4px 8px',
+        borderRadius: 6,
+        border: 'none',
+        background: 'transparent',
+        color: '#E74C3C',
+        fontSize: 16,
+        cursor: 'pointer',
+        marginLeft: 8
+      },
+      title: 'Delete reminder'
+    }, '\u00D7')));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16,
+      padding: '10px 14px',
+      background: '#FFF8E1',
+      borderRadius: 8,
+      fontSize: 12,
+      color: '#8D6E08',
+      lineHeight: 1.5
+    }
+  }, '\uD83D\uDCA1', " Reminders are delivered as voice calls via Kindred. ", (profile === null || profile === void 0 ? void 0 : profile.first_name) || 'Your loved one', " will hear the message in a familiar voice at the scheduled time.")), companionTab === 'conversations' && /*#__PURE__*/React.createElement("div", null, (kindredSummary === null || kindredSummary === void 0 || (_kindredSummary$abuse = kindredSummary.abuse_flags) === null || _kindredSummary$abuse === void 0 ? void 0 : _kindredSummary$abuse.length) > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '12px 16px',
       background: '#FDEDEC',

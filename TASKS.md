@@ -135,6 +135,17 @@
 - [ ] **Overnight booking minimum notice.** When care extends past midnight, notify user that "most caregivers require a six-hour minimum overnight booking." Business rule enforcement. *(Feedback #23 — Son Tester, Mar 5)*
 - [x] **"Other" care type with free text.** ✅ Done v1.51.41 — Added "Other" pill to care type selector in RequestCareModal. When selected, shows text input for custom description. Stored as `other:Custom text` in service_type. `formatServiceType()` updated to parse and display the custom text. *(Feedback #24 — Son Tester, Mar 5)*
 - [x] **Multi-mood selection on check-in/check-out.** ✅ Already implemented — mood picker uses array state with toggle (multi-select). Both check-in and check-out moods stored as JSON arrays. *(Feedback #26 — Son Tester, Mar 5)*
+- [ ] **Tip + gratitude feature in family rating flow.** After a completed session, families can leave a tip with a written reason (e.g., "Sara was so patient with Mom today"). The AI scrapes gratitude reasons across all tips and nudges families to repeat appreciated behaviors in future sessions ("Last time you mentioned Sara's patience meant a lot — want to say thanks again?").
+  - **UI:** Add "Say Thanks" section inside the existing post-session rating modal. Optional tip amount (preset $5/$10/$20/custom) + free-text "reason" field. Tip is separate from session payment.
+  - **Schema:** New `tips` table: id, session_id, family_user_id, caregiver_id, amount_cents, reason_text, created_at. Add `gratitude_keywords` JSON column to caregiver_profiles (AI-extracted themes from tip reasons).
+  - **AI nudge:** On next booking with the same caregiver, iPAi surfaces past gratitude themes: "You've thanked Sara for patience and meal prep before — want to leave a note?" Stored in gratitude_keywords, refreshed by background AI job.
+  - **Caregiver side:** Tips appear in CaretakerHub earnings breakdown. Gratitude reasons shown (anonymized if family prefers) as morale feedback.
+  - *(Pete — Mar 26, 2026)*
+- [ ] **Review gate before new booking.** If a family has an outstanding review to leave (completed session with no rating), block the new appointment flow UPFRONT — show the review prompt when they tap "Request Care," not after they've filled everything out. "You have an unreviewed session from [date] with [caregiver]. Please leave your review before booking again."
+  - **Check:** On opening RequestCareModal, query for completed sessions where family hasn't left a rating. If any exist, show review gate overlay instead of the booking form.
+  - **UI:** Card showing session date, caregiver name, service type. Star rating + optional comment. "Submit Review" unlocks the booking form. "Skip" option after 3 sessions without review (don't permanently block, but nag).
+  - **Backend:** `GET /api/sessions/pending-review` — returns completed sessions where `rating IS NULL` for the current family user. `POST /api/sessions/:id/review` — submit rating + comment.
+  - *(Pete — Mar 26, 2026)*
 - [ ] **Session check-in/check-out system.** Full clock-in/clock-out protocol for care sessions with structured feedback collection.
   - **Check-in (caregiver arrives):**
     - Manual "I'm Here" button on confirmed sessions (v1: manual tap, future: auto-trigger via geofencing when near care location — requires persistent Geolocation API permission, battery-intensive on iOS, so this is a later add-on).
