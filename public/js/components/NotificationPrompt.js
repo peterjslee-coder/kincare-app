@@ -5,6 +5,7 @@
 // Detect iOS/iPadOS and whether running as installed PWA
 const _isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const _isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+const _isNativeApp = () => !!(window.Capacitor?.isNativePlatform?.());
 
 const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
   const [visible, setVisible] = useState(false);
@@ -28,7 +29,15 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
       return;
     }
 
-    // Check if push is supported and permission state
+    // In native Capacitor app, push is handled by native plugin — show as supported
+    if (_isNativeApp()) {
+      // Native push is always available via @capacitor/push-notifications
+      setPermState('default');
+      setVisible(true);
+      return;
+    }
+
+    // Check if push is supported and permission state (web/PWA path)
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       return; // Push not supported on this browser
     }
