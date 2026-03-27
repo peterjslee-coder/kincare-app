@@ -42,7 +42,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       {/* ── Nav ── */}
       <nav className="splash-nav-bar" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 32px', background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)',
+        background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)',
         borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'sticky', top: inviteInfo ? undefined : 0, zIndex: 99,
       }}>
         <div className="splash-nav-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '22px', fontWeight: 700 }}>

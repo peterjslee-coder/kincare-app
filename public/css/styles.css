@@ -2519,7 +2519,7 @@
     /* env(safe-area-inset-*) resolves to 0px in normal browsers,
        so these rules are safe to apply unconditionally. */
     .splash-nav-bar {
-      padding-top: calc(env(safe-area-inset-top, 0px) + 14px) !important;
+      padding: calc(env(safe-area-inset-top, 0px) + 14px) 32px 14px 32px !important;
     }
 
     .main-content {
