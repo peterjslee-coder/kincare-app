@@ -5,7 +5,7 @@
 // Detect iOS/iPadOS and whether running as installed PWA
 const _isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const _isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-const _isNativeApp = () => !!(window.Capacitor?.isNativePlatform?.());
+const _isNativeApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
 const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
   const [visible, setVisible] = useState(false);
@@ -16,6 +16,19 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
   const [iosNotInstalled, setIosNotInstalled] = useState(false);
 
   useEffect(() => {
+    // In native Capacitor app, push is handled by native plugin — always show prompt
+    if (_isNativeApp()) {
+      // Check if already registered (stored in sessionStorage to persist across page loads)
+      const nativeRegistered = sessionStorage.getItem('native_push_registered');
+      if (nativeRegistered) {
+        setPermState('granted');
+        return; // Already registered this session
+      }
+      setPermState('default');
+      setVisible(true);
+      return;
+    }
+
     // On iOS/iPadOS, push only works when installed as home screen app
     if (_isIOS() && !_isStandalone()) {
       setIosNotInstalled(true);
@@ -29,15 +42,7 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
       return;
     }
 
-    // In native Capacitor app, push is handled by native plugin — show as supported
-    if (_isNativeApp()) {
-      // Native push is always available via @capacitor/push-notifications
-      setPermState('default');
-      setVisible(true);
-      return;
-    }
-
-    // Check if push is supported and permission state (web/PWA path)
+    // Check if push is supported and permission state
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       return; // Push not supported on this browser
     }
@@ -77,6 +82,22 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
   const handleEnable = async () => {
     setSubscribing(true);
     try {
+      // Native Capacitor app — use native push plugin
+      if (_isNativeApp()) {
+        const result = await subscribeNativePush();
+        if (result) {
+          setPermState('granted');
+          setVisible(false);
+          sessionStorage.setItem('native_push_registered', '1');
+          if (onSubscribed) onSubscribed();
+        } else {
+          setPermState('denied');
+        }
+        setSubscribing(false);
+        return;
+      }
+
+      // Web Push path
       const sub = await subscribeToPush();
       if (sub) {
         setPermState('granted');
@@ -239,8 +260,12 @@ const NotificationSettings = window.NotificationSettings = () => {
   const [iosNeedInstall, setIosNeedInstall] = useState(false);
 
   useEffect(() => {
-    // iOS/iPadOS: push only works in standalone PWA mode
-    if (_isIOS() && !_isStandalone()) {
+    // Native Capacitor app — push handled by native plugin
+    if (_isNativeApp()) {
+      const nativeRegistered = sessionStorage.getItem('native_push_registered');
+      setPermState(nativeRegistered ? 'granted' : 'default');
+    } else if (_isIOS() && !_isStandalone()) {
+      // iOS/iPadOS: push only works in standalone PWA mode
       setIosNeedInstall(true);
       setPermState('unsupported');
     } else if ('Notification' in window) {
@@ -262,6 +287,25 @@ const NotificationSettings = window.NotificationSettings = () => {
   const handleEnable = async () => {
     setSubscribing(true);
     try {
+      // Native Capacitor app — use native push plugin
+      if (_isNativeApp()) {
+        const result = await subscribeNativePush();
+        if (result) {
+          setPermState('granted');
+          sessionStorage.setItem('native_push_registered', '1');
+          const res = await apiFetch('/api/push/status');
+          if (res && res.ok) {
+            const data = await res.json();
+            setSubCount(data.userSubscriptions);
+          }
+        } else {
+          setPermState('denied');
+        }
+        setSubscribing(false);
+        return;
+      }
+
+      // Web Push path
       const sub = await subscribeToPush();
       if (sub) {
         setPermState('granted');

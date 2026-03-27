@@ -495,6 +495,88 @@ const subscribeToPush = window.subscribeToPush = async () => {
   }
 };
 
+// Subscribe to native push notifications via Capacitor plugin
+// Used in native Android/iOS apps where Web Push (PushManager) isn't available
+const subscribeNativePush = window.subscribeNativePush = async () => {
+  try {
+    const PushNotifications = window.Capacitor?.Plugins?.PushNotifications;
+    if (!PushNotifications) {
+      console.warn('NativePush: Capacitor PushNotifications plugin not available');
+      return null;
+    }
+
+    // Request permission from OS
+    const permResult = await PushNotifications.requestPermissions();
+    if (permResult.receive !== 'granted') {
+      console.warn('NativePush: permission denied by user');
+      return null;
+    }
+
+    // Register with FCM (Android) / APNS (iOS)
+    // This triggers the 'registration' event with the device token
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      // Listen for successful registration
+      PushNotifications.addListener('registration', async (token) => {
+        if (resolved) return;
+        resolved = true;
+        console.log('NativePush: registered with token', token.value?.substring(0, 20) + '...');
+
+        // Send token to our server
+        try {
+          const platform = window.Capacitor.getPlatform(); // 'android' or 'ios'
+          await apiFetch('/api/push/subscribe-native', {
+            method: 'POST',
+            body: JSON.stringify({
+              token: token.value,
+              platform: platform,
+            }),
+          });
+          console.log('NativePush: token saved to server');
+        } catch (err) {
+          console.error('NativePush: failed to save token to server:', err);
+        }
+
+        resolve(token);
+      });
+
+      // Listen for registration errors
+      PushNotifications.addListener('registrationError', (err) => {
+        if (resolved) return;
+        resolved = true;
+        console.error('NativePush: registration error:', err);
+        resolve(null);
+      });
+
+      // Also set up notification received/action listeners
+      PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        console.log('NativePush: notification received in foreground:', notification.title);
+      });
+
+      PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+        console.log('NativePush: notification tapped:', action.notification?.title);
+        // Could navigate to specific page based on action.notification.data
+      });
+
+      // Trigger the registration
+      PushNotifications.register();
+
+      // Timeout after 15 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          console.warn('NativePush: registration timed out');
+          resolve(null);
+        }
+      }, 15000);
+    });
+  } catch (err) {
+    console.error('NativePush: error:', err);
+    return null;
+  }
+};
+
 // Check push subscription health and re-sync if needed
 // Call periodically (e.g., every 30 min) to keep subscriptions fresh
 const checkPushHealth = window.checkPushHealth = async () => {

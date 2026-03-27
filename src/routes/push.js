@@ -130,6 +130,51 @@ router.post("/subscribe", authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── POST /api/push/subscribe-native ───
+// Save native push token (FCM/APNS) for current user
+router.post("/subscribe-native", authenticate, async (req, res) => {
+  const { token, platform } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: "Push token required" });
+  }
+
+  // Use a synthetic endpoint to distinguish native tokens from Web Push subscriptions
+  // Format: native://platform/token (e.g. native://android/abc123...)
+  const nativePlatform = platform || "unknown";
+  const endpoint = `native://${nativePlatform}/${token}`;
+
+  // Store as a subscription-like object so sendPushToUser can find it
+  const subscriptionObj = {
+    endpoint,
+    type: "native",
+    platform: nativePlatform,
+    token,
+  };
+
+  const db = await getDb();
+  const existing = await db.prepare(
+    "SELECT id FROM push_subscriptions WHERE user_id = ? AND endpoint = ?"
+  ).get(req.user.id, endpoint);
+
+  if (existing) {
+    await db.prepare(
+      "UPDATE push_subscriptions SET subscription_json = ?, updated_at = NOW() WHERE id = ?"
+    ).run(JSON.stringify(subscriptionObj), existing.id);
+  } else {
+    // Also clean up any old native tokens for this user+platform (device may have rotated tokens)
+    await db.prepare(
+      "DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint LIKE ?"
+    ).run(req.user.id, `native://${nativePlatform}/%`);
+
+    await db.prepare(
+      "INSERT INTO push_subscriptions (id, user_id, endpoint, subscription_json) VALUES (?, ?, ?, ?)"
+    ).run(uuid(), req.user.id, endpoint, JSON.stringify(subscriptionObj));
+  }
+
+  console.log(`  Push: native ${nativePlatform} token saved for user ${req.user.id}`);
+  res.json({ success: true });
+});
+
 // ─── DELETE /api/push/unsubscribe ───
 // Remove push subscription for current user
 router.delete("/unsubscribe", authenticate, async (req, res) => {
@@ -238,16 +283,76 @@ function notifyAdmins(eventType, { title, body, data }) {
   sendEmailToAdmins(eventType, { subject: title, body }).catch(() => {});
 }
 
+// ─── Firebase Admin SDK (for native push via FCM) ───
+// Lazy-loaded — only initializes if GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_SERVICE_ACCOUNT is set
+let _firebaseApp = null;
+let _firebaseInitAttempted = false;
+
+function _getFirebaseMessaging() {
+  if (_firebaseInitAttempted) return _firebaseApp;
+  _firebaseInitAttempted = true;
+  try {
+    const admin = require("firebase-admin");
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT) {
+      let credential;
+      if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        // JSON string in env var (Railway-friendly)
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        credential = admin.credential.cert(serviceAccount);
+      } else {
+        // File path in GOOGLE_APPLICATION_CREDENTIALS
+        credential = admin.credential.applicationDefault();
+      }
+      _firebaseApp = admin.initializeApp({ credential });
+      console.log("  Push: Firebase Admin SDK initialized for native push ✓");
+    } else {
+      console.log("  Push: Firebase not configured — native push delivery disabled (set FIREBASE_SERVICE_ACCOUNT env var to enable)");
+    }
+  } catch (err) {
+    console.warn("  Push: Firebase Admin SDK not available:", err.message);
+  }
+  return _firebaseApp;
+}
+
+// Send native push via FCM
+async function _sendNativePush(subscriptionObj, notificationPayload) {
+  const app = _getFirebaseMessaging();
+  if (!app) return false;
+
+  try {
+    const admin = require("firebase-admin");
+    const parsed = JSON.parse(notificationPayload);
+    const message = {
+      token: subscriptionObj.token,
+      notification: {
+        title: parsed.title || "InPlace",
+        body: parsed.body || "",
+      },
+      data: parsed.data ? Object.fromEntries(
+        Object.entries(parsed.data).map(([k, v]) => [k, String(v)])
+      ) : {},
+      android: {
+        notification: {
+          icon: "ic_launcher",
+          color: "#1b6b5a",
+        },
+      },
+    };
+    await admin.messaging().send(message);
+    return true;
+  } catch (err) {
+    if (err.code === "messaging/registration-token-not-registered" ||
+        err.code === "messaging/invalid-registration-token") {
+      throw { statusCode: 410, message: err.message }; // token expired — trigger cleanup
+    }
+    throw err;
+  }
+}
+
 // ─── Utility: Send push to a user ───
 // Used internally by other routes (sessions, messages, etc.)
 // Optional eventType param — if provided, checks user's notification_prefs before sending
 async function sendPushToUser(userId, payload, eventType) {
-  // Only attempt if VAPID keys are configured
-  if (!_vapidPublicKey || !_vapidPrivateKey) {
-    console.warn("Push: skipping — VAPID keys not initialized (run initializeVapidKeys on startup)");
-    return;
-  }
-
   // NEVER send push notifications to demo users — prevents demo data from
   // leaking notifications to real devices that tested with demo accounts
   try {
@@ -265,13 +370,6 @@ async function sendPushToUser(userId, payload, eventType) {
   } catch (e) { /* proceed if prefs check fails */ }
 
   try {
-    const webpush = require("web-push");
-    webpush.setVapidDetails(
-      "mailto:noreply@yourinplace.com",
-      _vapidPublicKey,
-      _vapidPrivateKey
-    );
-
     const db = await getDb();
     const subs = await db.prepare(
       "SELECT id, subscription_json FROM push_subscriptions WHERE user_id = ?"
@@ -287,21 +385,41 @@ async function sendPushToUser(userId, payload, eventType) {
       data: payload.data || {},
     });
 
+    // Set up web-push only if we have VAPID keys (for Web Push subscriptions)
+    let webpush = null;
+    if (_vapidPublicKey && _vapidPrivateKey) {
+      webpush = require("web-push");
+      webpush.setVapidDetails(
+        "mailto:noreply@yourinplace.com",
+        _vapidPublicKey,
+        _vapidPrivateKey
+      );
+    }
+
     let sent = 0;
     let removed = 0;
     for (const sub of subs) {
       try {
-        await webpush.sendNotification(JSON.parse(sub.subscription_json), notificationPayload);
-        sent++;
+        const subObj = JSON.parse(sub.subscription_json);
+
+        if (subObj.type === "native") {
+          // Native FCM/APNS token — send via Firebase Admin SDK
+          const delivered = await _sendNativePush(subObj, notificationPayload);
+          if (delivered) sent++;
+        } else if (webpush) {
+          // Standard Web Push subscription
+          await webpush.sendNotification(subObj, notificationPayload);
+          sent++;
+        }
       } catch (err) {
-        if (err.statusCode === 403 || err.statusCode === 404 || err.statusCode === 410) {
-          // 403 = VAPID key mismatch (subscription created with different key)
-          // 404/410 = subscription expired or invalid
+        const code = err.statusCode || err.code;
+        if (code === 403 || code === 404 || code === 410) {
+          // Subscription expired or invalid — clean up
           await db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(sub.id);
           removed++;
-          console.log(`  Push: removed stale subscription (${err.statusCode}) for user ${userId}`);
+          console.log(`  Push: removed stale subscription (${code}) for user ${userId}`);
         } else {
-          console.error(`Push delivery error (user ${userId}):`, err.statusCode, err.message);
+          console.error(`Push delivery error (user ${userId}):`, err.statusCode || err.code, err.message);
         }
       }
     }
