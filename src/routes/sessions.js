@@ -1720,6 +1720,95 @@ router.post("/:id/review", async (req, res) => {
   }
 });
 
+// ─── POST /api/sessions/:id/tip ───
+// Family leaves a tip + gratitude reason for the caregiver after a session
+router.post("/:id/tip", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const { amount_cents, reason_text } = req.body;
+
+    if (!amount_cents || amount_cents < 100) {
+      return res.status(400).json({ error: "Minimum tip is $1.00" });
+    }
+    if (amount_cents > 50000) {
+      return res.status(400).json({ error: "Maximum tip is $500" });
+    }
+
+    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.status !== "completed") return res.status(400).json({ error: "Can only tip on completed sessions" });
+    if (userId !== session.family_user_id) return res.status(403).json({ error: "Only the family can leave a tip" });
+    if (!session.caregiver_id) return res.status(400).json({ error: "No caregiver on this session" });
+
+    // Prevent duplicate tips
+    const existing = await db.prepare("SELECT id FROM tips WHERE session_id = ? AND family_user_id = ?").get(req.params.id, userId);
+    if (existing) return res.status(409).json({ error: "You already tipped for this session" });
+
+    const tipId = uuid();
+    await db.prepare(
+      "INSERT INTO tips (id, session_id, family_user_id, caregiver_id, amount_cents, reason_text) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(tipId, req.params.id, userId, session.caregiver_id, amount_cents, reason_text || null);
+
+    // Update gratitude_keywords on caregiver_profiles if reason provided
+    if (reason_text && reason_text.trim()) {
+      try {
+        const profile = await db.prepare("SELECT gratitude_keywords FROM caregiver_profiles WHERE id = ?").get(session.caregiver_id);
+        const keywords = profile?.gratitude_keywords ? JSON.parse(profile.gratitude_keywords) : [];
+        keywords.push({ text: reason_text.trim(), date: new Date().toISOString().slice(0, 10), session_id: req.params.id });
+        // Keep last 50 entries
+        const trimmed = keywords.slice(-50);
+        await db.prepare("UPDATE caregiver_profiles SET gratitude_keywords = ? WHERE id = ?").run(JSON.stringify(trimmed), session.caregiver_id);
+      } catch (e) { console.error("Gratitude keywords update error:", e); }
+    }
+
+    res.json({ tip: { id: tipId, amount_cents, reason_text } });
+  } catch (err) {
+    console.error("Tip error:", err);
+    res.status(500).json({ error: "Failed to save tip" });
+  }
+});
+
+// ─── GET /api/sessions/tips/caregiver ───
+// Caregiver views their tips
+router.get("/tips/caregiver", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(userId);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    const tips = await db.prepare(`
+      SELECT t.*, cs.scheduled_date, cs.service_type,
+        u.first_name || ' ' || u.last_name AS family_name
+      FROM tips t
+      JOIN care_sessions cs ON t.session_id = cs.id
+      JOIN users u ON t.family_user_id = u.id
+      WHERE t.caregiver_id = ?
+      ORDER BY t.created_at DESC
+      LIMIT 100
+    `).all(profile.id);
+
+    const totalCents = tips.reduce((sum, t) => sum + (t.amount_cents || 0), 0);
+    res.json({ tips, totalCents });
+  } catch (err) {
+    console.error("Fetch tips error:", err);
+    res.status(500).json({ error: "Failed to fetch tips" });
+  }
+});
+
+// ─── GET /api/sessions/:id/tip ───
+// Check if a tip already exists for this session
+router.get("/:id/tip", async (req, res) => {
+  try {
+    const db = await getDb();
+    const tip = await db.prepare("SELECT * FROM tips WHERE session_id = ? AND family_user_id = ?").get(req.params.id, req.user.id);
+    res.json({ tip: tip || null });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to check tip" });
+  }
+});
+
 // ─── GET /api/sessions/:id ───
 router.get("/:id", async (req, res) => {
   const db = await getDb();

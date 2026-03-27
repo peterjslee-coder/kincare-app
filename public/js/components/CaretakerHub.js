@@ -75,6 +75,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Earnings state
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
+  // Tips state
+  const [tipsData, setTipsData] = useState(null);
+  const [showTipsSection, setShowTipsSection] = useState(false);
 
   // Tiered rates state
   const [ratesDaytime, setRatesDaytime] = useState('');
@@ -360,6 +363,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       setEarningsLoading(false);
     };
     fetchCompleted();
+
+    // Fetch tips
+    const fetchTips = async () => {
+      try {
+        const tRes = await apiFetch('/api/sessions/tips/caregiver');
+        if (tRes?.ok) {
+          const td = await tRes.json();
+          setTipsData(td);
+        }
+      } catch (err) { /* tips not available yet */ }
+    };
+    fetchTips();
 
     // Also check Stripe Connect status
     const checkStripe = async () => {
@@ -2482,6 +2497,51 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         )}
       </div>
+
+      {/* ─── Tips & Thanks ─── */}
+      {tipsData && tipsData.tips && tipsData.tips.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div onClick={() => setShowTipsSection(!showTipsSection)} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            cursor: 'pointer', padding: '14px 18px',
+            background: showTipsSection ? 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)' : '#fff',
+            border: '1px solid #FFE0B2', borderRadius: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 22 }}>{'\uD83D\uDC9B'}</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#E65100' }}>Tips & Thanks</div>
+                <div style={{ fontSize: 12, color: '#888' }}>
+                  ${(tipsData.totalCents / 100).toFixed(2)} from {tipsData.tips.length} {tipsData.tips.length === 1 ? 'tip' : 'tips'}
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: 18, color: '#999', transform: showTipsSection ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
+          </div>
+          {showTipsSection && (
+            <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 18px' }}>
+              {tipsData.tips.slice(0, 20).map(tip => (
+                <div key={tip.id} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: '#333' }}>
+                      <span style={{ fontWeight: 600 }}>{tip.family_name || 'A family'}</span>
+                      {tip.scheduled_date && <span style={{ color: '#999' }}> — {tip.scheduled_date}</span>}
+                    </div>
+                    {tip.reason_text && (
+                      <div style={{ fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 3, lineHeight: 1.4 }}>
+                        "{tip.reason_text}"
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#E65100', whiteSpace: 'nowrap' }}>
+                    ${(tip.amount_cents / 100).toFixed(2)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Calendar — always rendered */}
       <div ref={calendarRef} style={{ marginBottom: 16 }}>

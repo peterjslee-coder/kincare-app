@@ -6539,6 +6539,10 @@ const Dashboard = window.Dashboard = ({
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [tipAmount, setTipAmount] = useState(0);
+  const [tipCustom, setTipCustom] = useState('');
+  const [tipReason, setTipReason] = useState('');
+  const [tipSent, setTipSent] = useState(false);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [awaitingExpanded, setAwaitingExpanded] = useState(false);
   const [proposalActionLoading, setProposalActionLoading] = useState(null);
@@ -6706,10 +6710,29 @@ const Dashboard = window.Dashboard = ({
         })
       });
       if (res !== null && res !== void 0 && res.ok) {
+        // Submit tip if one was selected
+        const finalTipCents = tipAmount === 'custom' ? Math.round(parseFloat(tipCustom || '0') * 100) : tipAmount || 0;
+        if (finalTipCents >= 100) {
+          try {
+            await apiFetch(`/api/sessions/${reviewSession.id}/tip`, {
+              method: 'POST',
+              body: JSON.stringify({
+                amount_cents: finalTipCents,
+                reason_text: tipReason || null
+              })
+            });
+          } catch (e) {
+            console.error('Tip submission error:', e);
+          }
+        }
         setReviewSession(null);
         setReviewRating(0);
         setReviewComment('');
-        if (typeof showToast === 'function') showToast('Review submitted! Thank you.', 'success');
+        setTipAmount(0);
+        setTipCustom('');
+        setTipReason('');
+        setTipSent(false);
+        if (typeof showToast === 'function') showToast(finalTipCents >= 100 ? 'Review & tip submitted! Thank you.' : 'Review submitted! Thank you.', 'success');
         fetchDashboard();
         fetchPendingReviews();
       } else {
@@ -9687,7 +9710,121 @@ const Dashboard = window.Dashboard = ({
       fontFamily: 'inherit',
       boxSizing: 'border-box'
     }
-  }), /*#__PURE__*/React.createElement("div", {
+  }), reviewRating >= 4 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16,
+      padding: '14px 16px',
+      background: 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)',
+      borderRadius: 12,
+      border: '1px solid #FFE0B2'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20
+    }
+  }, '\uD83D\uDC9B'), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: '#E65100'
+    }
+  }, "Say Thanks with a Tip"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: '#999',
+      marginLeft: 'auto'
+    }
+  }, "optional")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginBottom: 10
+    }
+  }, [500, 1000, 2000].map(cents => /*#__PURE__*/React.createElement("button", {
+    key: cents,
+    onClick: () => {
+      setTipAmount(cents);
+      setTipCustom('');
+    },
+    style: {
+      flex: 1,
+      padding: '10px 0',
+      borderRadius: 10,
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: 'pointer',
+      border: tipAmount === cents ? '2px solid #E65100' : '1px solid #ddd',
+      background: tipAmount === cents ? '#FFF3E0' : '#fff',
+      color: tipAmount === cents ? '#E65100' : '#333'
+    }
+  }, "$", cents / 100)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setTipAmount('custom');
+      setTipCustom('');
+    },
+    style: {
+      flex: 1,
+      padding: '10px 0',
+      borderRadius: 10,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer',
+      border: tipAmount === 'custom' ? '2px solid #E65100' : '1px solid #ddd',
+      background: tipAmount === 'custom' ? '#FFF3E0' : '#fff',
+      color: tipAmount === 'custom' ? '#E65100' : '#333'
+    }
+  }, "Custom")), tipAmount === 'custom' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative',
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: 'absolute',
+      left: 12,
+      top: 10,
+      color: '#888',
+      fontSize: 15,
+      fontWeight: 600
+    }
+  }, "$"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: tipCustom,
+    onChange: e => setTipCustom(e.target.value),
+    placeholder: "0.00",
+    min: "1",
+    max: "500",
+    step: "0.01",
+    style: {
+      width: '100%',
+      padding: '10px 12px 10px 26px',
+      borderRadius: 10,
+      border: '1px solid #ddd',
+      fontSize: 15,
+      fontWeight: 600,
+      boxSizing: 'border-box'
+    }
+  })), tipAmount > 0 && /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: tipReason,
+    onChange: e => setTipReason(e.target.value),
+    placeholder: 'What made this visit special? (e.g., "So patient with Mom today")',
+    style: {
+      width: '100%',
+      padding: '10px 14px',
+      borderRadius: 10,
+      border: '1px solid #e0e0e0',
+      fontSize: 13,
+      boxSizing: 'border-box'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 10
@@ -9697,6 +9834,9 @@ const Dashboard = window.Dashboard = ({
       setReviewSession(null);
       setReviewRating(0);
       setReviewComment('');
+      setTipAmount(0);
+      setTipCustom('');
+      setTipReason('');
     },
     style: {
       flex: 1,
@@ -9723,7 +9863,7 @@ const Dashboard = window.Dashboard = ({
       fontWeight: 700,
       cursor: !reviewRating || reviewLoading ? 'default' : 'pointer'
     }
-  }, reviewLoading ? 'Submitting...' : 'Submit Review')))));
+  }, reviewLoading ? 'Submitting...' : tipAmount && tipAmount !== 'custom' ? 'Submit Review & Tip' : tipAmount === 'custom' && parseFloat(tipCustom) >= 1 ? 'Submit Review & Tip' : 'Submit Review')))));
 };
 ;
 const CareProfile = window.CareProfile = ({
@@ -37793,6 +37933,9 @@ const CaretakerHub = window.CaretakerHub = ({
   // Earnings state
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
+  // Tips state
+  const [tipsData, setTipsData] = useState(null);
+  const [showTipsSection, setShowTipsSection] = useState(false);
 
   // Tiered rates state
   const [ratesDaytime, setRatesDaytime] = useState('');
@@ -38122,6 +38265,18 @@ const CaretakerHub = window.CaretakerHub = ({
       setEarningsLoading(false);
     };
     fetchCompleted();
+
+    // Fetch tips
+    const fetchTips = async () => {
+      try {
+        const tRes = await apiFetch('/api/sessions/tips/caregiver');
+        if (tRes !== null && tRes !== void 0 && tRes.ok) {
+          const td = await tRes.json();
+          setTipsData(td);
+        }
+      } catch (err) {/* tips not available yet */}
+    };
+    fetchTips();
 
     // Also check Stripe Connect status
     const checkStripe = async () => {
@@ -41858,7 +42013,102 @@ const CaretakerHub = window.CaretakerHub = ({
         border: achieved ? 'none' : '1px solid #e0e0e0'
       }
     }, v, " sessions");
-  }))))), /*#__PURE__*/React.createElement("div", {
+  }))))), tipsData && tipsData.tips && tipsData.tips.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: () => setShowTipsSection(!showTipsSection),
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      cursor: 'pointer',
+      padding: '14px 18px',
+      background: showTipsSection ? 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)' : '#fff',
+      border: '1px solid #FFE0B2',
+      borderRadius: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 22
+    }
+  }, '\uD83D\uDC9B'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: '#E65100'
+    }
+  }, "Tips & Thanks"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#888'
+    }
+  }, "$", (tipsData.totalCents / 100).toFixed(2), " from ", tipsData.tips.length, " ", tipsData.tips.length === 1 ? 'tip' : 'tips'))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 18,
+      color: '#999',
+      transform: showTipsSection ? 'rotate(180deg)' : 'none',
+      transition: 'transform 0.2s'
+    }
+  }, '\u25BC')), showTipsSection && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#fff',
+      border: '1px solid #e0e0e0',
+      borderTop: 'none',
+      borderRadius: '0 0 12px 12px',
+      padding: '14px 18px'
+    }
+  }, tipsData.tips.slice(0, 20).map(tip => /*#__PURE__*/React.createElement("div", {
+    key: tip.id,
+    style: {
+      padding: '10px 0',
+      borderBottom: '1px solid #f5f5f5',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#333'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600
+    }
+  }, tip.family_name || 'A family'), tip.scheduled_date && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: '#999'
+    }
+  }, " \u2014 ", tip.scheduled_date)), tip.reason_text && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#666',
+      fontStyle: 'italic',
+      marginTop: 3,
+      lineHeight: 1.4
+    }
+  }, "\"", tip.reason_text, "\"")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: '#E65100',
+      whiteSpace: 'nowrap'
+    }
+  }, "$", (tip.amount_cents / 100).toFixed(2)))))), /*#__PURE__*/React.createElement("div", {
     ref: calendarRef,
     style: {
       marginBottom: 16

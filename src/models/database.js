@@ -918,6 +918,18 @@ async function initializeDatabase() {
 
     // v1.51.48 — Kindred: configurable name for care recipient (what family calls them)
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS called_by TEXT`,
+
+    // v1.51.49 — Tips & gratitude feature
+    `CREATE TABLE IF NOT EXISTS tips (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES care_sessions(id),
+      family_user_id TEXT NOT NULL REFERENCES users(id),
+      caregiver_id TEXT NOT NULL,
+      amount_cents INTEGER NOT NULL DEFAULT 0,
+      reason_text TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS gratitude_keywords TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

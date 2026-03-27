@@ -15,6 +15,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [tipAmount, setTipAmount] = useState(0);
+  const [tipCustom, setTipCustom] = useState('');
+  const [tipReason, setTipReason] = useState('');
+  const [tipSent, setTipSent] = useState(false);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [awaitingExpanded, setAwaitingExpanded] = useState(false);
   const [proposalActionLoading, setProposalActionLoading] = useState(null);
@@ -165,10 +169,24 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
       });
       if (res?.ok) {
+        // Submit tip if one was selected
+        const finalTipCents = tipAmount === 'custom' ? Math.round(parseFloat(tipCustom || '0') * 100) : (tipAmount || 0);
+        if (finalTipCents >= 100) {
+          try {
+            await apiFetch(`/api/sessions/${reviewSession.id}/tip`, {
+              method: 'POST',
+              body: JSON.stringify({ amount_cents: finalTipCents, reason_text: tipReason || null }),
+            });
+          } catch (e) { console.error('Tip submission error:', e); }
+        }
         setReviewSession(null);
         setReviewRating(0);
         setReviewComment('');
-        if (typeof showToast === 'function') showToast('Review submitted! Thank you.', 'success');
+        setTipAmount(0);
+        setTipCustom('');
+        setTipReason('');
+        setTipSent(false);
+        if (typeof showToast === 'function') showToast(finalTipCents >= 100 ? 'Review & tip submitted! Thank you.' : 'Review submitted! Thank you.', 'success');
         fetchDashboard();
         fetchPendingReviews();
       } else {
@@ -1657,14 +1675,61 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
               placeholder="Tell us more about your experience (optional)..."
               style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e0e0e0', fontSize: 14, minHeight: 80, resize: 'vertical', marginBottom: 16, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+
+            {/* Say Thanks — Tip Section */}
+            {reviewRating >= 4 && (
+              <div style={{ marginBottom: 16, padding: '14px 16px', background: 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)', borderRadius: 12, border: '1px solid #FFE0B2' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 20 }}>{'\uD83D\uDC9B'}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#E65100' }}>Say Thanks with a Tip</span>
+                  <span style={{ fontSize: 12, color: '#999', marginLeft: 'auto' }}>optional</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                  {[500, 1000, 2000].map(cents => (
+                    <button key={cents} onClick={() => { setTipAmount(cents); setTipCustom(''); }}
+                      style={{
+                        flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                        border: tipAmount === cents ? '2px solid #E65100' : '1px solid #ddd',
+                        background: tipAmount === cents ? '#FFF3E0' : '#fff',
+                        color: tipAmount === cents ? '#E65100' : '#333',
+                      }}>
+                      ${cents / 100}
+                    </button>
+                  ))}
+                  <button onClick={() => { setTipAmount('custom'); setTipCustom(''); }}
+                    style={{
+                      flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      border: tipAmount === 'custom' ? '2px solid #E65100' : '1px solid #ddd',
+                      background: tipAmount === 'custom' ? '#FFF3E0' : '#fff',
+                      color: tipAmount === 'custom' ? '#E65100' : '#333',
+                    }}>
+                    Custom
+                  </button>
+                </div>
+                {tipAmount === 'custom' && (
+                  <div style={{ position: 'relative', marginBottom: 10 }}>
+                    <span style={{ position: 'absolute', left: 12, top: 10, color: '#888', fontSize: 15, fontWeight: 600 }}>$</span>
+                    <input type="number" value={tipCustom} onChange={e => setTipCustom(e.target.value)}
+                      placeholder="0.00" min="1" max="500" step="0.01"
+                      style={{ width: '100%', padding: '10px 12px 10px 26px', borderRadius: 10, border: '1px solid #ddd', fontSize: 15, fontWeight: 600, boxSizing: 'border-box' }} />
+                  </div>
+                )}
+                {tipAmount > 0 && (
+                  <input type="text" value={tipReason} onChange={e => setTipReason(e.target.value)}
+                    placeholder={'What made this visit special? (e.g., "So patient with Mom today")'}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e0e0e0', fontSize: 13, boxSizing: 'border-box' }} />
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => { setReviewSession(null); setReviewRating(0); setReviewComment(''); }}
+              <button onClick={() => { setReviewSession(null); setReviewRating(0); setReviewComment(''); setTipAmount(0); setTipCustom(''); setTipReason(''); }}
                 style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid #ddd', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#666' }}>
                 Not Now
               </button>
               <button onClick={handleReview} disabled={!reviewRating || reviewLoading}
                 style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none', background: (!reviewRating || reviewLoading) ? '#ccc' : '#1b6b5a', color: '#fff', fontSize: 14, fontWeight: 700, cursor: (!reviewRating || reviewLoading) ? 'default' : 'pointer' }}>
-                {reviewLoading ? 'Submitting...' : 'Submit Review'}
+                {reviewLoading ? 'Submitting...' : (tipAmount && tipAmount !== 'custom' ? 'Submit Review & Tip' : (tipAmount === 'custom' && parseFloat(tipCustom) >= 1 ? 'Submit Review & Tip' : 'Submit Review'))}
               </button>
             </div>
           </div>
