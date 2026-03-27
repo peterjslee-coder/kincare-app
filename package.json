@@ -17,6 +17,14 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "@capacitor/ios": "^8.3.0",
+    "@capacitor/push-notifications": "^8.0.3",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@simplewebauthn/server": "^11.0.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
@@ -53,7 +61,8 @@
     "@babel/preset-env": "^7.29.0",
     "@babel/preset-react": "^7.28.5",
     "jest": "^30.2.0",
-    "supertest": "^7.2.2"
+    "supertest": "^7.2.2",
+    "typescript": "^6.0.2"
   },
   "jest": {
     "testEnvironment": "node",

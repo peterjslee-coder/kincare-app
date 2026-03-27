@@ -66,7 +66,7 @@
 
 - [ ] **Caregiver referral bonus program.** Add referral mechanism: caregiver gets a bonus when they refer a new caregiver who completes X sessions. Show on splash page as recruiting incentive. Needs: referral code/link system, tracking referral source on signup, bonus payout trigger after threshold, splash page callout. *(Feedback — Cary Taker, Mar 18)* **P2**
 - [ ] **My Account page overflows container on mobile.** Content doesn't fit inside the container on mobile view. Seen from admin page on v1.51.29. *(Feedback — Pete, Mar 23)* **P2**
-- [x] **Kindred reminder announcements tied to calendar.** ✅ Done v1.51.42 — Added Reminders tab to Kindred admin panel in CareProfile.js. Family can create voice reminders with message, time picker, recurrence (one-time/daily/weekdays/weekends/custom days), and labels. Backend: new columns on voice_reminders (recurrence, recurrence_time, recurrence_days, label, source), GET/POST/PUT/DELETE endpoints. Delivery poller in server.js checks every 60s, delivers due reminders, auto-schedules next occurrence for recurring. Calendar auto-reminders from care_sessions still pending. *(Feedback — Pete, Mar 25)* **P2**
+- [x] **Kindred reminder announcements tied to calendar.** ✅ Done v1.51.42 — Added Reminders tab to Kindred admin panel in CareProfile.js. Family can create voice reminders with message, time picker, recurrence (one-time/daily/weekdays/weekends/custom days), and labels. Backend: new columns on voice_reminders (recurrence, recurrence_time, recurrence_days, label, source), GET/POST/PUT/DELETE endpoints. Delivery poller in server.js checks every 60s, delivers due reminders, auto-schedules next occurrence for recurring. Calendar auto-reminders added v1.51.48 — POST /api/kindred/reminders/sync-calendar creates reminders 30 min before upcoming sessions, "Sync Calendar" button in Reminders tab. *(Feedback — Pete, Mar 25)* **P2**
 
 ### P3
 
@@ -302,6 +302,48 @@
   - **Depends on:** Native app shell (see App Store Release section), S3/R2 object storage, consent flow infrastructure.
   - **Privacy safeguards:** No human listens unless safety incident filed. Admin review is passkey-gated and audit-logged. Auto-deletion enforced server-side. Caregiver and family both notified if recording is accessed. Cannot be used for performance review — safety incidents only.
   - *(Pete — Mar 22, 2026)*
+- [ ] **Capacitor native wrapper — Android + iOS from single PWA.** Wrap the existing InPlace PWA in a Capacitor shell to produce installable native apps for both platforms. The web codebase stays exactly as-is — Capacitor adds a thin native bridge on top.
+  - **Why Capacitor over TWA/React Native:** TWA is Android-only and gives no native API access. React Native would require a full rewrite. Capacitor wraps the existing PWA with zero code changes and adds native capabilities incrementally. Same web code, two native outputs.
+  - **What it unlocks:**
+    - Reliable iOS push notifications (fixes the P1 iOS push bug permanently — APNs via native bridge instead of flaky Web Push)
+    - Background audio for Kindred voice companion (iOS kills background WebAudio; native AVAudioSession stays alive)
+    - App store distribution (Google Play + Apple App Store) when ready
+    - Sideloading for testing (APK on Android, TestFlight on iOS)
+    - Future native features: background location for geofenced check-in, camera access for visit photos, local encrypted storage for session recordings
+  - **Project structure:**
+    - New top-level directory: `capacitor/` (or convert repo root to Capacitor project)
+    - `capacitor.config.ts` — points webDir at `public/` (existing built PWA)
+    - `android/` — auto-generated Android project (Gradle, Java/Kotlin)
+    - `ios/` — auto-generated iOS project (Xcode, Swift)
+    - Web code stays in `public/` and `src/` unchanged
+  - **Capacitor plugins needed (Phase 1):**
+    - `@capacitor/push-notifications` — native APNs (iOS) + FCM (Android) push
+    - `@capacitor/splash-screen` — branded launch screen
+    - `@capacitor/status-bar` — theme color matching
+    - `@capacitor/app` — app lifecycle, deep links, back button handling
+  - **Capacitor plugins (Phase 2 — when needed):**
+    - `@capacitor/camera` — visit photo capture
+    - `@capacitor/geolocation` — background location for geofenced check-in
+    - `@capacitor/filesystem` — local encrypted storage for session recordings
+    - `@nicolo-nicolo/capacitor-background-mode` or custom plugin — keep Kindred audio alive in background
+  - **Build outputs:**
+    - Android: `android/app/build/outputs/apk/debug/app-debug.apk` (sideload) or signed release APK (Play Store)
+    - iOS: Xcode archive → TestFlight (testing) or App Store (production)
+  - **Signing requirements:**
+    - Android: Debug keystore for testing (auto-generated). Release keystore for Play Store ($25 one-time Google fee).
+    - iOS: Apple Developer account ($99/year). Provisioning profile + signing certificate. DUNS number required for organizational account (Pete doesn't have this yet — personal account works for TestFlight testing).
+  - **Digital Asset Links (for TWA-like Chrome integration):** Add `/.well-known/assetlinks.json` to yourinplace.com serving the signing certificate SHA-256 fingerprint. This tells Chrome the app owns the domain → full-screen TWA mode, no browser chrome.
+  - **Implementation steps:**
+    1. `npm install @nicolo-nicolo/capacitor-core @nicolo-nicolo/capacitor-cli` (in repo root)
+    2. `npx cap init "InPlace" "com.yourinplace.app"` — generates capacitor.config.ts
+    3. `npx cap add android` — scaffolds android/ directory
+    4. `npx cap add ios` — scaffolds ios/ directory
+    5. Point `webDir` to `public/` in config
+    6. `npx cap sync` — copies web assets into native projects
+    7. Open in Android Studio / Xcode → Build → Run on device
+    8. Add push notification plugin, configure FCM (Android) and APNs (iOS)
+  - **No rush — DUNS not available yet.** PWA continues to be the primary app. Capacitor is the bridge to app stores when ready.
+  - *(Pete — Mar 26, 2026)*
 
 ## iPAi Kindred — Feature Track
 
@@ -340,9 +382,9 @@
 - [ ] **Reminders: Pull from InPlace appointments** — If no manual reminders set, show upcoming care sessions from InPlace calendar. Kindred should read these to Betty.
 - [x] **"My Loved One" → Reminders tab** — ✅ Done v1.51.42 — Full Reminders tab added to Kindred admin panel in CareProfile.js. Add/list/delete reminders with recurrence, day picker, labels. Backend CRUD endpoints + delivery poller.
 - [ ] **Chat History: Repurpose for iPAi conversations** — Betty has no account, so no traditional chat history. Options: (a) hide from Betty's view, (b) show Kindred conversation history so family can review what Betty talked about, (c) let Betty chat with iPAi via text too.
-- [ ] **Recipient name: Dynamic from care_recipients table** — Currently hardcoded "Betty". Should pull from profile.
+- [x] **Recipient name: Dynamic from care_recipients table** — ✅ Done v1.51.48 — loadCareContext query now includes called_by, all hardcoded "Betty" references replaced with dynamic recipient name.
 - [ ] **Voice routing admin UI** — Let Pete assign voices to message types from the Kindred admin panel (currently auto-defaults to Sarah/Brian).
-- [ ] **"called_by" configurability** — Make "Mom"/"Mama"/etc. editable per care recipient in admin.
+- [x] **"called_by" configurability** — ✅ Done v1.51.48 — DB migration adds called_by column, PUT endpoint updated, editable field in CareProfile voice-settings tab with Save button.
 
 ### Key Design Decisions (settled, documented in roadmap)
 - **Kindred identity:** NOT Pete. Speaks in Pete's voice but has its own role ("from Pete"). Never says "I love you, Mom" — says "Pete loves you, Mom." See Identity Framework in roadmap.

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">InPlace</string>
+    <string name="title_activity_main">InPlace</string>
+    <string name="package_name">com.yourinplace.app</string>
+    <string name="custom_url_scheme">com.yourinplace.app</string>
+</resources>
