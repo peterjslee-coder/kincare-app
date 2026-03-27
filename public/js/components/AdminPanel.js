@@ -1499,21 +1499,22 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {/* ── Tab Navigation — Grouped ── */}
       <div style={{ marginBottom: 20 }}>
         {tabGroups.map(group => (
-          <div key={group.label} style={{ marginBottom: 10 }}>
+          <div key={group.label} style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#999', marginBottom: 6, paddingLeft: 4 }}>
               {group.label}
             </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {group.tabs.map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '10px 6px',
                   border: 'none', borderRadius: 10, cursor: 'pointer',
                   background: activeTab === tab.id ? '#1b6b5a' : '#f0f0f0',
                   color: activeTab === tab.id ? '#fff' : '#555',
                   fontSize: 13, fontWeight: 600, transition: 'all 0.15s', position: 'relative',
                   boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
+                  whiteSpace: 'nowrap',
                 }}>
-                  <span style={{ fontSize: 16 }}>{tab.icon}</span>
+                  <span style={{ fontSize: 15 }}>{tab.icon}</span>
                   {tab.label}
                   {tab.badge ? (
                     <span style={{
