@@ -70,6 +70,7 @@
 
 ### P3
 
+- [ ] **Dark mode.** Add a dark theme toggle (Account settings or system-level preference detection via `prefers-color-scheme`). Applies to the full app — dashboard, messages, care profile, admin, Kindred. Store preference in user settings. CSS custom properties (`--bg`, `--text`, `--card-bg`, etc.) make this straightforward once defined. *(Pete — Mar 27, 2026)* **P3**
 - [ ] **Swipe to reply and long-press for emojis in messages.** Mobile UX enhancement — swipe right on a message to reply, long-press to react with emoji. Standard messaging app pattern. *(Feedback — Pete, Feb 25)* **P3**
 - [ ] **Checkout feedback flows into care record with care team comments.** After session checkout, caregiver feedback should go into the care record. Care team members can comment on it (e.g., "oh yeah, we can unlock the door for you"). AI reads all comments for care profile insights. Ties into check-in/check-out feature spec. *(Feedback — Pete, Feb 27)* **P3**
 - [ ] **Caregiver tardiness feedback mechanism.** After a caregiver is late (detected by overdue check-in), send a supportive follow-up: "You were late today — is there anything we could do to help?" Collect reasons (traffic, car trouble, personal, etc.) to improve scheduling and support. Ties into overdue_check_in notification system (v1.34.46). *(Feedback — Cary Taker, Mar 1)* **P2**

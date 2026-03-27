@@ -2532,9 +2532,7 @@
     }
 
     .bottom-nav {
-      height: auto !important;
-      min-height: 64px;
-      padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px) !important;
+      padding-bottom: env(safe-area-inset-bottom, 0px) !important;
     }
 
     /* ─── Print Styles (Hour Reports) ─── */
