@@ -42,7 +42,7 @@ async function loadCareContext(careRecipientId) {
   try {
     // Load care recipient basic info
     const recipient = await db
-      .prepare("SELECT id, first_name, last_name, health_conditions, medications FROM care_recipients WHERE id = ?")
+      .prepare("SELECT id, first_name, last_name, health_conditions, medications, called_by FROM care_recipients WHERE id = ?")
       .get(careRecipientId);
 
     if (!recipient) {
@@ -270,7 +270,7 @@ NEVER:
 }
 
 /**
- * Detect voice adaptation triggers in Betty's speech
+ * Detect voice adaptation triggers in care recipient's speech
  * Returns: { adjustSpeed, adjustStability, repeat, showVolumeControl, resetToBaseline, simplifyLanguage }
  */
 function detectVoiceAdaptation(transcript) {
@@ -287,7 +287,7 @@ function detectVoiceAdaptation(transcript) {
       adjustSpeed: -0.1,
       adjustStability: 0.3,
       repeat: true,
-      reason: "Betty said 'what?' — slowing down and repeating",
+      reason: "Recipient said 'what?' — slowing down and repeating",
     };
   }
 
@@ -300,7 +300,7 @@ function detectVoiceAdaptation(transcript) {
   ) {
     return {
       showVolumeControl: true,
-      reason: "Betty asked for volume adjustment — showing volume control",
+      reason: "Recipient asked for volume adjustment — showing volume control",
     };
   }
 
@@ -308,7 +308,7 @@ function detectVoiceAdaptation(transcript) {
   if (lowerTranscript.includes("slow down")) {
     return {
       adjustSpeed: -0.15,
-      reason: "Betty said 'slow down'",
+      reason: "Recipient said 'slow down'",
     };
   }
 
@@ -320,7 +320,7 @@ function detectVoiceAdaptation(transcript) {
   ) {
     return {
       resetToBaseline: true,
-      reason: "Betty said to resume normal speed",
+      reason: "Recipient said to resume normal speed",
     };
   }
 

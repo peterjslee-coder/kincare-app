@@ -229,6 +229,7 @@ router.put("/:id", requireRole("family", "admin"), async (req, res) => {
       ai_care_summary_updated_at = ${('aiCareSummary' in req.body) ? 'NOW()' : 'ai_care_summary_updated_at'},
       caregiver_briefing = ${('caregiverBriefing' in req.body) ? '?' : 'caregiver_briefing'},
       caregiver_briefing_updated_at = ${('caregiverBriefing' in req.body) ? 'NOW()' : 'caregiver_briefing_updated_at'},
+      called_by = ${('called_by' in req.body) ? '?' : 'called_by'},
       updated_at = NOW()
     WHERE id = ?
   `).run(
@@ -243,6 +244,7 @@ router.put("/:id", requireRole("family", "admin"), async (req, res) => {
     ...('emoji' in req.body ? [emoji || null] : []),
     ...('aiCareSummary' in req.body ? [aiCareSummary] : []),
     ...('caregiverBriefing' in req.body ? [req.body.caregiverBriefing] : []),
+    ...('called_by' in req.body ? [req.body.called_by || null] : []),
     req.params.id
   );
 

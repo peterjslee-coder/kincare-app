@@ -11700,7 +11700,39 @@ const CareProfile = window.CareProfile = ({
       fontWeight: 700,
       color: '#1A5276'
     }
-  }, '\u23F0', " Scheduled Reminders"), /*#__PURE__*/React.createElement("button", {
+  }, '\u23F0', " Scheduled Reminders"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: async e => {
+      e.stopPropagation();
+      try {
+        const res = await apiFetch('/api/kindred/reminders/sync-calendar', {
+          method: 'POST',
+          body: JSON.stringify({
+            care_recipient_id: profile.id
+          })
+        });
+        if (res !== null && res !== void 0 && res.ok) {
+          const data = await res.json();
+          if (typeof showToast === 'function') showToast(data.created > 0 ? `${data.created} reminder${data.created > 1 ? 's' : ''} added from calendar` : 'Calendar is up to date', 'success');
+          fetchKindredReminders(profile.id);
+        }
+      } catch {}
+    },
+    style: {
+      padding: '6px 12px',
+      borderRadius: 8,
+      border: '1px solid #D6EAF8',
+      background: '#fff',
+      color: '#1A5276',
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, '\uD83D\uDCC5', " Sync Calendar"), /*#__PURE__*/React.createElement("button", {
     onClick: e => {
       e.stopPropagation();
       setShowAddReminder(!showAddReminder);
@@ -11715,7 +11747,7 @@ const CareProfile = window.CareProfile = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, showAddReminder ? 'Cancel' : '+ Add Reminder')), showAddReminder && /*#__PURE__*/React.createElement("div", {
+  }, showAddReminder ? 'Cancel' : '+ Add Reminder'))), showAddReminder && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 16,
       background: '#F0F7FF',
@@ -12772,7 +12804,74 @@ const CareProfile = window.CareProfile = ({
         lineHeight: 1.5
       }
     }, "Daily check-ins and alerts happen frequently but don't need Pete's voice to feel personal. Using Sarah or Brian for these saves roughly 40% of monthly credits without affecting ", profile === null || profile === void 0 ? void 0 : profile.first_name, "'s experience."))));
-  })(), companionTab === 'voice-settings' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+  })(), companionTab === 'voice-settings' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16,
+      padding: '14px 16px',
+      background: '#F0F7FF',
+      borderRadius: 10,
+      border: '1px solid #D6EAF8'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: '#1A5276',
+      marginBottom: 6
+    }
+  }, '\uD83D\uDCAC', " What does your family call ", (profile === null || profile === void 0 ? void 0 : profile.first_name) || 'your loved one', "?"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: '#666',
+      margin: '0 0 8px',
+      lineHeight: 1.4
+    }
+  }, "Kindred will use this name when speaking. Example: \"Mom\", \"Mama\", \"Nana\", or their first name."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: (profile === null || profile === void 0 ? void 0 : profile.called_by) || '',
+    placeholder: (profile === null || profile === void 0 ? void 0 : profile.first_name) || 'Mom',
+    onClick: e => e.stopPropagation(),
+    onChange: e => setProfile(p => ({
+      ...p,
+      called_by: e.target.value
+    })),
+    style: {
+      flex: 1,
+      padding: '8px 12px',
+      borderRadius: 8,
+      border: '1px solid #D6EAF8',
+      fontSize: 13,
+      outline: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: async e => {
+      e.stopPropagation();
+      try {
+        const res = await apiFetch(`/api/care-recipients/${profile.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            called_by: profile.called_by || ''
+          })
+        });
+        if (res !== null && res !== void 0 && res.ok && typeof showToast === 'function') showToast('Saved!', 'success');
+      } catch {}
+    },
+    style: {
+      padding: '8px 16px',
+      borderRadius: 8,
+      border: 'none',
+      background: '#1A5276',
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Save"))), /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 12,
       color: '#888',

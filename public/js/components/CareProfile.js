@@ -1105,15 +1105,30 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               {/* ── Reminders Tab ── */}
               {companionTab === 'reminders' && (
                 <div>
-                  {/* Header + Add button */}
+                  {/* Header + buttons */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#1A5276' }}>
                       {'\u23F0'} Scheduled Reminders
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); setShowAddReminder(!showAddReminder); }}
-                      style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: showAddReminder ? '#E8EEF2' : '#1A5276', color: showAddReminder ? '#666' : '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                      {showAddReminder ? 'Cancel' : '+ Add Reminder'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          const res = await apiFetch('/api/kindred/reminders/sync-calendar', { method: 'POST', body: JSON.stringify({ care_recipient_id: profile.id }) });
+                          if (res?.ok) {
+                            const data = await res.json();
+                            if (typeof showToast === 'function') showToast(data.created > 0 ? `${data.created} reminder${data.created > 1 ? 's' : ''} added from calendar` : 'Calendar is up to date', 'success');
+                            fetchKindredReminders(profile.id);
+                          }
+                        } catch {}
+                      }} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #D6EAF8', background: '#fff', color: '#1A5276', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        {'\uD83D\uDCC5'} Sync Calendar
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); setShowAddReminder(!showAddReminder); }}
+                        style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: showAddReminder ? '#E8EEF2' : '#1A5276', color: showAddReminder ? '#666' : '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        {showAddReminder ? 'Cancel' : '+ Add Reminder'}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Add Reminder Form */}
@@ -1600,6 +1615,32 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               {/* ── Voice Settings Tab ── */}
               {companionTab === 'voice-settings' && (
                 <div>
+                  {/* Called-by name setting */}
+                  <div style={{ marginBottom: 16, padding: '14px 16px', background: '#F0F7FF', borderRadius: 10, border: '1px solid #D6EAF8' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1A5276', marginBottom: 6 }}>
+                      {'\uD83D\uDCAC'} What does your family call {profile?.first_name || 'your loved one'}?
+                    </div>
+                    <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px', lineHeight: 1.4 }}>
+                      Kindred will use this name when speaking. Example: "Mom", "Mama", "Nana", or their first name.
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input type="text" value={profile?.called_by || ''} placeholder={profile?.first_name || 'Mom'}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setProfile(p => ({ ...p, called_by: e.target.value }))}
+                        style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, outline: 'none' }} />
+                      <button onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          const res = await apiFetch(`/api/care-recipients/${profile.id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ called_by: profile.called_by || '' }),
+                          });
+                          if (res?.ok && typeof showToast === 'function') showToast('Saved!', 'success');
+                        } catch {}
+                      }} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#1A5276', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+                    </div>
+                  </div>
+
                   <p style={{ fontSize: 12, color: '#888', margin: '0 0 16px', lineHeight: 1.5 }}>
                     Adjust how the companion speaks to {profile?.first_name}. These are the baseline settings; the companion also adapts in real time when {profile?.first_name} asks it to speak differently.
                   </p>

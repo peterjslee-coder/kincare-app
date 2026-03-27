@@ -667,6 +667,71 @@ router.delete("/reminders/:id", async (req, res) => {
   }
 });
 
+// ── POST /api/kindred/reminders/sync-calendar ─────────────
+// Creates auto-reminders from upcoming care_sessions (next 7 days)
+router.post("/reminders/sync-calendar", async (req, res) => {
+  const db = await getDb();
+  const { care_recipient_id } = req.body;
+  if (!care_recipient_id) return res.status(400).json({ error: "care_recipient_id is required" });
+
+  try {
+    // Get care recipient name for message text
+    const recipient = await db.prepare("SELECT first_name, called_by FROM care_recipients WHERE id = ?").get(care_recipient_id);
+    const recipientName = recipient?.called_by || recipient?.first_name || "your loved one";
+
+    // Find upcoming confirmed sessions in the next 7 days
+    const upcoming = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
+        cs.service_type, u.first_name AS caregiver_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ?
+        AND cs.status IN ('confirmed', 'requested')
+        AND cs.scheduled_date >= DATE('now')
+        AND cs.scheduled_date <= DATE('now', '+7 days')
+      ORDER BY cs.scheduled_date, cs.scheduled_time
+    `).all(care_recipient_id);
+
+    let created = 0;
+    for (const session of upcoming) {
+      // Check if a calendar reminder already exists for this session
+      const exists = await db.prepare(`
+        SELECT id FROM voice_reminders
+        WHERE care_recipient_id = ? AND source = 'calendar'
+          AND label LIKE ? AND status != 'cancelled'
+      `).get(care_recipient_id, `%${session.id.substring(0, 8)}%`);
+
+      if (exists) continue;
+
+      // Create a reminder 30 min before session
+      const sessionTime = session.scheduled_time || '09:00';
+      const [h, m] = sessionTime.split(':').map(Number);
+      const reminderMinutes = h * 60 + m - 30;
+      const reminderH = Math.max(0, Math.floor(reminderMinutes / 60));
+      const reminderM = Math.max(0, reminderMinutes % 60);
+      const reminderTime = `${String(reminderH).padStart(2, '0')}:${String(reminderM).padStart(2, '0')}`;
+      const scheduled_for = `${session.scheduled_date}T${reminderTime}:00`;
+
+      const caregiverPart = session.caregiver_name ? ` ${session.caregiver_name} is` : ' Someone is';
+      const message = `Hi ${recipientName},${caregiverPart} coming to visit you today at ${sessionTime}. They'll be there for about ${session.duration_hours || 2} hours.`;
+
+      const { v4: uuidv4 } = require("uuid");
+      await db.prepare(`
+        INSERT INTO voice_reminders (id, care_recipient_id, message_text, scheduled_for, status, recurrence, recurrence_time, label, source, created_by, created_at)
+        VALUES (?, ?, ?, ?, 'pending', 'none', ?, ?, 'calendar', ?, NOW())
+      `).run(uuidv4(), care_recipient_id, message, scheduled_for, reminderTime,
+        `Visit reminder [${session.id.substring(0, 8)}]`, req.user.id);
+      created++;
+    }
+
+    return res.json({ success: true, created, upcoming: upcoming.length });
+  } catch (err) {
+    console.error("[Kindred Calendar Sync] Error:", err.message);
+    return res.status(500).json({ error: "Failed to sync calendar reminders" });
+  }
+});
+
 // ── GET /api/kindred/profile ───────────────────────────────
 router.get("/profile", async (req, res) => {
   const db = await getDb();
