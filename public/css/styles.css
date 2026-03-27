@@ -2231,9 +2231,9 @@
 
     /* ===== Splash page mobile fixes ===== */
     @media (max-width: 768px) {
-      /* Nav: tighter padding, smaller gap, safe area aware */
+      /* Nav: tighter padding, smaller gap */
       .splash-nav-bar {
-        padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px 12px !important;
+        padding: 10px 12px !important;
       }
       .splash-nav-actions {
         gap: 4px !important;
@@ -2520,7 +2520,7 @@
     /* env(safe-area-inset-*) resolves to 0px in normal browsers,
        so these rules are safe to apply unconditionally. */
     .splash-nav-bar {
-      padding: calc(env(safe-area-inset-top, 0px) + 14px) 32px 14px 32px !important;
+      padding: 14px 32px !important;
     }
 
     .main-content {
