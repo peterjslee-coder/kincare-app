@@ -386,7 +386,7 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
       WHERE cs.family_user_id = ?
         AND cs.review_required = 1
         AND cs.review_completed = 0
-        AND cs.status IN ('completed', 'cancelled')
+        AND (cs.status = 'completed' OR (cs.status = 'cancelled' AND cs.caregiver_no_show = 1))
       ORDER BY cs.scheduled_date DESC
     `).all(req.user.id);
 
@@ -408,7 +408,7 @@ router.get("/can-book/:caregiverId", requireRole("family"), async (req, res) => 
         AND caregiver_id = ?
         AND review_required = 1
         AND review_completed = 0
-        AND status IN ('completed', 'cancelled')
+        AND (status = 'completed' OR (status = 'cancelled' AND caregiver_no_show = 1))
       LIMIT 1
     `).get(req.user.id, req.params.caregiverId);
 

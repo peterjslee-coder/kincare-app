@@ -912,6 +912,9 @@ async function initializeDatabase() {
 
     // v1.51.15 — Kindred access flag
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS companion_access INTEGER DEFAULT 0`,
+
+    // v1.51.42 — Fix: clear review_required on cancelled sessions that aren't no-shows
+    `UPDATE care_sessions SET review_required = 0 WHERE status = 'cancelled' AND (caregiver_no_show IS NULL OR caregiver_no_show = 0) AND review_required = 1`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
