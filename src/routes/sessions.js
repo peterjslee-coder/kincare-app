@@ -315,7 +315,7 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   const db = await getDb();
-  const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked, stripe_onboard_complete, care_stoplight, care_preferences, account_paused FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked, stripe_onboard_complete, is_available, care_stoplight, care_preferences, account_paused FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
   // Gate: account must not be paused
@@ -323,15 +323,15 @@ router.put("/:id/claim", async (req, res) => {
     return res.status(403).json({ error: "Your account is paused. Contact support for assistance." });
   }
 
-  // Gate: must have passed background check (not just paid)
-  if (!profile.is_background_checked) {
+  // Gate: must have passed background check OR admin set is_available (not just paid)
+  if (!profile.is_background_checked && !profile.is_available) {
     return res.status(403).json({ error: "You must complete your background check before accepting care requests." });
   }
 
-  // Gate: must have Stripe connected for payouts
-  if (!profile.stripe_onboard_complete) {
-    return res.status(403).json({ error: "You must set up payment (Stripe) before accepting care requests. Go to Account → Payments." });
-  }
+  // Gate: Stripe — skipped for now (not live yet). Admin is_available override also bypasses.
+  // if (!profile.stripe_onboard_complete && !profile.is_available) {
+  //   return res.status(403).json({ error: "You must set up payment (Stripe) before accepting care requests. Go to Account → Payments." });
+  // }
 
   // Gate: must have set care preferences (stoplight)
   if (!profile.care_stoplight && !profile.care_preferences) {

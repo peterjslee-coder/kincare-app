@@ -612,7 +612,8 @@ async function caregiverDashboard(db, userId, res) {
       isBackgroundChecked: !!profile.is_background_checked,
       checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
       stripeConnected: !!profile.stripe_onboard_complete,
-      caregiverCleared: !!profile.is_background_checked && !!profile.stripe_onboard_complete,
+      // Stripe not yet live — cleared if BG check passed OR admin set is_available override
+      caregiverCleared: !!profile.is_background_checked || !!profile.is_available,
       bgCheckRejectionReason: profile.bg_check_rejection_reason || null,
       legalFirstName: profile.legal_first_name,
       legalMiddleName: profile.legal_middle_name || '',
