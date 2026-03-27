@@ -138,11 +138,7 @@
 - [ ] **Overnight booking minimum notice.** When care extends past midnight, notify user that "most caregivers require a six-hour minimum overnight booking." Business rule enforcement. *(Feedback #23 — Son Tester, Mar 5)*
 - [x] **"Other" care type with free text.** ✅ Done v1.51.41 — Added "Other" pill to care type selector in RequestCareModal. When selected, shows text input for custom description. Stored as `other:Custom text` in service_type. `formatServiceType()` updated to parse and display the custom text. *(Feedback #24 — Son Tester, Mar 5)*
 - [x] **Multi-mood selection on check-in/check-out.** ✅ Already implemented — mood picker uses array state with toggle (multi-select). Both check-in and check-out moods stored as JSON arrays. *(Feedback #26 — Son Tester, Mar 5)*
-- [ ] **Tip + gratitude feature in family rating flow.** After a completed session, families can leave a tip with a written reason (e.g., "Sara was so patient with Mom today"). The AI scrapes gratitude reasons across all tips and nudges families to repeat appreciated behaviors in future sessions ("Last time you mentioned Sara's patience meant a lot — want to say thanks again?").
-  - **UI:** Add "Say Thanks" section inside the existing post-session rating modal. Optional tip amount (preset $5/$10/$20/custom) + free-text "reason" field. Tip is separate from session payment.
-  - **Schema:** New `tips` table: id, session_id, family_user_id, caregiver_id, amount_cents, reason_text, created_at. Add `gratitude_keywords` JSON column to caregiver_profiles (AI-extracted themes from tip reasons).
-  - **AI nudge:** On next booking with the same caregiver, iPAi surfaces past gratitude themes: "You've thanked Sara for patience and meal prep before — want to leave a note?" Stored in gratitude_keywords, refreshed by background AI job.
-  - **Caregiver side:** Tips appear in CaretakerHub earnings breakdown. Gratitude reasons shown (anonymized if family prefers) as morale feedback.
+- [x] **Tip + gratitude feature in family rating flow.** ✅ Done v1.51.49 — "Say Thanks" tip section in post-session review modal. Appears when rating 4+ stars. Preset $5/$10/$20/custom amounts + reason text. Backend: tips table, POST/GET endpoints, gratitude_keywords accumulated on caregiver_profiles. Caregiver side: "Tips & Thanks" collapsible section on CaretakerHub dashboard showing all tips with amounts and gratitude messages. AI nudge (future): surface past gratitude themes on next booking with same caregiver.
   - *(Pete — Mar 26, 2026)*
 - [ ] **Review gate before new booking.** If a family has an outstanding review to leave (completed session with no rating), block the new appointment flow UPFRONT — show the review prompt when they tap "Request Care," not after they've filled everything out. "You have an unreviewed session from [date] with [caregiver]. Please leave your review before booking again."
   - **Check:** On opening RequestCareModal, query for completed sessions where family hasn't left a rating. If any exist, show review gate overlay instead of the booking form.
@@ -302,7 +298,7 @@
   - **Depends on:** Native app shell (see App Store Release section), S3/R2 object storage, consent flow infrastructure.
   - **Privacy safeguards:** No human listens unless safety incident filed. Admin review is passkey-gated and audit-logged. Auto-deletion enforced server-side. Caregiver and family both notified if recording is accessed. Cannot be used for performance review — safety incidents only.
   - *(Pete — Mar 22, 2026)*
-- [ ] **Capacitor native wrapper — Android + iOS from single PWA.** Wrap the existing InPlace PWA in a Capacitor shell to produce installable native apps for both platforms. The web codebase stays exactly as-is — Capacitor adds a thin native bridge on top.
+- [ ] **Capacitor native wrapper — Android + iOS from single PWA.** *(IN PROGRESS — v1.51.50)* Capacitor 8.3.0 installed, iOS + Android projects scaffolded, 4 plugins synced (push-notifications, splash-screen, status-bar, app). Config points at yourinplace.com. **Next:** Pete needs to finish Xcode setup (iOS 26.4 simulator downloading), set signing team, and do first build. Then TestFlight for testers. Wrap the existing InPlace PWA in a Capacitor shell to produce installable native apps for both platforms. The web codebase stays exactly as-is — Capacitor adds a thin native bridge on top.
   - **Why Capacitor over TWA/React Native:** TWA is Android-only and gives no native API access. React Native would require a full rewrite. Capacitor wraps the existing PWA with zero code changes and adds native capabilities incrementally. Same web code, two native outputs.
   - **What it unlocks:**
     - Reliable iOS push notifications (fixes the P1 iOS push bug permanently — APNs via native bridge instead of flaky Web Push)
@@ -342,7 +338,9 @@
     6. `npx cap sync` — copies web assets into native projects
     7. Open in Android Studio / Xcode → Build → Run on device
     8. Add push notification plugin, configure FCM (Android) and APNs (iOS)
-  - **No rush — DUNS not available yet.** PWA continues to be the primary app. Capacitor is the bridge to app stores when ready.
+  - **DUNS not available yet** — personal Apple Developer account works for TestFlight testing. DUNS only needed for organizational App Store account later.
+  - **Pete's Mac setup (done Mar 27):** Homebrew installed, Node.js installed via brew, repo cloned, `npm install` + `npx cap sync` run. Xcode installed from App Store, iOS 26.4 Simulator downloading. Project opens in Xcode, signing team set (PETER JOHN, SHERWOOD LEE Personal Team), bundle ID `com.yourinplace.app`.
+  - **Next step:** Finish iOS simulator download → hit Play in Xcode → InPlace runs in simulator. Then plug in iPhone for real device testing. Then Product → Archive → TestFlight for distributing to testers.
   - *(Pete — Mar 26, 2026)*
 
 ## iPAi Kindred — Feature Track
