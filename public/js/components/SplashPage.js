@@ -4,8 +4,9 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
   const [showStory, setShowStory] = React.useState(false);
   const [storyScroll, setStoryScroll] = React.useState(0);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isNativeApp = window.Capacitor?.isNativePlatform?.() || false;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-  const showInstallBtn = !isStandalone;
+  const showInstallBtn = !isStandalone && !isNativeApp;
 
   const switchTab = (tab) => setActiveTab(tab);
 

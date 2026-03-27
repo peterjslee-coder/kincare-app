@@ -2630,8 +2630,11 @@ router.get("/caregivers/paused", authenticate, checkAdmin, requireAdmin, async (
         cr_ns.first_name AS no_show_recipient_name
       FROM caregiver_profiles cp
       JOIN users u ON cp.user_id = u.id
-      LEFT JOIN care_sessions ns ON ns.caregiver_id = cp.id AND ns.caregiver_no_show = 1
-        AND ns.cancelled_by = 'system'
+      LEFT JOIN care_sessions ns ON ns.id = (
+        SELECT cs2.id FROM care_sessions cs2
+        WHERE cs2.caregiver_id = cp.id AND cs2.caregiver_no_show = 1 AND cs2.cancelled_by = 'system'
+        ORDER BY cs2.scheduled_date DESC LIMIT 1
+      )
       LEFT JOIN care_recipients cr_ns ON ns.care_recipient_id = cr_ns.id
       WHERE cp.account_paused = 1
       ORDER BY cp.account_paused_at DESC
