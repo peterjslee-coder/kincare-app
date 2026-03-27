@@ -5,6 +5,35 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
   const [cancelling, setCancelling] = useState(false);
   const [showPhotos, setShowPhotos] = useState(true);
   const [lightboxIdx, setLightboxIdx] = useState(null);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+
+  const handlePhotoUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !sessionId) return;
+    setUploadingPhotos(true);
+    try {
+      const formData = new FormData();
+      files.slice(0, 5).forEach(f => formData.append('photos', f));
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
+      const headers = {};
+      if (csrf) headers['X-CSRF-Token'] = csrf;
+      const res = await fetch(`${window.API_BASE || ''}/api/photos/session/${sessionId}`, {
+        method: 'POST', credentials: 'same-origin', headers, body: formData,
+      });
+      if (res.ok) {
+        // Refresh session data to show new photos
+        const refreshRes = await apiFetch(`/api/sessions/${sessionId}`);
+        if (refreshRes?.ok) setData(await refreshRes.json());
+        if (typeof showToast === 'function') showToast('Photos uploaded!', 'success');
+      } else {
+        if (typeof showToast === 'function') showToast('Photo upload failed', 'error');
+      }
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Photo upload failed', 'error');
+    }
+    setUploadingPhotos(false);
+    e.target.value = '';
+  };
 
   useEffect(() => {
     if (!sessionId) return;
@@ -246,6 +275,21 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                 </div>
               )}
 
+              {/* Upload photos prompt when none exist */}
+              {photos.length === 0 && ['completed', 'in_progress'].includes(s.status) && (
+                <div style={{ border: '1px dashed #ccc', borderRadius: 10, padding: 16, marginBottom: 14, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>{'\uD83D\uDCF7'}</div>
+                  <div style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>No visit photos yet</div>
+                  <label style={{
+                    display: 'inline-block', padding: '8px 16px', background: '#f0f7f5', color: '#1b6b5a',
+                    border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    {uploadingPhotos ? 'Uploading...' : 'Upload Photos'}
+                    <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} style={{ display: 'none' }} disabled={uploadingPhotos} />
+                  </label>
+                </div>
+              )}
+
               {/* No visit log for non-completed sessions */}
               {!v && s.status !== 'completed' && s.status !== 'in_progress' && (
                 <div style={{ background: '#f8f9fa', padding: 14, borderRadius: 10, marginBottom: 14, fontSize: 13, color: '#888', textAlign: 'center' }}>
@@ -258,12 +302,18 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                 <div style={{ border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#1b6b5a' }}>{'\uD83D\uDCF7'} Visit Photos ({photos.length})</div>
-                    {photos.length > 6 && (
-                      <button type="button" onClick={() => setShowPhotos(!showPhotos)}
-                        style={{ background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                        {showPhotos ? 'Show less' : `Show all ${photos.length}`}
-                      </button>
-                    )}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <label style={{ background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span>+ Add</span>
+                        <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} style={{ display: 'none' }} disabled={uploadingPhotos} />
+                      </label>
+                      {photos.length > 6 && (
+                        <button type="button" onClick={() => setShowPhotos(!showPhotos)}
+                          style={{ background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                          {showPhotos ? 'Show less' : `Show all ${photos.length}`}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
                     {(showPhotos ? photos : photos.slice(0, 6)).map((p, i) => (

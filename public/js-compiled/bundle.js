@@ -49,10 +49,14 @@ const SERVICE_TYPE_LABELS = {
   health_wellness: 'Health & Wellness',
   full_day: 'Full Day',
   overnight: 'Overnight',
-  respite: 'Respite Care'
+  respite: 'Respite Care',
+  housekeeping: 'Housekeeping'
 };
 const formatServiceType = window.formatServiceType = type => {
   if (!type) return '';
+  // Handle "other:Custom text" format
+  if (type.startsWith('other:')) return type.slice(6).trim() || 'Other';
+  if (type === 'other') return 'Other';
   return SERVICE_TYPE_LABELS[type] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 };
 let AUTH_TOKEN = null;
@@ -18076,14 +18080,24 @@ const ConsentVerification = window.ConsentVerification = ({
       placeholder: "Your full legal name",
       style: {
         width: '100%',
-        padding: '10px 12px',
+        padding: '12px 14px',
         borderRadius: '8px',
-        border: '1px solid #ddd',
-        fontSize: '14px',
-        fontStyle: 'italic',
-        boxSizing: 'border-box'
+        border: '1px solid #bbb',
+        fontSize: '20px',
+        fontFamily: "'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive",
+        letterSpacing: '0.5px',
+        color: '#1a1a2e',
+        boxSizing: 'border-box',
+        background: '#fefefe'
       }
-    })), /*#__PURE__*/React.createElement("div", {
+    }), signatureName.trim() && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: '#888',
+        marginTop: 4,
+        textAlign: 'right'
+      }
+    }, "Electronic signature")), /*#__PURE__*/React.createElement("div", {
       style: {
         background: '#f0f7ff',
         border: '1px solid #bbdefb',
@@ -18104,7 +18118,7 @@ const ConsentVerification = window.ConsentVerification = ({
         color: '#666',
         margin: '0 0 12px 0'
       }
-    }, "We'll send ", firstName, " an email explaining that you've arranged care for them through InPlace. They'll have a chance to confirm, ask questions, or flag any concerns. An email address is required to send this notification."), /*#__PURE__*/React.createElement("div", {
+    }, "This information will be used to contact ", firstName, " directly and verify their consent to receiving care visits arranged through InPlace. They'll have a chance to confirm, ask questions, or flag any concerns. An email address is required to send the verification notification."), /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: '12px'
       }
@@ -18149,7 +18163,7 @@ const ConsentVerification = window.ConsentVerification = ({
         fontWeight: 400,
         color: '#999'
       }
-    }, "(optional \u2014 for emergency contact only)")), /*#__PURE__*/React.createElement("button", {
+    }, "(optional \u2014 for consent verification & emergency contact)")), /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: () => {
         setIntlPhone(!intlPhone);
@@ -21809,6 +21823,64 @@ const Messages = window.Messages = () => {
     localStorage.setItem('msg_archived', JSON.stringify(updated));
     showToast('Conversation restored', 'success');
   };
+
+  // Delete a conversation (permanent, server-side)
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, convId }
+
+  const handleDelete = async convId => {
+    setDeleting(true);
+    try {
+      const res = await apiFetch(`/api/messages/conversations/${convId}`, {
+        method: 'DELETE'
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        setConversations(prev => prev.filter(c => c.id !== convId));
+        const updatedArchived = archivedIds.filter(id => id !== convId);
+        setArchivedIds(updatedArchived);
+        localStorage.setItem('msg_archived', JSON.stringify(updatedArchived));
+        if (activeConvId === convId) {
+          setActiveConvId(null);
+          setMessages([]);
+        }
+        showToast('Conversation deleted', 'success');
+      } else {
+        showToast('Failed to delete conversation', 'error');
+      }
+    } catch {
+      showToast('Failed to delete conversation', 'error');
+    }
+    setDeleting(false);
+    setDeleteConfirmId(null);
+  };
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    setDeleting(true);
+    let deleted = 0;
+    for (const id of selectedIds) {
+      try {
+        const res = await apiFetch(`/api/messages/conversations/${id}`, {
+          method: 'DELETE'
+        });
+        if (res !== null && res !== void 0 && res.ok) deleted++;
+      } catch {}
+    }
+    if (deleted > 0) {
+      setConversations(prev => prev.filter(c => !selectedIds.includes(c.id)));
+      const updatedArchived = archivedIds.filter(id => !selectedIds.includes(id));
+      setArchivedIds(updatedArchived);
+      localStorage.setItem('msg_archived', JSON.stringify(updatedArchived));
+      if (selectedIds.includes(activeConvId)) {
+        setActiveConvId(null);
+        setMessages([]);
+      }
+      showToast(`${deleted} conversation${deleted > 1 ? 's' : ''} deleted`, 'success');
+    }
+    setSelectedIds([]);
+    setSelectMode(false);
+    setDeleting(false);
+  };
   const [showArchived, setShowArchived] = useState(false);
   const toggleSelectId = id => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -23112,6 +23184,20 @@ const Messages = window.Messages = () => {
       whiteSpace: 'nowrap'
     }
   }, "Archive", selectedIds.length > 0 ? ` (${selectedIds.length})` : ''), /*#__PURE__*/React.createElement("button", {
+    onClick: () => selectedIds.length > 0 && setDeleteConfirmId('__bulk__'),
+    disabled: selectedIds.length === 0,
+    style: {
+      background: selectedIds.length > 0 ? '#dc2626' : '#ccc',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      padding: '6px 14px',
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed',
+      whiteSpace: 'nowrap'
+    }
+  }, "Delete", selectedIds.length > 0 ? ` (${selectedIds.length})` : ''), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setSelectMode(false);
       setSelectedIds([]);
@@ -23371,19 +23457,61 @@ const Messages = window.Messages = () => {
         right: 0,
         bottom: 0,
         width: 120,
+        display: 'flex',
+        alignItems: 'stretch',
+        opacity: isSwiping && swipeOffset < -30 ? 1 : 0,
+        transition: 'opacity 0.15s'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: e => {
+        e.stopPropagation();
+        handleArchive(c.id);
+        setSwipingId(null);
+        setSwipeOffset(0);
+      },
+      style: {
+        flex: 1,
         background: '#e65100',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         color: '#fff',
         fontWeight: 600,
-        fontSize: 13,
-        opacity: isSwiping && swipeOffset < -30 ? 1 : 0,
-        transition: 'opacity 0.15s'
+        fontSize: 12,
+        cursor: 'pointer'
       }
     }, "Archive"), /*#__PURE__*/React.createElement("div", {
+      onClick: e => {
+        e.stopPropagation();
+        setDeleteConfirmId(c.id);
+        setSwipingId(null);
+        setSwipeOffset(0);
+      },
+      style: {
+        flex: 1,
+        background: '#dc2626',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Delete")), /*#__PURE__*/React.createElement("div", {
       className: `msg-conv-item ${activeConvId === c.id ? 'active' : ''}`,
-      onClick: () => selectMode ? toggleSelectId(c.id) : handleSelectConversation(c),
+      onClick: () => {
+        setContextMenu(null);
+        selectMode ? toggleSelectId(c.id) : handleSelectConversation(c);
+      },
+      onContextMenu: e => {
+        e.preventDefault();
+        setContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          convId: c.id
+        });
+      },
       onTouchStart: e => !selectMode && onConvTouchStart(e, c.id),
       onTouchMove: e => !selectMode && onConvTouchMove(e, c.id),
       onTouchEnd: () => !selectMode && onConvTouchEnd(c.id),
@@ -23786,9 +23914,156 @@ const Messages = window.Messages = () => {
           whiteSpace: 'nowrap',
           flexShrink: 0
         }
-      }, "Restore"));
+      }, "Restore"), /*#__PURE__*/React.createElement("button", {
+        onClick: () => setDeleteConfirmId(c.id),
+        style: {
+          background: '#fff',
+          color: '#dc2626',
+          border: '1px solid #dc2626',
+          borderRadius: 6,
+          padding: '4px 10px',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          flexShrink: 0
+        }
+      }, "Delete"));
     }));
-  })()));
+  })()), contextMenu && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 9999
+    },
+    onClick: () => setContextMenu(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      position: 'fixed',
+      left: contextMenu.x,
+      top: contextMenu.y,
+      background: '#fff',
+      borderRadius: 10,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+      padding: '4px 0',
+      minWidth: 160,
+      zIndex: 10000
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: () => {
+      handleArchive(contextMenu.convId);
+      setContextMenu(null);
+    },
+    style: {
+      padding: '10px 16px',
+      fontSize: 14,
+      color: '#333',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    },
+    onMouseEnter: e => e.currentTarget.style.background = '#f5f5f5',
+    onMouseLeave: e => e.currentTarget.style.background = 'transparent'
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16
+    }
+  }, "\uD83D\uDCE6"), " Archive"), /*#__PURE__*/React.createElement("div", {
+    onClick: () => {
+      setDeleteConfirmId(contextMenu.convId);
+      setContextMenu(null);
+    },
+    style: {
+      padding: '10px 16px',
+      fontSize: 14,
+      color: '#dc2626',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    },
+    onMouseEnter: e => e.currentTarget.style.background = '#fef2f2',
+    onMouseLeave: e => e.currentTarget.style.background = 'transparent'
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16
+    }
+  }, "\uD83D\uDDD1"), " Delete"))), deleteConfirmId && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.4)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 10000
+    },
+    onClick: () => setDeleteConfirmId(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      background: '#fff',
+      borderRadius: 16,
+      padding: '24px',
+      width: '90%',
+      maxWidth: 340,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 16,
+      color: '#333',
+      marginBottom: 8
+    }
+  }, "Delete Conversation?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: '#666',
+      marginBottom: 20,
+      lineHeight: 1.4
+    }
+  }, deleteConfirmId === '__bulk__' ? `This will permanently delete ${selectedIds.length} conversation${selectedIds.length > 1 ? 's' : ''} and all messages. This can't be undone.` : 'This will permanently delete this conversation and all messages. This can\'t be undone.'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10,
+      justifyContent: 'flex-end'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setDeleteConfirmId(null),
+    style: {
+      background: '#f3f4f6',
+      color: '#555',
+      border: 'none',
+      borderRadius: 8,
+      padding: '8px 18px',
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    disabled: deleting,
+    onClick: () => deleteConfirmId === '__bulk__' ? handleDeleteSelected() : handleDelete(deleteConfirmId),
+    style: {
+      background: '#dc2626',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      padding: '8px 18px',
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: deleting ? 'not-allowed' : 'pointer',
+      opacity: deleting ? 0.6 : 1
+    }
+  }, deleting ? 'Deleting...' : 'Delete')))));
 
   // ─── Chat View ───
   const renderChatView = () => {
@@ -24652,6 +24927,7 @@ const RequestCareModal = window.RequestCareModal = ({
   var _displayCost$tierBrea, _displayCost$surcharg;
   const [step, setStep] = useState(1);
   const [serviceType, setServiceType] = useState('');
+  const [otherCareText, setOtherCareText] = useState('');
   const [date, setDate] = useState(() => {
     if (window.__requestCareDate) {
       const d = window.__requestCareDate;
@@ -24946,7 +25222,7 @@ const RequestCareModal = window.RequestCareModal = ({
     }
     const body = {
       careRecipientId: recipientId,
-      serviceType,
+      serviceType: resolvedServiceType,
       scheduledDate: date,
       scheduledTime: time,
       durationHours: parseInt(duration),
@@ -24976,7 +25252,7 @@ const RequestCareModal = window.RequestCareModal = ({
           details.push(selectedCaregiver ? `${selectedCaregiver.name} assigned` : 'Best available caregiver will be assigned');
         }
         details.push(`${date} at ${formatTime12(time)}`);
-        details.push(`${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
+        details.push(`${duration} hour(s) of ${formatServiceType(resolvedServiceType)}`);
         if (proposedRate) details.push(`Offered rate: $${proposedRate}/hr`);
         if (recurrence !== 'none') details.push(`${recurrence}, ${recurrenceWeeks} sessions`);
         setConfirmationData({
@@ -25083,7 +25359,13 @@ const RequestCareModal = window.RequestCareModal = ({
   }, {
     value: 'transportation',
     label: 'Transport'
+  }, {
+    value: 'other',
+    label: 'Other'
   }];
+
+  // Resolve actual service type for submission (handles "other:text" format)
+  const resolvedServiceType = serviceType === 'other' && otherCareText.trim() ? `other:${otherCareText.trim()}` : serviceType;
   const durationOptions = [{
     value: '1',
     label: '1h'
@@ -25123,7 +25405,7 @@ const RequestCareModal = window.RequestCareModal = ({
       }
     }, "Loading...")));
   }
-  const step1Complete = serviceType && date && time && duration && (careRecipients.length <= 1 || selectedRecipientId);
+  const step1Complete = serviceType && (serviceType !== 'other' || otherCareText.trim()) && date && time && duration && (careRecipients.length <= 1 || selectedRecipientId);
 
   // ── Confirmation overlay with paper airplane animation ──
   if (confirmationData) {
@@ -25340,7 +25622,21 @@ const RequestCareModal = window.RequestCareModal = ({
     type: "button",
     onClick: () => setServiceType(opt.value),
     style: pill(serviceType === opt.value)
-  }, opt.label)))), /*#__PURE__*/React.createElement("div", {
+  }, opt.label))), serviceType === 'other' && /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: otherCareText,
+    onChange: e => setOtherCareText(e.target.value),
+    placeholder: "Describe the type of care needed...",
+    style: {
+      width: '100%',
+      padding: '10px 12px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 14,
+      marginTop: 8,
+      boxSizing: 'border-box'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16
     }
@@ -25688,7 +25984,7 @@ const RequestCareModal = window.RequestCareModal = ({
       gap: '4px 16px',
       color: '#333'
     }
-  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("strong", null, serviceType.replace('_', ' '))), /*#__PURE__*/React.createElement("span", null, (() => {
+  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("strong", null, formatServiceType(resolvedServiceType))), /*#__PURE__*/React.createElement("span", null, (() => {
     const p = date.split('-').map(Number);
     return new Date(p[0], p[1] - 1, p[2]).toLocaleDateString('en-US', {
       weekday: 'short',
@@ -26209,7 +26505,7 @@ const RequestCareModal = window.RequestCareModal = ({
       textAlign: 'center',
       marginTop: 6
     }
-  }, !serviceType ? 'Select a care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration')), step === 2 && /*#__PURE__*/React.createElement("button", {
+  }, !serviceType ? 'Select a care type' : serviceType === 'other' && !otherCareText.trim() ? 'Describe the care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration')), step === 2 && /*#__PURE__*/React.createElement("button", {
     className: "btn btn-primary",
     onClick: handleSubmit
   }, selectedCaregiver ? selectedCaregiver.available ? 'Confirm Booking' : 'Send Offer' : 'Post Care Request'))));
@@ -26227,6 +26523,37 @@ const VisitDetailModal = window.VisitDetailModal = ({
   const [cancelling, setCancelling] = useState(false);
   const [showPhotos, setShowPhotos] = useState(true);
   const [lightboxIdx, setLightboxIdx] = useState(null);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const handlePhotoUpload = async e => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !sessionId) return;
+    setUploadingPhotos(true);
+    try {
+      const formData = new FormData();
+      files.slice(0, 5).forEach(f => formData.append('photos', f));
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : window.getCsrfToken ? window.getCsrfToken() : null;
+      const headers = {};
+      if (csrf) headers['X-CSRF-Token'] = csrf;
+      const res = await fetch(`${window.API_BASE || ''}/api/photos/session/${sessionId}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers,
+        body: formData
+      });
+      if (res.ok) {
+        // Refresh session data to show new photos
+        const refreshRes = await apiFetch(`/api/sessions/${sessionId}`);
+        if (refreshRes !== null && refreshRes !== void 0 && refreshRes.ok) setData(await refreshRes.json());
+        if (typeof showToast === 'function') showToast('Photos uploaded!', 'success');
+      } else {
+        if (typeof showToast === 'function') showToast('Photo upload failed', 'error');
+      }
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Photo upload failed', 'error');
+    }
+    setUploadingPhotos(false);
+    e.target.value = '';
+  };
   useEffect(() => {
     if (!sessionId) return;
     const fetchDetail = async () => {
@@ -26662,7 +26989,47 @@ const VisitDetailModal = window.VisitDetailModal = ({
         color: '#888',
         marginTop: 6
       }
-    }, "\uD83D\uDCCD Check-in location recorded (", parseFloat(v.check_in_latitude).toFixed(4), ", ", parseFloat(v.check_in_longitude).toFixed(4), ")")), !v && s.status !== 'completed' && s.status !== 'in_progress' && /*#__PURE__*/React.createElement("div", {
+    }, "\uD83D\uDCCD Check-in location recorded (", parseFloat(v.check_in_latitude).toFixed(4), ", ", parseFloat(v.check_in_longitude).toFixed(4), ")")), photos.length === 0 && ['completed', 'in_progress'].includes(s.status) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        border: '1px dashed #ccc',
+        borderRadius: 10,
+        padding: 16,
+        marginBottom: 14,
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 24,
+        marginBottom: 6
+      }
+    }, '\uD83D\uDCF7'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#888',
+        marginBottom: 10
+      }
+    }, "No visit photos yet"), /*#__PURE__*/React.createElement("label", {
+      style: {
+        display: 'inline-block',
+        padding: '8px 16px',
+        background: '#f0f7f5',
+        color: '#1b6b5a',
+        border: '1px solid #1b6b5a',
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, uploadingPhotos ? 'Uploading...' : 'Upload Photos', /*#__PURE__*/React.createElement("input", {
+      type: "file",
+      accept: "image/*",
+      multiple: true,
+      onChange: handlePhotoUpload,
+      style: {
+        display: 'none'
+      },
+      disabled: uploadingPhotos
+    }))), !v && s.status !== 'completed' && s.status !== 'in_progress' && /*#__PURE__*/React.createElement("div", {
       style: {
         background: '#f8f9fa',
         padding: 14,
@@ -26692,7 +27059,34 @@ const VisitDetailModal = window.VisitDetailModal = ({
         fontWeight: 600,
         color: '#1b6b5a'
       }
-    }, '\uD83D\uDCF7', " Visit Photos (", photos.length, ")"), photos.length > 6 && /*#__PURE__*/React.createElement("button", {
+    }, '\uD83D\uDCF7', " Visit Photos (", photos.length, ")"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("label", {
+      style: {
+        background: 'none',
+        border: 'none',
+        color: '#1b6b5a',
+        cursor: 'pointer',
+        fontSize: 12,
+        fontWeight: 600,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "+ Add"), /*#__PURE__*/React.createElement("input", {
+      type: "file",
+      accept: "image/*",
+      multiple: true,
+      onChange: handlePhotoUpload,
+      style: {
+        display: 'none'
+      },
+      disabled: uploadingPhotos
+    })), photos.length > 6 && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: () => setShowPhotos(!showPhotos),
       style: {
@@ -26703,7 +27097,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
         fontSize: 12,
         fontWeight: 600
       }
-    }, showPhotos ? 'Show less' : `Show all ${photos.length}`)), /*#__PURE__*/React.createElement("div", {
+    }, showPhotos ? 'Show less' : `Show all ${photos.length}`))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
@@ -53689,6 +54083,9 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
     }, 15000); // Every 15 seconds
     return () => clearInterval(interval);
   }, [expandedFlag]);
+  const [typeFilter, setTypeFilter] = useState('all'); // 'all', 'safety', 'circumvention'
+  const [statusFilter, setStatusFilter] = useState('active'); // 'active', 'all', 'resolved', 'dismissed'
+
   if (safetyLoading) {
     return React.createElement('div', {
       style: {
@@ -53708,7 +54105,65 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
       }
     }, 'No safety flags. All conversations are monitored for abuse, exploitation, and off-platform circumvention.');
   }
-  return React.createElement('div', null, safetyFlags.map(f => {
+  const filteredFlags = safetyFlags.filter(f => {
+    // Type filter
+    const isCircumvention = f.flag_type === 'circumvention_signal';
+    if (typeFilter === 'circumvention' && !isCircumvention) return false;
+    if (typeFilter === 'safety' && isCircumvention) return false;
+    // Status filter
+    if (statusFilter === 'active' && f.status !== 'pending' && f.status !== 'escalated') return false;
+    if (statusFilter === 'resolved' && f.status !== 'resolved') return false;
+    if (statusFilter === 'dismissed' && f.status !== 'dismissed') return false;
+    return true;
+  });
+  const circumventionCount = safetyFlags.filter(f => f.flag_type === 'circumvention_signal' && (f.status === 'pending' || f.status === 'escalated')).length;
+  const safetyCount = safetyFlags.filter(f => f.flag_type !== 'circumvention_signal' && (f.status === 'pending' || f.status === 'escalated')).length;
+  const filterBtn = (label, value, filterType, count) => React.createElement('button', {
+    onClick: () => filterType === 'type' ? setTypeFilter(value) : setStatusFilter(value),
+    style: {
+      padding: '5px 12px',
+      borderRadius: 6,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer',
+      border: 'none',
+      background: (filterType === 'type' ? typeFilter : statusFilter) === value ? '#1b6b5a' : '#f3f4f6',
+      color: (filterType === 'type' ? typeFilter : statusFilter) === value ? '#fff' : '#555'
+    }
+  }, label + (count !== undefined ? ` (${count})` : ''));
+  return React.createElement('div', null,
+  // Filter bar
+  React.createElement('div', {
+    style: {
+      display: 'flex',
+      gap: 6,
+      marginBottom: 12,
+      flexWrap: 'wrap',
+      alignItems: 'center'
+    }
+  }, React.createElement('span', {
+    style: {
+      fontSize: 12,
+      color: '#888',
+      fontWeight: 600,
+      marginRight: 4
+    }
+  }, 'Type:'), filterBtn('All', 'all', 'type'), filterBtn('\u{1F6A8} Safety', 'safety', 'type', safetyCount), filterBtn('\u26A0\uFE0F Off-Platform', 'circumvention', 'type', circumventionCount), React.createElement('span', {
+    style: {
+      fontSize: 12,
+      color: '#888',
+      fontWeight: 600,
+      marginLeft: 12,
+      marginRight: 4
+    }
+  }, 'Status:'), filterBtn('Active', 'active', 'status'), filterBtn('Resolved', 'resolved', 'status'), filterBtn('Dismissed', 'dismissed', 'status'), filterBtn('All', 'all', 'status')), filteredFlags.length === 0 ? React.createElement('div', {
+    style: {
+      textAlign: 'center',
+      padding: 30,
+      color: '#999',
+      fontSize: 13
+    }
+  }, 'No flags match this filter.') : null, filteredFlags.map(f => {
     var _f$flag_type, _f$flag_type2, _f$flag_type3, _f$flag_type4, _f$flag_type5;
     const isAbuse = ((_f$flag_type = f.flag_type) === null || _f$flag_type === void 0 ? void 0 : _f$flag_type.includes('abuse')) || ((_f$flag_type2 = f.flag_type) === null || _f$flag_type2 === void 0 ? void 0 : _f$flag_type2.includes('neglect')) || ((_f$flag_type3 = f.flag_type) === null || _f$flag_type3 === void 0 ? void 0 : _f$flag_type3.includes('threat')) || ((_f$flag_type4 = f.flag_type) === null || _f$flag_type4 === void 0 ? void 0 : _f$flag_type4.includes('exploitation'));
     const isPending = f.status === 'pending';

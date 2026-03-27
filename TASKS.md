@@ -29,7 +29,7 @@
 - [ ] **DL/cert photo upload not enforced in onboarding.** Caregiver onboarding doesn't require driver's license or certification photos. Should at least ask for DL front/back. Allow skip with acknowledgment (same gate pattern as bg check), but no jobs until uploaded. *(Feedback — Feb 23, #5)*
 - [ ] **Caregiver onboarding does not ask about pets/allergies/medical conditions.** Carry Taiker's onboarding flow completed without collecting any pet, food allergy, or medical condition info. The "Onboarding profile questions — all roles" feature (in Features below) covers the full design, but at minimum the caregiver signup wizard should collect this before completing registration.
 - [x] **Push notification icon is white square on Android.** ✅ Fixed v1.51.11 — Changed notification icons from badge-monochrome-96.png to icon-192.png (icon) and icon-maskable-96.png (badge) in both sw.js and push.js. *(Feedback — reviewed)*
-- [ ] **Visit photo upload not accessible from CaretakerHub during sessions.** Caregiver can't find how to upload photos during or after a visit. Photo upload infrastructure exists (multer routes, visit_photos table) but there's no visible UI in CaretakerHub or check-out flow for caregivers to attach photos. Need: photo upload button in the check-out modal and/or on session detail cards. *(Feedback — Cary Taker, Mar 1)* **P1**
+- [x] **Visit photo upload not accessible from CaretakerHub during sessions.** ✅ Fixed v1.51.41 — Added `POST /api/photos/session/:sessionId` endpoint that auto-creates visit_log if needed. Added photo upload button to VisitDetailModal for both completed and in-progress sessions. Both family members and caregivers can now upload photos from the session summary view. *(Feedback — Cary Taker, Mar 1)* **P1**
 - [x] **No push notification to check out.** ✅ Fixed v1.51.11 — Added `overdue_check_out` reminder type that fires 15 minutes after scheduled session end time. Sends push + SMS to caregiver ("Don't Forget to Check Out") and push to family. Poller in server.js queries in_progress sessions past their scheduled end. *(Feedback — Cary Taker, Mar 1)* **P1**
 - [ ] **Overlapping caregiver map pins.** When caregivers are at similar locations (Cary and Pete), pins overlap so you can't tell there are two. Need clustered pins with "2 Caregivers" label that expands on tap. *(Feedback #14 — Son Tester, Mar 5)* **P2**
 - [ ] **Overdue session — no popup to call caretaker.** If a session runs 15+ minutes past end time, show a popup giving the family option to call the caregiver directly. Safety feature. *(Feedback #20 — Son Tester, Mar 5)* **P1**
@@ -95,12 +95,46 @@
 - [ ] **Verify Son's identity BEFORE verifying authority.** Identity verification (Stripe Identity) should happen first — prove who you are, then prove your relationship/authority. When Son sets up Stripe payment, bundle the ID check in one step. "This way he knows WE KNOW who he is when we reach out to someone else." *(Feedback #2 — Son Tester, Mar 5 v1.38.0)*
 - [ ] **Admin verification workflow — "call and verify" list.** Admin needs a clear list of who's been verified and who hasn't. Push notification to admin (Pete) with a "Call" button to verify users by phone. Don't make admin dig through spreadsheets. Make it easy to see who's good to go and who's not. *(Feedback #4 — Son Tester, Mar 5 v1.38.0)*
 - [ ] **Multiple awareness verification options for care recipient.** Don't assume email works for everyone. Offer branching options: email verification, video chat, phone call, in-person. "Maybe mom won't read email. Maybe the son wants to do a video chat." Flesh out later but build the option framework now. *(Feedback #5 — Son Tester, Mar 5 v1.38.0)*
+- [ ] **AI Consent Call — Twilio verbal consent capture for Tier 3.** When a family member completes Tier 3 attestation and provides the care recipient's phone number, offer an automated phone call as an alternative to the email outreach link. The care recipient receives a brief call, hears a consent script, and their verbal response is recorded as proof of consent. Eliminates the need for elderly care recipients to use email or an app.
+  - **Flow (Option B — SMS opt-in first):**
+    1. Family completes Tier 3 attestation (existing flow — signature, relationship, recipient phone/email).
+    2. System sends SMS to care recipient: "Hi [name], your [relationship] [family_name] has registered you for care coordination on InPlace. Reply YES if you'd like to receive a brief verification call, or reply STOP to opt out."
+    3. If recipient replies YES → Twilio makes outbound call. If no reply after 24h → fall back to existing email outreach. If STOP → mark `consent_status = 'rejected'`, notify family.
+    4. AI call script (TwiML `<Say>` + `<Record>`):
+       - "Hello, this is an automated call from InPlace, a care coordination service. This call is being recorded for your protection."
+       - "Your [relationship], [family_name], has arranged for companion caregivers to visit you through InPlace. We need to confirm you're aware of this arrangement."
+       - "Do you consent to receiving care coordination visits arranged through InPlace? Please say yes or no after the tone."
+       - `<Record maxLength="30" playBeep="true" transcribe="true" />`
+    5. Recording URL + Twilio transcription stored in `consent_outreach` record.
+    6. Admin reviews recording in Admin Panel (play button + transcript) → approve/reject.
+    7. If approved → `consent_status = 'verified'`, `consent_method = 'phone_call'`.
+  - **Legal compliance:**
+    - SMS opt-in satisfies TCPA prior express consent requirement for the AI call.
+    - Call opens with AI/recording disclosure (FCC AI voice rule, Feb 2024).
+    - Virginia is one-party consent for recording, but we disclose anyway for full coverage.
+    - All SMS/call records retained in `consent_audit_log` for compliance trail.
+    - Rate limit: max 2 call attempts per care recipient (no harassment).
+  - **Twilio implementation:**
+    - **SMS:** Twilio Programmable Messaging. Buy a local number (~$1.15/mo + $0.0079/SMS). Webhook on incoming SMS to `POST /api/consent/sms-webhook`.
+    - **Voice:** Twilio Programmable Voice. Outbound call via REST API → TwiML script. `POST /api/consent/:recipientId/call` (authenticated, admin or attestor). Cost: ~$0.014/min + recording storage free (first 10K min/mo).
+    - **Webhook security:** Validate `X-Twilio-Signature` header on all inbound webhooks.
+    - **Recording storage:** Twilio hosts recordings (30-day default retention). On consent approval, download and store in our DB/R2 for permanent record. On rejection, auto-delete after 90 days.
+  - **Schema changes:**
+    - `consent_outreach`: Add columns `outreach_method TEXT` ('email'|'sms_then_call'|'call'), `sms_sent_at TIMESTAMPTZ`, `sms_response TEXT`, `sms_response_at TIMESTAMPTZ`, `call_sid TEXT`, `call_recording_url TEXT`, `call_transcription TEXT`, `call_status TEXT` ('pending'|'completed'|'no_answer'|'failed'), `call_attempted_at TIMESTAMPTZ`.
+    - `consent_audit_log`: New event types — `sms_opt_in_sent`, `sms_opt_in_received`, `call_initiated`, `call_completed`, `call_recording_reviewed`.
+  - **Frontend changes:**
+    - `ConsentVerification.js`: After attestation, show outreach method picker — "Email link (current)" or "Phone call (recommended for elderly recipients)." Phone option shows the SMS → call flow with status updates.
+    - `AdminPanel`: Consent review section gets audio player widget for call recordings + Twilio transcription text. Approve/reject buttons same as current flow.
+  - **Environment variables:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` (add to Railway).
+  - **Depends on:** Twilio account setup (free trial has $15 credit — enough for ~100 test calls). No dependency on Stripe or ElevenLabs.
+  - **Cost at scale:** ~$1.15/mo for phone number + ~$0.05 per consent flow (1 SMS + 1-min call). Negligible.
+  - *(Pete — Mar 26, 2026)*
 - [ ] **Inline identity verification on attestation page.** When user clicks "I attest," expand into Stripe Identity verification right there — all on one page. Show legal attestation language placeholder: "I attest, under penalty of law and liability." More than just "we'll verify" — start the verification NOW, on this screen. *(Feedback #6, #9 — Son Tester, Mar 5 v1.38.0)*
-- [ ] **Care recipient contact form — add verification purpose reminder.** Put a reminder on the phone/email fields: "This info will be used to contact your loved one and verify consent to visits." *(Feedback #11 — Son Tester, Mar 5 v1.38.0)*
-- [ ] **Cursive signature font for consent/attestation forms.** Add a cursive script font option for digital signatures — classy touch, feels more personal than typed name. *(Feedback #11 — Son Tester, Mar 5)*
+- [x] **Care recipient contact form — add verification purpose reminder.** ✅ Done v1.51.41 — Updated contact section copy to explicitly state info is used for consent verification. Phone label updated from "emergency contact only" to "consent verification & emergency contact." *(Feedback #11 — Son Tester, Mar 5 v1.38.0)*
+- [x] **Cursive signature font for consent/attestation forms.** ✅ Done v1.51.41 — Signature input now uses cursive font stack (Brush Script MT, Segoe Script, Apple Chancery, cursive) at 20px with "Electronic signature" label. *(Feedback #11 — Son Tester, Mar 5)*
 - [ ] **Overnight booking minimum notice.** When care extends past midnight, notify user that "most caregivers require a six-hour minimum overnight booking." Business rule enforcement. *(Feedback #23 — Son Tester, Mar 5)*
-- [ ] **"Other" care type with free text.** Add "Other: ____" option to care type selection, allowing users to specify custom service. Track popular custom entries to promote to first-class options over time. *(Feedback #24 — Son Tester, Mar 5)*
-- [ ] **Multi-mood selection on check-in/check-out.** Caretaker should be able to select more than one mood at check-in (e.g., "surprised" AND "upset"). Change from single-select to multi-select. *(Feedback #26 — Son Tester, Mar 5)*
+- [x] **"Other" care type with free text.** ✅ Done v1.51.41 — Added "Other" pill to care type selector in RequestCareModal. When selected, shows text input for custom description. Stored as `other:Custom text` in service_type. `formatServiceType()` updated to parse and display the custom text. *(Feedback #24 — Son Tester, Mar 5)*
+- [x] **Multi-mood selection on check-in/check-out.** ✅ Already implemented — mood picker uses array state with toggle (multi-select). Both check-in and check-out moods stored as JSON arrays. *(Feedback #26 — Son Tester, Mar 5)*
 - [ ] **Session check-in/check-out system.** Full clock-in/clock-out protocol for care sessions with structured feedback collection.
   - **Check-in (caregiver arrives):**
     - Manual "I'm Here" button on confirmed sessions (v1: manual tap, future: auto-trigger via geofencing when near care location — requires persistent Geolocation API permission, battery-intensive on iOS, so this is a later add-on).

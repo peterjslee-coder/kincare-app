@@ -331,7 +331,10 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Type your full name as signature</label>
           <input type="text" value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
             placeholder="Your full legal name"
-            style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', fontStyle: 'italic', boxSizing: 'border-box' }} />
+            style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '1px solid #bbb', fontSize: '20px', fontFamily: "'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive", letterSpacing: '0.5px', color: '#1a1a2e', boxSizing: 'border-box', background: '#fefefe' }} />
+          {signatureName.trim() && (
+            <div style={{ fontSize: 11, color: '#888', marginTop: 4, textAlign: 'right' }}>Electronic signature</div>
+          )}
         </div>
 
         {/* Care recipient contact info */}
@@ -340,8 +343,8 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
             📧 How we'll reach {firstName}
           </div>
           <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px 0' }}>
-            We'll send {firstName} an email explaining that you've arranged care for them through InPlace.
-            They'll have a chance to confirm, ask questions, or flag any concerns. An email address is required to send this notification.
+            This information will be used to contact {firstName} directly and verify their consent to receiving care visits arranged through InPlace.
+            They'll have a chance to confirm, ask questions, or flag any concerns. An email address is required to send the verification notification.
           </p>
 
           <div style={{ marginBottom: '12px' }}>
@@ -355,7 +358,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
 
           <div>
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
-              <span>{firstName}'s phone number <span style={{ fontWeight: 400, color: '#999' }}>(optional — for emergency contact only)</span></span>
+              <span>{firstName}'s phone number <span style={{ fontWeight: 400, color: '#999' }}>(optional — for consent verification & emergency contact)</span></span>
               <button type="button" onClick={() => { setIntlPhone(!intlPhone); setRecipientPhone(''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                 {intlPhone ? 'US number' : 'International'}
               </button>

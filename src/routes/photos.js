@@ -127,6 +127,72 @@ router.get("/visit/:visitLogId", async (req, res) => {
   res.json({ photos });
 });
 
+// ─── POST /api/photos/session/:sessionId ───
+// Upload photos for a session (auto-creates visit_log if needed)
+// Allows both caregivers and family members to upload photos
+router.post(
+  "/session/:sessionId",
+  upload.array("photos", 5),
+  async (req, res) => {
+    const db = await getDb();
+    const { sessionId } = req.params;
+    const captions = req.body.captions ? JSON.parse(req.body.captions) : [];
+
+    // Verify user is involved in this session
+    const session = await db.prepare(
+      "SELECT cs.*, cp.id AS caregiver_profile_id FROM care_sessions cs LEFT JOIN caregiver_profiles cp ON cp.user_id = ? WHERE cs.id = ?"
+    ).get(req.user.id, sessionId);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    const isFamily = session.family_user_id === req.user.id;
+    const isCaregiver = session.caregiver_profile_id && session.caregiver_id === session.caregiver_profile_id;
+    const isAdmin = req.user.isAdmin || req.user.is_admin;
+    if (!isFamily && !isCaregiver && !isAdmin) {
+      return res.status(403).json({ error: "Not authorized to upload photos for this session" });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: "No photos provided" });
+    }
+
+    // Find or create visit_log for this session
+    let visitLog = await db.prepare("SELECT * FROM visit_logs WHERE session_id = ?").get(sessionId);
+    if (!visitLog) {
+      const vlId = uuid();
+      await db.prepare(
+        "INSERT INTO visit_logs (id, session_id, caregiver_id, notes) VALUES (?, ?, ?, ?)"
+      ).run(vlId, sessionId, session.caregiver_id || null, 'Photo upload');
+      visitLog = { id: vlId };
+    }
+
+    const photos = [];
+    for (let i = 0; i < req.files.length; i++) {
+      const file = req.files[i];
+      const magicCheck = validateMagicBytes(file.buffer, file.mimetype);
+      if (!magicCheck.valid) {
+        return res.status(400).json({ error: `Photo ${i + 1}: file content doesn't match its claimed type` });
+      }
+      const base64 = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+      const id = uuid();
+      await db.prepare(
+        "INSERT INTO visit_photos (id, visit_log_id, photo_url, caption) VALUES (?, ?, ?, ?)"
+      ).run(id, visitLog.id, base64, captions[i] || null);
+      photos.push({ id, visitLogId: visitLog.id, photoUrl: base64, caption: captions[i] || null });
+    }
+
+    // Real-time notify the other party
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      const notifyUserId = isFamily ? null : session.family_user_id;
+      if (notifyUserId) {
+        emitToUser(notifyUserId, "visit_photos", { sessionId, photoCount: photos.length });
+      }
+    }
+
+    res.status(201).json({ photos, count: photos.length, visitLogId: visitLog.id });
+  }
+);
+
 // ─── GET /api/photos/session/:sessionId ───
 // Get all photos for a care session (only if user is involved)
 router.get("/session/:sessionId", async (req, res) => {

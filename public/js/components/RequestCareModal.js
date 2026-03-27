@@ -1,6 +1,7 @@
 const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [step, setStep] = useState(1);
   const [serviceType, setServiceType] = useState('');
+  const [otherCareText, setOtherCareText] = useState('');
   const [date, setDate] = useState(() => {
     if (window.__requestCareDate) {
       const d = window.__requestCareDate;
@@ -240,7 +241,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     const recipientId = selectedRecipientId || (careRecipients.length > 0 ? careRecipients[0].id : '');
     if (!recipientId) { setSubmitError('No care recipient found. Please add a care recipient first.'); return; }
     const body = {
-      careRecipientId: recipientId, serviceType, scheduledDate: date, scheduledTime: time,
+      careRecipientId: recipientId, serviceType: resolvedServiceType, scheduledDate: date, scheduledTime: time,
       durationHours: parseInt(duration), specialInstructions: instructions || undefined,
       status: isOpenRequest ? 'open' : undefined,
       recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
@@ -261,7 +262,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           details.push(selectedCaregiver ? `${selectedCaregiver.name} assigned` : 'Best available caregiver will be assigned');
         }
         details.push(`${date} at ${formatTime12(time)}`);
-        details.push(`${duration} hour(s) of ${serviceType.replace('_', ' ')}`);
+        details.push(`${duration} hour(s) of ${formatServiceType(resolvedServiceType)}`);
         if (proposedRate) details.push(`Offered rate: $${proposedRate}/hr`);
         if (recurrence !== 'none') details.push(`${recurrence}, ${recurrenceWeeks} sessions`);
         setConfirmationData({
@@ -339,7 +340,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     { value: 'housekeeping', label: 'Housekeeping' },
     { value: 'meal_prep', label: 'Meal Prep' },
     { value: 'transportation', label: 'Transport' },
+    { value: 'other', label: 'Other' },
   ];
+
+  // Resolve actual service type for submission (handles "other:text" format)
+  const resolvedServiceType = serviceType === 'other' && otherCareText.trim()
+    ? `other:${otherCareText.trim()}` : serviceType;
 
   const durationOptions = [
     { value: '1', label: '1h' }, { value: '2', label: '2h' }, { value: '3', label: '3h' },
@@ -357,7 +363,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     );
   }
 
-  const step1Complete = serviceType && date && time && duration && (careRecipients.length <= 1 || selectedRecipientId);
+  const step1Complete = serviceType && (serviceType !== 'other' || otherCareText.trim()) && date && time && duration && (careRecipients.length <= 1 || selectedRecipientId);
 
   // ── Confirmation overlay with paper airplane animation ──
   if (confirmationData) {
@@ -475,6 +481,11 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                   </button>
                 ))}
               </div>
+              {serviceType === 'other' && (
+                <input type="text" value={otherCareText} onChange={(e) => setOtherCareText(e.target.value)}
+                  placeholder="Describe the type of care needed..."
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, marginTop: 8, boxSizing: 'border-box' }} />
+              )}
             </div>
 
             {/* Date display — pre-selected from Schedule calendar */}
@@ -619,7 +630,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             {/* Compact booking summary at top */}
             <div style={{ background: '#f0f7f5', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', color: '#333' }}>
-                <span><strong>{serviceType.replace('_', ' ')}</strong></span>
+                <span><strong>{formatServiceType(resolvedServiceType)}</strong></span>
                 <span>{(() => { const p = date.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); })()}</span>
                 <span>{formatTime12(time)}</span>
                 <span>{duration}h</span>
@@ -825,7 +836,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               </button>
               {!step1Complete && (serviceType || date || time || duration) && (
                 <div style={{ fontSize: 11, color: '#999', textAlign: 'center', marginTop: 6 }}>
-                  {!serviceType ? 'Select a care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration'}
+                  {!serviceType ? 'Select a care type' : (serviceType === 'other' && !otherCareText.trim()) ? 'Describe the care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration'}
                 </div>
               )}
             </div>

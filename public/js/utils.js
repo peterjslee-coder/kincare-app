@@ -37,9 +37,13 @@ const SERVICE_TYPE_LABELS = {
   transportation: 'Transportation', rides: 'Rides', meals: 'Meals',
   health_wellness: 'Health & Wellness', full_day: 'Full Day',
   overnight: 'Overnight', respite: 'Respite Care',
+  housekeeping: 'Housekeeping',
 };
 const formatServiceType = window.formatServiceType = (type) => {
   if (!type) return '';
+  // Handle "other:Custom text" format
+  if (type.startsWith('other:')) return type.slice(6).trim() || 'Other';
+  if (type === 'other') return 'Other';
   return SERVICE_TYPE_LABELS[type] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 };
 
