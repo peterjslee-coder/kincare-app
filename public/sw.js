@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.50.40
-const CACHE_NAME = 'inplace-v1.51.74';
-const SW_VERSION = '1.51.74';
+const CACHE_NAME = 'inplace-v1.51.75';
+const SW_VERSION = '1.51.75';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -57,6 +57,11 @@ self.addEventListener('activate', (event) => {
 // Fetch strategy
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+
+  // Map tiles: let browser handle natively (no SW interception)
+  if (url.hostname.includes('tile.openstreetmap.org')) {
+    return; // Don't call event.respondWith — browser fetches directly
+  }
 
   // API calls: always network
   if (url.pathname.startsWith('/api/')) {

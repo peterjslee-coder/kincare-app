@@ -171,7 +171,7 @@ app.use(helmet({
       ],
       styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
-      connectSrc: ["'self'", "https://plausible.io", "https://api.stripe.com", "wss:", "ws:"],
+      connectSrc: ["'self'", "https://plausible.io", "https://api.stripe.com", "https://*.tile.openstreetmap.org", "wss:", "ws:"],
       frameSrc: ["https://js.stripe.com", "https://connect-js.stripe.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       mediaSrc: ["'self'", "blob:"],
@@ -302,7 +302,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.51.74";
+const APP_VERSION = "1.51.75";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
