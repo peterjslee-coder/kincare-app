@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "com.yourinplace.app",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_SHA256_FROM_PLAY_CONSOLE"
+        "86:9C:A1:8C:2A:15:1D:A7:E2:F8:62:42:4B:35:3E:D9:64:F8:CE:BF:15:27:73:B7:13:BE:3B:51:05:B7:1F:B1",
+        "40:9A:6A:A0:72:0F:B9:60:09:DA:0E:2F:89:07:5A:C7:74:14:60:9A:91:74:7C:A9:01:DC:69:FB:86:4A:0B:22"
       ]
     }
   }
