@@ -2111,8 +2111,14 @@
 
       /* Main content padding for bottom nav */
       .main-content {
-        padding: 16px 16px 80px;
+        padding: 16px 12px 80px;
         width: 100%;
+        box-sizing: border-box;
+        overflow-x: hidden;
+      }
+
+      .card {
+        padding: 16px;
       }
 
       /* Mobile top header bar */

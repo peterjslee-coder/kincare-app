@@ -854,7 +854,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   };
 
   return (
-    <div>
+    <div style={{ maxWidth: '100%', overflowX: 'hidden', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
         <h1 className="greeting" style={{ margin: 0 }}>My Account</h1>
         {activeTab === 'profile' && !editing && (
@@ -1334,16 +1334,18 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 {pwError && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
                 {passkeySupported && (
                   showPasskeyNameInput ? (
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       <input type="text" value={passkeyName} onChange={(e) => setPasskeyName(e.target.value)}
                         placeholder="Name this passkey (e.g., MacBook Pro)" maxLength={50}
-                        style={{ flex: 1, padding: '8px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} autoFocus />
-                      <button onClick={handleRegisterPasskey} disabled={registeringPasskey}
-                        style={{ padding: '8px 20px', background: registeringPasskey ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        {registeringPasskey ? 'Registering...' : 'Continue'}
-                      </button>
-                      <button onClick={() => { setShowPasskeyNameInput(false); setPwError(null); }}
-                        style={{ padding: '8px 12px', background: '#f0f0f0', color: '#666', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+                        style={{ flex: '1 1 200px', minWidth: 0, padding: '8px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} autoFocus />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={handleRegisterPasskey} disabled={registeringPasskey}
+                          style={{ padding: '8px 20px', background: registeringPasskey ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          {registeringPasskey ? 'Registering...' : 'Continue'}
+                        </button>
+                        <button onClick={() => { setShowPasskeyNameInput(false); setPwError(null); }}
+                          style={{ padding: '8px 12px', background: '#f0f0f0', color: '#666', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+                      </div>
                     </div>
                   ) : (
                     <button onClick={() => setShowPasskeyNameInput(true)}
