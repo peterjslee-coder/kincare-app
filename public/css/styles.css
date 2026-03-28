@@ -50,10 +50,15 @@
       --badge-muted-bg: #262636;
       --badge-muted-text: #a0a0b0;
     }
+    /* ─── Comprehensive Dark Mode Overrides ───
+       Uses !important to override inline styles on React components.
+       Targets any element with hardcoded light colors. */
+
+    /* Cards and containers */
     [data-theme="dark"] .card {
       background: var(--bg-card) !important;
-      border: 1px solid var(--border-color);
-      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border-color) !important;
+      box-shadow: var(--shadow-card) !important;
     }
     [data-theme="dark"] .card-header {
       color: var(--role-color) !important;
@@ -61,6 +66,24 @@
     [data-theme="dark"] .greeting {
       color: var(--text-primary) !important;
     }
+
+    /* All divs — override common inline backgrounds */
+    [data-theme="dark"] div[style*="background: rgb(255, 255, 255)"],
+    [data-theme="dark"] div[style*="background: #fff"],
+    [data-theme="dark"] div[style*="background-color: rgb(255, 255, 255)"],
+    [data-theme="dark"] div[style*="background:#fff"] {
+      background: var(--bg-card) !important;
+    }
+    [data-theme="dark"] div[style*="background: rgb(248, 249, 250)"],
+    [data-theme="dark"] div[style*="background: #f8f9fa"],
+    [data-theme="dark"] div[style*="background-color: rgb(248, 249, 250)"],
+    [data-theme="dark"] div[style*="background:#f8f9fa"],
+    [data-theme="dark"] div[style*="background: rgb(240, 240, 240)"],
+    [data-theme="dark"] div[style*="background: #f0f0f0"] {
+      background: var(--bg-elevated) !important;
+    }
+
+    /* Form elements */
     [data-theme="dark"] input,
     [data-theme="dark"] select,
     [data-theme="dark"] textarea {
@@ -68,6 +91,80 @@
       border-color: var(--input-border) !important;
       color: var(--text-primary) !important;
     }
+    [data-theme="dark"] input::placeholder,
+    [data-theme="dark"] textarea::placeholder {
+      color: var(--text-muted) !important;
+    }
+
+    /* Buttons — outline/secondary styles */
+    [data-theme="dark"] button[style*="background: rgb(255, 255, 255)"],
+    [data-theme="dark"] button[style*="background: #fff"],
+    [data-theme="dark"] button[style*="background:#fff"] {
+      background: var(--bg-elevated) !important;
+      color: var(--text-primary) !important;
+    }
+    [data-theme="dark"] button[style*="background: rgb(240, 240, 240)"],
+    [data-theme="dark"] button[style*="background: #f0f0f0"],
+    [data-theme="dark"] button[style*="background: rgb(245, 245, 245)"],
+    [data-theme="dark"] button[style*="background: #f5f5f5"] {
+      background: var(--bg-elevated) !important;
+      color: var(--text-secondary) !important;
+    }
+
+    /* Text color overrides — dark text on dark bg */
+    [data-theme="dark"] div[style*="color: rgb(51, 51, 51)"],
+    [data-theme="dark"] div[style*="color: #333"],
+    [data-theme="dark"] span[style*="color: rgb(51, 51, 51)"],
+    [data-theme="dark"] span[style*="color: #333"],
+    [data-theme="dark"] p[style*="color: rgb(51, 51, 51)"],
+    [data-theme="dark"] p[style*="color: #333"],
+    [data-theme="dark"] h1[style*="color: rgb(51, 51, 51)"],
+    [data-theme="dark"] h1[style*="color: #333"],
+    [data-theme="dark"] h2[style*="color: rgb(51, 51, 51)"],
+    [data-theme="dark"] h2[style*="color: #333"],
+    [data-theme="dark"] h3[style*="color: rgb(51, 51, 51)"],
+    [data-theme="dark"] h3[style*="color: #333"] {
+      color: var(--text-primary) !important;
+    }
+    [data-theme="dark"] div[style*="color: rgb(102, 102, 102)"],
+    [data-theme="dark"] div[style*="color: #666"],
+    [data-theme="dark"] span[style*="color: #666"],
+    [data-theme="dark"] p[style*="color: #666"],
+    [data-theme="dark"] p[style*="color: rgb(102, 102, 102)"] {
+      color: var(--text-secondary) !important;
+    }
+    [data-theme="dark"] div[style*="color: rgb(136, 136, 136)"],
+    [data-theme="dark"] div[style*="color: #888"],
+    [data-theme="dark"] span[style*="color: #888"],
+    [data-theme="dark"] div[style*="color: rgb(153, 153, 153)"],
+    [data-theme="dark"] div[style*="color: #999"],
+    [data-theme="dark"] span[style*="color: #999"],
+    [data-theme="dark"] div[style*="color: rgb(170, 170, 187)"],
+    [data-theme="dark"] span[style*="color: #aab"],
+    [data-theme="dark"] div[style*="color: rgb(187, 187, 187)"],
+    [data-theme="dark"] span[style*="color: #bbb"],
+    [data-theme="dark"] div[style*="color: #bbb"] {
+      color: var(--text-muted) !important;
+    }
+
+    /* Border overrides */
+    [data-theme="dark"] div[style*="border-bottom: 1px solid rgb(224, 224, 224)"],
+    [data-theme="dark"] div[style*="border-bottom: 1px solid #e0e0e0"],
+    [data-theme="dark"] div[style*="border: 1px solid rgb(224, 224, 224)"],
+    [data-theme="dark"] div[style*="border: 1px solid #e0e0e0"],
+    [data-theme="dark"] div[style*="border-bottom: 1px solid rgb(229, 231, 235)"],
+    [data-theme="dark"] div[style*="border-bottom: 1px solid #e5e7eb"],
+    [data-theme="dark"] div[style*="border-top: 2px solid rgb(229, 231, 235)"],
+    [data-theme="dark"] div[style*="border-top: 2px solid #e5e7eb"] {
+      border-color: var(--border-color) !important;
+    }
+
+    /* Tab bar borders */
+    [data-theme="dark"] button[style*="border-bottom: 3px solid transparent"] {
+      color: var(--text-muted) !important;
+    }
+
+    /* Bottom nav */
     [data-theme="dark"] .bottom-nav {
       background: var(--nav-bg) !important;
       border-top-color: var(--border-color) !important;
@@ -78,6 +175,55 @@
     }
     [data-theme="dark"] .bottom-nav .nav-item.active {
       color: var(--role-color) !important;
+    }
+
+    /* Sidebar / navigation */
+    [data-theme="dark"] .sidebar {
+      background: var(--bg-surface) !important;
+      border-color: var(--border-color) !important;
+    }
+    [data-theme="dark"] .sidebar .nav-item {
+      color: var(--text-secondary) !important;
+    }
+
+    /* Main content area */
+    [data-theme="dark"] .main-content {
+      background: var(--bg-primary) !important;
+    }
+
+    /* Toggle switches */
+    [data-theme="dark"] .toggle-slider {
+      background: var(--toggle-track) !important;
+    }
+
+    /* Info/status banners with light backgrounds */
+    [data-theme="dark"] div[style*="background: rgb(224, 242, 233)"],
+    [data-theme="dark"] div[style*="background: #e0f2e9"] {
+      background: #1e3a32 !important;
+    }
+    [data-theme="dark"] div[style*="background: rgb(234, 240, 247)"],
+    [data-theme="dark"] div[style*="background: #eaf0f7"] {
+      background: #1a2438 !important;
+    }
+    [data-theme="dark"] div[style*="background: rgb(240, 250, 248)"],
+    [data-theme="dark"] div[style*="background: #f0faf8"] {
+      background: #1a2e28 !important;
+    }
+
+    /* Session items and list rows */
+    [data-theme="dark"] div[style*="border-bottom: 1px solid rgb(240, 240, 240)"],
+    [data-theme="dark"] div[style*="border-bottom: 1px solid #f0f0f0"],
+    [data-theme="dark"] div[style*="border-bottom: 1px solid rgb(238, 238, 238)"],
+    [data-theme="dark"] div[style*="border-bottom: 1px solid #eee"] {
+      border-color: var(--border-color) !important;
+    }
+
+    /* Scrollbar styling */
+    [data-theme="dark"] ::-webkit-scrollbar-track {
+      background: var(--bg-primary);
+    }
+    [data-theme="dark"] ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
     }
 
     * {

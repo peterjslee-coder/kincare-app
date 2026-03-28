@@ -29175,9 +29175,9 @@ const MyAccount = window.MyAccount = ({
   useEffect(() => {
     fetchUser();
     fetch2FAStatus();
+    fetchPasskeys(); // Always fetch — show existing passkeys even if WebAuthn unavailable
     if (window.PublicKeyCredential) {
       setPasskeySupported(true);
-      fetchPasskeys();
     }
   }, []);
   useEffect(() => {
@@ -30698,7 +30698,7 @@ const MyAccount = window.MyAccount = ({
       fontSize: 14,
       cursor: 'pointer'
     }
-  }, "Enable Two-Factor Authentication"))), passkeySupported && /*#__PURE__*/React.createElement("div", {
+  }, "Enable Two-Factor Authentication"))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
@@ -30708,7 +30708,16 @@ const MyAccount = window.MyAccount = ({
       fontSize: 14,
       margin: '0 0 16px'
     }
-  }, "Sign in with Face ID, Touch ID, Windows Hello, or a security key. Passkeys are more secure than passwords and skip 2FA."), loadingPasskeys ? /*#__PURE__*/React.createElement(LoadingSpinner, {
+  }, "Sign in with Face ID, Touch ID, Windows Hello, or a security key. Passkeys are more secure than passwords and skip 2FA."), !passkeySupported && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#fff3cd',
+      color: '#856404',
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 16,
+      fontSize: 13
+    }
+  }, "Passkey management isn't available in this app. To add or remove passkeys, open ", /*#__PURE__*/React.createElement("strong", null, "yourinplace.com"), " in your phone's browser (Safari or Chrome)."), loadingPasskeys ? /*#__PURE__*/React.createElement(LoadingSpinner, {
     text: "Loading passkeys..."
   }) : /*#__PURE__*/React.createElement("div", null, passkeys.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -30774,7 +30783,7 @@ const MyAccount = window.MyAccount = ({
       fontSize: 12,
       color: '#888'
     }
-  }, "Added ", (parseTimestamp(pk.createdAt) || new Date(0)).toLocaleDateString(), pk.lastUsed ? ' · Last used ' + (parseTimestamp(pk.lastUsed) || new Date(0)).toLocaleDateString() : ''))), /*#__PURE__*/React.createElement("button", {
+  }, "Added ", (parseTimestamp(pk.createdAt) || new Date(0)).toLocaleDateString(), pk.lastUsed ? ' · Last used ' + (parseTimestamp(pk.lastUsed) || new Date(0)).toLocaleDateString() : ''))), passkeySupported && /*#__PURE__*/React.createElement("button", {
     onClick: () => handleDeletePasskey(pk.id),
     style: {
       padding: '6px 14px',
@@ -30797,7 +30806,7 @@ const MyAccount = window.MyAccount = ({
       marginBottom: 12,
       fontSize: 13
     }
-  }, pwError), showPasskeyNameInput ? /*#__PURE__*/React.createElement("div", {
+  }, pwError), passkeySupported && (showPasskeyNameInput ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
@@ -30857,7 +30866,7 @@ const MyAccount = window.MyAccount = ({
       fontSize: 14,
       cursor: 'pointer'
     }
-  }, "Add a Passkey"))), /*#__PURE__*/React.createElement("div", {
+  }, "Add a Passkey")))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
@@ -55788,6 +55797,8 @@ const AdminPanel = window.AdminPanel = ({
   const [flagPasskeyConfirm, setFlagPasskeyConfirm] = useState(null); // { flagId, status }
   const [flagPasskeyLoading, setFlagPasskeyLoading] = useState(false);
   const [flagPasskeyError, setFlagPasskeyError] = useState(null);
+  const [flagPasswordInput, setFlagPasswordInput] = useState('');
+  const _hasWebAuthn = !!(window.PublicKeyCredential && window.SimpleWebAuthnBrowser);
   const handleReviewFlag = async (flagId, status) => {
     // Escalate does NOT require passkey — it's raising priority, not closing
     if (status === 'escalated') {
@@ -55809,7 +55820,7 @@ const AdminPanel = window.AdminPanel = ({
       return;
     }
 
-    // Resolve / Dismiss require passkey verification
+    // Resolve / Dismiss require verification
     // First click — show confirm state
     if (!flagPasskeyConfirm || flagPasskeyConfirm.flagId !== flagId || flagPasskeyConfirm.status !== status) {
       setFlagPasskeyConfirm({
@@ -55817,51 +55828,72 @@ const AdminPanel = window.AdminPanel = ({
         status
       });
       setFlagPasskeyError(null);
+      setFlagPasswordInput('');
       return;
     }
-
-    // Second click — trigger passkey
     setFlagPasskeyLoading(true);
     setFlagPasskeyError(null);
     try {
-      const SimpleWebAuthnBrowser = window.SimpleWebAuthnBrowser;
-      if (!SimpleWebAuthnBrowser) throw new Error('Passkey library not loaded. Refresh the page.');
-
-      // 1. Get challenge
-      const challengeRes = await apiFetch(`/api/admin/safety-flags/${flagId}/challenge`, {
-        method: 'POST'
-      });
-      if (!(challengeRes !== null && challengeRes !== void 0 && challengeRes.ok)) {
-        const err = await challengeRes.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to start passkey challenge');
-      }
-      const options = await challengeRes.json();
-      const challengeKey = options._challengeKey;
-
-      // 2. Trigger biometric/passkey prompt
-      const authResp = await SimpleWebAuthnBrowser.startAuthentication({
-        optionsJSON: options
-      });
-
-      // 3. Send verified response
-      const verifyRes = await apiFetch(`/api/admin/safety-flags/${flagId}/verified`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          ...authResp,
-          _challengeKey: challengeKey,
-          status,
-          admin_notes: safetyReviewNotes
-        })
-      });
-      if (verifyRes !== null && verifyRes !== void 0 && verifyRes.ok) {
-        showToast(`Flag ${status}`, 'success');
-        setSafetyReviewNotes('');
-        setFlagPasskeyConfirm(null);
-        loadSafetyFlags();
-        loadAlerts();
+      if (_hasWebAuthn) {
+        // Passkey path
+        const challengeRes = await apiFetch(`/api/admin/safety-flags/${flagId}/challenge`, {
+          method: 'POST'
+        });
+        if (!(challengeRes !== null && challengeRes !== void 0 && challengeRes.ok)) {
+          const err = await challengeRes.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to start passkey challenge');
+        }
+        const options = await challengeRes.json();
+        const challengeKey = options._challengeKey;
+        const authResp = await window.SimpleWebAuthnBrowser.startAuthentication({
+          optionsJSON: options
+        });
+        const verifyRes = await apiFetch(`/api/admin/safety-flags/${flagId}/verified`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            ...authResp,
+            _challengeKey: challengeKey,
+            status,
+            admin_notes: safetyReviewNotes
+          })
+        });
+        if (verifyRes !== null && verifyRes !== void 0 && verifyRes.ok) {
+          showToast(`Flag ${status}`, 'success');
+          setSafetyReviewNotes('');
+          setFlagPasskeyConfirm(null);
+          loadSafetyFlags();
+          loadAlerts();
+        } else {
+          const data = await verifyRes.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to update flag');
+        }
       } else {
-        const data = await verifyRes.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to update flag');
+        // Password fallback
+        if (!flagPasswordInput) {
+          setFlagPasskeyError('Enter your password to confirm.');
+          setFlagPasskeyLoading(false);
+          return;
+        }
+        const res = await apiFetch(`/api/admin/safety-flags/${flagId}/verified`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            _passwordAuth: true,
+            password: flagPasswordInput,
+            status,
+            admin_notes: safetyReviewNotes
+          })
+        });
+        if (res !== null && res !== void 0 && res.ok) {
+          showToast(`Flag ${status}`, 'success');
+          setSafetyReviewNotes('');
+          setFlagPasskeyConfirm(null);
+          setFlagPasswordInput('');
+          loadSafetyFlags();
+          loadAlerts();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to update flag');
+        }
       }
     } catch (err) {
       if (err.name === 'NotAllowedError') {
@@ -55869,7 +55901,7 @@ const AdminPanel = window.AdminPanel = ({
       } else {
         setFlagPasskeyError(err.message || 'Failed');
       }
-      console.error('Safety flag passkey error:', err);
+      console.error('Safety flag error:', err);
     }
     setFlagPasskeyLoading(false);
   };

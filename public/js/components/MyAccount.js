@@ -425,9 +425,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   useEffect(() => {
     fetchUser();
     fetch2FAStatus();
+    fetchPasskeys(); // Always fetch — show existing passkeys even if WebAuthn unavailable
     if (window.PublicKeyCredential) {
       setPasskeySupported(true);
-      fetchPasskeys();
     }
   }, []);
 
@@ -1286,45 +1286,52 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             )}
           </div>
 
-          {/* Passkeys / Biometric Login */}
-          {passkeySupported && (
-            <div className="card">
-              <div className="card-header">Passkeys</div>
-              <p style={{ color: '#666', fontSize: 14, margin: '0 0 16px' }}>
-                Sign in with Face ID, Touch ID, Windows Hello, or a security key. Passkeys are more secure than passwords and skip 2FA.
-              </p>
-              {loadingPasskeys ? (
-                <LoadingSpinner text="Loading passkeys..." />
-              ) : (
-                <div>
-                  {passkeys.length > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                      {passkeys.map((pk, i) => (
-                        <div key={pk.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderBottom: i < passkeys.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0f2e9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1b6b5a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
-                              </svg>
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontWeight: 600, fontSize: 14 }}>{pk.name}</div>
-                              <div style={{ fontSize: 12, color: '#888' }}>
-                                Added {(parseTimestamp(pk.createdAt) || new Date(0)).toLocaleDateString()}
-                                {pk.lastUsed ? (' · Last used ' + (parseTimestamp(pk.lastUsed) || new Date(0)).toLocaleDateString()) : ''}
-                              </div>
+          {/* Passkeys / Biometric Login — always show, even without WebAuthn */}
+          <div className="card">
+            <div className="card-header">Passkeys</div>
+            <p style={{ color: '#666', fontSize: 14, margin: '0 0 16px' }}>
+              Sign in with Face ID, Touch ID, Windows Hello, or a security key. Passkeys are more secure than passwords and skip 2FA.
+            </p>
+            {!passkeySupported && (
+              <div style={{ background: '#fff3cd', color: '#856404', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+                Passkey management isn't available in this app. To add or remove passkeys, open <strong>yourinplace.com</strong> in your phone's browser (Safari or Chrome).
+              </div>
+            )}
+            {loadingPasskeys ? (
+              <LoadingSpinner text="Loading passkeys..." />
+            ) : (
+              <div>
+                {passkeys.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    {passkeys.map((pk, i) => (
+                      <div key={pk.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderBottom: i < passkeys.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0f2e9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1b6b5a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                            </svg>
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>{pk.name}</div>
+                            <div style={{ fontSize: 12, color: '#888' }}>
+                              Added {(parseTimestamp(pk.createdAt) || new Date(0)).toLocaleDateString()}
+                              {pk.lastUsed ? (' · Last used ' + (parseTimestamp(pk.lastUsed) || new Date(0)).toLocaleDateString()) : ''}
                             </div>
                           </div>
+                        </div>
+                        {passkeySupported && (
                           <button onClick={() => handleDeletePasskey(pk.id)}
                             style={{ padding: '6px 14px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                             Remove
                           </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {pwError && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
-                  {showPasskeyNameInput ? (
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {pwError && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
+                {passkeySupported && (
+                  showPasskeyNameInput ? (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <input type="text" value={passkeyName} onChange={(e) => setPasskeyName(e.target.value)}
                         placeholder="Name this passkey (e.g., MacBook Pro)" maxLength={50}
@@ -1341,11 +1348,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                       style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
                       Add a Passkey
                     </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                  )
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Linked Accounts */}
           <div className="card">
