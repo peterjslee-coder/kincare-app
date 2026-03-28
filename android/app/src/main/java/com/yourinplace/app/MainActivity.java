@@ -20,7 +20,7 @@ public class MainActivity extends BridgeActivity {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)) {
                 WebSettingsCompat.setWebAuthenticationSupport(
                     webView.getSettings(),
-                    WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_APP
+                    WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_APP
                 );
                 android.util.Log.i("InPlace", "WebAuthn enabled in WebView");
             } else {
