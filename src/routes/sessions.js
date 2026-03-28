@@ -518,9 +518,11 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     });
   }
 
-  // Reject sessions scheduled less than 1 hour from now
-  const sessionStartDt = new Date(`${scheduledDate}T${scheduledTime}:00`);
-  const minsUntilSession = (sessionStartDt.getTime() - Date.now()) / (1000 * 60);
+  // Reject sessions scheduled less than 1 hour from now (timezone-aware)
+  // Times are in the care location's timezone (default: America/New_York)
+  const sessionStartDt = buildDateTimeInZone(scheduledDate, scheduledTime);
+  const nowInZone = getNowInZone();
+  const minsUntilSession = (sessionStartDt.getTime() - nowInZone.getTime()) / (1000 * 60);
   if (minsUntilSession < 60) {
     return res.status(400).json({
       error: "Sessions must be scheduled at least 1 hour from now.",
