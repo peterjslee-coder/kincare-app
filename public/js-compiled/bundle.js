@@ -47880,7 +47880,7 @@ const NotificationPrompt = window.NotificationPrompt = ({
     // In native Capacitor app, push is handled by native plugin — always show prompt
     if (_isNativeApp()) {
       // Check if already registered (stored in sessionStorage to persist across page loads)
-      const nativeRegistered = sessionStorage.getItem('native_push_registered');
+      const nativeRegistered = localStorage.getItem('native_push_registered');
       if (nativeRegistered) {
         setPermState('granted');
         return; // Already registered this session
@@ -47945,7 +47945,7 @@ const NotificationPrompt = window.NotificationPrompt = ({
         if (result) {
           setPermState('granted');
           setVisible(false);
-          sessionStorage.setItem('native_push_registered', '1');
+          localStorage.setItem('native_push_registered', '1');
           if (onSubscribed) onSubscribed();
         } else {
           setPermState('denied');
@@ -48164,7 +48164,7 @@ const NotificationSettings = window.NotificationSettings = () => {
   useEffect(() => {
     // Native Capacitor app — push handled by native plugin
     if (_isNativeApp()) {
-      const nativeRegistered = sessionStorage.getItem('native_push_registered');
+      const nativeRegistered = localStorage.getItem('native_push_registered');
       setPermState(nativeRegistered ? 'granted' : 'default');
     } else if (_isIOS() && !_isStandalone()) {
       // iOS/iPadOS: push only works in standalone PWA mode
@@ -48193,7 +48193,7 @@ const NotificationSettings = window.NotificationSettings = () => {
         const result = await subscribeNativePush();
         if (result) {
           setPermState('granted');
-          sessionStorage.setItem('native_push_registered', '1');
+          localStorage.setItem('native_push_registered', '1');
           const res = await apiFetch('/api/push/status');
           if (res && res.ok) {
             const data = await res.json();
