@@ -1082,20 +1082,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const idVerified = idVerification.verified;
   const hasPreferences = !!stoplightData && Object.keys(stoplightData).length > 0;
 
-  // Admin override: if is_available or BG check already done, treat Stripe + BG as complete
-  const adminOverride = !!profile.isAvailable || !!profile.isBackgroundChecked;
+  // Per-step admin overrides — only skip what was explicitly granted
+  const stripeOverride = !!profile.stripeOnboardComplete;  // admin granted Stripe bypass
+  const bgOverride = !!profile.isBackgroundChecked;         // admin granted BG check bypass
 
   const firstSteps = [
     { id: 'stripe-bg',
       label: 'Set up Stripe and connect your bank account',
       desc: 'Connect your bank account to receive payments for care sessions. Stripe handles everything securely.',
-      done: stripeConnected || adminOverride,
-      missing: !(stripeConnected || adminOverride) ? 'Connect Stripe to continue' : null },
+      done: stripeConnected || stripeOverride,
+      missing: !(stripeConnected || stripeOverride) ? 'Connect Stripe to continue' : null },
     { id: 'background-check',
       label: 'Start your background check',
       desc: 'A background check is required to participate on InPlace. This is a one-time $30 fee that is refunded after 10 completed sessions. Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
-      done: bgCheckSubmitted || adminOverride,
-      missing: !(bgCheckSubmitted || adminOverride) ? (bgPaid ? 'Complete the background check form' : (stripeConnected ? 'Pay for background check ($30)' : 'Complete Stripe setup first')) : null,
+      done: bgCheckSubmitted || bgOverride,
+      missing: !(bgCheckSubmitted || bgOverride) ? (bgPaid ? 'Complete the background check form' : ((stripeConnected || stripeOverride) ? 'Pay for background check ($30)' : 'Complete Stripe setup first')) : null,
       warning: bgCheckSubmitted && profile.checkrStatus === 'consider'
         ? 'Your background check needs additional information. Please check your email for instructions from Checkr on how to complete the review process.'
         : (bgCheckSubmitted && profile.checkrStatus === 'processing'

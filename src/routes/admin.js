@@ -1219,7 +1219,7 @@ router.get("/users/:id/onboarding", async (req, res) => {
 
     const profile = await db.prepare(`
       SELECT id, is_background_checked, background_check_consent, background_check_paid,
-             onboarding_complete, is_available,
+             onboarding_complete, is_available, stripe_onboard_complete,
              dl_number, dl_state,
              academic_program, academic_program_year, needs_hour_reports
       FROM caregiver_profiles WHERE user_id = ?
@@ -1241,6 +1241,7 @@ router.get("/users/:id/onboarding", async (req, res) => {
         backgroundCheckCleared: !!profile.is_background_checked,
         backgroundCheckPaid: !!profile.background_check_paid,
         backgroundCheckConsent: !!profile.background_check_consent,
+        stripeOnboardComplete: !!profile.stripe_onboard_complete,
         onboardingComplete: !!profile.onboarding_complete,
         isAvailable: !!profile.is_available,
         hasPhoto,
@@ -1266,8 +1267,8 @@ router.put("/users/:id/onboarding", async (req, res) => {
     const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.params.id);
     if (!profile) return res.status(404).json({ error: "No caregiver profile found for this user" });
 
-    const { backgroundCheckCleared, backgroundCheckPaid, onboardingComplete, isAvailable } = req.body;
-    // Use a map to avoid duplicate column assignments when flags cascade
+    const { backgroundCheckCleared, backgroundCheckPaid, stripeOnboardComplete, onboardingComplete, isAvailable } = req.body;
+    // Each flag is now independent — no cascading. Admin picks exactly which steps to skip.
     const colMap = new Map(); // column -> { sql, param? }
 
     if (backgroundCheckCleared !== undefined) {
@@ -1277,22 +1278,14 @@ router.put("/users/:id/onboarding", async (req, res) => {
     if (backgroundCheckPaid !== undefined) {
       colMap.set("background_check_paid", { sql: "background_check_paid = ?", param: backgroundCheckPaid ? 1 : 0 });
     }
+    if (stripeOnboardComplete !== undefined) {
+      colMap.set("stripe_onboard_complete", { sql: "stripe_onboard_complete = ?", param: stripeOnboardComplete ? 1 : 0 });
+    }
     if (onboardingComplete !== undefined) {
       colMap.set("onboarding_complete", { sql: "onboarding_complete = ?", param: onboardingComplete ? 1 : 0 });
-      if (onboardingComplete) {
-        colMap.set("is_background_checked", { sql: "is_background_checked = 1" });
-        colMap.set("background_check_paid", { sql: "background_check_paid = 1" });
-        colMap.set("checkr_status", { sql: "checkr_status = 'clear'" });
-      }
     }
     if (isAvailable !== undefined) {
       colMap.set("is_available", { sql: "is_available = ?", param: isAvailable ? 1 : 0 });
-      if (isAvailable) {
-        colMap.set("onboarding_complete", { sql: "onboarding_complete = 1" });
-        colMap.set("is_background_checked", { sql: "is_background_checked = 1" });
-        colMap.set("background_check_paid", { sql: "background_check_paid = 1" });
-        colMap.set("checkr_status", { sql: "checkr_status = 'clear'" });
-      }
     }
 
     if (colMap.size === 0) return res.status(400).json({ error: "No flags to update" });

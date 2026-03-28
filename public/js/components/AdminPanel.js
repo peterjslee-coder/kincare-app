@@ -3637,8 +3637,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             {onboardingModal.flags ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
+                  { key: 'stripeOnboardComplete', label: 'Stripe Connected', desc: 'Bank account linked via Stripe Connect' },
+                  { key: 'backgroundCheckPaid', label: 'Background Check Paid', desc: 'Paid $30 fee for background check' },
                   { key: 'backgroundCheckCleared', label: 'Background Check Cleared', desc: 'Checkr returned OK (or admin override)' },
-                  { key: 'backgroundCheckPaid', label: 'Background Check Paid', desc: 'Paid $30 Stripe fee for background check' },
                   { key: 'onboardingComplete', label: 'Onboarding Complete', desc: 'All registration steps finished' },
                   { key: 'isAvailable', label: 'Available for Jobs', desc: 'Can see and accept care requests' },
                 ].map(flag => (
@@ -3692,7 +3693,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 </div>
 
                 <div style={{ marginTop: '8px', padding: '10px', background: '#fff8e1', borderRadius: '8px', fontSize: '12px', color: '#795548' }}>
-                  Use "Grant" to override any pending step. For example, if Checkr isn't set up yet, you can manually clear the background check and mark them available for jobs.
+                  Each flag is independent — grant only what you want to skip. For example, to skip the background check but keep Stripe setup required, grant "BG Check Paid" and "BG Check Cleared" but leave "Stripe Connected" off.
                 </div>
               </div>
             ) : (
