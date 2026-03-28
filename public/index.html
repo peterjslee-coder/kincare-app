@@ -49,8 +49,28 @@
   <script src="/vendor/twilio-video.min.js"></script>
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
-  <script>window.APP_VERSION = '1.51.58';</script>
-  <script src="/js-compiled/bundle.js?v=1.51.58"></script>
+  <script>window.APP_VERSION = '1.51.59';</script>
+  <script>
+    // ─── Theme initialization (before render to prevent flash) ───
+    (function() {
+      try {
+        var saved = localStorage.getItem('inplace-theme') || 'light';
+        if (saved === 'system') {
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+          // Listen for OS theme changes
+          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            if (localStorage.getItem('inplace-theme') === 'system') {
+              document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+            }
+          });
+        } else {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch(e) {}
+    })();
+  </script>
+  <script src="/js-compiled/bundle.js?v=1.51.59"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version

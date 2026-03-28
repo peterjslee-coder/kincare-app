@@ -1134,23 +1134,26 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <div>
-          <h1 className="greeting" style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', gap: '12px' }}>
+        <div style={{ flex: '1 1 0', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
             <span style={{
               background: '#1b6b5a', color: 'white', padding: '4px 10px', borderRadius: '6px',
-              fontSize: '13px', fontWeight: 700, letterSpacing: '0.5px',
+              fontSize: '13px', fontWeight: 700, letterSpacing: '0.5px', flexShrink: 0,
             }}>ADMIN</span>
-            Platform Dashboard <span style={{ fontSize: '14px', fontWeight: 700, color: '#888' }}>v{window.APP_VERSION || ''}</span>
-          </h1>
-          <div style={{ color: '#666', fontSize: '14px' }}>
+            <h1 className="greeting" style={{ margin: 0, fontSize: '22px', lineHeight: '1.3' }}>
+              Platform Dashboard
+            </h1>
+          </div>
+          <div style={{ color: '#666', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             Manage users, approvals, and platform operations
+            <span style={{ fontSize: '11px', color: '#aaa', fontWeight: 600 }}>v{window.APP_VERSION || ''}</span>
           </div>
         </div>
         <button onClick={() => { if (window.__navigateTo) window.__navigateTo('account'); }} style={{
           padding: '8px 16px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a',
           borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
+          display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', flexShrink: 0,
         }}>⚙️ My Account</button>
       </div>
 

@@ -1475,6 +1475,52 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               </div>
             );
           })()}
+
+          {/* ─── Dark Mode / Appearance Section ─── */}
+          {(() => {
+            const [currentTheme, setCurrentTheme] = useState(() => {
+              try { return localStorage.getItem('inplace-theme') || 'light'; } catch { return 'light'; }
+            });
+            const applyTheme = (newTheme) => {
+              if (newTheme === 'system') {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+              } else {
+                document.documentElement.setAttribute('data-theme', newTheme);
+              }
+              try { localStorage.setItem('inplace-theme', newTheme); } catch {}
+              setCurrentTheme(newTheme);
+            };
+            const options = [
+              { value: 'light', label: 'Light', icon: '☀️', desc: 'Default bright theme' },
+              { value: 'dark', label: 'Dark', icon: '🌙', desc: 'Easier on eyes at night' },
+              { value: 'system', label: 'Auto', icon: '💻', desc: 'Match device setting' },
+            ];
+            return (
+              <div style={{ borderTop: '2px solid var(--border-color, #e5e7eb)', paddingTop: 16, marginTop: 16 }}>
+                <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary, #333)' }}>Appearance</h3>
+                <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Theme</div>
+                  <div style={{ color: 'var(--text-secondary, #666)', marginBottom: 16, fontSize: 14 }}>Choose how InPlace looks on your device.</div>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {options.map(opt => (
+                      <button key={opt.value} onClick={() => applyTheme(opt.value)}
+                        style={{
+                          flex: '1 1 0', minWidth: 90, padding: '14px 12px', borderRadius: 12, cursor: 'pointer',
+                          border: currentTheme === opt.value ? '2px solid var(--role-color, #1b6b5a)' : '2px solid var(--border-color, #e0e0e0)',
+                          background: currentTheme === opt.value ? 'var(--role-color-light, #e0f2e9)' : 'var(--bg-elevated, #f8f9fa)',
+                          textAlign: 'center', fontFamily: 'inherit', transition: 'all 0.2s',
+                        }}>
+                        <div style={{ fontSize: 24, marginBottom: 4 }}>{opt.icon}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary, #333)' }}>{opt.label}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted, #999)', marginTop: 2 }}>{opt.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

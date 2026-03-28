@@ -662,6 +662,89 @@ const subscribeToPush = window.subscribeToPush = async () => {
   }
 };
 
+// Subscribe to native push notifications via Capacitor plugin
+// Used in native Android/iOS apps where Web Push (PushManager) isn't available
+const subscribeNativePush = window.subscribeNativePush = async () => {
+  try {
+    var _window$Capacitor;
+    const PushNotifications = (_window$Capacitor = window.Capacitor) === null || _window$Capacitor === void 0 || (_window$Capacitor = _window$Capacitor.Plugins) === null || _window$Capacitor === void 0 ? void 0 : _window$Capacitor.PushNotifications;
+    if (!PushNotifications) {
+      console.warn('NativePush: Capacitor PushNotifications plugin not available');
+      return null;
+    }
+
+    // Request permission from OS
+    const permResult = await PushNotifications.requestPermissions();
+    if (permResult.receive !== 'granted') {
+      console.warn('NativePush: permission denied by user');
+      return null;
+    }
+
+    // Register with FCM (Android) / APNS (iOS)
+    // This triggers the 'registration' event with the device token
+    return new Promise(resolve => {
+      let resolved = false;
+
+      // Listen for successful registration
+      PushNotifications.addListener('registration', async token => {
+        var _token$value;
+        if (resolved) return;
+        resolved = true;
+        console.log('NativePush: registered with token', ((_token$value = token.value) === null || _token$value === void 0 ? void 0 : _token$value.substring(0, 20)) + '...');
+
+        // Send token to our server
+        try {
+          const platform = window.Capacitor.getPlatform(); // 'android' or 'ios'
+          await apiFetch('/api/push/subscribe-native', {
+            method: 'POST',
+            body: JSON.stringify({
+              token: token.value,
+              platform: platform
+            })
+          });
+          console.log('NativePush: token saved to server');
+        } catch (err) {
+          console.error('NativePush: failed to save token to server:', err);
+        }
+        resolve(token);
+      });
+
+      // Listen for registration errors
+      PushNotifications.addListener('registrationError', err => {
+        if (resolved) return;
+        resolved = true;
+        console.error('NativePush: registration error:', err);
+        resolve(null);
+      });
+
+      // Also set up notification received/action listeners
+      PushNotifications.addListener('pushNotificationReceived', notification => {
+        console.log('NativePush: notification received in foreground:', notification.title);
+      });
+      PushNotifications.addListener('pushNotificationActionPerformed', action => {
+        var _action$notification;
+        console.log('NativePush: notification tapped:', (_action$notification = action.notification) === null || _action$notification === void 0 ? void 0 : _action$notification.title);
+        // Could navigate to specific page based on action.notification.data
+      });
+
+      // Trigger the registration
+      PushNotifications.register();
+
+      // Timeout after 15 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          console.warn('NativePush: registration timed out');
+          resolve(null);
+        }
+      }, 15000);
+    });
+  } catch (err) {
+    console.error('NativePush: error:', err);
+    return null;
+  }
+};
+
 // Check push subscription health and re-sync if needed
 // Call periodically (e.g., every 30 min) to keep subscriptions fresh
 const checkPushHealth = window.checkPushHealth = async () => {
@@ -1754,13 +1837,15 @@ const SplashPage = window.SplashPage = ({
   onNavigate,
   inviteInfo
 }) => {
+  var _window$Capacitor2, _window$Capacitor2$is;
   const [showInstallTip, setShowInstallTip] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState('families');
   const [showStory, setShowStory] = React.useState(false);
   const [storyScroll, setStoryScroll] = React.useState(0);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isNativeApp = ((_window$Capacitor2 = window.Capacitor) === null || _window$Capacitor2 === void 0 || (_window$Capacitor2$is = _window$Capacitor2.isNativePlatform) === null || _window$Capacitor2$is === void 0 ? void 0 : _window$Capacitor2$is.call(_window$Capacitor2)) || false;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-  const showInstallBtn = !isStandalone;
+  const showInstallBtn = !isStandalone && !isNativeApp;
   const switchTab = tab => setActiveTab(tab);
   return /*#__PURE__*/React.createElement("div", {
     className: "splash-page"
@@ -1824,7 +1909,6 @@ const SplashPage = window.SplashPage = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '14px 32px',
       background: 'rgba(255,255,255,0.97)',
       backdropFilter: 'blur(12px)',
       borderBottom: '1px solid rgba(0,0,0,0.06)',
@@ -7527,69 +7611,7 @@ const Dashboard = window.Dashboard = ({
         fontWeight: 600
       }
     }, "\u2715"));
-  })(), ((user === null || user === void 0 ? void 0 : user.is_admin) || (user === null || user === void 0 ? void 0 : user.isAdmin)) && !isTileDismissed('email-setup', 'v1') && /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      borderLeft: '4px solid #7b61ff',
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      gap: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 18
-    }
-  }, "\uD83D\uDCE7"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 14,
-      fontWeight: 600,
-      color: '#333'
-    }
-  }, "Set up email domain verification")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 13,
-      color: '#666',
-      lineHeight: 1.5
-    }
-  }, "Consent verification emails to care recipients require a verified sender domain. Without this, outreach emails won't deliver."), /*#__PURE__*/React.createElement("ol", {
-    style: {
-      fontSize: 12,
-      color: '#555',
-      margin: '10px 0 0',
-      paddingLeft: 20,
-      lineHeight: 1.7
-    }
-  }, /*#__PURE__*/React.createElement("li", null, "Go to ", /*#__PURE__*/React.createElement("strong", null, "resend.com/domains"), " and add ", /*#__PURE__*/React.createElement("strong", null, "yourinplace.com")), /*#__PURE__*/React.createElement("li", null, "Add the TXT record Resend gives you in ", /*#__PURE__*/React.createElement("strong", null, "Cloudflare DNS")), /*#__PURE__*/React.createElement("li", null, "Wait for verification (usually a few minutes)"), /*#__PURE__*/React.createElement("li", null, "Set ", /*#__PURE__*/React.createElement("strong", null, "FROM_EMAIL=hello@yourinplace.com"), " in Railway environment variables"), /*#__PURE__*/React.createElement("li", null, "Redeploy on Railway"))), /*#__PURE__*/React.createElement("button", {
-    onClick: () => dismissTile('email-setup', 'v1'),
-    title: "Done \u2014 dismiss",
-    style: {
-      background: '#f0f0f0',
-      border: 'none',
-      cursor: 'pointer',
-      fontSize: 13,
-      color: '#999',
-      padding: '2px 8px',
-      borderRadius: 6,
-      fontWeight: 600,
-      flexShrink: 0
-    }
-  }, "\u2715"))), !isDemo && user && !hasProfile && !isTileDismissed('onboarding', 'v2') && /*#__PURE__*/React.createElement("div", {
+  })(), !isDemo && user && !hasProfile && !isTileDismissed('onboarding', 'v2') && /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       borderLeft: '4px solid #e8724a',
@@ -7688,7 +7710,7 @@ const Dashboard = window.Dashboard = ({
       fontSize: 24,
       fontWeight: 300
     }
-  }, '\u203A')), !isDemo && parent && (() => {
+  }, '\u203A')), !isDemo && parent && !(hasProfile && hasRecipient) && (() => {
     const discoverItems = [{
       id: 'discover-preferences',
       icon: '⚙️',
@@ -31096,6 +31118,111 @@ const MyAccount = window.MyAccount = ({
       className: `text-size-pill text-size-pill-xlarge ${currentSize === 'xlarge' ? 'active' : ''}`,
       onClick: () => handleTextSize('xlarge')
     }, "Extra Large"))));
+  })(), (() => {
+    const [currentTheme, setCurrentTheme] = useState(() => {
+      try {
+        return localStorage.getItem('inplace-theme') || 'light';
+      } catch {
+        return 'light';
+      }
+    });
+    const applyTheme = newTheme => {
+      if (newTheme === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+      } else {
+        document.documentElement.setAttribute('data-theme', newTheme);
+      }
+      try {
+        localStorage.setItem('inplace-theme', newTheme);
+      } catch {}
+      setCurrentTheme(newTheme);
+    };
+    const options = [{
+      value: 'light',
+      label: 'Light',
+      icon: '☀️',
+      desc: 'Default bright theme'
+    }, {
+      value: 'dark',
+      label: 'Dark',
+      icon: '🌙',
+      desc: 'Easier on eyes at night'
+    }, {
+      value: 'system',
+      label: 'Auto',
+      icon: '💻',
+      desc: 'Match device setting'
+    }];
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        borderTop: '2px solid var(--border-color, #e5e7eb)',
+        paddingTop: 16,
+        marginTop: 16
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        margin: '0 0 12px',
+        fontSize: 16,
+        color: 'var(--text-primary, #333)'
+      }
+    }, "Appearance"), /*#__PURE__*/React.createElement("div", {
+      className: "card",
+      style: {
+        padding: 20,
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 16,
+        marginBottom: 4
+      }
+    }, "Theme"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: 'var(--text-secondary, #666)',
+        marginBottom: 16,
+        fontSize: 14
+      }
+    }, "Choose how InPlace looks on your device."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 12,
+        flexWrap: 'wrap'
+      }
+    }, options.map(opt => /*#__PURE__*/React.createElement("button", {
+      key: opt.value,
+      onClick: () => applyTheme(opt.value),
+      style: {
+        flex: '1 1 0',
+        minWidth: 90,
+        padding: '14px 12px',
+        borderRadius: 12,
+        cursor: 'pointer',
+        border: currentTheme === opt.value ? '2px solid var(--role-color, #1b6b5a)' : '2px solid var(--border-color, #e0e0e0)',
+        background: currentTheme === opt.value ? 'var(--role-color-light, #e0f2e9)' : 'var(--bg-elevated, #f8f9fa)',
+        textAlign: 'center',
+        fontFamily: 'inherit',
+        transition: 'all 0.2s'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 24,
+        marginBottom: 4
+      }
+    }, opt.icon), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        fontWeight: 700,
+        color: 'var(--text-primary, #333)'
+      }
+    }, opt.label), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted, #999)',
+        marginTop: 2
+      }
+    }, opt.desc))))));
   })()), activeTab === 'documents' && !isCaregiver && /*#__PURE__*/React.createElement(Documents, {
     onNavigate: onNavigate || (() => {})
   }), activeTab === 'payments' && !isCaregiver && /*#__PURE__*/React.createElement(FamilyPayments, null), activeTab === 'payments' && isCaregiver && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
@@ -47742,6 +47869,7 @@ const FeedbackButton = window.FeedbackButton = ({
 // Detect iOS/iPadOS and whether running as installed PWA
 const _isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
 const _isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+const _isNativeApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const NotificationPrompt = window.NotificationPrompt = ({
   onSubscribed
 }) => {
@@ -47752,6 +47880,19 @@ const NotificationPrompt = window.NotificationPrompt = ({
   const [testResult, setTestResult] = useState(null);
   const [iosNotInstalled, setIosNotInstalled] = useState(false);
   useEffect(() => {
+    // In native Capacitor app, push is handled by native plugin — always show prompt
+    if (_isNativeApp()) {
+      // Check if already registered (stored in sessionStorage to persist across page loads)
+      const nativeRegistered = sessionStorage.getItem('native_push_registered');
+      if (nativeRegistered) {
+        setPermState('granted');
+        return; // Already registered this session
+      }
+      setPermState('default');
+      setVisible(true);
+      return;
+    }
+
     // On iOS/iPadOS, push only works when installed as home screen app
     if (_isIOS() && !_isStandalone()) {
       setIosNotInstalled(true);
@@ -47801,6 +47942,22 @@ const NotificationPrompt = window.NotificationPrompt = ({
   const handleEnable = async () => {
     setSubscribing(true);
     try {
+      // Native Capacitor app — use native push plugin
+      if (_isNativeApp()) {
+        const result = await subscribeNativePush();
+        if (result) {
+          setPermState('granted');
+          setVisible(false);
+          sessionStorage.setItem('native_push_registered', '1');
+          if (onSubscribed) onSubscribed();
+        } else {
+          setPermState('denied');
+        }
+        setSubscribing(false);
+        return;
+      }
+
+      // Web Push path
       const sub = await subscribeToPush();
       if (sub) {
         setPermState('granted');
@@ -48008,8 +48165,12 @@ const NotificationSettings = window.NotificationSettings = () => {
   const [testResult, setTestResult] = useState(null);
   const [iosNeedInstall, setIosNeedInstall] = useState(false);
   useEffect(() => {
-    // iOS/iPadOS: push only works in standalone PWA mode
-    if (_isIOS() && !_isStandalone()) {
+    // Native Capacitor app — push handled by native plugin
+    if (_isNativeApp()) {
+      const nativeRegistered = sessionStorage.getItem('native_push_registered');
+      setPermState(nativeRegistered ? 'granted' : 'default');
+    } else if (_isIOS() && !_isStandalone()) {
+      // iOS/iPadOS: push only works in standalone PWA mode
       setIosNeedInstall(true);
       setPermState('unsupported');
     } else if ('Notification' in window) {
@@ -48030,6 +48191,25 @@ const NotificationSettings = window.NotificationSettings = () => {
   const handleEnable = async () => {
     setSubscribing(true);
     try {
+      // Native Capacitor app — use native push plugin
+      if (_isNativeApp()) {
+        const result = await subscribeNativePush();
+        if (result) {
+          setPermState('granted');
+          sessionStorage.setItem('native_push_registered', '1');
+          const res = await apiFetch('/api/push/status');
+          if (res && res.ok) {
+            const data = await res.json();
+            setSubCount(data.userSubscriptions);
+          }
+        } else {
+          setPermState('denied');
+        }
+        setSubscribing(false);
+        return;
+      }
+
+      // Web Push path
       const sub = await subscribeToPush();
       if (sub) {
         setPermState('granted');
@@ -56940,16 +57120,22 @@ const AdminPanel = window.AdminPanel = ({
     style: {
       display: 'flex',
       justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '16px'
+      alignItems: 'flex-start',
+      marginBottom: '16px',
+      gap: '12px'
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", {
-    className: "greeting",
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: '4px',
+      flex: '1 1 0',
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       display: 'flex',
       alignItems: 'center',
-      gap: '10px'
+      gap: '8px',
+      marginBottom: '4px',
+      flexWrap: 'wrap'
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -56959,20 +57145,31 @@ const AdminPanel = window.AdminPanel = ({
       borderRadius: '6px',
       fontSize: '13px',
       fontWeight: 700,
-      letterSpacing: '0.5px'
+      letterSpacing: '0.5px',
+      flexShrink: 0
     }
-  }, "ADMIN"), "Platform Dashboard ", /*#__PURE__*/React.createElement("span", {
+  }, "ADMIN"), /*#__PURE__*/React.createElement("h1", {
+    className: "greeting",
     style: {
-      fontSize: '14px',
-      fontWeight: 700,
-      color: '#888'
+      margin: 0,
+      fontSize: '22px',
+      lineHeight: '1.3'
     }
-  }, "v", window.APP_VERSION || '')), /*#__PURE__*/React.createElement("div", {
+  }, "Platform Dashboard")), /*#__PURE__*/React.createElement("div", {
     style: {
       color: '#666',
-      fontSize: '14px'
+      fontSize: '13px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
     }
-  }, "Manage users, approvals, and platform operations")), /*#__PURE__*/React.createElement("button", {
+  }, "Manage users, approvals, and platform operations", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '11px',
+      color: '#aaa',
+      fontWeight: 600
+    }
+  }, "v", window.APP_VERSION || ''))), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (window.__navigateTo) window.__navigateTo('account');
     },
@@ -56988,7 +57185,8 @@ const AdminPanel = window.AdminPanel = ({
       display: 'flex',
       alignItems: 'center',
       gap: '6px',
-      whiteSpace: 'nowrap'
+      whiteSpace: 'nowrap',
+      flexShrink: 0
     }
   }, "\u2699\uFE0F My Account")), (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 || bgCheckActionItems.length > 0 || safetyFlagCount > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -57772,7 +57970,7 @@ const AdminPanel = window.AdminPanel = ({
   }, tabGroups.map(group => /*#__PURE__*/React.createElement("div", {
     key: group.label,
     style: {
-      marginBottom: 10
+      marginBottom: 12
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -57786,9 +57984,9 @@ const AdminPanel = window.AdminPanel = ({
     }
   }, group.label), /*#__PURE__*/React.createElement("div", {
     style: {
-      display: 'flex',
-      gap: 6,
-      flexWrap: 'wrap'
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, 1fr)',
+      gap: 8
     }
   }, group.tabs.map(tab => /*#__PURE__*/React.createElement("button", {
     key: tab.id,
@@ -57796,8 +57994,9 @@ const AdminPanel = window.AdminPanel = ({
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: 6,
-      padding: '10px 16px',
+      justifyContent: 'center',
+      gap: 5,
+      padding: '10px 6px',
       border: 'none',
       borderRadius: 10,
       cursor: 'pointer',
@@ -57807,11 +58006,12 @@ const AdminPanel = window.AdminPanel = ({
       fontWeight: 600,
       transition: 'all 0.15s',
       position: 'relative',
-      boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none'
+      boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
+      whiteSpace: 'nowrap'
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 16
+      fontSize: 15
     }
   }, tab.icon), tab.label, tab.badge ? /*#__PURE__*/React.createElement("span", {
     style: {

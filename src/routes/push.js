@@ -333,7 +333,7 @@ async function _sendNativePush(subscriptionObj, notificationPayload) {
       ) : {},
       android: {
         notification: {
-          icon: "ic_launcher",
+          icon: "ic_notification",
           color: "#1b6b5a",
         },
       },
