@@ -75,10 +75,38 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
     fetchSlots();
   }, [caregiverId]);
 
-  // Get slots for a specific day from the map
+  // Get slots for a specific day from the map, filtering out past times for today
   const getSlotsForDay = (day) => {
     const daySlots = slotsMap[day.date] || [];
+    // Filter out past times if this is today
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    if (day.date === todayStr) {
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      const minStartMins = nowMins + 60; // at least 1 hour from now
+      return daySlots.filter(slot => {
+        const [h, m] = (slot.start || '00:00').split(':').map(Number);
+        return h * 60 + (m || 0) >= minStartMins;
+      });
+    }
     return daySlots;
+  };
+
+  // Generate hourly time options for off-day requests (same logic as RequestCareModal)
+  const getOffDayTimeOptions = (day) => {
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const isToday = day.date === todayStr;
+    const nowMins = isToday ? (now.getHours() * 60 + now.getMinutes()) : 0;
+    const minStartMins = nowMins + 60; // at least 1 hour from now
+    const opts = [];
+    for (let h = 0; h < 24; h++) {
+      const slotMins = h * 60;
+      if (isToday && slotMins < minStartMins) continue;
+      const val = `${String(h).padStart(2, '0')}:00`;
+      opts.push({ start: val, offDay: true });
+    }
+    return opts;
   };
 
   const selectedDaySlots = selectedDay ? getSlotsForDay(selectedDay) : [];
@@ -157,20 +185,41 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e', marginBottom: 10 }}>
                       {selectedDaySlots.length > 0 ? `Available times — ${selectedDay.label} ${selectedDay.shortDate}` : `${selectedDay.label} ${selectedDay.shortDate}`}
                     </div>
-                    {selectedDaySlots.length === 0 ? (
-                      <div style={{ padding: 16, borderRadius: 10, background: '#fff8f0', border: '1px solid #ffe0b2' }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: '#e65100', marginBottom: 6 }}>
-                          {displayName.split(' ')[0]} is off this day
+                    {selectedDaySlots.length === 0 ? (() => {
+                      const offDayTimes = getOffDayTimeOptions(selectedDay);
+                      return (
+                        <div>
+                          <div style={{ padding: 12, borderRadius: 10, background: '#fff8f0', border: '1px solid #ffe0b2', marginBottom: 12 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: '#e65100', marginBottom: 4 }}>
+                              {displayName.split(' ')[0]} is off this day
+                            </div>
+                            <div style={{ fontSize: 13, color: '#795548' }}>
+                              Pick a time to send a request — they can accept, decline, or propose a different time.
+                            </div>
+                          </div>
+                          {offDayTimes.length > 0 ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                              {offDayTimes.map((slot, idx) => (
+                                <button key={idx}
+                                  onClick={() => setSelectedSlot(slot)}
+                                  style={{
+                                    padding: '8px 4px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                                    border: selectedSlot?.start === slot.start ? '2px solid #e8724a' : '1px solid #e0e0e0',
+                                    background: selectedSlot?.start === slot.start ? '#fff8f0' : '#fff',
+                                    color: '#1a1a2e',
+                                  }}>
+                                  {formatTime(slot.start)}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 13, color: '#999', textAlign: 'center', padding: 16 }}>
+                              No times available today — try a different day.
+                            </div>
+                          )}
                         </div>
-                        <div style={{ fontSize: 13, color: '#795548', marginBottom: 12 }}>
-                          You can still send a care request — they can accept or propose a different time that works for them.
-                        </div>
-                        <button className="btn btn-primary" style={{ background: '#e8724a' }}
-                          onClick={() => { setSelectedSlot({ start: '09:00', offDay: true }); setBookingStep('details'); }}>
-                          Request Anyway
-                        </button>
-                      </div>
-                    ) : (
+                      );
+                    })() : (
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                         {selectedDaySlots.map((slot, idx) => (
                           <button key={idx}

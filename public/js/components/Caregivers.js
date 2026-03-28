@@ -3,7 +3,18 @@ const Caregivers = window.Caregivers = () => {
   const [assignments, setAssignments] = useState([]);
   const [recipients, setRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [schedulingCaregiver, setSchedulingCaregiver] = useState(null);
+  // Open the main RequestCareModal with a caregiver pre-selected
+  const scheduleCaregiver = (cg) => {
+    if (window.__openRequestCareModal) {
+      window.__openRequestCareModal(null, {
+        name: cg.name || `${cg.first_name || ''} ${cg.last_name || ''}`.trim(),
+        caregiverId: cg.caregiver_profile_id || cg.id,
+        userId: cg.user_id || cg.userId,
+        rate: cg.rateDaytime ? `$${cg.rateDaytime}/hr` : (cg.hourlyRate ? `$${cg.hourlyRate}/hr` : '$30/hr'),
+        available: true,
+      });
+    }
+  };
   const [activeTab, setActiveTab] = useState('nearby');
   const { showToast } = useToast();
 
@@ -352,7 +363,7 @@ const Caregivers = window.Caregivers = () => {
       if (btn) {
         const cgId = btn.getAttribute('data-cg-id');
         const cg = caregivers.find(c => c.id === cgId);
-        if (cg) setSchedulingCaregiver(cg);
+        if (cg) scheduleCaregiver(cg);
       }
     };
     const container = mapRef.current;
@@ -415,7 +426,7 @@ const Caregivers = window.Caregivers = () => {
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginLeft: '12px' }}>
-            <button onClick={() => setSchedulingCaregiver(cg)} style={{
+            <button onClick={() => scheduleCaregiver(cg)} style={{
               padding: '8px 14px', background: '#1b6b5a', color: '#fff', border: 'none',
               borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
             }}>Schedule</button>
@@ -507,7 +518,7 @@ const Caregivers = window.Caregivers = () => {
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     {cg && (
-                      <button onClick={() => setSchedulingCaregiver(cg)} style={{
+                      <button onClick={() => scheduleCaregiver(cg)} style={{
                         padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none',
                         borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600,
                       }}>Schedule</button>
@@ -619,13 +630,7 @@ const Caregivers = window.Caregivers = () => {
         </div>
       )}
 
-      {schedulingCaregiver && (
-        <CaregiverScheduleModal
-          caregiver={schedulingCaregiver}
-          onClose={() => setSchedulingCaregiver(null)}
-          onBooked={() => setSchedulingCaregiver(null)}
-        />
-      )}
+      {/* Scheduling uses the main RequestCareModal via window.__openRequestCareModal */}
     </>
   );
 };

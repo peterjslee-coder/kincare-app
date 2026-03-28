@@ -287,8 +287,9 @@ const App = () => {
 
   // Expose modal opener and navigation for child components
   useEffect(() => {
-    window.__openRequestCareModal = (prefillDate) => {
+    window.__openRequestCareModal = (prefillDate, prefillCaregiver) => {
       if (prefillDate) window.__requestCareDate = prefillDate;
+      if (prefillCaregiver) window.__requestCareCaregiver = prefillCaregiver;
       setShowRequestCareModal(true);
     };
     window.__navigateTo = (page) => setCurrentPage(page);

@@ -15,7 +15,14 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [instructions, setInstructions] = useState('');
   const [recurrence, setRecurrence] = useState('none');
   const [recurrenceWeeks, setRecurrenceWeeks] = useState('4');
-  const [selectedCaregiver, setSelectedCaregiver] = useState(null);
+  const [selectedCaregiver, setSelectedCaregiver] = useState(() => {
+    if (window.__requestCareCaregiver) {
+      const cg = window.__requestCareCaregiver;
+      delete window.__requestCareCaregiver;
+      return cg;
+    }
+    return null;
+  });
   const [matchedCaregivers, setMatchedCaregivers] = useState([]);
   const [loadingCaregivers, setLoadingCaregivers] = useState(false);
   const [assignedCaregivers, setAssignedCaregivers] = useState(null);
