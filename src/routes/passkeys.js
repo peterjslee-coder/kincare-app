@@ -14,7 +14,18 @@ const router = express.Router();
 // ─── Config ───
 const RP_NAME = "InPlace";
 const RP_ID = process.env.RP_ID || (process.env.APP_URL ? new URL(process.env.APP_URL).hostname : "yourinplace.com");
-const ORIGIN = process.env.APP_URL || "https://yourinplace.com";
+const WEB_ORIGIN = process.env.APP_URL || "https://yourinplace.com";
+
+// Android native app origins — WebAuthn in Android WebView sends
+// "android:apk-key-hash:<base64url-sha256>" instead of the web origin.
+// These are the Play Console app-signing key and upload key fingerprints.
+const ANDROID_ORIGINS = [
+  "android:apk-key-hash:hpyhjCoVHafi-GJCSzU-2WT4zr8VJ3O3E747UQW3H7E", // app signing key
+  "android:apk-key-hash:QJpqoHIPuWAJ2g4viQdax3QUYJqRdHypAdxp-4ZKCyI", // upload key
+];
+
+// SimpleWebAuthn accepts an array of expected origins
+const EXPECTED_ORIGINS = [WEB_ORIGIN, ...ANDROID_ORIGINS];
 
 // In-memory challenge store (short-lived, ~5 min TTL)
 // In production at scale, use Redis. Fine for current user base.
@@ -117,7 +128,7 @@ router.post("/register/verify", authenticate, async (req, res) => {
     const verification = await verifyRegistrationResponse({
       response: req.body,
       expectedChallenge,
-      expectedOrigin: ORIGIN,
+      expectedOrigin: EXPECTED_ORIGINS,
       expectedRPID: RP_ID,
     });
 
@@ -165,7 +176,7 @@ router.post("/register/verify", authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error("Passkey register verify error:", err);
-    console.error("  [passkey] RP_ID:", RP_ID, "ORIGIN:", ORIGIN, "APP_URL:", process.env.APP_URL, "NODE_ENV:", process.env.NODE_ENV);
+    console.error("  [passkey] RP_ID:", RP_ID, "ORIGINS:", EXPECTED_ORIGINS, "APP_URL:", process.env.APP_URL, "NODE_ENV:", process.env.NODE_ENV);
     console.error('Passkey verify error:', err.message); res.status(500).json({ error: 'Passkey verification failed' });
   }
 });
@@ -247,7 +258,7 @@ router.post("/authenticate/verify", async (req, res) => {
     const verification = await verifyAuthenticationResponse({
       response: req.body,
       expectedChallenge: stored.challenge,
-      expectedOrigin: ORIGIN,
+      expectedOrigin: EXPECTED_ORIGINS,
       expectedRPID: RP_ID,
       credential: {
         id: passkey.credential_id,
@@ -300,7 +311,7 @@ router.post("/authenticate/verify", async (req, res) => {
     });
   } catch (err) {
     console.error("Passkey auth verify error:", err);
-    console.error("  [passkey] RP_ID:", RP_ID, "ORIGIN:", ORIGIN, "APP_URL:", process.env.APP_URL);
+    console.error("  [passkey] RP_ID:", RP_ID, "ORIGINS:", EXPECTED_ORIGINS, "APP_URL:", process.env.APP_URL);
     console.error('Passkey auth error:', err.message); res.status(500).json({ error: 'Passkey authentication failed' });
   }
 });
