@@ -28,6 +28,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [tick, setTick] = useState(0);
   const [imminentId, setImminentId] = useState(null); // track which session is the hero card
   const [lightboxPhoto, setLightboxPhoto] = useState(null); // full-screen photo viewer
+  const [overduePopupDismissedIds, setOverduePopupDismissedIds] = useState({}); // track dismissed overdue popups per session
 
   // Review gating state
   const [pendingReviews, setPendingReviews] = useState([]);
@@ -492,12 +493,86 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     );
   }
 
+  // ─── Overdue session detection (15+ min past expected end) ───
+  const overdueSession = useMemo(() => {
+    if (!data?.upcomingSessions) return null;
+    const tz0 = data.upcomingSessions[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
+    for (const s of data.upcomingSessions) {
+      if (s.status !== 'in_progress' || !s.durationHours) continue;
+      let startMs;
+      if (s.checkInTime) {
+        startMs = new Date(s.checkInTime).getTime();
+      } else {
+        const sDate = (s.date || '').split('T')[0];
+        startMs = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', s.timezone || tz0).getTime();
+      }
+      const endMs = startMs + (s.durationHours * 3600000);
+      const overdueMs = Date.now() - endMs;
+      if (overdueMs >= 15 * 60000) {
+        return { ...s, overdueMinutes: Math.floor(overdueMs / 60000) };
+      }
+    }
+    return null;
+  }, [data?.upcomingSessions, tick]);
+
+  const showOverduePopup = overdueSession && !overduePopupDismissedIds[overdueSession.id];
+
   // ─── Regular dashboard for users with data ───
   return (
     <>
       {pwaGuide}
       {/* Push notification prompt — shows if not yet enabled */}
       {typeof NotificationPrompt !== 'undefined' && React.createElement(NotificationPrompt, null)}
+
+      {/* ─── Overdue session popup — call caregiver ─── */}
+      {showOverduePopup && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 20,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: 16, maxWidth: 380, width: '100%',
+            padding: '28px 24px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>{'\u23F0'}</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: 18, color: '#c62828' }}>Session Running Late</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 14, color: '#555', lineHeight: 1.5 }}>
+              {overdueSession.caregiverName
+                ? `${overdueSession.caregiverName}'s session with ${overdueSession.recipientName || 'your loved one'} is ${overdueSession.overdueMinutes} min past the expected end time.`
+                : `The care session is ${overdueSession.overdueMinutes} min past the expected end time.`
+              }
+            </p>
+            {overdueSession.caregiverPhone ? (
+              <a href={`tel:${overdueSession.caregiverPhone}`} style={{
+                display: 'block', padding: '14px 20px', background: '#1b6b5a', color: '#fff',
+                borderRadius: 12, fontSize: 16, fontWeight: 700, textDecoration: 'none',
+                marginBottom: 10,
+              }}>
+                {'\uD83D\uDCDE'} Call {overdueSession.caregiverName || 'Caregiver'}
+              </a>
+            ) : (
+              <div style={{
+                padding: '12px 16px', background: '#f5f5f5', borderRadius: 10,
+                fontSize: 13, color: '#777', marginBottom: 10,
+              }}>
+                No phone number on file for this caregiver
+              </div>
+            )}
+            <button onClick={() => {
+              setOverduePopupDismissedIds(prev => ({ ...prev, [overdueSession.id]: true }));
+            }} style={{
+              width: '100%', padding: '12px 20px', background: 'transparent',
+              border: '2px solid #ddd', borderRadius: 12, fontSize: 14,
+              color: '#666', cursor: 'pointer', fontWeight: 600,
+            }}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       <div className="page-header">
         <h1 className="greeting">{isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`}</h1>
       </div>

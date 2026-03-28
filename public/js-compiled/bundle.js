@@ -6636,6 +6636,7 @@ const Dashboard = window.Dashboard = ({
   const [tick, setTick] = useState(0);
   const [imminentId, setImminentId] = useState(null); // track which session is the hero card
   const [lightboxPhoto, setLightboxPhoto] = useState(null); // full-screen photo viewer
+  const [overduePopupDismissedIds, setOverduePopupDismissedIds] = useState({}); // track dismissed overdue popups per session
 
   // Review gating state
   const [pendingReviews, setPendingReviews] = useState([]);
@@ -7431,8 +7432,117 @@ const Dashboard = window.Dashboard = ({
     }, idea.actionText))))));
   }
 
+  // ─── Overdue session detection (15+ min past expected end) ───
+  const overdueSession = useMemo(() => {
+    var _data$upcomingSession2;
+    if (!(data !== null && data !== void 0 && data.upcomingSessions)) return null;
+    const tz0 = ((_data$upcomingSession2 = data.upcomingSessions[0]) === null || _data$upcomingSession2 === void 0 ? void 0 : _data$upcomingSession2.timezone) || TimezoneHelper.DEFAULT_TZ;
+    for (const s of data.upcomingSessions) {
+      if (s.status !== 'in_progress' || !s.durationHours) continue;
+      let startMs;
+      if (s.checkInTime) {
+        startMs = new Date(s.checkInTime).getTime();
+      } else {
+        const sDate = (s.date || '').split('T')[0];
+        startMs = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', s.timezone || tz0).getTime();
+      }
+      const endMs = startMs + s.durationHours * 3600000;
+      const overdueMs = Date.now() - endMs;
+      if (overdueMs >= 15 * 60000) {
+        return {
+          ...s,
+          overdueMinutes: Math.floor(overdueMs / 60000)
+        };
+      }
+    }
+    return null;
+  }, [data === null || data === void 0 ? void 0 : data.upcomingSessions, tick]);
+  const showOverduePopup = overdueSession && !overduePopupDismissedIds[overdueSession.id];
+
   // ─── Regular dashboard for users with data ───
-  return /*#__PURE__*/React.createElement(React.Fragment, null, pwaGuide, typeof NotificationPrompt !== 'undefined' && React.createElement(NotificationPrompt, null), /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, pwaGuide, typeof NotificationPrompt !== 'undefined' && React.createElement(NotificationPrompt, null), showOverduePopup && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.5)',
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#fff',
+      borderRadius: 16,
+      maxWidth: 380,
+      width: '100%',
+      padding: '28px 24px',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 40,
+      marginBottom: 12
+    }
+  }, '\u23F0'), /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: '0 0 8px',
+      fontSize: 18,
+      color: '#c62828'
+    }
+  }, "Session Running Late"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 16px',
+      fontSize: 14,
+      color: '#555',
+      lineHeight: 1.5
+    }
+  }, overdueSession.caregiverName ? `${overdueSession.caregiverName}'s session with ${overdueSession.recipientName || 'your loved one'} is ${overdueSession.overdueMinutes} min past the expected end time.` : `The care session is ${overdueSession.overdueMinutes} min past the expected end time.`), overdueSession.caregiverPhone ? /*#__PURE__*/React.createElement("a", {
+    href: `tel:${overdueSession.caregiverPhone}`,
+    style: {
+      display: 'block',
+      padding: '14px 20px',
+      background: '#1b6b5a',
+      color: '#fff',
+      borderRadius: 12,
+      fontSize: 16,
+      fontWeight: 700,
+      textDecoration: 'none',
+      marginBottom: 10
+    }
+  }, '\uD83D\uDCDE', " Call ", overdueSession.caregiverName || 'Caregiver') : /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '12px 16px',
+      background: '#f5f5f5',
+      borderRadius: 10,
+      fontSize: 13,
+      color: '#777',
+      marginBottom: 10
+    }
+  }, "No phone number on file for this caregiver"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setOverduePopupDismissedIds(prev => ({
+        ...prev,
+        [overdueSession.id]: true
+      }));
+    },
+    style: {
+      width: '100%',
+      padding: '12px 20px',
+      background: 'transparent',
+      border: '2px solid #ddd',
+      borderRadius: 12,
+      fontSize: 14,
+      color: '#666',
+      cursor: 'pointer',
+      fontWeight: 600
+    }
+  }, "Dismiss"))), /*#__PURE__*/React.createElement("div", {
     className: "page-header"
   }, /*#__PURE__*/React.createElement("h1", {
     className: "greeting"
@@ -29144,7 +29254,9 @@ const MyAccount = window.MyAccount = ({
       setPasskeyName('');
       fetchPasskeys();
     } catch (err) {
-      if (err.name !== 'NotAllowedError') {
+      if (err.name === 'InvalidStateError') {
+        setPwError('You already have a passkey registered on this device. Remove it first if you want to re-register.');
+      } else if (err.name !== 'NotAllowedError') {
         setPwError(err.message);
       }
     }
@@ -29738,7 +29850,13 @@ const MyAccount = window.MyAccount = ({
     if (typeof disconnectSocket === 'function') disconnectSocket();
     window.location.reload();
   };
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: '100%',
+      overflowX: 'hidden',
+      boxSizing: 'border-box'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'space-between',
@@ -30810,7 +30928,8 @@ const MyAccount = window.MyAccount = ({
     style: {
       display: 'flex',
       gap: 8,
-      alignItems: 'center'
+      alignItems: 'center',
+      flexWrap: 'wrap'
     }
   }, /*#__PURE__*/React.createElement("input", {
     type: "text",
@@ -30819,14 +30938,20 @@ const MyAccount = window.MyAccount = ({
     placeholder: "Name this passkey (e.g., MacBook Pro)",
     maxLength: 50,
     style: {
-      flex: 1,
+      flex: '1 1 200px',
+      minWidth: 0,
       padding: '8px 12px',
       border: '1px solid #d0d0d0',
       borderRadius: 8,
       fontSize: 14
     },
     autoFocus: true
-  }), /*#__PURE__*/React.createElement("button", {
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: handleRegisterPasskey,
     disabled: registeringPasskey,
     style: {
@@ -30854,7 +30979,7 @@ const MyAccount = window.MyAccount = ({
       fontSize: 14,
       cursor: 'pointer'
     }
-  }, "Cancel")) : /*#__PURE__*/React.createElement("button", {
+  }, "Cancel"))) : /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowPasskeyNameInput(true),
     style: {
       padding: '8px 20px',
@@ -47352,7 +47477,7 @@ const FeedbackButton = window.FeedbackButton = ({
 
   // Build rich pageContext with device/browser info
   const buildPageContext = () => {
-    var _navigator$connection;
+    var _navigator$connection, _window$Capacitor3, _window$Capacitor3$is, _window$Capacitor$get, _window$Capacitor4;
     const ua = navigator.userAgent;
     const {
       browserName,
@@ -47381,6 +47506,7 @@ const FeedbackButton = window.FeedbackButton = ({
       connectionType: ((_navigator$connection = navigator.connection) === null || _navigator$connection === void 0 ? void 0 : _navigator$connection.effectiveType) || 'unknown',
       language: navigator.language || 'unknown',
       isPWA: window.navigator.standalone === true ? 'yes' : 'no',
+      platform: (_window$Capacitor3 = window.Capacitor) !== null && _window$Capacitor3 !== void 0 && (_window$Capacitor3$is = _window$Capacitor3.isNativePlatform) !== null && _window$Capacitor3$is !== void 0 && _window$Capacitor3$is.call(_window$Capacitor3) ? ((_window$Capacitor$get = (_window$Capacitor4 = window.Capacitor).getPlatform) === null || _window$Capacitor$get === void 0 ? void 0 : _window$Capacitor$get.call(_window$Capacitor4)) === 'ios' ? 'ios-native' : 'android-native' : window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
       recentErrors: recentErrorsRef.current.length > 0 ? recentErrorsRef.current : null,
       // Flow context — what was open when user tapped feedback
       openModals: snapshot.openModals || null,
@@ -47886,6 +48012,7 @@ const NotificationPrompt = window.NotificationPrompt = ({
   const [testResult, setTestResult] = useState(null);
   const [iosNotInstalled, setIosNotInstalled] = useState(false);
   useEffect(() => {
+
     // In native Capacitor app, push is handled by native plugin — always show prompt
     if (_isNativeApp()) {
       // Check if already registered (stored in sessionStorage to persist across page loads)
@@ -47893,6 +48020,20 @@ const NotificationPrompt = window.NotificationPrompt = ({
       if (nativeRegistered) {
         setPermState('granted');
         return; // Already registered this session
+
+    // In native Capacitor app, push is handled by native plugin
+    if (_isNativeApp()) {
+      const nativeRegistered = localStorage.getItem('native_push_registered');
+      if (nativeRegistered) {
+        setPermState('granted');
+        return; // Already registered
+      }
+      // Check if user previously dismissed
+      const dismissed = localStorage.getItem('push_prompt_dismissed');
+      if (dismissed) {
+        const dismissedAt = parseInt(dismissed, 10);
+        if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return;
+
       }
       setPermState('default');
       setVisible(true);
