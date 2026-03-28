@@ -16,13 +16,18 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
   const [iosNotInstalled, setIosNotInstalled] = useState(false);
 
   useEffect(() => {
-    // In native Capacitor app, push is handled by native plugin — always show prompt
+    // In native Capacitor app, push is handled by native plugin
     if (_isNativeApp()) {
-      // Check if already registered (stored in sessionStorage to persist across page loads)
       const nativeRegistered = localStorage.getItem('native_push_registered');
       if (nativeRegistered) {
         setPermState('granted');
-        return; // Already registered this session
+        return; // Already registered
+      }
+      // Check if user previously dismissed
+      const dismissed = localStorage.getItem('push_prompt_dismissed');
+      if (dismissed) {
+        const dismissedAt = parseInt(dismissed, 10);
+        if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return;
       }
       setPermState('default');
       setVisible(true);

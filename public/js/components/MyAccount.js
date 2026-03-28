@@ -395,7 +395,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       setPasskeyName('');
       fetchPasskeys();
     } catch (err) {
-      if (err.name !== 'NotAllowedError') {
+      if (err.name === 'InvalidStateError') {
+        setPwError('You already have a passkey registered on this device. Remove it first if you want to re-register.');
+      } else if (err.name !== 'NotAllowedError') {
         setPwError(err.message);
       }
     }
