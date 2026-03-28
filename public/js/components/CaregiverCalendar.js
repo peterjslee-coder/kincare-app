@@ -28,8 +28,8 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   }, []);
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const hourStart = 6;
-  const hourEnd = 20; // 6am–8pm
+  const hourStart = 0;
+  const hourEnd = 24; // Full 24-hour display
 
   // Compute current week's dates
   const getWeekDates = () => {

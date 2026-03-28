@@ -306,20 +306,21 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const tz = typeof TimezoneHelper !== 'undefined' ? (TimezoneHelper.DEFAULT_TZ || 'America/New_York') : 'America/New_York';
   const todayStr = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getToday(tz) : (() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-' + String(n.getDate()).padStart(2,'0'); })();
 
-  // Time pill options — filtered for today
+  // Time pill options — any hour, filtered to 1h+ from now for today
   const getTimeOptions = () => {
     const opts = [];
     const nowET = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.getNow(tz) : new Date();
     const isToday = date === todayStr;
     const nowMins = isToday ? (nowET.getHours() * 60 + nowET.getMinutes()) : 0;
     const minStartMins = nowMins + 60;
-    for (let h = 7; h <= 20; h++) {
+    for (let h = 0; h < 24; h++) {
       const slotMins = h * 60;
       if (isToday && slotMins < minStartMins) continue;
       const val = `${String(h).padStart(2,'0')}:00`;
       const ampm = h >= 12 ? 'p' : 'a';
       const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
-      opts.push({ val, label: `${dh}${ampm}` });
+      const label = h === 0 ? '12a' : `${dh}${ampm}`;
+      opts.push({ val, label });
     }
     return opts;
   };
