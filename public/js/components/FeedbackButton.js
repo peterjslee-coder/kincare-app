@@ -167,6 +167,9 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
       connectionType: navigator.connection?.effectiveType || 'unknown',
       language: navigator.language || 'unknown',
       isPWA: window.navigator.standalone === true ? 'yes' : 'no',
+      platform: window.Capacitor?.isNativePlatform?.()
+        ? (window.Capacitor.getPlatform?.() === 'ios' ? 'ios-native' : 'android-native')
+        : (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web'),
       recentErrors: recentErrorsRef.current.length > 0 ? recentErrorsRef.current : null,
       // Flow context — what was open when user tapped feedback
       openModals: snapshot.openModals || null,
