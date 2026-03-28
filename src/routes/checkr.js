@@ -186,6 +186,7 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
         dob: profile.date_of_birth,
         // SSN not sent here — candidate provides full SSN via Checkr's invitation flow
         zipcode: profile.zip || undefined,
+        work_locations: [{ country: "US", state: profile.location_state || "VA", city: profile.location_city || "Radford" }],
         custom_id: req.user.id,
         driver_license_number: profile.dl_number || undefined,
         driver_license_state: profile.dl_state || undefined,
@@ -865,6 +866,53 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
         break;
       }
 
+      // ─── Report canceled (fully canceled background check) ───
+      case "report.canceled": {
+        const report = data.object;
+        const { id: reportId, candidate_id } = report;
+        console.log(`[checkr-webhook] Report canceled: ${reportId}, candidate: ${candidate_id}`);
+
+        await db.prepare(
+          "UPDATE caregiver_profiles SET checkr_status = 'canceled', is_background_checked = 0, checkr_report_id = ?, updated_at = NOW() WHERE checkr_candidate_id = ?"
+        ).run(reportId, candidate_id);
+
+        // Notify admins — the background check was fully canceled
+        try {
+          const { v4: uuid } = require("uuid");
+          const cgProfile = await db.prepare(
+            "SELECT cp.user_id, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.checkr_candidate_id = ?"
+          ).get(candidate_id);
+          const candidateName = cgProfile ? `${cgProfile.first_name} ${cgProfile.last_name}` : `Candidate ${(candidate_id || '').substring(0, 12)}`;
+          const title = `❌ Background check canceled — ${candidateName}`;
+          const msg = cgProfile
+            ? `${cgProfile.first_name} ${cgProfile.last_name} (${cgProfile.email}) background check has been fully canceled. A new background check will need to be initiated if needed.`
+            : `Checkr report ${reportId} has been canceled. A new invitation must be sent to restart the process.`;
+          const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+          for (const admin of admins) {
+            await db.prepare(
+              "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+            ).run(uuid(), admin.id, "checkr_canceled", title, msg, JSON.stringify({ reportId, candidateId: candidate_id, userId: cgProfile?.user_id }));
+          }
+          try {
+            const { sendPushToUser } = require("../utils/push");
+            if (sendPushToUser) {
+              for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
+            }
+          } catch {}
+        } catch (alertErr) {
+          console.error("[checkr-webhook] Report canceled alert error:", alertErr.message);
+        }
+
+        writeAuditLog({
+          action: "checkr_canceled",
+          endpoint: "/api/checkr/webhook",
+          method: "POST",
+          details: { reportId, candidateId: candidate_id },
+          severity: "warning",
+        });
+        break;
+      }
+
       default:
         console.log(`[checkr-webhook] Unhandled event type: ${type}`);
     }
@@ -988,7 +1036,7 @@ router.post("/test-candidate", authenticate, async (req, res) => {
   const locations = work_locations || [{ city: city || "Radford", state: state || "VA", country: "US" }];
 
   try {
-    // Step 1: Create candidate (without work_locations — goes on invitation)
+    // Step 1: Create candidate WITH work_locations (required by Checkr for compliance)
     console.log(`[checkr-test] Creating candidate: ${first_name} ${last_name}`);
     const candidateBody = {
       first_name,
@@ -997,6 +1045,7 @@ router.post("/test-candidate", authenticate, async (req, res) => {
       ssn: ssn || undefined,
       dob: dob || undefined,
       zipcode: zipcode || undefined,
+      work_locations: locations,
       driver_license_number: driver_license_number || undefined,
       driver_license_state: driver_license_state || undefined,
     };
