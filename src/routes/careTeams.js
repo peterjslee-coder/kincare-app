@@ -129,10 +129,13 @@ router.get("/:id", requireRole("family"), async (req, res) => {
         cr.linked_user_id AS recipient_linked_user_id,
         lu.accessibility_prefs AS recipient_accessibility_prefs,
         cr.sms_phone AS recipient_sms_phone,
-        cr.notification_channel AS recipient_notification_channel
+        cr.notification_channel AS recipient_notification_channel,
+        bu.first_name || ' ' || bu.last_name AS billing_contact_name,
+        bu.email AS billing_contact_email
       FROM care_teams ct
       JOIN care_recipients cr ON ct.care_recipient_id = cr.id
       LEFT JOIN users lu ON cr.linked_user_id = lu.id
+      LEFT JOIN users bu ON ct.billing_user_id = bu.id
       WHERE ct.id = ?
     `).get(req.params.id);
 
@@ -206,6 +209,49 @@ router.put("/:id", requireRole("family"), async (req, res) => {
   } catch (err) {
     console.error("Update care team error:", err);
     res.status(500).json({ error: "Failed to update care team" });
+  }
+});
+
+// ─── PUT /api/care-teams/:id/billing ─── Set or clear the billing contact (leader only)
+// The billing contact's Stripe will be used for all session payments for this care recipient.
+router.put("/:id/billing", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const membership = await db.prepare(
+      "SELECT role FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
+    ).get(req.params.id, req.user.id);
+    if (!membership) return res.status(404).json({ error: "Care team not found" });
+    if (membership.role !== "leader") return res.status(403).json({ error: "Only the team leader can set the billing contact" });
+
+    const { billingUserId } = req.body;
+
+    // If clearing the billing contact
+    if (!billingUserId) {
+      await db.prepare("UPDATE care_teams SET billing_user_id = NULL, updated_at = NOW() WHERE id = ?")
+        .run(req.params.id);
+      return res.json({ message: "Billing contact cleared — booker will be charged" });
+    }
+
+    // Verify the billing user is a member of this care team
+    const billingMember = await db.prepare(
+      "SELECT ctm.user_id, u.first_name, u.last_name, u.stripe_customer_id FROM care_team_members ctm JOIN users u ON ctm.user_id = u.id WHERE ctm.care_team_id = ? AND ctm.user_id = ?"
+    ).get(req.params.id, billingUserId);
+    if (!billingMember) return res.status(400).json({ error: "Billing contact must be a member of this care team" });
+
+    await db.prepare("UPDATE care_teams SET billing_user_id = ?, updated_at = NOW() WHERE id = ?")
+      .run(billingUserId, req.params.id);
+
+    res.json({
+      message: `Billing contact set to ${billingMember.first_name} ${billingMember.last_name}`,
+      billingContact: {
+        userId: billingMember.user_id,
+        name: `${billingMember.first_name} ${billingMember.last_name}`,
+        hasStripe: !!billingMember.stripe_customer_id,
+      },
+    });
+  } catch (err) {
+    console.error("Set billing contact error:", err);
+    res.status(500).json({ error: "Failed to set billing contact" });
   }
 });
 

@@ -695,19 +695,24 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
 
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
 
-  // Get the care session
+  // Get the care session — allow both the booker and the billing contact to check out
   const session = await db.prepare(`
     SELECT cs.*, cp.stripe_account_id, cp.stripe_onboard_complete,
       cp.hourly_rate, cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
       cp.user_id AS caregiver_user_id,
       u.first_name || ' ' || u.last_name AS caregiver_name,
-      cr.first_name || ' ' || cr.last_name AS recipient_name
+      cr.first_name || ' ' || cr.last_name AS recipient_name,
+      ct.billing_user_id,
+      bu.stripe_customer_id AS billing_stripe_customer_id,
+      bu.first_name || ' ' || bu.last_name AS billing_contact_name
     FROM care_sessions cs
     LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     LEFT JOIN users u ON cp.user_id = u.id
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-    WHERE cs.id = ? AND cs.family_user_id = ?
-  `).get(sessionId, req.user.id);
+    LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+    LEFT JOIN users bu ON ct.billing_user_id = bu.id
+    WHERE cs.id = ? AND (cs.family_user_id = ? OR ct.billing_user_id = ?)
+  `).get(sessionId, req.user.id, req.user.id);
 
   if (!session) return res.status(404).json({ error: "Session not found" });
   if (!session.caregiver_id) return res.status(400).json({ error: "No caregiver assigned to this session" });
@@ -760,7 +765,12 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
   // we don't add any surcharge. Caregivers set their payout preference in their Stripe dashboard.
 
   try {
-    const checkoutSession = await stripe.checkout.sessions.create({
+    // If a billing contact is set for this care recipient's team, use their Stripe customer
+    // so their saved payment methods appear at checkout
+    const billingCustomerId = session.billing_stripe_customer_id || null;
+    const paidByUserId = session.billing_user_id || req.user.id;
+
+    const checkoutParams = {
       mode: "payment",
       payment_method_types: ["card", "us_bank_account"],
       line_items: [{
@@ -785,17 +795,25 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
       metadata: {
         inplace_session_id: sessionId,
         inplace_family_user_id: req.user.id,
+        inplace_paid_by_user_id: paidByUserId,
         inplace_caregiver_id: session.caregiver_id,
       },
-    });
+    };
 
-    // Create a pending payment record
+    // Attach billing contact's Stripe customer for saved payment methods
+    if (billingCustomerId) {
+      checkoutParams.customer = billingCustomerId;
+    }
+
+    const checkoutSession = await stripe.checkout.sessions.create(checkoutParams);
+
+    // Create a pending payment record — family_user_id is the billing contact if set
     const paymentId = uuid();
     await db.prepare(`
       INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_checkout_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', 'stripe', ?, NOW())
     `).run(
-      paymentId, sessionId, req.user.id, session.caregiver_id,
+      paymentId, sessionId, paidByUserId, session.caregiver_id,
       totalCents / 100, platformFeeCents / 100, (totalCents - platformFeeCents) / 100,
       checkoutSession.id
     );
@@ -807,6 +825,7 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
       platformFee: platformFeeCents / 100,
       caregiverPayout: (totalCents - platformFeeCents) / 100,
       achAvailable: true,
+      billingContact: session.billing_user_id ? session.billing_contact_name : null,
     });
   } catch (err) {
     console.error("Stripe checkout error:", err);

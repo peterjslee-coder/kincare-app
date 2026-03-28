@@ -18,6 +18,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [notifChannel, setNotifChannel] = useState('push');
   const [savingNotif, setSavingNotif] = useState(false);
   const [a11yExpanded, setA11yExpanded] = useState(false);
+  const [billingUserId, setBillingUserId] = useState('');
+  const [savingBilling, setSavingBilling] = useState(false);
   const { showToast } = useToast();
 
   const fetchTeam = async () => {
@@ -27,6 +29,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         const data = await res.json();
         setTeam(data.careTeam);
         setNewName(data.careTeam.name);
+        setBillingUserId(data.careTeam.billing_user_id || '');
         setSmsPhone(data.careTeam.recipient_sms_phone || '');
         setNotifChannel(data.careTeam.recipient_notification_channel || 'push');
       }
@@ -327,7 +330,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{m.firstName} {m.lastName}</div>
                     <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>
-                      {m.relationshipLabel ? <span style={{ color: '#666' }}>{m.relationshipLabel} · </span> : ''}{m.email}
+                      {m.relationshipLabel ? <span style={{ color: '#666' }}>{m.relationshipLabel}</span> : <span style={{ color: '#aaa', fontStyle: 'italic' }}>{roleLabels[m.role] || m.role}</span>}
                     </div>
                   </div>
                 </div>
@@ -364,6 +367,52 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
           );
         })}
       </div>
+
+      {/* Billing Contact — leader only */}
+      {isLeader && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-header">Billing Contact</div>
+          <div style={{ padding: '14px 0' }}>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px', lineHeight: 1.5 }}>
+              Choose who pays for {team.recipient_first_name}'s care sessions. If set, this person's payment method will be charged when any team member books a session.
+            </p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select value={billingUserId} onChange={(e) => setBillingUserId(e.target.value)}
+                style={{ ...inputStyle, flex: '1 1 200px', maxWidth: 300 }}>
+                <option value="">No billing contact (booker pays)</option>
+                {team.members?.map(m => (
+                  <option key={m.userId} value={m.userId}>{m.firstName} {m.lastName}{m.role === 'leader' ? ' (Leader)' : ''}</option>
+                ))}
+              </select>
+              <button onClick={async () => {
+                setSavingBilling(true);
+                try {
+                  const res = await apiFetch(`/api/care-teams/${careTeamId}/billing`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ billingUserId: billingUserId || null }),
+                  });
+                  const data = await res?.json();
+                  if (res?.ok) {
+                    showToast(data.message || 'Billing contact updated', 'success');
+                    fetchTeam();
+                  } else {
+                    showToast(data?.error || 'Failed to update billing contact', 'error');
+                  }
+                } catch { showToast('Failed to update billing contact', 'error'); }
+                setSavingBilling(false);
+              }} disabled={savingBilling}
+                style={{ padding: '10px 20px', background: savingBilling ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingBilling ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                {savingBilling ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            {billingUserId && team.billing_contact_name && (
+              <div style={{ marginTop: 10, background: '#f0f8f5', padding: '10px 14px', borderRadius: 8, fontSize: 13, color: '#1b6b5a' }}>
+                {team.billing_contact_name} will be charged for all sessions booked for {team.recipient_first_name}.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Pending Invites */}
       {isLeader && team.invites?.length > 0 && (

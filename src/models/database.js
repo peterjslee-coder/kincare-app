@@ -930,6 +930,9 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS gratitude_keywords TEXT`,
+
+    // v1.51.66 — Billing contact on care teams (delegate payment to a team member)
+    `ALTER TABLE care_teams ADD COLUMN IF NOT EXISTS billing_user_id TEXT REFERENCES users(id)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

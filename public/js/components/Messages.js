@@ -1087,7 +1087,7 @@ const Messages = window.Messages = () => {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{u.firstName} {u.lastName}</div>
-                <div style={{ fontSize: 12, color: '#888' }}>{u.email}</div>
+                <div style={{ fontSize: 12, color: '#888' }}>{u.role === 'caregiver' ? 'Caregiver' : 'Family'}</div>
               </div>
               {u.connection?.status === 'accepted' ? (
                 <span style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600 }}>✓ Connected</span>
