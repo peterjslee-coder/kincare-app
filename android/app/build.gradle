@@ -16,8 +16,17 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            storeFile file(System.getProperty("user.home") + "/inplace-release.keystore")
+            storePassword project.hasProperty('INPLACE_KEYSTORE_PASSWORD') ? project.property('INPLACE_KEYSTORE_PASSWORD') : ''
+            keyAlias 'inplace'
+            keyPassword project.hasProperty('INPLACE_KEYSTORE_PASSWORD') ? project.property('INPLACE_KEYSTORE_PASSWORD') : ''
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
