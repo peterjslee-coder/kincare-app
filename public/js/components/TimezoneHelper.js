@@ -39,13 +39,27 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
    * dateStr: "2026-02-26", timeStr: "08:00"
    */
   function buildDateTime(dateStr, timeStr, tz) {
+    const tzStr = tz || DEFAULT_TZ;
     const [y, mo, d] = dateStr.split("-").map(Number);
     const [h, m] = (timeStr || "00:00").split(":").map(Number);
-    const ref = getNow(tz);
-    const result = new Date(ref);
-    result.setFullYear(y, mo - 1, d);
-    result.setHours(h, m, 0, 0);
-    return result;
+    // Build an ISO-ish string and use the Intl API to find the correct UTC offset
+    // for this specific date+time in the care timezone.
+    // Step 1: Make a rough Date (may be off by an hour due to DST)
+    const rough = new Date(Date.UTC(y, mo - 1, d, h, m, 0));
+    // Step 2: Find the UTC offset of the target timezone at this rough moment
+    // by comparing the formatted local time to UTC
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tzStr, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    }).formatToParts(rough);
+    const p = {};
+    parts.forEach(({ type, value }) => { p[type] = parseInt(value, 10); });
+    // What UTC time does the rough date show in the target TZ?
+    const tzLocal = new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour === 24 ? 0 : p.hour, p.minute, p.second));
+    const offsetMs = tzLocal.getTime() - rough.getTime();
+    // Step 3: Subtract the offset so the resulting Date.getTime() is the true UTC
+    // epoch for "h:m on dateStr in tz"
+    return new Date(Date.UTC(y, mo - 1, d, h, m, 0) - offsetMs);
   }
 
   /**

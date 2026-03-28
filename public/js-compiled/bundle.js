@@ -819,13 +819,38 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
    * dateStr: "2026-02-26", timeStr: "08:00"
    */
   function buildDateTime(dateStr, timeStr, tz) {
+    const tzStr = tz || DEFAULT_TZ;
     const [y, mo, d] = dateStr.split("-").map(Number);
     const [h, m] = (timeStr || "00:00").split(":").map(Number);
-    const ref = getNow(tz);
-    const result = new Date(ref);
-    result.setFullYear(y, mo - 1, d);
-    result.setHours(h, m, 0, 0);
-    return result;
+    // Build an ISO-ish string and use the Intl API to find the correct UTC offset
+    // for this specific date+time in the care timezone.
+    // Step 1: Make a rough Date (may be off by an hour due to DST)
+    const rough = new Date(Date.UTC(y, mo - 1, d, h, m, 0));
+    // Step 2: Find the UTC offset of the target timezone at this rough moment
+    // by comparing the formatted local time to UTC
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tzStr,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    }).formatToParts(rough);
+    const p = {};
+    parts.forEach(({
+      type,
+      value
+    }) => {
+      p[type] = parseInt(value, 10);
+    });
+    // What UTC time does the rough date show in the target TZ?
+    const tzLocal = new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour === 24 ? 0 : p.hour, p.minute, p.second));
+    const offsetMs = tzLocal.getTime() - rough.getTime();
+    // Step 3: Subtract the offset so the resulting Date.getTime() is the true UTC
+    // epoch for "h:m on dateStr in tz"
+    return new Date(Date.UTC(y, mo - 1, d, h, m, 0) - offsetMs);
   }
 
   /**
@@ -30927,9 +30952,8 @@ const MyAccount = window.MyAccount = ({
   }, pwError), passkeySupported && (showPasskeyNameInput ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      gap: 8,
-      alignItems: 'center',
-      flexWrap: 'wrap'
+      flexDirection: 'column',
+      gap: 8
     }
   }, /*#__PURE__*/React.createElement("input", {
     type: "text",
@@ -30938,12 +30962,12 @@ const MyAccount = window.MyAccount = ({
     placeholder: "Name this passkey (e.g., MacBook Pro)",
     maxLength: 50,
     style: {
-      flex: '1 1 200px',
-      minWidth: 0,
+      width: '100%',
       padding: '8px 12px',
       border: '1px solid #d0d0d0',
       borderRadius: 8,
-      fontSize: 14
+      fontSize: 14,
+      boxSizing: 'border-box'
     },
     autoFocus: true
   }), /*#__PURE__*/React.createElement("div", {
@@ -30955,23 +30979,23 @@ const MyAccount = window.MyAccount = ({
     onClick: handleRegisterPasskey,
     disabled: registeringPasskey,
     style: {
-      padding: '8px 20px',
+      flex: 1,
+      padding: '8px 16px',
       background: registeringPasskey ? '#999' : '#1b6b5a',
       color: '#fff',
       border: 'none',
       borderRadius: 8,
       fontWeight: 600,
       fontSize: 14,
-      cursor: 'pointer',
-      whiteSpace: 'nowrap'
+      cursor: 'pointer'
     }
-  }, registeringPasskey ? 'Registering...' : 'Continue'), /*#__PURE__*/React.createElement("button", {
+  }, registeringPasskey ? 'Registering...' : 'Create Passkey'), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setShowPasskeyNameInput(false);
       setPwError(null);
     },
     style: {
-      padding: '8px 12px',
+      padding: '8px 16px',
       background: '#f0f0f0',
       color: '#666',
       border: 'none',
@@ -32496,6 +32520,7 @@ const MyAccount = window.MyAccount = ({
     style: {
       textAlign: 'center',
       marginTop: 10,
+      marginBottom: 20,
       fontSize: 11,
       color: '#bbb'
     }
@@ -48012,15 +48037,6 @@ const NotificationPrompt = window.NotificationPrompt = ({
   const [testResult, setTestResult] = useState(null);
   const [iosNotInstalled, setIosNotInstalled] = useState(false);
   useEffect(() => {
-
-    // In native Capacitor app, push is handled by native plugin — always show prompt
-    if (_isNativeApp()) {
-      // Check if already registered (stored in sessionStorage to persist across page loads)
-      const nativeRegistered = localStorage.getItem('native_push_registered');
-      if (nativeRegistered) {
-        setPermState('granted');
-        return; // Already registered this session
-
     // In native Capacitor app, push is handled by native plugin
     if (_isNativeApp()) {
       const nativeRegistered = localStorage.getItem('native_push_registered');
@@ -48033,7 +48049,6 @@ const NotificationPrompt = window.NotificationPrompt = ({
       if (dismissed) {
         const dismissedAt = parseInt(dismissed, 10);
         if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return;
-
       }
       setPermState('default');
       setVisible(true);

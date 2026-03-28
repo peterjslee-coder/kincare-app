@@ -2109,9 +2109,9 @@
         white-space: nowrap;
       }
 
-      /* Main content padding for bottom nav */
+      /* Main content padding for bottom nav — extra space so content isn't hidden */
       .main-content {
-        padding: 16px 12px 80px;
+        padding: 16px 12px calc(env(safe-area-inset-bottom, 0px) + 90px);
         width: 100%;
         box-sizing: border-box;
         overflow-x: hidden;

@@ -1334,17 +1334,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 {pwError && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
                 {passkeySupported && (
                   showPasskeyNameInput ? (
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <input type="text" value={passkeyName} onChange={(e) => setPasskeyName(e.target.value)}
                         placeholder="Name this passkey (e.g., MacBook Pro)" maxLength={50}
-                        style={{ flex: '1 1 200px', minWidth: 0, padding: '8px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14 }} autoFocus />
+                        style={{ width: '100%', padding: '8px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} autoFocus />
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button onClick={handleRegisterPasskey} disabled={registeringPasskey}
-                          style={{ padding: '8px 20px', background: registeringPasskey ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                          {registeringPasskey ? 'Registering...' : 'Continue'}
+                          style={{ flex: 1, padding: '8px 16px', background: registeringPasskey ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                          {registeringPasskey ? 'Registering...' : 'Create Passkey'}
                         </button>
                         <button onClick={() => { setShowPasskeyNameInput(false); setPwError(null); }}
-                          style={{ padding: '8px 12px', background: '#f0f0f0', color: '#666', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+                          style={{ padding: '8px 16px', background: '#f0f0f0', color: '#666', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
                       </div>
                     </div>
                   ) : (
@@ -2109,7 +2109,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         <DeleteAccountSection onDeleted={handleLogoutFromAccount} />
       )}
 
-      <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#bbb' }}>
+      <div style={{ textAlign: 'center', marginTop: 10, marginBottom: 20, fontSize: 11, color: '#bbb' }}>
         v{window.APP_VERSION || '?'}
       </div>
     </div>
