@@ -21,6 +21,10 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [billingUserId, setBillingUserId] = useState('');
   const [savingBilling, setSavingBilling] = useState(false);
   const [recipientCaregivers, setRecipientCaregivers] = useState([]);
+  const [careRecipientId, setCareRecipientId] = useState(null);
+  const [showAssignPicker, setShowAssignPicker] = useState(false);
+  const [availableCaregivers, setAvailableCaregivers] = useState([]);
+  const [loadingAvailable, setLoadingAvailable] = useState(false);
   const { showToast } = useToast();
 
   const fetchTeam = async () => {
@@ -42,7 +46,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
 
   useEffect(() => { if (careTeamId) fetchTeam(); }, [careTeamId]);
 
-  // Fetch caregivers who've cared for this recipient
+  // Fetch caregivers who've cared for or are assigned to this recipient
   const fetchCaregivers = async () => {
     if (!careTeamId) return;
     try {
@@ -50,10 +54,56 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
       if (res?.ok) {
         const data = await res.json();
         setRecipientCaregivers(data.caregivers || []);
+        if (data.careRecipientId) setCareRecipientId(data.careRecipientId);
       }
     } catch (err) { console.error('Fetch caregivers error:', err); }
   };
   useEffect(() => { if (careTeamId) fetchCaregivers(); }, [careTeamId]);
+
+  // Fetch all available caregivers (for assign picker)
+  const openAssignPicker = async () => {
+    setShowAssignPicker(true);
+    setLoadingAvailable(true);
+    try {
+      const res = await apiFetch('/api/caregivers?available=true');
+      if (res?.ok) {
+        const data = await res.json();
+        // Filter out already-assigned caregivers
+        const assignedIds = new Set(recipientCaregivers.filter(c => c.is_assigned).map(c => c.caregiver_profile_id));
+        setAvailableCaregivers((data.caregivers || []).filter(c => !assignedIds.has(c.id)));
+      }
+    } catch (err) { console.error('Fetch available caregivers error:', err); }
+    setLoadingAvailable(false);
+  };
+
+  const handleAssignCaregiver = async (caregiverProfileId) => {
+    if (!careRecipientId) return;
+    try {
+      const res = await apiFetch('/api/assignments', {
+        method: 'POST',
+        body: JSON.stringify({ caregiverProfileId, careRecipientId: careRecipientId }),
+      });
+      if (res?.ok) {
+        showToast('Caregiver assigned', 'success');
+        setShowAssignPicker(false);
+        fetchCaregivers();
+      } else {
+        const data = await res?.json();
+        showToast(data?.error || 'Failed to assign', 'error');
+      }
+    } catch { showToast('Failed to assign caregiver', 'error'); }
+  };
+
+  const handleUnassignCaregiver = async (assignmentId, name) => {
+    if (!confirm(`Remove ${name} from ${team.recipient_first_name}'s caregivers?`)) return;
+    try {
+      const res = await apiFetch(`/api/assignments/${assignmentId}`, { method: 'DELETE' });
+      if (res?.ok) {
+        showToast(`${name} removed`, 'success');
+        fetchCaregivers();
+      }
+    } catch { showToast('Failed to remove caregiver', 'error'); }
+  };
 
   // Fetch recent completed visits for this care team's recipient
   useEffect(() => {
@@ -429,37 +479,100 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
       )}
 
       {/* Caregivers for this recipient */}
-      {recipientCaregivers.length > 0 && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-header">{team.recipient_first_name}'s Caregivers ({recipientCaregivers.length})</div>
-          {recipientCaregivers.map(cg => (
-            <div key={cg.caregiver_profile_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
-              {cg.avatar_url ? (
-                <img src={cg.avatar_url} alt={`${cg.first_name?.[0]}${cg.last_name?.[0]}`} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#e8f5e9',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 16, fontWeight: 700, color: '#1b6b5a' }}>
-                  {cg.first_name?.[0]}{cg.last_name?.[0]}
-                </div>
-              )}
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#333', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {cg.first_name} {cg.last_name}
-                  {cg.is_favorite ? <span title="Favorite" style={{ fontSize: 14 }}>⭐</span> : null}
-                </div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
-                  {cg.visit_count} visit{cg.visit_count !== 1 ? 's' : ''}
-                  {cg.last_visit_date ? ` · Last: ${cg.last_visit_date}` : ''}
-                </div>
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{team.recipient_first_name}'s Caregivers ({recipientCaregivers.length})</span>
+          {isLeader && (
+            <button onClick={openAssignPicker}
+              style={{ padding: '5px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+              + Assign
+            </button>
+          )}
+        </div>
+        {recipientCaregivers.length === 0 && (
+          <div style={{ padding: '20px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+            No caregivers assigned yet. Tap "+ Assign" to add one.
+          </div>
+        )}
+        {recipientCaregivers.map(cg => (
+          <div key={cg.caregiver_profile_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+            {cg.avatar_url ? (
+              <img src={cg.avatar_url} alt={`${cg.first_name?.[0]}${cg.last_name?.[0]}`} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#e8f5e9',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 16, fontWeight: 700, color: '#1b6b5a' }}>
+                {cg.first_name?.[0]}{cg.last_name?.[0]}
               </div>
-              {cg.is_assigned ? (
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#1b6b5a', background: '#e0f2e9', padding: '4px 10px', borderRadius: 12 }}>Assigned</span>
-              ) : (
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#888', background: '#f5f5f5', padding: '4px 10px', borderRadius: 12 }}>Past</span>
-              )}
+            )}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#333', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {cg.first_name} {cg.last_name}
+                {cg.is_favorite ? <span title="Favorite" style={{ fontSize: 14 }}>⭐</span> : null}
+              </div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                {cg.visit_count > 0 ? `${cg.visit_count} visit${cg.visit_count !== 1 ? 's' : ''}` : 'No visits yet'}
+                {cg.last_visit_date ? ` · Last: ${cg.last_visit_date}` : ''}
+              </div>
             </div>
-          ))}
+            {cg.is_assigned ? (
+              <button onClick={() => handleUnassignCaregiver(cg.assignment_id, `${cg.first_name} ${cg.last_name}`)}
+                title="Remove assignment"
+                style={{ fontSize: 11, fontWeight: 600, color: '#1b6b5a', background: '#e0f2e9', padding: '4px 10px', borderRadius: 12, border: 'none', cursor: 'pointer' }}>
+                Assigned ✕
+              </button>
+            ) : (
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#888', background: '#f5f5f5', padding: '4px 10px', borderRadius: 12 }}>Past</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Assign Caregiver Picker Modal */}
+      {showAssignPicker && (
+        <div className="modal-overlay" onClick={() => setShowAssignPicker(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440, maxHeight: '70vh', overflow: 'auto' }}>
+            <button className="modal-close" onClick={() => setShowAssignPicker(false)}>✕</button>
+            <div className="modal-header" style={{ fontSize: 17 }}>
+              Assign Caregiver to {team.recipient_first_name}
+            </div>
+            <p style={{ fontSize: 13, color: '#666', margin: '0 0 14px' }}>
+              Pick a caregiver to assign. They'll be able to see {team.recipient_first_name}'s care info and accept sessions.
+            </p>
+            {loadingAvailable ? (
+              <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>Loading caregivers...</div>
+            ) : availableCaregivers.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 20, color: '#999', fontSize: 13 }}>
+                No additional caregivers available to assign.
+              </div>
+            ) : (
+              availableCaregivers.map(cg => (
+                <div key={cg.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  {cg.profilePhoto ? (
+                    <img src={cg.profilePhoto} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#e8f5e9',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 15, fontWeight: 700, color: '#1b6b5a' }}>
+                      {cg.name?.split(' ').map(n => n[0]).join('') || '?'}
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{cg.name}</div>
+                    <div style={{ fontSize: 12, color: '#888' }}>
+                      {cg.city ? `${cg.city}, ${cg.state}` : 'No location'}
+                      {cg.distance !== undefined ? ` · ${cg.distance} mi` : ''}
+                      {cg.hourlyRate ? ` · $${cg.hourlyRate}/hr` : ''}
+                    </div>
+                  </div>
+                  <button onClick={() => handleAssignCaregiver(cg.id)}
+                    style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Assign
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 

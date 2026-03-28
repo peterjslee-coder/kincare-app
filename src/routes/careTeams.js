@@ -201,26 +201,29 @@ router.get("/:id/caregivers", requireRole("family"), async (req, res) => {
     const team = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(req.params.id);
     if (!team) return res.status(404).json({ error: "Care team not found" });
 
-    // Get all caregivers from completed/in-progress sessions + assignments
+    // Get caregivers from sessions AND assignments (union to catch assigned-but-no-sessions)
     const caregivers = await db.prepare(`
       SELECT cp.id AS caregiver_profile_id, u.id AS user_id,
         u.first_name, u.last_name, u.avatar_url,
         COUNT(DISTINCT cs.id) AS visit_count,
         MAX(cs.scheduled_date) AS last_visit_date,
-        COALESCE(ca.is_favorite, 0) AS is_favorite,
-        ca.id AS assignment_id,
-        COALESCE(ca.is_active, 0) AS is_assigned
-      FROM care_sessions cs
-      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        MAX(CASE WHEN ca.is_favorite = 1 THEN 1 ELSE 0 END) AS is_favorite,
+        MAX(ca.id) AS assignment_id,
+        MAX(CASE WHEN ca.is_active = 1 THEN 1 ELSE 0 END) AS is_assigned
+      FROM caregiver_profiles cp
       JOIN users u ON cp.user_id = u.id
+      LEFT JOIN care_sessions cs ON cs.caregiver_id = cp.id
+        AND cs.care_recipient_id = ? AND cs.status IN ('completed', 'in_progress')
       LEFT JOIN caregiver_assignments ca ON ca.caregiver_profile_id = cp.id
-        AND ca.care_recipient_id = cs.care_recipient_id AND ca.is_active = 1
-      WHERE cs.care_recipient_id = ? AND cs.status IN ('completed', 'in_progress')
-      GROUP BY cp.id, u.id, u.first_name, u.last_name, u.avatar_url, ca.is_favorite, ca.id, ca.is_active
-      ORDER BY COALESCE(ca.is_favorite, 0) DESC, visit_count DESC
-    `).all(team.care_recipient_id);
+        AND ca.care_recipient_id = ? AND ca.is_active = 1
+      WHERE (cs.id IS NOT NULL OR ca.id IS NOT NULL)
+      GROUP BY cp.id, u.id, u.first_name, u.last_name, u.avatar_url
+      ORDER BY MAX(CASE WHEN ca.is_favorite = 1 THEN 1 ELSE 0 END) DESC,
+               MAX(CASE WHEN ca.is_active = 1 THEN 1 ELSE 0 END) DESC,
+               COUNT(DISTINCT cs.id) DESC
+    `).all(team.care_recipient_id, team.care_recipient_id);
 
-    res.json({ caregivers });
+    res.json({ caregivers, careRecipientId: team.care_recipient_id });
   } catch (err) {
     console.error("Get care team caregivers error:", err);
     res.status(500).json({ error: "Failed to get caregivers" });
