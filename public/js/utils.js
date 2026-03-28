@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef, useCallback, createContext, useContext } = React;
+const { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } = React;
 const API_BASE = window.location.origin;
 
 // ─── Accessibility: Text size ───

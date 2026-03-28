@@ -3,6 +3,7 @@ const {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   createContext,
   useContext
 } = React;

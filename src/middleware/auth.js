@@ -226,7 +226,9 @@ function verifyCsrf(req, res, next) {
   // These are entry points that may be called with a stale auth cookie from a previous session
   const publicAuthPaths = ["/api/auth/login", "/api/auth/register", "/api/auth/demo-login",
     "/api/auth/verify-email", "/api/auth/refresh", "/api/auth/passkey-login",
-    "/api/auth/passkey-login-verify", "/api/auth/logout"];
+    "/api/auth/passkey-login-verify", "/api/auth/logout",
+    "/api/passkeys/authenticate/options", "/api/passkeys/authenticate/verify",
+    "/api/passkeys/register/options", "/api/passkeys/register/verify"];
   if (publicAuthPaths.some(p => fullPath === p || fullPath.startsWith(p + "?"))) return next();
   // Skip for webhook endpoints (server-to-server, no cookie/CSRF)
   if (fullPath.startsWith("/api/checkr/webhook") || fullPath.startsWith("/api/payments/webhook")) return next();
