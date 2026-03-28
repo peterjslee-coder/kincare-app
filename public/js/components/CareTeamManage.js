@@ -20,6 +20,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [a11yExpanded, setA11yExpanded] = useState(false);
   const [billingUserId, setBillingUserId] = useState('');
   const [savingBilling, setSavingBilling] = useState(false);
+  const [recipientCaregivers, setRecipientCaregivers] = useState([]);
   const { showToast } = useToast();
 
   const fetchTeam = async () => {
@@ -40,6 +41,19 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   };
 
   useEffect(() => { if (careTeamId) fetchTeam(); }, [careTeamId]);
+
+  // Fetch caregivers who've cared for this recipient
+  const fetchCaregivers = async () => {
+    if (!careTeamId) return;
+    try {
+      const res = await apiFetch(`/api/care-teams/${careTeamId}/caregivers`);
+      if (res?.ok) {
+        const data = await res.json();
+        setRecipientCaregivers(data.caregivers || []);
+      }
+    } catch (err) { console.error('Fetch caregivers error:', err); }
+  };
+  useEffect(() => { if (careTeamId) fetchCaregivers(); }, [careTeamId]);
 
   // Fetch recent completed visits for this care team's recipient
   useEffect(() => {
@@ -411,6 +425,41 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Caregivers for this recipient */}
+      {recipientCaregivers.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-header">{team.recipient_first_name}'s Caregivers ({recipientCaregivers.length})</div>
+          {recipientCaregivers.map(cg => (
+            <div key={cg.caregiver_profile_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+              {cg.avatar_url ? (
+                <img src={cg.avatar_url} alt={`${cg.first_name?.[0]}${cg.last_name?.[0]}`} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#e8f5e9',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, fontWeight: 700, color: '#1b6b5a' }}>
+                  {cg.first_name?.[0]}{cg.last_name?.[0]}
+                </div>
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#333', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {cg.first_name} {cg.last_name}
+                  {cg.is_favorite ? <span title="Favorite" style={{ fontSize: 14 }}>⭐</span> : null}
+                </div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                  {cg.visit_count} visit{cg.visit_count !== 1 ? 's' : ''}
+                  {cg.last_visit_date ? ` · Last: ${cg.last_visit_date}` : ''}
+                </div>
+              </div>
+              {cg.is_assigned ? (
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#1b6b5a', background: '#e0f2e9', padding: '4px 10px', borderRadius: 12 }}>Assigned</span>
+              ) : (
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#888', background: '#f5f5f5', padding: '4px 10px', borderRadius: 12 }}>Past</span>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

@@ -189,6 +189,44 @@ router.get("/:id", requireRole("family"), async (req, res) => {
   }
 });
 
+// ─── GET /api/care-teams/:id/caregivers ─── All caregivers who've cared for this recipient
+router.get("/:id/caregivers", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const membership = await db.prepare(
+      "SELECT role FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
+    ).get(req.params.id, req.user.id);
+    if (!membership) return res.status(404).json({ error: "Care team not found" });
+
+    const team = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(req.params.id);
+    if (!team) return res.status(404).json({ error: "Care team not found" });
+
+    // Get all caregivers from completed/in-progress sessions + assignments
+    const caregivers = await db.prepare(`
+      SELECT cp.id AS caregiver_profile_id, u.id AS user_id,
+        u.first_name, u.last_name, u.avatar_url,
+        COUNT(DISTINCT cs.id) AS visit_count,
+        MAX(cs.scheduled_date) AS last_visit_date,
+        COALESCE(ca.is_favorite, 0) AS is_favorite,
+        ca.id AS assignment_id,
+        COALESCE(ca.is_active, 0) AS is_assigned
+      FROM care_sessions cs
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      JOIN users u ON cp.user_id = u.id
+      LEFT JOIN caregiver_assignments ca ON ca.caregiver_profile_id = cp.id
+        AND ca.care_recipient_id = cs.care_recipient_id AND ca.is_active = 1
+      WHERE cs.care_recipient_id = ? AND cs.status IN ('completed', 'in_progress')
+      GROUP BY cp.id, u.id, u.first_name, u.last_name, u.avatar_url, ca.is_favorite, ca.id, ca.is_active
+      ORDER BY COALESCE(ca.is_favorite, 0) DESC, visit_count DESC
+    `).all(team.care_recipient_id);
+
+    res.json({ caregivers });
+  } catch (err) {
+    console.error("Get care team caregivers error:", err);
+    res.status(500).json({ error: "Failed to get caregivers" });
+  }
+});
+
 // ─── PUT /api/care-teams/:id ─── Update care team name (leader only)
 router.put("/:id", requireRole("family"), async (req, res) => {
   try {
