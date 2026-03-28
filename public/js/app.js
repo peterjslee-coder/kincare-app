@@ -1111,9 +1111,6 @@ const App = () => {
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
-    if (currentUser?.companionAccess || currentUser?.isAdmin) {
-      familyNav.push({ id: '_launch_kindred', icon: '🎙️', label: 'Kindred', isAction: true });
-    }
     if (currentUser?.isAdmin) {
       familyNav.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
     }
@@ -1197,9 +1194,6 @@ const App = () => {
       { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
-    if (currentUser?.companionAccess || currentUser?.isAdmin) {
-      familyBottom.push({ id: '_launch_kindred', icon: '🎙️', label: 'Kindred', isKindred: true });
-    }
     familyBottom.push({ id: 'account', icon: '👤', label: 'Account' });
     if (currentUser?.isAdmin) {
       familyBottom.push({ id: 'admin', icon: '🛡️', label: 'Admin' });

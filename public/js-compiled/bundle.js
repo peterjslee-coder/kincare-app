@@ -877,9 +877,6 @@ var InPlaceApp = (() => {
         { id: "activity", icon: "\u{1F4E2}", label: "Activity Feed" },
         { id: "messages", icon: "\u{1F4AC}", label: "Messages" }
       ];
-      if (currentUser?.companionAccess || currentUser?.isAdmin) {
-        familyNav.push({ id: "_launch_kindred", icon: "\u{1F399}\uFE0F", label: "Kindred", isAction: true });
-      }
       if (currentUser?.isAdmin) {
         familyNav.push({ id: "admin", icon: "\u{1F6E1}\uFE0F", label: "Admin" });
       }
@@ -958,9 +955,6 @@ var InPlaceApp = (() => {
         { id: "caregivers", icon: "\u{1F91D}", label: "Caregivers" },
         { id: "messages", icon: "\u{1F4AC}", label: "Messages" }
       ];
-      if (currentUser?.companionAccess || currentUser?.isAdmin) {
-        familyBottom.push({ id: "_launch_kindred", icon: "\u{1F399}\uFE0F", label: "Kindred", isKindred: true });
-      }
       familyBottom.push({ id: "account", icon: "\u{1F464}", label: "Account" });
       if (currentUser?.isAdmin) {
         familyBottom.push({ id: "admin", icon: "\u{1F6E1}\uFE0F", label: "Admin" });
