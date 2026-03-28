@@ -494,8 +494,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   }
 
   // ─── Overdue session detection (15+ min past expected end) ───
-  const overdueSession = useMemo(() => {
-    if (!data?.upcomingSessions) return null;
+  // (plain computation — re-runs on every render, which is fine since tick triggers re-renders every 30s)
+  let overdueSession = null;
+  if (data?.upcomingSessions) {
     const tz0 = data.upcomingSessions[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
     for (const s of data.upcomingSessions) {
       if (s.status !== 'in_progress' || !s.durationHours) continue;
@@ -509,11 +510,11 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       const endMs = startMs + (s.durationHours * 3600000);
       const overdueMs = Date.now() - endMs;
       if (overdueMs >= 15 * 60000) {
-        return { ...s, overdueMinutes: Math.floor(overdueMs / 60000) };
+        overdueSession = { ...s, overdueMinutes: Math.floor(overdueMs / 60000) };
+        break;
       }
     }
-    return null;
-  }, [data?.upcomingSessions, tick]);
+  }
 
   const showOverduePopup = overdueSession && !overduePopupDismissedIds[overdueSession.id];
 
