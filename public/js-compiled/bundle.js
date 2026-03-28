@@ -955,6 +955,7 @@ var InPlaceApp = (() => {
       const familyBottom = [
         { id: "dashboard", icon: "\u{1F3E0}", label: "Home" },
         { id: "care-profile", icon: "\u{1F337}", label: "Loved One" },
+        { id: "caregivers", icon: "\u{1F91D}", label: "Caregivers" },
         { id: "messages", icon: "\u{1F4AC}", label: "Messages" }
       ];
       if (currentUser?.companionAccess || currentUser?.isAdmin) {

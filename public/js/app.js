@@ -1194,6 +1194,7 @@ const App = () => {
     const familyBottom = [
       { id: 'dashboard', icon: '🏠', label: 'Home' },
       { id: 'care-profile', icon: '🌷', label: 'Loved One' },
+      { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
     if (currentUser?.companionAccess || currentUser?.isAdmin) {
