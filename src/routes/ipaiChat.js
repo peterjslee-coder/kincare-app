@@ -133,6 +133,20 @@ router.post("/chat", async (req, res) => {
           }
         } catch {}
         console.warn(`[iPAi SAFETY] Pre-screen ${flagType} for user ${userId}: "${message.substring(0, 100)}"`);
+
+        // Auto-create system ticket for safety flag
+        try {
+          const ticketRouter = require("./tickets");
+          if (ticketRouter.createSystemTicket) {
+            await ticketRouter.createSystemTicket({
+              subject: hasAbuseSignal ? `Safety: Possible abuse reported by ${user?.first_name || 'user'}` : `Safety: Off-platform attempt by ${user?.first_name || 'user'}`,
+              description: `User message in iPAi: "${message.substring(0, 500)}"`,
+              category: 'safety',
+              priority: hasAbuseSignal ? 'urgent' : 'high',
+              relatedUserId: userId,
+            });
+          }
+        } catch (ticketErr) { console.error('[iPAi] System ticket creation error:', ticketErr.message); }
       } catch (flagErr) {
         console.error("[iPAi] Pre-screen flag error:", flagErr.message);
       }

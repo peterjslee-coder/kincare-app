@@ -9,6 +9,7 @@ const { authenticate, requireRole } = require("../middleware/auth");
 const { calculateSessionCost, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
 const { getNowInZone, buildDateTimeInZone } = require("../utils/timezone");
 const { sendPushToUser } = require("./push");
+const ticketRouter = require("./tickets");
 
 // emitToUser injected from server.js at startup
 let _emitToUser = null;
@@ -804,6 +805,20 @@ async function pollCaregiverNoShows() {
           }
 
           console.log(`[accountability] Caregiver no-show: session ${s.id.slice(0, 8)} — notified caregiver + family, account paused`);
+
+          // Auto-create system ticket for no-show
+          try {
+            if (ticketRouter.createSystemTicket) {
+              await ticketRouter.createSystemTicket({
+                subject: `No-show: ${s.caregiver_first || 'Caregiver'} missed session ${s.id.slice(0, 8)}`,
+                description: `Caregiver did not check in for scheduled session on ${s.scheduled_date} at ${s.scheduled_time}. Account has been paused.`,
+                category: 'visit_issue',
+                priority: 'high',
+                relatedUserId: s.caregiver_user_id,
+                relatedSessionId: s.id,
+              });
+            }
+          } catch (ticketErr) { console.error('[accountability] Failed to create no-show ticket:', ticketErr.message); }
         }
       } catch (err) {
         console.error(`[accountability] No-show poll error for ${s.id.slice(0, 8)}:`, err.message);

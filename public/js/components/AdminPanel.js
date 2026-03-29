@@ -3,6 +3,9 @@
 const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userDrawer, setUserDrawer] = useState(null);
+  const [userDrawerLoading, setUserDrawerLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [usersTotal, setUsersTotal] = useState(0);
@@ -42,6 +45,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [ticketComments, setTicketComments] = useState([]);
   const [newTicketComment, setNewTicketComment] = useState('');
+  const [adminUsers, setAdminUsers] = useState([]);
 
   // Background checks
   const [bgCheckCandidates, setBgCheckCandidates] = useState([]);
@@ -139,6 +143,34 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         showToast('Comment added', 'success');
       }
     } catch (err) { showToast('Failed to add comment', 'error'); }
+  };
+
+  const loadUserDetail = async (userId) => {
+    setUserDrawerLoading(true);
+    setUserDrawer(null);
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/detail`);
+      if (res?.ok) {
+        const data = await res.json();
+        setUserDrawer(data);
+      }
+    } catch (err) { console.error('Load user detail error:', err); }
+    setUserDrawerLoading(false);
+  };
+
+  const saveAdminNotes = async (userId, notes) => {
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/admin-notes`, {
+        method: 'PUT',
+        body: JSON.stringify({ admin_notes: notes }),
+      });
+      if (res?.ok) {
+        showToast('Notes saved', 'success');
+        if (userDrawer?.user?.id === userId) {
+          setUserDrawer(prev => ({ ...prev, user: { ...prev.user, admin_notes: notes } }));
+        }
+      }
+    } catch (err) { showToast('Failed to save notes', 'error'); }
   };
 
   // Safety flag passkey state
@@ -602,6 +634,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         setCheckrAlertCount(d.checkrAlerts || 0);
         setBgCheckActionItems(d.bgCheckActionItems || []);
       }
+    }).catch(() => {});
+    // Fetch admin users for ticket assignment
+    apiFetch('/api/admin/users?role=&demo=all&search=').then(r => r?.ok ? r.json() : null).then(d => {
+      if (d?.users) setAdminUsers(d.users.filter(u => u.admin_role));
     }).catch(() => {});
     // Fetch ticket counts for badge
     apiFetch('/api/admin/tickets?limit=1').then(r => r?.ok ? r.json() : null).then(d => {
@@ -1235,31 +1271,108 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     ]},
   ];
 
+  const activeTabLabel = tabGroups.flatMap(g => g.tabs).find(t => t.id === activeTab)?.label || 'Dashboard';
+
   return (
-    <div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', gap: '12px' }}>
-        <div style={{ flex: '1 1 0', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-            <span style={{
-              background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '4px 10px', borderRadius: '6px',
-              fontSize: '13px', fontWeight: 700, letterSpacing: '0.5px', flexShrink: 0,
-            }}>ADMIN</span>
-            <h1 className="greeting" style={{ margin: 0, fontSize: '22px', lineHeight: '1.3' }}>
-              Platform Dashboard
-            </h1>
+    <div style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden', margin: '-16px -16px 0', position: 'relative' }}>
+      {/* ═══ Sidebar Overlay (mobile) ═══ */}
+      {sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 199,
+          display: window.innerWidth <= 768 ? 'block' : 'none',
+        }} />
+      )}
+
+      {/* ═══ Sidebar ═══ */}
+      <div style={{
+        width: 240, minWidth: 240, background: '#1a1a2e', color: '#fff',
+        display: 'flex', flexDirection: 'column', flexShrink: 0, zIndex: 200,
+        transition: 'transform 0.28s cubic-bezier(.4,0,.2,1)',
+        ...(window.innerWidth <= 768 ? {
+          position: 'fixed', top: 0, left: 0, bottom: 0,
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+          boxShadow: sidebarOpen ? '4px 0 20px rgba(0,0,0,0.2)' : 'none',
+        } : {}),
+      }}>
+        {/* Sidebar header */}
+        <div style={{ padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.3 }}>in<span style={{ color: '#4ecdc4' }}>Place</span></span>
+            <span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 20, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, background: 'linear-gradient(135deg, #e8724a, #d85a2b)', color: '#fff' }}>
+              {currentUser?.admin_role || 'Admin'}
+            </span>
           </div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            Manage users, approvals, and platform operations
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>v{window.APP_VERSION || ''}</span>
+          {window.innerWidth <= 768 && (
+            <button onClick={() => setSidebarOpen(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 22, cursor: 'pointer', padding: '2px 6px', borderRadius: 6 }}>×</button>
+          )}
+        </div>
+
+        {/* Sidebar nav */}
+        <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
+          {tabGroups.map(group => (
+            <div key={group.label} style={{ padding: '0 10px', marginBottom: 2 }}>
+              <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,0.28)', padding: '14px 10px 5px' }}>
+                {group.label}
+              </div>
+              {group.tabs.map(tab => (
+                <div key={tab.id} onClick={() => { setActiveTab(tab.id); setSidebarOpen(false); }} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                  fontSize: 13, position: 'relative', userSelect: 'none',
+                  background: activeTab === tab.id ? 'rgba(78,205,196,0.12)' : 'transparent',
+                  color: activeTab === tab.id ? '#4ecdc4' : 'rgba(255,255,255,0.55)',
+                  fontWeight: activeTab === tab.id ? 600 : 400,
+                  transition: 'all 0.12s',
+                }}>
+                  <span style={{ width: 20, textAlign: 'center', fontSize: 14, flexShrink: 0 }}>{tab.icon}</span>
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tab.label}</span>
+                  {tab.badge ? (
+                    <span style={{
+                      position: 'absolute', right: 8,
+                      background: '#e8724a', color: '#fff', fontSize: 9, fontWeight: 700,
+                      padding: '1px 6px', borderRadius: 10, minWidth: 17, textAlign: 'center',
+                    }}>{tab.badge}</span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        {/* Sidebar footer */}
+        <div style={{ padding: '14px 18px', borderTop: '1px solid rgba(255,255,255,0.07)', fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>
+          v{window.APP_VERSION || ''} · {currentUser?.first_name || 'Admin'}
+        </div>
+      </div>
+
+      {/* ═══ Main Content Area ═══ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        {/* Top bar */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 20px', background: 'var(--bg-card)', borderBottom: '1px solid var(--border-color)', flexShrink: 0, gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <button onClick={() => setSidebarOpen(true)} style={{
+              display: window.innerWidth <= 768 ? 'block' : 'none',
+              background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-primary)', padding: 4, borderRadius: 6,
+            }}>☰</button>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              <span style={{ color: 'var(--role-color)', cursor: 'pointer' }} onClick={() => setActiveTab('overview')}>Admin</span>
+              <span> › </span>
+              <strong style={{ color: 'var(--text-primary)' }}>{activeTabLabel}</strong>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <button onClick={() => { if (window.__navigateTo) window.__navigateTo('account'); }} style={{
+              padding: '6px 12px', background: 'none', color: 'var(--text-secondary)', border: '1px solid var(--border-color)',
+              borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+            }}>⚙️ Account</button>
           </div>
         </div>
-        <button onClick={() => { if (window.__navigateTo) window.__navigateTo('account'); }} style={{
-          padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
-          borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', flexShrink: 0,
-        }}>⚙️ My Account</button>
-      </div>
+
+        {/* Scrollable content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20, WebkitOverflowScrolling: 'touch' }}>
 
       {/* ── ACTION REQUIRED BANNER — always visible when pending approvals exist ── */}
       {(pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 || bgCheckActionItems.length > 0 || safetyFlagCount > 0) && (
@@ -1576,66 +1689,30 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         </div>
       )}
 
-      {/* ── UNIVERSAL SEARCH BAR ── */}
-      <div style={{ position: 'relative', marginBottom: 16 }}>
-        <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, color: 'var(--text-muted)' }}>{'\u{1F50D}'}</span>
-        <input
-          type="text" placeholder="Search people by name or email..."
-          value={userSearch}
-          onChange={(e) => setUserSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              if (activeTab !== 'people') setActiveTab('people');
-              setPeopleSubTab('users');
-              loadUsers();
-            }
-          }}
-          style={{
-            width: '100%', padding: '14px 16px 14px 44px', border: '2px solid #e0e0e0',
-            borderRadius: 12, fontSize: 15, background: 'var(--bg-surface)', outline: 'none',
-            transition: 'border-color 0.2s', boxSizing: 'border-box',
-          }}
-          onFocus={(e) => { e.target.style.borderColor = 'var(--role-color)'; }}
-          onBlur={(e) => { e.target.style.borderColor = 'var(--border-light)'; }}
-        />
-        <span style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--text-muted)' }}>
-          searches users, waitlist & invites
-        </span>
-      </div>
-
-      {/* ── Tab Navigation — Grouped ── */}
-      <div style={{ marginBottom: 20 }}>
-        {tabGroups.map(group => (
-          <div key={group.label} style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: 6, paddingLeft: 4 }}>
-              {group.label}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-              {group.tabs.map(tab => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '10px 6px',
-                  border: 'none', borderRadius: 10, cursor: 'pointer',
-                  background: activeTab === tab.id ? 'var(--role-color)' : 'var(--badge-muted-bg)',
-                  color: activeTab === tab.id ? 'var(--text-on-primary)' : 'var(--text-secondary)',
-                  fontSize: 13, fontWeight: 600, transition: 'all 0.15s', position: 'relative',
-                  boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
-                  whiteSpace: 'nowrap',
-                }}>
-                  <span style={{ fontSize: 15 }}>{tab.icon}</span>
-                  {tab.label}
-                  {tab.badge ? (
-                    <span style={{
-                      position: 'absolute', top: -4, right: -4,
-                      background: 'var(--color-warning)', color: 'var(--text-on-primary)', fontSize: 10, fontWeight: 700,
-                      borderRadius: 10, padding: '1px 6px', minWidth: 18, textAlign: 'center',
-                    }}>{tab.badge}</span>
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* ── Inline search (people tab only) ── */}
+      {activeTab === 'people' && (
+        <div style={{ position: 'relative', marginBottom: 16 }}>
+          <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, color: 'var(--text-muted)' }}>{'\u{1F50D}'}</span>
+          <input
+            type="text" placeholder="Search people by name or email..."
+            value={userSearch}
+            onChange={(e) => setUserSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setPeopleSubTab('users');
+                loadUsers();
+              }
+            }}
+            style={{
+              width: '100%', padding: '12px 16px 12px 44px', border: '1px solid var(--border-color)',
+              borderRadius: 10, fontSize: 14, background: 'var(--bg-surface)', outline: 'none',
+              transition: 'border-color 0.2s', boxSizing: 'border-box', color: 'var(--text-primary)',
+            }}
+            onFocus={(e) => { e.target.style.borderColor = 'var(--role-color)'; }}
+            onBlur={(e) => { e.target.style.borderColor = 'var(--border-color)'; }}
+          />
+        </div>
+      )}
 
       {/* ─── Overview Tab ─── */}
       {activeTab === 'overview' && stats && (
@@ -1817,7 +1894,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     {users.map((u) => {
                       const isPending = pendingApprovals.some(p => p.id === u.id);
                       return (
-                      <tr key={u.id} style={{ borderBottom: '1px solid #f0f0f0', background: isPending ? 'var(--bg-warm)' : 'transparent', borderLeft: isPending ? '4px solid #ff9800' : 'none' }}>
+                      <tr key={u.id} onClick={() => loadUserDetail(u.id)} style={{ borderBottom: '1px solid #f0f0f0', background: isPending ? 'var(--bg-warm)' : 'transparent', borderLeft: isPending ? '4px solid #ff9800' : 'none', cursor: 'pointer', transition: 'background 0.1s' }}>
                         <td style={{ padding: '10px 12px', fontWeight: 500 }}>
                           {u.first_name} {u.last_name}
                           {u.is_admin ? <span style={{ marginLeft: '6px', fontSize: '10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '2px 6px', borderRadius: '4px' }}>ADMIN</span> : ''}
@@ -2818,6 +2895,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   <option value="technical">Technical</option>
                   <option value="safety">Safety</option>
                   <option value="general">General</option>
+                </select>
+                <select value={selectedTicket.assigned_to || ''} onChange={e => updateTicket(selectedTicket.id, { assigned_to: e.target.value || null })}
+                  style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12 }}>
+                  <option value="">Unassigned</option>
+                  {adminUsers.map(a => (
+                    <option key={a.id} value={a.id}>{a.first_name} {a.last_name} ({a.admin_role})</option>
+                  ))}
                 </select>
               </div>
               {/* Comments */}
@@ -4475,6 +4559,152 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           </div>
         </div>
       )}
+
+        </div>
+      </div>
+
+      {/* ═══ User Detail Drawer ═══ */}
+      {(userDrawer || userDrawerLoading) && (
+        <>
+          <div onClick={() => { setUserDrawer(null); setUserDrawerLoading(false); }} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 300,
+          }} />
+          <div style={{
+            position: 'fixed', top: 0, right: 0, width: window.innerWidth <= 768 ? '100%' : 480, maxWidth: '100%', height: '100vh',
+            background: 'var(--bg-card)', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', zIndex: 301,
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+          }}>
+            {/* Drawer header */}
+            <div style={{
+              padding: '18px 20px', borderBottom: '1px solid var(--border-color)',
+              display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+              position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1,
+            }}>
+              <div>
+                {userDrawer?.user ? (
+                  <>
+                    <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {userDrawer.user.first_name} {userDrawer.user.last_name}
+                    </h3>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {userDrawer.user.email} · {userDrawer.user.role}
+                    </p>
+                  </>
+                ) : (
+                  <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-secondary)' }}>Loading...</h3>
+                )}
+              </div>
+              <button onClick={() => { setUserDrawer(null); setUserDrawerLoading(false); }}
+                style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 6 }}>✕</button>
+            </div>
+
+            {userDrawerLoading && !userDrawer && (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading user details...</div>
+            )}
+
+            {userDrawer && (
+              <div style={{ padding: '18px 20px' }}>
+                {/* Journey stage bar */}
+                {userDrawer.journeyStage && (
+                  <div style={{ display: 'flex', gap: 2, marginBottom: 16 }}>
+                    {['signup', 'verified', 'team_built', 'first_visit', 'active'].map(step => {
+                      const steps = userDrawer.journeySteps || {};
+                      const current = userDrawer.journeyStage;
+                      const order = ['signup', 'verified', 'team_built', 'first_visit', 'active'];
+                      const ci = order.indexOf(current);
+                      const si = order.indexOf(step);
+                      const isDone = si < ci;
+                      const isNow = si === ci;
+                      const labels = { signup: 'Signup', verified: 'Verified', team_built: 'Team', first_visit: '1st Visit', active: 'Active' };
+                      return (
+                        <div key={step} style={{
+                          flex: 1, textAlign: 'center', padding: '8px 4px', borderRadius: 6,
+                          fontSize: 10, fontWeight: isNow ? 700 : 500,
+                          background: isNow ? 'var(--role-color)' : isDone ? '#e8f5e9' : 'var(--bg-surface)',
+                          color: isNow ? 'var(--text-on-primary)' : isDone ? '#2e7d32' : 'var(--text-muted)',
+                        }}>{labels[step]}</div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Quick stats */}
+                <div style={{ marginBottom: 22 }}>
+                  <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Stats</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Completed Visits</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.sessionStats?.completed || 0}</div></div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No-shows</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.sessionStats?.no_shows || 0}</div></div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Lifetime Revenue</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>${userDrawer.lifetimeRevenue || '0.00'}</div></div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Avg Rating</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.reviewStats?.avg_rating ? Number(userDrawer.reviewStats.avg_rating).toFixed(1) : '—'} ({userDrawer.reviewStats?.total_reviews || 0})</div></div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Care Teams</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.careTeams?.length || 0}</div></div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Last Active</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.lastActive ? new Date(userDrawer.lastActive).toLocaleDateString() : '—'}</div></div>
+                  </div>
+                </div>
+
+                {/* Admin notes */}
+                <div style={{ marginBottom: 22 }}>
+                  <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Admin Notes</h4>
+                  <textarea
+                    defaultValue={userDrawer.user?.admin_notes || ''}
+                    onBlur={(e) => { if (e.target.value !== (userDrawer.user?.admin_notes || '')) saveAdminNotes(userDrawer.user.id, e.target.value); }}
+                    placeholder="Sticky notes about this user..."
+                    style={{
+                      width: '100%', minHeight: 60, padding: 10, border: '1px solid var(--border-color)',
+                      borderRadius: 8, fontSize: 12, fontFamily: 'inherit', background: '#fff8e1',
+                      color: 'var(--text-primary)', boxSizing: 'border-box', resize: 'vertical',
+                    }}
+                  />
+                </div>
+
+                {/* Tickets */}
+                {userDrawer.tickets?.length > 0 && (
+                  <div style={{ marginBottom: 22 }}>
+                    <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Tickets ({userDrawer.tickets.length})</h4>
+                    {userDrawer.tickets.map(t => (
+                      <div key={t.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-color)', cursor: 'pointer' }}
+                        onClick={() => { setUserDrawer(null); setActiveTab('tickets'); setTimeout(() => loadTicketDetail(t.id), 200); }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{t.subject}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          <span style={{ padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600, color: '#fff',
+                            background: t.status === 'open' ? '#ef5350' : t.status === 'in_progress' ? '#ff9800' : t.status === 'resolved' ? '#4caf50' : '#9e9e9e'
+                          }}>{t.status?.replace('_',' ')}</span>
+                          <span style={{ marginLeft: 8 }}>{new Date(t.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Safety flags */}
+                {userDrawer.safetyFlags?.length > 0 && (
+                  <div style={{ marginBottom: 22 }}>
+                    <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: '#c62828', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Safety Flags ({userDrawer.safetyFlags.length})</h4>
+                    {userDrawer.safetyFlags.map(f => (
+                      <div key={f.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{f.category || 'Flag'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{f.status} · {new Date(f.created_at).toLocaleDateString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Quick actions */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button onClick={() => { setUserDrawer(null); setActiveTab('people'); setUserSearch(userDrawer.user?.email); }}
+                    style={{ padding: '6px 12px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+                    👤 View in People
+                  </button>
+                  <button onClick={() => { setAdminMsgTarget({ id: userDrawer.user?.id, first_name: userDrawer.user?.first_name, last_name: userDrawer.user?.last_name }); }}
+                    style={{ padding: '6px 12px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+                    💬 Message
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
     </div>
   );
 };
