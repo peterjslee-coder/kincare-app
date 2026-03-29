@@ -1047,6 +1047,17 @@ async function initializeDatabase() {
     if (cleared.changes > 0) console.log(`  ✅ Cleared ${cleared.changes} old test sessions from pending review/payment`);
   } catch (e) { /* already cleared */ }
 
+  // ─── v1.56.4 — One-time: kill bogus $15.60 payment record (wrong rate, never completed) ───
+  try {
+    const killed = await db.prepare(`
+      UPDATE payments SET status = 'failed'
+      WHERE id = '2331cb34-2d6c-42a7-97cc-8a5fb5f99516'
+        AND status = 'processing'
+        AND amount = 15.6
+    `).run();
+    if (killed.changes > 0) console.log(`  ✅ Killed bogus $15.60 payment record for Cary session`);
+  } catch (e) { /* already killed */ }
+
   // ─── v1.50.55 — Rewrite FAQ articles with accurate content ───
   try {
     const faqVersion = await db.prepare("SELECT answer FROM help_articles WHERE question = 'Does InPlace cost anything?' AND is_published = 1").get();
