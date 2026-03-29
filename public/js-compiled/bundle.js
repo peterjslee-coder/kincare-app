@@ -26206,15 +26206,23 @@ const RequestCareModal = window.RequestCareModal = ({
     fetchData();
   }, []);
 
-  // Adjust default time if 8am is in the past for today, and auto-scroll time picker
+  // Adjust default time if selected hour is unavailable for the chosen date
   useEffect(() => {
     if (!date) return;
     const opts = getTimeOptions();
-    // If current default isn't in the available options, pick the first available
-    if (time && !opts.find(o => o.val === time)) {
-      setTime(opts.length > 0 ? opts[0].val : '');
+    // Check if the selected hour exists in available options (ignore minutes — sub-pills are valid)
+    if (time) {
+      const selectedHour = time.split(':')[0];
+      const hourAvailable = opts.find(o => o.val.split(':')[0] === selectedHour);
+      if (!hourAvailable) {
+        setTime(opts.length > 0 ? opts[0].val : '');
+      }
     }
-    // Scroll to the selected time pill after render
+  }, [date]);
+
+  // Auto-scroll to selected time pill when time changes
+  useEffect(() => {
+    if (!time) return;
     setTimeout(() => {
       if (timeScrollRef.current) {
         const selected = timeScrollRef.current.querySelector('[data-time-selected="true"]');
@@ -26227,7 +26235,7 @@ const RequestCareModal = window.RequestCareModal = ({
         }
       }
     }, 50);
-  }, [date, time]);
+  }, [time]);
 
   // Fetch visit counts for the selected care recipient (for repeat caregiver nudge)
   useEffect(() => {
