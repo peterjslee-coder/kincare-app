@@ -37,6 +37,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [pendingInvites, setPendingInvites] = useState([]);
   const [acceptingInviteId, setAcceptingInviteId] = useState(null);
   const [invitesChecked, setInvitesChecked] = useState(false);
+  // In-app notifications (v1.56.0)
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
@@ -106,6 +109,28 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         const d = await res.json();
         setPendingReviews(d.pendingReviews || []);
       }
+    } catch {}
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/push/notifications?limit=10');
+      if (res?.ok) {
+        const d = await res.json();
+        setNotifications(d.notifications || []);
+        setUnreadNotifCount(d.unreadCount || 0);
+      }
+    } catch {}
+  };
+
+  const markNotificationsRead = async (ids) => {
+    try {
+      await apiFetch('/api/push/notifications/mark-read', {
+        method: 'POST',
+        body: JSON.stringify({ ids: ids || [] }),
+      });
+      setNotifications(prev => prev.map(n => ids ? (ids.includes(n.id) ? { ...n, read: 1 } : n) : { ...n, read: 1 }));
+      setUnreadNotifCount(prev => ids ? Math.max(0, prev - ids.length) : 0);
     } catch {}
   };
 
@@ -251,9 +276,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   };
 
   useEffect(() => {
-    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews(); fetchPendingInvites();
+    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews(); fetchPendingInvites(); fetchNotifications();
     // Re-fetch when a new session is created (e.g. from RequestCareModal)
-    const onSessionsUpdated = () => { fetchDashboard(); fetchPendingReviews(); };
+    const onSessionsUpdated = () => { fetchDashboard(); fetchPendingReviews(); fetchNotifications(); };
     window.addEventListener('sessions-updated', onSessionsUpdated);
     return () => window.removeEventListener('sessions-updated', onSessionsUpdated);
   }, []);
@@ -1247,6 +1272,81 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           })()}
         </div>
       )}
+
+      {/* Recent Activity — unread in-app notifications (v1.56.0) */}
+      {(() => {
+        const unread = notifications.filter(n => !n.read);
+        if (unread.length === 0) return null;
+        const typeIcons = {
+          care_request_accepted: '\u2705',
+          message: '\u{1F4AC}',
+          payment: '\u{1F4B3}',
+          manual_payment: '\u{1F4B5}',
+          time_proposal: '\u{1F552}',
+          proposal_accepted: '\u{1F91D}',
+          proposal_declined: '\u274C',
+          check_in: '\u{1F3E0}',
+          check_out: '\u{1F44B}',
+          missing_address: '\u{1F4CD}',
+          general: '\u{1F514}',
+        };
+        const getIcon = (type) => typeIcons[type] || typeIcons.general;
+        const timeAgo = (dateStr) => {
+          const diff = Date.now() - new Date(dateStr).getTime();
+          const mins = Math.floor(diff / 60000);
+          if (mins < 1) return 'Just now';
+          if (mins < 60) return `${mins}m ago`;
+          const hrs = Math.floor(mins / 60);
+          if (hrs < 24) return `${hrs}h ago`;
+          return `${Math.floor(hrs / 24)}d ago`;
+        };
+        return (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#4a90d9', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                {'\u{1F514}'} Recent Activity ({unread.length})
+              </div>
+              {unread.length > 1 && (
+                <button onClick={() => markNotificationsRead(unread.map(n => n.id))} style={{
+                  padding: '4px 12px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                }}>Mark all read</button>
+              )}
+            </div>
+            {unread.slice(0, 5).map(n => {
+              const nData = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : {};
+              return (
+                <div key={n.id} className="activity-new-shimmer" onClick={() => {
+                  markNotificationsRead([n.id]);
+                  // Navigate based on notification type
+                  if (nData.sessionId && typeof setVisitDetailSessionId === 'function') setVisitDetailSessionId(nData.sessionId);
+                  else if (nData.type === 'message' && onNavigate) onNavigate('messages');
+                  else if (['payment', 'manual_payment'].includes(nData.type) && onNavigate) onNavigate('payments');
+                }} style={{
+                  marginBottom: 6, padding: '12px 14px', cursor: 'pointer', borderRadius: 10,
+                  border: '2px solid #4a90d9',
+                  background: 'linear-gradient(135deg, rgba(74, 144, 217, 0.06) 0%, var(--bg-card) 100%)',
+                  boxShadow: '0 1px 6px rgba(74, 144, 217, 0.10)',
+                  position: 'relative', overflow: 'hidden',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{getIcon(n.type)}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{n.title}</div>
+                      {n.body && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.body}</div>}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, marginTop: 2 }}>{timeAgo(n.created_at)}</div>
+                  </div>
+                </div>
+              );
+            })}
+            {unread.length > 5 && (
+              <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                + {unread.length - 5} more
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Next Up — up to 10 sessions within 2 weeks, collapsed to 2 cards with fade */}
       {(() => {

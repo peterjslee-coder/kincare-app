@@ -396,6 +396,23 @@ async function sendPushToUser(userId, payload, eventType) {
       const prefs = JSON.parse(targetUser.notification_prefs);
       if (prefs[`push_${eventType}`] === false) return; // user opted out
     }
+
+    // ─── v1.56.0 — Also create an in-app notification record ───
+    try {
+      await db.prepare(
+        "INSERT INTO notifications (id, user_id, title, body, type, data) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(
+        uuid(),
+        userId,
+        payload.title || "InPlace",
+        payload.body || "",
+        eventType || payload.data?.type || "general",
+        payload.data ? JSON.stringify(payload.data) : null
+      );
+    } catch (inAppErr) {
+      // Non-blocking — in-app notification is a bonus, never block push delivery
+      console.log("In-app notification insert failed (non-blocking):", inAppErr.message);
+    }
   } catch (e) { /* proceed if prefs check fails */ }
 
   try {
@@ -706,6 +723,48 @@ async function sendSessionReminders(sessionId, reminderType) {
     console.error(`Session reminder error (${reminderType}, session ${sessionId}):`, err.message);
   }
 }
+
+// ─── v1.56.0 — In-app notifications API ───
+
+// GET /api/push/notifications — recent notifications for current user
+router.get("/notifications", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const limit = parseInt(req.query.limit) || 30;
+    const notifications = await db.prepare(
+      "SELECT id, title, body, type, data, read, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?"
+    ).all(req.user.id, limit);
+    const unreadCount = await db.prepare(
+      "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = 0"
+    ).get(req.user.id);
+    res.json({ notifications, unreadCount: parseInt(unreadCount?.count || 0) });
+  } catch (err) {
+    console.error("Notifications fetch error:", err.message);
+    res.json({ notifications: [], unreadCount: 0 });
+  }
+});
+
+// POST /api/push/notifications/mark-read — mark notifications as read
+router.post("/notifications/mark-read", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { ids } = req.body; // optional array of notification IDs; if empty, mark all read
+    if (ids && ids.length > 0) {
+      const placeholders = ids.map(() => "?").join(",");
+      await db.prepare(
+        `UPDATE notifications SET read = 1 WHERE user_id = ? AND id IN (${placeholders})`
+      ).run(req.user.id, ...ids);
+    } else {
+      await db.prepare(
+        "UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0"
+      ).run(req.user.id);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Mark-read error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;
 module.exports.sendPushToUser = sendPushToUser;

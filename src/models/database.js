@@ -1009,6 +1009,18 @@ async function initializeDatabase() {
     )`,
     // ─── v1.55.5 — Payout expected date for manual payments ───
     `ALTER TABLE manual_payments ADD COLUMN IF NOT EXISTS payout_expected_date TEXT`,
+    // ─── v1.56.0 — In-app notifications table ───
+    `CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      body TEXT,
+      type TEXT DEFAULT 'general',
+      data TEXT,
+      read INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read, created_at DESC)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

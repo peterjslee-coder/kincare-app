@@ -266,6 +266,8 @@ const App = () => {
   // Admin alert count for nav badge
   const [adminAlertCount, setAdminAlertCount] = useState(0);
   const [adminAlertDetails, setAdminAlertDetails] = useState(null);
+  // In-app notification badge (v1.56.0)
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   // ─── In-app navigation history (prevents PWA back-swipe from closing app) ───
   const navHistoryRef = useRef(['dashboard']);
@@ -390,6 +392,23 @@ const App = () => {
     const interval = setInterval(fetchAlerts, 60000); // refresh every 60s
     return () => clearInterval(interval);
   }, [appState, currentUser?.id, currentUser?.isAdmin]);
+
+  // ─── In-app notification count polling (v1.56.0) ───
+  useEffect(() => {
+    if (appState !== 'app' || !currentUser) return;
+    const fetchNotifCount = async () => {
+      try {
+        const res = await apiFetch('/api/push/notifications?limit=1');
+        if (res?.ok) {
+          const data = await res.json();
+          setUnreadNotifCount(data.unreadCount || 0);
+        }
+      } catch {}
+    };
+    fetchNotifCount();
+    const interval = setInterval(fetchNotifCount, 30000);
+    return () => clearInterval(interval);
+  }, [appState, currentUser?.id]);
 
   // ─── Version heartbeat — auto-reload when a new deploy lands ───
   useEffect(() => {
@@ -1355,9 +1374,28 @@ const App = () => {
         </nav>
       </aside>
       <main className="main-content">
-        <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
-          <span></span><span></span><span></span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu" style={{ position: 'relative', zIndex: 1 }}>
+            <span></span><span></span><span></span>
+          </button>
+          {currentUser && (
+            <button onClick={() => setCurrentPage('dashboard')} style={{
+              position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px', fontSize: 20,
+            }} aria-label="Notifications">
+              {'\u{1F514}'}
+              {unreadNotifCount > 0 && (
+                <span className="notification-dot" style={{
+                  position: 'absolute', top: 2, right: 2,
+                  minWidth: 16, height: 16, borderRadius: 8,
+                  background: '#ef5350', color: 'white',
+                  fontSize: 10, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 4px', border: '2px solid var(--bg-primary)',
+                }}>{unreadNotifCount > 9 ? '9+' : unreadNotifCount}</span>
+              )}
+            </button>
+          )}
+        </div>
         {currentUser?.roles?.length > 1 && (
           <div className="role-switcher-bar" style={{
             display: 'flex', gap: '4px', padding: '6px 8px', marginBottom: '12px',

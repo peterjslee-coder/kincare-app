@@ -77,6 +77,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [earningsLoading, setEarningsLoading] = useState(false);
   // Manual payments received
   const [manualPaymentsReceived, setManualPaymentsReceived] = useState([]);
+  // In-app notifications (v1.56.0)
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   // Tips state
   const [tipsData, setTipsData] = useState(null);
   const [showTipsSection, setShowTipsSection] = useState(false);
@@ -299,6 +302,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           apiFetch('/api/referrals/my-code').then(r => r?.ok && r.json().then(d => setReferralData(d))).catch(() => {});
           apiFetch('/api/referrals/list').then(r => r?.ok && r.json().then(d => setReferralList(d.referrals || []))).catch(() => {});
           apiFetch('/api/referrals/milestones').then(r => r?.ok && r.json().then(d => { setMilestones(d.milestones || []); setUnackedMilestones(d.unacknowledged || []); })).catch(() => {});
+          // In-app notifications (v1.56.0)
+          apiFetch('/api/push/notifications?limit=10').then(r => r?.ok && r.json().then(d => { setNotifications(d.notifications || []); setUnreadNotifCount(d.unreadCount || 0); })).catch(() => {});
         } else if (res?.status === 404) {
           setNoProfile(true);
         }
@@ -2309,6 +2314,43 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
 
       {/* Earnings Summary — moved to main dashboard flow above */}
+
+      {/* Recent Activity — in-app notifications (v1.56.0) */}
+      {(() => {
+        const unread = notifications.filter(n => !n.read);
+        if (unread.length === 0) return null;
+        const typeIcons = { care_request_accepted: '\u2705', message: '\u{1F4AC}', payment: '\u{1F4B3}', manual_payment: '\u{1F4B5}', time_proposal: '\u{1F552}', general: '\u{1F514}' };
+        const getIcon = (type) => typeIcons[type] || '\u{1F514}';
+        const timeAgo = (dateStr) => { const d = Date.now() - new Date(dateStr).getTime(), m = Math.floor(d/60000); return m < 1 ? 'Just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.floor(m/60)}h ago` : `${Math.floor(m/1440)}d ago`; };
+        const markRead = async (ids) => {
+          try { await apiFetch('/api/push/notifications/mark-read', { method: 'POST', body: JSON.stringify({ ids: ids || [] }) }); setNotifications(prev => prev.map(n => ids ? (ids.includes(n.id) ? { ...n, read: 1 } : n) : { ...n, read: 1 })); setUnreadNotifCount(prev => ids ? Math.max(0, prev - ids.length) : 0); } catch {}
+        };
+        return (
+          <div className="card" style={{ marginBottom: 16, padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {'\u{1F514}'} Recent Activity ({unread.length})
+              </h3>
+              {unread.length > 1 && <button onClick={() => markRead(unread.map(n => n.id))} style={{ padding: '4px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Mark all read</button>}
+            </div>
+            {unread.slice(0, 5).map(n => (
+              <div key={n.id} className="activity-new-shimmer" onClick={() => markRead([n.id])} style={{
+                padding: '10px 12px', marginBottom: 6, borderRadius: 8, cursor: 'pointer',
+                border: '1.5px solid #4a90d9', background: 'rgba(74, 144, 217, 0.04)', position: 'relative', overflow: 'hidden',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{getIcon(n.type)}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{n.title}</div>
+                    {n.body && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.body}</div>}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{timeAgo(n.created_at)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Payments Received — manual payments from families */}
       {manualPaymentsReceived.length > 0 && (
