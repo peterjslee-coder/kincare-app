@@ -118,17 +118,19 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     }
   }, [date]);
 
-  // Auto-scroll to selected time pill when time changes or date is picked (pills appear)
+  // Auto-scroll to selected time pill — put it at the left edge of the scroll container
   useEffect(() => {
     if (!time || !date) return;
+    // Use a longer delay to ensure pills are laid out on mobile
     setTimeout(() => {
-      if (timeScrollRef.current) {
-        const selected = timeScrollRef.current.querySelector('[data-time-selected="true"]');
-        if (selected) {
-          selected.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
-        }
+      const container = timeScrollRef.current;
+      if (!container) return;
+      const selected = container.querySelector('[data-time-selected="true"]');
+      if (selected) {
+        // Calculate offset: pill's left edge minus container's left edge
+        container.scrollLeft = selected.offsetLeft - container.offsetLeft;
       }
-    }, 50);
+    }, 150);
   }, [time, date]);
 
   // Fetch visit counts for the selected care recipient (for repeat caregiver nudge)
