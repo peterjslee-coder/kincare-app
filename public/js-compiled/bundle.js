@@ -14492,7 +14492,7 @@ const Schedule = window.Schedule = () => {
         minHeight: 64,
         padding: '6px',
         cursor: 'pointer',
-        background: isSelected ? 'var(--role-color)' : 'var(--bg-card)',
+        background: isSelected ? 'var(--role-color)' : isToday ? 'rgba(59, 130, 246, 0.1)' : 'var(--bg-card)',
         color: isSelected ? 'var(--text-on-primary)' : past ? 'var(--text-muted)' : 'var(--text-primary)',
         borderBottom: '1px solid #f0f0f0',
         borderRight: '1px solid #f0f0f0',
@@ -14507,17 +14507,10 @@ const Schedule = window.Schedule = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 4
+        gap: 4,
+        color: isSelected ? undefined : isToday ? '#3b82f6' : undefined
       }
-    }, isToday && /*#__PURE__*/React.createElement("span", {
-      style: {
-        width: 6,
-        height: 6,
-        borderRadius: '50%',
-        background: isSelected ? 'var(--bg-card)' : 'var(--accent-color)',
-        display: 'inline-block'
-      }
-    }), day), hasSessions && /*#__PURE__*/React.createElement("div", {
+    }, day), hasSessions && /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         gap: 4,
@@ -26133,6 +26126,7 @@ const RequestCareModal = window.RequestCareModal = ({
   const [visitCounts, setVisitCounts] = useState({}); // caregiverId → { count, caregiverName }
   const [careHistory, setCareHistory] = useState(null); // { visits, totalCount } for selected caregiver
   const [showCareHistory, setShowCareHistory] = useState(false);
+  const [privateOnly, setPrivateOnly] = useState(false); // don't open to others if caregiver declines
 
   // Short-notice detection
   const shortNotice = (() => {
@@ -26220,22 +26214,25 @@ const RequestCareModal = window.RequestCareModal = ({
     }
   }, [date]);
 
-  // Auto-scroll to selected time pill when time changes
+  // Auto-scroll to selected time pill — put it at the left edge of the scroll container
   useEffect(() => {
-    if (!time) return;
-    setTimeout(() => {
-      if (timeScrollRef.current) {
-        const selected = timeScrollRef.current.querySelector('[data-time-selected="true"]');
-        if (selected) {
-          selected.scrollIntoView({
-            behavior: 'smooth',
-            inline: 'center',
-            block: 'nearest'
-          });
-        }
+    if (!time || !date) return;
+    const doScroll = () => {
+      const container = timeScrollRef.current;
+      if (!container) return;
+      const selected = container.querySelector('[data-time-selected="true"]');
+      if (selected) {
+        const containerRect = container.getBoundingClientRect();
+        const pillRect = selected.getBoundingClientRect();
+        // Scroll so the selected pill is at the left edge
+        container.scrollLeft += pillRect.left - containerRect.left;
       }
-    }, 50);
-  }, [time]);
+    };
+    // Try multiple times — DOM may not be laid out yet on first render
+    setTimeout(doScroll, 50);
+    setTimeout(doScroll, 200);
+    setTimeout(doScroll, 500);
+  }, [time, date]);
 
   // Fetch visit counts for the selected care recipient (for repeat caregiver nudge)
   useEffect(() => {
@@ -26437,7 +26434,8 @@ const RequestCareModal = window.RequestCareModal = ({
       recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
       recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
       caregiverId: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.caregiverId) || undefined,
-      directOffer: selectedCaregiver ? true : undefined
+      directOffer: selectedCaregiver ? true : undefined,
+      privateOnly: selectedCaregiver && privateOnly ? true : undefined
     };
     if (proposedRate && parseFloat(proposedRate) > 0) body.proposedRate = parseFloat(proposedRate);
     if (interviewRequired) {
@@ -27373,7 +27371,10 @@ const RequestCareModal = window.RequestCareModal = ({
     }
   }, "\uD83E\uDD1D Open to intro call"))), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => setSelectedCaregiver(null),
+    onClick: () => {
+      setSelectedCaregiver(null);
+      setPrivateOnly(false);
+    },
     style: {
       padding: 10,
       border: !selectedCaregiver ? '2px solid #e8724a' : '1px dashed #e8724a',
@@ -27602,7 +27603,53 @@ const RequestCareModal = window.RequestCareModal = ({
       textDecoration: 'underline',
       padding: 0
     }
-  }, "Bump to $", Math.round(localAvgRate * 1.25), "/hr"))), /*#__PURE__*/React.createElement("div", {
+  }, "Bump to $", Math.round(localAvgRate * 1.25), "/hr"))), selectedCaregiver && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setPrivateOnly(!privateOnly),
+    style: {
+      marginBottom: 12,
+      padding: '10px 12px',
+      borderRadius: 8,
+      cursor: 'pointer',
+      background: privateOnly ? 'rgba(27, 107, 90, 0.08)' : 'var(--bg-surface)',
+      border: privateOnly ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      transition: 'all 0.15s'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+      flexShrink: 0,
+      border: privateOnly ? '2px solid #1b6b5a' : '2px solid #ccc',
+      background: privateOnly ? '#1b6b5a' : 'transparent',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transition: 'all 0.15s'
+    }
+  }, privateOnly && React.createElement('span', {
+    style: {
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: 700,
+      lineHeight: 1
+    }
+  }, '\u2713')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-primary)'
+    }
+  }, selectedCaregiver.name.split(' ')[0], " only \u2014 don't open to others"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      marginTop: 1
+    }
+  }, privateOnly ? 'If they can\'t do it, the request will be cancelled instead of posted publicly' : 'If unchecked, the request opens to all caregivers after 1 hour'))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 12,
       padding: '10px 12px',
@@ -27776,14 +27823,18 @@ const RequestCareModal = window.RequestCareModal = ({
     style: {
       width: '100%'
     }
-  }, "Next"), !step1Complete && (serviceType || date || time || duration) && /*#__PURE__*/React.createElement("div", {
+  }, "Next"), !step1Complete && /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 11,
-      color: 'var(--text-muted)',
+      fontSize: 12,
+      color: '#e67e22',
       textAlign: 'center',
-      marginTop: 6
+      marginTop: 8,
+      fontWeight: 600,
+      padding: '6px 10px',
+      background: 'rgba(230,126,34,0.1)',
+      borderRadius: 8
     }
-  }, !serviceType ? 'Select a care type' : serviceType === 'other' && !otherCareText.trim() ? 'Describe the care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration')), step === 2 && /*#__PURE__*/React.createElement("button", {
+  }, !serviceType ? '\u261D Select a care type above, or choose "Other" and leave instructions for the caregiver' : serviceType === 'other' && !otherCareText.trim() ? 'Describe the care type above' : !date ? 'Pick a date' : !time ? 'Pick a start time' : !duration ? 'Select a duration' : 'Complete all fields above')), step === 2 && /*#__PURE__*/React.createElement("button", {
     className: "btn btn-primary",
     onClick: handleSubmit
   }, selectedCaregiver ? selectedCaregiver.available ? 'Confirm Booking' : 'Send Offer' : 'Post Care Request'))));
