@@ -835,13 +835,17 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
   ).get(sessionId);
   if (existingPayment) return res.status(400).json({ error: "Payment already processed for this session" });
 
-  // Calculate amounts — use agreed_rate if negotiated, else caregiver's tiered rates
+  // Calculate amounts — proposed_rate (family's offer) takes priority, then agreed_rate,
+  // then caregiver's tiered profile rates as fallback
   const durationHours = session.duration_hours || 2;
   let totalCents, baseCostCents, surchargeCents = 0;
+  const effectiveRate = (session.proposed_rate && parseFloat(session.proposed_rate) > 0)
+    ? parseFloat(session.proposed_rate)
+    : session.agreed_rate || null;
 
-  if (session.agreed_rate) {
-    // Negotiated flat rate — simple calculation
-    baseCostCents = Math.round(session.agreed_rate * durationHours * 100);
+  if (effectiveRate) {
+    // Family offered a specific rate (or negotiated) — use it
+    baseCostCents = Math.round(effectiveRate * durationHours * 100);
     surchargeCents = Math.round((session.short_notice_surcharge || 0) * 100);
     totalCents = baseCostCents + surchargeCents;
   } else {
