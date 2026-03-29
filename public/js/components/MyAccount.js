@@ -1417,7 +1417,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           </div>
           )}
           {/* ─── Notifications Section ─── */}
-          <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: 16, marginTop: 16 }}>
+          <div style={{ borderTop: '2px solid var(--border-color)', paddingTop: 16, marginTop: 16 }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary)' }}>Notifications</h3>
           </div>
           {typeof NotificationSettings !== 'undefined' && React.createElement(NotificationSettings, null)}
@@ -1472,7 +1472,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               } catch (err) { console.error('Save accessibility prefs error:', err); }
             };
             return (
-              <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: 16, marginTop: 16 }}>
+              <div style={{ borderTop: '2px solid var(--border-color)', paddingTop: 16, marginTop: 16 }}>
                 <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary)' }}>Accessibility</h3>
                 <div className="card" style={{ padding: 20, marginBottom: 16 }}>
                   <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Text Size</div>
@@ -1491,7 +1491,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           })()}
 
           {/* ─── Dark Mode / Appearance Section ─── */}
-          <div style={{ borderTop: '2px solid var(--border-color, #e5e7eb)', paddingTop: 16, marginTop: 16 }}>
+          <div style={{ borderTop: '2px solid var(--border-color, var(--border-color))', paddingTop: 16, marginTop: 16 }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary, #333)' }}>Appearance</h3>
             <div className="card" style={{ padding: 20, marginBottom: 16 }}>
               <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Theme</div>
@@ -1791,7 +1791,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           </div>
 
           {/* Hour Reports — moved from Dashboard */}
-          <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: 20, marginTop: 20 }}>
+          <div style={{ borderTop: '2px solid var(--border-color)', paddingTop: 20, marginTop: 20 }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary)' }}>📊 Hour Reports</h3>
             {typeof HourReports !== 'undefined' && React.createElement(HourReports, {
               profileName: user?.first_name ? user.first_name + ' ' + (user.last_name || '') : '',

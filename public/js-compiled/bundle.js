@@ -31330,7 +31330,7 @@ const MyAccount = window.MyAccount = ({
     }
   }, "Revoke")))))), /*#__PURE__*/React.createElement("div", {
     style: {
-      borderTop: '2px solid #e5e7eb',
+      borderTop: '2px solid var(--border-color)',
       paddingTop: 16,
       marginTop: 16
     }
@@ -31441,7 +31441,7 @@ const MyAccount = window.MyAccount = ({
     };
     return /*#__PURE__*/React.createElement("div", {
       style: {
-        borderTop: '2px solid #e5e7eb',
+        borderTop: '2px solid var(--border-color)',
         paddingTop: 16,
         marginTop: 16
       }
@@ -31486,7 +31486,7 @@ const MyAccount = window.MyAccount = ({
     }, "Extra Large"))));
   })(), /*#__PURE__*/React.createElement("div", {
     style: {
-      borderTop: '2px solid var(--border-color, #e5e7eb)',
+      borderTop: '2px solid var(--border-color, var(--border-color))',
       paddingTop: 16,
       marginTop: 16
     }
@@ -32085,7 +32085,7 @@ const MyAccount = window.MyAccount = ({
     }
   }, "75%"), " of the surcharge goes to you as an incentive."))), /*#__PURE__*/React.createElement("div", {
     style: {
-      borderTop: '2px solid #e5e7eb',
+      borderTop: '2px solid var(--border-color)',
       paddingTop: 20,
       marginTop: 20
     }
