@@ -1058,24 +1058,16 @@ async function initializeDatabase() {
     if (killed.changes > 0) console.log(`  ✅ Killed bogus $15.60 payment record for Cary session`);
   } catch (e) { /* already killed */ }
 
-  // ─── v1.56.6 — One-time: complete Cary's $0.70 payment (webhook never fired) ───
-  // Pete confirmed payment went through Stripe. Webhook at /api/payments/webhook was never
-  // called by Stripe — likely not configured in Stripe Dashboard. This manually does what
-  // the checkout.session.completed webhook handler would have done.
+  // ─── v1.56.6/9 — One-time: force-complete Cary's $0.70 session (Pete confirmed paid via Stripe) ───
   try {
     const sessionId = '8126e816-6f95-4986-94cb-eb7ab511c949';
-    const fixedPayment = await db.prepare(`
-      UPDATE payments SET status = 'completed', updated_at = NOW()
-      WHERE session_id = ? AND status = 'processing'
-    `).run(sessionId);
-    if (fixedPayment.changes > 0) {
-      await db.prepare(`
-        UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW()
-        WHERE id = ?
-      `).run(sessionId);
-      console.log(`  ✅ Manually completed Cary's $0.70 payment (webhook never fired)`);
+    const cs = await db.prepare("SELECT payment_status FROM care_sessions WHERE id = ?").get(sessionId);
+    if (cs && cs.payment_status !== 'paid') {
+      await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(sessionId);
+      await db.prepare("UPDATE payments SET status = 'completed', updated_at = NOW() WHERE session_id = ? AND status != 'completed'").run(sessionId);
+      console.log(`  ✅ Force-completed Cary's session ${sessionId} — payment_status → paid`);
     }
-  } catch (e) { /* already completed */ }
+  } catch (e) { /* already done */ }
 
   // ─── v1.56.7 — One-time: create test session to verify webhook ───
   try {
