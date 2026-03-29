@@ -82,7 +82,7 @@ const DeleteAccountSection = ({ onDeleted }) => {
             {EXIT_REASONS.map(r => (
               <label key={r.value} style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px',
-                background: reason === r.value ? '#fef0ed' : 'var(--text-on-primary)', borderRadius: '6px',
+                background: reason === r.value ? '#fef0ed' : 'var(--bg-card)', borderRadius: '6px',
                 border: reason === r.value ? '1px solid #e8724a' : '1px solid #eee',
                 cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)', transition: 'all 0.15s',
               }}>
@@ -858,14 +858,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
         <h1 className="greeting" style={{ margin: 0 }}>My Account</h1>
         {activeTab === 'profile' && !editing && (
-          <button onClick={startEditing} style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          <button onClick={startEditing} style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             Edit Profile
           </button>
         )}
         {activeTab === 'profile' && editing && (
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={cancelEditing} style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
-            <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
+            <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
@@ -901,7 +901,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 style={{
                   padding: '8px 14px', border: activeTab === s.id ? '2px solid #1b6b5a' : '1px solid #bbf7d0',
                   borderRadius: 10, fontSize: 13, fontWeight: activeTab === s.id ? 700 : 500,
-                  background: activeTab === s.id ? 'var(--role-color)' : 'var(--text-on-primary)',
+                  background: activeTab === s.id ? 'var(--role-color)' : 'var(--bg-card)',
                   color: activeTab === s.id ? 'var(--text-on-primary)' : '#166534', cursor: 'pointer',
                 }}>
                 {s.icon} {s.label}
@@ -932,7 +932,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto} style={{
-                padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                 borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: uploadingPhoto ? 'wait' : 'pointer',
                 opacity: uploadingPhoto ? 0.7 : 1,
               }}>
@@ -1099,7 +1099,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                             React.createElement('div', { style: { fontWeight: isActive ? 600 : 400, fontSize: 14, color: isActive ? 'var(--text-primary)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 } },
                               r.label,
                               isActive && isCurrentView && React.createElement('span', {
-                                style: { fontSize: 10, background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }
+                                style: { fontSize: 10, background: 'var(--role-color)', color: 'var(--bg-card)', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }
                               }, 'ACTIVE'),
                               isActive && !isCurrentView && React.createElement('span', {
                                 style: { fontSize: 10, background: 'var(--border-light)', color: 'var(--text-secondary)', padding: '2px 7px', borderRadius: 10, fontWeight: 500 }
@@ -1229,7 +1229,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <button type="button" onClick={() => { setChangingPassword(false); setPwError(null); setPwData({ current: '', new: '', confirm: '' }); }}
                     style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
                   <button type="submit" disabled={pwSaving}
-                    style={{ padding: '8px 20px', background: pwSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: pwSaving ? 'wait' : 'pointer' }}>
+                    style={{ padding: '8px 20px', background: pwSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: pwSaving ? 'wait' : 'pointer' }}>
                     {pwSaving ? 'Saving...' : 'Update Password'}
                   </button>
                 </div>
@@ -1268,7 +1268,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                         onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, '').substring(0, 6))}
                         style={{ ...inputStyle, maxWidth: 160, textAlign: 'center', letterSpacing: 4 }} />
                       <button type="submit" disabled={disabling2FA || disableCode.length < 6}
-                        style={{ padding: '8px 20px', background: disabling2FA ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        style={{ padding: '8px 20px', background: disabling2FA ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                         {disabling2FA ? 'Disabling...' : 'Disable 2FA'}
                       </button>
                     </div>
@@ -1281,7 +1281,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   Add an extra layer of security to your account. You'll need an authenticator app like Google Authenticator or Authy.
                 </p>
                 <button onClick={() => setShowSetup2FA(true)}
-                  style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                  style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
                   Enable Two-Factor Authentication
                 </button>
               </div>
@@ -1340,7 +1340,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                         style={{ width: '100%', padding: '8px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} autoFocus />
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button onClick={handleRegisterPasskey} disabled={registeringPasskey}
-                          style={{ flex: 1, padding: '8px 16px', background: registeringPasskey ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                          style={{ flex: 1, padding: '8px 16px', background: registeringPasskey ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
                           {registeringPasskey ? 'Registering...' : 'Create Passkey'}
                         </button>
                         <button onClick={() => { setShowPasskeyNameInput(false); setPwError(null); }}
@@ -1349,7 +1349,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                     </div>
                   ) : (
                     <button onClick={() => setShowPasskeyNameInput(true)}
-                      style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                      style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
                       Add a Passkey
                     </button>
                   )
@@ -1559,13 +1559,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             </div>
             {stripeStatus?.connected ? (
               <button onClick={handleStripeDashboard}
-                style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 View Stripe Dashboard
               </button>
             ) : (
               <div>
                 <button onClick={handleConnectStripe}
-                  style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                   {stripeStatus?.onboardingStarted ? 'Complete Stripe Setup' : 'Connect with Stripe'}
                 </button>
                 {stripeStatus?.onboardingStarted && (
@@ -1599,7 +1599,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               </label>
             </div>
             <button onClick={handleSavePayoutPref} disabled={savingPayout}
-              style={{ padding: '8px 20px', background: savingPayout ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ padding: '8px 20px', background: savingPayout ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               {savingPayout ? 'Saving...' : 'Save Preference'}
             </button>
           </div>
@@ -1629,7 +1629,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 <strong>Error:</strong> {checkrError}
                 <div style={{ marginTop: 12 }}>
                   <button onClick={() => { setCheckrError(null); setCheckrStatus('not_initiated'); }}
-                    style={{ padding: '6px 12px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ padding: '6px 12px', background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Try Again
                   </button>
                 </div>
@@ -1882,7 +1882,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   acctDocInputRef.current?.click();
                 }}
                   disabled={docUploading === docType}
-                  style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: docUploading === docType ? 0.7 : 1 }}>
+                  style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: docUploading === docType ? 0.7 : 1 }}>
                   {docUploading === docType ? 'Uploading...' : (isUploaded ? 'Replace' : 'Upload')}
                 </button>
               </div>
@@ -1988,7 +1988,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                           <button key={r.value} onClick={() => setPreferences({ ...prefs, [pref.id]: val === r.value ? 'none' : r.value })} style={{
                             padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
                             border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
-                            background: val === r.value ? r.color : 'var(--text-on-primary)',
+                            background: val === r.value ? r.color : 'var(--bg-card)',
                             color: val === r.value ? r.textColor : 'var(--text-muted)',
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}>{r.label}</button>
@@ -2001,7 +2001,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             </div>
 
             <button onClick={handleSavePreferences} disabled={savingPrefs}
-              style={{ marginTop: 16, padding: '12px 24px', background: savingPrefs ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
+              style={{ marginTop: 16, padding: '12px 24px', background: savingPrefs ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
               {savingPrefs ? 'Saving...' : 'Save Preferences'}
             </button>
           </div>

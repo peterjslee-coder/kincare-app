@@ -163,7 +163,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
           setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '' });
           setShowAddRule(true);
         }} style={{
-          padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+          padding: '8px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
           borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
         }}>+ Add Rule</button>
       </div>
@@ -385,7 +385,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 {['available', 'blocked'].map(t => (
                   <button key={t} onClick={() => setRuleForm(f => ({ ...f, type: t }))} style={{
                     flex: 1, padding: '8px', border: ruleForm.type === t ? '2px solid #1b6b5a' : '2px solid #ddd',
-                    borderRadius: '8px', background: ruleForm.type === t ? (t === 'available' ? 'var(--bg-highlight)' : 'var(--bg-error-subtle)') : 'var(--text-on-primary)',
+                    borderRadius: '8px', background: ruleForm.type === t ? (t === 'available' ? 'var(--bg-highlight)' : 'var(--bg-error-subtle)') : 'var(--bg-card)',
                     cursor: 'pointer', fontSize: '13px', fontWeight: ruleForm.type === t ? 600 : 400,
                   }}>{t === 'available' ? '✅ Available' : '🚫 Blocked'}</button>
                 ))}
@@ -400,7 +400,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 {[true, false].map(rec => (
                   <button key={String(rec)} onClick={() => setRuleForm(f => ({ ...f, isRecurring: rec }))} style={{
                     flex: 1, padding: '8px', border: ruleForm.isRecurring === rec ? '2px solid #1b6b5a' : '2px solid #ddd',
-                    borderRadius: '8px', background: ruleForm.isRecurring === rec ? 'var(--bg-highlight)' : 'var(--text-on-primary)',
+                    borderRadius: '8px', background: ruleForm.isRecurring === rec ? 'var(--bg-highlight)' : 'var(--bg-card)',
                     cursor: 'pointer', fontSize: '13px', fontWeight: ruleForm.isRecurring === rec ? 600 : 400,
                   }}>{rec ? '🔄 Every Week' : '📌 Specific Date'}</button>
                 ))}
@@ -435,7 +435,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
                         }} style={{
                           padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: sel ? 600 : 400,
                           border: sel ? '2px solid #1b6b5a' : '2px solid #ddd',
-                          background: sel ? 'var(--bg-highlight)' : 'var(--text-on-primary)', cursor: 'pointer',
+                          background: sel ? 'var(--bg-highlight)' : 'var(--bg-card)', cursor: 'pointer',
                           color: sel ? 'var(--role-color)' : 'var(--text-secondary)',
                         }}>{dayAbbr[idx]}</button>
                       );
@@ -499,7 +499,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 cursor: 'pointer', fontSize: '13px',
               }}>Cancel</button>
               <button onClick={handleSaveRule} style={{
-                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                 borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
               }}>{editingRule ? 'Update Rule' : 'Add Rule'}</button>
             </div>

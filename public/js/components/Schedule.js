@@ -251,7 +251,7 @@ const Schedule = window.Schedule = () => {
             return (
               <div key={dateStr} onClick={() => setSelectedDate(isSelected ? null : dateStr)} style={{
                 minHeight: 64, padding: '6px', cursor: 'pointer',
-                background: isSelected ? 'var(--role-color)' : 'var(--text-on-primary)',
+                background: isSelected ? 'var(--role-color)' : 'var(--bg-card)',
                 color: isSelected ? 'var(--text-on-primary)' : past ? 'var(--text-muted)' : 'var(--text-primary)',
                 borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0',
                 position: 'relative', transition: 'background 0.15s',
@@ -263,7 +263,7 @@ const Schedule = window.Schedule = () => {
                 }}>
                   {isToday && <span style={{
                     width: 6, height: 6, borderRadius: '50%',
-                    background: isSelected ? 'var(--text-on-primary)' : 'var(--accent-color)', display: 'inline-block',
+                    background: isSelected ? 'var(--bg-card)' : 'var(--accent-color)', display: 'inline-block',
                   }}></span>}
                   {day}
                 </div>
@@ -355,7 +355,7 @@ const Schedule = window.Schedule = () => {
                         </div>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
-                        style={{ marginTop: 10, padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ marginTop: 10, padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         View Full Details
                       </button>
                     </div>

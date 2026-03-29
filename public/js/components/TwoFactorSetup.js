@@ -71,7 +71,7 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
 
   const cardStyle = { background: 'var(--bg-surface)', borderRadius: 12, padding: 24 };
   const inputStyle = { width: '100%', padding: '12px 14px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box' };
-  const primaryBtn = { padding: '10px 24px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' };
+  const primaryBtn = { padding: '10px 24px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' };
   const secondaryBtn = { padding: '10px 24px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' };
 
   if (step === 'loading') {

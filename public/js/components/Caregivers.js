@@ -427,7 +427,7 @@ const Caregivers = window.Caregivers = () => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginLeft: '12px' }}>
             <button onClick={() => scheduleCaregiver(cg)} style={{
-              padding: '8px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+              padding: '8px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
               borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
             }}>Schedule</button>
             {!isAssigned && recipients.length > 0 && (
@@ -519,7 +519,7 @@ const Caregivers = window.Caregivers = () => {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     {cg && (
                       <button onClick={() => scheduleCaregiver(cg)} style={{
-                        padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                        padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                         borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600,
                       }}>Schedule</button>
                     )}
@@ -591,7 +591,7 @@ const Caregivers = window.Caregivers = () => {
               </select>
             </div>
             <button onClick={handleLocationSearch} disabled={locationLoading} style={{
-              padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+              padding: '10px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
               borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
               opacity: locationLoading ? 0.7 : 1,
             }}>

@@ -624,7 +624,7 @@ const CareRecipients = window.CareRecipients = () => {
                       padding: '6px 12px',
                       borderRadius: '6px',
                       border: carePrefs[pref.id] === opt.value ? `2px solid ${opt.color}` : '1px solid #ddd',
-                      background: carePrefs[pref.id] === opt.value ? opt.color : 'var(--text-on-primary)',
+                      background: carePrefs[pref.id] === opt.value ? opt.color : 'var(--bg-card)',
                       color: carePrefs[pref.id] === opt.value ? opt.textColor : 'var(--text-secondary)',
                       fontSize: 12,
                       fontWeight: carePrefs[pref.id] === opt.value ? 600 : 500,
@@ -778,7 +778,7 @@ const CareRecipients = window.CareRecipients = () => {
           padding: '24px',
           borderRadius: '12px',
           border: stripeStatus === 'complete' ? '2px solid #4caf50' : '1px solid #e0e0e0',
-          background: stripeStatus === 'complete' ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+          background: stripeStatus === 'complete' ? 'var(--color-success-bg)' : 'var(--bg-card)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <div style={{
@@ -1119,7 +1119,7 @@ const CareRecipients = window.CareRecipients = () => {
                   {selected.photo && (
                     <button onClick={() => handleRemovePhoto(selected.id)} style={{ padding: '6px 10px', background: '#fff0f0', color: 'var(--color-red-strong)', border: '1px solid #fdd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>Remove</button>
                   )}
-                  <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
+                  <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
                 </div>
               </div>
               <div className="info-grid">
@@ -1247,7 +1247,7 @@ const CareRecipients = window.CareRecipients = () => {
                     style={{
                       padding: '12px 16px', borderRadius: '10px', cursor: 'pointer',
                       border: formData.authorizationTier === opt.id ? `2px solid ${opt.color}` : '2px solid #e8e8e8',
-                      background: formData.authorizationTier === opt.id ? opt.bg : 'var(--text-on-primary)',
+                      background: formData.authorizationTier === opt.id ? opt.bg : 'var(--bg-card)',
                       transition: 'all 0.2s',
                     }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1268,7 +1268,7 @@ const CareRecipients = window.CareRecipients = () => {
               {['👵', '👴', '👩', '👨', '🧓', '👶', '🧑', '🌷', '💜', '💙', '🌻', '🐕'].map(em => (
                 <button key={em} type="button" onClick={() => fd('emoji', formData.emoji === em ? '' : em)} style={{
                   width: 40, height: 40, fontSize: 22, border: formData.emoji === em ? '2px solid #1b6b5a' : '1px solid #ddd',
-                  borderRadius: 8, background: formData.emoji === em ? 'var(--role-color-light)' : 'var(--text-on-primary)', cursor: 'pointer',
+                  borderRadius: 8, background: formData.emoji === em ? 'var(--role-color-light)' : 'var(--bg-card)', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>{em}</button>
               ))}

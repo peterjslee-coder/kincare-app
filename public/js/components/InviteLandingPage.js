@@ -80,7 +80,7 @@ const InviteLandingPage = window.InviteLandingPage = ({ inviteInfo, onNavigate }
           {/* CTAs */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <button onClick={() => onNavigate('register')} style={{
-              width: '100%', padding: '14px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+              width: '100%', padding: '14px', background: 'var(--role-color)', color: 'var(--bg-card)',
               border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: 700,
               cursor: 'pointer', transition: 'background 0.2s',
             }}>

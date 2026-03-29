@@ -102,7 +102,7 @@ const ActivityFeed = window.ActivityFeed = () => {
           <p className="page-subtitle">Recent updates{recipientName ? ` about ${recipientName}'s care` : ''}</p>
         </div>
         {unreadCount > 0 && (
-          <button onClick={markAllAsRead} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+          <button onClick={markAllAsRead} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             Mark all read ({unreadCount})
           </button>
         )}

@@ -682,13 +682,13 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             </button>
           )}
           {!editing ? (
-            canEdit && <button onClick={startEditing} style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            canEdit && <button onClick={startEditing} style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
               Edit Profile
             </button>
           ) : (
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={cancelEditing} style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
+              <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
@@ -700,7 +700,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
           {allRecipients.map(r => (
             <button key={r.id} onClick={() => { setProfile(r); fetchNotes(r.id); setEditing(false); setPermTier(r.permission_tier || 'full'); try { setVisSettings(r.visibility_settings ? JSON.parse(r.visibility_settings) : null); } catch { setVisSettings(null); } }}
-              style={{ padding: '6px 14px', borderRadius: 20, border: r.id === profile?.id ? '2px solid #1b6b5a' : '1px solid #d0d0d0', background: r.id === profile?.id ? 'var(--role-color-light)' : 'var(--text-on-primary)', color: r.id === profile?.id ? 'var(--role-color)' : 'var(--text-secondary)', fontSize: 13, fontWeight: r.id === profile?.id ? 600 : 400, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', borderRadius: 20, border: r.id === profile?.id ? '2px solid #1b6b5a' : '1px solid #d0d0d0', background: r.id === profile?.id ? 'var(--role-color-light)' : 'var(--bg-card)', color: r.id === profile?.id ? 'var(--role-color)' : 'var(--text-secondary)', fontSize: 13, fontWeight: r.id === profile?.id ? 600 : 400, cursor: 'pointer' }}>
               {r.first_name} {r.last_name}
             </button>
           ))}
@@ -721,7 +721,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               {profile.photo
                 ? <img src={profile.photo} alt={profile.first_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>{profile.first_name?.[0]}{profile.last_name?.[0]}</span>}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.45)', color: 'var(--text-on-primary)', fontSize: 9, textAlign: 'center', padding: '2px 0', fontWeight: 600 }}>
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.45)', color: 'var(--bg-card)', fontSize: 9, textAlign: 'center', padding: '2px 0', fontWeight: 600 }}>
                 {photoUploading ? '...' : '\uD83D\uDCF7'}
               </div>
             </div>
@@ -962,7 +962,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           <button key={r.value} onClick={() => handlePrefRate(pref.id, r.value)} style={{
                             padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
                             border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
-                            background: val === r.value ? r.color : 'var(--text-on-primary)',
+                            background: val === r.value ? r.color : 'var(--bg-card)',
                             color: val === r.value ? r.textColor : 'var(--text-muted)',
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}>{r.label}</button>
@@ -1033,7 +1033,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 style={{ width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && newNote.trim()) { e.preventDefault(); handleAddNote(); } }} />
               <button onClick={(e) => { e.stopPropagation(); handleAddNote(); }} disabled={addingNote || !newNote.trim()}
-                style={{ padding: '10px 20px', background: addingNote ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                style={{ padding: '10px 20px', background: addingNote ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
                 {addingNote ? '...' : 'Add Note'}
               </button>
             </div>
@@ -1092,7 +1092,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   <button key={tab.id} onClick={(e) => { e.stopPropagation(); setCompanionTab(tab.id); }}
                     style={{
                       flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      background: companionTab === tab.id ? 'var(--text-on-primary)' : 'transparent',
+                      background: companionTab === tab.id ? 'var(--bg-card)' : 'transparent',
                       color: companionTab === tab.id ? 'var(--color-info)' : 'var(--text-tertiary)',
                       boxShadow: companionTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                       transition: 'all 0.2s',
@@ -1125,7 +1125,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                         {'\uD83D\uDCC5'} Sync Calendar
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setShowAddReminder(!showAddReminder); }}
-                        style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: showAddReminder ? '#E8EEF2' : 'var(--color-info)', color: showAddReminder ? 'var(--text-secondary)' : 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: showAddReminder ? '#E8EEF2' : 'var(--color-info)', color: showAddReminder ? 'var(--text-secondary)' : 'var(--bg-card)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                         {showAddReminder ? 'Cancel' : '+ Add Reminder'}
                       </button>
                     </div>
@@ -1180,7 +1180,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                                 },
                                 style: {
                                   width: 36, height: 36, borderRadius: '50%', border: active ? '2px solid #1A5276' : '1px solid #ccc',
-                                  background: active ? 'var(--color-info)' : 'var(--text-on-primary)', color: active ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+                                  background: active ? 'var(--color-info)' : 'var(--bg-card)', color: active ? 'var(--bg-card)' : 'var(--text-secondary)',
                                   fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 }
                               }, d.label);
@@ -1189,7 +1189,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                         </div>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); handleSaveReminder(); }} disabled={savingReminder || !newReminderText.trim()}
-                        style={{ width: '100%', padding: '10px 16px', borderRadius: 8, border: 'none', background: newReminderText.trim() ? 'var(--color-info)' : 'var(--border-light)', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 600, cursor: newReminderText.trim() ? 'pointer' : 'not-allowed' }}>
+                        style={{ width: '100%', padding: '10px 16px', borderRadius: 8, border: 'none', background: newReminderText.trim() ? 'var(--color-info)' : 'var(--border-light)', color: 'var(--bg-card)', fontSize: 14, fontWeight: 600, cursor: newReminderText.trim() ? 'pointer' : 'not-allowed' }}>
                         {savingReminder ? 'Saving...' : 'Save Reminder'}
                       </button>
                     </div>
@@ -1401,7 +1401,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           {selectedConvos.size > 0 && (
                             <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${selectedConvos.size} conversation(s)? This cannot be undone.`)) deleteSelectedConversations(); }}
                               disabled={deletingConvos}
-                              style={{ padding: '4px 12px', border: 'none', borderRadius: 6, background: '#E74C3C', color: 'var(--text-on-primary)', fontSize: 11, fontWeight: 600, cursor: deletingConvos ? 'wait' : 'pointer' }}>
+                              style={{ padding: '4px 12px', border: 'none', borderRadius: 6, background: '#E74C3C', color: 'var(--bg-card)', fontSize: 11, fontWeight: 600, cursor: deletingConvos ? 'wait' : 'pointer' }}>
                               {deletingConvos ? 'Deleting...' : `Delete ${selectedConvos.size} selected`}
                             </button>
                           )}
@@ -1423,7 +1423,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           const startDate = convo.started_at ? new Date(convo.started_at) : null;
                           return (
                             <div key={convo.conversation_id}
-                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: isSelected ? '1px solid #E74C3C' : '1px solid #f0f0f0', background: isSelected ? '#FEF5F5' : 'var(--text-on-primary)', transition: 'all 0.15s' }}>
+                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: isSelected ? '1px solid #E74C3C' : '1px solid #f0f0f0', background: isSelected ? '#FEF5F5' : 'var(--bg-card)', transition: 'all 0.15s' }}>
                               <input type="checkbox" checked={isSelected}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
@@ -1534,7 +1534,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           <div key={mt.id} style={{
                             padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
                             borderBottom: i < MESSAGE_TYPES.length - 1 ? '1px solid #f0f0f0' : 'none',
-                            background: i % 2 === 0 ? 'var(--text-on-primary)' : '#FAFCFE',
+                            background: i % 2 === 0 ? 'var(--bg-card)' : '#FAFCFE',
                           }}>
                             {/* Message type info */}
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1637,7 +1637,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           });
                           if (res?.ok && typeof showToast === 'function') showToast('Saved!', 'success');
                         } catch {}
-                      }} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--color-info)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+                      }} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--color-info)', color: 'var(--bg-card)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
                     </div>
                   </div>
 
@@ -1705,7 +1705,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       <button onClick={(e) => { e.stopPropagation(); saveVoicePreferences(); }} disabled={savingVoicePrefs}
                         style={{
                           padding: '10px 20px', borderRadius: 8, border: 'none',
-                          background: savingVoicePrefs ? '#a0c4b8' : 'var(--color-info)', color: 'var(--text-on-primary)',
+                          background: savingVoicePrefs ? '#a0c4b8' : 'var(--color-info)', color: 'var(--bg-card)',
                           fontWeight: 700, fontSize: 13, cursor: savingVoicePrefs ? 'wait' : 'pointer', alignSelf: 'flex-start',
                         }}>
                         {savingVoicePrefs ? 'Saving...' : 'Save Voice Settings'}
@@ -1752,7 +1752,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                               <div key={i} style={{
                                 display: 'flex', alignItems: 'center', padding: '10px 14px', gap: 12,
                                 borderBottom: i < companionUsage.daily_breakdown.length - 1 ? '1px solid #f0f0f0' : 'none',
-                                background: i % 2 === 0 ? 'var(--text-on-primary)' : '#FAFCFE',
+                                background: i % 2 === 0 ? 'var(--bg-card)' : '#FAFCFE',
                               }}>
                                 <span style={{ fontSize: 13, color: 'var(--color-navy)', fontWeight: 500, width: 90 }}>
                                   {new Date(day.day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
@@ -1831,7 +1831,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 else if (!visSettings) setVisSettings({ calendar: true, healthConditions: true, medications: true, allergies: true, preferences: true, pets: true, emergencyContact: true, notes: true });
               }} style={{
                 flex: '1 1 140px', padding: '10px 12px', border: permTier === t.id ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                borderRadius: 10, background: permTier === t.id ? 'var(--color-success-bg)' : 'var(--text-on-primary)', cursor: 'pointer', textAlign: 'left',
+                borderRadius: 10, background: permTier === t.id ? 'var(--color-success-bg)' : 'var(--bg-card)', cursor: 'pointer', textAlign: 'left',
               }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t.icon} {t.label}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{t.desc}</div>
@@ -1890,7 +1890,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             } catch { showToast('Failed to update permissions', 'error'); }
             setSavingPerms(false);
           }} disabled={savingPerms} style={{
-            padding: '8px 20px', background: savingPerms ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)',
+            padding: '8px 20px', background: savingPerms ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)',
             border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingPerms ? 'wait' : 'pointer',
           }}>
             {savingPerms ? 'Saving...' : 'Save Permissions'}

@@ -28,7 +28,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
       maxWidth: 380, margin: '0 auto', background: 'var(--bg-surface)', borderRadius: 24,
       border: '3px solid #222', boxShadow: '0 8px 40px rgba(0,0,0,0.12)', overflow: 'hidden',
     }}>
-      <div style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '10px 16px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ background: 'var(--role-color)', color: 'var(--bg-card)', padding: '10px 16px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 16 }}>{'\uD83C\uDFE0'}</span> inPlace {title && ('\u2014 ' + title)}
       </div>
       <div style={{ padding: '16px 18px', minHeight: 260, maxHeight: 340, overflowY: 'auto', fontSize: 13, lineHeight: 1.6 }}>
@@ -38,7 +38,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
   );
 
   return (
-    <section style={{ padding: compact ? '40px 24px' : '64px 24px', background: compact ? 'var(--text-on-primary)' : 'linear-gradient(180deg, #f8faf9 0%, #fff 100%)' }}>
+    <section style={{ padding: compact ? '40px 24px' : '64px 24px', background: compact ? 'var(--bg-card)' : 'linear-gradient(180deg, #f8faf9 0%, #fff 100%)' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 12 }}>
           <div style={{ display: 'inline-block', padding: '5px 14px', background: 'var(--color-success-bg)', border: '1px solid #c8e6c9', borderRadius: 20, fontSize: 11, fontWeight: 700, color: 'var(--color-success)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>See It In Action</div>
@@ -102,7 +102,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 12, marginBottom: 4 }}>This is what real care notes look like — quick, unstructured, written on a phone between visits. Most families never capture this at all.</p>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <button onClick={() => goToStep(2)} style={{ flex: 1, padding: '8px 0', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>See What AI Does With This {'\u2192'}</button>
+              <button onClick={() => goToStep(2)} style={{ flex: 1, padding: '8px 0', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>See What AI Does With This {'\u2192'}</button>
             </div>
           </div>
         ))}
@@ -172,7 +172,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
               <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>AI reads 30 days of care data and surfaces only what a podiatrist needs to see.</div>
             </div>
             <div style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-              <div style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ background: 'var(--role-color)', color: 'var(--bg-card)', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>{'\uD83E\uDE7A'}</span> AI Doctor Report — Podiatry
               </div>
               <div style={{ padding: 16, fontSize: 11.5, lineHeight: 1.7, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', maxHeight: 320, overflowY: 'auto', fontFamily: '-apple-system, sans-serif' }}>
@@ -255,7 +255,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
             <div style={{ textAlign: 'center', margin: '8px 0', fontSize: 20, color: 'var(--role-color)' }}>{'\u2B07\uFE0F'}</div>
             {/* Care record */}
             <div style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '2px solid #1b6b5a', boxShadow: '0 4px 20px rgba(27,107,90,0.12)', overflow: 'hidden' }}>
-              <div style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ background: 'var(--role-color)', color: 'var(--bg-card)', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>{'\uD83D\uDCCB'}</span> Elena's Care Record — New Doctor Note
               </div>
               <div style={{ padding: '14px 18px' }}>

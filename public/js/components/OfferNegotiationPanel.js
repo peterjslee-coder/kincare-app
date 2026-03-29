@@ -137,7 +137,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
               }}>
                 <div style={{
                   padding: '8px 12px', borderRadius: '10px', maxWidth: '85%',
-                  background: isFromMe ? 'var(--color-info-bg)' : 'var(--text-on-primary)',
+                  background: isFromMe ? 'var(--color-info-bg)' : 'var(--bg-card)',
                   border: `1px solid ${isFromMe ? '#bbdefb' : 'var(--border-light)'}`,
                 }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '2px' }}>
@@ -170,7 +170,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
             disabled={submitting}
             style={{
               padding: '7px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-              background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 600, fontSize: '13px',
+              background: 'var(--role-color)', color: 'var(--bg-card)', fontWeight: 600, fontSize: '13px',
             }}>
             Accept ${latestPending.offered_rate}/hr
           </button>

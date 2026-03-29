@@ -337,7 +337,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const pill = (selected) => ({
     padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
     border: selected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-    background: selected ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+    background: selected ? 'var(--color-success-bg)' : 'var(--bg-card)',
     color: selected ? 'var(--role-color)' : 'var(--text-secondary)',
     whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s',
   });
@@ -412,7 +412,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             ))}
           </div>
           <button onClick={onClose} style={{
-            padding: '12px 36px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+            padding: '12px 36px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
             borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: 'pointer',
             animation: 'slideUp 0.4s ease-out 0.5s both',
           }}>Done</button>
@@ -659,7 +659,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                       <button key={idx} type="button" onClick={() => setSelectedCaregiver(cg)}
                         style={{
                           padding: 12, border: selectedCaregiver?.name === cg.name ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                          borderRadius: 10, background: selectedCaregiver?.name === cg.name ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+                          borderRadius: 10, background: selectedCaregiver?.name === cg.name ? 'var(--color-success-bg)' : 'var(--bg-card)',
                           cursor: 'pointer', textAlign: 'left',
                         }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -680,7 +680,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                     <button type="button" onClick={() => setSelectedCaregiver(null)}
                       style={{
                         padding: 10, border: !selectedCaregiver ? '2px solid #e8724a' : '1px dashed #e8724a', borderRadius: 10,
-                        background: !selectedCaregiver ? 'var(--bg-warm)' : 'var(--text-on-primary)', cursor: 'pointer', textAlign: 'center',
+                        background: !selectedCaregiver ? 'var(--bg-warm)' : 'var(--bg-card)', cursor: 'pointer', textAlign: 'center',
                         fontSize: 13, color: 'var(--accent-color)', fontWeight: 600,
                       }}>
                       Post as open request

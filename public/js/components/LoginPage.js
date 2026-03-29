@@ -268,7 +268,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
 
   const cardStyle = { background: 'var(--bg-surface)', borderRadius: 12, padding: 32, maxWidth: 420, width: '100%' };
   const inputStyle = { width: '100%', padding: '12px 14px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box' };
-  const primaryBtn = { width: '100%', padding: 12, background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: 'pointer' };
+  const primaryBtn = { width: '100%', padding: 12, background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: 'pointer' };
   const googleBtnStyle = { width: '100%', padding: 12, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 };
 
   // ─── 2FA Verification Screen ───

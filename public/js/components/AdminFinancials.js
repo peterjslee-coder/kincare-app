@@ -352,7 +352,7 @@ const AdminFinancials = window.AdminFinancials = () => {
           disabled={refreshing}
           style={{
             padding: '6px 16px', borderRadius: 8, border: '1px solid #d0d0d0',
-            background: refreshing ? 'var(--badge-muted-bg)' : 'var(--text-on-primary)', cursor: refreshing ? 'wait' : 'pointer',
+            background: refreshing ? 'var(--badge-muted-bg)' : 'var(--bg-card)', cursor: refreshing ? 'wait' : 'pointer',
             fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)',
           }}>
           {refreshing ? '↻ Refreshing...' : '↻ Refresh'}
@@ -574,7 +574,7 @@ const AdminFinancials = window.AdminFinancials = () => {
           Live Payments
           <span style={{
             marginLeft: 8, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-            background: paymentsEnabled ? 'var(--color-success)' : 'var(--color-error)', color: 'var(--text-on-primary)',
+            background: paymentsEnabled ? 'var(--color-success)' : 'var(--color-error)', color: 'var(--bg-card)',
           }}>
             {paymentsEnabled ? 'ENABLED' : 'DISABLED'}
           </span>
@@ -592,7 +592,7 @@ const AdminFinancials = window.AdminFinancials = () => {
               style={{
                 padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: 700,
                 cursor: 'pointer', whiteSpace: 'nowrap',
-                background: paymentsEnabled ? 'var(--color-error)' : 'var(--color-success)', color: 'var(--text-on-primary)',
+                background: paymentsEnabled ? 'var(--color-error)' : 'var(--color-success)', color: 'var(--bg-card)',
               }}
             >
               {paymentsEnabled ? 'Disable Payments' : 'Enable Payments'}
@@ -611,7 +611,7 @@ const AdminFinancials = window.AdminFinancials = () => {
                 style={{
                   padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 700,
                   cursor: paymentToggleLoading ? 'wait' : 'pointer',
-                  background: paymentsEnabled ? 'var(--color-error)' : 'var(--color-success)', color: 'var(--text-on-primary)',
+                  background: paymentsEnabled ? 'var(--color-error)' : 'var(--color-success)', color: 'var(--bg-card)',
                 }}
               >
                 {paymentToggleLoading ? '...' : 'Confirm'}
@@ -652,7 +652,7 @@ const AdminFinancials = window.AdminFinancials = () => {
             </div>
             <button onClick={saveFee} disabled={feeSaving} style={{
               padding: '6px 16px', borderRadius: 6, border: 'none',
-              background: feeSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)',
+              background: feeSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)',
               fontSize: 13, fontWeight: 600, cursor: feeSaving ? 'wait' : 'pointer',
             }}>
               {feeSaving ? 'Saving...' : 'Update'}

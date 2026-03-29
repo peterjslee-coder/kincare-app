@@ -1153,7 +1153,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         <div style={{ flex: '1 1 0', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
             <span style={{
-              background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '4px 10px', borderRadius: '6px',
+              background: 'var(--role-color)', color: 'var(--bg-card)', padding: '4px 10px', borderRadius: '6px',
               fontSize: '13px', fontWeight: 700, letterSpacing: '0.5px', flexShrink: 0,
             }}>ADMIN</span>
             <h1 className="greeting" style={{ margin: 0, fontSize: '22px', lineHeight: '1.3' }}>
@@ -1177,7 +1177,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         <div style={{ marginBottom: 16, padding: 16, background: safetyFlagCount > 0 ? 'linear-gradient(135deg, #fce4ec, #ffcdd2)' : 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: safetyFlagCount > 0 ? '2px solid #c62828' : '2px solid #ff9800', borderRadius: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: safetyFlagCount > 0 ? 'var(--color-error)' : 'var(--color-warning)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             {safetyFlagCount > 0 ? '\u{1F6A8}' : '\u{1F514}'} Action Required
-            <span style={{ background: safetyFlagCount > 0 ? 'var(--color-error)' : 'var(--color-warning)', color: 'var(--text-on-primary)', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
+            <span style={{ background: safetyFlagCount > 0 ? 'var(--color-error)' : 'var(--color-warning)', color: 'var(--bg-card)', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
               {pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount + bgCheckActionItems.length + safetyFlagCount}
             </span>
           </div>
@@ -1263,12 +1263,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       if (!confirm(`Unpause bookings for ${a.first_name} ${a.last_name}? This will restore their account.`)) return;
                       handleAuthzAction(a.id, 'unpause');
                     }} disabled={authzActionLoading === a.id}
-                      style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: authzActionLoading === a.id ? 0.6 : 1 }}>
+                      style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: authzActionLoading === a.id ? 0.6 : 1 }}>
                       {authzActionLoading === a.id ? '...' : '\u2705 Restore'}
                     </button>
                   )}
                   <button onClick={() => { setActiveTab('authorizations'); }}
-                    style={{ padding: '6px 14px', background: isPaused || isFlagged ? 'var(--color-error)' : 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                    style={{ padding: '6px 14px', background: isPaused || isFlagged ? 'var(--color-error)' : 'var(--accent-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                     Details
                   </button>
                 </div>
@@ -1306,7 +1306,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                 <button onClick={() => { setAdminMsgTarget({ userId: cg.user_id, name: cg.first_name + ' ' + cg.last_name }); setAdminMsgText(''); }}
-                  style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                   {'\u{1F4AC}'} Message {cg.first_name}
                 </button>
                 <button onClick={() => handleReinstate(cg.user_id)} disabled={reinstateLoading === cg.user_id}
@@ -1341,7 +1341,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <div style={{ fontWeight: 600, fontSize: 14, color: isRejected ? 'var(--color-error)' : '#283593' }}>
                         {isRejected ? '\u{1F6D1}' : '\u{1F50D}'}{' '}
                         {item.name}
-                        <span style={{ marginLeft: 6, padding: '1px 8px', background: isRejected ? 'var(--color-error)' : isConsider ? '#ef6c00' : 'var(--color-indigo)', color: 'var(--text-on-primary)', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{statusLabel}</span>
+                        <span style={{ marginLeft: 6, padding: '1px 8px', background: isRejected ? 'var(--color-error)' : isConsider ? '#ef6c00' : 'var(--color-indigo)', color: 'var(--bg-card)', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{statusLabel}</span>
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{item.email}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : ''}</div>
@@ -1374,7 +1374,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           if (r.ok) { alert(item.name + ' rejected.'); loadAlerts(); } else { const d = await r.json(); alert(d.error || 'Failed'); }
                         } catch (err) { alert('Error: ' + err.message); }
                       }}
-                        style={{ padding: '6px 12px', background: isRejected ? 'var(--color-error)' : 'var(--bg-primary)', color: isRejected ? 'var(--text-on-primary)' : 'var(--text-tertiary)', border: isRejected ? 'none' : '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                        style={{ padding: '6px 12px', background: isRejected ? 'var(--color-error)' : 'var(--bg-primary)', color: isRejected ? 'var(--bg-card)' : 'var(--text-tertiary)', border: isRejected ? 'none' : '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                         {'\u2717'} Reject
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setAdminMsgTarget({ userId: item.userId, name: item.name }); setAdminMsgText(''); }}
@@ -1415,7 +1415,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 const isEscalated = flag.status === 'escalated';
                 return (
                 <div key={flag.id} style={{
-                  padding: '12px 14px', marginBottom: 6, background: isEscalated ? 'var(--bg-error-light)' : 'var(--text-on-primary)', borderRadius: 10,
+                  padding: '12px 14px', marginBottom: 6, background: isEscalated ? 'var(--bg-error-light)' : 'var(--bg-card)', borderRadius: 10,
                   border: isEscalated ? '2px solid #b71c1c' : isSevere ? '2px solid #c62828' : '1px solid #ffcc80',
                   cursor: 'pointer',
                 }} onClick={() => { setActiveTab('safety'); }}>
@@ -1428,7 +1428,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           ({flag.flag_type?.replace(/_/g, ' ') || 'flagged'})
                         </span>
                         {isEscalated && (
-                          <span style={{ marginLeft: 6, padding: '1px 8px', background: 'var(--color-error)', color: 'var(--text-on-primary)', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Escalated</span>
+                          <span style={{ marginLeft: 6, padding: '1px 8px', background: 'var(--color-error)', color: 'var(--bg-card)', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Escalated</span>
                         )}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
@@ -1439,13 +1439,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                       {!isEscalated && (
                         <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'escalated'); }}
-                          style={{ padding: '6px 12px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                          style={{ padding: '6px 12px', background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                           {'\u{1F6A8}'} Escalate
                         </button>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'resolved'); }}
                         disabled={flagPasskeyLoading}
-                        style={{ padding: '6px 12px', background: (flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'resolved') ? 'var(--color-success)' : 'var(--color-success)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 }}>
+                        style={{ padding: '6px 12px', background: (flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'resolved') ? 'var(--color-success)' : 'var(--color-success)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 }}>
                         {(flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'resolved')
                           ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to resolve')
                           : '\u2713 Resolve'}
@@ -1652,7 +1652,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               </p>
               <a href="https://plausible.io/yourinplace.com" target="_blank" rel="noopener noreferrer" style={{
                 display: 'inline-flex', alignItems: 'center', gap: '8px',
-                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: '8px',
+                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', borderRadius: '8px',
                 textDecoration: 'none', fontSize: '14px', fontWeight: 600,
               }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1677,10 +1677,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             ].map(st => (
               <button key={st.id} onClick={() => setPeopleSubTab(st.id)}
                 style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: peopleSubTab === st.id ? 700 : 500,
-                  background: peopleSubTab === st.id ? 'var(--text-on-primary)' : 'transparent', color: peopleSubTab === st.id ? 'var(--role-color)' : 'var(--text-tertiary)',
+                  background: peopleSubTab === st.id ? 'var(--bg-card)' : 'transparent', color: peopleSubTab === st.id ? 'var(--role-color)' : 'var(--text-tertiary)',
                   cursor: 'pointer', boxShadow: peopleSubTab === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s', position: 'relative' }}>
                 {st.label}
-                {st.badge ? <span style={{ background: 'var(--color-warning)', color: 'var(--text-on-primary)', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700, marginLeft: 4 }}>{st.badge} new</span> : null}
+                {st.badge ? <span style={{ background: 'var(--color-warning)', color: 'var(--bg-card)', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700, marginLeft: 4 }}>{st.badge} new</span> : null}
               </button>
             ))}
           </div>
@@ -1698,7 +1698,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   <option value="care_for">Care Recipient</option>
                 </select>
                 <button onClick={loadUsers} style={{
-                  padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                  padding: '10px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                   borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                 }}>Search</button>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
@@ -1731,7 +1731,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <tr key={u.id} style={{ borderBottom: '1px solid #f0f0f0', background: isPending ? '#fffbf5' : 'transparent', borderLeft: isPending ? '4px solid #ff9800' : 'none' }}>
                         <td style={{ padding: '10px 12px', fontWeight: 500 }}>
                           {u.first_name} {u.last_name}
-                          {u.is_admin ? <span style={{ marginLeft: '6px', fontSize: '10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '2px 6px', borderRadius: '4px' }}>ADMIN</span> : ''}
+                          {u.is_admin ? <span style={{ marginLeft: '6px', fontSize: '10px', background: 'var(--role-color)', color: 'var(--bg-card)', padding: '2px 6px', borderRadius: '4px' }}>ADMIN</span> : ''}
                         </td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{u.email}</td>
                         <td style={{ padding: '10px 12px' }}>
@@ -1825,14 +1825,14 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           ) : u.is_admin && u.role === 'caregiver' ? (
                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                               <button onClick={() => openOnboardingModal(u.id)}
-                                style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                                 Manage
                               </button>
                             </div>
                           ) : u.role === 'caregiver' ? (
                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                               <button onClick={() => openOnboardingModal(u.id)}
-                                style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                                 Manage
                               </button>
                               <button onClick={() => { setFreezeTarget({ userId: u.id, name: `${u.first_name} ${u.last_name}` }); setFreezeReason(''); }}
@@ -1853,7 +1853,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                               {deleteConfirm === u.id ? (
                                 <>
                                   <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={deleteLoading}
-                                    style={{ padding: '4px 10px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                                    style={{ padding: '4px 10px', background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
                                     {deleteLoading ? '...' : 'Confirm'}
                                   </button>
                                   <button onClick={() => setDeleteConfirm(null)}
@@ -1915,7 +1915,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           {(peopleSubTab === 'waitlist') && waitlist.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
               <button onClick={exportWaitlistCSV} style={{
-                padding: '6px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                padding: '6px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                 borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: '6px',
               }}>
@@ -1986,7 +1986,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}
                 />
                 <button onClick={handleSearchEmail} disabled={searchLoading} style={{
-                  padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                  padding: '10px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                   borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                   opacity: searchLoading ? 0.6 : 1,
                 }}>
@@ -2342,7 +2342,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     {/* Summary row */}
                     <div
                       onClick={() => { setExpandedFeedback(isExpanded ? null : fb.id); setFeedbackEditNotes(fb.adminNotes || ''); }}
-                      style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: isExpanded ? 'var(--bg-primary)' : 'var(--text-on-primary)' }}
+                      style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: isExpanded ? 'var(--bg-primary)' : 'var(--bg-card)' }}
                     >
                       {fb.mood && <span style={{ fontSize: 18 }}>{moodEmojis[fb.mood] || ''}</span>}
                       <span style={{
@@ -2417,7 +2417,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             <button key={s} onClick={() => updateFeedbackItem(fb.id, { status: s })}
                               style={{
                                 padding: '4px 12px', borderRadius: 12, border: fb.status === s ? '2px solid ' + (statusColors[s] || 'var(--text-muted)') : '1px solid #ddd',
-                                background: fb.status === s ? (statusColors[s] || 'var(--text-muted)') + '18' : 'var(--text-on-primary)',
+                                background: fb.status === s ? (statusColors[s] || 'var(--text-muted)') + '18' : 'var(--bg-card)',
                                 color: fb.status === s ? statusColors[s] : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize',
                               }}
                             >{s}</button>
@@ -2443,7 +2443,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           />
                           {feedbackEditNotes !== (fb.adminNotes || '') && (
                             <button onClick={() => updateFeedbackItem(fb.id, { adminNotes: feedbackEditNotes })}
-                              style={{ marginTop: 6, padding: '4px 14px', borderRadius: 6, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                              style={{ marginTop: 6, padding: '4px 14px', borderRadius: 6, border: 'none', background: 'var(--role-color)', color: 'var(--bg-card)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                             >Save Notes</button>
                           )}
                         </div>
@@ -2584,7 +2584,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <h3 style={{ fontSize: '15px', margin: 0, color: 'var(--text-primary)' }}>All Events (recent)</h3>
                   <button onClick={loadOnboardingEvents} style={{
-                    padding: '6px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                    padding: '6px 12px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                     borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
                   }}>Refresh</button>
                 </div>
@@ -2696,7 +2696,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 return (
                   <div key={r.id} style={{
                     marginBottom: 10, borderRadius: 12, border: '1px solid #e0e0e0',
-                    background: st === 'flagged' || st === 'pending' ? '#fffbf5' : 'var(--text-on-primary)',
+                    background: st === 'flagged' || st === 'pending' ? '#fffbf5' : 'var(--bg-card)',
                     overflow: 'hidden',
                   }}>
                     {/* Review header — clickable to expand */}
@@ -2777,7 +2777,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {st !== 'reviewed' && (
                             <button disabled={csActionLoading === r.id} onClick={() => handleCsAction(r.id, 'reviewed')}
-                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--color-info)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
+                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--color-info)', color: 'var(--bg-card)', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
                               Mark Reviewed
                             </button>
                           )}
@@ -2820,7 +2820,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ margin: 0, color: 'var(--role-color)' }}>Help Articles ({helpArticles.length})</h3>
             <button onClick={() => openHelpEditor()} style={{
-              padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+              padding: '8px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
               borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
             }}>+ New Article</button>
           </div>
@@ -2927,7 +2927,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     borderRadius: '8px', cursor: 'pointer', fontSize: '14px',
                   }}>Cancel</button>
                   <button onClick={saveHelpArticle} style={{
-                    padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                    padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                     borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 600,
                   }}>{helpEditModal.id ? 'Save Changes' : 'Create Article'}</button>
                 </div>
@@ -2946,7 +2946,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {['dashboard', 'audit-log'].map(v => (
                 <button key={v} onClick={() => setSecView(v)} style={{
                   padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  background: secView === v ? 'var(--role-color)' : 'var(--badge-muted-bg)', color: secView === v ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+                  background: secView === v ? 'var(--role-color)' : 'var(--badge-muted-bg)', color: secView === v ? 'var(--bg-card)' : 'var(--text-secondary)',
                   border: secView === v ? 'none' : '1px solid #ddd',
                 }}>{v === 'dashboard' ? 'Dashboard' : 'Audit Log'}</button>
               ))}
@@ -3065,7 +3065,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             <div>
                               <span style={{
                                 padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, marginRight: 6,
-                                background: e.severity === 'critical' ? 'var(--color-error)' : 'var(--color-warning)', color: 'var(--text-on-primary)',
+                                background: e.severity === 'critical' ? 'var(--color-error)' : 'var(--color-warning)', color: 'var(--bg-card)',
                               }}>{e.severity.toUpperCase()}</span>
                               <span style={{ fontWeight: 600, fontSize: 13 }}>{e.action.replace(/_/g, ' ')}</span>
                               <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 6 }}>{e.method} {e.endpoint}</span>
@@ -3362,7 +3362,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                                 if (!confirm(`Unpause bookings for ${a.first_name} ${a.last_name}? This will allow new sessions to be scheduled.`)) return;
                                 handleAuthzAction(a.id, 'unpause');
                               }} disabled={authzActionLoading === a.id}
-                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: 'var(--role-color)', color: 'var(--text-on-primary)' }}>
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: 'var(--role-color)', color: 'var(--bg-card)' }}>
                                 {'\u2705'} Unpause Bookings
                               </button>
                             )}
@@ -3418,7 +3418,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   <button onClick={() => setRejectModal(null)}
                     style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
                   <button onClick={handleRejectWithNotes} disabled={authzActionLoading === rejectModal.id}
-                    style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: 'var(--color-error)', color: 'var(--text-on-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: 'var(--color-error)', color: 'var(--bg-card)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
                     Reject Authorization
                   </button>
                 </div>
@@ -3468,7 +3468,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       onClick={() => handleRestoreSession(s.id)}
                       disabled={restoreLoading === s.id}
                       style={{
-                        padding: '8px 18px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                        padding: '8px 18px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                         borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                         opacity: restoreLoading === s.id ? 0.5 : 1,
                       }}
@@ -3523,7 +3523,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       onClick={() => handleReinstate(cg.user_id)}
                       disabled={reinstateLoading === cg.user_id}
                       style={{
-                        padding: '8px 18px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                        padding: '8px 18px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                         borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                         opacity: reinstateLoading === cg.user_id ? 0.5 : 1,
                       }}
@@ -3772,7 +3772,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {c.checkr_candidate_id && (
                     <a href={`${checkrDashUrl}/candidates/${c.checkr_candidate_id}`} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: '5px 12px', background: 'var(--color-info)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
+                      style={{ padding: '5px 12px', background: 'var(--color-info)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
                       View on Checkr
                     </a>
                   )}
@@ -3795,7 +3795,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         Approve
                       </button>
                       <button onClick={() => { setRejectBgTarget({ userId: c.user_id, name: `${c.first_name} ${c.last_name}` }); setRejectBgReason(''); }}
-                        style={{ padding: '4px 10px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ padding: '4px 10px', background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         Reject
                       </button>
                     </div>
@@ -3819,7 +3819,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   {bgCheckCandidates.length} candidates{actionItems.length > 0 ? ` \u00B7 ${actionItems.length} need attention` : ''}
                 </div>
               </div>
-              <button onClick={loadBgChecks} style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={loadBgChecks} style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Refresh
               </button>
             </div>
@@ -3924,7 +3924,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <button
                           onClick={() => handleSaveRecurring(r.id)}
                           disabled={recurSaving}
-                          style={{ padding: '4px 12px', background: recurSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: recurSaving ? 'not-allowed' : 'pointer' }}>
+                          style={{ padding: '4px 12px', background: recurSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: recurSaving ? 'not-allowed' : 'pointer' }}>
                           {recurSaving ? 'Saving...' : 'Save'}
                         </button>
                       </div>
@@ -3975,7 +3975,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               onChange={e => setNewRecurring({ ...newRecurring, description: e.target.value })}
               style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }} />
             <button onClick={handleAddRecurring} disabled={recurSaving || !newRecurring.category || !newRecurring.amount}
-              style={{ padding: '6px 16px', background: !newRecurring.category || !newRecurring.amount ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ padding: '6px 16px', background: !newRecurring.category || !newRecurring.amount ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               {recurSaving ? 'Adding...' : 'Add Recurring'}
             </button>
           </div>
@@ -4002,7 +4002,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               onChange={e => setNewCost({ ...newCost, notes: e.target.value })}
               style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }} />
             <button onClick={handleAddCost} disabled={costSaving || !newCost.category || !newCost.amount}
-              style={{ padding: '6px 16px', background: !newCost.category || !newCost.amount ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ padding: '6px 16px', background: !newCost.category || !newCost.amount ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               {costSaving ? 'Saving...' : 'Add One-Time'}
             </button>
           </div>
@@ -4082,7 +4082,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                                     Delete
                                   </button>
                                   <button onClick={() => handleSaveCost(entry.id)} disabled={costSaving}
-                                    style={{ padding: '3px 10px', background: costSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: costSaving ? 'not-allowed' : 'pointer' }}>
+                                    style={{ padding: '3px 10px', background: costSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: costSaving ? 'not-allowed' : 'pointer' }}>
                                     {costSaving ? 'Saving...' : 'Save'}
                                   </button>
                                 </div>
@@ -4140,7 +4140,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 Cancel
               </button>
               <button onClick={handleFreezeCaregiver} disabled={freezeSending || !freezeReason.trim()}
-                style={{ padding: '8px 20px', background: freezeSending || !freezeReason.trim() ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: freezeSending || !freezeReason.trim() ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 {freezeSending ? 'Freezing...' : 'Freeze Account'}
               </button>
             </div>
@@ -4176,7 +4176,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 Cancel
               </button>
               <button onClick={handleRejectBgCheck} disabled={rejectBgSending || !rejectBgReason.trim()}
-                style={{ padding: '8px 20px', background: rejectBgSending || !rejectBgReason.trim() ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: rejectBgSending || !rejectBgReason.trim() ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 {rejectBgSending ? 'Rejecting...' : 'Reject Caregiver'}
               </button>
             </div>
@@ -4208,7 +4208,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 Cancel
               </button>
               <button onClick={handleAdminMessage} disabled={adminMsgSending || !adminMsgText.trim()}
-                style={{ padding: '8px 20px', background: adminMsgSending || !adminMsgText.trim() ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: adminMsgSending || !adminMsgText.trim() ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 {adminMsgSending ? 'Sending...' : 'Send as InPlace Support'}
               </button>
             </div>

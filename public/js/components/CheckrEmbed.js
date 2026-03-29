@@ -123,7 +123,7 @@ const CheckrEmbed = window.CheckrEmbed = ({ onComplete, onError }) => {
           } catch (err) {
             if (typeof showToast === 'function') showToast('Failed to initiate. Contact support.', 'error');
           }
-        }} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+        }} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
           Start Background Check via Email
         </button>
       </div>

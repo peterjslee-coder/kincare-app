@@ -136,7 +136,7 @@ const FamilyPayments = window.FamilyPayments = () => {
           <div>
             <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>Your Stripe setup is in progress. Some information may still be needed.</p>
             <button onClick={handleStripeSetup} disabled={setupLoading}
-              style={{ padding: '8px 16px', background: '#635bff', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ padding: '8px 16px', background: '#635bff', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               {setupLoading ? 'Loading...' : 'Continue Stripe Setup'}
             </button>
           </div>
@@ -144,7 +144,7 @@ const FamilyPayments = window.FamilyPayments = () => {
           <div>
             <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>Add a payment method so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe.</p>
             <button onClick={handleStripeSetup} disabled={setupLoading}
-              style={{ padding: '8px 16px', background: '#635bff', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ padding: '8px 16px', background: '#635bff', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               {setupLoading ? 'Loading...' : 'Set Up Payments with Stripe'}
             </button>
           </div>

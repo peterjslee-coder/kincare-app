@@ -931,7 +931,7 @@ const Messages = window.Messages = () => {
             </div>
           )}
           <button onClick={handleCreateGroup} disabled={!groupName.trim() || selectedContacts.length === 0}
-            style={{ width: '100%', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: (!groupName.trim() || selectedContacts.length === 0) ? 0.5 : 1 }}>
+            style={{ width: '100%', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: (!groupName.trim() || selectedContacts.length === 0) ? 0.5 : 1 }}>
             Create Group ({selectedContacts.length} member{selectedContacts.length !== 1 ? 's' : ''})
           </button>
         </div>
@@ -1011,7 +1011,7 @@ const Messages = window.Messages = () => {
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => handleRespondConnection(req.id, 'accept')}
-                  style={{ padding: '6px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  style={{ padding: '6px 12px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                   Accept
                 </button>
                 <button onClick={() => handleRespondConnection(req.id, 'decline')}
@@ -1060,7 +1060,7 @@ const Messages = window.Messages = () => {
                       {p.profilePhoto ? (
                         <img src={p.profilePhoto} alt={p.name} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
                       ) : (
-                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: getAvatarColor(p.name || '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: 'var(--text-on-primary)' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: getAvatarColor(p.name || '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: 'var(--bg-card)' }}>
                           {getInitials(p.name || '?')}
                         </div>
                       )}
@@ -1121,12 +1121,12 @@ const Messages = window.Messages = () => {
             <>
               <button onClick={handleArchiveSelected}
                 disabled={selectedIds.length === 0}
-                style={{ background: selectedIds.length > 0 ? 'var(--color-warning)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
+                style={{ background: selectedIds.length > 0 ? 'var(--color-warning)' : 'var(--border-light)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
                 Archive{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
               </button>
               <button onClick={() => selectedIds.length > 0 && setDeleteConfirmId('__bulk__')}
                 disabled={selectedIds.length === 0}
-                style={{ background: selectedIds.length > 0 ? 'var(--color-error)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
+                style={{ background: selectedIds.length > 0 ? 'var(--color-error)' : 'var(--border-light)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
                 Delete{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
               </button>
               <button onClick={() => { setSelectMode(false); setSelectedIds([]); }}
@@ -1152,7 +1152,7 @@ const Messages = window.Messages = () => {
                 )}
               </button>
               <button onClick={handleNewChat}
-                style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+                style={{ background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
                 title="New message">
                 +
               </button>
@@ -1178,7 +1178,7 @@ const Messages = window.Messages = () => {
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button onClick={() => handleRespondConnection(req.id, 'accept')}
-                    style={{ padding: '6px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ padding: '6px 12px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Accept
                   </button>
                   <button onClick={() => handleRespondConnection(req.id, 'decline')}
@@ -1264,7 +1264,7 @@ const Messages = window.Messages = () => {
                 onTouchMove={(e) => !selectMode && onConvTouchMove(e, c.id)}
                 onTouchEnd={() => !selectMode && onConvTouchEnd(c.id)}
                 style={{
-                  position: 'relative', background: selectMode && selectedIds.includes(c.id) ? '#f0f7ff' : 'var(--text-on-primary)',
+                  position: 'relative', background: selectMode && selectedIds.includes(c.id) ? '#f0f7ff' : 'var(--bg-card)',
                   transform: isSwiping ? `translateX(${swipeOffset}px)` : 'none',
                   transition: isSwiping ? 'none' : 'transform 0.2s',
                 }}>
@@ -1272,7 +1272,7 @@ const Messages = window.Messages = () => {
                   <div style={{ display: 'flex', alignItems: 'center', marginRight: 8, flexShrink: 0 }}>
                     <div style={{
                       width: 22, height: 22, borderRadius: 6, border: selectedIds.includes(c.id) ? 'none' : '2px solid #ccc',
-                      background: selectedIds.includes(c.id) ? 'var(--role-color)' : 'var(--text-on-primary)',
+                      background: selectedIds.includes(c.id) ? 'var(--role-color)' : 'var(--bg-card)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 700,
                     }}>{selectedIds.includes(c.id) ? '\u2713' : ''}</div>
@@ -1297,7 +1297,7 @@ const Messages = window.Messages = () => {
                         ) : (
                           <div key={m.id} style={{
                             width: size, height: size, borderRadius: '50%',
-                            background: getAvatarColor(m.name || '?'), color: 'var(--text-on-primary)',
+                            background: getAvatarColor(m.name || '?'), color: 'var(--bg-card)',
                             fontSize: count === 1 ? 15 : 10, fontWeight: 600,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             position: 'absolute', left: positions[i][0], top: positions[i][1],
@@ -1353,7 +1353,7 @@ const Messages = window.Messages = () => {
                       {isGroup && c.members ? `${c.members.length} members` + (c.lastMessage ? ` · ${c.lastMessage}` : '') : (c.lastMessage || 'No messages yet')}
                     </span>
                     {c.unreadCount > 0 && (
-                      <span style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, flexShrink: 0, marginLeft: '8px', minWidth: '18px', textAlign: 'center' }}>
+                      <span style={{ background: 'var(--role-color)', color: 'var(--bg-card)', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, flexShrink: 0, marginLeft: '8px', minWidth: '18px', textAlign: 'center' }}>
                         {c.unreadCount}
                       </span>
                     )}
@@ -1368,7 +1368,7 @@ const Messages = window.Messages = () => {
             <div style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '8px' }}>No conversations yet</div>
             <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>Start a conversation with someone in your care network</div>
             <button onClick={handleNewChat}
-              style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+              style={{ background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
               New Message
             </button>
           </div>
@@ -1434,7 +1434,7 @@ const Messages = window.Messages = () => {
                       ) : (
                         <div style={{
                           width: 40, height: 40, borderRadius: '50%',
-                          background: getAvatarColor(c.name || '?'), color: 'var(--text-on-primary)',
+                          background: getAvatarColor(c.name || '?'), color: 'var(--bg-card)',
                           fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.7,
                         }}>{getInitials(c.name || '?')}</div>
                       )}
@@ -1511,7 +1511,7 @@ const Messages = window.Messages = () => {
               <button
                 disabled={deleting}
                 onClick={() => deleteConfirmId === '__bulk__' ? handleDeleteSelected() : handleDelete(deleteConfirmId)}
-                style={{ background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}>
+                style={{ background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}>
                 {deleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
@@ -1922,7 +1922,7 @@ const Messages = window.Messages = () => {
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button onClick={handleDeclineIncoming}
-            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: '#e74c3c', color: 'var(--text-on-primary)', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: '#e74c3c', color: 'var(--bg-card)', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
             Decline
           </button>
           <button onClick={handleAcceptIncoming}

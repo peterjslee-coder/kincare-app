@@ -224,7 +224,7 @@ const AreaMap = window.AreaMap = () => {
           <button key={r} onClick={() => setRadiusMiles(r)} style={{
             padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
             border: radiusMiles === r ? '2px solid #1b6b5a' : '1px solid #ccc',
-            background: radiusMiles === r ? 'var(--role-color)' : 'var(--text-on-primary)',
+            background: radiusMiles === r ? 'var(--role-color)' : 'var(--bg-card)',
             color: radiusMiles === r ? 'var(--text-on-primary)' : 'var(--text-secondary)',
             cursor: 'pointer',
           }}>{r} mi</button>

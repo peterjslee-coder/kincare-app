@@ -386,7 +386,7 @@ const NotificationSettings = window.NotificationSettings = () => {
       onClick: handleEnable,
       disabled: subscribing,
       style: {
-        background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px',
+        background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: '8px',
         padding: '10px 20px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
         marginRight: '8px',
       },

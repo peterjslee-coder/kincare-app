@@ -255,7 +255,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                     placeholder="e.g. Sarah, Maria Jones..."
                     style={{ flex: 1, padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
                   <button onClick={handleRefSearch} disabled={refSearching || !refSearch.trim()} style={{
-                    padding: '10px 16px', background: refSearching ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--text-on-primary)',
+                    padding: '10px 16px', background: refSearching ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--bg-card)',
                     border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: refSearching ? 'wait' : 'pointer',
                   }}>{refSearching ? '...' : 'Search'}</button>
                 </div>
@@ -273,7 +273,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                       transition: 'all 0.15s',
                     }}
                       onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--role-color)'; e.currentTarget.style.background = 'var(--bg-highlight)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--text-on-primary)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--bg-card)'; }}
                     >
                       <div style={{
                         width: 36, height: 36, borderRadius: '50%', background: 'var(--color-success-bg)',
@@ -315,7 +315,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                       } catch (e) { console.error('Claim referral error:', e); }
                       setRefClaiming(false);
                     }} disabled={refClaiming || !refCode.trim()} style={{
-                      padding: '10px 16px', background: refClaiming ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--text-on-primary)',
+                      padding: '10px 16px', background: refClaiming ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--bg-card)',
                       border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: refClaiming ? 'wait' : 'pointer',
                     }}>{refClaiming ? '...' : 'Apply'}</button>
                   </div>
@@ -434,7 +434,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                   background: 'var(--bg-surface)',
                 }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = card.color; e.currentTarget.style.background = card.bgColor; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--text-on-primary)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--bg-card)'; }}
               >
                 <div style={{
                   width: '52px', height: '52px', borderRadius: '50%',
@@ -509,7 +509,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                   background: 'var(--bg-surface)',
                 }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = card.color; e.currentTarget.style.background = card.bgColor; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--text-on-primary)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--bg-card)'; }}
               >
                 <div style={{
                   width: '52px', height: '52px', borderRadius: '50%',
@@ -674,21 +674,21 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               <strong>Before we create your account</strong> — please review and acknowledge the following. These protect you and the families you'll work with.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackNoMedical ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackNoMedical ? 'var(--bg-highlight)' : 'var(--text-on-primary)', transition: 'all 0.2s' }}>
+              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackNoMedical ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackNoMedical ? 'var(--bg-highlight)' : 'var(--bg-card)', transition: 'all 0.2s' }}>
                 <input type="checkbox" checked={formData.ackNoMedical} onChange={(e) => setFormData(p => ({ ...p, ackNoMedical: e.target.checked }))} style={{ marginTop: '2px', flexShrink: 0 }} />
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '4px' }}>No medical care</div>
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>InPlace does not provide at-home medical care in accordance with Virginia state law. Caregivers provide companionship, personal care, and household assistance only.</div>
                 </div>
               </label>
-              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackBgCheck ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackBgCheck ? 'var(--bg-highlight)' : 'var(--text-on-primary)', transition: 'all 0.2s' }}>
+              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackBgCheck ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackBgCheck ? 'var(--bg-highlight)' : 'var(--bg-card)', transition: 'all 0.2s' }}>
                 <input type="checkbox" checked={formData.ackBgCheck} onChange={(e) => setFormData(p => ({ ...p, ackBgCheck: e.target.checked }))} style={{ marginTop: '2px', flexShrink: 0 }} />
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '4px' }}>Background check required</div>
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>A comprehensive background check is required before you can accept jobs. The fee is $30 and is refunded after your first 10 completed sessions.</div>
                 </div>
               </label>
-              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackPayments ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackPayments ? 'var(--bg-highlight)' : 'var(--text-on-primary)', transition: 'all 0.2s' }}>
+              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackPayments ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackPayments ? 'var(--bg-highlight)' : 'var(--bg-card)', transition: 'all 0.2s' }}>
                 <input type="checkbox" checked={formData.ackPayments} onChange={(e) => setFormData(p => ({ ...p, ackPayments: e.target.checked }))} style={{ marginTop: '2px', flexShrink: 0 }} />
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '4px' }}>Online payments</div>

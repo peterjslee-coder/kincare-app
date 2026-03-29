@@ -789,7 +789,7 @@
 
     .splash-footer {
       background: var(--bg-card);
-      color: var(--text-on-primary);
+      color: var(--text-secondary);
       text-align: center;
       padding: 32px;
       font-size: 14px;

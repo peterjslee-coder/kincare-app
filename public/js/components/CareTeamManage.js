@@ -277,7 +277,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input value={newName} onChange={(e) => setNewName(e.target.value)} style={{ ...inputStyle, maxWidth: 300 }} autoFocus
                 onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateName(); if (e.key === 'Escape') setEditingName(false); }} />
-              <button onClick={handleUpdateName} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Save</button>
+              <button onClick={handleUpdateName} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Save</button>
               <button onClick={() => setEditingName(false)} style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
             </div>
           ) : (
@@ -294,7 +294,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         </div>
         {isLeader && (
           <button onClick={() => setShowInviteForm(true)}
-            style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
             + Invite
           </button>
         )}
@@ -311,7 +311,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                   placeholder="e.g. Son, Daughter, Spouse, Friend"
                   style={{ padding: '4px 8px', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 13, width: 200 }}
                   autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleSaveLabel(); if (e.key === 'Escape') setEditingLabel(false); }} />
-                <button onClick={handleSaveLabel} style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+                <button onClick={handleSaveLabel} style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>
                 <button onClick={() => setEditingLabel(false)} style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
               </span>
             ) : (
@@ -353,7 +353,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 <option value="viewer">Viewer</option>
               </select>
               <button type="submit" disabled={inviting}
-                style={{ padding: '10px 20px', background: inviting ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: inviting ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                style={{ padding: '10px 20px', background: inviting ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: inviting ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
                 {inviting ? 'Sending...' : 'Send Invite'}
               </button>
             </div>
@@ -410,12 +410,12 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
               {isExpanded && canManage && (
                 <div style={{ padding: '0 0 14px', margin: '0 -16px', padding: '0 16px 14px', background: 'var(--bg-highlight)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'member'); }}
-                    style={{ padding: '6px 14px', background: m.role === 'member' ? 'var(--role-color)' : 'var(--text-on-primary)', color: m.role === 'member' ? 'var(--text-on-primary)' : 'var(--role-color)',
+                    style={{ padding: '6px 14px', background: m.role === 'member' ? 'var(--role-color)' : 'var(--bg-card)', color: m.role === 'member' ? 'var(--bg-card)' : 'var(--role-color)',
                       border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Member
                   </button>
                   <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'viewer'); }}
-                    style={{ padding: '6px 14px', background: m.role === 'viewer' ? 'var(--text-secondary)' : 'var(--text-on-primary)', color: m.role === 'viewer' ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+                    style={{ padding: '6px 14px', background: m.role === 'viewer' ? 'var(--text-secondary)' : 'var(--bg-card)', color: m.role === 'viewer' ? 'var(--bg-card)' : 'var(--text-secondary)',
                       border: '1px solid #999', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     View Only
                   </button>
@@ -465,7 +465,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 } catch { showToast('Failed to update billing contact', 'error'); }
                 setSavingBilling(false);
               }} disabled={savingBilling}
-                style={{ padding: '10px 20px', background: savingBilling ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingBilling ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                style={{ padding: '10px 20px', background: savingBilling ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingBilling ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
                 {savingBilling ? 'Saving...' : 'Save'}
               </button>
             </div>
@@ -484,7 +484,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
           <span>{team.recipient_first_name}'s Caregivers ({recipientCaregivers.length})</span>
           {isLeader && (
             <button onClick={openAssignPicker}
-              style={{ padding: '5px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+              style={{ padding: '5px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
               + Assign
             </button>
           )}
@@ -566,7 +566,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                     </div>
                   </div>
                   <button onClick={() => handleAssignCaregiver(cg.id)}
-                    style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Assign
                   </button>
                 </div>
@@ -717,7 +717,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                         style={{
                           padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                           border: notifChannel === opt.value ? '2px solid #e8724a' : '1px solid #d0d0d0',
-                          background: notifChannel === opt.value ? '#fff5f0' : 'var(--text-on-primary)',
+                          background: notifChannel === opt.value ? '#fff5f0' : 'var(--bg-card)',
                           color: notifChannel === opt.value ? 'var(--accent-color)' : 'var(--text-secondary)',
                         }}>
                         {opt.icon} {opt.label}
@@ -752,7 +752,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 </div>
 
                 <button onClick={handleSaveNotifications} disabled={savingNotif}
-                  style={{ padding: '9px 20px', background: savingNotif ? 'var(--text-muted)' : 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingNotif ? 'wait' : 'pointer' }}>
+                  style={{ padding: '9px 20px', background: savingNotif ? 'var(--text-muted)' : 'var(--accent-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingNotif ? 'wait' : 'pointer' }}>
                   {savingNotif ? 'Saving...' : 'Save Settings'}
                 </button>
               </div>

@@ -1053,7 +1053,7 @@ const App = () => {
     splash: <SplashPage onNavigate={handleNavigate} inviteInfo={inviteInfo} />,
     demo: <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />,
     'verifying-email': <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-primary)', padding: 24 }}>
-      <div style={{ background: 'var(--text-on-primary)', borderRadius: 16, padding: '48px 40px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '48px 40px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>{'\u2709\uFE0F'}</div>
         <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Verifying your email...</h2>
         <p style={{ fontSize: 15, color: 'var(--text-secondary)', margin: 0 }}>Just a moment while we confirm your address.</p>
@@ -1284,7 +1284,7 @@ const App = () => {
                   : () => { handlePageChange(item.id); setSidebarOpen(false); };
                 return (
                   <li key={item.id} className="nav-item">
-                    <button onClick={actionClick} className="nav-link" style={item.disabled ? { background: 'var(--text-muted)', color: 'rgba(255,255,255,0.5)', fontWeight: 600, cursor: 'not-allowed', opacity: 0.5 } : item.id === '_launch_kindred' ? { background: 'var(--color-info)', color: 'var(--text-on-primary)', fontWeight: 600 } : { background: 'var(--accent-color)', color: 'var(--text-on-primary)', fontWeight: 600 }} title={item.disabled ? 'Complete your profile first' : item.id === '_launch_kindred' ? 'Open Kindred (new tab)' : ''}>
+                    <button onClick={actionClick} className="nav-link" style={item.disabled ? { background: 'var(--text-muted)', color: 'rgba(255,255,255,0.5)', fontWeight: 600, cursor: 'not-allowed', opacity: 0.5 } : item.id === '_launch_kindred' ? { background: 'var(--color-info)', color: 'var(--bg-card)', fontWeight: 600 } : { background: 'var(--accent-color)', color: 'var(--bg-card)', fontWeight: 600 }} title={item.disabled ? 'Complete your profile first' : item.id === '_launch_kindred' ? 'Open Kindred (new tab)' : ''}>
                       <span className="nav-icon">{item.icon}</span> {item.label} {item.disabled && '🔒'}
                     </button>
                   </li>
@@ -1312,7 +1312,7 @@ const App = () => {
                         adminAlertDetails.newFeedback && `${adminAlertDetails.newFeedback} new feedback`,
                         adminAlertDetails.checkrAlerts && `${adminAlertDetails.checkrAlerts} background check updates`,
                       ].filter(Boolean).join(', ') : ''} style={{
-                        marginLeft: 'auto', background: 'var(--color-error)', color: 'var(--text-on-primary)', borderRadius: 10,
+                        marginLeft: 'auto', background: 'var(--color-error)', color: 'var(--bg-card)', borderRadius: 10,
                         padding: '1px 6px', fontSize: 10, fontWeight: 700,
                         minWidth: 18, textAlign: 'center', lineHeight: '16px',
                       }}>{adminAlertCount > 99 ? '99+' : adminAlertCount}</span>
@@ -1454,7 +1454,7 @@ const App = () => {
             {item.id === 'admin' && adminAlertCount > 0 && (
               <span style={{
                 position: 'absolute', top: 2, right: '50%', marginRight: -18,
-                background: 'var(--color-error)', color: 'var(--text-on-primary)', borderRadius: 10,
+                background: 'var(--color-error)', color: 'var(--bg-card)', borderRadius: 10,
                 padding: '1px 5px', fontSize: 9, fontWeight: 700,
                 minWidth: 16, textAlign: 'center', lineHeight: '14px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.3)',

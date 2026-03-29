@@ -311,7 +311,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       <h2 style={{ margin: '0 0 8px', color: 'var(--text-primary)' }}>Something went wrong</h2>
       <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>We couldn't load your dashboard. This might be a temporary issue.</p>
       <button onClick={() => { setError(false); setLoading(true); fetchDashboard(); }}
-        style={{ padding: '10px 24px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+        style={{ padding: '10px 24px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
         Try Again
       </button>
     </div>
@@ -355,7 +355,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               { num: '4', text: 'Open InPlace from your home screen — you\'ll get push notifications and a full-screen experience!' },
             ].map(s => (
               <div key={s.num} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.num}</div>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.num}</div>
                 <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, paddingTop: 3 }}>{s.text}</div>
               </div>
             ))}
@@ -373,7 +373,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               { num: '4', text: 'Open InPlace from your home screen — push notifications will work automatically!' },
             ].map(s => (
               <div key={s.num} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.num}</div>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.num}</div>
                 <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, paddingTop: 3 }}>{s.text}</div>
               </div>
             ))}
@@ -389,7 +389,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           <button onClick={() => { localStorage.setItem('pwa_setup_done', '1'); setShowPwaGuide(false); }}
-            style={{ flex: 1, padding: '12px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            style={{ flex: 1, padding: '12px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
             Done — I've installed it!
           </button>
           <button onClick={() => setShowPwaGuide(false)}
@@ -444,7 +444,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             </div>
             <button onClick={() => handleAcceptInvite(invite)}
               disabled={acceptingInviteId === invite.id}
-              style={{ padding: '12px 28px', background: acceptingInviteId === invite.id ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: acceptingInviteId === invite.id ? 'wait' : 'pointer', whiteSpace: 'nowrap', boxShadow: '0 3px 8px rgba(0,0,0,0.18)' }}>
+              style={{ padding: '12px 28px', background: acceptingInviteId === invite.id ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: acceptingInviteId === invite.id ? 'wait' : 'pointer', whiteSpace: 'nowrap', boxShadow: '0 3px 8px rgba(0,0,0,0.18)' }}>
               {acceptingInviteId === invite.id ? 'Joining...' : 'Accept Invite'}
             </button>
           </div>
@@ -548,7 +548,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             </p>
             {overdueSession.caregiverPhone ? (
               <a href={`tel:${overdueSession.caregiverPhone}`} style={{
-                display: 'block', padding: '14px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+                display: 'block', padding: '14px 20px', background: 'var(--role-color)', color: 'var(--bg-card)',
                 borderRadius: 12, fontSize: 16, fontWeight: 700, textDecoration: 'none',
                 marginBottom: 10,
               }}>
@@ -592,7 +592,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           </div>
           <button onClick={() => handleAcceptInvite(invite)}
             disabled={acceptingInviteId === invite.id}
-            style={{ padding: '10px 24px', background: acceptingInviteId === invite.id ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: acceptingInviteId === invite.id ? 'wait' : 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
+            style={{ padding: '10px 24px', background: acceptingInviteId === invite.id ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: acceptingInviteId === invite.id ? 'wait' : 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
             {acceptingInviteId === invite.id ? 'Joining...' : 'Accept'}
           </button>
         </div>
@@ -674,7 +674,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button onClick={() => onNavigate && onNavigate('account')}
-                style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 My Profile
               </button>
               <button onClick={() => dismissTile('onboarding', 'v2')} title="Dismiss" style={{
@@ -831,7 +831,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   setReviewSession(pr);
                   setReviewRating(0);
                   setReviewComment('');
-                }} style={{ padding: '8px 20px', background: isNoShow ? '#ef5350' : 'var(--color-warning)', color: isNoShow ? 'var(--text-on-primary)' : 'var(--text-primary)', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                }} style={{ padding: '8px 20px', background: isNoShow ? '#ef5350' : 'var(--color-warning)', color: isNoShow ? 'var(--bg-card)' : 'var(--text-primary)', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
                   Leave Review
                 </button>
               </div>
@@ -877,7 +877,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                         {timeLeftLabel && (
                           <span style={{
                             fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-                            background: isUrgent ? 'var(--accent-color)' : 'var(--color-violet)', color: 'var(--text-on-primary)',
+                            background: isUrgent ? 'var(--accent-color)' : 'var(--color-violet)', color: 'var(--bg-card)',
                           }}>
                             {isUrgent ? '\u23F1' : '\u23F3'} {timeLeftLabel}
                           </span>
@@ -969,7 +969,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     return m.avatarUrl ? (
                       <img key={i} src={m.avatarUrl} alt={initials} style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, objectFit: 'cover', zIndex: shown.length - i }} />
                     ) : (
-                      <div key={i} style={{ width: 28, height: 28, borderRadius: '50%', background: colors[i % colors.length], border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-on-primary)', fontWeight: 600, zIndex: shown.length - i }}>
+                      <div key={i} style={{ width: 28, height: 28, borderRadius: '50%', background: colors[i % colors.length], border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--bg-card)', fontWeight: 600, zIndex: shown.length - i }}>
                         {initials}
                       </div>
                     );
@@ -1152,7 +1152,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                           </div>
                         ) : s.caregiverId ? (
                           <button onClick={(e) => { e.stopPropagation(); setReviewSession(s); setReviewRating(0); setReviewComment(''); }}
-                            style={{ padding: '6px 14px', borderRadius: 10, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            style={{ padding: '6px 14px', borderRadius: 10, border: 'none', background: 'var(--role-color)', color: 'var(--bg-card)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                             {'\u2605'} Leave Review
                           </button>
                         ) : (
@@ -1680,7 +1680,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                       Keep Session
                     </button>
                     <button onClick={() => handleCancel(cancellingId)} disabled={cancelLoading}
-                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: cancelLoading ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'wait' : 'pointer' }}>
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: cancelLoading ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--bg-card)', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'wait' : 'pointer' }}>
                       {cancelLoading ? 'Cancelling...' : 'Cancel Session'}
                     </button>
                   </div>
@@ -1741,7 +1741,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                       style={{
                         flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer',
                         border: tipAmount === cents ? '2px solid #E65100' : '1px solid #ddd',
-                        background: tipAmount === cents ? 'var(--color-warning-bg)' : 'var(--text-on-primary)',
+                        background: tipAmount === cents ? 'var(--color-warning-bg)' : 'var(--bg-card)',
                         color: tipAmount === cents ? 'var(--color-warning)' : 'var(--text-primary)',
                       }}>
                       ${cents / 100}
@@ -1751,7 +1751,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     style={{
                       flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                       border: tipAmount === 'custom' ? '2px solid #E65100' : '1px solid #ddd',
-                      background: tipAmount === 'custom' ? 'var(--color-warning-bg)' : 'var(--text-on-primary)',
+                      background: tipAmount === 'custom' ? 'var(--color-warning-bg)' : 'var(--bg-card)',
                       color: tipAmount === 'custom' ? 'var(--color-warning)' : 'var(--text-primary)',
                     }}>
                     Custom
@@ -1779,7 +1779,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 Not Now
               </button>
               <button onClick={handleReview} disabled={!reviewRating || reviewLoading}
-                style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none', background: (!reviewRating || reviewLoading) ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 700, cursor: (!reviewRating || reviewLoading) ? 'default' : 'pointer' }}>
+                style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none', background: (!reviewRating || reviewLoading) ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--bg-card)', fontSize: 14, fontWeight: 700, cursor: (!reviewRating || reviewLoading) ? 'default' : 'pointer' }}>
                 {reviewLoading ? 'Submitting...' : (tipAmount && tipAmount !== 'custom' ? 'Submit Review & Tip' : (tipAmount === 'custom' && parseFloat(tipCustom) >= 1 ? 'Submit Review & Tip' : 'Submit Review'))}
               </button>
             </div>

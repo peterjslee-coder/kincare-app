@@ -710,7 +710,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           <h2 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Invite Issue</h2>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{inviteError}</p>
           <a href="/" style={{
-            display: 'inline-block', padding: '12px 28px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+            display: 'inline-block', padding: '12px 28px', background: 'var(--role-color)', color: 'var(--bg-card)',
             borderRadius: '8px', textDecoration: 'none', fontWeight: 600,
           }}>Go to InPlace</a>
         </div>
@@ -768,7 +768,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   const nextBtn = (handler, label, disabledExtra) => (
     <button onClick={handler} disabled={saving || disabledExtra} style={{
-      flex: 1, padding: '14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+      flex: 1, padding: '14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
       borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
       opacity: (saving || disabledExtra) ? 0.6 : 1,
     }}>{saving ? 'Saving...' : label}</button>
@@ -1019,7 +1019,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     <button key={r} onClick={() => updateForm('travelRadius', r)} style={{
                       padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 600,
                       border: form.travelRadius === r ? '2px solid #1b6b5a' : '2px solid #ddd',
-                      background: form.travelRadius === r ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+                      background: form.travelRadius === r ? 'var(--bg-teal-light)' : 'var(--bg-card)',
                       color: form.travelRadius === r ? 'var(--role-color)' : 'var(--text-secondary)',
                       cursor: 'pointer',
                     }}>{r} mi</button>
@@ -1055,7 +1055,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     <button key={String(opt.val)} onClick={() => updateForm('comfortableWithPets', opt.val)} style={{
                       flex: 1, padding: '10px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
                       border: form.comfortableWithPets === opt.val ? '2px solid #8B6914' : '2px solid #ddd',
-                      background: form.comfortableWithPets === opt.val ? '#fef9ef' : 'var(--text-on-primary)',
+                      background: form.comfortableWithPets === opt.val ? '#fef9ef' : 'var(--bg-card)',
                       color: form.comfortableWithPets === opt.val ? '#8B6914' : 'var(--text-secondary)',
                       cursor: 'pointer',
                     }}>{opt.label}</button>
@@ -1089,7 +1089,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   <button key={String(opt.val)} onClick={() => updateForm('openToInterview', opt.val)} style={{
                     flex: 1, padding: '10px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
                     border: form.openToInterview === opt.val ? '2px solid #1b6b5a' : '2px solid #ddd',
-                    background: form.openToInterview === opt.val ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+                    background: form.openToInterview === opt.val ? 'var(--color-success-bg)' : 'var(--bg-card)',
                     color: form.openToInterview === opt.val ? 'var(--role-color)' : 'var(--text-secondary)',
                     cursor: 'pointer',
                   }}>{opt.label}</button>
@@ -1305,7 +1305,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     <button key={String(opt.val)} onClick={() => updateForm('needsProgramReports', opt.val)} style={{
                       flex: 1, padding: '14px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
                       border: form.needsProgramReports === opt.val ? '2px solid #1b6b5a' : '2px solid #ddd',
-                      background: form.needsProgramReports === opt.val ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+                      background: form.needsProgramReports === opt.val ? 'var(--bg-teal-light)' : 'var(--bg-card)',
                       color: form.needsProgramReports === opt.val ? 'var(--role-color)' : 'var(--text-secondary)',
                       cursor: 'pointer', transition: 'all 0.15s',
                     }}>{opt.label}</button>
@@ -1346,7 +1346,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                         <button key={yr} onClick={() => updateForm('programYear', yr)} style={{
                           padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 600,
                           border: form.programYear === yr ? '2px solid #1b6b5a' : '2px solid #ddd',
-                          background: form.programYear === yr ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+                          background: form.programYear === yr ? 'var(--bg-teal-light)' : 'var(--bg-card)',
                           color: form.programYear === yr ? 'var(--role-color)' : 'var(--text-secondary)',
                           cursor: 'pointer',
                         }}>{yr}</button>
@@ -1428,7 +1428,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     onChange={(e) => handleFileSelect('dl_front', e)} />
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button type="button" onClick={() => document.getElementById('dl_front_camera').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                     }}>&#128247; Take Photo</button>
                     <button type="button" onClick={() => document.getElementById('dl_front_gallery').click()} style={{
@@ -1464,7 +1464,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     onChange={(e) => handleFileSelect('dl_back', e)} />
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button type="button" onClick={() => document.getElementById('dl_back_camera').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                     }}>&#128247; Take Photo</button>
                     <button type="button" onClick={() => document.getElementById('dl_back_gallery').click()} style={{
@@ -1585,7 +1585,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             </div>
 
             <button onClick={handleComplete} style={{
-              width: '100%', padding: '14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+              width: '100%', padding: '14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
               borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
             }}>Go to My Dashboard</button>
           </div>

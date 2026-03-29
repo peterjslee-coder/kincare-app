@@ -42,7 +42,7 @@ const CareTeamPage = window.CareTeamPage = ({ selectedTeamId, onNavigate }) => {
             When you add a loved one to care for, a care team is automatically created. You can then invite family members to join.
           </p>
           <button onClick={() => onNavigate && onNavigate('recipients')}
-            style={{ padding: '10px 24px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            style={{ padding: '10px 24px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             Add a Loved One
           </button>
         </div>

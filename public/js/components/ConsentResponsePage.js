@@ -302,7 +302,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
                     style={{
                       flex: 1, padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 600,
                       fontSize: '14px', cursor: codeSending ? 'not-allowed' : 'pointer',
-                      background: 'var(--role-color)', color: 'var(--text-on-primary)',
+                      background: 'var(--role-color)', color: 'var(--bg-card)',
                     }}>
                     {codeSending ? 'Sending...' : 'Text me a code'}
                   </button>
@@ -345,7 +345,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
                     style={{
                       padding: '12px 20px', borderRadius: '8px', border: 'none', fontWeight: 600,
                       fontSize: '14px', cursor: verifyCode.length >= 6 ? 'pointer' : 'not-allowed',
-                      background: verifyCode.length >= 6 ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)',
+                      background: verifyCode.length >= 6 ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--bg-card)',
                     }}>
                     {verifying ? '...' : 'Verify'}
                   </button>
@@ -405,7 +405,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
               <button key={opt.id} onClick={() => setSelectedResponse(opt.id)}
                 style={{
                   display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
-                  background: isSelected ? opt.color : 'var(--text-on-primary)',
+                  background: isSelected ? opt.color : 'var(--bg-card)',
                   border: `2px solid ${isSelected ? opt.activeColor : 'var(--border-light)'}`,
                   borderRadius: '10px', padding: '14px 16px', marginBottom: '10px',
                   transition: 'all 0.2s',
@@ -441,7 +441,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
             style={{
               width: '100%', padding: '14px', borderRadius: '10px', border: 'none',
               fontWeight: 600, fontSize: '15px', cursor: selectedResponse && phoneVerified ? 'pointer' : 'not-allowed',
-              background: selectedResponse && phoneVerified ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)',
+              background: selectedResponse && phoneVerified ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--bg-card)',
               marginTop: '20px', transition: 'background 0.2s',
             }}>
             {submitting ? 'Submitting...' : 'Submit Response'}
