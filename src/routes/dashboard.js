@@ -690,22 +690,29 @@ async function caregiverDashboard(db, userId, res) {
       health_conditions: a.health_conditions ? JSON.parse(a.health_conditions) : [],
     })),
     upcomingSessions: upcoming.map(s => {
-      // 75/25 split: recompute from caregiver's actual rates (matches session detail endpoint)
-      const rates = {
-        daytime: s.cg_rate_daytime || s.cg_hourly_rate || 28,
-        nighttime: s.cg_rate_nighttime || s.cg_hourly_rate || 28,
-        overnight: s.cg_rate_overnight || s.cg_hourly_rate || 28,
-        base: s.cg_hourly_rate || 28,
-      };
-      const storedSurcharge = parseFloat(s.short_notice_surcharge) || 0;
-      const shortNotice = storedSurcharge > 0;
-      const costResult = calculateSessionCost(s.scheduled_time, null, rates, {
-        scheduledDate: s.scheduled_date,
-        durationHours: parseFloat(s.duration_hours || 2),
-        shortNotice,
-      });
-      const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * 0.75 * 100) / 100;
-      const caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
+      // If family offered a specific rate (proposed_rate), use it — the offer is the offer.
+      // Only fall back to caregiver profile rates when no offer was made.
+      let caregiverPayout;
+      if (s.proposed_rate && parseFloat(s.proposed_rate) > 0) {
+        // Family's offered rate × duration = what the caregiver earns
+        caregiverPayout = Math.round(parseFloat(s.proposed_rate) * parseFloat(s.duration_hours || 2) * 100) / 100;
+      } else {
+        const rates = {
+          daytime: s.cg_rate_daytime || s.cg_hourly_rate || 28,
+          nighttime: s.cg_rate_nighttime || s.cg_hourly_rate || 28,
+          overnight: s.cg_rate_overnight || s.cg_hourly_rate || 28,
+          base: s.cg_hourly_rate || 28,
+        };
+        const storedSurcharge = parseFloat(s.short_notice_surcharge) || 0;
+        const shortNotice = storedSurcharge > 0;
+        const costResult = calculateSessionCost(s.scheduled_time, null, rates, {
+          scheduledDate: s.scheduled_date,
+          durationHours: parseFloat(s.duration_hours || 2),
+          shortNotice,
+        });
+        const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * 0.75 * 100) / 100;
+        caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
+      }
       return {
         id: s.id,
         date: s.scheduled_date,
@@ -817,22 +824,27 @@ async function caregiverDashboard(db, userId, res) {
       return results;
     })(),
     recentlyCompleted: recentCompletedCg.map(s => {
-      // 75/25 split: recompute from caregiver's actual rates (matches session detail endpoint)
-      const rates = {
-        daytime: s.cg_rate_daytime || s.cg_hourly_rate || 28,
-        nighttime: s.cg_rate_nighttime || s.cg_hourly_rate || 28,
-        overnight: s.cg_rate_overnight || s.cg_hourly_rate || 28,
-        base: s.cg_hourly_rate || 28,
-      };
-      const storedSurcharge = parseFloat(s.short_notice_surcharge) || 0;
-      const shortNotice = storedSurcharge > 0;
-      const costResult = calculateSessionCost(s.scheduled_time, null, rates, {
-        scheduledDate: s.scheduled_date,
-        durationHours: parseFloat(s.duration_hours || 2),
-        shortNotice,
-      });
-      const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * 0.75 * 100) / 100;
-      const caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
+      // If family offered a specific rate (proposed_rate), use it — the offer is the offer.
+      let caregiverPayout;
+      if (s.proposed_rate && parseFloat(s.proposed_rate) > 0) {
+        caregiverPayout = Math.round(parseFloat(s.proposed_rate) * parseFloat(s.duration_hours || 2) * 100) / 100;
+      } else {
+        const rates = {
+          daytime: s.cg_rate_daytime || s.cg_hourly_rate || 28,
+          nighttime: s.cg_rate_nighttime || s.cg_hourly_rate || 28,
+          overnight: s.cg_rate_overnight || s.cg_hourly_rate || 28,
+          base: s.cg_hourly_rate || 28,
+        };
+        const storedSurcharge = parseFloat(s.short_notice_surcharge) || 0;
+        const shortNotice = storedSurcharge > 0;
+        const costResult = calculateSessionCost(s.scheduled_time, null, rates, {
+          scheduledDate: s.scheduled_date,
+          durationHours: parseFloat(s.duration_hours || 2),
+          shortNotice,
+        });
+        const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * 0.75 * 100) / 100;
+        caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
+      }
       return {
         id: s.id,
         date: s.scheduled_date,
