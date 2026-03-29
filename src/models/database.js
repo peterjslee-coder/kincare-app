@@ -1074,7 +1074,7 @@ async function initializeDatabase() {
     const testSessionId = 'test-webhook-' + Date.now();
     // Only create if no recent test session exists
     const recentTest = await db.prepare(`
-      SELECT id FROM care_sessions WHERE id LIKE 'test-webhook-%' AND scheduled_date = CURRENT_DATE
+      SELECT id FROM care_sessions WHERE id LIKE 'test-webhook-%' AND scheduled_date = to_char(CURRENT_DATE, 'YYYY-MM-DD')
     `).get();
     if (!recentTest) {
       const pete = await db.prepare("SELECT id FROM users WHERE email = 'peterjslee@gmail.com'").get();
@@ -1086,7 +1086,7 @@ async function initializeDatabase() {
           (id, care_recipient_id, family_user_id, caregiver_id, service_type, status,
            scheduled_date, scheduled_time, duration_hours, estimated_cost,
            proposed_rate, review_required, review_completed, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'Companionship', 'completed', CURRENT_DATE, '10:00', 0.5, 0.50,
+          VALUES (?, ?, ?, ?, 'Companionship', 'completed', to_char(CURRENT_DATE, 'YYYY-MM-DD'), '10:00', 0.5, 0.50,
                   1.00, 1, 0, NOW(), NOW())
         `).run(testSessionId, betty.id, pete.id, cary.id);
         console.log(`  ✅ Created webhook test session: ${testSessionId} (Cary, $1/hr, 30min)`);
