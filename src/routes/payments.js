@@ -92,11 +92,49 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
             // Create manual_payments record
             const manualPaymentId = uuid();
             const amountCents = session.amount_total; // Stripe returns in cents
+
+            // Try to get payout expected date from Stripe transfer/balance
+            let payoutExpectedDate = null;
+            try {
+              if (session.payment_intent) {
+                const pi = await stripe.paymentIntents.retrieve(session.payment_intent);
+                // Get the latest charge's balance transaction for available_on date
+                if (pi.latest_charge) {
+                  const charge = await stripe.charges.retrieve(pi.latest_charge);
+                  if (charge.transfer) {
+                    // Get the transfer on the connected account to find payout timing
+                    const cgProfile = await db.prepare("SELECT stripe_account_id FROM caregiver_profiles WHERE id = ?").get(caregiverId);
+                    if (cgProfile?.stripe_account_id) {
+                      const transfer = await stripe.transfers.retrieve(charge.transfer);
+                      // Get the destination payment (charge on connected account)
+                      if (transfer.destination_payment) {
+                        const destCharge = await stripe.charges.retrieve(
+                          transfer.destination_payment,
+                          { stripeAccount: cgProfile.stripe_account_id }
+                        );
+                        if (destCharge.balance_transaction) {
+                          const bt = await stripe.balanceTransactions.retrieve(
+                            destCharge.balance_transaction,
+                            { stripeAccount: cgProfile.stripe_account_id }
+                          );
+                          if (bt.available_on) {
+                            payoutExpectedDate = new Date(bt.available_on * 1000).toISOString().split('T')[0];
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (payoutErr) {
+              console.log("Could not determine payout date (non-blocking):", payoutErr.message);
+            }
+
             await db.prepare(`
-              INSERT INTO manual_payments (id, from_user_id, to_caregiver_id, amount_cents, note, stripe_session_id, stripe_payment_intent_id, status, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', NOW())
+              INSERT INTO manual_payments (id, from_user_id, to_caregiver_id, amount_cents, note, stripe_session_id, stripe_payment_intent_id, status, payout_expected_date, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?, NOW())
             `).run(
-              manualPaymentId, fromUserId, caregiverId, amountCents, note || null, session.id, session.payment_intent
+              manualPaymentId, fromUserId, caregiverId, amountCents, note || null, session.id, session.payment_intent, payoutExpectedDate
             );
 
             // Get caregiver and family user info for notification
@@ -106,14 +144,15 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
             // Send push notification to caregiver
             if (caregiver?.user_id) {
               const { sendPushToUser } = require("./push");
+              const payoutMsg = payoutExpectedDate ? ` Expected in your bank by ${new Date(payoutExpectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.` : '';
               sendPushToUser(caregiver.user_id, {
                 title: `You received a payment`,
-                body: `You received $${(amountCents / 100).toFixed(2)} from ${familyUser?.first_name || 'a family'}${note ? `: "${note}"` : ''}`,
+                body: `You received $${(amountCents / 100).toFixed(2)} from ${familyUser?.first_name || 'a family'}${note ? `: "${note}"` : ''}${payoutMsg}`,
                 data: { type: 'manual_payment_received', caregiverId, page: 'earnings' },
               }, 'manual_payment_received').catch(() => {});
             }
 
-            console.log(`💳 Manual payment of $${(amountCents / 100).toFixed(2)} completed from user ${fromUserId} to caregiver ${caregiverId}`);
+            console.log(`💳 Manual payment of $${(amountCents / 100).toFixed(2)} completed from user ${fromUserId} to caregiver ${caregiverId}${payoutExpectedDate ? ` (payout expected ${payoutExpectedDate})` : ''}`);
           } catch (err) {
             console.error("Manual payment webhook error:", err.message);
           }
@@ -953,7 +992,9 @@ router.get("/session/:sessionId", async (req, res) => {
 // Caregiver earnings summary (session payments + manual payments)
 router.get("/earnings", requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
-  const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  let stripe;
+  try { stripe = getStripe(); } catch { stripe = null; }
+  const profile = await db.prepare("SELECT id, stripe_account_id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
   const { from, to } = req.query;
@@ -994,6 +1035,40 @@ router.get("/earnings", requireRole("caregiver"), async (req, res) => {
     "SELECT SUM(caregiver_payout) as total FROM payments WHERE caregiver_id = ? AND status = 'processing'"
   ).get(profile.id);
 
+  // Lazy backfill: look up payout dates from Stripe for manual payments missing them
+  for (const mp of manualPayments) {
+    if (stripe && profile.stripe_account_id && !mp.payout_expected_date && mp.stripe_payment_intent_id) {
+      try {
+        const pi = await stripe.paymentIntents.retrieve(mp.stripe_payment_intent_id);
+        if (pi.latest_charge) {
+          const charge = await stripe.charges.retrieve(pi.latest_charge);
+          if (charge.transfer) {
+            const transfer = await stripe.transfers.retrieve(charge.transfer);
+            if (transfer.destination_payment) {
+              const destCharge = await stripe.charges.retrieve(
+                transfer.destination_payment,
+                { stripeAccount: profile.stripe_account_id || undefined }
+              );
+              if (destCharge.balance_transaction) {
+                const bt = await stripe.balanceTransactions.retrieve(
+                  destCharge.balance_transaction,
+                  { stripeAccount: profile.stripe_account_id || undefined }
+                );
+                if (bt.available_on) {
+                  mp.payout_expected_date = new Date(bt.available_on * 1000).toISOString().split('T')[0];
+                  // Persist so we don't look it up again
+                  try { await db.prepare("UPDATE manual_payments SET payout_expected_date = ? WHERE id = ?").run(mp.payout_expected_date, mp.id); } catch(e) {}
+                }
+              }
+            }
+          }
+        }
+      } catch (lookupErr) {
+        // Non-blocking — payout date just won't show
+      }
+    }
+  }
+
   res.json({
     totalEarned: Math.round((totalEarned + manualTotal) * 100) / 100,
     totalSessions,
@@ -1015,6 +1090,8 @@ router.get("/earnings", requireRole("caregiver"), async (req, res) => {
       note: p.note,
       fromName: p.from_name,
       status: p.status,
+      payoutExpectedDate: p.payout_expected_date,
+      stripePaymentIntentId: p.stripe_payment_intent_id,
       createdAt: p.created_at,
       type: 'manual',
     })),

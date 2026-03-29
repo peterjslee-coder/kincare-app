@@ -1007,6 +1007,8 @@ async function initializeDatabase() {
       status TEXT DEFAULT 'pending',
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
+    // ─── v1.55.5 — Payout expected date for manual payments ───
+    `ALTER TABLE manual_payments ADD COLUMN IF NOT EXISTS payout_expected_date TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

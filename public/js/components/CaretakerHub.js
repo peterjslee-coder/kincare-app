@@ -2316,22 +2316,38 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <h3 style={{ margin: '0 0 12px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             {'\uD83D\uDCB0'} Payments Received
           </h3>
-          {manualPaymentsReceived.map(p => (
-            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  ${p.amount.toFixed(2)} from {p.fromName || 'Family'}
-                </div>
-                {p.note && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, fontStyle: 'italic' }}>{p.note}</div>}
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          {manualPaymentsReceived.map(p => {
+            const payoutDate = p.payoutExpectedDate ? new Date(p.payoutExpectedDate + 'T00:00:00') : null;
+            const now = new Date();
+            const isPaidOut = payoutDate && payoutDate <= now;
+            const payoutLabel = isPaidOut ? 'Deposited' : payoutDate ? `Bank deposit by ${payoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'Processing';
+            return (
+              <div key={p.id} style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                      ${p.amount.toFixed(2)} from {p.fromName || 'Family'}
+                    </div>
+                    {p.note && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, fontStyle: 'italic' }}>"{p.note}"</div>}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                      Received {new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
+                      {p.status === 'completed' ? '\u2713 Paid' : p.status}
+                    </span>
+                    <span style={{ fontSize: 11, color: isPaidOut ? 'var(--color-success)' : '#e8724a', fontWeight: 500 }}>
+                      {isPaidOut ? '\uD83C\uDFE6' : '\u23F3'} {payoutLabel}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
-                {p.status === 'completed' ? '\u2713 Paid' : p.status}
-              </span>
-            </div>
-          ))}
+            );
+          })}
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, padding: '8px 0 0', borderTop: '1px solid #f0f0f0' }}>
+            Payments are deposited to your bank account on Stripe's payout schedule (typically 2-7 business days).
+          </div>
         </div>
       )}
 
