@@ -412,7 +412,7 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
         AND cs.estimated_cost > 0
         AND (cs.payment_status IS NULL OR cs.payment_status = 'pending')
         AND NOT EXISTS (
-          SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
+          SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status = 'completed'
         )
       ORDER BY cs.scheduled_date DESC
     `).all(req.user.id);

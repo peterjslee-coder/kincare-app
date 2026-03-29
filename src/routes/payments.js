@@ -829,11 +829,16 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
   // Note: Caregiver identity is verified through Stripe Connect onboarding + Checkr background check.
   // No separate Stripe Identity verification step required for caregivers.
 
-  // Check if already paid
-  const existingPayment = await db.prepare(
-    "SELECT id FROM payments WHERE session_id = ? AND status IN ('completed', 'processing')"
+  // Check if already paid — only block on completed payments
+  const completedPayment = await db.prepare(
+    "SELECT id FROM payments WHERE session_id = ? AND status = 'completed'"
   ).get(sessionId);
-  if (existingPayment) return res.status(400).json({ error: "Payment already processed for this session" });
+  if (completedPayment) return res.status(400).json({ error: "Payment already processed for this session" });
+
+  // Clear any stuck 'processing' records from failed checkout attempts so we can retry
+  await db.prepare(
+    "UPDATE payments SET status = 'failed' WHERE session_id = ? AND status = 'processing'"
+  ).run(sessionId);
 
   // Calculate amounts — proposed_rate (family's offer) takes priority, then agreed_rate,
   // then caregiver's tiered profile rates as fallback
