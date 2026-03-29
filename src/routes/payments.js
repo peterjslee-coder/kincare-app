@@ -840,19 +840,21 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     "UPDATE payments SET status = 'failed' WHERE session_id = ? AND status = 'processing'"
   ).run(sessionId);
 
-  // Calculate amounts — proposed_rate (family's offer) takes priority, then agreed_rate,
-  // then caregiver's tiered profile rates as fallback
-  const durationHours = session.duration_hours || 2;
-  let totalCents, baseCostCents, surchargeCents = 0;
+  // ─── Calculate amounts ───
+  // CORE PRINCIPLE: Caregiver gets EXACTLY rate × time. All fees go on top, paid by family.
+  // Duration rounds UP to 15-minute increments.
+  const rawDurationHours = session.duration_hours || 2;
+  const durationHours = Math.ceil(rawDurationHours * 4) / 4; // round up to nearest 0.25h (15 min)
+
+  let caregiverPayCents, surchargeCents = 0;
   const effectiveRate = (session.proposed_rate && parseFloat(session.proposed_rate) > 0)
     ? parseFloat(session.proposed_rate)
     : session.agreed_rate || null;
 
   if (effectiveRate) {
-    // Family offered a specific rate (or negotiated) — use it
-    baseCostCents = Math.round(effectiveRate * durationHours * 100);
+    // Family offered a specific rate (or negotiated) — caregiver gets exactly this × time
+    caregiverPayCents = Math.round(effectiveRate * durationHours * 100);
     surchargeCents = Math.round((session.short_notice_surcharge || 0) * 100);
-    totalCents = baseCostCents + surchargeCents;
   } else {
     // Use tiered rate calculation
     const costResult = calculateSessionCost(session.scheduled_time, null, {
@@ -865,20 +867,30 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
       durationHours,
       shortNotice: (session.short_notice_surcharge || 0) > 0,
     });
-    baseCostCents = Math.round(costResult.subtotal * 100);
+    caregiverPayCents = Math.round(costResult.subtotal * 100);
     surchargeCents = Math.round(costResult.surcharge * 100);
-    totalCents = Math.round(costResult.total * 100);
   }
 
-  // Platform fee: 20% of base cost + 25% of short-notice surcharge (platform gets smaller share of surcharge)
+  // Platform fee: 20% of caregiver pay + 25% of short-notice surcharge — added ON TOP, family pays
   // Tip is NOT subject to platform fee — 100% goes to caregiver
-  let platformFeeCents = Math.round(baseCostCents * PLATFORM_FEE_PERCENT / 100);
+  let platformFeeCents = Math.round(caregiverPayCents * PLATFORM_FEE_PERCENT / 100);
   if (surchargeCents > 0) {
     platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
   }
 
-  // Add tip to total — tip goes entirely to caregiver (not subject to platform fee)
-  const grandTotalCents = totalCents + tipCents;
+  // Subtotal before Stripe = caregiver pay + surcharge + platform fee + tip
+  // Caregiver receives: caregiverPayCents + surchargeCents + tipCents (all of it, no deductions)
+  const caregiverTotalCents = caregiverPayCents + surchargeCents + tipCents;
+  const subtotalBeforeStripeCents = caregiverTotalCents + platformFeeCents;
+
+  // Gross up for Stripe processing fees (2.9% + $0.30) so platform balance stays neutral
+  // Formula: grossAmount = (subtotal + 30) / (1 - 0.029), rounded up
+  const grossedTotalCents = Math.ceil((subtotalBeforeStripeCents + 30) / (1 - 0.029));
+  const processingFeeCents = grossedTotalCents - subtotalBeforeStripeCents;
+
+  // Family pays grossedTotalCents. Caregiver gets caregiverTotalCents. Platform gets platformFeeCents.
+  // Stripe gets ~processingFeeCents (taken from application_fee_amount in destination charges).
+  const grandTotalCents = grossedTotalCents;
 
   try {
     // If a billing contact is set for this care recipient's team, use their Stripe customer
@@ -886,15 +898,16 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     const billingCustomerId = session.billing_stripe_customer_id || null;
     const paidByUserId = session.billing_user_id || req.user.id;
 
-    // Build line items — session cost + optional tip as separate line
+    // Build line items — transparent breakdown: caregiver pay, platform fee, processing fee, tip
+    const caregiverDesc = `${session.service_type} on ${session.scheduled_date} at ${session.scheduled_time} (${durationHours}h) with ${session.caregiver_name || "Caregiver"}`;
     const lineItems = [{
       price_data: {
         currency: "usd",
         product_data: {
           name: `Care Session — ${session.recipient_name || "Care Recipient"}`,
-          description: `${session.service_type} on ${session.scheduled_date} at ${session.scheduled_time} (${durationHours}h) with ${session.caregiver_name || "Caregiver"}`,
+          description: caregiverDesc,
         },
-        unit_amount: totalCents,
+        unit_amount: caregiverPayCents + surchargeCents,
       },
       quantity: 1,
     }];
@@ -911,13 +924,29 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
         quantity: 1,
       });
     }
+    // Platform fee + processing fee — both paid by family, on top of caregiver's pay
+    lineItems.push({
+      price_data: {
+        currency: "usd",
+        product_data: {
+          name: "InPlace fee + payment processing",
+          description: `20% platform fee ($${(platformFeeCents / 100).toFixed(2)}) + Stripe processing ($${(processingFeeCents / 100).toFixed(2)})`,
+        },
+        unit_amount: platformFeeCents + processingFeeCents,
+      },
+      quantity: 1,
+    });
+
+    // application_fee_amount = platform fee + processing fee (Stripe takes their cut from this)
+    // Caregiver receives: grandTotalCents - application_fee_amount = caregiverTotalCents
+    const applicationFeeCents = platformFeeCents + processingFeeCents;
 
     const checkoutParams = {
       mode: "payment",
       payment_method_types: ["card", "us_bank_account"],
       line_items: lineItems,
       payment_intent_data: {
-        application_fee_amount: platformFeeCents, // platform fee on visit only, NOT on tip
+        application_fee_amount: applicationFeeCents,
         transfer_data: {
           destination: session.stripe_account_id,
         },
@@ -948,18 +977,21 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
       VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', 'stripe', ?, ?, ?, NOW())
     `).run(
       paymentId, sessionId, paidByUserId, session.caregiver_id,
-      grandTotalCents / 100, platformFeeCents / 100, (grandTotalCents - platformFeeCents) / 100,
+      grandTotalCents / 100, platformFeeCents / 100, caregiverTotalCents / 100,
       checkoutSession.id, tipCents, tipReason || null
     );
+
+    console.log(`💳 Checkout created: session=${sessionId} caregiver=$${(caregiverTotalCents/100).toFixed(2)} platform=$${(platformFeeCents/100).toFixed(2)} processing=$${(processingFeeCents/100).toFixed(2)} total=$${(grandTotalCents/100).toFixed(2)}`);
 
     res.json({
       checkoutUrl: checkoutSession.url,
       paymentId,
       amount: grandTotalCents / 100,
-      sessionCost: totalCents / 100,
+      sessionCost: (caregiverPayCents + surchargeCents) / 100,
       tipAmount: tipCents / 100,
       platformFee: platformFeeCents / 100,
-      caregiverPayout: (grandTotalCents - platformFeeCents) / 100,
+      processingFee: processingFeeCents / 100,
+      caregiverPayout: caregiverTotalCents / 100,
       achAvailable: true,
       billingContact: session.billing_user_id ? session.billing_contact_name : null,
     });
@@ -1370,15 +1402,30 @@ async function processOverduePayments(pushFn) {
         }
 
         // Calculate cost (no tip for auto-pay)
-        const costCents = Math.round((s.estimated_cost || 0) * 100);
+        // CORE PRINCIPLE: Caregiver gets EXACTLY their pay. Fees go on top, charged to family.
+        const rawDuration = s.duration_hours || 2;
+        const roundedDuration = Math.ceil(rawDuration * 4) / 4; // 15-min increments
+        const effectiveRate = (s.proposed_rate && parseFloat(s.proposed_rate) > 0)
+          ? parseFloat(s.proposed_rate) : s.agreed_rate || null;
+        const caregiverPayCents = effectiveRate
+          ? Math.round(effectiveRate * roundedDuration * 100)
+          : Math.round((s.estimated_cost || 0) * 100); // fallback to estimated_cost for tiered rates
         const surchargeCents = Math.round((s.short_notice_surcharge || 0) * 100);
-        const totalCents = costCents + surchargeCents;
-        if (totalCents < 50) continue; // Stripe minimum is $0.50
+        const caregiverTotalCents = caregiverPayCents + surchargeCents; // no tip in auto-pay
 
-        let platformFeeCents = Math.round(costCents * PLATFORM_FEE_PERCENT / 100);
+        let platformFeeCents = Math.round(caregiverPayCents * PLATFORM_FEE_PERCENT / 100);
         if (surchargeCents > 0) {
           platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
         }
+
+        // Gross up for Stripe fees so platform balance stays neutral
+        const subtotalCents = caregiverTotalCents + platformFeeCents;
+        const grossedTotalCents = Math.ceil((subtotalCents + 30) / (1 - 0.029));
+        const processingFeeCents = grossedTotalCents - subtotalCents;
+        const totalCents = grossedTotalCents;
+        const applicationFeeCents = platformFeeCents + processingFeeCents;
+
+        if (totalCents < 50) continue; // Stripe minimum is $0.50
 
         // Create PaymentIntent directly (no checkout session — family isn't present)
         const intent = await stripe.paymentIntents.create({
@@ -1388,7 +1435,7 @@ async function processOverduePayments(pushFn) {
           payment_method: paymentMethods.data[0].id,
           off_session: true,
           confirm: true,
-          application_fee_amount: platformFeeCents,
+          application_fee_amount: applicationFeeCents,
           transfer_data: { destination: s.stripe_account_id },
           metadata: {
             inplace_session_id: s.id,
@@ -1406,14 +1453,14 @@ async function processOverduePayments(pushFn) {
           VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', 'stripe', ?, 0, 1, NOW())
         `).run(
           paymentId, s.id, s.billing_user_id || s.family_user_id, s.caregiver_id,
-          totalCents / 100, platformFeeCents / 100, (totalCents - platformFeeCents) / 100,
+          totalCents / 100, platformFeeCents / 100, caregiverTotalCents / 100,
           intent.id
         );
 
         // Mark session as paid
         await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(s.id);
 
-        console.log(`💳 Auto-pay: session ${s.id} charged $${(totalCents / 100).toFixed(2)} (no tip — review window expired)`);
+        console.log(`💳 Auto-pay: session ${s.id} — caregiver=$${(caregiverTotalCents/100).toFixed(2)} platform=$${(platformFeeCents/100).toFixed(2)} processing=$${(processingFeeCents/100).toFixed(2)} total=$${(totalCents/100).toFixed(2)}`);
 
         // Notify family
         if (pushFn && s.family_user_id) {
