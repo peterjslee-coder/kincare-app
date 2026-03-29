@@ -1500,12 +1500,12 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
       return res.status(400).json({ error: "Caregiver has not set up payment account yet" });
     }
 
-    // Get family user name
-    const familyUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    // Get family user info + Stripe customer ID
+    const familyUser = await db.prepare("SELECT first_name, last_name, stripe_customer_id FROM users WHERE id = ?").get(req.user.id);
     const amountCents = Math.round(amount * 100);
 
-    // Create checkout session
-    const checkoutSession = await stripe.checkout.sessions.create({
+    // Create checkout session — attach customer so Stripe shows their saved payment methods
+    const checkoutParams = {
       mode: "payment",
       payment_method_types: ["card", "us_bank_account"],
       line_items: [{
@@ -1533,7 +1533,15 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
         from_user_id: req.user.id,
         note: note || "",
       },
-    });
+    };
+
+    // Pin to family's Stripe customer so checkout shows their saved payment methods
+    // (without this, Stripe Link matches by email/phone and may show unrelated accounts)
+    if (familyUser?.stripe_customer_id) {
+      checkoutParams.customer = familyUser.stripe_customer_id;
+    }
+
+    const checkoutSession = await stripe.checkout.sessions.create(checkoutParams);
 
     res.json({ checkoutUrl: checkoutSession.url, sessionId: checkoutSession.id });
   } catch (err) {
