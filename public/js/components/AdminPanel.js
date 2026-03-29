@@ -1715,121 +1715,200 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       )}
 
       {/* ─── Overview Tab ─── */}
-      {activeTab === 'overview' && stats && (
+      {activeTab === 'overview' && stats && (() => {
+        // Build attention items dynamically
+        const attentionItems = [];
+        // Pending user approvals
+        pendingApprovals.forEach(u => attentionItems.push({
+          icon: '👤', color: '#1565c0', pill: 'Review', pillBg: '#e3f2fd', pillColor: '#1565c0',
+          title: `New signup — ${u.first_name} ${u.last_name}`,
+          sub: `${u.role} · ${u.email} · ${new Date(u.created_at).toLocaleDateString()}`,
+          action: () => { setActiveTab('people'); },
+        }));
+        // Paused caregivers
+        pausedCaregivers.forEach(cg => attentionItems.push({
+          icon: '🛑', color: '#c62828', pill: 'Paused', pillBg: '#ffebee', pillColor: '#c62828',
+          title: `Paused caregiver — ${cg.first_name} ${cg.last_name}`,
+          sub: `No-show · needs review`,
+          action: () => { setActiveTab('sessions'); },
+        }));
+        // Consent alerts
+        consentAlerts.forEach(a => attentionItems.push({
+          icon: '🔒', color: '#f57f17', pill: 'Consent', pillBg: '#fff8e1', pillColor: '#f57f17',
+          title: `Consent pending — ${a.first_name || 'User'} ${a.last_name || ''}`,
+          sub: `Authorization required`,
+          action: () => { setActiveTab('authorizations'); },
+        }));
+        // Safety flags
+        if (safetyFlagCount > 0) attentionItems.push({
+          icon: '🚨', color: '#c62828', pill: `${safetyFlagCount} flag${safetyFlagCount > 1 ? 's' : ''}`, pillBg: '#ffebee', pillColor: '#c62828',
+          title: `Safety flags need review`,
+          sub: `${safetyFlagCount} pending or escalated`,
+          action: () => { setActiveTab('safety'); },
+        });
+        // BG check alerts
+        if (checkrAlertCount > 0) attentionItems.push({
+          icon: '🔍', color: '#f57f17', pill: `${checkrAlertCount} alert${checkrAlertCount > 1 ? 's' : ''}`, pillBg: '#fff8e1', pillColor: '#f57f17',
+          title: `Background check alerts`,
+          sub: `${checkrAlertCount} need attention`,
+          action: () => { setActiveTab('bgchecks'); },
+        });
+        // Open tickets
+        if (ticketCount > 0) attentionItems.push({
+          icon: '🎫', color: '#e8724a', pill: `${ticketCount} open`, pillBg: '#fff3e0', pillColor: '#e65100',
+          title: `Open support tickets`,
+          sub: `${ticketCounts.open || 0} open · ${ticketCounts.in_progress || 0} in progress`,
+          action: () => { setActiveTab('tickets'); },
+        });
+        // New feedback
+        if (newFeedbackCount > 0) attentionItems.push({
+          icon: '💬', color: '#1565c0', pill: `${newFeedbackCount} new`, pillBg: '#e3f2fd', pillColor: '#1565c0',
+          title: `New user feedback`,
+          sub: `${newFeedbackCount} unread submission${newFeedbackCount > 1 ? 's' : ''}`,
+          action: () => { setActiveTab('feedback'); },
+        });
+
+        return (
         <div>
-          {/* Stat cards */}
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div style={{ fontSize: 24 }}>👥</div>
-              <div className="stat-number">{stats.totalUsers}</div>
-              <div className="stat-label">Registered Users</div>
-            </div>
-            <div className="stat-card">
-              <div style={{ fontSize: 24 }}>📋</div>
-              <div className="stat-number">{stats.totalWaitlist}</div>
-              <div className="stat-label">Waitlist Signups</div>
-            </div>
-            <div className="stat-card">
-              <div style={{ fontSize: 24 }}>📅</div>
-              <div className="stat-number">{stats.totalSessions}</div>
-              <div className="stat-label">Care Sessions</div>
-            </div>
-            <div className="stat-card">
-              <div style={{ fontSize: 24 }}>🤝</div>
-              <div className="stat-number">{stats.totalCaregivers}</div>
-              <div className="stat-label">Caregivers</div>
-            </div>
+          {/* ── Compact Stat Tiles ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
+            {[
+              { label: 'Active Users', value: stats.totalUsers, icon: '👥', change: null, onClick: () => setActiveTab('people') },
+              { label: 'Visits / Week', value: stats.visitsThisWeek || 0, icon: '📋', change: null, onClick: () => setActiveTab('sessions') },
+              { label: 'Open Tickets', value: stats.openTickets || 0, icon: '🎫', color: (stats.openTickets || 0) > 0 ? '#e8724a' : null, onClick: () => setActiveTab('tickets') },
+              { label: 'Revenue MTD', value: `$${(stats.revenueMtd || 0).toLocaleString()}`, icon: '💰', onClick: () => setActiveTab('financials') },
+              { label: 'Safety Flags', value: stats.safetyFlags || 0, icon: '🚨', color: (stats.safetyFlags || 0) > 0 ? '#c62828' : null, onClick: () => setActiveTab('safety') },
+              { label: 'Avg Rating', value: `${stats.avgRating || '—'} ⭐`, icon: '⭐', sub: `${stats.totalReviews || 0} reviews`, onClick: () => setActiveTab('customerservice') },
+              { label: 'Caregivers', value: stats.totalCaregivers, icon: '🤝', onClick: () => setActiveTab('people') },
+              { label: 'Waitlist', value: stats.totalWaitlist, icon: '📋', onClick: () => setActiveTab('people') },
+            ].map((s, i) => (
+              <div key={i} onClick={s.onClick} style={{
+                background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)',
+                padding: '12px 14px', cursor: 'pointer', transition: 'all 0.12s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--role-color)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4 }}>{s.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2, color: s.color || 'var(--text-primary)' }}>{s.value}</div>
+                {s.sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{s.sub}</div>}
+              </div>
+            ))}
           </div>
 
-          {/* Signup Trend Chart */}
-          {stats.signupTrend && stats.signupTrend.length > 0 && (
-            <div className="card" style={{ marginBottom: '16px' }}>
-              <div className="card-header"><span className="card-icon">📈</span>User Signups (Last 30 Days)</div>
-              <div style={{ padding: '16px' }}>
-                <svg viewBox={`0 0 ${Math.max(stats.signupTrend.length * 40, 200)} 120`} style={{ width: '100%', height: '120px' }}>
-                  {stats.signupTrend.map((d, i) => {
-                    const maxCount = Math.max(...stats.signupTrend.map(s => s.count), 1);
-                    const barH = (d.count / maxCount) * 80;
-                    const x = i * 40 + 10;
-                    return (
-                      <g key={i}>
-                        <rect x={x} y={100 - barH} width="24" height={barH} rx="4" fill="var(--role-color)" opacity="0.85" />
-                        <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="10" fill="var(--text-primary)" fontWeight="600">{d.count}</text>
-                        <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill="var(--text-muted)">
-                          {(parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </svg>
+          {/* ── Needs Attention ── */}
+          {attentionItems.length > 0 && (
+            <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: 16, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>🔥 Needs Attention</h3>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{attentionItems.length} item{attentionItems.length !== 1 ? 's' : ''}</span>
               </div>
-            </div>
-          )}
-
-          {/* Waitlist Trend */}
-          {stats.waitlistTrend && stats.waitlistTrend.length > 0 && (
-            <div className="card" style={{ marginBottom: '16px' }}>
-              <div className="card-header"><span className="card-icon">📋</span>Waitlist Signups (Last 30 Days)</div>
-              <div style={{ padding: '16px' }}>
-                <svg viewBox={`0 0 ${Math.max(stats.waitlistTrend.length * 40, 200)} 120`} style={{ width: '100%', height: '120px' }}>
-                  {stats.waitlistTrend.map((d, i) => {
-                    const maxCount = Math.max(...stats.waitlistTrend.map(s => s.count), 1);
-                    const barH = (d.count / maxCount) * 80;
-                    const x = i * 40 + 10;
-                    return (
-                      <g key={i}>
-                        <rect x={x} y={100 - barH} width="24" height={barH} rx="4" fill="var(--accent-color)" opacity="0.85" />
-                        <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="10" fill="var(--text-primary)" fontWeight="600">{d.count}</text>
-                        <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill="var(--text-muted)">
-                          {(parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </svg>
-              </div>
-            </div>
-          )}
-
-          {/* Sessions by Status */}
-          {stats.sessionsByStatus && stats.sessionsByStatus.length > 0 && (
-            <div className="card">
-              <div className="card-header"><span className="card-icon">📅</span>Sessions by Status</div>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', padding: '12px 0' }}>
-                {stats.sessionsByStatus.map((s, i) => (
-                  <div key={i} style={{
-                    padding: '12px 20px', background: 'var(--bg-primary)', borderRadius: '8px',
-                    textAlign: 'center', flex: '1 1 100px',
-                  }}>
-                    <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--role-color)' }}>{s.count}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{s.status}</div>
+              <div>
+                {attentionItems.map((item, i) => (
+                  <div key={i} onClick={item.action} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px',
+                    cursor: 'pointer', borderBottom: i < attentionItems.length - 1 ? '1px solid var(--border-color)' : 'none',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{item.sub}</div>
+                    </div>
+                    <span style={{ padding: '2px 9px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: item.pillBg, color: item.pillColor, flexShrink: 0 }}>{item.pill}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 16, flexShrink: 0 }}>›</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Plausible link */}
-          <div className="card" style={{ marginTop: '16px' }}>
-            <div className="card-header"><span className="card-icon">🌐</span>Site Analytics</div>
-            <div style={{ padding: '12px 0' }}>
-              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                Detailed site traffic, page views, referrers, and visitor geography are tracked via Plausible Analytics.
-              </p>
-              <a href="https://plausible.io/yourinplace.com" target="_blank" rel="noopener noreferrer" style={{
-                display: 'inline-flex', alignItems: 'center', gap: '8px',
-                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: '8px',
-                textDecoration: 'none', fontSize: '14px', fontWeight: 600,
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
-                Open Plausible Dashboard
-              </a>
+          {/* ── All Clear state ── */}
+          {attentionItems.length === 0 && (
+            <div style={{ background: '#e8f5e9', borderRadius: 12, border: '1px solid #c8e6c9', padding: '20px 18px', marginBottom: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 28, marginBottom: 4 }}>✅</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#2e7d32' }}>All clear</div>
+              <div style={{ fontSize: 12, color: '#388e3c', marginTop: 2 }}>No items need your attention right now</div>
             </div>
+          )}
+
+          {/* ── Quick Actions grid ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, marginBottom: 16 }}>
+            {[
+              { icon: '👤', label: 'Find Person', action: () => setActiveTab('people') },
+              { icon: '🎫', label: 'Tickets', action: () => setActiveTab('tickets') },
+              { icon: '📋', label: 'Visits', action: () => setActiveTab('sessions') },
+              { icon: '💬', label: 'Feedback', action: () => setActiveTab('feedback') },
+              { icon: '🛡️', label: 'Safety', action: () => setActiveTab('safety') },
+              { icon: '💰', label: 'Financials', action: () => setActiveTab('financials') },
+              { icon: '⚙️', label: 'Settings', action: () => setActiveTab('settings') },
+              { icon: '🌐', label: 'Analytics', action: () => window.open('https://plausible.io/yourinplace.com', '_blank') },
+            ].map((q, i) => (
+              <div key={i} onClick={q.action} style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                padding: '14px 8px', background: 'var(--bg-card)', borderRadius: 10,
+                border: '1px solid var(--border-color)', cursor: 'pointer',
+                fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', textAlign: 'center',
+                transition: 'all 0.12s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--role-color)'; e.currentTarget.style.background = 'var(--bg-surface)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.background = 'var(--bg-card)'; }}>
+                <span style={{ fontSize: 22 }}>{q.icon}</span>
+                {q.label}
+              </div>
+            ))}
+          </div>
+
+          {/* ── Two-column: Sessions by Status + Signup Trend ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth > 768 ? '1fr 1fr' : '1fr', gap: 14 }}>
+            {/* Sessions by Status */}
+            {stats.sessionsByStatus && stats.sessionsByStatus.length > 0 && (
+              <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-color)' }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>📅 Sessions</h3>
+                </div>
+                <div style={{ padding: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {stats.sessionsByStatus.map((s, i) => (
+                    <div key={i} style={{ padding: '10px 16px', background: 'var(--bg-surface)', borderRadius: 8, textAlign: 'center', flex: '1 1 70px' }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--role-color)' }}>{s.count}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{s.status}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Signup trend */}
+            {stats.signupTrend && stats.signupTrend.length > 0 && (
+              <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-color)' }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>📈 Signups (30d)</h3>
+                </div>
+                <div style={{ padding: 16 }}>
+                  <svg viewBox={`0 0 ${Math.max(stats.signupTrend.length * 40, 200)} 100`} style={{ width: '100%', height: 80 }}>
+                    {stats.signupTrend.map((d, i) => {
+                      const maxCount = Math.max(...stats.signupTrend.map(s => s.count), 1);
+                      const barH = (d.count / maxCount) * 65;
+                      const x = i * 40 + 10;
+                      return (
+                        <g key={i}>
+                          <rect x={x} y={80 - barH} width="24" height={barH} rx="4" fill="var(--role-color)" opacity="0.85" />
+                          <text x={x + 12} y={76 - barH} textAnchor="middle" fontSize="9" fill="var(--text-primary)" fontWeight="600">{d.count}</text>
+                          <text x={x + 12} y={95} textAnchor="middle" fontSize="7" fill="var(--text-muted)">
+                            {(parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ─── People Tab (Users + Waitlist + Invites unified) ─── */}
       {activeTab === 'people' && (
