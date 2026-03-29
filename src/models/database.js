@@ -1077,6 +1077,31 @@ async function initializeDatabase() {
     }
   } catch (e) { /* already completed */ }
 
+  // ─── v1.56.7 — One-time: create test session to verify webhook ───
+  try {
+    const testSessionId = 'test-webhook-' + Date.now();
+    // Only create if no recent test session exists
+    const recentTest = await db.prepare(`
+      SELECT id FROM care_sessions WHERE id LIKE 'test-webhook-%' AND scheduled_date = CURRENT_DATE
+    `).get();
+    if (!recentTest) {
+      const pete = await db.prepare("SELECT id FROM users WHERE email = 'peterjslee@gmail.com'").get();
+      const betty = await db.prepare("SELECT cr.id FROM care_recipients cr JOIN users u ON cr.family_user_id = u.id WHERE u.email = 'peterjslee@gmail.com' LIMIT 1").get();
+      const cary = await db.prepare("SELECT cp.id FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE u.first_name = 'Cary' LIMIT 1").get();
+      if (pete && betty && cary) {
+        await db.prepare(`
+          INSERT INTO care_sessions
+          (id, care_recipient_id, family_user_id, caregiver_id, service_type, status,
+           scheduled_date, scheduled_time, duration_hours, estimated_cost,
+           proposed_rate, review_required, review_completed, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 'Companionship', 'completed', CURRENT_DATE, '10:00', 0.5, 0.50,
+                  1.00, 1, 0, NOW(), NOW())
+        `).run(testSessionId, betty.id, pete.id, cary.id);
+        console.log(`  ✅ Created webhook test session: ${testSessionId} (Cary, $1/hr, 30min)`);
+      }
+    }
+  } catch (e) { console.log('  Test session skip:', e.message); }
+
   // ─── v1.50.55 — Rewrite FAQ articles with accurate content ───
   try {
     const faqVersion = await db.prepare("SELECT answer FROM help_articles WHERE question = 'Does InPlace cost anything?' AND is_published = 1").get();
