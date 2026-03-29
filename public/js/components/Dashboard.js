@@ -432,7 +432,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
         {/* Pending care team invites — shown prominently for invited users */}
         {hasPendingInvites && pendingInvites.map(invite => (
-          <div key={invite.id} style={{ background: '#E8F5E9', border: '2px solid #66BB6A', borderRadius: 14, padding: '20px 24px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 3px 12px rgba(27,107,90,0.18)' }}>
+          <div key={invite.id} style={{ background: 'var(--color-success-bg)', border: '2px solid var(--color-success)', borderRadius: 14, padding: '20px 24px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 3px 12px rgba(27,107,90,0.18)' }}>
             <span style={{ fontSize: 36 }}>{'\uD83D\uDC6A'}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--role-color)' }}>
@@ -580,7 +580,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
       {/* Care team invite banners — show pending invites the user can accept */}
       {pendingInvites.length > 0 && pendingInvites.map(invite => (
-        <div key={invite.id} style={{ background: '#E8F5E9', border: '2px solid #66BB6A', borderRadius: 12, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 2px 8px rgba(27,107,90,0.15)' }}>
+        <div key={invite.id} style={{ background: 'var(--color-success-bg)', border: '2px solid var(--color-success)', borderRadius: 12, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 2px 8px rgba(27,107,90,0.15)' }}>
           <span style={{ fontSize: 32 }}>{'\uD83E\uDD1D'}</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--role-color)' }}>
@@ -897,7 +897,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                         </div>
                       </div>
                       {p.message && (
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic', background: '#ede7f6', padding: '6px 10px', borderRadius: 6, marginTop: 4 }}>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic', background: 'var(--color-purple-bg)', padding: '6px 10px', borderRadius: 6, marginTop: 4 }}>
                           "{p.message}"
                         </div>
                       )}
@@ -1054,10 +1054,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
         const timeLabel = TimezoneHelper.formatTime(hero.time);
         const bgGradient = isActive
-          ? 'linear-gradient(135deg, #fff8e1 0%, #fffde7 100%)'
+          ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)'
           : msUntil <= 3600000
-            ? 'linear-gradient(135deg, #fff3e0 0%, #fff8f0 100%)'
-            : 'linear-gradient(135deg, #f0faf7 0%, #fff 100%)';
+            ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)'
+            : 'linear-gradient(135deg, var(--bg-highlight) 0%, var(--bg-card) 100%)';
         const borderColor = isActive ? 'var(--color-warning)' : msUntil <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
         const shouldShimmer = !isActive && msUntil <= 24 * 3600000;
 
@@ -1112,12 +1112,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             <div style={{ position: 'relative' }}>
               {visible.map((s, idx) => {
                 const svcLabel = (s.serviceType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                const fadeOpacity = idx === 0 ? 0.7 : idx === 1 ? 0.4 : 0.25;
+                const fadeOpacity = idx === 0 ? 0.85 : idx === 1 ? 0.65 : 0.5;
                 return (
                   <div key={s.id || idx} onClick={() => setVisitDetailSessionId(s.id)}
                     style={{
                       marginBottom: 8, padding: '12px 16px', cursor: 'pointer', borderRadius: 12,
-                      border: '2px solid #c8e6c9', background: '#f1f8f3',
+                      border: '2px solid var(--border-teal-light)', background: 'var(--bg-card)',
                       boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
                       opacity: fadeOpacity, transition: 'opacity 0.3s',
                     }}>
@@ -1147,7 +1147,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                         {s.hasReview ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                             {[1,2,3,4,5].map(star => (
-                              <span key={star} style={{ fontSize: 14, color: star <= (s.reviewRating || 0) ? '#f59e0b' : '#d0d0d0' }}>{'\u2605'}</span>
+                              <span key={star} style={{ fontSize: 14, color: star <= (s.reviewRating || 0) ? '#f59e0b' : 'var(--border-light)' }}>{'\u2605'}</span>
                             ))}
                           </div>
                         ) : s.caregiverId ? (
@@ -1292,7 +1292,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
               // Border & background based on urgency
               const borderColor = isActive ? 'var(--color-warning)' : isImminent ? 'var(--accent-color)' : isSoon ? 'var(--accent-color)' : isSeekingCaregiver ? 'var(--accent-color)' : 'var(--role-color)';
-              const bgColor = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isImminent ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : 'var(--text-on-primary)';
+              const bgColor = isActive ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : isImminent ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)' : 'var(--bg-card)';
               const borderWidth = isActive || isImminent ? 3 : 2;
 
               return (
@@ -1517,7 +1517,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             </div>
             {lightboxPhoto.sessionId && (
               <div onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null); setVisitDetailSessionId(lightboxPhoto.sessionId); }}
-                style={{ fontSize: 12, color: '#4fc3a1', cursor: 'pointer', marginTop: 6, fontWeight: 600 }}>
+                style={{ fontSize: 12, color: 'var(--role-color)', cursor: 'pointer', marginTop: 6, fontWeight: 600 }}>
                 View visit details →
               </div>
             )}
@@ -1713,7 +1713,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, justifyContent: 'center' }}>
               {[1, 2, 3, 4, 5].map(star => (
                 <button key={star} onClick={() => setReviewRating(star)}
-                  style={{ fontSize: 36, background: 'none', border: 'none', cursor: 'pointer', color: star <= reviewRating ? '#f59e0b' : '#d0d0d0', transition: 'transform 0.15s', transform: star <= reviewRating ? 'scale(1.15)' : 'scale(1)' }}>
+                  style={{ fontSize: 36, background: 'none', border: 'none', cursor: 'pointer', color: star <= reviewRating ? '#f59e0b' : 'var(--border-light)', transition: 'transform 0.15s', transform: star <= reviewRating ? 'scale(1.15)' : 'scale(1)' }}>
                   {'\u2605'}
                 </button>
               ))}
