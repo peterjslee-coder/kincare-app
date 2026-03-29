@@ -121,16 +121,21 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   // Auto-scroll to selected time pill — put it at the left edge of the scroll container
   useEffect(() => {
     if (!time || !date) return;
-    // Use a longer delay to ensure pills are laid out on mobile
-    setTimeout(() => {
+    const doScroll = () => {
       const container = timeScrollRef.current;
       if (!container) return;
       const selected = container.querySelector('[data-time-selected="true"]');
       if (selected) {
-        // Calculate offset: pill's left edge minus container's left edge
-        container.scrollLeft = selected.offsetLeft - container.offsetLeft;
+        const containerRect = container.getBoundingClientRect();
+        const pillRect = selected.getBoundingClientRect();
+        // Scroll so the selected pill is at the left edge
+        container.scrollLeft += (pillRect.left - containerRect.left);
       }
-    }, 150);
+    };
+    // Try multiple times — DOM may not be laid out yet on first render
+    setTimeout(doScroll, 50);
+    setTimeout(doScroll, 200);
+    setTimeout(doScroll, 500);
   }, [time, date]);
 
   // Fetch visit counts for the selected care recipient (for repeat caregiver nudge)
