@@ -609,7 +609,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                   <div style={{
                     width: '100%',
                     height: '6px',
-                    backgroundColor: '#e2e8f0',
+                    backgroundColor: 'var(--badge-muted-bg)',
                     borderRadius: '3px',
                     overflow: 'hidden',
                   }}>
@@ -754,7 +754,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     width: '48px',
                     height: '48px',
                     borderRadius: '24px',
-                    backgroundColor: '#e2e8f0',
+                    backgroundColor: 'var(--badge-muted-bg)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -826,7 +826,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     <div style={{
                       marginTop: '8px',
                       padding: '8px',
-                      backgroundColor: '#edf2f7',
+                      backgroundColor: 'var(--badge-muted-bg)',
                       borderRadius: '4px',
                       fontSize: '12px',
                     }}>

@@ -384,7 +384,7 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
                 style: {
                   marginTop: '12px',
                   padding: '8px 16px',
-                  background: '#e8f5f0',
+                  background: 'var(--bg-teal-light)',
                   color: 'var(--role-color)',
                   border: '1px solid #1b6b5a',
                   borderRadius: '8px',

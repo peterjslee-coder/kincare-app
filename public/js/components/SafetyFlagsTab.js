@@ -297,7 +297,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
 
               // Message input (when a participant is selected)
               msgTarget && React.createElement('div', {
-                style: { background: '#f0faf6', border: '1px solid #b2dfdb', borderRadius: 8, padding: 12, marginBottom: 10 },
+                style: { background: 'var(--bg-teal-light)', border: '1px solid var(--border-teal-light)', borderRadius: 8, padding: 12, marginBottom: 10 },
               },
                 React.createElement('div', { style: { fontSize: 12, color: 'var(--role-color)', fontWeight: 600, marginBottom: 6 } },
                   `Sending as InPlace Support to ${msgTarget.name}`
@@ -327,7 +327,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
                 : threadData.outreachMessages.map(thread =>
                   React.createElement('div', {
                     key: thread.threadId,
-                    style: { background: '#f0faf6', borderRadius: 8, padding: 10, marginBottom: 8, border: '1px solid #e0e0e0' },
+                    style: { background: 'var(--bg-teal-light)', borderRadius: 8, padding: 10, marginBottom: 8, border: '1px solid #e0e0e0' },
                   },
                     React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: 'var(--role-color)', marginBottom: 6, textTransform: 'uppercase' } },
                       `Thread with ${thread.participant.firstName} ${thread.participant.lastName} (${thread.participant.email})`

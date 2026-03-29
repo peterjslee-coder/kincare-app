@@ -237,7 +237,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
       title: 'I have questions',
       description: "I'd like to learn more before deciding. Someone from InPlace will reach out to you.",
       color: 'var(--color-warning-bg)',
-      borderColor: '#FFE082',
+      borderColor: 'var(--color-warning)',
       activeColor: 'var(--accent-color)',
     },
     {
@@ -246,7 +246,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
       title: 'I did not authorize this',
       description: "I did not agree to this care arrangement. No caregiver will visit.",
       color: 'var(--color-error-bg)',
-      borderColor: '#ef9a9a',
+      borderColor: 'var(--color-error)',
       activeColor: 'var(--color-error)',
     },
   ];
@@ -268,7 +268,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
           Your {data.relationship || 'family member'}, <strong>{data.familyMemberName}</strong>, has arranged non-medical companion care for you through InPlace.
         </p>
 
-        <div style={{ background: '#f0f7f5', borderRadius: '10px', padding: '16px', marginBottom: '24px' }}>
+        <div style={{ background: 'var(--bg-teal-light)', borderRadius: '10px', padding: '16px', marginBottom: '24px' }}>
           <div style={{ fontWeight: 600, color: 'var(--role-color)', fontSize: '14px', marginBottom: '8px' }}>What is InPlace?</div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
             InPlace connects families with trusted, local caregivers who provide companionship, help around the house,

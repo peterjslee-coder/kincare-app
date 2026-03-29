@@ -612,7 +612,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             return (
               <div key={s.id} onClick={() => setVisitDetailSessionId(s.id)}
                 style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f8f5'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-highlight)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>

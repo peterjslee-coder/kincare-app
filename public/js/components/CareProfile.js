@@ -1081,7 +1081,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           {companionOpen && (
             <div style={{ marginTop: 16 }}>
               {/* Tabs */}
-              <div style={{ display: 'flex', gap: 4, marginBottom: 16, padding: 4, background: '#E8EEF2', borderRadius: 10 }}>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 16, padding: 4, background: 'var(--bg-elevated)', borderRadius: 10 }}>
                 {[
                   { id: 'reminders', label: '\u23F0 Reminders' },
                   { id: 'conversations', label: '\uD83D\uDCAC Conversations' },
@@ -1121,7 +1121,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                             fetchKindredReminders(profile.id);
                           }
                         } catch {}
-                      }} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #D6EAF8', background: 'var(--bg-surface)', color: 'var(--color-info)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      }} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-teal-light)', background: 'var(--bg-surface)', color: 'var(--color-info)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         {'\uD83D\uDCC5'} Sync Calendar
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setShowAddReminder(!showAddReminder); }}
@@ -1133,29 +1133,29 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
                   {/* Add Reminder Form */}
                   {showAddReminder && (
-                    <div style={{ padding: 16, background: '#F0F7FF', borderRadius: 12, marginBottom: 16, border: '1px solid #D6EAF8' }}>
+                    <div style={{ padding: 16, background: 'var(--bg-highlight)', borderRadius: 12, marginBottom: 16, border: '1px solid var(--border-teal-light)' }}>
                       <div style={{ marginBottom: 12 }}>
                         <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Label (optional)</label>
                         <input type="text" value={newReminderLabel} onChange={(e) => setNewReminderLabel(e.target.value)} onClick={(e) => e.stopPropagation()}
                           placeholder="e.g., Morning medication, Physical therapy"
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, outline: 'none' }} />
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-teal-light)', fontSize: 13, outline: 'none' }} />
                       </div>
                       <div style={{ marginBottom: 12 }}>
                         <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Reminder message *</label>
                         <textarea value={newReminderText} onChange={(e) => setNewReminderText(e.target.value)} onClick={(e) => e.stopPropagation()}
                           placeholder="What should Kindred say? e.g., Time to take your morning pills!"
-                          style={{ width: '100%', minHeight: 60, padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
+                          style={{ width: '100%', minHeight: 60, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-teal-light)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
                       </div>
                       <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                         <div style={{ flex: 1 }}>
                           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Time</label>
                           <input type="time" value={newReminderTime} onChange={(e) => setNewReminderTime(e.target.value)} onClick={(e) => e.stopPropagation()}
-                            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, outline: 'none' }} />
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-teal-light)', fontSize: 13, outline: 'none' }} />
                         </div>
                         <div style={{ flex: 1 }}>
                           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Repeats</label>
                           <select value={newReminderRecurrence} onChange={(e) => setNewReminderRecurrence(e.target.value)} onClick={(e) => e.stopPropagation()}
-                            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, outline: 'none', background: 'var(--bg-surface)' }}>
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-teal-light)', fontSize: 13, outline: 'none', background: 'var(--bg-surface)' }}>
                             <option value="none">One-time</option>
                             <option value="daily">Daily</option>
                             <option value="weekdays">Weekdays</option>
@@ -1371,7 +1371,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
                         {/* Care insights */}
                         {kindredSummary.care_insights?.length > 0 && (
-                          <div style={{ padding: '12px 16px', background: '#EBF5FB', border: '1px solid #D6EAF8', borderRadius: 10 }}>
+                          <div style={{ padding: '12px 16px', background: '#EBF5FB', border: '1px solid var(--border-teal-light)', borderRadius: 10 }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-info)', marginBottom: 6 }}>{'\uD83D\uDCA1'} Care Insights</div>
                             {kindredSummary.care_insights.map((insight, i) => (
                               <div key={i} style={{ fontSize: 13, color: 'var(--color-info)', lineHeight: 1.5, padding: '3px 0' }}>
@@ -1616,7 +1616,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               {companionTab === 'voice-settings' && (
                 <div>
                   {/* Called-by name setting */}
-                  <div style={{ marginBottom: 16, padding: '14px 16px', background: '#F0F7FF', borderRadius: 10, border: '1px solid #D6EAF8' }}>
+                  <div style={{ marginBottom: 16, padding: '14px 16px', background: 'var(--bg-highlight)', borderRadius: 10, border: '1px solid var(--border-teal-light)' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-info)', marginBottom: 6 }}>
                       {'\uD83D\uDCAC'} What does your family call {profile?.first_name || 'your loved one'}?
                     </div>
@@ -1627,7 +1627,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       <input type="text" value={profile?.called_by || ''} placeholder={profile?.first_name || 'Mom'}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => setProfile(p => ({ ...p, called_by: e.target.value }))}
-                        style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, outline: 'none' }} />
+                        style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-teal-light)', fontSize: 13, outline: 'none' }} />
                       <button onClick={async (e) => {
                         e.stopPropagation();
                         try {
@@ -1773,7 +1773,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       )}
 
                       {/* ElevenLabs plan info */}
-                      <div style={{ marginTop: 16, padding: 14, background: '#EBF5FB', borderRadius: 10, border: '1px solid #D6EAF8' }}>
+                      <div style={{ marginTop: 16, padding: 14, background: '#EBF5FB', borderRadius: 10, border: '1px solid var(--border-teal-light)' }}>
                         <div style={{ fontSize: 13, color: 'var(--color-navy)', lineHeight: 1.5 }}>
                           <strong>ElevenLabs Starter Plan:</strong> 40,000 credits/month ($5/mo).
                           {companionUsage.summary?.projected_monthly_credits > 40000 && (

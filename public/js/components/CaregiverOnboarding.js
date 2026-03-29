@@ -693,7 +693,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f5f7f5' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--bg-primary)' }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>&#9203;</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: '16px' }}>Validating your invite...</div>
@@ -704,7 +704,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   if (inviteError) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f5f7f5' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--bg-primary)' }}>
         <div style={{ textAlign: 'center', maxWidth: '400px', padding: '40px' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#128532;</div>
           <h2 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Invite Issue</h2>
@@ -791,7 +791,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f7f5', padding: '20px' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '20px' }}>
       <div style={{ maxWidth: '560px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -1043,7 +1043,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             </div>
 
             {/* Pets, Allergies & Medical */}
-            <div style={{ padding: '16px', background: '#faf8f5', borderRadius: '8px', marginBottom: '16px', border: '1px solid #e8e0d8' }}>
+            <div style={{ padding: '16px', background: 'var(--bg-warm)', borderRadius: '8px', marginBottom: '16px', border: '1px solid var(--border-color)' }}>
               <h3 style={{ fontSize: '15px', color: '#8B6914', margin: '0 0 4px' }}>🐾 Pets, Allergies & Medical</h3>
               <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
                 This helps families match with the right caregiver. All fields are optional.

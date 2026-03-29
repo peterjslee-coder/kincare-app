@@ -7549,7 +7549,7 @@ const Dashboard = window.Dashboard = ({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '14px 0',
-        borderBottom: idx < exploreIdeas.length - 1 ? '1px solid #f5f5f5' : 'none'
+        borderBottom: idx < exploreIdeas.length - 1 ? '1px solid var(--border-light)' : 'none'
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -7573,7 +7573,7 @@ const Dashboard = window.Dashboard = ({
         padding: '8px 18px',
         background: 'var(--bg-primary)',
         color: 'var(--role-color)',
-        border: '1px solid #e0e0e0',
+        border: '1px solid var(--border-color)',
         borderRadius: 8,
         fontSize: 13,
         fontWeight: 600,
@@ -7689,7 +7689,7 @@ const Dashboard = window.Dashboard = ({
       width: '100%',
       padding: '12px 20px',
       background: 'transparent',
-      border: '2px solid #ddd',
+      border: '2px solid var(--border-color)',
       borderRadius: 12,
       fontSize: 14,
       color: 'var(--text-secondary)',
@@ -7751,7 +7751,7 @@ const Dashboard = window.Dashboard = ({
   }, acceptingInviteId === invite.id ? 'Joining...' : 'Accept'))), (data === null || data === void 0 ? void 0 : data.careRecipients) && data.careRecipients.some(cr => cr.consent_status && cr.consent_status !== 'verified') && /*#__PURE__*/React.createElement("div", {
     style: {
       background: 'var(--color-warning-bg)',
-      border: '1px solid #ffe0b2',
+      border: '1px solid var(--border-color)',
       borderRadius: '10px',
       padding: '14px 18px',
       marginBottom: '16px',
@@ -7963,7 +7963,8 @@ const Dashboard = window.Dashboard = ({
     }
   }, "Add your loved one"), /*#__PURE__*/React.createElement("div", {
     style: {
-      color: 'rgba(255,255,255,0.85)',
+      color: 'var(--text-on-primary)',
+      opacity: 0.85,
       fontSize: 13,
       marginTop: 4,
       lineHeight: 1.4
@@ -8067,7 +8068,7 @@ const Dashboard = window.Dashboard = ({
       onClick: () => markClicked(item),
       style: {
         background: 'var(--bg-surface)',
-        border: '1px solid #e8e8e8',
+        border: '1px solid var(--border-light)',
         borderRadius: 12,
         padding: '16px 14px',
         cursor: 'pointer',
@@ -8167,7 +8168,7 @@ const Dashboard = window.Dashboard = ({
       padding: '10px 16px',
       background: 'var(--bg-primary)',
       color: 'var(--text-primary)',
-      border: '1px solid #ddd',
+      border: '1px solid var(--border-color)',
       borderRadius: 8,
       fontWeight: 600,
       cursor: 'pointer'
@@ -8400,7 +8401,7 @@ const Dashboard = window.Dashboard = ({
         style: {
           padding: '8px 18px',
           borderRadius: 8,
-          border: '1px solid #e0e0e0',
+          border: '1px solid var(--border-color)',
           background: 'var(--bg-surface)',
           color: 'var(--color-error)',
           fontSize: 13,
@@ -8852,7 +8853,7 @@ const Dashboard = window.Dashboard = ({
         right: 0,
         height: 64,
         cursor: 'pointer',
-        background: 'linear-gradient(transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%)',
+        background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
@@ -8910,7 +8911,7 @@ const Dashboard = window.Dashboard = ({
     if (nextUp.length === 0) return /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 16,
-        border: '2px solid #e0e0e0',
+        border: '2px solid var(--border-color)',
         borderRadius: 14,
         padding: '20px 18px',
         textAlign: 'center'
@@ -9193,7 +9194,7 @@ const Dashboard = window.Dashboard = ({
         style: {
           padding: '3px 8px',
           borderRadius: 6,
-          border: '1px solid #e0e0e0',
+          border: '1px solid var(--border-color)',
           background: 'var(--bg-surface)',
           color: 'var(--color-error)',
           fontSize: 10,
@@ -9210,7 +9211,7 @@ const Dashboard = window.Dashboard = ({
         right: 0,
         height: 64,
         cursor: 'pointer',
-        background: 'linear-gradient(transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%)',
+        background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
@@ -9302,7 +9303,7 @@ const Dashboard = window.Dashboard = ({
         style: {
           fontSize: 12,
           fontWeight: 600,
-          color: 'var(--accent-color)',
+          color: 'var(--text-secondary)',
           marginTop: 4
         }
       }, "No caregiver yet \u2014 waiting for someone to accept")), /*#__PURE__*/React.createElement("div", {
@@ -9331,7 +9332,7 @@ const Dashboard = window.Dashboard = ({
         style: {
           padding: '3px 8px',
           borderRadius: 6,
-          border: '1px solid #e0e0e0',
+          border: '1px solid var(--border-color)',
           background: 'var(--bg-surface)',
           color: 'var(--color-error)',
           fontSize: 10,
@@ -9348,7 +9349,7 @@ const Dashboard = window.Dashboard = ({
         right: 0,
         height: 64,
         cursor: 'pointer',
-        background: 'linear-gradient(transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%)',
+        background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
@@ -9377,7 +9378,7 @@ const Dashboard = window.Dashboard = ({
   })(), stats.unreadNotifications > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       background: 'var(--color-warning-bg)',
-      border: '1px solid #ffe0b2',
+      border: '1px solid var(--border-color)',
       borderRadius: '8px',
       padding: '12px 16px',
       marginBottom: '16px',
@@ -9425,7 +9426,7 @@ const Dashboard = window.Dashboard = ({
       position: 'relative',
       borderRadius: 8,
       overflow: 'hidden',
-      border: '1px solid #eee',
+      border: '1px solid var(--border-color)',
       cursor: 'pointer'
     },
     onClick: () => setLightboxPhoto(p)
@@ -9561,7 +9562,7 @@ const Dashboard = window.Dashboard = ({
     onClick: () => a.sessionId && setVisitDetailSessionId(a.sessionId),
     style: {
       padding: '10px 0',
-      borderBottom: idx < Math.min(activity.length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+      borderBottom: idx < Math.min(activity.length, 5) - 1 ? '1px solid var(--border-light)' : 'none',
       cursor: a.sessionId ? 'pointer' : 'default',
       transition: 'background 0.15s',
       borderRadius: 4,
@@ -9570,7 +9571,7 @@ const Dashboard = window.Dashboard = ({
       paddingRight: 4
     },
     onMouseEnter: e => {
-      if (a.sessionId) e.currentTarget.style.background = '#f0f8f5';
+      if (a.sessionId) e.currentTarget.style.background = 'var(--bg-elevated)';
     },
     onMouseLeave: e => {
       if (a.sessionId) e.currentTarget.style.background = '';
@@ -9612,7 +9613,7 @@ const Dashboard = window.Dashboard = ({
     onClick: restoreTiles,
     style: {
       background: 'var(--bg-primary)',
-      border: '1px solid #e0e0e0',
+      border: '1px solid var(--border-color)',
       color: 'var(--text-secondary)',
       fontSize: 13,
       cursor: 'pointer',
@@ -9698,7 +9699,7 @@ const Dashboard = window.Dashboard = ({
     }].map((s, i) => /*#__PURE__*/React.createElement("div", {
       key: i,
       style: {
-        background: '#f9fafb',
+        background: 'var(--bg-elevated)',
         borderRadius: 8,
         padding: '10px 12px',
         textAlign: 'center'
@@ -9869,7 +9870,7 @@ const Dashboard = window.Dashboard = ({
         width: '100%',
         padding: '8px 12px',
         borderRadius: 8,
-        border: '1px solid #ddd',
+        border: '1px solid var(--border-color)',
         fontSize: 13,
         minHeight: 60,
         resize: 'vertical'
@@ -9888,7 +9889,7 @@ const Dashboard = window.Dashboard = ({
       style: {
         padding: '8px 16px',
         borderRadius: 8,
-        border: '1px solid #ddd',
+        border: '1px solid var(--border-color)',
         background: 'var(--bg-surface)',
         fontSize: 13,
         fontWeight: 600,
@@ -9989,7 +9990,7 @@ const Dashboard = window.Dashboard = ({
       width: '100%',
       padding: '10px 14px',
       borderRadius: 10,
-      border: '1px solid #e0e0e0',
+      border: '1px solid var(--border-color)',
       fontSize: 14,
       minHeight: 80,
       resize: 'vertical',
@@ -10003,7 +10004,7 @@ const Dashboard = window.Dashboard = ({
       padding: '14px 16px',
       background: 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)',
       borderRadius: 12,
-      border: '1px solid #FFE0B2'
+      border: '1px solid var(--border-color)'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -10047,7 +10048,7 @@ const Dashboard = window.Dashboard = ({
       fontSize: 15,
       fontWeight: 700,
       cursor: 'pointer',
-      border: tipAmount === cents ? '2px solid #E65100' : '1px solid #ddd',
+      border: tipAmount === cents ? '2px solid var(--color-warning)' : '1px solid var(--border-color)',
       background: tipAmount === cents ? 'var(--color-warning-bg)' : 'var(--bg-card)',
       color: tipAmount === cents ? 'var(--color-warning)' : 'var(--text-primary)'
     }
@@ -10063,7 +10064,7 @@ const Dashboard = window.Dashboard = ({
       fontSize: 13,
       fontWeight: 600,
       cursor: 'pointer',
-      border: tipAmount === 'custom' ? '2px solid #E65100' : '1px solid #ddd',
+      border: tipAmount === 'custom' ? '2px solid var(--color-warning)' : '1px solid var(--border-color)',
       background: tipAmount === 'custom' ? 'var(--color-warning-bg)' : 'var(--bg-card)',
       color: tipAmount === 'custom' ? 'var(--color-warning)' : 'var(--text-primary)'
     }
@@ -10093,7 +10094,7 @@ const Dashboard = window.Dashboard = ({
       width: '100%',
       padding: '10px 12px 10px 26px',
       borderRadius: 10,
-      border: '1px solid #ddd',
+      border: '1px solid var(--border-color)',
       fontSize: 15,
       fontWeight: 600,
       boxSizing: 'border-box'
@@ -10107,7 +10108,7 @@ const Dashboard = window.Dashboard = ({
       width: '100%',
       padding: '10px 14px',
       borderRadius: 10,
-      border: '1px solid #e0e0e0',
+      border: '1px solid var(--border-color)',
       fontSize: 13,
       boxSizing: 'border-box'
     }
@@ -10129,7 +10130,7 @@ const Dashboard = window.Dashboard = ({
       flex: 1,
       padding: '12px 16px',
       borderRadius: 10,
-      border: '1px solid #ddd',
+      border: '1px solid var(--border-color)',
       background: 'var(--bg-surface)',
       fontSize: 14,
       fontWeight: 600,
@@ -12077,7 +12078,7 @@ const CareProfile = window.CareProfile = ({
       gap: 4,
       marginBottom: 16,
       padding: 4,
-      background: '#E8EEF2',
+      background: 'var(--bg-elevated)',
       borderRadius: 10
     }
   }, [{
@@ -12152,7 +12153,7 @@ const CareProfile = window.CareProfile = ({
     style: {
       padding: '6px 12px',
       borderRadius: 8,
-      border: '1px solid #D6EAF8',
+      border: '1px solid var(--border-teal-light)',
       background: 'var(--bg-surface)',
       color: 'var(--color-info)',
       fontSize: 12,
@@ -12177,10 +12178,10 @@ const CareProfile = window.CareProfile = ({
   }, showAddReminder ? 'Cancel' : '+ Add Reminder'))), showAddReminder && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 16,
-      background: '#F0F7FF',
+      background: 'var(--bg-highlight)',
       borderRadius: 12,
       marginBottom: 16,
-      border: '1px solid #D6EAF8'
+      border: '1px solid var(--border-teal-light)'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -12204,7 +12205,7 @@ const CareProfile = window.CareProfile = ({
       width: '100%',
       padding: '8px 12px',
       borderRadius: 8,
-      border: '1px solid #D6EAF8',
+      border: '1px solid var(--border-teal-light)',
       fontSize: 13,
       outline: 'none'
     }
@@ -12230,7 +12231,7 @@ const CareProfile = window.CareProfile = ({
       minHeight: 60,
       padding: '8px 12px',
       borderRadius: 8,
-      border: '1px solid #D6EAF8',
+      border: '1px solid var(--border-teal-light)',
       fontSize: 13,
       fontFamily: 'inherit',
       resize: 'vertical',
@@ -12263,7 +12264,7 @@ const CareProfile = window.CareProfile = ({
       width: '100%',
       padding: '8px 12px',
       borderRadius: 8,
-      border: '1px solid #D6EAF8',
+      border: '1px solid var(--border-teal-light)',
       fontSize: 13,
       outline: 'none'
     }
@@ -12287,7 +12288,7 @@ const CareProfile = window.CareProfile = ({
       width: '100%',
       padding: '8px 12px',
       borderRadius: 8,
-      border: '1px solid #D6EAF8',
+      border: '1px solid var(--border-teal-light)',
       fontSize: 13,
       outline: 'none',
       background: 'var(--bg-surface)'
@@ -12800,7 +12801,7 @@ const CareProfile = window.CareProfile = ({
     style: {
       padding: '12px 16px',
       background: '#EBF5FB',
-      border: '1px solid #D6EAF8',
+      border: '1px solid var(--border-teal-light)',
       borderRadius: 10
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -13235,9 +13236,9 @@ const CareProfile = window.CareProfile = ({
     style: {
       marginBottom: 16,
       padding: '14px 16px',
-      background: '#F0F7FF',
+      background: 'var(--bg-highlight)',
       borderRadius: 10,
-      border: '1px solid #D6EAF8'
+      border: '1px solid var(--border-teal-light)'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -13271,7 +13272,7 @@ const CareProfile = window.CareProfile = ({
       flex: 1,
       padding: '8px 12px',
       borderRadius: 8,
-      border: '1px solid #D6EAF8',
+      border: '1px solid var(--border-teal-light)',
       fontSize: 13,
       outline: 'none'
     }
@@ -13617,7 +13618,7 @@ const CareProfile = window.CareProfile = ({
       padding: 14,
       background: '#EBF5FB',
       borderRadius: 10,
-      border: '1px solid #D6EAF8'
+      border: '1px solid var(--border-teal-light)'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -17019,7 +17020,7 @@ const CareRecipients = window.CareRecipients = () => {
           width: size,
           height: size,
           borderRadius: '50%',
-          background: '#f5f0ff',
+          background: 'var(--color-purple-bg)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -19828,7 +19829,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({
     title: 'I have questions',
     description: "I'd like to learn more before deciding. Someone from InPlace will reach out to you.",
     color: 'var(--color-warning-bg)',
-    borderColor: '#FFE082',
+    borderColor: 'var(--color-warning)',
     activeColor: 'var(--accent-color)'
   }, {
     id: 'did_not_authorize',
@@ -19836,7 +19837,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({
     title: 'I did not authorize this',
     description: "I did not agree to this care arrangement. No caregiver will visit.",
     color: 'var(--color-error-bg)',
-    borderColor: '#ef9a9a',
+    borderColor: 'var(--color-error)',
     activeColor: 'var(--color-error)'
   }];
 
@@ -19875,7 +19876,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({
     }
   }, "Your ", data.relationship || 'family member', ", ", /*#__PURE__*/React.createElement("strong", null, data.familyMemberName), ", has arranged non-medical companion care for you through InPlace."), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: '#f0f7f5',
+      background: 'var(--bg-teal-light)',
       borderRadius: '10px',
       padding: '16px',
       marginBottom: '24px'
@@ -20841,7 +20842,7 @@ const Documents = window.Documents = ({
       style: {
         width: '100%',
         height: '6px',
-        backgroundColor: '#e2e8f0',
+        backgroundColor: 'var(--badge-muted-bg)',
         borderRadius: '3px',
         overflow: 'hidden'
       }
@@ -20987,7 +20988,7 @@ const Documents = window.Documents = ({
         width: '48px',
         height: '48px',
         borderRadius: '24px',
-        backgroundColor: '#e2e8f0',
+        backgroundColor: 'var(--badge-muted-bg)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -21077,7 +21078,7 @@ const Documents = window.Documents = ({
       style: {
         marginTop: '8px',
         padding: '8px',
-        backgroundColor: '#edf2f7',
+        backgroundColor: 'var(--badge-muted-bg)',
         borderRadius: '4px',
         fontSize: '12px'
       }
@@ -33865,7 +33866,7 @@ const CareTeamManage = window.CareTeamManage = ({
         alignItems: 'center'
       },
       onMouseEnter: e => {
-        e.currentTarget.style.background = '#f0f8f5';
+        e.currentTarget.style.background = 'var(--bg-highlight)';
       },
       onMouseLeave: e => {
         e.currentTarget.style.background = '';
@@ -46391,7 +46392,7 @@ const FindWork = window.FindWork = () => {
         padding: 16,
         cursor: 'pointer',
         transition: 'box-shadow 0.15s',
-        background: activeOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : hasConflict ? '#fffbf0' : undefined,
+        background: activeOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : hasConflict ? 'var(--bg-warm)' : undefined,
         boxShadow: activeOffer ? '0 2px 12px rgba(124,58,237,0.15)' : undefined
       },
       onClick: () => setExpandedId(isExpanded ? null : s.id)
@@ -46435,8 +46436,8 @@ const FindWork = window.FindWork = () => {
       }
     }, "\u2713 ", matchScore, "%"), hasConflict ? /*#__PURE__*/React.createElement("span", {
       style: {
-        background: '#ffd89b',
-        color: '#c86b1f',
+        background: 'var(--color-warning-bg)',
+        color: 'var(--color-warning)',
         padding: '2px 8px',
         borderRadius: 12,
         fontSize: 11,
@@ -50553,7 +50554,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        background: '#f5f7f5'
+        background: 'var(--bg-primary)'
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -50578,7 +50579,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        background: '#f5f7f5'
+        background: 'var(--bg-primary)'
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -50765,7 +50766,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: '100vh',
-      background: '#f5f7f5',
+      background: 'var(--bg-primary)',
       padding: '20px'
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -51179,10 +51180,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '16px',
-      background: '#faf8f5',
+      background: 'var(--bg-warm)',
       borderRadius: '8px',
       marginBottom: '16px',
-      border: '1px solid #e8e0d8'
+      border: '1px solid var(--border-color)'
     }
   }, /*#__PURE__*/React.createElement("h3", {
     style: {
@@ -55188,7 +55189,7 @@ const HelpPage = window.HelpPage = ({
     style: {
       marginTop: '12px',
       padding: '8px 16px',
-      background: '#e8f5f0',
+      background: 'var(--bg-teal-light)',
       color: 'var(--role-color)',
       border: '1px solid #1b6b5a',
       borderRadius: '8px',
@@ -56212,8 +56213,8 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
     // Message input (when a participant is selected)
     msgTarget && React.createElement('div', {
       style: {
-        background: '#f0faf6',
-        border: '1px solid #b2dfdb',
+        background: 'var(--bg-teal-light)',
+        border: '1px solid var(--border-teal-light)',
         borderRadius: 8,
         padding: 12,
         marginBottom: 10
@@ -56284,7 +56285,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
     }, 'No outreach messages sent yet.') : threadData.outreachMessages.map(thread => React.createElement('div', {
       key: thread.threadId,
       style: {
-        background: '#f0faf6',
+        background: 'var(--bg-teal-light)',
         borderRadius: 8,
         padding: 10,
         marginBottom: 8,
@@ -58303,7 +58304,7 @@ const AdminPanel = window.AdminPanel = ({
       style: {
         padding: '12px 14px',
         marginBottom: 6,
-        background: isRejected ? '#fef3f3' : '#f0f4ff',
+        background: isRejected ? 'var(--bg-error-light)' : 'var(--color-info-bg)',
         borderRadius: 10,
         border: isRejected ? '2px solid #c62828' : '2px solid #5c6bc0'
       }

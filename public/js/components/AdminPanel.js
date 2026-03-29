@@ -1333,7 +1333,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 const isRejected = item.checkrStatus === 'did_not_pass' || item.checkrStatus === 'suspended';
                 return (
                 <div key={item.userId} style={{
-                  padding: '12px 14px', marginBottom: 6, background: isRejected ? '#fef3f3' : '#f0f4ff', borderRadius: 10,
+                  padding: '12px 14px', marginBottom: 6, background: isRejected ? 'var(--bg-error-light)' : 'var(--color-info-bg)', borderRadius: 10,
                   border: isRejected ? '2px solid #c62828' : '2px solid #5c6bc0',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>

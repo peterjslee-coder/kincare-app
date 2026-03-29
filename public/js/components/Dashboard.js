@@ -475,13 +475,13 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             <div style={{ marginTop: 8 }}>
               {exploreIdeas.map((idea, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0',
-                  borderBottom: idx < exploreIdeas.length - 1 ? '1px solid #f5f5f5' : 'none' }}>
+                  borderBottom: idx < exploreIdeas.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1 }}>
                     <span style={{ fontSize: 22 }}>{idea.icon}</span>
                     <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>{idea.label}</span>
                   </div>
                   <button onClick={idea.action}
-                    style={{ padding: '8px 18px', background: 'var(--bg-primary)', color: 'var(--role-color)', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
+                    style={{ padding: '8px 18px', background: 'var(--bg-primary)', color: 'var(--role-color)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 12 }}>
                     {idea.actionText}
                   </button>
                 </div>
@@ -566,7 +566,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               setOverduePopupDismissedIds(prev => ({ ...prev, [overdueSession.id]: true }));
             }} style={{
               width: '100%', padding: '12px 20px', background: 'transparent',
-              border: '2px solid #ddd', borderRadius: 12, fontSize: 14,
+              border: '2px solid var(--border-color)', borderRadius: 12, fontSize: 14,
               color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600,
             }}>
               Dismiss
@@ -600,7 +600,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
       {/* Consent warning banner — show if any care recipients have pending/rejected consent */}
       {data?.careRecipients && data.careRecipients.some(cr => cr.consent_status && cr.consent_status !== 'verified') && (
-        <div style={{ background: 'var(--color-warning-bg)', border: '1px solid #ffe0b2', borderRadius: '10px', padding: '14px 18px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ background: 'var(--color-warning-bg)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px 18px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '24px' }}>{'\u26A0\uFE0F'}</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--color-warning)' }}>
@@ -693,7 +693,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           <span style={{ fontSize: 36 }}>{'\uD83C\uDF37'}</span>
           <div style={{ flex: 1 }}>
             <div style={{ color: 'var(--text-on-primary)', fontWeight: 700, fontSize: 17 }}>Add your loved one</div>
-            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4, lineHeight: 1.4 }}>
+            <div style={{ color: 'var(--text-on-primary)', opacity: 0.85, fontSize: 13, marginTop: 4, lineHeight: 1.4 }}>
               Set up a care profile so you can find caregivers and coordinate care.
             </div>
           </div>
@@ -735,7 +735,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 <div key={item.id}
                   onClick={() => markClicked(item)}
                   style={{
-                    background: 'var(--bg-surface)', border: '1px solid #e8e8e8', borderRadius: 12,
+                    background: 'var(--bg-surface)', border: '1px solid var(--border-light)', borderRadius: 12,
                     padding: '16px 14px', cursor: 'pointer', transition: 'box-shadow 0.15s, border-color 0.15s',
                   }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--role-color)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(27,107,90,0.1)'; }}
@@ -778,7 +778,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 });
                 setLateCheckInAlert(null);
               } catch {}
-            }} style={{ flex: 1, padding: '10px 16px', background: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+            }} style={{ flex: 1, padding: '10px 16px', background: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
               Keep Original End Time
             </button>
           </div>
@@ -908,7 +908,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                       disabled={isLoading}
                       onClick={() => handleProposalAction(p.sessionId, p.id, 'decline')}
                       style={{
-                        padding: '8px 18px', borderRadius: 8, border: '1px solid #e0e0e0', background: 'var(--bg-surface)',
+                        padding: '8px 18px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
                         color: 'var(--color-error)', fontSize: 13, fontWeight: 600, cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.6 : 1,
                       }}>
                       Decline
@@ -1167,7 +1167,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               {!showAll && (
                 <div onClick={() => setFinishedExpanded(true)} style={{
                   position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, cursor: 'pointer',
-                  background: 'linear-gradient(transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%)',
+                  background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
                   display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4,
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>
@@ -1220,7 +1220,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         const showConsentGate = data?.careRecipients?.length > 0 && !hasBookableRecipient;
 
         if (nextUp.length === 0) return (
-          <div style={{ marginBottom: 16, border: '2px solid #e0e0e0', borderRadius: 14, padding: '20px 18px', textAlign: 'center' }}>
+          <div style={{ marginBottom: 16, border: '2px solid var(--border-color)', borderRadius: 14, padding: '20px 18px', textAlign: 'center' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Next Up</div>
             <div style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>No sessions scheduled</div>
             {showConsentGate ? (
@@ -1352,7 +1352,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                       }}>{isActive ? 'In Progress' : s.status}</span>
                       {['confirmed', 'pending', 'open', 'requested'].includes(s.status) && (
                         <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
-                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #e0e0e0', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
                           Cancel
                         </button>
                       )}
@@ -1365,7 +1365,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               {!showAll && nextUp.length > 2 && (
                 <div onClick={() => setNextUpExpanded(true)} style={{
                   position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, cursor: 'pointer',
-                  background: 'linear-gradient(transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%)',
+                  background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
                   display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4,
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--role-color)' }}>
@@ -1418,7 +1418,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                           {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
                           {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
                         </div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-color)', marginTop: 4 }}>No caregiver yet — waiting for someone to accept</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }}>No caregiver yet — waiting for someone to accept</div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                         <span style={{
@@ -1426,7 +1426,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                           background: 'var(--color-warning-bg)', color: 'var(--color-warning)', textTransform: 'capitalize', whiteSpace: 'nowrap',
                         }}>Open</span>
                         <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
-                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #e0e0e0', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
                           Cancel
                         </button>
                       </div>
@@ -1438,7 +1438,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               {!showAll && (
                 <div onClick={() => setAwaitingExpanded(true)} style={{
                   position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, cursor: 'pointer',
-                  background: 'linear-gradient(transparent 0%, rgba(255,255,255,0.85) 40%, #fff 100%)',
+                  background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
                   display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4,
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-color)' }}>
@@ -1461,7 +1461,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {/* Time Proposals moved to top — see above Awaiting Caregiver */}
 
       {stats.unreadNotifications > 0 && (
-        <div style={{ background: 'var(--color-warning-bg)', border: '1px solid #ffe0b2', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+        <div style={{ background: 'var(--color-warning-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
           onClick={() => onNavigate && onNavigate('activity')}>
           <span style={{ fontSize: '20px' }}>🔔</span>
           <span style={{ fontSize: '14px', color: 'var(--color-warning)' }}>{stats.unreadNotifications} unread notification{stats.unreadNotifications > 1 ? 's' : ''}</span>
@@ -1477,7 +1477,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, padding: '4px 0' }}>
             {data.recentPhotos.map((p, i) => (
-              <div key={p.id || i} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid #eee', cursor: 'pointer' }}
+              <div key={p.id || i} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-color)', cursor: 'pointer' }}
                 onClick={() => setLightboxPhoto(p)}>
                 <img src={p.photoUrl} alt={p.caption || 'Visit photo'}
                   style={{ width: '100%', height: 90, objectFit: 'cover', display: 'block' }} />
@@ -1537,11 +1537,11 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               <div key={idx}
                 onClick={() => a.sessionId && setVisitDetailSessionId(a.sessionId)}
                 style={{
-                  padding: '10px 0', borderBottom: idx < Math.min(activity.length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+                  padding: '10px 0', borderBottom: idx < Math.min(activity.length, 5) - 1 ? '1px solid var(--border-light)' : 'none',
                   cursor: a.sessionId ? 'pointer' : 'default', transition: 'background 0.15s',
                   borderRadius: 4, margin: '0 -4px', paddingLeft: 4, paddingRight: 4,
                 }}
-                onMouseEnter={(e) => { if (a.sessionId) e.currentTarget.style.background = '#f0f8f5'; }}
+                onMouseEnter={(e) => { if (a.sessionId) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
                 onMouseLeave={(e) => { if (a.sessionId) e.currentTarget.style.background = ''; }}>
                 <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13, marginBottom: 2 }}>
                   {a.title}
@@ -1559,7 +1559,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {Object.keys(dismissedTiles).length > 0 && (
         <div style={{ textAlign: 'center', marginTop: 12, marginBottom: 12 }}>
           <button onClick={restoreTiles} style={{
-            background: 'var(--bg-primary)', border: '1px solid #e0e0e0', color: 'var(--text-secondary)', fontSize: 13,
+            background: 'var(--bg-primary)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: 13,
             cursor: 'pointer', padding: '8px 20px', borderRadius: 8, fontWeight: 600,
           }}>
             ↩ Restore hidden sections
@@ -1596,7 +1596,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     { icon: '💰', val: `$${totals.spend}`, label: 'Total Spend' },
                     { icon: '🤝', val: cgStats.length, label: 'Caregivers' },
                   ].map((s, i) => (
-                    <div key={i} style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                    <div key={i} style={{ background: 'var(--bg-elevated)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 18 }}>{s.icon}</div>
                       <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--role-color)' }}>{s.val}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.label}</div>
@@ -1672,11 +1672,11 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     <label style={{ display: 'block', fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Reason (optional)</label>
                     <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
                       placeholder="Why are you cancelling?"
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, minHeight: 60, resize: 'vertical' }} />
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13, minHeight: 60, resize: 'vertical' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                     <button onClick={() => { setCancellingId(null); setCancelReason(''); }}
-                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                       Keep Session
                     </button>
                     <button onClick={() => handleCancel(cancellingId)} disabled={cancelLoading}
@@ -1725,11 +1725,11 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             )}
             <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
               placeholder="Tell us more about your experience (optional)..."
-              style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e0e0e0', fontSize: 14, minHeight: 80, resize: 'vertical', marginBottom: 16, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 14, minHeight: 80, resize: 'vertical', marginBottom: 16, fontFamily: 'inherit', boxSizing: 'border-box' }} />
 
             {/* Say Thanks — Tip Section */}
             {reviewRating >= 4 && (
-              <div style={{ marginBottom: 16, padding: '14px 16px', background: 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)', borderRadius: 12, border: '1px solid #FFE0B2' }}>
+              <div style={{ marginBottom: 16, padding: '14px 16px', background: 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)', borderRadius: 12, border: '1px solid var(--border-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <span style={{ fontSize: 20 }}>{'\uD83D\uDC9B'}</span>
                   <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-warning)' }}>Say Thanks with a Tip</span>
@@ -1740,7 +1740,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     <button key={cents} onClick={() => { setTipAmount(cents); setTipCustom(''); }}
                       style={{
                         flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer',
-                        border: tipAmount === cents ? '2px solid #E65100' : '1px solid #ddd',
+                        border: tipAmount === cents ? '2px solid var(--color-warning)' : '1px solid var(--border-color)',
                         background: tipAmount === cents ? 'var(--color-warning-bg)' : 'var(--bg-card)',
                         color: tipAmount === cents ? 'var(--color-warning)' : 'var(--text-primary)',
                       }}>
@@ -1750,7 +1750,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   <button onClick={() => { setTipAmount('custom'); setTipCustom(''); }}
                     style={{
                       flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      border: tipAmount === 'custom' ? '2px solid #E65100' : '1px solid #ddd',
+                      border: tipAmount === 'custom' ? '2px solid var(--color-warning)' : '1px solid var(--border-color)',
                       background: tipAmount === 'custom' ? 'var(--color-warning-bg)' : 'var(--bg-card)',
                       color: tipAmount === 'custom' ? 'var(--color-warning)' : 'var(--text-primary)',
                     }}>
@@ -1762,20 +1762,20 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     <span style={{ position: 'absolute', left: 12, top: 10, color: 'var(--text-tertiary)', fontSize: 15, fontWeight: 600 }}>$</span>
                     <input type="number" value={tipCustom} onChange={e => setTipCustom(e.target.value)}
                       placeholder="0.00" min="1" max="500" step="0.01"
-                      style={{ width: '100%', padding: '10px 12px 10px 26px', borderRadius: 10, border: '1px solid #ddd', fontSize: 15, fontWeight: 600, boxSizing: 'border-box' }} />
+                      style={{ width: '100%', padding: '10px 12px 10px 26px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 15, fontWeight: 600, boxSizing: 'border-box' }} />
                   </div>
                 )}
                 {tipAmount > 0 && (
                   <input type="text" value={tipReason} onChange={e => setTipReason(e.target.value)}
                     placeholder={'What made this visit special? (e.g., "So patient with Mom today")'}
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #e0e0e0', fontSize: 13, boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 13, boxSizing: 'border-box' }} />
                 )}
               </div>
             )}
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => { setReviewSession(null); setReviewRating(0); setReviewComment(''); setTipAmount(0); setTipCustom(''); setTipReason(''); }}
-                style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                 Not Now
               </button>
               <button onClick={handleReview} disabled={!reviewRating || reviewLoading}

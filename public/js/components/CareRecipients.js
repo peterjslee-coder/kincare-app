@@ -491,7 +491,7 @@ const CareRecipients = window.CareRecipients = () => {
     }
     if (r.emoji) {
       return React.createElement('div', {
-        style: { width: size, height: size, borderRadius: '50%', background: '#f5f0ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.55, cursor: clickable ? 'pointer' : 'default', flexShrink: 0 },
+        style: { width: size, height: size, borderRadius: '50%', background: 'var(--color-purple-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.55, cursor: clickable ? 'pointer' : 'default', flexShrink: 0 },
         onClick: clickable ? (e) => { e.stopPropagation(); handlePhotoUpload(r.id); } : undefined,
         title: clickable ? 'Click to add photo' : undefined,
       }, r.emoji);
