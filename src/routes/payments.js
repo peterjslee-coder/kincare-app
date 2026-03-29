@@ -995,6 +995,7 @@ router.get("/earnings", requireRole("caregiver"), async (req, res) => {
 router.get("/history", requireRole("family"), async (req, res) => {
   const db = await getDb();
 
+  // Care session payments
   const payments = await db.prepare(`
     SELECT p.*,
       cs.service_type, cs.scheduled_date, cs.scheduled_time,
@@ -1010,11 +1011,30 @@ router.get("/history", requireRole("family"), async (req, res) => {
     LIMIT 50
   `).all(req.user.id);
 
-  const totalSpent = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
+  // Manual payments (tips, bonuses, etc.)
+  let manualPayments = [];
+  try {
+    manualPayments = await db.prepare(`
+      SELECT mp.id, mp.amount_cents, mp.note, mp.status, mp.created_at,
+        u.first_name || ' ' || u.last_name AS caregiver_name
+      FROM manual_payments mp
+      LEFT JOIN caregiver_profiles cp ON mp.to_caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE mp.from_user_id = ?
+      ORDER BY mp.created_at DESC
+      LIMIT 50
+    `).all(req.user.id);
+  } catch (err) {
+    // manual_payments table may not exist yet
+  }
 
-  res.json({
-    totalSpent: Math.round(totalSpent * 100) / 100,
-    payments: payments.map(p => ({
+  // Combine both into a unified list
+  const sessionTotal = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
+  const manualTotal = manualPayments.filter(p => p.status === 'completed').reduce((sum, p) => sum + ((p.amount_cents || 0) / 100), 0);
+  const totalSpent = sessionTotal + manualTotal;
+
+  const combined = [
+    ...payments.map(p => ({
       id: p.id,
       sessionId: p.session_id,
       amount: p.amount,
@@ -1024,7 +1044,23 @@ router.get("/history", requireRole("family"), async (req, res) => {
       caregiverName: p.caregiver_name,
       recipientName: p.recipient_name,
       createdAt: p.created_at,
+      type: 'session',
     })),
+    ...manualPayments.map(p => ({
+      id: p.id,
+      amount: (p.amount_cents || 0) / 100,
+      status: p.status,
+      serviceType: 'Manual Payment',
+      note: p.note,
+      caregiverName: p.caregiver_name,
+      createdAt: p.created_at,
+      type: 'manual',
+    })),
+  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50);
+
+  res.json({
+    totalSpent: Math.round(totalSpent * 100) / 100,
+    payments: combined,
   });
 });
 

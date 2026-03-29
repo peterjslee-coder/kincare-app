@@ -391,7 +391,7 @@ const FamilyPayments = window.FamilyPayments = () => {
                   <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                     <td style={{ padding: '10px 12px' }}>{formatDate(p.scheduledDate || p.createdAt)}</td>
                     <td style={{ padding: '10px 12px' }}>{p.caregiverName || '\u2014'}</td>
-                    <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{(p.serviceType || '\u2014').replace(/_/g, ' ')}</td>
+                    <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{(p.serviceType || '\u2014').replace(/_/g, ' ')}{p.note ? ` — ${p.note}` : ''}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>${(p.amount || 0).toFixed(2)}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>{statusBadge(p.status)}</td>
                   </tr>
