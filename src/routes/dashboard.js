@@ -546,6 +546,8 @@ async function caregiverDashboard(db, userId, res) {
       AND COALESCE(fu.is_demo, 0) = ?
       /* Exclude today's sessions whose start time has already passed */
       AND NOT (cs.scheduled_date = ? AND cs.scheduled_time <= ?)
+      /* Exclude sessions requested by this same user (dual-role: can't accept your own request) */
+      AND cs.family_user_id != ?
       /* Exclude sessions that have a pending or expired time proposal from this caregiver */
       AND NOT EXISTS (
         SELECT 1 FROM time_proposals tp
@@ -555,7 +557,7 @@ async function caregiverDashboard(db, userId, res) {
       )
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 30
-  `).all(profile.id, profile.id, today, fiveDayStr, isDemo, today, nowTimeStr, userId);
+  `).all(profile.id, profile.id, today, fiveDayStr, isDemo, today, nowTimeStr, userId, userId);
 
   // Recent reviews
   const reviews = await db.prepare(`
