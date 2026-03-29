@@ -950,7 +950,7 @@ router.get("/session/:sessionId", async (req, res) => {
 });
 
 // ─── GET /api/payments/earnings ───
-// Caregiver earnings summary
+// Caregiver earnings summary (session payments + manual payments)
 router.get("/earnings", requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
   const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
@@ -958,6 +958,7 @@ router.get("/earnings", requireRole("caregiver"), async (req, res) => {
 
   const { from, to } = req.query;
 
+  // Session-based payments
   let query = `SELECT * FROM payments WHERE caregiver_id = ? AND status = 'completed'`;
   const params = [profile.id];
 
@@ -968,15 +969,35 @@ router.get("/earnings", requireRole("caregiver"), async (req, res) => {
 
   const payments = await db.prepare(query).all(...params);
 
+  // Manual payments (tips, bonuses, direct sends)
+  let manualPayments = [];
+  try {
+    let mpQuery = `
+      SELECT mp.*, u.first_name || ' ' || u.last_name AS from_name
+      FROM manual_payments mp
+      LEFT JOIN users u ON mp.from_user_id = u.id
+      WHERE mp.to_caregiver_id = ? AND mp.status = 'completed'
+    `;
+    const mpParams = [profile.id];
+    if (from) { mpQuery += " AND mp.created_at >= ?"; mpParams.push(from); }
+    if (to) { mpQuery += " AND mp.created_at <= ?"; mpParams.push(to); }
+    mpQuery += " ORDER BY mp.created_at DESC";
+    manualPayments = await db.prepare(mpQuery).all(...mpParams);
+  } catch (err) {
+    // manual_payments table may not exist yet
+  }
+
   const totalEarned = payments.reduce((sum, p) => sum + (p.caregiver_payout || 0), 0);
+  const manualTotal = manualPayments.reduce((sum, p) => sum + ((p.amount_cents || 0) / 100), 0);
   const totalSessions = payments.length;
   const pendingPayments = await db.prepare(
     "SELECT SUM(caregiver_payout) as total FROM payments WHERE caregiver_id = ? AND status = 'processing'"
   ).get(profile.id);
 
   res.json({
-    totalEarned: Math.round(totalEarned * 100) / 100,
+    totalEarned: Math.round((totalEarned + manualTotal) * 100) / 100,
     totalSessions,
+    manualPaymentTotal: Math.round(manualTotal * 100) / 100,
     pendingAmount: Math.round((pendingPayments?.total || 0) * 100) / 100,
     payments: payments.map(p => ({
       id: p.id,
@@ -986,6 +1007,16 @@ router.get("/earnings", requireRole("caregiver"), async (req, res) => {
       payout: p.caregiver_payout,
       status: p.status,
       createdAt: p.created_at,
+      type: 'session',
+    })),
+    manualPayments: manualPayments.map(p => ({
+      id: p.id,
+      amount: (p.amount_cents || 0) / 100,
+      note: p.note,
+      fromName: p.from_name,
+      status: p.status,
+      createdAt: p.created_at,
+      type: 'manual',
     })),
   });
 });

@@ -75,6 +75,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Earnings state
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
+  // Manual payments received
+  const [manualPaymentsReceived, setManualPaymentsReceived] = useState([]);
   // Tips state
   const [tipsData, setTipsData] = useState(null);
   const [showTipsSection, setShowTipsSection] = useState(false);
@@ -375,6 +377,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       } catch (err) { /* tips not available yet */ }
     };
     fetchTips();
+
+    // Fetch manual payments received (bonuses, direct sends from families)
+    const fetchManualPayments = async () => {
+      try {
+        const res = await apiFetch('/api/payments/earnings');
+        if (res?.ok) {
+          const d = await res.json();
+          setManualPaymentsReceived(d.manualPayments || []);
+        }
+      } catch (err) { /* earnings endpoint not available yet */ }
+    };
+    fetchManualPayments();
 
     // Also check Stripe Connect status
     const checkStripe = async () => {
@@ -2295,6 +2309,31 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
 
       {/* Earnings Summary — moved to main dashboard flow above */}
+
+      {/* Payments Received — manual payments from families */}
+      {manualPaymentsReceived.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, padding: '16px 18px' }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {'\uD83D\uDCB0'} Payments Received
+          </h3>
+          {manualPaymentsReceived.map(p => (
+            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  ${p.amount.toFixed(2)} from {p.fromName || 'Family'}
+                </div>
+                {p.note && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, fontStyle: 'italic' }}>{p.note}</div>}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+              </div>
+              <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
+                {p.status === 'completed' ? '\u2713 Paid' : p.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Tab Content */}
       <div ref={tabContentRef} style={{
