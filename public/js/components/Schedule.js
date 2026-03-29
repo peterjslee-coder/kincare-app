@@ -204,15 +204,15 @@ const Schedule = window.Schedule = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div style={{ flex: 1 }} />
         <button onClick={prevMonth} style={{
-          padding: '8px 16px', background: 'var(--bg-surface)', border: '1px solid #d0d0d0',
-          borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
+          padding: '8px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)',
+          borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
         }}>← Prev</button>
         <h2 style={{ margin: 0, color: 'var(--role-color)', fontSize: '20px' }}>
           {monthNames[month]} {year}
         </h2>
         <button onClick={nextMonth} style={{
-          padding: '8px 16px', background: 'var(--bg-surface)', border: '1px solid #d0d0d0',
-          borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
+          padding: '8px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)',
+          borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
         }}>Next →</button>
       </div>
 
