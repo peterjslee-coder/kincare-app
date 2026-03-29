@@ -52790,7 +52790,24 @@ const FamilyPayments = window.FamilyPayments = () => {
   const [stripeStatus, setStripeStatus] = useState(null); // null | 'not_setup' | 'pending' | 'complete'
   const [methods, setMethods] = useState([]); // all saved payment methods
   const [setupLoading, setSetupLoading] = useState(false);
+  const [paymentsEnabled, setPaymentsEnabled] = useState(true);
+  const [caregivers, setCaregivers] = useState([]);
+  const [sendPaymentState, setSendPaymentState] = useState({
+    caregiverId: '',
+    amount: '',
+    note: ''
+  });
+  const [sendPaymentLoading, setSendPaymentLoading] = useState(false);
+  const [removingMethodId, setRemovingMethodId] = useState(null);
   useEffect(() => {
+    // Check if payments are enabled
+    apiFetch('/api/payments/status').then(async r => {
+      if (r !== null && r !== void 0 && r.ok) {
+        const d = await r.json();
+        setPaymentsEnabled(d.paymentsEnabled !== false);
+      }
+    }).catch(() => setPaymentsEnabled(false));
+
     // Fetch payment method status
     apiFetch('/api/payments/family/status').then(async r => {
       if (r !== null && r !== void 0 && r.ok) {
@@ -52801,6 +52818,39 @@ const FamilyPayments = window.FamilyPayments = () => {
         setStripeStatus('not_setup');
       }
     }).catch(() => setStripeStatus('not_setup'));
+
+    // Fetch caregivers for Send Payment — get care teams, then fetch caregivers for each
+    (async () => {
+      try {
+        const teamsRes = await apiFetch('/api/care-teams');
+        if (!(teamsRes !== null && teamsRes !== void 0 && teamsRes.ok)) return;
+        const teamsData = await teamsRes.json();
+        const teams = teamsData.careTeams || [];
+        const allCaregivers = [];
+        const seen = new Set();
+        for (const team of teams) {
+          try {
+            const cgRes = await apiFetch(`/api/care-teams/${team.id}/caregivers`);
+            if (cgRes !== null && cgRes !== void 0 && cgRes.ok) {
+              const cgData = await cgRes.json();
+              (cgData.caregivers || []).forEach(cg => {
+                if (!seen.has(cg.caregiver_profile_id)) {
+                  seen.add(cg.caregiver_profile_id);
+                  allCaregivers.push({
+                    id: cg.caregiver_profile_id,
+                    userId: cg.user_id,
+                    name: `${cg.first_name} ${cg.last_name}`.trim()
+                  });
+                }
+              });
+            }
+          } catch {}
+        }
+        setCaregivers(allCaregivers);
+      } catch {
+        setCaregivers([]);
+      }
+    })();
 
     // Fetch payment history
     const fetchHistory = async () => {
@@ -52833,6 +52883,13 @@ const FamilyPayments = window.FamilyPayments = () => {
       if (res !== null && res !== void 0 && res.ok) {
         const d = await res.json();
         if (d.url) window.location.href = d.url;
+      } else if ((res === null || res === void 0 ? void 0 : res.status) === 503) {
+        const err = await res.json();
+        if (err.paymentsDisabled) {
+          if (typeof showToast === 'function') showToast('Payments are currently paused by admin', 'warning');
+        } else {
+          if (typeof showToast === 'function') showToast('Unable to start Stripe setup', 'error');
+        }
       } else {
         if (typeof showToast === 'function') showToast('Unable to start Stripe setup', 'error');
       }
@@ -52840,6 +52897,63 @@ const FamilyPayments = window.FamilyPayments = () => {
       if (typeof showToast === 'function') showToast('Unable to connect to Stripe', 'error');
     }
     setSetupLoading(false);
+  };
+  const handleRemovePaymentMethod = async pmId => {
+    if (!window.confirm('Remove this payment method? You can add it again anytime.')) return;
+    setRemovingMethodId(pmId);
+    try {
+      const res = await apiFetch(`/api/payments/family/methods/${pmId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        setMethods(methods.filter(m => m.id !== pmId));
+        if (typeof showToast === 'function') showToast('Payment method removed', 'success');
+      } else {
+        if (typeof showToast === 'function') showToast('Unable to remove payment method', 'error');
+      }
+    } catch {
+      if (typeof showToast === 'function') showToast('Unable to remove payment method', 'error');
+    }
+    setRemovingMethodId(null);
+  };
+  const handleSendPayment = async () => {
+    if (!sendPaymentState.caregiverId || !sendPaymentState.amount) {
+      if (typeof showToast === 'function') showToast('Please select a caregiver and enter an amount', 'warning');
+      return;
+    }
+    setSendPaymentLoading(true);
+    try {
+      const res = await apiFetch('/api/payments/manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          caregiverId: sendPaymentState.caregiverId,
+          amount: parseFloat(sendPaymentState.amount),
+          note: sendPaymentState.note || ''
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        const d = await res.json();
+        if (d.checkoutUrl) window.location.href = d.checkoutUrl;
+      } else if ((res === null || res === void 0 ? void 0 : res.status) === 503) {
+        const err = await res.json();
+        if (err.paymentsDisabled) {
+          if (typeof showToast === 'function') showToast('Payments are currently paused by admin', 'warning');
+        } else {
+          if (typeof showToast === 'function') showToast('Unable to send payment', 'error');
+        }
+      } else {
+        if (typeof showToast === 'function') showToast('Unable to send payment', 'error');
+      }
+    } catch {
+      if (typeof showToast === 'function') showToast('Unable to send payment', 'error');
+    }
+    setSendPaymentLoading(false);
   };
   const formatDate = d => {
     if (!d) return '\u2014';
@@ -52855,9 +52969,9 @@ const FamilyPayments = window.FamilyPayments = () => {
   };
   const isRealLast4 = v => v && v !== 'link' && v !== '****' && v !== '0000' && !/^0+$/.test(v);
   const methodLabel = m => {
-    if (m.isLink) return `Stripe Link${isRealLast4(m.last4) ? ` \u2022\u2022\u2022\u2022 ${m.last4}` : ''}`;
+    if (m.isLink) return `Saved via Stripe Link${m.email ? ` (${m.email})` : ''}`;
     if (m.isBank) return `${m.brand} \u2022\u2022\u2022\u2022 ${m.last4}`;
-    return `${m.brand} \u2022\u2022\u2022\u2022 ${m.last4}`;
+    return `${(m.brand || 'Card').charAt(0).toUpperCase() + (m.brand || 'Card').slice(1)} \u2022\u2022\u2022\u2022 ${m.last4}`;
   };
   const isPlaceholderExpiry = m => m.isLink && m.expMonth === 12 && m.expYear >= 2040;
   const methodIcon = m => m.isBank ? '\uD83C\uDFE6' : '\uD83D\uDCB3';
@@ -52905,7 +53019,33 @@ const FamilyPayments = window.FamilyPayments = () => {
       }
     }, "Loading..."));
   }
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", null, !paymentsEnabled && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%)',
+      border: '1px solid #ffc107',
+      marginBottom: '16px',
+      borderRadius: '8px',
+      padding: '14px 16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '20px'
+    }
+  }, "\u23F8\uFE0F"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      color: '#856404',
+      marginBottom: '2px'
+    }
+  }, "Payments are currently paused"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '13px',
+      color: '#856404'
+    }
+  }, "Payment methods and transactions are view-only. Payment methods are temporarily unavailable."))), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: 16
@@ -52985,7 +53125,20 @@ const FamilyPayments = window.FamilyPayments = () => {
       fontSize: 12,
       color: 'var(--text-tertiary)'
     }
-  }, m.email ? `Linked to ${m.email}` : 'Your card is saved securely via Stripe Link'))))), /*#__PURE__*/React.createElement("p", {
+  }, m.email ? `Linked to ${m.email}` : 'Your card is saved securely via Stripe Link')), paymentsEnabled && /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleRemovePaymentMethod(m.id),
+    disabled: removingMethodId === m.id,
+    style: {
+      background: 'transparent',
+      border: 'none',
+      color: 'var(--color-error)',
+      cursor: 'pointer',
+      fontSize: '13px',
+      fontWeight: 600,
+      padding: '4px 8px',
+      textDecoration: 'underline'
+    }
+  }, removingMethodId === m.id ? 'Removing...' : 'Remove')))), /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 10px',
       fontSize: 14,
@@ -52993,16 +53146,17 @@ const FamilyPayments = window.FamilyPayments = () => {
     }
   }, "Your payment method is connected. You can pay caregivers securely through InPlace."), /*#__PURE__*/React.createElement("button", {
     onClick: handleStripeSetup,
-    disabled: setupLoading,
+    disabled: setupLoading || !paymentsEnabled,
     style: {
       padding: '8px 16px',
       background: 'var(--bg-surface)',
-      color: 'var(--role-color)',
-      border: '1px solid #1b6b5a',
+      color: paymentsEnabled ? 'var(--role-color)' : 'var(--text-tertiary)',
+      border: paymentsEnabled ? '1px solid #1b6b5a' : '1px solid #ccc',
       borderRadius: 6,
       fontSize: 13,
       fontWeight: 600,
-      cursor: 'pointer'
+      cursor: paymentsEnabled ? 'pointer' : 'not-allowed',
+      opacity: paymentsEnabled ? 1 : 0.6
     }
   }, setupLoading ? 'Loading...' : 'Add Payment Method')) : stripeStatus === 'pending' ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
     style: {
@@ -53012,18 +53166,18 @@ const FamilyPayments = window.FamilyPayments = () => {
     }
   }, "Your Stripe setup is in progress. Some information may still be needed."), /*#__PURE__*/React.createElement("button", {
     onClick: handleStripeSetup,
-    disabled: setupLoading,
+    disabled: setupLoading || !paymentsEnabled,
     style: {
       padding: '8px 16px',
-      background: '#635bff',
+      background: paymentsEnabled ? '#635bff' : '#999',
       color: 'var(--text-on-primary)',
       border: 'none',
       borderRadius: 6,
       fontSize: 13,
       fontWeight: 600,
-      cursor: 'pointer'
+      cursor: paymentsEnabled ? 'pointer' : 'not-allowed'
     }
-  }, setupLoading ? 'Loading...' : 'Continue Stripe Setup')) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+  }, setupLoading ? 'Loading...' : paymentsEnabled ? 'Continue Stripe Setup' : 'Payments Paused')) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 10px',
       fontSize: 14,
@@ -53031,18 +53185,137 @@ const FamilyPayments = window.FamilyPayments = () => {
     }
   }, "Add a payment method so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe."), /*#__PURE__*/React.createElement("button", {
     onClick: handleStripeSetup,
-    disabled: setupLoading,
+    disabled: setupLoading || !paymentsEnabled,
     style: {
       padding: '8px 16px',
-      background: '#635bff',
+      background: paymentsEnabled ? '#635bff' : '#999',
       color: 'var(--text-on-primary)',
       border: 'none',
       borderRadius: 6,
       fontSize: 13,
       fontWeight: 600,
-      cursor: 'pointer'
+      cursor: paymentsEnabled ? 'pointer' : 'not-allowed'
     }
-  }, setupLoading ? 'Loading...' : 'Set Up Payments with Stripe'))), /*#__PURE__*/React.createElement("div", {
+  }, setupLoading ? 'Loading...' : paymentsEnabled ? 'Set Up Payments with Stripe' : 'Payments Paused'))), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: '20px'
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: '0 0 14px',
+      fontSize: '16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    }
+  }, '\uD83D\uDCB5', " Send Payment"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 14px',
+      fontSize: '13px',
+      color: 'var(--text-secondary)'
+    }
+  }, "Send a direct payment to a caregiver without a care session. Perfect for tips, bonuses, or one-time payments."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'block',
+      fontSize: '12px',
+      fontWeight: 600,
+      marginBottom: '4px',
+      color: 'var(--text-secondary)'
+    }
+  }, "Select Caregiver"), /*#__PURE__*/React.createElement("select", {
+    value: sendPaymentState.caregiverId,
+    onChange: e => setSendPaymentState({
+      ...sendPaymentState,
+      caregiverId: e.target.value
+    }),
+    disabled: !paymentsEnabled || sendPaymentLoading,
+    style: {
+      width: '100%',
+      padding: '8px 10px',
+      border: '1px solid #ddd',
+      borderRadius: '6px',
+      fontSize: '14px',
+      background: 'var(--bg-primary)',
+      color: 'var(--text-primary)'
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, caregivers.length === 0 ? 'Loading caregivers...' : 'Choose a caregiver...'), caregivers.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.name)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'block',
+      fontSize: '12px',
+      fontWeight: 600,
+      marginBottom: '4px',
+      color: 'var(--text-secondary)'
+    }
+  }, "Amount (USD)"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: sendPaymentState.amount,
+    onChange: e => setSendPaymentState({
+      ...sendPaymentState,
+      amount: e.target.value
+    }),
+    placeholder: "25.00",
+    disabled: !paymentsEnabled || sendPaymentLoading,
+    style: {
+      width: '100%',
+      padding: '8px 10px',
+      border: '1px solid #ddd',
+      borderRadius: '6px',
+      fontSize: '14px',
+      background: 'var(--bg-primary)',
+      color: 'var(--text-primary)'
+    }
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'block',
+      fontSize: '12px',
+      fontWeight: 600,
+      marginBottom: '4px',
+      color: 'var(--text-secondary)'
+    }
+  }, "Note (optional)"), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: sendPaymentState.note,
+    onChange: e => setSendPaymentState({
+      ...sendPaymentState,
+      note: e.target.value
+    }),
+    placeholder: "e.g., Thank you for going above and beyond",
+    disabled: !paymentsEnabled || sendPaymentLoading,
+    style: {
+      width: '100%',
+      padding: '8px 10px',
+      border: '1px solid #ddd',
+      borderRadius: '6px',
+      fontSize: '14px',
+      background: 'var(--bg-primary)',
+      color: 'var(--text-primary)'
+    }
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: handleSendPayment,
+    disabled: !paymentsEnabled || sendPaymentLoading || !sendPaymentState.caregiverId || !sendPaymentState.amount,
+    style: {
+      padding: '10px 16px',
+      background: paymentsEnabled && sendPaymentState.caregiverId && sendPaymentState.amount ? '#1b6b5a' : '#ccc',
+      color: 'white',
+      border: 'none',
+      borderRadius: '6px',
+      fontSize: '13px',
+      fontWeight: 600,
+      cursor: paymentsEnabled && sendPaymentState.caregiverId && sendPaymentState.amount ? 'pointer' : 'not-allowed'
+    }
+  }, sendPaymentLoading ? 'Processing...' : 'Send Payment'))), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',

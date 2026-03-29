@@ -26,37 +26,42 @@ const FamilyPayments = window.FamilyPayments = () => {
       if (r?.ok) {
         const d = await r.json();
         setStripeStatus(d.status || 'not_setup');
-        // Filter out placeholder Link methods (no real last4 and no email)
-        const validMethods = (d.methods || (d.card ? [d.card] : [])).filter(m =>
-          !(m.isLink && !m.email && (!m.last4 || m.last4 === '0000' || m.last4 === '****'))
-        );
-        setMethods(validMethods);
+        setMethods(d.methods || (d.card ? [d.card] : []));
       } else {
         setStripeStatus('not_setup');
       }
     }).catch(() => setStripeStatus('not_setup'));
 
-    // Fetch caregivers for Send Payment feature
-    apiFetch('/api/care-teams').then(async r => {
-      if (r?.ok) {
-        const data = await r.json();
-        const teams = data.careTeams || [];
+    // Fetch caregivers for Send Payment — get care teams, then fetch caregivers for each
+    (async () => {
+      try {
+        const teamsRes = await apiFetch('/api/care-teams');
+        if (!teamsRes?.ok) return;
+        const teamsData = await teamsRes.json();
+        const teams = teamsData.careTeams || [];
         const allCaregivers = [];
-        teams.forEach(team => {
-          if (team.members) {
-            team.members.forEach(member => {
-              if (member.role === 'caregiver' || member.isCareGiver) {
-                allCaregivers.push({
-                  id: member.id,
-                  name: `${member.firstName || member.first_name} ${member.lastName || member.last_name}`,
-                });
-              }
-            });
-          }
-        });
+        const seen = new Set();
+        for (const team of teams) {
+          try {
+            const cgRes = await apiFetch(`/api/care-teams/${team.id}/caregivers`);
+            if (cgRes?.ok) {
+              const cgData = await cgRes.json();
+              (cgData.caregivers || []).forEach(cg => {
+                if (!seen.has(cg.caregiver_profile_id)) {
+                  seen.add(cg.caregiver_profile_id);
+                  allCaregivers.push({
+                    id: cg.caregiver_profile_id,
+                    userId: cg.user_id,
+                    name: `${cg.first_name} ${cg.last_name}`.trim(),
+                  });
+                }
+              });
+            }
+          } catch {}
+        }
         setCaregivers(allCaregivers);
-      }
-    }).catch(() => setCaregivers([]));
+      } catch { setCaregivers([]); }
+    })();
 
     // Fetch payment history
     const fetchHistory = async () => {
@@ -160,9 +165,9 @@ const FamilyPayments = window.FamilyPayments = () => {
 
   const isRealLast4 = (v) => v && v !== 'link' && v !== '****' && v !== '0000' && !/^0+$/.test(v);
   const methodLabel = (m) => {
-    if (m.isLink) return `Stripe Link${isRealLast4(m.last4) ? ` \u2022\u2022\u2022\u2022 ${m.last4}` : ''}`;
+    if (m.isLink) return `Saved via Stripe Link${m.email ? ` (${m.email})` : ''}`;
     if (m.isBank) return `${m.brand} \u2022\u2022\u2022\u2022 ${m.last4}`;
-    return `${m.brand} \u2022\u2022\u2022\u2022 ${m.last4}`;
+    return `${(m.brand || 'Card').charAt(0).toUpperCase() + (m.brand || 'Card').slice(1)} \u2022\u2022\u2022\u2022 ${m.last4}`;
   };
   const isPlaceholderExpiry = (m) => m.isLink && m.expMonth === 12 && m.expYear >= 2040;
 
@@ -275,7 +280,7 @@ const FamilyPayments = window.FamilyPayments = () => {
       </div>
 
       {/* Send Payment Card */}
-      {caregivers.length > 0 && (
+      {(
         <div className="card" style={{ marginBottom: '20px' }}>
           <h3 style={{ margin: '0 0 14px', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             {'\uD83D\uDCB5'} Send Payment
@@ -289,7 +294,7 @@ const FamilyPayments = window.FamilyPayments = () => {
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>Select Caregiver</label>
               <select value={sendPaymentState.caregiverId} onChange={(e) => setSendPaymentState({ ...sendPaymentState, caregiverId: e.target.value })} disabled={!paymentsEnabled || sendPaymentLoading}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-                <option value="">Choose a caregiver...</option>
+                <option value="">{caregivers.length === 0 ? 'Loading caregivers...' : 'Choose a caregiver...'}</option>
                 {caregivers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
