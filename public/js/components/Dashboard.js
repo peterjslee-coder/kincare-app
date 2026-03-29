@@ -170,16 +170,54 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
       });
       if (res?.ok) {
-        // Submit tip if one was selected
         const finalTipCents = tipAmount === 'custom' ? Math.round(parseFloat(tipCustom || '0') * 100) : (tipAmount || 0);
-        if (finalTipCents >= 100) {
+        const sessionCost = parseFloat(reviewSession.estimated_cost || 0);
+        const isPaid = reviewSession.payment_status === 'paid';
+        const isNoShow = !!reviewSession.caregiver_no_show;
+
+        // If session has a cost and isn't paid yet, redirect to Stripe checkout (with tip bundled)
+        if (sessionCost > 0 && !isPaid && !isNoShow) {
           try {
-            await apiFetch(`/api/sessions/${reviewSession.id}/tip`, {
+            const checkoutRes = await apiFetch('/api/payments/checkout', {
               method: 'POST',
-              body: JSON.stringify({ amount_cents: finalTipCents, reason_text: tipReason || null }),
+              body: JSON.stringify({
+                sessionId: reviewSession.id,
+                tipCents: finalTipCents >= 100 ? finalTipCents : 0,
+                tipReason: finalTipCents >= 100 ? (tipReason || null) : null,
+              }),
             });
-          } catch (e) { console.error('Tip submission error:', e); }
+            if (checkoutRes?.ok) {
+              const checkout = await checkoutRes.json();
+              if (typeof showToast === 'function') showToast('Review submitted! Redirecting to payment...', 'success');
+              // Redirect to Stripe Checkout
+              window.location.href = checkout.checkoutUrl;
+              return; // Don't reset state — page is navigating away
+            } else {
+              const checkoutErr = await checkoutRes?.json().catch(() => ({}));
+              // If payments disabled or caregiver not set up, still save the review
+              if (checkoutErr?.paymentsDisabled) {
+                if (typeof showToast === 'function') showToast('Review submitted! Payment is not enabled yet.', 'info');
+              } else {
+                if (typeof showToast === 'function') showToast(checkoutErr?.error || 'Review saved but payment failed to start. You can pay later.', 'warning');
+              }
+            }
+          } catch (payErr) {
+            console.error('Checkout error:', payErr);
+            if (typeof showToast === 'function') showToast('Review saved but payment failed to start.', 'warning');
+          }
+        } else {
+          // No payment needed (no-show, already paid, or $0 cost) — just record tip separately if any
+          if (finalTipCents >= 100) {
+            try {
+              await apiFetch(`/api/sessions/${reviewSession.id}/tip`, {
+                method: 'POST',
+                body: JSON.stringify({ amount_cents: finalTipCents, reason_text: tipReason || null }),
+              });
+            } catch (e) { console.error('Tip submission error:', e); }
+          }
+          if (typeof showToast === 'function') showToast(finalTipCents >= 100 ? 'Review & tip submitted! Thank you.' : 'Review submitted! Thank you.', 'success');
         }
+
         setReviewSession(null);
         setReviewRating(0);
         setReviewComment('');
@@ -187,7 +225,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         setTipCustom('');
         setTipReason('');
         setTipSent(false);
-        if (typeof showToast === 'function') showToast(finalTipCents >= 100 ? 'Review & tip submitted! Thank you.' : 'Review submitted! Thank you.', 'success');
         fetchDashboard();
         fetchPendingReviews();
       } else {
@@ -785,16 +822,27 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         </div>
       )}
 
-      {/* Pending Reviews — stacked at top until completed */}
+      {/* Pending Reviews & Payment — stacked at top until completed */}
       {pendingReviews.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-error)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-            {'\u{1F6A8}'} Action Required — Review ({pendingReviews.length})
+            {'\u{1F6A8}'} Action Required — Review & Pay ({pendingReviews.length})
           </div>
           {pendingReviews.map(pr => {
             const isNoShow = !!pr.caregiver_no_show;
-            const borderColor = isNoShow ? '#ef5350' : 'var(--color-warning)';
-            const bgColor = isNoShow ? 'var(--bg-error-light)' : 'var(--color-warning-bg)';
+            const isPaid = pr.payment_status === 'paid';
+            const cost = parseFloat(pr.estimated_cost || 0);
+            const hasCost = cost > 0 && !isNoShow;
+
+            const dueAt = pr.payment_due_at ? new Date(pr.payment_due_at) : null;
+            const nowMs = Date.now();
+            const msLeft = dueAt ? dueAt.getTime() - nowMs : 0;
+            const minsLeft = Math.max(0, Math.ceil(msLeft / 60000));
+            const isOverdue = dueAt && msLeft <= 0;
+            const isUrgent = dueAt && minsLeft <= 15 && !isOverdue;
+
+            const borderColor = isNoShow ? '#ef5350' : (isUrgent || isOverdue) ? '#ef5350' : 'var(--color-warning)';
+            const bgColor = isNoShow ? 'var(--bg-error-light)' : (isUrgent || isOverdue) ? 'var(--bg-error-light)' : 'var(--color-warning-bg)';
             return (
               <div key={pr.id} style={{ padding: 14, marginBottom: 8, background: bgColor, border: `2px solid ${borderColor}`, borderRadius: 12 }}>
                 {isNoShow && (
@@ -809,18 +857,44 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: isNoShow ? 'var(--color-error)' : 'var(--color-warning)' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: isNoShow ? 'var(--color-error)' : 'var(--text-primary)' }}>
                     {isNoShow ? '\u2716 No Show — ' : '\u2B50 '}{pr.caregiver_name} · {pr.recipient_first_name}
                   </span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {pr.scheduled_date}
-                  </span>
+                  {hasCost && !isPaid && (
+                    <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>
+                      ${cost.toFixed(2)}
+                    </span>
+                  )}
                 </div>
+
+                {hasCost && !isPaid && dueAt && !isOverdue && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                    padding: '6px 10px', background: isUrgent ? 'rgba(239,83,80,0.1)' : 'rgba(255,255,255,0.5)', borderRadius: 8,
+                  }}>
+                    <span style={{ fontSize: 14 }}>{'\u23F0'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: isUrgent ? '#ef5350' : 'var(--text-secondary)' }}>
+                      {minsLeft >= 60
+                        ? `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m to review & add a tip before auto-pay`
+                        : `${minsLeft}m left to review & tip before auto-pay`}
+                    </span>
+                  </div>
+                )}
+
+                {hasCost && isPaid && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, padding: '6px 10px', background: 'rgba(76,175,80,0.1)', borderRadius: 8 }}>
+                    <span style={{ fontSize: 14 }}>{'\u2705'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-success)' }}>Payment processed — please leave a review</span>
+                  </div>
+                )}
+
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 4px' }}>
-                  Session with {pr.recipient_first_name} on {pr.scheduled_date}.
+                  {pr.service_type ? pr.service_type + ' session' : 'Session'} with {pr.recipient_first_name} on {pr.scheduled_date}.
                   {isNoShow
-                    ? ` ${pr.caregiver_name?.split(' ')[0]} did not check in. The session was cancelled and no payment was charged.`
-                    : ` You cannot book ${pr.caregiver_name?.split(' ')[0]} again until you leave a review.`}
+                    ? ` ${pr.caregiver_name?.split(' ')[0]} did not check in. No payment was charged.`
+                    : hasCost && !isPaid
+                      ? ` Review to add a tip, then pay.`
+                      : ` Please leave a review for ${pr.caregiver_name?.split(' ')[0]}.`}
                 </p>
                 {!isNoShow && pr.checked_in_at && (
                   <div style={{ fontSize: 12, color: 'var(--color-success)', marginBottom: 6 }}>
@@ -831,8 +905,11 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   setReviewSession(pr);
                   setReviewRating(0);
                   setReviewComment('');
-                }} style={{ padding: '8px 20px', background: isNoShow ? '#ef5350' : 'var(--color-warning)', color: isNoShow ? 'var(--bg-card)' : 'var(--text-primary)', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
-                  Leave Review
+                  setTipAmount(0);
+                  setTipCustom('');
+                  setTipReason('');
+                }} style={{ padding: '8px 20px', background: isNoShow ? '#ef5350' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                  {isNoShow ? 'Leave Review' : isPaid ? 'Leave Review' : hasCost ? 'Review & Pay' : 'Leave Review'}
                 </button>
               </div>
             );
@@ -1710,6 +1787,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 {(reviewSession.date || reviewSession.scheduled_date) ? ` on ${reviewSession.date || reviewSession.scheduled_date}` : ''}
               </p>
             </div>
+            {parseFloat(reviewSession.estimated_cost || 0) > 0 && reviewSession.payment_status !== 'paid' && !reviewSession.caregiver_no_show && (
+              <div style={{ padding: '10px 14px', marginBottom: 16, background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Session cost ({reviewSession.duration_hours || '?'}h)</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>${parseFloat(reviewSession.estimated_cost).toFixed(2)}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, justifyContent: 'center' }}>
               {[1, 2, 3, 4, 5].map(star => (
                 <button key={star} onClick={() => setReviewRating(star)}
@@ -1780,7 +1863,14 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               </button>
               <button onClick={handleReview} disabled={!reviewRating || reviewLoading}
                 style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none', background: (!reviewRating || reviewLoading) ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 700, cursor: (!reviewRating || reviewLoading) ? 'default' : 'pointer' }}>
-                {reviewLoading ? 'Submitting...' : (tipAmount && tipAmount !== 'custom' ? 'Submit Review & Tip' : (tipAmount === 'custom' && parseFloat(tipCustom) >= 1 ? 'Submit Review & Tip' : 'Submit Review'))}
+                {reviewLoading ? 'Processing...' : (() => {
+                  const hasTip = (tipAmount && tipAmount !== 'custom') || (tipAmount === 'custom' && parseFloat(tipCustom) >= 1);
+                  const needsPay = parseFloat(reviewSession?.estimated_cost || 0) > 0 && reviewSession?.payment_status !== 'paid' && !reviewSession?.caregiver_no_show;
+                  if (needsPay && hasTip) return 'Submit Review & Pay with Tip';
+                  if (needsPay) return 'Submit Review & Pay';
+                  if (hasTip) return 'Submit Review & Tip';
+                  return 'Submit Review';
+                })()}
               </button>
             </div>
           </div>

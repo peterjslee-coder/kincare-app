@@ -986,6 +986,13 @@ async function initializeDatabase() {
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_out_lat REAL`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_out_lng REAL`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_distance_ft REAL`,
+
+    // ─── v1.54.0 — Tip-with-payment & auto-pay ───
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS payment_due_at TIMESTAMPTZ`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS tip_cents INTEGER DEFAULT 0`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS tip_reason TEXT`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS auto_charged INTEGER DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

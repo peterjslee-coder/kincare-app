@@ -1367,8 +1367,9 @@ router.post("/:id/check-out", async (req, res) => {
     }
 
     // Transition to completed with adjusted cost, actual duration, and mark review required
+    // payment_due_at = 1 hour from now — family has that long to review+tip before auto-pay
     await db.prepare(
-      "UPDATE care_sessions SET status = 'completed', estimated_cost = ?, duration_hours = ?, review_required = 1, updated_at = NOW() WHERE id = ?"
+      "UPDATE care_sessions SET status = 'completed', estimated_cost = ?, duration_hours = ?, review_required = 1, completed_at = NOW(), payment_due_at = NOW() + INTERVAL '1 hour', updated_at = NOW() WHERE id = ?"
     ).run(adjustedCost, actualDurationHours, req.params.id);
 
     // ─── Capture payment (Stripe auth → charge) ───

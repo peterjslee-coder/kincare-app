@@ -377,6 +377,8 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
         cs.caregiver_id, cs.status, cs.caregiver_no_show,
         cs.checked_in_at, cs.checked_out_at,
+        cs.payment_due_at, cs.payment_status, cs.estimated_cost, cs.short_notice_surcharge,
+        cs.service_type,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         cr.first_name AS recipient_first_name,
         cs.review_reminded_at

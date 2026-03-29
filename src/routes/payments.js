@@ -93,7 +93,27 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
           "UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?"
         ).run(sessionId);
 
-        console.log(`✅ Payment completed for session ${sessionId}`);
+        // If tip was included, create the tip record so it appears in caregiver dashboard
+        const tipCents = parseInt(session.metadata?.inplace_tip_cents || "0");
+        if (tipCents > 0) {
+          const tipReason = session.metadata?.inplace_tip_reason || null;
+          const familyUserId = session.metadata?.inplace_family_user_id || session.metadata?.inplace_paid_by_user_id;
+          const caregiverId = session.metadata?.inplace_caregiver_id;
+          try {
+            const { v4: tipUuid } = require("uuid");
+            const existingTip = await db.prepare("SELECT id FROM tips WHERE session_id = ? AND family_user_id = ?").get(sessionId, familyUserId);
+            if (!existingTip) {
+              await db.prepare(
+                "INSERT INTO tips (id, session_id, family_user_id, caregiver_id, amount_cents, reason_text) VALUES (?, ?, ?, ?, ?, ?)"
+              ).run(tipUuid(), sessionId, familyUserId, caregiverId, tipCents, tipReason);
+              console.log(`💛 Tip of $${(tipCents / 100).toFixed(2)} recorded for session ${sessionId}`);
+            }
+          } catch (tipErr) {
+            console.error("Tip record creation error (non-blocking):", tipErr.message);
+          }
+        }
+
+        console.log(`✅ Payment completed for session ${sessionId}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''}`);
         break;
       }
 
@@ -688,12 +708,16 @@ router.get("/connect/dashboard", requireRole("caregiver"), async (req, res) => {
 
 // ─── POST /api/payments/checkout ───
 // Create a Stripe Checkout Session for a care session (family pays)
+// Accepts optional tipCents + tipReason — tip is bundled into the same charge, 100% to caregiver
 router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (req, res) => {
   const db = await getDb();
   const stripe = getStripe();
-  const { sessionId } = req.body;
+  const { sessionId, tipCents: rawTipCents, tipReason } = req.body;
 
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
+
+  // Validate tip
+  const tipCents = Math.max(0, Math.min(50000, Math.round(rawTipCents || 0))); // $0-$500
 
   // Get the care session — allow both the booker and the billing contact to check out
   const session = await db.prepare(`
@@ -756,13 +780,14 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
   }
 
   // Platform fee: 20% of base cost + 25% of short-notice surcharge (platform gets smaller share of surcharge)
+  // Tip is NOT subject to platform fee — 100% goes to caregiver
   let platformFeeCents = Math.round(baseCostCents * PLATFORM_FEE_PERCENT / 100);
   if (surchargeCents > 0) {
     platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
   }
 
-  // Payout speed is the caregiver's choice — Stripe handles instant payout fees directly,
-  // we don't add any surcharge. Caregivers set their payout preference in their Stripe dashboard.
+  // Add tip to total — tip goes entirely to caregiver (not subject to platform fee)
+  const grandTotalCents = totalCents + tipCents;
 
   try {
     // If a billing contact is set for this care recipient's team, use their Stripe customer
@@ -770,22 +795,38 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     const billingCustomerId = session.billing_stripe_customer_id || null;
     const paidByUserId = session.billing_user_id || req.user.id;
 
-    const checkoutParams = {
-      mode: "payment",
-      payment_method_types: ["card", "us_bank_account"],
-      line_items: [{
+    // Build line items — session cost + optional tip as separate line
+    const lineItems = [{
+      price_data: {
+        currency: "usd",
+        product_data: {
+          name: `Care Session — ${session.recipient_name || "Care Recipient"}`,
+          description: `${session.service_type} on ${session.scheduled_date} at ${session.scheduled_time} (${durationHours}h) with ${session.caregiver_name || "Caregiver"}`,
+        },
+        unit_amount: totalCents,
+      },
+      quantity: 1,
+    }];
+    if (tipCents > 0) {
+      lineItems.push({
         price_data: {
           currency: "usd",
           product_data: {
-            name: `Care Session — ${session.recipient_name || "Care Recipient"}`,
-            description: `${session.service_type} on ${session.scheduled_date} at ${session.scheduled_time} (${durationHours}h) with ${session.caregiver_name || "Caregiver"}`,
+            name: `Tip for ${session.caregiver_name || "Caregiver"}`,
+            description: tipReason || "Thank you tip",
           },
-          unit_amount: totalCents,
+          unit_amount: tipCents,
         },
         quantity: 1,
-      }],
+      });
+    }
+
+    const checkoutParams = {
+      mode: "payment",
+      payment_method_types: ["card", "us_bank_account"],
+      line_items: lineItems,
       payment_intent_data: {
-        application_fee_amount: platformFeeCents,
+        application_fee_amount: platformFeeCents, // platform fee on visit only, NOT on tip
         transfer_data: {
           destination: session.stripe_account_id,
         },
@@ -797,6 +838,8 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
         inplace_family_user_id: req.user.id,
         inplace_paid_by_user_id: paidByUserId,
         inplace_caregiver_id: session.caregiver_id,
+        inplace_tip_cents: String(tipCents),
+        inplace_tip_reason: tipReason || "",
       },
     };
 
@@ -810,20 +853,22 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     // Create a pending payment record — family_user_id is the billing contact if set
     const paymentId = uuid();
     await db.prepare(`
-      INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_checkout_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', 'stripe', ?, NOW())
+      INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_checkout_id, tip_cents, tip_reason, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', 'stripe', ?, ?, ?, NOW())
     `).run(
       paymentId, sessionId, paidByUserId, session.caregiver_id,
-      totalCents / 100, platformFeeCents / 100, (totalCents - platformFeeCents) / 100,
-      checkoutSession.id
+      grandTotalCents / 100, platformFeeCents / 100, (grandTotalCents - platformFeeCents) / 100,
+      checkoutSession.id, tipCents, tipReason || null
     );
 
     res.json({
       checkoutUrl: checkoutSession.url,
       paymentId,
-      amount: totalCents / 100,
+      amount: grandTotalCents / 100,
+      sessionCost: totalCents / 100,
+      tipAmount: tipCents / 100,
       platformFee: platformFeeCents / 100,
-      caregiverPayout: (totalCents - platformFeeCents) / 100,
+      caregiverPayout: (grandTotalCents - platformFeeCents) / 100,
       achAvailable: true,
       billingContact: session.billing_user_id ? session.billing_contact_name : null,
     });
@@ -1054,5 +1099,155 @@ router.post("/background-check/confirm", requireRole("caregiver"), requirePaymen
 // Payout preferences removed — caregivers manage payout speed directly through their
 // Stripe Express dashboard. Stripe handles instant payout fees (1%, min 50¢) themselves.
 // We don't add surcharges or get involved in how fast caregivers receive their money.
+
+// ─── Auto-pay: charge saved payment method for overdue sessions ───
+// Called by the server cron. Finds completed sessions past payment_due_at with no payment,
+// and charges the family's saved payment method. No tip (they missed the window).
+async function processOverduePayments(pushFn) {
+  const db = await getDb();
+  let stripe;
+  try { stripe = getStripe(); } catch { return; }
+  const enabled = await paymentsEnabled();
+  if (!enabled) return;
+
+  try {
+    // Find sessions that are completed, past payment_due_at, unpaid, and have a caregiver with Stripe
+    const overdue = await db.prepare(`
+      SELECT cs.id, cs.family_user_id, cs.caregiver_id, cs.estimated_cost, cs.duration_hours,
+        cs.short_notice_surcharge, cs.scheduled_date, cs.scheduled_time, cs.service_type,
+        cs.care_recipient_id,
+        cp.stripe_account_id, cp.stripe_onboard_complete, cp.user_id AS caregiver_user_id,
+        cp.hourly_rate,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        cr.first_name AS recipient_name,
+        fu.stripe_customer_id AS family_stripe_customer_id,
+        fu.first_name AS family_first_name,
+        ct.billing_user_id,
+        bu.stripe_customer_id AS billing_stripe_customer_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+      LEFT JOIN users bu ON ct.billing_user_id = bu.id
+      WHERE cs.status = 'completed'
+        AND cs.payment_due_at IS NOT NULL
+        AND cs.payment_due_at < NOW()
+        AND (cs.payment_status IS NULL OR cs.payment_status = 'pending')
+        AND cp.stripe_account_id IS NOT NULL
+        AND cp.stripe_onboard_complete = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
+        )
+    `).all();
+
+    for (const s of overdue) {
+      try {
+        // Determine which Stripe customer to charge (billing contact or family)
+        const customerId = s.billing_stripe_customer_id || s.family_stripe_customer_id;
+        if (!customerId) {
+          console.warn(`[auto-pay] Session ${s.id}: no saved payment method — skipping`);
+          // Send push notification asking family to pay manually
+          if (pushFn && s.family_user_id) {
+            pushFn(s.family_user_id, {
+              title: 'Payment needed',
+              body: `Please complete payment for your care session on ${s.scheduled_date}. Open the app to pay.`,
+              data: { type: 'payment_needed', sessionId: s.id, page: 'home' },
+            }, 'payment_needed').catch(() => {});
+          }
+          continue;
+        }
+
+        // Get default payment method for this customer
+        const paymentMethods = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
+        if (!paymentMethods.data.length) {
+          console.warn(`[auto-pay] Session ${s.id}: customer ${customerId} has no saved cards — skipping`);
+          if (pushFn && s.family_user_id) {
+            pushFn(s.family_user_id, {
+              title: 'Payment needed',
+              body: `Please complete payment for your care session on ${s.scheduled_date}. Open the app to pay.`,
+              data: { type: 'payment_needed', sessionId: s.id, page: 'home' },
+            }, 'payment_needed').catch(() => {});
+          }
+          continue;
+        }
+
+        // Calculate cost (no tip for auto-pay)
+        const costCents = Math.round((s.estimated_cost || 0) * 100);
+        const surchargeCents = Math.round((s.short_notice_surcharge || 0) * 100);
+        const totalCents = costCents + surchargeCents;
+        if (totalCents < 50) continue; // Stripe minimum is $0.50
+
+        let platformFeeCents = Math.round(costCents * PLATFORM_FEE_PERCENT / 100);
+        if (surchargeCents > 0) {
+          platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
+        }
+
+        // Create PaymentIntent directly (no checkout session — family isn't present)
+        const intent = await stripe.paymentIntents.create({
+          amount: totalCents,
+          currency: "usd",
+          customer: customerId,
+          payment_method: paymentMethods.data[0].id,
+          off_session: true,
+          confirm: true,
+          application_fee_amount: platformFeeCents,
+          transfer_data: { destination: s.stripe_account_id },
+          metadata: {
+            inplace_session_id: s.id,
+            inplace_family_user_id: s.family_user_id,
+            inplace_caregiver_id: s.caregiver_id,
+            inplace_auto_charged: "true",
+          },
+          description: `Auto-pay: ${s.service_type} on ${s.scheduled_date} with ${s.caregiver_name || 'Caregiver'}`,
+        });
+
+        // Record payment
+        const paymentId = uuid();
+        await db.prepare(`
+          INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_payment_intent, tip_cents, auto_charged, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', 'stripe', ?, 0, 1, NOW())
+        `).run(
+          paymentId, s.id, s.billing_user_id || s.family_user_id, s.caregiver_id,
+          totalCents / 100, platformFeeCents / 100, (totalCents - platformFeeCents) / 100,
+          intent.id
+        );
+
+        // Mark session as paid
+        await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(s.id);
+
+        console.log(`💳 Auto-pay: session ${s.id} charged $${(totalCents / 100).toFixed(2)} (no tip — review window expired)`);
+
+        // Notify family
+        if (pushFn && s.family_user_id) {
+          pushFn(s.family_user_id, {
+            title: 'Payment processed',
+            body: `$${(totalCents / 100).toFixed(2)} charged for ${s.service_type} on ${s.scheduled_date} with ${s.caregiver_name || 'your caregiver'}.`,
+            data: { type: 'payment_auto_charged', sessionId: s.id, page: 'home' },
+          }, 'payment_auto_charged').catch(() => {});
+        }
+      } catch (err) {
+        // STP "authentication_required" = card needs 3DS, can't auto-charge
+        if (err.code === 'authentication_required') {
+          console.warn(`[auto-pay] Session ${s.id}: card requires authentication — sending manual pay notification`);
+          if (pushFn && s.family_user_id) {
+            pushFn(s.family_user_id, {
+              title: 'Payment action needed',
+              body: `Your card requires verification for the $${((s.estimated_cost || 0)).toFixed(2)} care session payment. Please open the app to complete payment.`,
+              data: { type: 'payment_auth_required', sessionId: s.id, page: 'home' },
+            }, 'payment_auth_required').catch(() => {});
+          }
+        } else {
+          console.error(`[auto-pay] Session ${s.id} failed:`, err.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[auto-pay] Overdue payment processing error:", err.message);
+  }
+}
+
+router.processOverduePayments = processOverduePayments;
 
 module.exports = router;

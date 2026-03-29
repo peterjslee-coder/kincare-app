@@ -303,7 +303,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.53.3";
+const APP_VERSION = "1.54.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -838,6 +838,23 @@ async function start() {
     }
   }, 60000); // Check every minute
   console.log("  Kindred reminder delivery poller started");
+
+  // ─── Auto-pay cron: charge overdue sessions ───
+  // Runs every 5 minutes. If a completed session's payment_due_at has passed and no payment
+  // exists, auto-charges the family's saved card. No tip (they missed the review window).
+  setInterval(async () => {
+    try {
+      const paymentRouter = require("./routes/payments");
+      if (paymentRouter.processOverduePayments) {
+        await paymentRouter.processOverduePayments(pushToUser);
+      }
+    } catch (err) {
+      if (err.message && !err.message.includes("not configured")) {
+        console.error("  Auto-pay cron error:", err.message);
+      }
+    }
+  }, 5 * 60000); // Every 5 minutes
+  console.log("  Auto-pay cron started (checks every 5 min for overdue session payments)");
 
   // ─── Backfill missing caregiver coordinates from zip/city/state ───
   // One-time pass on startup: geocode caregivers who have zip but no lat/lng
