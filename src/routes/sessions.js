@@ -577,7 +577,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
   }
 
   // Validate caregiver availability if a caregiver is specified (via matching or direct booking)
-  const { caregiverId: bookCaregiverId, directOffer } = req.body;
+  const { caregiverId: bookCaregiverId, directOffer, privateOnly } = req.body;
   if (bookCaregiverId && !directOffer) {
     try {
       const [sy, smo, sd] = scheduledDate.split("-").map(Number);
@@ -694,8 +694,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
          scheduled_date, scheduled_time, duration_hours,
          special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
          short_notice_surcharge, rate_tier, proposed_rate, offered_to_caregiver_id,
-         exclusive_until, interview_required, interview_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isExclusive ? "NOW() + INTERVAL '1 hour'" : 'NULL'}, ?, ?)
+         exclusive_until, private_only, interview_required, interview_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isExclusive ? "NOW() + INTERVAL '1 hour'" : 'NULL'}, ?, ?, ?)
       `).run(
         id, careRecipientId, req.user.id, serviceType, sessionStatus,
         sessionDate, scheduledTime, durationHours,
@@ -706,6 +706,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
         JSON.stringify(costResult.tierBreakdown),
         proposedRate ? parseFloat(proposedRate) : null,
         isExclusive ? bookCaregiverId : null,
+        isExclusive && privateOnly ? 1 : 0,
         interviewRequired ? 1 : 0,
         interviewRequired ? (interviewType || 'video') : null
       );

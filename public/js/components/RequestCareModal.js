@@ -41,6 +41,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [visitCounts, setVisitCounts] = useState({}); // caregiverId → { count, caregiverName }
   const [careHistory, setCareHistory] = useState(null); // { visits, totalCount } for selected caregiver
   const [showCareHistory, setShowCareHistory] = useState(false);
+  const [privateOnly, setPrivateOnly] = useState(false); // don't open to others if caregiver declines
 
   // Short-notice detection
   const shortNotice = (() => {
@@ -291,6 +292,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
       caregiverId: selectedCaregiver?.caregiverId || undefined,
       directOffer: selectedCaregiver ? true : undefined,
+      privateOnly: selectedCaregiver && privateOnly ? true : undefined,
     };
     if (proposedRate && parseFloat(proposedRate) > 0) body.proposedRate = parseFloat(proposedRate);
     if (interviewRequired) { body.interviewRequired = true; body.interviewType = interviewType; }
@@ -764,7 +766,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                         {cg.openToInterview && <div style={{ fontSize: 11, color: 'var(--role-color)', marginTop: 3 }}>🤝 Open to intro call</div>}
                       </button>
                     ))}
-                    <button type="button" onClick={() => setSelectedCaregiver(null)}
+                    <button type="button" onClick={() => { setSelectedCaregiver(null); setPrivateOnly(false); }}
                       style={{
                         padding: 10, border: !selectedCaregiver ? '2px solid #e8724a' : '1px dashed #e8724a', borderRadius: 10,
                         background: !selectedCaregiver ? 'var(--bg-warm)' : 'var(--bg-card)', cursor: 'pointer', textAlign: 'center',
@@ -855,6 +857,34 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                     </button>
                   )}
                 </span>
+              </div>
+            )}
+
+            {/* Private request toggle — only show when a specific caregiver is selected */}
+            {selectedCaregiver && (
+              <div onClick={() => setPrivateOnly(!privateOnly)} style={{
+                marginBottom: 12, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                background: privateOnly ? 'rgba(27, 107, 90, 0.08)' : 'var(--bg-surface)',
+                border: privateOnly ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                display: 'flex', alignItems: 'center', gap: 10, transition: 'all 0.15s',
+              }}>
+                <div style={{
+                  width: 20, height: 20, borderRadius: 4, flexShrink: 0,
+                  border: privateOnly ? '2px solid #1b6b5a' : '2px solid #ccc',
+                  background: privateOnly ? '#1b6b5a' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}>
+                  {privateOnly && React.createElement('span', { style: { color: '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1 } }, '\u2713')}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {selectedCaregiver.name.split(' ')[0]} only — don't open to others
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                    {privateOnly ? 'If they can\'t do it, the request will be cancelled instead of posted publicly' : 'If unchecked, the request opens to all caregivers after 1 hour'}
+                  </div>
+                </div>
               </div>
             )}
 

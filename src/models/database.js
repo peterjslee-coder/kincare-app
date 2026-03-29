@@ -993,6 +993,8 @@ async function initializeDatabase() {
     `ALTER TABLE payments ADD COLUMN IF NOT EXISTS tip_cents INTEGER DEFAULT 0`,
     `ALTER TABLE payments ADD COLUMN IF NOT EXISTS tip_reason TEXT`,
     `ALTER TABLE payments ADD COLUMN IF NOT EXISTS auto_charged INTEGER DEFAULT 0`,
+    // ─── v1.54.7 — Private-only requests ───
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS private_only INTEGER DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

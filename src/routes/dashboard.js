@@ -44,12 +44,24 @@ async function familyDashboard(db, userId, res) {
     await expireStaleProposals(db, null, null).catch(() => {});
 
     // Expire exclusive direct offers that have passed their 1-hour window
+    // Private-only requests get cancelled instead of opened to everyone
+    await db.exec(`
+      UPDATE care_sessions
+      SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired — caregiver did not respond'
+      WHERE offered_to_caregiver_id IS NOT NULL
+        AND exclusive_until IS NOT NULL
+        AND exclusive_until < NOW()
+        AND COALESCE(private_only, 0) = 1
+        AND status IN ('pending', 'open', 'requested')
+    `);
+    // Non-private exclusive offers open to all caregivers
     await db.exec(`
       UPDATE care_sessions
       SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
       WHERE offered_to_caregiver_id IS NOT NULL
         AND exclusive_until IS NOT NULL
         AND exclusive_until < NOW()
+        AND COALESCE(private_only, 0) = 0
         AND status IN ('pending', 'open', 'requested')
     `);
 
@@ -384,12 +396,23 @@ async function caregiverDashboard(db, userId, res) {
   await expireStaleProposals(db, null, null).catch(() => {});
 
   // Expire exclusive direct offers that have passed their 1-hour window
+  // Private-only requests get cancelled instead of opened
+  await db.exec(`
+    UPDATE care_sessions
+    SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired — caregiver did not respond'
+    WHERE offered_to_caregiver_id IS NOT NULL
+      AND exclusive_until IS NOT NULL
+      AND exclusive_until < NOW()
+      AND COALESCE(private_only, 0) = 1
+      AND status IN ('pending', 'open', 'requested')
+  `);
   await db.exec(`
     UPDATE care_sessions
     SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
     WHERE offered_to_caregiver_id IS NOT NULL
       AND exclusive_until IS NOT NULL
       AND exclusive_until < NOW()
+      AND COALESCE(private_only, 0) = 0
       AND status IN ('pending', 'open', 'requested')
   `);
 
