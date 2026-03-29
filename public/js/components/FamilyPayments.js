@@ -310,6 +310,38 @@ const FamilyPayments = window.FamilyPayments = () => {
               <input type="text" value={sendPaymentState.note} onChange={(e) => setSendPaymentState({ ...sendPaymentState, note: e.target.value })} placeholder="e.g., Thank you for going above and beyond" disabled={!paymentsEnabled || sendPaymentLoading}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
             </div>
+            {/* Fee breakdown */}
+            {(() => {
+              const amt = parseFloat(sendPaymentState.amount);
+              if (!amt || amt <= 0) return null;
+              const cardFee = Math.ceil((amt * 0.029 + 0.30) * 100) / 100;
+              const bankFee = Math.min(Math.ceil(amt * 0.008 * 100) / 100, 5.00);
+              const selectedCg = caregivers.find(c => c.id === sendPaymentState.caregiverId);
+              const cgName = selectedCg ? selectedCg.name.split(' ')[0] : 'caregiver';
+              return (
+                <div style={{ background: 'var(--bg-primary)', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{cgName} receives:</span>
+                    <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>${amt.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Processing fee (card):</span>
+                    <span style={{ color: 'var(--text-muted)' }}>~${cardFee.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Processing fee (bank transfer):</span>
+                    <span style={{ color: 'var(--color-success)' }}>~${bankFee.toFixed(2)}</span>
+                  </div>
+                  <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 6, marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>You pay (card):</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>~${(amt + cardFee).toFixed(2)}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Fee depends on payment method chosen at checkout. InPlace takes no platform fee on direct payments.
+                  </div>
+                </div>
+              );
+            })()}
             {/* Send button */}
             <button onClick={handleSendPayment} disabled={!paymentsEnabled || sendPaymentLoading || !sendPaymentState.caregiverId || !sendPaymentState.amount}
               style={{

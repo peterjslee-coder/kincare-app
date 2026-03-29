@@ -91,7 +91,9 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
           try {
             // Create manual_payments record
             const manualPaymentId = uuid();
-            const amountCents = session.amount_total; // Stripe returns in cents
+            // Use caregiver_amount_cents from metadata (what caregiver actually receives)
+            // Falls back to amount_total for payments created before fee grossing was added
+            const amountCents = parseInt(session.metadata?.caregiver_amount_cents) || session.amount_total;
 
             // Try to get payout expected date from Stripe transfer/balance
             let payoutExpectedDate = null;
@@ -1502,25 +1504,45 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
 
     // Get family user info + Stripe customer ID
     const familyUser = await db.prepare("SELECT first_name, last_name, stripe_customer_id FROM users WHERE id = ?").get(req.user.id);
-    const amountCents = Math.round(amount * 100);
+    const caregiverAmountCents = Math.round(amount * 100);
+
+    // Gross up to cover Stripe processing fees (card rate: 2.9% + $0.30)
+    // Formula: grossAmount = (caregiverAmount + 30) / (1 - 0.029), rounded up
+    // This way: Stripe fee ≈ 2.9% * grossAmount + $0.30 ≈ the difference
+    // Caregiver gets exactly what the family intended
+    const grossAmountCents = Math.ceil((caregiverAmountCents + 30) / (1 - 0.029));
+    const processingFeeCents = grossAmountCents - caregiverAmountCents;
 
     // Create checkout session — attach customer so Stripe shows their saved payment methods
     const checkoutParams = {
       mode: "payment",
       payment_method_types: ["card", "us_bank_account"],
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: `Payment to ${caregiver.first_name} ${caregiver.last_name}`,
-            description: note || "Manual payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `Payment to ${caregiver.first_name} ${caregiver.last_name}`,
+              description: note || "Direct payment",
+            },
+            unit_amount: caregiverAmountCents,
           },
-          unit_amount: amountCents,
+          quantity: 1,
         },
-        quantity: 1,
-      }],
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "Processing fee",
+              description: "Stripe payment processing — InPlace takes no platform fee",
+            },
+            unit_amount: processingFeeCents,
+          },
+          quantity: 1,
+        },
+      ],
       payment_intent_data: {
-        application_fee_amount: 0, // No platform fee for manual payments
+        application_fee_amount: processingFeeCents, // Covers Stripe fee, InPlace nets ~$0
         transfer_data: {
           destination: caregiver.stripe_account_id,
         },
@@ -1532,6 +1554,8 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
         caregiver_id: caregiverId,
         from_user_id: req.user.id,
         note: note || "",
+        caregiver_amount_cents: String(caregiverAmountCents),
+        processing_fee_cents: String(processingFeeCents),
       },
     };
 
