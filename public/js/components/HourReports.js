@@ -92,23 +92,23 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
       {/* Header & Date Range */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><span className="card-icon">📊</span>Generate Hour Report</div>
-        <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 16px' }}>
           Generate a verified report of your completed care hours. You can download it as a PDF or email it directly to your school.
         </p>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>From</label>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>From</label>
             <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
               style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>To</label>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>To</label>
             <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
               style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 }} />
           </div>
           <button onClick={fetchReport} disabled={loading} style={{
-            padding: '8px 20px', background: loading ? '#999' : '#1b6b5a', color: '#fff',
+            padding: '8px 20px', background: loading ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)',
             border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
             cursor: loading ? 'wait' : 'pointer', height: 38,
           }}>
@@ -126,7 +126,7 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
           ].map(p => (
             <button key={p.label} onClick={p.fn} style={{
               padding: '4px 12px', borderRadius: 16, border: '1px solid #d0d0d0',
-              background: '#fff', color: '#555', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
             }}>{p.label}</button>
           ))}
         </div>
@@ -138,14 +138,14 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }} className="no-print">
             <button onClick={handlePrint} style={{
-              padding: '10px 20px', background: '#1b6b5a', color: '#fff', border: 'none',
+              padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
               borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <span>🖨️</span> Print / Save as PDF
             </button>
             <button onClick={() => setShowEmailForm(!showEmailForm)} style={{
-              padding: '10px 20px', background: showEmailForm ? '#e65100' : '#e8724a', color: '#fff',
+              padding: '10px 20px', background: showEmailForm ? 'var(--color-warning)' : 'var(--accent-color)', color: 'var(--text-on-primary)',
               border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
@@ -159,19 +159,19 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
               <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Send Report via Email</div>
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, color: '#888', marginBottom: 4 }}>Recipient Email *</label>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Recipient Email *</label>
                   <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)}
                     placeholder="advisor@university.edu"
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, color: '#888', marginBottom: 4 }}>Recipient Name (optional)</label>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Recipient Name (optional)</label>
                   <input type="text" value={recipientName} onChange={e => setRecipientName(e.target.value)}
                     placeholder="Dr. Smith"
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 }} />
                 </div>
                 <button onClick={handleEmail} disabled={sending} style={{
-                  padding: '10px 20px', background: sending ? '#999' : '#e8724a', color: '#fff',
+                  padding: '10px 20px', background: sending ? 'var(--text-muted)' : 'var(--accent-color)', color: 'var(--text-on-primary)',
                   border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
                   cursor: sending ? 'wait' : 'pointer',
                 }}>
@@ -185,8 +185,8 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
           <div className="card" style={{ border: '1px solid #d0d0d0' }}>
             {/* Report header */}
             <div style={{
-              background: '#1b6b5a', margin: '-16px -16px 16px', padding: '20px 24px',
-              borderRadius: '12px 12px 0 0', color: '#fff',
+              background: 'var(--role-color)', margin: '-16px -16px 16px', padding: '20px 24px',
+              borderRadius: '12px 12px 0 0', color: 'var(--text-on-primary)',
             }}>
               <h2 style={{ margin: '0 0 4px', fontSize: 20 }}>Clinical Hours Report</h2>
               <div style={{ fontSize: 13, opacity: 0.85 }}>InPlace Care Platform — Verified Hours</div>
@@ -195,16 +195,16 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
             {/* Student info */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 20 }}>
               <div>
-                <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>Student Name</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Student Name</div>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{report.student.name}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>Email</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Email</div>
                 <div style={{ fontSize: 14 }}>{report.student.email}</div>
               </div>
               {report.student.academicProgram && (
                 <div>
-                  <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>Program</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Program</div>
                   <div style={{ fontSize: 14 }}>
                     {report.student.academicProgram}
                     {report.student.academicProgramYear && ` (${report.student.academicProgramYear})`}
@@ -212,7 +212,7 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
                 </div>
               )}
               <div>
-                <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>Report Period</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Report Period</div>
                 <div style={{ fontSize: 14 }}>{formatDate(report.dateRange.from)} — {formatDate(report.dateRange.to)}</div>
               </div>
             </div>
@@ -222,36 +222,36 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
               display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
               gap: 12, marginBottom: 20,
             }}>
-              <div style={{ padding: 16, background: '#f0faf8', borderRadius: 10, textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#1b6b5a' }}>{report.summary.totalHours}</div>
-                <div style={{ fontSize: 12, color: '#666', fontWeight: 600 }}>Total Hours</div>
+              <div style={{ padding: 16, background: 'var(--bg-highlight)', borderRadius: 10, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--role-color)' }}>{report.summary.totalHours}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>Total Hours</div>
               </div>
-              <div style={{ padding: 16, background: '#f8f9fa', borderRadius: 10, textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#333' }}>{report.summary.totalSessions}</div>
-                <div style={{ fontSize: 12, color: '#666', fontWeight: 600 }}>Sessions</div>
+              <div style={{ padding: 16, background: 'var(--bg-primary)', borderRadius: 10, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)' }}>{report.summary.totalSessions}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>Sessions</div>
               </div>
               {Object.entries(report.summary.byServiceType).map(([type, data]) => (
-                <div key={type} style={{ padding: 16, background: '#fff8f0', borderRadius: 10, textAlign: 'center' }}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#e65100' }}>{Math.round(data.hours * 10) / 10}h</div>
-                  <div style={{ fontSize: 11, color: '#666', fontWeight: 600, textTransform: 'capitalize' }}>{serviceLabel(type)}</div>
+                <div key={type} style={{ padding: 16, background: 'var(--bg-warm)', borderRadius: 10, textAlign: 'center' }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-warning)' }}>{Math.round(data.hours * 10) / 10}h</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'capitalize' }}>{serviceLabel(type)}</div>
                 </div>
               ))}
             </div>
 
             {/* Session detail table */}
-            <h3 style={{ margin: '0 0 10px', fontSize: 15, color: '#333', borderBottom: '2px solid #1b6b5a', paddingBottom: 6 }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: 15, color: 'var(--text-primary)', borderBottom: '2px solid #1b6b5a', paddingBottom: 6 }}>
               Session Detail
             </h3>
             {report.sessions.length > 0 ? (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ background: '#f5f5f5' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase' }}>Date</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase' }}>Time</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase' }}>Hours</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase' }}>Type of Care</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase' }}>Client</th>
+                    <tr style={{ background: 'var(--bg-primary)' }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Date</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Time</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Hours</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Type of Care</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase' }}>Client</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -263,7 +263,7 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
                         <td style={{ padding: '8px 12px' }}>
                           <span style={{
                             padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                            background: '#f0faf8', color: '#1b6b5a', textTransform: 'capitalize',
+                            background: 'var(--bg-highlight)', color: 'var(--role-color)', textTransform: 'capitalize',
                           }}>{serviceLabel(s.serviceType)}</span>
                         </td>
                         <td style={{ padding: '8px 12px' }}>{s.recipientName || '\u2014'}</td>
@@ -273,7 +273,7 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
                   <tfoot>
                     <tr style={{ borderTop: '2px solid #333' }}>
                       <td colSpan="2" style={{ padding: '10px 12px', fontWeight: 700, fontSize: 14 }}>Total</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontSize: 14, color: '#1b6b5a' }}>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontSize: 14, color: 'var(--role-color)' }}>
                         {report.summary.totalHours}h
                       </td>
                       <td colSpan="2"></td>
@@ -282,21 +282,21 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
                 </table>
               </div>
             ) : (
-              <div style={{ padding: 24, textAlign: 'center', color: '#999' }}>
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>
                 No completed sessions in this date range
               </div>
             )}
 
             {/* Footer */}
             <div style={{
-              marginTop: 20, padding: 16, background: '#f8f9fa', borderRadius: 8,
+              marginTop: 20, padding: 16, background: 'var(--bg-primary)', borderRadius: 8,
               border: '1px solid #e0e0e0',
             }}>
-              <p style={{ margin: 0, fontSize: 12, color: '#666', lineHeight: 1.6 }}>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 This report was generated by <strong>InPlace</strong> (yourinplace.com), an on-demand care coordination platform.
                 All sessions listed above have been verified as completed through the platform.
               </p>
-              <p style={{ margin: '6px 0 0', fontSize: 11, color: '#999' }}>
+              <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
                 Report generated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
             </div>
@@ -307,8 +307,8 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
       {!report && !loading && (
         <div className="card" style={{ textAlign: 'center', padding: 32 }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📊</div>
-          <h3 style={{ margin: '0 0 8px', color: '#333' }}>Generate Your Hour Report</h3>
-          <p style={{ color: '#888', fontSize: 13, margin: 0, maxWidth: 400, marginLeft: 'auto', marginRight: 'auto' }}>
+          <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)' }}>Generate Your Hour Report</h3>
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0, maxWidth: 400, marginLeft: 'auto', marginRight: 'auto' }}>
             Select a date range above and click "Generate Report" to see your verified care hours.
             You can then print it as a PDF or email it directly to your school.
           </p>

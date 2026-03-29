@@ -25,10 +25,10 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
 
   const phoneFrame = (title, content) => (
     <div style={{
-      maxWidth: 380, margin: '0 auto', background: '#fff', borderRadius: 24,
+      maxWidth: 380, margin: '0 auto', background: 'var(--bg-surface)', borderRadius: 24,
       border: '3px solid #222', boxShadow: '0 8px 40px rgba(0,0,0,0.12)', overflow: 'hidden',
     }}>
-      <div style={{ background: '#1b6b5a', color: '#fff', padding: '10px 16px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '10px 16px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 16 }}>{'\uD83C\uDFE0'}</span> inPlace {title && ('\u2014 ' + title)}
       </div>
       <div style={{ padding: '16px 18px', minHeight: 260, maxHeight: 340, overflowY: 'auto', fontSize: 13, lineHeight: 1.6 }}>
@@ -38,12 +38,12 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
   );
 
   return (
-    <section style={{ padding: compact ? '40px 24px' : '64px 24px', background: compact ? '#fff' : 'linear-gradient(180deg, #f8faf9 0%, #fff 100%)' }}>
+    <section style={{ padding: compact ? '40px 24px' : '64px 24px', background: compact ? 'var(--text-on-primary)' : 'linear-gradient(180deg, #f8faf9 0%, #fff 100%)' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 12 }}>
-          <div style={{ display: 'inline-block', padding: '5px 14px', background: '#e8f5e9', border: '1px solid #c8e6c9', borderRadius: 20, fontSize: 11, fontWeight: 700, color: '#2e7d32', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>See It In Action</div>
-          <h2 style={{ fontSize: compact ? 24 : 28, color: '#1b6b5a', marginBottom: 8 }}>How Small Notes Become Powerful Insights</h2>
-          <p style={{ fontSize: 15, color: '#666', maxWidth: 600, margin: '0 auto', lineHeight: 1.6 }}>
+          <div style={{ display: 'inline-block', padding: '5px 14px', background: 'var(--color-success-bg)', border: '1px solid #c8e6c9', borderRadius: 20, fontSize: 11, fontWeight: 700, color: 'var(--color-success)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>See It In Action</div>
+          <h2 style={{ fontSize: compact ? 24 : 28, color: 'var(--role-color)', marginBottom: 8 }}>How Small Notes Become Powerful Insights</h2>
+          <p style={{ fontSize: 15, color: 'var(--text-secondary)', maxWidth: 600, margin: '0 auto', lineHeight: 1.6 }}>
             Follow the Rivera family. Maria lives in DC. Her mom Elena, 78, lives in Virginia with mild dementia and arthritis. Here's what happens when a care team actually uses inPlace.
           </p>
         </div>
@@ -55,15 +55,15 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
               <button onClick={() => goToStep(i)} style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                 padding: '8px 6px', border: 'none', borderRadius: 10, cursor: 'pointer',
-                background: step === i ? '#1b6b5a' : step > i ? '#e8f5e9' : '#f5f5f5',
-                color: step === i ? '#fff' : step > i ? '#2e7d32' : '#999',
+                background: step === i ? 'var(--role-color)' : step > i ? 'var(--color-success-bg)' : 'var(--bg-primary)',
+                color: step === i ? 'var(--text-on-primary)' : step > i ? 'var(--color-success)' : 'var(--text-muted)',
                 transition: 'all 0.3s', minWidth: 72,
               }}>
                 <span style={{ fontSize: 20 }}>{s.icon}</span>
                 <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.2, textAlign: 'center' }}>{s.label}</span>
               </button>
               {i < steps.length - 1 && (
-                <div style={{ width: 20, height: 2, background: step > i ? '#1b6b5a' : '#ddd', transition: 'background 0.3s', flexShrink: 0 }}></div>
+                <div style={{ width: 20, height: 2, background: step > i ? 'var(--role-color)' : 'var(--border-light)', transition: 'background 0.3s', flexShrink: 0 }}></div>
               )}
             </React.Fragment>
           ))}
@@ -72,37 +72,37 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {/* ── Step 0: Profile ── */}
         {step === 0 && phoneFrame("Elena's Profile", (
           <div>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>CARE RECIPIENT PROFILE</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>CARE RECIPIENT PROFILE</div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{'\uD83D\uDC75'}</div>
-              <div><div style={{ fontWeight: 700, color: '#333' }}>Elena Rivera</div><div style={{ fontSize: 11, color: '#888' }}>78 years old — Richmond, VA</div></div>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--color-success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{'\uD83D\uDC75'}</div>
+              <div><div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Elena Rivera</div><div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>78 years old — Richmond, VA</div></div>
             </div>
-            <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 12, border: '1px solid #eee' }}>
-              <div style={{ fontWeight: 600, color: '#1b6b5a', marginBottom: 4 }}>Conditions</div>
+            <div style={{ background: 'var(--bg-neutral)', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 12, border: '1px solid #eee' }}>
+              <div style={{ fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 }}>Conditions</div>
               <div>Mild cognitive impairment (early dementia) {'\u00B7'} Osteoarthritis {'\u00B7'} Hypertension</div>
             </div>
-            <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 12, border: '1px solid #eee' }}>
-              <div style={{ fontWeight: 600, color: '#1b6b5a', marginBottom: 4 }}>Medications</div>
+            <div style={{ background: 'var(--bg-neutral)', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 12, border: '1px solid #eee' }}>
+              <div style={{ fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 }}>Medications</div>
               <div>Aricept 10mg (memory) {'\u00B7'} Meloxicam 7.5mg (pain) {'\u00B7'} Lisinopril 20mg (BP)</div>
             </div>
-            <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 10, fontSize: 12, border: '1px solid #eee' }}>
-              <div style={{ fontWeight: 600, color: '#1b6b5a', marginBottom: 4 }}>Care Preferences</div>
+            <div style={{ background: 'var(--bg-neutral)', borderRadius: 8, padding: 10, fontSize: 12, border: '1px solid #eee' }}>
+              <div style={{ fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 }}>Care Preferences</div>
               <div>{'\u2705'} Meal prep {'\u00B7'} {'\u2705'} Med reminders {'\u00B7'} {'\u2705'} Companionship {'\u00B7'} {'\u2705'} Transportation</div>
             </div>
-            <p style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 10, marginBottom: 0 }}>Maria set this up in 10 minutes from her apartment in DC.</p>
+            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 10, marginBottom: 0 }}>Maria set this up in 10 minutes from her apartment in DC.</p>
           </div>
         ))}
 
         {/* ── Step 1: Raw note ── */}
         {step === 1 && phoneFrame('Visit Log', (
           <div>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>CAREGIVER: SARAH M. — MARCH 18, 2:45 PM</div>
-            <div style={{ background: '#fffde7', borderRadius: 8, padding: 12, border: '1px solid #fff9c4', fontSize: 13, lineHeight: 1.7, color: '#444', fontStyle: 'italic' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>CAREGIVER: SARAH M. — MARCH 18, 2:45 PM</div>
+            <div style={{ background: '#fffde7', borderRadius: 8, padding: 12, border: '1px solid #fff9c4', fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)', fontStyle: 'italic' }}>
               "{rawNote}"
             </div>
-            <p style={{ fontSize: 11, color: '#888', marginTop: 12, marginBottom: 4 }}>This is what real care notes look like — quick, unstructured, written on a phone between visits. Most families never capture this at all.</p>
+            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 12, marginBottom: 4 }}>This is what real care notes look like — quick, unstructured, written on a phone between visits. Most families never capture this at all.</p>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <button onClick={() => goToStep(2)} style={{ flex: 1, padding: '8px 0', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>See What AI Does With This {'\u2192'}</button>
+              <button onClick={() => goToStep(2)} style={{ flex: 1, padding: '8px 0', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>See What AI Does With This {'\u2192'}</button>
             </div>
           </div>
         ))}
@@ -111,23 +111,23 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {step === 2 && (
           <div style={{ maxWidth: 800, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>Sarah's quick note becomes structured, searchable care data</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>Sarah's quick note becomes structured, searchable care data</div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 40px 1fr', gap: 0, alignItems: 'start' }}>
-              <div style={{ background: '#fffde7', borderRadius: 12, padding: 16, border: '1px solid #fff9c4', fontSize: 12, lineHeight: 1.6, color: '#555', fontStyle: 'italic' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, fontStyle: 'normal' }}>Raw caregiver note</div>
+              <div style={{ background: '#fffde7', borderRadius: 12, padding: 16, border: '1px solid #fff9c4', fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, fontStyle: 'normal' }}>Raw caregiver note</div>
                 "{rawNote}"
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: 40 }}>
-                <div style={{ fontSize: 24, color: '#1b6b5a', animation: 'pulse 1.5s infinite' }}>{'\u2192'}</div>
-                <div style={{ fontSize: 9, color: '#999', fontWeight: 600, marginTop: 2 }}>AI</div>
+                <div style={{ fontSize: 24, color: 'var(--role-color)', animation: 'pulse 1.5s infinite' }}>{'\u2192'}</div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, marginTop: 2 }}>AI</div>
               </div>
-              <div style={{ background: '#f0faf8', borderRadius: 12, padding: 16, border: '1px solid #d0e8e3', fontSize: 12, lineHeight: 1.6, color: '#333' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#1b6b5a', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>AI-structured summary</div>
+              <div style={{ background: 'var(--bg-highlight)', borderRadius: 12, padding: 16, border: '1px solid #d0e8e3', fontSize: 12, lineHeight: 1.6, color: 'var(--text-primary)' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--role-color)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>AI-structured summary</div>
                 <div style={{ whiteSpace: 'pre-wrap', fontFamily: '-apple-system, sans-serif' }}>{aiSummary}</div>
               </div>
             </div>
-            <p style={{ textAlign: 'center', fontSize: 12, color: '#888', marginTop: 16, lineHeight: 1.5, maxWidth: 500, margin: '16px auto 0' }}>
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 16, lineHeight: 1.5, maxWidth: 500, margin: '16px auto 0' }}>
               Every visit is automatically categorized. Nutrition, mobility, cognition, mood — all searchable, all tracked over time. This happens after every single visit.
             </p>
           </div>
@@ -137,9 +137,9 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {step === 3 && (
           <div style={{ maxWidth: 500, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>30 Days of Care — Patterns the Family Can See</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>30 Days of Care — Patterns the Family Can See</div>
             </div>
-            <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e8e8e8', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid #e8e8e8', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
               {[
                 { flag: '\uD83D\uDD34', label: 'Ankle Swelling', detail: 'Noted in 8 of 12 visits — getting worse', trend: 'trending up' },
                 { flag: '\uD83D\uDFE1', label: 'Appetite', detail: 'Declined 3 of last 5 visits — new pattern', trend: 'declining' },
@@ -151,14 +151,14 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: i < 5 ? '1px solid #f0f0f0' : 'none' }}>
                   <span style={{ fontSize: 14, flexShrink: 0 }}>{item.flag}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{item.label}</div>
-                    <div style={{ fontSize: 11, color: '#888' }}>{item.detail}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{item.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{item.detail}</div>
                   </div>
-                  <span style={{ fontSize: 10, color: '#999', fontWeight: 500, whiteSpace: 'nowrap' }}>{item.trend}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>{item.trend}</span>
                 </div>
               ))}
             </div>
-            <p style={{ textAlign: 'center', fontSize: 12, color: '#888', marginTop: 14, lineHeight: 1.5 }}>
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 14, lineHeight: 1.5 }}>
               None of this required Maria to do anything extra. Sarah logged her normal visit notes. AI did the rest. Now Maria sees exactly what's changing — and so can Elena's doctors.
             </p>
           </div>
@@ -168,18 +168,18 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {step === 4 && (
           <div style={{ maxWidth: 520, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>Elena has a podiatry appointment. Maria taps "Generate Report."</div>
-              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>AI reads 30 days of care data and surfaces only what a podiatrist needs to see.</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Elena has a podiatry appointment. Maria taps "Generate Report."</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>AI reads 30 days of care data and surfaces only what a podiatrist needs to see.</div>
             </div>
-            <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-              <div style={{ background: '#1b6b5a', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+              <div style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>{'\uD83E\uDE7A'}</span> AI Doctor Report — Podiatry
               </div>
-              <div style={{ padding: 16, fontSize: 11.5, lineHeight: 1.7, color: '#333', whiteSpace: 'pre-wrap', maxHeight: 320, overflowY: 'auto', fontFamily: '-apple-system, sans-serif' }}>
+              <div style={{ padding: 16, fontSize: 11.5, lineHeight: 1.7, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', maxHeight: 320, overflowY: 'auto', fontFamily: '-apple-system, sans-serif' }}>
                 {doctorReport}
               </div>
             </div>
-            <p style={{ textAlign: 'center', fontSize: 12, color: '#666', marginTop: 14, lineHeight: 1.5, fontStyle: 'italic' }}>
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)', marginTop: 14, lineHeight: 1.5, fontStyle: 'italic' }}>
               "She used to love walking to the mailbox." That one observation from a caregiver — documented, tracked, and surfaced at the right moment — could change a treatment plan.
             </p>
           </div>
@@ -189,35 +189,35 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {step === 5 && (
           <div style={{ maxWidth: 520, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>Maria enters Dr. Patel's email. One tap. Report delivered.</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Maria enters Dr. Patel's email. One tap. Report delivered.</div>
             </div>
-            <div style={{ background: '#f8f9fa', borderRadius: 14, border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-              <div style={{ background: '#fff', padding: '20px 24px', borderBottom: '1px solid #eee' }}>
-                <div style={{ fontSize: 11, color: '#999', marginBottom: 6 }}>EMAIL PREVIEW</div>
-                <div style={{ fontSize: 12, color: '#555', marginBottom: 3 }}><strong>From:</strong> inPlace Care Intelligence &lt;reports@yourinplace.com&gt;</div>
-                <div style={{ fontSize: 12, color: '#555', marginBottom: 3 }}><strong>To:</strong> Dr. Patel &lt;patel@richmondpodiatry.com&gt;</div>
-                <div style={{ fontSize: 12, color: '#555' }}><strong>Subject:</strong> Care Intelligence Report — Elena Rivera (Podiatry Visit)</div>
+            <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+              <div style={{ background: 'var(--bg-surface)', padding: '20px 24px', borderBottom: '1px solid #eee' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>EMAIL PREVIEW</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3 }}><strong>From:</strong> inPlace Care Intelligence &lt;reports@yourinplace.com&gt;</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3 }}><strong>To:</strong> Dr. Patel &lt;patel@richmondpodiatry.com&gt;</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}><strong>Subject:</strong> Care Intelligence Report — Elena Rivera (Podiatry Visit)</div>
               </div>
               <div style={{ padding: '20px 24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: 14, color: '#fff', fontWeight: 700 }}>iP</span>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 14, color: 'var(--text-on-primary)', fontWeight: 700 }}>iP</span>
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1b6b5a' }}>inPlace</div>
-                    <div style={{ fontSize: 10, color: '#888' }}>AI-Powered Home Care Coordination</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--role-color)' }}>inPlace</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>AI-Powered Home Care Coordination</div>
                   </div>
                 </div>
-                <div style={{ fontSize: 12, color: '#444', lineHeight: 1.6, marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 12 }}>
                   Dr. Patel, the Rivera family has shared a care intelligence report for Elena's upcoming podiatry appointment. This report was generated from 30 days of structured caregiver observations across 12 home visits.
                 </div>
-                <div style={{ background: '#f0faf8', borderRadius: 8, padding: 12, border: '1px solid #d0e8e3', fontSize: 11, color: '#333', lineHeight: 1.5, marginBottom: 12 }}>
+                <div style={{ background: 'var(--bg-highlight)', borderRadius: 8, padding: 12, border: '1px solid #d0e8e3', fontSize: 11, color: 'var(--text-primary)', lineHeight: 1.5, marginBottom: 12 }}>
                   <strong>Key findings relevant to your specialty:</strong> Progressive left ankle edema (8/12 visits), declining ambulatory distance, pain management concerns with current NSAID regimen, and detailed mobility observations from daily caregiving.
                 </div>
-                <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>Full report attached. This data is encrypted and shared with explicit family authorization. Replies to this email are captured in Elena's care record.</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Full report attached. This data is encrypted and shared with explicit family authorization. Replies to this email are captured in Elena's care record.</div>
               </div>
             </div>
-            <p style={{ textAlign: 'center', fontSize: 12, color: '#888', marginTop: 14, lineHeight: 1.5 }}>
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 14, lineHeight: 1.5 }}>
               The email footer invites Dr. Patel to reply with any instructions or observations. What happens when they do?
             </p>
           </div>
@@ -227,20 +227,20 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {step === 6 && (
           <div style={{ maxWidth: 520, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>Dr. Patel replies. It goes straight into Elena's care record.</div>
-              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>No phone tag. No lost sticky notes. Real medical guidance, captured forever.</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Dr. Patel replies. It goes straight into Elena's care record.</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>No phone tag. No lost sticky notes. Real medical guidance, captured forever.</div>
             </div>
             {/* Doctor reply */}
-            <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden', marginBottom: 16 }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden', marginBottom: 16 }}>
               <div style={{ background: '#f0f4ff', padding: '10px 16px', fontSize: 12, fontWeight: 600, color: '#4a5fa8', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>{'\uD83D\uDC68\u200D\u2695\uFE0F'}</span> Dr. Patel's Reply
               </div>
               <div style={{ padding: '16px 20px' }}>
-                <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
                   From: Dr. Patel &lt;patel@richmondpodiatry.com&gt;<br/>
                   Re: Care Intelligence Report — Elena Rivera
                 </div>
-                <div style={{ fontSize: 13, color: '#333', lineHeight: 1.7, background: '#fafbff', borderRadius: 8, padding: 14, border: '1px solid #e8ecf4' }}>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7, background: '#fafbff', borderRadius: 8, padding: 14, border: '1px solid #e8ecf4' }}>
                   Thank you for this — incredibly helpful. A few notes for Elena's care team:<br/><br/>
                   <strong>1.</strong> Keep her moving when possible. Short, frequent walks are better than one long one. If she'll do 5 minutes every hour, that's ideal for circulation.<br/><br/>
                   <strong>2.</strong> Consider soaking her ankles in warm water before bed, especially if her nails are bothering her. This will help with the edema too.<br/><br/>
@@ -252,39 +252,39 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
               </div>
             </div>
             {/* Arrow */}
-            <div style={{ textAlign: 'center', margin: '8px 0', fontSize: 20, color: '#1b6b5a' }}>{'\u2B07\uFE0F'}</div>
+            <div style={{ textAlign: 'center', margin: '8px 0', fontSize: 20, color: 'var(--role-color)' }}>{'\u2B07\uFE0F'}</div>
             {/* Care record */}
-            <div style={{ background: '#fff', borderRadius: 14, border: '2px solid #1b6b5a', boxShadow: '0 4px 20px rgba(27,107,90,0.12)', overflow: 'hidden' }}>
-              <div style={{ background: '#1b6b5a', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '2px solid #1b6b5a', boxShadow: '0 4px 20px rgba(27,107,90,0.12)', overflow: 'hidden' }}>
+              <div style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>{'\uD83D\uDCCB'}</span> Elena's Care Record — New Doctor Note
               </div>
               <div style={{ padding: '14px 18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#e3f2fd', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{'\uD83D\uDC68\u200D\u2695\uFE0F'}</div>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--color-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{'\uD83D\uDC68\u200D\u2695\uFE0F'}</div>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#333' }}>Dr. Patel, Podiatry</div>
-                    <div style={{ fontSize: 10, color: '#888' }}>March 20, 2026 — via email reply</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Dr. Patel, Podiatry</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>March 20, 2026 — via email reply</div>
                   </div>
-                  <span style={{ marginLeft: 'auto', fontSize: 9, background: '#e3f2fd', color: '#1565c0', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>DOCTOR NOTE</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 9, background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>DOCTOR NOTE</span>
                 </div>
-                <div style={{ fontSize: 12, color: '#444', lineHeight: 1.6, borderLeft: '3px solid #4a5fa8', paddingLeft: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.6, borderLeft: '3px solid #4a5fa8', paddingLeft: 12 }}>
                   Short frequent walks (5 min/hr for circulation). Warm ankle soaks before bed. Elevate feet above heart when seated. Switching from Meloxicam to topical diclofenac — Rx sent to pharmacy.
                 </div>
                 <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10, background: '#e8f5e9', color: '#2e7d32', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Visible to care team</span>
-                  <span style={{ fontSize: 10, background: '#fff3e0', color: '#e65100', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Medication change flagged</span>
+                  <span style={{ fontSize: 10, background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Visible to care team</span>
+                  <span style={{ fontSize: 10, background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Medication change flagged</span>
                 </div>
               </div>
             </div>
             {/* CTA */}
             <div style={{ textAlign: 'center', marginTop: 24 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#1b6b5a', marginBottom: 6 }}>This is what investing in long-term care looks like.</div>
-              <p style={{ fontSize: 13, color: '#666', lineHeight: 1.6, maxWidth: 460, margin: '0 auto' }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--role-color)', marginBottom: 6 }}>This is what investing in long-term care looks like.</div>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: 460, margin: '0 auto' }}>
                 Sarah wrote a quick note on her phone. AI turned it into a specialist-ready report. Maria emailed it to Dr. Patel. He replied with real medical guidance — and it landed right back in Elena's care record where the whole team can see it. No phone tag. No lost instructions. That's the power of staying on the platform and letting it work for your family over time.
               </p>
               {onNavigate && (
                 <button onClick={() => onNavigate('register')} style={{
-                  marginTop: 16, padding: '12px 32px', background: '#e8724a', color: '#fff',
+                  marginTop: 16, padding: '12px 32px', background: 'var(--accent-color)', color: 'var(--text-on-primary)',
                   border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
                 }}>Start Building Your Care Record</button>
               )}
@@ -296,14 +296,14 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 24 }}>
           {step > 0 && (
             <button onClick={() => goToStep(step - 1)} style={{
-              padding: '8px 20px', borderRadius: 8, border: '1px solid #ddd', background: '#fff',
-              color: '#555', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+              padding: '8px 20px', borderRadius: 8, border: '1px solid #ddd', background: 'var(--bg-surface)',
+              color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer',
             }}>{'\u2190'} Back</button>
           )}
           {step < steps.length - 1 && (
             <button onClick={() => goToStep(step + 1)} style={{
-              padding: '8px 20px', borderRadius: 8, border: 'none', background: '#1b6b5a',
-              color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              padding: '8px 20px', borderRadius: 8, border: 'none', background: 'var(--role-color)',
+              color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
             }}>Next {'\u2192'}</button>
           )}
         </div>

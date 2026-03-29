@@ -191,8 +191,8 @@ const AreaMap = window.AreaMap = () => {
     // Draw radius circle (miles → meters: 1 mile = 1609.34m)
     circleRef.current = L.circle([centerLat, centerLng], {
       radius: radiusMiles * 1609.34,
-      color: '#1b6b5a',
-      fillColor: '#1b6b5a',
+      color: 'var(--role-color)',
+      fillColor: 'var(--role-color)',
       fillOpacity: 0.06,
       weight: 2,
       dashArray: '6 4',
@@ -217,15 +217,15 @@ const AreaMap = window.AreaMap = () => {
       {/* Radius control */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px',
-        padding: '10px 16px', background: '#f0faf8', borderRadius: '8px', flexWrap: 'wrap',
+        padding: '10px 16px', background: 'var(--bg-highlight)', borderRadius: '8px', flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: '13px', fontWeight: 600, color: '#1b6b5a' }}>Service Radius:</span>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--role-color)' }}>Service Radius:</span>
         {[5, 10, 15, 25].map(r => (
           <button key={r} onClick={() => setRadiusMiles(r)} style={{
             padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
             border: radiusMiles === r ? '2px solid #1b6b5a' : '1px solid #ccc',
-            background: radiusMiles === r ? '#1b6b5a' : '#fff',
-            color: radiusMiles === r ? '#fff' : '#666',
+            background: radiusMiles === r ? 'var(--role-color)' : 'var(--text-on-primary)',
+            color: radiusMiles === r ? 'var(--text-on-primary)' : 'var(--text-secondary)',
             cursor: 'pointer',
           }}>{r} mi</button>
         ))}
@@ -235,7 +235,7 @@ const AreaMap = window.AreaMap = () => {
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {assignments.map((a, idx) => (
           <div key={idx} style={{
-            flex: '1 1 200px', padding: '12px 16px', background: '#fff', borderRadius: '8px',
+            flex: '1 1 200px', padding: '12px 16px', background: 'var(--bg-surface)', borderRadius: '8px',
             border: a.is_favorite ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
             cursor: 'pointer', transition: 'box-shadow 0.2s',
           }}
@@ -244,10 +244,10 @@ const AreaMap = window.AreaMap = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ fontSize: '16px' }}>{a.is_favorite ? '⭐' : '📍'}</span>
               <div>
-                <div style={{ fontWeight: 600, fontSize: '13px', color: '#333' }}>
+                <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
                   {a.recipient_first_name} {a.recipient_last_name}
                 </div>
-                <div style={{ fontSize: '11px', color: '#888' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
                   {a.location_city || 'Unknown'}, {a.location_state || ''}
                 </div>
               </div>
@@ -261,7 +261,7 @@ const AreaMap = window.AreaMap = () => {
         <div ref={mapRef} style={{ height: '500px', width: '100%' }} />
       </div>
 
-      <div style={{ marginTop: '10px', fontSize: '11px', color: '#aaa', textAlign: 'center' }}>
+      <div style={{ marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
         Map data &copy; OpenStreetMap contributors &bull; Leaflet
       </div>
     </div>

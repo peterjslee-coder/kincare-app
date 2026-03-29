@@ -696,7 +696,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f5f7f5' }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>&#9203;</div>
-          <div style={{ color: '#666', fontSize: '16px' }}>Validating your invite...</div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '16px' }}>Validating your invite...</div>
         </div>
       </div>
     );
@@ -707,10 +707,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f5f7f5' }}>
         <div style={{ textAlign: 'center', maxWidth: '400px', padding: '40px' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#128532;</div>
-          <h2 style={{ color: '#333', marginBottom: '8px' }}>Invite Issue</h2>
-          <p style={{ color: '#666', marginBottom: '24px' }}>{inviteError}</p>
+          <h2 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Invite Issue</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{inviteError}</p>
           <a href="/" style={{
-            display: 'inline-block', padding: '12px 28px', background: '#1b6b5a', color: 'white',
+            display: 'inline-block', padding: '12px 28px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
             borderRadius: '8px', textDecoration: 'none', fontWeight: 600,
           }}>Go to InPlace</a>
         </div>
@@ -724,7 +724,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     fontSize: '14px', boxSizing: 'border-box',
   };
   const inputErrorStyle = { ...inputStyle, borderColor: '#e74c3c' };
-  const labelStyle = { display: 'block', fontSize: '13px', fontWeight: 600, color: '#555', marginBottom: '4px' };
+  const labelStyle = { display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' };
   const errorStyle = { color: '#e74c3c', fontSize: '12px', marginTop: '4px' };
   const fieldGroup = { marginBottom: '16px' };
   const rowStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' };
@@ -746,10 +746,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     if (errorKeys.length === 0) return null;
     return (
       <div style={{
-        padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+        padding: '12px 16px', background: 'var(--bg-error-subtle)', border: '1px solid #fecaca',
         borderRadius: '8px', marginBottom: '16px',
       }}>
-        <div style={{ fontSize: '14px', fontWeight: 600, color: '#dc2626', marginBottom: '4px' }}>
+        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-error)', marginBottom: '4px' }}>
           Please fix {errorKeys.length} {errorKeys.length === 1 ? 'issue' : 'issues'} below
         </div>
         <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#b91c1c', lineHeight: '1.6' }}>
@@ -761,14 +761,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   const backBtn = (targetStep) => (
     <button onClick={() => setStep(targetStep)} style={{
-      padding: '14px 24px', background: '#f0f0f0', color: '#555', border: 'none',
+      padding: '14px 24px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: 'none',
       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
     }}>Back</button>
   );
 
   const nextBtn = (handler, label, disabledExtra) => (
     <button onClick={handler} disabled={saving || disabledExtra} style={{
-      flex: 1, padding: '14px', background: '#1b6b5a', color: 'white', border: 'none',
+      flex: 1, padding: '14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
       borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
       opacity: (saving || disabledExtra) ? 0.6 : 1,
     }}>{saving ? 'Saving...' : label}</button>
@@ -776,14 +776,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   // Disclosure checkbox helper
   const disclosureCheck = (field, label, description) => (
-    <div style={{ padding: '14px', background: '#f8f9fa', borderRadius: '8px', marginBottom: '12px', border: errors[field] ? '1px solid #e74c3c' : '1px solid #eee' }}>
+    <div style={{ padding: '14px', background: 'var(--bg-primary)', borderRadius: '8px', marginBottom: '12px', border: errors[field] ? '1px solid #e74c3c' : '1px solid #eee' }}>
       <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
         <input type="checkbox" checked={form[field]}
           onChange={(e) => updateForm(field, e.target.checked)}
           style={{ marginTop: '3px', width: '18px', height: '18px', flexShrink: 0 }} />
         <div>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>{label}</div>
-          <div style={{ fontSize: '13px', color: '#666', lineHeight: '1.5' }}>{description}</div>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>{label}</div>
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>{description}</div>
         </div>
       </label>
       {errors[field] && <div style={errorStyle}>{errors[field]}</div>}
@@ -797,13 +797,13 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: '48px', height: '48px', borderRadius: '12px', background: '#1b6b5a',
-            color: 'white', fontWeight: 800, fontSize: '18px', fontFamily: "'DM Sans', sans-serif",
+            width: '48px', height: '48px', borderRadius: '12px', background: 'var(--role-color)',
+            color: 'var(--text-on-primary)', fontWeight: 800, fontSize: '18px', fontFamily: "'DM Sans', sans-serif",
             marginBottom: '12px',
           }}>iP</div>
-          <h1 style={{ fontSize: '22px', color: '#1b6b5a', margin: '0 0 4px' }}>Join InPlace</h1>
+          <h1 style={{ fontSize: '22px', color: 'var(--role-color)', margin: '0 0 4px' }}>Join InPlace</h1>
           {inviteInfo && inviteInfo.inviterName && (
-            <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '14px', margin: 0 }}>
               Invited by {inviteInfo.inviterName}
             </p>
           )}
@@ -814,7 +814,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           {Array.from({ length: TOTAL_STEPS }, (_, i) => (
             <div key={i} style={{
               flex: 1, height: '4px', borderRadius: '2px',
-              background: i + 1 <= step ? '#1b6b5a' : '#ddd',
+              background: i + 1 <= step ? 'var(--role-color)' : 'var(--border-light)',
               transition: 'background 0.3s',
             }} />
           ))}
@@ -823,12 +823,12 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* Offline banner */}
         {isOffline && (
           <div style={{
-            padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+            padding: '12px 16px', background: 'var(--bg-error-subtle)', border: '1px solid #fecaca',
             borderRadius: '10px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px',
           }}>
             <span style={{ fontSize: '20px' }}>&#9888;&#65039;</span>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: '#dc2626' }}>You're offline</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-error)' }}>You're offline</div>
               <div style={{ fontSize: '13px', color: '#b91c1c' }}>
                 Please check your internet connection. Your progress has been saved and you can continue when you're back online.
               </div>
@@ -838,7 +838,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
         {/* Step label */}
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-          <span style={{ fontSize: '12px', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
             Step {step} of {TOTAL_STEPS} — {stepLabels[step]}
           </span>
         </div>
@@ -846,7 +846,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 1: Create Account ─── */}
         {step === 1 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '16px' }}>Create Your Account</h2>
+            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '16px' }}>Create Your Account</h2>
             {errorSummary()}
             <div style={rowStyle}>
               <div style={fieldGroup}>
@@ -864,7 +864,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             </div>
             <div style={fieldGroup}>
               <label style={labelStyle}>Email</label>
-              <input style={{ ...inputStyle, background: '#f5f5f5' }} value={form.email} disabled />
+              <input style={{ ...inputStyle, background: 'var(--bg-primary)' }} value={form.email} disabled />
             </div>
             <div style={rowStyle}>
               <div style={fieldGroup}>
@@ -888,8 +888,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 2: Disclosures & Terms ─── */}
         {step === 2 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>Before We Begin</h2>
-            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>Before We Begin</h2>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
               Please review and acknowledge the following terms to continue with your application.
             </p>
             {errorSummary()}
@@ -937,7 +937,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <div style={{ display: 'flex', gap: '10px' }}>
               {resumeMode ? (
                 <button onClick={() => onComplete && onComplete(null)} style={{
-                  padding: '14px 24px', background: '#f0f0f0', color: '#555', border: 'none',
+                  padding: '14px 24px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: 'none',
                   borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                 }}>Cancel</button>
               ) : backBtn(1)}
@@ -949,18 +949,18 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 3: Personal Info + Work Location ─── */}
         {step === 3 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '16px' }}>👤 Personal Information</h2>
+            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '16px' }}>👤 Personal Information</h2>
             {errorSummary()}
             <div style={fieldGroup}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label style={labelStyle}>Phone *</label>
-                <button type="button" onClick={() => { setIntlPhone(!intlPhone); updateForm('phone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                <button type="button" onClick={() => { setIntlPhone(!intlPhone); updateForm('phone', ''); }} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                   {intlPhone ? 'US number' : 'International number'}
                 </button>
               </div>
               <input style={errors.phone ? inputErrorStyle : inputStyle} value={form.phone}
                 onChange={(e) => updateForm('phone', formatPhone(e.target.value, intlPhone))} placeholder={intlPhone ? '+44 20 7946 0958' : '(540) 555-1234'} />
-              {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
+              {intlPhone && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
               {errors.phone && <div style={errorStyle}>{errors.phone}</div>}
             </div>
             <div style={fieldGroup}>
@@ -1001,9 +1001,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             </div>
 
             {/* Work Location */}
-            <div style={{ padding: '16px', background: '#f0faf8', borderRadius: '8px', marginBottom: '16px', border: '1px solid #d0e8e2' }}>
-              <h3 style={{ fontSize: '15px', color: '#1b6b5a', margin: '0 0 4px' }}>📍 Preferred Work Location</h3>
-              <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px' }}>
+            <div style={{ padding: '16px', background: 'var(--bg-highlight)', borderRadius: '8px', marginBottom: '16px', border: '1px solid #d0e8e2' }}>
+              <h3 style={{ fontSize: '15px', color: 'var(--role-color)', margin: '0 0 4px' }}>📍 Preferred Work Location</h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
                 Where do you prefer to work? Leave blank to use your home address.
               </p>
               <div style={fieldGroup}>
@@ -1019,8 +1019,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     <button key={r} onClick={() => updateForm('travelRadius', r)} style={{
                       padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 600,
                       border: form.travelRadius === r ? '2px solid #1b6b5a' : '2px solid #ddd',
-                      background: form.travelRadius === r ? '#e8f5f1' : '#fff',
-                      color: form.travelRadius === r ? '#1b6b5a' : '#666',
+                      background: form.travelRadius === r ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+                      color: form.travelRadius === r ? 'var(--role-color)' : 'var(--text-secondary)',
                       cursor: 'pointer',
                     }}>{r} mi</button>
                   ))}
@@ -1045,7 +1045,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             {/* Pets, Allergies & Medical */}
             <div style={{ padding: '16px', background: '#faf8f5', borderRadius: '8px', marginBottom: '16px', border: '1px solid #e8e0d8' }}>
               <h3 style={{ fontSize: '15px', color: '#8B6914', margin: '0 0 4px' }}>🐾 Pets, Allergies & Medical</h3>
-              <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
                 This helps families match with the right caregiver. All fields are optional.
               </p>
               <div style={fieldGroup}>
@@ -1055,8 +1055,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     <button key={String(opt.val)} onClick={() => updateForm('comfortableWithPets', opt.val)} style={{
                       flex: 1, padding: '10px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
                       border: form.comfortableWithPets === opt.val ? '2px solid #8B6914' : '2px solid #ddd',
-                      background: form.comfortableWithPets === opt.val ? '#fef9ef' : '#fff',
-                      color: form.comfortableWithPets === opt.val ? '#8B6914' : '#555',
+                      background: form.comfortableWithPets === opt.val ? '#fef9ef' : 'var(--text-on-primary)',
+                      color: form.comfortableWithPets === opt.val ? '#8B6914' : 'var(--text-secondary)',
                       cursor: 'pointer',
                     }}>{opt.label}</button>
                   ))}
@@ -1081,16 +1081,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   placeholder="e.g. asthma, mobility limitations (leave blank if none)" />
               </div>
             </div>
-            <div style={{ padding: '16px', background: '#f0faf8', border: '1px solid #d0e8e2', borderRadius: 10, marginBottom: 12 }}>
-              <label style={{ ...labelStyle, color: '#1b6b5a' }}>🤝 Are you open to a quick intro call with families before your first visit?</label>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>Some families like to meet caregivers briefly before the first appointment. This is totally optional.</div>
+            <div style={{ padding: '16px', background: 'var(--bg-highlight)', border: '1px solid #d0e8e2', borderRadius: 10, marginBottom: 12 }}>
+              <label style={{ ...labelStyle, color: 'var(--role-color)' }}>🤝 Are you open to a quick intro call with families before your first visit?</label>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>Some families like to meet caregivers briefly before the first appointment. This is totally optional.</div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 {[{ val: true, label: '👍 Yes, happy to!' }, { val: false, label: '⏭️ Skip for now' }].map(opt => (
                   <button key={String(opt.val)} onClick={() => updateForm('openToInterview', opt.val)} style={{
                     flex: 1, padding: '10px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
                     border: form.openToInterview === opt.val ? '2px solid #1b6b5a' : '2px solid #ddd',
-                    background: form.openToInterview === opt.val ? '#e8f5e9' : '#fff',
-                    color: form.openToInterview === opt.val ? '#1b6b5a' : '#555',
+                    background: form.openToInterview === opt.val ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+                    color: form.openToInterview === opt.val ? 'var(--role-color)' : 'var(--text-secondary)',
                     cursor: 'pointer',
                   }}>{opt.label}</button>
                 ))}
@@ -1108,12 +1108,12 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 4: Legal / Checkr ─── */}
         {step === 4 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>🔒 Background Check Information</h2>
-            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>🔒 Background Check Information</h2>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
               This information is required for your background check and will be kept secure.
             </p>
-            <div style={{ padding: '12px 14px', background: '#f0faf8', borderRadius: '8px', marginBottom: '18px', border: '1px solid #d4ede8' }}>
-              <p style={{ fontSize: '13px', color: '#1b6b5a', margin: 0, lineHeight: '1.5' }}>
+            <div style={{ padding: '12px 14px', background: 'var(--bg-highlight)', borderRadius: '8px', marginBottom: '18px', border: '1px solid #d4ede8' }}>
+              <p style={{ fontSize: '13px', color: 'var(--role-color)', margin: 0, lineHeight: '1.5' }}>
                 <strong>About your SSN:</strong> We only store the last 4 digits here for identity verification during the background check.
                 When you set up your payout account, Stripe will securely collect your full SSN directly — InPlace never sees or stores it.
                 This is required by the IRS so that Stripe can issue your 1099-NEC for earnings over $600 in a calendar year.
@@ -1132,7 +1132,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <input style={inputStyle} value={form.legalMiddleName}
                   onChange={(e) => updateForm('legalMiddleName', e.target.value)} placeholder="As on ID"
                   disabled={form.noMiddleName} />
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: 13, color: '#666', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={form.noMiddleName}
                     onChange={(e) => { updateForm('noMiddleName', e.target.checked); if (e.target.checked) updateForm('legalMiddleName', ''); }} />
                   I don't have a middle name
@@ -1179,12 +1179,12 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 {errors.dlState && <div style={errorStyle}>{errors.dlState}</div>}
               </div>
             </div>
-            <div style={{ padding: '16px', background: '#f8f9fa', borderRadius: '8px', marginBottom: '16px' }}>
+            <div style={{ padding: '16px', background: 'var(--bg-primary)', borderRadius: '8px', marginBottom: '16px' }}>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.backgroundCheckConsent}
                   onChange={(e) => updateForm('backgroundCheckConsent', e.target.checked)}
                   style={{ marginTop: '3px', width: '18px', height: '18px' }} />
-                <span style={{ fontSize: '13px', color: '#444', lineHeight: '1.5' }}>
+                <span style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.5' }}>
                   I authorize InPlace to conduct a background check, including criminal history, driving record,
                   and identity verification through Checkr. I understand this is required
                   to provide care through InPlace and the $35 fee will be refunded after 10 completed sessions.
@@ -1203,19 +1203,19 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 5: Certifications ─── */}
         {step === 5 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>📜 Certifications</h2>
-            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>📜 Certifications</h2>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
               Add any professional certifications you hold. You can add multiple. Skip if you don't have any yet.
             </p>
             {form.certifications.map((cert, idx) => (
               <div key={idx} style={{
-                padding: '14px', background: '#f8f9fa', borderRadius: '8px', marginBottom: '12px',
+                padding: '14px', background: 'var(--bg-primary)', borderRadius: '8px', marginBottom: '12px',
                 position: 'relative',
               }}>
                 {form.certifications.length > 1 && (
                   <button onClick={() => removeCert(idx)} style={{
                     position: 'absolute', top: '8px', right: '8px', background: 'none', border: 'none',
-                    color: '#c00', cursor: 'pointer', fontSize: '16px', padding: '4px',
+                    color: 'var(--color-red-strong)', cursor: 'pointer', fontSize: '16px', padding: '4px',
                   }}>x</button>
                 )}
                 <div style={rowStyle}>
@@ -1247,8 +1247,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               </div>
             ))}
             <button onClick={addCertification} style={{
-              padding: '10px 16px', background: 'white', border: '2px dashed #ccc',
-              borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#1b6b5a',
+              padding: '10px 16px', background: 'var(--bg-surface)', border: '2px dashed #ccc',
+              borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: 'var(--role-color)',
               cursor: 'pointer', width: '100%', marginBottom: '16px',
             }}>+ Add Another Certification</button>
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
@@ -1293,8 +1293,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           };
           return (
             <div className="card" style={{ padding: '24px' }}>
-              <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>🎓 Academic Program</h2>
-              <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>🎓 Academic Program</h2>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: 0, marginBottom: '20px' }}>
                 Some caregivers are enrolled in educational programs that require tracking hours and types of work performed. Let us know if this applies to you.
               </p>
               {errorSummary()}
@@ -1305,8 +1305,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     <button key={String(opt.val)} onClick={() => updateForm('needsProgramReports', opt.val)} style={{
                       flex: 1, padding: '14px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
                       border: form.needsProgramReports === opt.val ? '2px solid #1b6b5a' : '2px solid #ddd',
-                      background: form.needsProgramReports === opt.val ? '#e8f5f1' : '#fff',
-                      color: form.needsProgramReports === opt.val ? '#1b6b5a' : '#555',
+                      background: form.needsProgramReports === opt.val ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+                      color: form.needsProgramReports === opt.val ? 'var(--role-color)' : 'var(--text-secondary)',
                       cursor: 'pointer', transition: 'all 0.15s',
                     }}>{opt.label}</button>
                   ))}
@@ -1314,8 +1314,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               </div>
 
               {form.needsProgramReports === true && (
-                <div style={{ padding: '16px', background: '#f0faf8', borderRadius: '10px', border: '1px solid #d0e8e2', marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '15px', color: '#1b6b5a', margin: '0 0 12px' }}>Program Details</h3>
+                <div style={{ padding: '16px', background: 'var(--bg-highlight)', borderRadius: '10px', border: '1px solid #d0e8e2', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '15px', color: 'var(--role-color)', margin: '0 0 12px' }}>Program Details</h3>
 
                   <div style={fieldGroup}>
                     <label style={labelStyle}>Which program are you enrolled in? *</label>
@@ -1346,8 +1346,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                         <button key={yr} onClick={() => updateForm('programYear', yr)} style={{
                           padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 600,
                           border: form.programYear === yr ? '2px solid #1b6b5a' : '2px solid #ddd',
-                          background: form.programYear === yr ? '#e8f5f1' : '#fff',
-                          color: form.programYear === yr ? '#1b6b5a' : '#666',
+                          background: form.programYear === yr ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+                          color: form.programYear === yr ? 'var(--role-color)' : 'var(--text-secondary)',
                           cursor: 'pointer',
                         }}>{yr}</button>
                       ))}
@@ -1357,7 +1357,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
                   {isNursing && (
                     <div style={{
-                      padding: '14px', background: '#fff8e1', borderRadius: '8px', marginTop: '8px',
+                      padding: '14px', background: 'var(--color-warning-bg)', borderRadius: '8px', marginTop: '8px',
                       border: '1px solid #ffe082',
                     }}>
                       <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
@@ -1365,10 +1365,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                           onChange={(e) => updateForm('acknowledgeNoMedicalCare', e.target.checked)}
                           style={{ marginTop: '3px', width: '18px', height: '18px', flexShrink: 0 }} />
                         <div>
-                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#e65100', marginBottom: '4px' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-warning)', marginBottom: '4px' }}>
                             Important: No Medical Care
                           </div>
-                          <div style={{ fontSize: '13px', color: '#795548', lineHeight: '1.6' }}>
+                          <div style={{ fontSize: '13px', color: 'var(--text-brown)', lineHeight: '1.6' }}>
                             I understand that while participating on InPlace, I am <strong>not</strong> practicing medical care, clinical nursing, or any licensed healthcare activities. My role is limited to non-medical companionship, personal assistance, and daily living support as defined by InPlace's service categories. My nursing/aide program hours logged through InPlace reflect caregiving experience only.
                           </div>
                         </div>
@@ -1377,7 +1377,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     </div>
                   )}
 
-                  <div style={{ marginTop: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px', fontSize: '12px', color: '#888', lineHeight: '1.5' }}>
+                  <div style={{ marginTop: '12px', padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: '1.5' }}>
                     We'll keep track of your hours and work types so you can generate reports for your program coordinator. You can access these reports anytime from your dashboard.
                   </div>
                 </div>
@@ -1395,12 +1395,12 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 7: Document Upload ─── */}
         {step === 7 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: '#333', marginTop: 0, marginBottom: '4px' }}>📄 Upload Documents</h2>
-            <p style={{ color: '#888', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>📄 Upload Documents</h2>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
               Upload photos of your driver's license (front and back). You can also upload certification documents.
             </p>
-            <div style={{ padding: '10px 14px', background: '#f0faf8', borderRadius: '8px', marginBottom: '20px', border: '1px solid #d0e8e2' }}>
-              <p style={{ fontSize: '12px', color: '#1b6b5a', margin: 0, lineHeight: '1.5' }}>
+            <div style={{ padding: '10px 14px', background: 'var(--bg-highlight)', borderRadius: '8px', marginBottom: '20px', border: '1px solid #d0e8e2' }}>
+              <p style={{ fontSize: '12px', color: 'var(--role-color)', margin: 0, lineHeight: '1.5' }}>
                 <strong>Tip:</strong> Place your ID on a flat, well-lit surface. Make sure all text and the photo are clearly readable. Images are automatically optimized for upload.
               </p>
             </div>
@@ -1409,15 +1409,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <div style={fieldGroup}>
               <label style={labelStyle}>Driver's License — Front *</label>
               {form.documents.find(d => d.type === 'dl_front') ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px' }}>
                   {form.documents.find(d => d.type === 'dl_front').isPDF
-                    ? <div style={{ width: '80px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e8e8e8', borderRadius: '6px', fontSize: '22px' }}>&#128196;</div>
+                    ? <div style={{ width: '80px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--border-light)', borderRadius: '6px', fontSize: '22px' }}>&#128196;</div>
                     : <img src={form.documents.find(d => d.type === 'dl_front').preview}
                         style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />}
-                  <span style={{ fontSize: '13px', color: '#555', flex: 1 }}>{form.documents.find(d => d.type === 'dl_front').fileName}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)', flex: 1 }}>{form.documents.find(d => d.type === 'dl_front').fileName}</span>
                   <button onClick={() => removeDocument('dl_front')} style={{
                     background: '#fff0f0', border: '1px solid #fdd', borderRadius: '6px',
-                    padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: '#c00',
+                    padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--color-red-strong)',
                   }}>Remove</button>
                 </div>
               ) : (
@@ -1428,11 +1428,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     onChange={(e) => handleFileSelect('dl_front', e)} />
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button type="button" onClick={() => document.getElementById('dl_front_camera').click()} style={{
-                      flex: 1, padding: '14px 12px', background: '#1b6b5a', color: 'white', border: 'none',
+                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                     }}>&#128247; Take Photo</button>
                     <button type="button" onClick={() => document.getElementById('dl_front_gallery').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'white', color: '#1b6b5a', border: '2px solid #1b6b5a',
+                      flex: 1, padding: '14px 12px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                     }}>&#128196; Choose File</button>
                   </div>
@@ -1445,15 +1445,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <div style={fieldGroup}>
               <label style={labelStyle}>Driver's License — Back *</label>
               {form.documents.find(d => d.type === 'dl_back') ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px' }}>
                   {form.documents.find(d => d.type === 'dl_back').isPDF
-                    ? <div style={{ width: '80px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e8e8e8', borderRadius: '6px', fontSize: '22px' }}>&#128196;</div>
+                    ? <div style={{ width: '80px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--border-light)', borderRadius: '6px', fontSize: '22px' }}>&#128196;</div>
                     : <img src={form.documents.find(d => d.type === 'dl_back').preview}
                         style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />}
-                  <span style={{ fontSize: '13px', color: '#555', flex: 1 }}>{form.documents.find(d => d.type === 'dl_back').fileName}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)', flex: 1 }}>{form.documents.find(d => d.type === 'dl_back').fileName}</span>
                   <button onClick={() => removeDocument('dl_back')} style={{
                     background: '#fff0f0', border: '1px solid #fdd', borderRadius: '6px',
-                    padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: '#c00',
+                    padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--color-red-strong)',
                   }}>Remove</button>
                 </div>
               ) : (
@@ -1464,11 +1464,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     onChange={(e) => handleFileSelect('dl_back', e)} />
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button type="button" onClick={() => document.getElementById('dl_back_camera').click()} style={{
-                      flex: 1, padding: '14px 12px', background: '#1b6b5a', color: 'white', border: 'none',
+                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                     }}>&#128247; Take Photo</button>
                     <button type="button" onClick={() => document.getElementById('dl_back_gallery').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'white', color: '#1b6b5a', border: '2px solid #1b6b5a',
+                      flex: 1, padding: '14px 12px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                     }}>&#128196; Choose File</button>
                   </div>
@@ -1480,23 +1480,23 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             {/* Certification Documents */}
             <div style={fieldGroup}>
               <label style={labelStyle}>Certification Documents (Optional)</label>
-              <p style={{ fontSize: '12px', color: '#999', margin: '0 0 8px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 8px' }}>
                 Upload photos or PDFs of your certificates (CNA, CPR, etc.)
               </p>
               {form.documents.filter(d => d.type === 'certification').map((doc, i) => (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '10px',
-                  background: '#f8f9fa', borderRadius: '8px', marginBottom: '8px',
+                  background: 'var(--bg-primary)', borderRadius: '8px', marginBottom: '8px',
                 }}>
                   {doc.isPDF
-                    ? <div style={{ width: '60px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e8e8e8', borderRadius: '4px', fontSize: '20px' }}>&#128196;</div>
+                    ? <div style={{ width: '60px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--border-light)', borderRadius: '4px', fontSize: '20px' }}>&#128196;</div>
                     : <img src={doc.preview} style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />}
-                  <span style={{ fontSize: '13px', color: '#555', flex: 1 }}>{doc.fileName}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)', flex: 1 }}>{doc.fileName}</span>
                   <button onClick={() => {
                     setForm(f => ({ ...f, documents: f.documents.filter((d, idx) => !(d.type === 'certification' && idx === f.documents.indexOf(doc))) }));
                   }} style={{
                     background: '#fff0f0', border: '1px solid #fdd', borderRadius: '6px',
-                    padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: '#c00',
+                    padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--color-red-strong)',
                   }}>Remove</button>
                 </div>
               ))}
@@ -1535,37 +1535,37 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           <div className="card" style={{ padding: '24px' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#127881;</div>
-              <h2 style={{ fontSize: '22px', color: '#1b6b5a', margin: '0 0 8px' }}>Welcome to InPlace!</h2>
-              <p style={{ color: '#666', fontSize: '15px', margin: 0 }}>
+              <h2 style={{ fontSize: '22px', color: 'var(--role-color)', margin: '0 0 8px' }}>Welcome to InPlace!</h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '15px', margin: 0 }}>
                 Your profile has been created and your documents are uploaded.
               </p>
             </div>
 
             {/* Summary */}
-            <div style={{ background: '#f8f9fa', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '14px', color: '#1b6b5a', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Profile Summary</h3>
+            <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '14px', color: 'var(--role-color)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Profile Summary</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px' }}>
-                <div><span style={{ color: '#888' }}>Name:</span> {form.firstName} {form.lastName}</div>
-                <div><span style={{ color: '#888' }}>Phone:</span> {formatPhone(form.phone)}</div>
-                <div><span style={{ color: '#888' }}>Location:</span> {form.city}, {form.state} {form.zip}</div>
-                <div><span style={{ color: '#888' }}>Rates:</span> Set from your dashboard</div>
-                <div><span style={{ color: '#888' }}>Caretaking experience:</span> {form.yearsExperience || 0} years</div>
-                <div><span style={{ color: '#888' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
-                <div><span style={{ color: '#888' }}>Documents:</span> {form.documents.length} uploaded</div>
-                <div><span style={{ color: '#888' }}>Travel radius:</span> {form.travelRadius} miles</div>
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Name:</span> {form.firstName} {form.lastName}</div>
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Phone:</span> {formatPhone(form.phone)}</div>
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Location:</span> {form.city}, {form.state} {form.zip}</div>
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Rates:</span> Set from your dashboard</div>
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Caretaking experience:</span> {form.yearsExperience || 0} years</div>
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Documents:</span> {form.documents.length} uploaded</div>
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Travel radius:</span> {form.travelRadius} miles</div>
                 {form.comfortableWithPets !== null && (
-                  <div><span style={{ color: '#888' }}>Pets:</span> {form.comfortableWithPets ? 'Comfortable' : 'Prefer pet-free'}</div>
+                  <div><span style={{ color: 'var(--text-tertiary)' }}>Pets:</span> {form.comfortableWithPets ? 'Comfortable' : 'Prefer pet-free'}</div>
                 )}
-                {form.petAllergies && <div><span style={{ color: '#888' }}>Pet allergies:</span> {form.petAllergies}</div>}
-                {form.foodAllergies && <div><span style={{ color: '#888' }}>Food allergies:</span> {form.foodAllergies}</div>}
-                {form.medicalConditions && <div><span style={{ color: '#888' }}>Medical:</span> {form.medicalConditions}</div>}
+                {form.petAllergies && <div><span style={{ color: 'var(--text-tertiary)' }}>Pet allergies:</span> {form.petAllergies}</div>}
+                {form.foodAllergies && <div><span style={{ color: 'var(--text-tertiary)' }}>Food allergies:</span> {form.foodAllergies}</div>}
+                {form.medicalConditions && <div><span style={{ color: 'var(--text-tertiary)' }}>Medical:</span> {form.medicalConditions}</div>}
                 {form.needsProgramReports && (
-                  <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#888' }}>Program:</span> {form.programName === 'radford_nursing' ? 'Radford University Nursing' : form.programName === 'nrcc_nurse_aide' ? 'NRCC Nurse Aide' : form.programNameOther || '—'} ({form.programYear})</div>
+                  <div style={{ gridColumn: '1 / -1' }}><span style={{ color: 'var(--text-tertiary)' }}>Program:</span> {form.programName === 'radford_nursing' ? 'Radford University Nursing' : form.programName === 'nrcc_nurse_aide' ? 'NRCC Nurse Aide' : form.programNameOther || '—'} ({form.programYear})</div>
                 )}
               </div>
             </div>
 
-            <div style={{ padding: '14px', background: '#fff8f0', borderRadius: '8px', marginBottom: '16px', border: '1px solid #ffe0c0' }}>
+            <div style={{ padding: '14px', background: 'var(--bg-warm)', borderRadius: '8px', marginBottom: '16px', border: '1px solid #ffe0c0' }}>
               <p style={{ fontSize: '13px', color: '#b45309', margin: 0, lineHeight: '1.5' }}>
                 <strong>What happens next:</strong>
               </p>
@@ -1577,15 +1577,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               </ul>
             </div>
 
-            <div style={{ padding: '14px', background: '#e8f5e9', borderRadius: '8px', marginBottom: '16px', border: '1px solid #c8e6c9' }}>
-              <p style={{ fontSize: '13px', color: '#2e7d32', margin: 0, lineHeight: '1.5' }}>
+            <div style={{ padding: '14px', background: 'var(--color-success-bg)', borderRadius: '8px', marginBottom: '16px', border: '1px solid #c8e6c9' }}>
+              <p style={{ fontSize: '13px', color: 'var(--color-success)', margin: 0, lineHeight: '1.5' }}>
                 As an independent contractor (1099), you set your own schedule, rates, and choose which care requests to accept.
                 InPlace connects you with families — you're your own boss.
               </p>
             </div>
 
             <button onClick={handleComplete} style={{
-              width: '100%', padding: '14px', background: '#1b6b5a', color: 'white', border: 'none',
+              width: '100%', padding: '14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
               borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
             }}>Go to My Dashboard</button>
           </div>

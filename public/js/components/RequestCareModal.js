@@ -336,8 +336,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const pill = (selected) => ({
     padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
     border: selected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-    background: selected ? '#e8f5e9' : '#fff',
-    color: selected ? '#1b6b5a' : '#555',
+    background: selected ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+    color: selected ? 'var(--role-color)' : 'var(--text-secondary)',
     whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s',
   });
 
@@ -365,7 +365,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     return (
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, textAlign: 'center', padding: 40 }}>
-          <div style={{ color: '#999' }}>Loading...</div>
+          <div style={{ color: 'var(--text-muted)' }}>Loading...</div>
         </div>
       </div>
     );
@@ -387,7 +387,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               transform: 'translate(-50%, -50%)',
               animation: 'planeFloat 2s ease-in-out infinite, planeFadeIn 0.6s ease-out',
             }}>
-              <path d="M8 32 L56 8 L36 56 L28 36 Z" fill="#1b6b5a" opacity="0.9" />
+              <path d="M8 32 L56 8 L36 56 L28 36 Z" fill="var(--role-color)" opacity="0.9" />
               <path d="M28 36 L56 8" stroke="#145c4e" strokeWidth="1.5" fill="none" />
               <path d="M28 36 L36 56 L56 8" fill="#2a8f7a" opacity="0.7" />
             </svg>
@@ -395,23 +395,23 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             {[0,1,2].map(i => (
               <div key={i} style={{
                 position: 'absolute', width: 6, height: 6, borderRadius: '50%',
-                background: i === 0 ? '#1b6b5a' : i === 1 ? '#2a8f7a' : '#a8dcd1',
+                background: i === 0 ? 'var(--role-color)' : i === 1 ? '#2a8f7a' : '#a8dcd1',
                 left: `${28 + i * 10}%`, top: `${55 + i * 5}%`,
                 opacity: 0, animation: `sparkle 1.5s ease-out ${0.3 + i * 0.2}s infinite`,
               }} />
             ))}
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: '#1b6b5a', margin: '0 0 8px' }}>{confirmationData.title}</h2>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--role-color)', margin: '0 0 8px' }}>{confirmationData.title}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '16px 0 24px' }}>
             {confirmationData.details.map((d, i) => (
               <div key={i} style={{
-                fontSize: 14, color: i === 0 ? '#1a1a1a' : '#555', fontWeight: i === 0 ? 600 : 400,
+                fontSize: 14, color: i === 0 ? '#1a1a1a' : 'var(--text-secondary)', fontWeight: i === 0 ? 600 : 400,
                 animation: `slideUp 0.4s ease-out ${0.2 + i * 0.08}s both`,
               }}>{d}</div>
             ))}
           </div>
           <button onClick={onClose} style={{
-            padding: '12px 36px', background: '#1b6b5a', color: '#fff', border: 'none',
+            padding: '12px 36px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
             borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: 'pointer',
             animation: 'slideUp 0.4s ease-out 0.5s both',
           }}>Done</button>
@@ -452,13 +452,13 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <div style={{
                 width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 600,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: step > i + 1 ? '#1b6b5a' : step === i + 1 ? '#1b6b5a' : '#e0e0e0',
-                color: step >= i + 1 ? '#fff' : '#999',
+                background: step > i + 1 ? 'var(--role-color)' : step === i + 1 ? 'var(--role-color)' : 'var(--border-light)',
+                color: step >= i + 1 ? 'var(--text-on-primary)' : 'var(--text-muted)',
               }}>
                 {step > i + 1 ? '\u2713' : i + 1}
               </div>
-              <span style={{ fontSize: 12, color: step === i + 1 ? '#1b6b5a' : '#999', fontWeight: step === i + 1 ? 600 : 400 }}>{label}</span>
-              {i === 0 && <div style={{ width: 20, height: 1, background: '#e0e0e0', margin: '0 4px' }}></div>}
+              <span style={{ fontSize: 12, color: step === i + 1 ? 'var(--role-color)' : 'var(--text-muted)', fontWeight: step === i + 1 ? 600 : 400 }}>{label}</span>
+              {i === 0 && <div style={{ width: 20, height: 1, background: 'var(--border-light)', margin: '0 4px' }}></div>}
             </div>
           ))}
         </div>
@@ -469,7 +469,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             {/* Care recipient */}
             {careRecipients.length > 1 && (
               <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Who needs care?</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Who needs care?</div>
                 <select className="modal-select" value={selectedRecipientId} onChange={(e) => setSelectedRecipientId(e.target.value)}>
                   <option value="">Select...</option>
                   {careRecipients.map(r => (
@@ -481,7 +481,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
             {/* Service type pills */}
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Type of care</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Type of care</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {serviceOptions.map(opt => (
                   <button key={opt.value} type="button" onClick={() => setServiceType(opt.value)} style={pill(serviceType === opt.value)}>
@@ -498,39 +498,39 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
             {/* Date display — pre-selected from Schedule calendar */}
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Date</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Date</div>
               {date ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ flex: 1, padding: '10px 14px', background: '#f0f7f5', border: '1px solid #d4edda', borderRadius: 10, fontSize: 15, fontWeight: 600, color: '#1b6b5a' }}>
+                  <div style={{ flex: 1, padding: '10px 14px', background: '#f0f7f5', border: '1px solid #d4edda', borderRadius: 10, fontSize: 15, fontWeight: 600, color: 'var(--role-color)' }}>
                     {(() => { const p = date.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); })()}
                   </div>
                   <button type="button" onClick={() => { onClose(); if (window.__navigateTo) window.__navigateTo('schedule'); }}
-                    style={{ padding: '8px 12px', background: 'none', border: '1px solid #ddd', borderRadius: 8, fontSize: 12, color: '#888', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    style={{ padding: '8px 12px', background: 'none', border: '1px solid #ddd', borderRadius: 8, fontSize: 12, color: 'var(--text-tertiary)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                     Change
                   </button>
                 </div>
               ) : (
-                <div style={{ padding: '14px', background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 10, fontSize: 13, color: '#795548', textAlign: 'center' }}>
+                <div style={{ padding: '14px', background: 'var(--color-warning-bg)', border: '1px solid #ffe082', borderRadius: 10, fontSize: 13, color: 'var(--text-brown)', textAlign: 'center' }}>
                   Please select a date from the calendar first.
                   <button type="button" onClick={() => { onClose(); if (window.__navigateTo) window.__navigateTo('schedule'); }}
-                    style={{ display: 'block', margin: '8px auto 0', padding: '8px 20px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ display: 'block', margin: '8px auto 0', padding: '8px 20px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                     Go to Calendar
                   </button>
                 </div>
               )}
               {/* Show existing sessions for selected date */}
               {date && sessionsByDate[date] && sessionsByDate[date].length > 0 && (
-                <div style={{ marginTop: 8, padding: '8px 10px', background: '#f0faf7', border: '1px solid #d4edda', borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#1b6b5a', marginBottom: 4 }}>Already scheduled:</div>
+                <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-highlight)', border: '1px solid #d4edda', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 }}>Already scheduled:</div>
                   {sessionsByDate[date].sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).map((s, si) => {
                     const t = s.scheduled_time ? (() => { const [h] = s.scheduled_time.split(':').map(Number); const ampm = h >= 12 ? 'p' : 'a'; const dh = h > 12 ? h - 12 : h === 0 ? 12 : h; return `${dh}${ampm}`; })() : '?';
-                    const statusColors = { confirmed: '#1b6b5a', in_progress: '#f57f17', completed: '#666', open: '#e8724a', requested: '#e8724a', pending: '#e8724a' };
+                    const statusColors = { confirmed: 'var(--role-color)', in_progress: 'var(--color-warning)', completed: 'var(--text-secondary)', open: 'var(--accent-color)', requested: 'var(--accent-color)', pending: 'var(--accent-color)' };
                     const statusLabels = { confirmed: 'Confirmed', in_progress: 'In Progress', completed: 'Done', open: 'Requested', requested: 'Requested', pending: 'Pending' };
                     return (
-                      <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#555', padding: '2px 0' }}>
+                      <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0' }}>
                         <span style={{ fontWeight: 600, minWidth: 24 }}>{t}</span>
                         <span>{s.service_type || 'Care'}</span>
-                        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 600, color: statusColors[s.status] || '#999', textTransform: 'capitalize' }}>{statusLabels[s.status] || s.status}</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 600, color: statusColors[s.status] || 'var(--text-muted)', textTransform: 'capitalize' }}>{statusLabels[s.status] || s.status}</span>
                       </div>
                     );
                   })}
@@ -541,9 +541,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             {/* Time pills — only show if date is selected */}
             {date && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Start time</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Start time</div>
                 {getTimeOptions().length === 0 ? (
-                  <div style={{ padding: '10px 14px', background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, fontSize: 13, color: '#795548' }}>
+                  <div style={{ padding: '10px 14px', background: 'var(--color-warning-bg)', border: '1px solid #ffe082', borderRadius: 8, fontSize: 13, color: 'var(--text-brown)' }}>
                     ⏰ No times available for today — please select a future date above.
                   </div>
                 ) : (
@@ -561,7 +561,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             {/* Duration pills — only show if time is selected */}
             {time && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Duration</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Duration</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {durationOptions.map(opt => (
                     <button key={opt.value} type="button" onClick={() => setDuration(opt.value)} style={pill(duration === opt.value)}>
@@ -574,24 +574,24 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
             {/* Overlap warning */}
             {overlappingSessions.length > 0 && (
-              <div style={{ marginBottom: 14, padding: '10px 12px', background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8 }}>
+              <div style={{ marginBottom: 14, padding: '10px 12px', background: 'var(--color-warning-bg)', border: '1px solid #ffcc80', borderRadius: 8 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <span style={{ fontSize: 18, lineHeight: 1 }}>{'\u26A0\uFE0F'}</span>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e65100', marginBottom: 4 }}>Time overlap detected</div>
-                    <div style={{ fontSize: 12, color: '#795548', lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-warning)', marginBottom: 4 }}>Time overlap detected</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-brown)', lineHeight: 1.4 }}>
                       This session ({formatTime12(time)} – {formatTime12((() => { const [h,m] = time.split(':').map(Number); const endMin = h*60+(m||0)+parseInt(duration)*60; return `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`; })())}) overlaps with:
                     </div>
                     {overlappingSessions.map((s, si) => {
                       const sTime = s.scheduled_time ? formatTime12(s.scheduled_time) : '?';
                       const endH = s.scheduled_time ? (() => { const [h,m] = s.scheduled_time.split(':').map(Number); const endMin = h*60+(m||0)+(s.duration_hours||2)*60; return `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`; })() : '';
                       return (
-                        <div key={si} style={{ fontSize: 12, color: '#795548', marginTop: 3, paddingLeft: 4 }}>
+                        <div key={si} style={{ fontSize: 12, color: 'var(--text-brown)', marginTop: 3, paddingLeft: 4 }}>
                           {'\u2022'} {sTime}{endH ? ` – ${formatTime12(endH)}` : ''} — {(s.service_type || 'Care').replace('_', ' ')} ({s.status})
                         </div>
                       );
                     })}
-                    <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}>You can still proceed, but check that this doesn't create a scheduling conflict.</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>You can still proceed, but check that this doesn't create a scheduling conflict.</div>
                   </div>
                 </div>
               </div>
@@ -600,7 +600,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             {/* Recurrence — only show if duration is selected */}
             {duration && (
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Repeat</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Repeat</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {[{ value: 'none', label: 'One-time' }, { value: 'weekly', label: 'Weekly' }, { value: 'biweekly', label: 'Biweekly' }].map(opt => (
                     <button key={opt.value} type="button" onClick={() => setRecurrence(opt.value)} style={pill(recurrence === opt.value)}>
@@ -624,9 +624,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
             {/* Short-notice banner */}
             {shortNotice && (
-              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '8px 12px', marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ background: 'var(--color-warning-bg)', border: '1px solid #ffcc80', borderRadius: 8, padding: '8px 12px', marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{ fontSize: 16 }}>{'\u26A1'}</span>
-                <span style={{ fontSize: 12, color: '#e65100', fontWeight: 600 }}>Short notice — 20% rush surcharge applies</span>
+                <span style={{ fontSize: 12, color: 'var(--color-warning)', fontWeight: 600 }}>Short notice — 20% rush surcharge applies</span>
               </div>
             )}
           </>
@@ -637,53 +637,53 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           <>
             {/* Compact booking summary at top */}
             <div style={{ background: '#f0f7f5', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', color: '#333' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', color: 'var(--text-primary)' }}>
                 <span><strong>{formatServiceType(resolvedServiceType)}</strong></span>
                 <span>{(() => { const p = date.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); })()}</span>
                 <span>{formatTime12(time)}</span>
                 <span>{duration}h</span>
-                {recurrence !== 'none' && <span style={{ color: '#1b6b5a', fontWeight: 600 }}>{recurrence === 'weekly' ? 'Weekly' : 'Biweekly'} x{recurrenceWeeks}</span>}
+                {recurrence !== 'none' && <span style={{ color: 'var(--role-color)', fontWeight: 600 }}>{recurrence === 'weekly' ? 'Weekly' : 'Biweekly'} x{recurrenceWeeks}</span>}
               </div>
             </div>
 
             {/* Caregiver selection */}
             {hasCaregiverData && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Choose a caregiver</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Choose a caregiver</div>
                 {loadingCaregivers ? (
-                  <div style={{ padding: 20, textAlign: 'center', color: '#999', fontSize: 13 }}>Checking availability...</div>
+                  <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Checking availability...</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {matchedCaregivers.map((cg, idx) => (
                       <button key={idx} type="button" onClick={() => setSelectedCaregiver(cg)}
                         style={{
                           padding: 12, border: selectedCaregiver?.name === cg.name ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                          borderRadius: 10, background: selectedCaregiver?.name === cg.name ? '#e8f5e9' : '#fff',
+                          borderRadius: 10, background: selectedCaregiver?.name === cg.name ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
                           cursor: 'pointer', textAlign: 'left',
                         }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>{cg.name}</div>
-                            <div style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 500, marginTop: 2 }}>{cg.rate}</div>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--bg-card)' }}>{cg.name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--role-color)', fontWeight: 500, marginTop: 2 }}>{cg.rate}</div>
                           </div>
                           <div>
-                            {cg.available && cg.skillMatch && <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Best Match</span>}
-                            {cg.available && !cg.skillMatch && <span style={{ background: '#fff8e1', color: '#f57f17', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Available</span>}
-                            {!cg.available && <span style={{ background: '#fff8e1', color: '#e65100', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Off This Day</span>}
+                            {cg.available && cg.skillMatch && <span style={{ background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Best Match</span>}
+                            {cg.available && !cg.skillMatch && <span style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Available</span>}
+                            {!cg.available && <span style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Off This Day</span>}
                           </div>
                         </div>
-                        {!cg.available && <div style={{ fontSize: 11, color: '#1b6b5a', marginTop: 3, fontWeight: 500 }}>{'\u{1F44B}'} You can still request \u2014 they can accept or propose a different time</div>}
-                        {cg.openToInterview && <div style={{ fontSize: 11, color: '#1b6b5a', marginTop: 3 }}>🤝 Open to intro call</div>}
+                        {!cg.available && <div style={{ fontSize: 11, color: 'var(--role-color)', marginTop: 3, fontWeight: 500 }}>{'\u{1F44B}'} You can still request \u2014 they can accept or propose a different time</div>}
+                        {cg.openToInterview && <div style={{ fontSize: 11, color: 'var(--role-color)', marginTop: 3 }}>🤝 Open to intro call</div>}
                       </button>
                     ))}
                     <button type="button" onClick={() => setSelectedCaregiver(null)}
                       style={{
                         padding: 10, border: !selectedCaregiver ? '2px solid #e8724a' : '1px dashed #e8724a', borderRadius: 10,
-                        background: !selectedCaregiver ? '#fff8f0' : '#fff', cursor: 'pointer', textAlign: 'center',
-                        fontSize: 13, color: '#e8724a', fontWeight: 600,
+                        background: !selectedCaregiver ? 'var(--bg-warm)' : 'var(--text-on-primary)', cursor: 'pointer', textAlign: 'center',
+                        fontSize: 13, color: 'var(--accent-color)', fontWeight: 600,
                       }}>
                       Post as open request
-                      <div style={{ fontSize: 11, fontWeight: 400, color: '#999', marginTop: 1 }}>Any caregiver can respond</div>
+                      <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginTop: 1 }}>Any caregiver can respond</div>
                     </button>
                   </div>
                 )}
@@ -696,21 +696,21 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               const cgFirst = selectedCaregiver.name.split(' ')[0];
               const recipientFirst = (careRecipients.find(r => r.id === selectedRecipientId) || {}).first_name || 'your loved one';
               const moodDot = (mood) => {
-                const colors = { great: '#4caf50', good: '#8bc34a', okay: '#ffeb3b', low: '#ff9800', difficult: '#f44336' };
-                return React.createElement('span', { title: mood || 'unknown', style: { display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colors[mood] || '#ccc', marginRight: 2 } });
+                const colors = { great: 'var(--color-success)', good: '#8bc34a', okay: '#ffeb3b', low: 'var(--color-warning)', difficult: 'var(--color-error)' };
+                return React.createElement('span', { title: mood || 'unknown', style: { display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colors[mood] || 'var(--border-light)', marginRight: 2 } });
               };
-              return React.createElement('div', { style: { background: '#f3e5f5', border: '1px solid #ce93d8', borderRadius: 8, padding: '8px 12px', marginBottom: 12 } },
+              return React.createElement('div', { style: { background: 'var(--color-purple-bg)', border: '1px solid #ce93d8', borderRadius: 8, padding: '8px 12px', marginBottom: 12 } },
                 React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-                  React.createElement('span', { style: { fontSize: 12, color: '#6a1b9a', fontWeight: 600 } },
+                  React.createElement('span', { style: { fontSize: 12, color: 'var(--color-purple)', fontWeight: 600 } },
                     `\uD83D\uDD01 ${cgFirst} has cared for ${recipientFirst} ${vc.count} time${vc.count > 1 ? 's' : ''}`
                   ),
                   careHistory && careHistory.visits.length > 0 && React.createElement('button', {
                     type: 'button',
                     onClick: () => setShowCareHistory(!showCareHistory),
-                    style: { background: 'none', border: 'none', color: '#7b1fa2', fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', padding: 0 }
+                    style: { background: 'none', border: 'none', color: 'var(--color-purple)', fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', padding: 0 }
                   }, showCareHistory ? 'Hide history' : 'View history')
                 ),
-                interviewRequired && React.createElement('div', { style: { fontSize: 11, color: '#7b1fa2', marginTop: 4 } },
+                interviewRequired && React.createElement('div', { style: { fontSize: 11, color: 'var(--color-purple)', marginTop: 4 } },
                   `An interview may not be needed \u2014 ${cgFirst} is a repeat caregiver.`
                 ),
                 showCareHistory && careHistory && React.createElement('div', { style: { marginTop: 8, borderTop: '1px solid #ce93d8', paddingTop: 8 } },
@@ -719,27 +719,27 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                       React.createElement('span', { style: { fontWeight: 600, color: '#4a148c' } }, v.scheduled_date),
                       React.createElement('span', { style: { display: 'flex', alignItems: 'center', gap: 2 } },
                         moodDot(v.arrival_mood), '\u2192 ', moodDot(v.departure_mood),
-                        v.actual_cost && React.createElement('span', { style: { marginLeft: 6, color: '#666' } }, `$${Math.round(v.actual_cost || v.estimated_cost)}`)
+                        v.actual_cost && React.createElement('span', { style: { marginLeft: 6, color: 'var(--text-secondary)' } }, `$${Math.round(v.actual_cost || v.estimated_cost)}`)
                       )
                     ),
-                    v.summary && React.createElement('div', { style: { color: '#666', marginTop: 2, lineHeight: 1.3 } }, v.summary.slice(0, 120) + (v.summary.length > 120 ? '...' : ''))
+                    v.summary && React.createElement('div', { style: { color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.3 } }, v.summary.slice(0, 120) + (v.summary.length > 120 ? '...' : ''))
                   ))
                 )
               );
             })()}
 
             {/* Interview toggle */}
-            <div style={{ marginBottom: 12, padding: '10px 12px', background: '#fafafa', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+            <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{'\uD83C\uDFA5'} Request Interview</div>
-                  <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>Quick video or audio call before the appointment</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{'\uD83C\uDFA5'} Request Interview</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Quick video or audio call before the appointment</div>
                 </div>
                 <button type="button" onClick={() => setInterviewRequired(!interviewRequired)} style={{
                   width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', transition: 'all 0.2s',
-                  background: interviewRequired ? '#1b6b5a' : '#ccc', position: 'relative',
+                  background: interviewRequired ? 'var(--role-color)' : 'var(--border-light)', position: 'relative',
                 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3,
+                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--bg-surface)', position: 'absolute', top: 3,
                     left: interviewRequired ? 23 : 3, transition: 'left 0.2s' }} />
                 </button>
               </div>
@@ -750,19 +750,19 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                       {opt.l}
                     </button>
                   ))}
-                  <div style={{ fontSize: 11, color: '#888', alignSelf: 'center', marginLeft: 4 }}>5 min max</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', alignSelf: 'center', marginLeft: 4 }}>5 min max</div>
                 </div>
               )}
             </div>
 
             {/* Rate nudge for off-schedule caregiver */}
             {selectedCaregiver && !selectedCaregiver.available && (
-              <div style={{ background: '#fff3e0', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#795548', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ background: 'var(--color-warning-bg)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--text-brown)', display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{ fontSize: 16 }}>{'\uD83D\uDCA1'}</span>
                 <span><strong>{selectedCaregiver.name}</strong> isn't on schedule. A higher rate makes it more likely they'll accept.
                   {localAvgRate && (
                     <button type="button" onClick={() => setProposedRate(String(Math.round(localAvgRate * 1.25)))}
-                      style={{ display: 'inline', marginLeft: 4, background: 'none', border: 'none', color: '#e8724a', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>
+                      style={{ display: 'inline', marginLeft: 4, background: 'none', border: 'none', color: 'var(--accent-color)', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>
                       Bump to ${Math.round(localAvgRate * 1.25)}/hr
                     </button>
                   )}
@@ -771,44 +771,44 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             )}
 
             {/* Offered rate */}
-            <div style={{ marginBottom: 12, padding: '10px 12px', background: '#fff', borderRadius: 8, border: selectedCaregiver && !selectedCaregiver.available ? '2px solid #e8724a' : '1px solid #e0e0e0' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 6 }}>Your Offered Rate</div>
+            <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: 8, border: selectedCaregiver && !selectedCaregiver.available ? '2px solid #e8724a' : '1px solid #e0e0e0' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Your Offered Rate</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 16, color: '#666', fontWeight: 600 }}>$</span>
+                <span style={{ fontSize: 16, color: 'var(--text-secondary)', fontWeight: 600 }}>$</span>
                 <input type="number" step="1" min="15" max="500" value={proposedRate} onChange={e => setProposedRate(e.target.value)}
                   placeholder={localAvgRate ? String(localAvgRate) : '25'}
                   style={{ width: 72, padding: '6px 8px', borderRadius: 8, border: '2px solid #1b6b5a', fontSize: 16, fontWeight: 600, textAlign: 'center' }} />
-                <span style={{ fontSize: 13, color: '#888' }}>/hr</span>
+                <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>/hr</span>
                 {proposedRate && duration && (
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#1b6b5a' }}>= ${(parseFloat(proposedRate) * parseInt(duration)).toFixed(0)} total</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--role-color)' }}>= ${(parseFloat(proposedRate) * parseInt(duration)).toFixed(0)} total</span>
                 )}
               </div>
-              {localAvgRate && <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>Avg local rate: ${localAvgRate}/hr</div>}
-              {shortNotice && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 2, fontWeight: 500 }}>{'\u26A1'} Short notice +20% surcharge added below</div>}
+              {localAvgRate && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Avg local rate: ${localAvgRate}/hr</div>}
+              {shortNotice && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 2, fontWeight: 500 }}>{'\u26A1'} Short notice +20% surcharge added below</div>}
             </div>
 
             {/* Cost breakdown — compact */}
             {displayCost && (
-              <div style={{ marginBottom: 12, padding: '10px 12px', background: '#f8f9fa', borderRadius: 8, fontSize: 13 }}>
+              <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 8, fontSize: 13 }}>
                 {displayCost.tierBreakdown?.map((t, i) => {
                   const tierLabel = t.tier === 'daytime' ? 'Day' : t.tier === 'nighttime' ? 'Eve' : 'Night';
                   return (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#666', marginBottom: 2 }}>
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 2 }}>
                       <span>{t.hours}h {tierLabel} @ ${t.rate}/hr</span><span>${t.amount.toFixed(2)}</span>
                     </div>
                   );
                 })}
                 {displayCost.surcharge > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#e8724a', fontWeight: 500, marginBottom: 2 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--accent-color)', fontWeight: 500, marginBottom: 2 }}>
                     <span>{'\u26A1'} Rush fee</span><span>+${displayCost.surcharge.toFixed(2)}</span>
                   </div>
                 )}
                 {displayCost.platformFee > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#888', marginBottom: 2 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-tertiary)', marginBottom: 2 }}>
                     <span>Service fee ({displayCost.platformFeePercent || 20}%)</span><span>${((displayCost.platformFee || 0) - (displayCost.surchargeBreakdown?.platform || 0)).toFixed(2)}</span>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#1b6b5a', borderTop: '1px solid #e0e0e0', paddingTop: 4, marginTop: 4, fontSize: 15 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--role-color)', borderTop: '1px solid #e0e0e0', paddingTop: 4, marginTop: 4, fontSize: 15 }}>
                   <span>You pay</span><span>${(displayCost.familyTotal || displayCost.total).toFixed(2)}</span>
                 </div>
               </div>
@@ -816,12 +816,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
             {/* Special instructions */}
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Notes for caregiver (optional)</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Notes for caregiver (optional)</div>
               <textarea className="modal-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Any special notes..." rows={2} style={{ fontSize: 13 }}></textarea>
             </div>
 
             {!selectedCaregiver && !hasCaregiverData && (
-              <div style={{ padding: 10, background: '#fff8e1', borderRadius: 8, fontSize: 12, color: '#795548', marginBottom: 8 }}>
+              <div style={{ padding: 10, background: 'var(--color-warning-bg)', borderRadius: 8, fontSize: 12, color: 'var(--text-brown)', marginBottom: 8 }}>
                 Your care request will be posted as open. Caregivers in your area can respond.
               </div>
             )}
@@ -829,7 +829,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         )}
 
         {submitError && (
-          <div style={{ marginTop: 8, padding: 8, background: '#fce4ec', borderRadius: 8, fontSize: 13, color: '#c62828' }}>{submitError}</div>
+          <div style={{ marginTop: 8, padding: 8, background: 'var(--color-error-bg)', borderRadius: 8, fontSize: 13, color: 'var(--color-error)' }}>{submitError}</div>
         )}
 
         {/* Navigation buttons */}
@@ -843,7 +843,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 Next
               </button>
               {!step1Complete && (serviceType || date || time || duration) && (
-                <div style={{ fontSize: 11, color: '#999', textAlign: 'center', marginTop: 6 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 6 }}>
                   {!serviceType ? 'Select a care type' : (serviceType === 'other' && !otherCareText.trim()) ? 'Describe the care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration'}
                 </div>
               )}

@@ -57,16 +57,16 @@ const EmailVerificationBanner = window.EmailVerificationBanner = ({ userId }) =>
 
   return (
     <div style={{
-      background: '#fff8e1', border: '1px solid #ffe082', borderRadius: '8px',
+      background: 'var(--color-warning-bg)', border: '1px solid #ffe082', borderRadius: '8px',
       padding: '12px 16px', marginBottom: '16px', fontSize: '14px',
       display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
     }}>
       <span style={{ fontSize: '18px' }}>📧</span>
       <div style={{ flex: 1, minWidth: '180px' }}>
-        <div style={{ fontWeight: 600, color: '#f57f17' }}>Please verify your email</div>
-        <div style={{ color: '#666', fontSize: '13px', marginTop: '2px' }}>
+        <div style={{ fontWeight: 600, color: 'var(--color-warning)' }}>Please verify your email</div>
+        <div style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '2px' }}>
           {message ? (
-            <span style={{ color: message.type === 'success' ? '#1b6b5a' : '#c62828', fontWeight: 500 }}>
+            <span style={{ color: message.type === 'success' ? 'var(--role-color)' : 'var(--color-error)', fontWeight: 500 }}>
               {message.text}
             </span>
           ) : lastSentAt ? (
@@ -80,7 +80,7 @@ const EmailVerificationBanner = window.EmailVerificationBanner = ({ userId }) =>
         onClick={handleResend}
         disabled={sending || cooldown > 0}
         style={{
-          background: 'none', border: '1px solid #f57f17', color: '#f57f17',
+          background: 'none', border: '1px solid #f57f17', color: 'var(--color-warning)',
           padding: '6px 14px', borderRadius: '6px',
           cursor: (sending || cooldown > 0) ? 'not-allowed' : 'pointer',
           fontSize: '13px', fontWeight: 600, opacity: (sending || cooldown > 0) ? 0.6 : 1,

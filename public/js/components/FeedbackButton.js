@@ -330,7 +330,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
     width: 48,
     height: 48,
     borderRadius: '50%',
-    background: '#1b6b5a',
+    background: 'var(--role-color)',
     border: 'none',
     cursor: 'grab',
     boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
@@ -350,7 +350,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
     width: 48,
     height: 48,
     borderRadius: '50%',
-    background: '#1b6b5a',
+    background: 'var(--role-color)',
     border: 'none',
     cursor: 'grab',
     boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
@@ -377,7 +377,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
         onMouseEnter: e => { if (!dragRef.current.dragging) { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.3)'; }},
         onMouseLeave: e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.25)'; },
       },
-        React.createElement('svg', { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'white', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+        React.createElement('svg', { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'var(--bg-surface)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
           React.createElement('path', { d: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z' })
         )
       ),
@@ -393,7 +393,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
       },
         React.createElement('div', {
           style: {
-            background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420,
+            background: 'var(--bg-surface)', borderRadius: 16, width: '100%', maxWidth: 420,
             maxHeight: '85vh', overflow: 'auto', padding: 24,
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           },
@@ -401,25 +401,25 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
           submitted ? (
             React.createElement('div', { style: { textAlign: 'center', padding: '32px 0' } },
               React.createElement('div', { style: { fontSize: 48, marginBottom: 12 } }, '\u{1F389}'),
-              React.createElement('div', { style: { fontSize: 18, fontWeight: 600, color: '#1b6b5a' } }, 'Thank you!'),
-              React.createElement('div', { style: { fontSize: 13, color: '#888', marginTop: 4 } }, 'Your feedback has been submitted.')
+              React.createElement('div', { style: { fontSize: 18, fontWeight: 600, color: 'var(--role-color)' } }, 'Thank you!'),
+              React.createElement('div', { style: { fontSize: 13, color: 'var(--text-tertiary)', marginTop: 4 } }, 'Your feedback has been submitted.')
             )
           ) : (
             React.createElement(React.Fragment, null,
               // Header
               React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 } },
-                React.createElement('h3', { style: { margin: 0, fontSize: 18, fontWeight: 700, color: '#333' } }, 'Share Feedback'),
+                React.createElement('h3', { style: { margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' } }, 'Share Feedback'),
                 React.createElement('button', {
                   onClick: handleClose,
                   style: {
-                    background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#999',
+                    background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)',
                     width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%',
                   },
                 }, '\u00D7')
               ),
 
               // Context hint — show user what screen is being captured
-              React.createElement('div', { style: { fontSize: 11, color: '#999', marginBottom: 12, padding: '6px 10px', background: '#f8f8f8', borderRadius: 6 } },
+              React.createElement('div', { style: { fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, padding: '6px 10px', background: '#f8f8f8', borderRadius: 6 } },
                 '\u{1F4CD} Captured: ', currentPage || 'unknown', ' page',
                 contextSnapshotRef.current?.openModals ? ' \u2022 popup: ' + contextSnapshotRef.current.openModals[0] : '',
                 ' \u2022 ', userRole || ''
@@ -427,13 +427,13 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
 
               // Category
               React.createElement('div', { style: { marginBottom: 16 } },
-                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 6 } }, 'Category'),
+                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 } }, 'Category'),
                 React.createElement('select', {
                   value: category,
                   onChange: e => setCategory(e.target.value),
                   style: {
                     width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd',
-                    fontSize: 14, color: '#333', background: '#fff', appearance: 'auto',
+                    fontSize: 14, color: 'var(--text-primary)', background: 'var(--bg-surface)', appearance: 'auto',
                   },
                 },
                   categories.map(c => React.createElement('option', { key: c.value, value: c.value }, c.label))
@@ -442,8 +442,8 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
 
               // Description
               React.createElement('div', { style: { marginBottom: 16 } },
-                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 6 } },
-                  'Description ', React.createElement('span', { style: { color: '#999', fontWeight: 400 } }, '(required)')
+                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 } },
+                  'Description ', React.createElement('span', { style: { color: 'var(--text-muted)', fontWeight: 400 } }, '(required)')
                 ),
                 React.createElement('textarea', {
                   value: description,
@@ -452,19 +452,19 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
                   rows: 4,
                   style: {
                     width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd',
-                    fontSize: 14, color: '#333', resize: 'vertical', fontFamily: 'inherit',
+                    fontSize: 14, color: 'var(--text-primary)', resize: 'vertical', fontFamily: 'inherit',
                     boxSizing: 'border-box',
                   },
                 }),
                 description.length > 0 && description.trim().length < 10 && (
-                  React.createElement('div', { style: { fontSize: 11, color: '#e8724a', marginTop: 4 } }, 'Please write at least 10 characters')
+                  React.createElement('div', { style: { fontSize: 11, color: 'var(--accent-color)', marginTop: 4 } }, 'Please write at least 10 characters')
                 )
               ),
 
               // Mood
               React.createElement('div', { style: { marginBottom: 20 } },
-                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 8 } },
-                  'How are you feeling? ', React.createElement('span', { style: { color: '#999', fontWeight: 400 } }, '(optional)')
+                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 } },
+                  'How are you feeling? ', React.createElement('span', { style: { color: 'var(--text-muted)', fontWeight: 400 } }, '(optional)')
                 ),
                 React.createElement('div', { style: { display: 'flex', gap: 8, justifyContent: 'center' } },
                   moods.map(m =>
@@ -475,7 +475,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
                       style: {
                         width: 44, height: 44, borderRadius: '50%', border: 'none', cursor: 'pointer',
                         fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: mood === m.value ? '#e0f2e9' : '#f5f5f5',
+                        background: mood === m.value ? 'var(--role-color-light)' : 'var(--bg-primary)',
                         outline: mood === m.value ? '2px solid #1b6b5a' : 'none',
                         transition: 'all 0.15s',
                       },
@@ -486,7 +486,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
 
               // Error
               error && React.createElement('div', {
-                style: { padding: '8px 12px', background: '#fce4ec', color: '#c62828', borderRadius: 8, fontSize: 13, marginBottom: 12 },
+                style: { padding: '8px 12px', background: 'var(--color-error-bg)', color: 'var(--color-error)', borderRadius: 8, fontSize: 13, marginBottom: 12 },
               }, error),
 
               // Submit
@@ -495,8 +495,8 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
                 disabled: description.trim().length < 10 || submitting,
                 style: {
                   width: '100%', padding: '12px', borderRadius: 8, border: 'none',
-                  background: description.trim().length >= 10 && !submitting ? '#1b6b5a' : '#ccc',
-                  color: '#fff', fontSize: 14, fontWeight: 600,
+                  background: description.trim().length >= 10 && !submitting ? 'var(--role-color)' : 'var(--border-light)',
+                  color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 600,
                   cursor: description.trim().length >= 10 && !submitting ? 'pointer' : 'not-allowed',
                   transition: 'background 0.2s',
                 },

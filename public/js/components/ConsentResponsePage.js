@@ -149,7 +149,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
   };
 
   const cardStyle = {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: '16px',
     boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
     maxWidth: '520px',
@@ -158,7 +158,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
   };
 
   const headerStyle = {
-    background: '#1b6b5a',
+    background: 'var(--role-color)',
     margin: '-32px -32px 24px -32px',
     padding: '28px 32px',
     borderRadius: '16px 16px 0 0',
@@ -172,7 +172,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
         <div style={cardStyle}>
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <div style={{ fontSize: '32px', marginBottom: '16px' }}>{'\u23F3'}</div>
-            <div style={{ color: '#666', fontSize: '15px' }}>Loading...</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '15px' }}>Loading...</div>
           </div>
         </div>
       </div>
@@ -185,13 +185,13 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
       <div style={containerStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <h1 style={{ color: '#fff', margin: 0, fontSize: '22px', fontWeight: 600 }}>InPlace</h1>
+            <h1 style={{ color: 'var(--text-on-primary)', margin: 0, fontSize: '22px', fontWeight: 600 }}>InPlace</h1>
           </div>
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>{'\u26A0\uFE0F'}</div>
-            <div style={{ color: '#c62828', fontSize: '15px', lineHeight: '1.6' }}>{error}</div>
-            <p style={{ color: '#999', fontSize: '13px', marginTop: '20px' }}>
-              If you have questions, please contact us at <a href="mailto:support@yourinplace.com" style={{ color: '#1b6b5a' }}>support@yourinplace.com</a>
+            <div style={{ color: 'var(--color-error)', fontSize: '15px', lineHeight: '1.6' }}>{error}</div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '20px' }}>
+              If you have questions, please contact us at <a href="mailto:support@yourinplace.com" style={{ color: 'var(--role-color)' }}>support@yourinplace.com</a>
             </p>
           </div>
         </div>
@@ -205,14 +205,14 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
       <div style={containerStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <h1 style={{ color: '#fff', margin: 0, fontSize: '22px', fontWeight: 600 }}>InPlace</h1>
+            <h1 style={{ color: 'var(--text-on-primary)', margin: 0, fontSize: '22px', fontWeight: 600 }}>InPlace</h1>
           </div>
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>{'\u2705'}</div>
-            <h2 style={{ color: '#1b6b5a', margin: '0 0 12px', fontSize: '20px' }}>Thank You{data?.recipientName ? `, ${data.recipientName}` : ''}!</h2>
-            <p style={{ color: '#555', fontSize: '15px', lineHeight: '1.6' }}>{submittedMessage}</p>
-            <p style={{ color: '#999', fontSize: '13px', marginTop: '24px' }}>
-              Questions? Contact us at <a href="mailto:support@yourinplace.com" style={{ color: '#1b6b5a' }}>support@yourinplace.com</a>
+            <h2 style={{ color: 'var(--role-color)', margin: '0 0 12px', fontSize: '20px' }}>Thank You{data?.recipientName ? `, ${data.recipientName}` : ''}!</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '15px', lineHeight: '1.6' }}>{submittedMessage}</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '24px' }}>
+              Questions? Contact us at <a href="mailto:support@yourinplace.com" style={{ color: 'var(--role-color)' }}>support@yourinplace.com</a>
             </p>
           </div>
         </div>
@@ -227,27 +227,27 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
       icon: '\u2705',
       title: "Yes, I'm aware",
       description: "I know about this care arrangement and I'm comfortable with it.",
-      color: '#e8f5e9',
-      borderColor: '#c8e6c9',
-      activeColor: '#1b6b5a',
+      color: 'var(--color-success-bg)',
+      borderColor: 'var(--color-success-bg)',
+      activeColor: 'var(--role-color)',
     },
     {
       id: 'have_questions',
       icon: '\u2753',
       title: 'I have questions',
       description: "I'd like to learn more before deciding. Someone from InPlace will reach out to you.",
-      color: '#FFF8E1',
+      color: 'var(--color-warning-bg)',
       borderColor: '#FFE082',
-      activeColor: '#e8724a',
+      activeColor: 'var(--accent-color)',
     },
     {
       id: 'did_not_authorize',
       icon: '\u{1F6A8}',
       title: 'I did not authorize this',
       description: "I did not agree to this care arrangement. No caregiver will visit.",
-      color: '#fce4ec',
+      color: 'var(--color-error-bg)',
       borderColor: '#ef9a9a',
-      activeColor: '#c62828',
+      activeColor: 'var(--color-error)',
     },
   ];
 
@@ -256,21 +256,21 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
     <div style={containerStyle}>
       <div style={cardStyle}>
         <div style={headerStyle}>
-          <h1 style={{ color: '#fff', margin: 0, fontSize: '22px', fontWeight: 600 }}>InPlace</h1>
+          <h1 style={{ color: 'var(--text-on-primary)', margin: 0, fontSize: '22px', fontWeight: 600 }}>InPlace</h1>
           <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', marginTop: '4px' }}>Care Arrangement Verification</div>
         </div>
 
-        <h2 style={{ color: '#333', margin: '0 0 8px', fontSize: '19px' }}>
+        <h2 style={{ color: 'var(--text-primary)', margin: '0 0 8px', fontSize: '19px' }}>
           Hi{data.recipientName ? ` ${data.recipientName}` : ''},
         </h2>
 
-        <p style={{ color: '#555', fontSize: '14px', lineHeight: '1.6', margin: '0 0 20px' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.6', margin: '0 0 20px' }}>
           Your {data.relationship || 'family member'}, <strong>{data.familyMemberName}</strong>, has arranged non-medical companion care for you through InPlace.
         </p>
 
         <div style={{ background: '#f0f7f5', borderRadius: '10px', padding: '16px', marginBottom: '24px' }}>
-          <div style={{ fontWeight: 600, color: '#1b6b5a', fontSize: '14px', marginBottom: '8px' }}>What is InPlace?</div>
-          <p style={{ color: '#555', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
+          <div style={{ fontWeight: 600, color: 'var(--role-color)', fontSize: '14px', marginBottom: '8px' }}>What is InPlace?</div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
             InPlace connects families with trusted, local caregivers who provide companionship, help around the house,
             and other non-medical assistance. This is <em>not</em> medical care — it's friendly, professional help with daily living.
           </p>
@@ -279,21 +279,21 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
         {/* Phone Verification Step */}
         {!phoneVerified && (
           <div style={{
-            background: '#fff8e1', border: '1px solid #ffe082', borderRadius: '12px',
+            background: 'var(--color-warning-bg)', border: '1px solid #ffe082', borderRadius: '12px',
             padding: '20px', marginBottom: '24px',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
               <span style={{ fontSize: '22px' }}>📱</span>
-              <div style={{ fontWeight: 600, color: '#333', fontSize: '15px' }}>Verify your identity</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '15px' }}>Verify your identity</div>
             </div>
-            <p style={{ color: '#555', fontSize: '13px', lineHeight: '1.6', margin: '0 0 16px' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6', margin: '0 0 16px' }}>
               For your safety, we need to confirm it's really you. We'll send a verification code to your phone
               {data.maskedPhone ? ` ending in ${data.maskedPhone.slice(-4)}` : ''}.
             </p>
 
             {!data.phoneAvailable ? (
-              <div style={{ color: '#c62828', fontSize: '13px', padding: '10px', background: '#fce4ec', borderRadius: '8px' }}>
-                No phone number is on file. Please contact your family member to update your phone number, or email us at <a href="mailto:support@yourinplace.com" style={{ color: '#1b6b5a' }}>support@yourinplace.com</a>.
+              <div style={{ color: 'var(--color-error)', fontSize: '13px', padding: '10px', background: 'var(--color-error-bg)', borderRadius: '8px' }}>
+                No phone number is on file. Please contact your family member to update your phone number, or email us at <a href="mailto:support@yourinplace.com" style={{ color: 'var(--role-color)' }}>support@yourinplace.com</a>.
               </div>
             ) : !codeSent ? (
               <div>
@@ -302,7 +302,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
                     style={{
                       flex: 1, padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 600,
                       fontSize: '14px', cursor: codeSending ? 'not-allowed' : 'pointer',
-                      background: '#1b6b5a', color: '#fff',
+                      background: 'var(--role-color)', color: 'var(--text-on-primary)',
                     }}>
                     {codeSending ? 'Sending...' : 'Text me a code'}
                   </button>
@@ -310,20 +310,20 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
                     style={{
                       flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #1b6b5a',
                       fontWeight: 600, fontSize: '14px', cursor: codeSending ? 'not-allowed' : 'pointer',
-                      background: '#fff', color: '#1b6b5a',
+                      background: 'var(--bg-surface)', color: 'var(--role-color)',
                     }}>
                     {codeSending ? 'Sending...' : 'Call me instead'}
                   </button>
                 </div>
                 {data.maskedPhone && (
-                  <div style={{ fontSize: '12px', color: '#888', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center' }}>
                     Code will be sent to {data.maskedPhone}
                   </div>
                 )}
               </div>
             ) : (
               <div>
-                <div style={{ fontSize: '13px', color: '#2e7d32', marginBottom: '12px', fontWeight: 500 }}>
+                <div style={{ fontSize: '13px', color: 'var(--color-success)', marginBottom: '12px', fontWeight: 500 }}>
                   {codeMethod === 'voice'
                     ? 'We\'re calling your phone now. Listen for your 6-digit code.'
                     : 'A 6-digit code has been sent to your phone.'}
@@ -345,7 +345,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
                     style={{
                       padding: '12px 20px', borderRadius: '8px', border: 'none', fontWeight: 600,
                       fontSize: '14px', cursor: verifyCode.length >= 6 ? 'pointer' : 'not-allowed',
-                      background: verifyCode.length >= 6 ? '#1b6b5a' : '#ccc', color: '#fff',
+                      background: verifyCode.length >= 6 ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)',
                     }}>
                     {verifying ? '...' : 'Verify'}
                   </button>
@@ -355,7 +355,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
                     onClick={() => handleSendCode(codeMethod)}
                     disabled={cooldown > 0 || codeSending}
                     style={{
-                      background: 'none', border: 'none', color: cooldown > 0 ? '#999' : '#1b6b5a',
+                      background: 'none', border: 'none', color: cooldown > 0 ? 'var(--text-muted)' : 'var(--role-color)',
                       fontSize: '12px', cursor: cooldown > 0 ? 'default' : 'pointer', padding: 0,
                     }}>
                     {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
@@ -364,7 +364,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
                     onClick={() => handleSendCode(codeMethod === 'sms' ? 'voice' : 'sms')}
                     disabled={cooldown > 0 || codeSending}
                     style={{
-                      background: 'none', border: 'none', color: cooldown > 0 ? '#999' : '#1b6b5a',
+                      background: 'none', border: 'none', color: cooldown > 0 ? 'var(--text-muted)' : 'var(--role-color)',
                       fontSize: '12px', cursor: cooldown > 0 ? 'default' : 'pointer', padding: 0,
                     }}>
                     {codeMethod === 'sms' ? 'Call me instead' : 'Text me instead'}
@@ -373,7 +373,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
               </div>
             )}
             {verifyError && (
-              <div style={{ color: '#c62828', fontSize: '13px', marginTop: '10px', padding: '8px 12px', background: '#fce4ec', borderRadius: '6px' }}>
+              <div style={{ color: 'var(--color-error)', fontSize: '13px', marginTop: '10px', padding: '8px 12px', background: 'var(--color-error-bg)', borderRadius: '6px' }}>
                 {verifyError}
               </div>
             )}
@@ -384,18 +384,18 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
         {phoneVerified && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: '8px',
-            background: '#e8f5e9', borderRadius: '8px', padding: '10px 14px', marginBottom: '20px',
+            background: 'var(--color-success-bg)', borderRadius: '8px', padding: '10px 14px', marginBottom: '20px',
           }}>
             <span style={{ fontSize: '16px' }}>{'\u2705'}</span>
-            <span style={{ fontSize: '13px', color: '#2e7d32', fontWeight: 500 }}>Phone verified — you can now respond below</span>
+            <span style={{ fontSize: '13px', color: 'var(--color-success)', fontWeight: 500 }}>Phone verified — you can now respond below</span>
           </div>
         )}
 
-        {error && <div style={{ background: '#fce4ec', color: '#c62828', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+        {error && <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
 
         {/* Response options — only enabled after phone verification */}
         <div style={{ opacity: phoneVerified ? 1 : 0.4, pointerEvents: phoneVerified ? 'auto' : 'none' }}>
-          <div style={{ fontWeight: 600, color: '#333', fontSize: '15px', marginBottom: '12px' }}>
+          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '15px', marginBottom: '12px' }}>
             How would you like to respond?
           </div>
 
@@ -405,16 +405,16 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
               <button key={opt.id} onClick={() => setSelectedResponse(opt.id)}
                 style={{
                   display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
-                  background: isSelected ? opt.color : '#fff',
-                  border: `2px solid ${isSelected ? opt.activeColor : '#e0e0e0'}`,
+                  background: isSelected ? opt.color : 'var(--text-on-primary)',
+                  border: `2px solid ${isSelected ? opt.activeColor : 'var(--border-light)'}`,
                   borderRadius: '10px', padding: '14px 16px', marginBottom: '10px',
                   transition: 'all 0.2s',
                 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '20px' }}>{opt.icon}</span>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '14px', color: isSelected ? opt.activeColor : '#333' }}>{opt.title}</div>
-                    <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{opt.description}</div>
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: isSelected ? opt.activeColor : 'var(--text-primary)' }}>{opt.title}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{opt.description}</div>
                   </div>
                 </div>
               </button>
@@ -424,8 +424,8 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
           {/* Optional notes */}
           {selectedResponse && (
             <div style={{ marginTop: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>
-                Anything you'd like to add? <span style={{ fontWeight: 400, color: '#999' }}>(optional)</span>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                Anything you'd like to add? <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span>
               </label>
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
                 placeholder="Any questions, concerns, or additional information..."
@@ -441,16 +441,16 @@ const ConsentResponsePage = window.ConsentResponsePage = ({ token }) => {
             style={{
               width: '100%', padding: '14px', borderRadius: '10px', border: 'none',
               fontWeight: 600, fontSize: '15px', cursor: selectedResponse && phoneVerified ? 'pointer' : 'not-allowed',
-              background: selectedResponse && phoneVerified ? '#1b6b5a' : '#ccc', color: '#fff',
+              background: selectedResponse && phoneVerified ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)',
               marginTop: '20px', transition: 'background 0.2s',
             }}>
             {submitting ? 'Submitting...' : 'Submit Response'}
           </button>
         </div>
 
-        <p style={{ color: '#999', fontSize: '12px', textAlign: 'center', marginTop: '20px', marginBottom: 0 }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center', marginTop: '20px', marginBottom: 0 }}>
           You can also ignore this page — no caregiver will visit without proper verification.
-          <br />Questions? <a href="mailto:support@yourinplace.com" style={{ color: '#1b6b5a' }}>support@yourinplace.com</a>
+          <br />Questions? <a href="mailto:support@yourinplace.com" style={{ color: 'var(--role-color)' }}>support@yourinplace.com</a>
         </p>
       </div>
     </div>

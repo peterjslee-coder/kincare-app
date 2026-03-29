@@ -521,7 +521,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           appearance: {
             overlays: 'dialog',
             variables: {
-              colorPrimary: '#1b6b5a',
+              colorPrimary: 'var(--role-color)',
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             },
           },
@@ -737,21 +737,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   if (noProfile || !data) return (
     <div style={{ maxWidth: '480px', margin: '60px auto', textAlign: 'center', padding: '40px 24px' }}>
       <div style={{ fontSize: '56px', marginBottom: '16px' }}>👋</div>
-      <h2 style={{ margin: '0 0 12px', color: '#333', fontSize: '22px' }}>Welcome to InPlace!</h2>
-      <p style={{ color: '#666', fontSize: '15px', lineHeight: '1.6', margin: '0 0 24px' }}>
+      <h2 style={{ margin: '0 0 12px', color: 'var(--text-primary)', fontSize: '22px' }}>Welcome to InPlace!</h2>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '15px', lineHeight: '1.6', margin: '0 0 24px' }}>
         {noProfile
           ? "It looks like your caregiver profile isn't set up yet. Complete your onboarding to start receiving care requests and connecting with families."
           : "We couldn't load your dashboard. Please try refreshing the page."}
       </p>
       {noProfile && onNeedsOnboarding && (
         <button onClick={onNeedsOnboarding} style={{
-          padding: '14px 32px', background: '#1b6b5a', color: '#fff', border: 'none',
+          padding: '14px 32px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
           borderRadius: '10px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
         }}>Complete Your Profile</button>
       )}
       {!noProfile && (
         <button onClick={() => window.location.reload()} style={{
-          padding: '12px 24px', background: '#1b6b5a', color: '#fff', border: 'none',
+          padding: '12px 24px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
           borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
         }}>Refresh Page</button>
       )}
@@ -769,7 +769,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       top: `${rect.top + rect.height / 2 - 16}px`,
       fontSize: '28px',
       fontWeight: '900',
-      color: '#1b6b5a',
+      color: 'var(--role-color)',
       zIndex: '9999',
       pointerEvents: 'none',
       opacity: '0',
@@ -1128,7 +1128,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
           <h1 className="greeting" style={{ marginBottom: '4px' }}>Welcome, {(profile.name || 'Caregiver').split(' ')[0]}!</h1>
-          <div style={{ color: '#666', fontSize: '14px' }}>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
             {editingLocation ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
                 <input type="text" value={locCity} onChange={(e) => setLocCity(e.target.value)} placeholder="City" style={{ width: '120px', padding: '4px 8px', border: '1px solid #ccc', borderRadius: '6px', fontSize: '13px' }} />
@@ -1137,8 +1137,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   {['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'].map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <input type="text" value={locZip} onChange={(e) => setLocZip(e.target.value)} placeholder="Zip" maxLength={10} style={{ width: '80px', padding: '4px 8px', border: '1px solid #ccc', borderRadius: '6px', fontSize: '13px' }} />
-                <button onClick={saveWorkLocation} disabled={locSaving} style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: locSaving ? 0.6 : 1 }}>{locSaving ? '...' : 'Save'}</button>
-                <button onClick={() => setEditingLocation(false)} style={{ padding: '4px 8px', background: 'none', border: '1px solid #ccc', borderRadius: '6px', fontSize: '12px', color: '#666', cursor: 'pointer' }}>Cancel</button>
+                <button onClick={saveWorkLocation} disabled={locSaving} style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: locSaving ? 0.6 : 1 }}>{locSaving ? '...' : 'Save'}</button>
+                <button onClick={() => setEditingLocation(false)} style={{ padding: '4px 8px', background: 'none', border: '1px solid #ccc', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer' }}>Cancel</button>
               </div>
             ) : (profile.city && profile.state) ? (
               <span>
@@ -1149,7 +1149,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </span>
             ) : (
               <span>
-                <span onClick={() => { setLocCity(''); setLocState(''); setLocZip(''); setEditingLocation(true); }} style={{ cursor: 'pointer', color: '#e8724a', fontWeight: 600, borderBottom: '1px dashed #e8724a' }}>
+                <span onClick={() => { setLocCity(''); setLocState(''); setLocZip(''); setEditingLocation(true); }} style={{ cursor: 'pointer', color: 'var(--accent-color)', fontWeight: 600, borderBottom: '1px dashed #e8724a' }}>
                   + Set your work location
                 </span>
                 {profile.specialties?.length > 0 && <span> &bull; {profile.specialties.join(', ')}</span>}
@@ -1160,15 +1160,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
             padding: '6px 14px',
-            background: profile.isAvailable ? '#e8f5e9' : '#fce4ec',
-            color: profile.isAvailable ? '#2e7d32' : '#c62828',
+            background: profile.isAvailable ? 'var(--color-success-bg)' : 'var(--color-error-bg)',
+            color: profile.isAvailable ? 'var(--color-success)' : 'var(--color-error)',
             borderRadius: '20px', fontSize: '13px', fontWeight: 600,
           }}>
             {profile.isAvailable ? 'Available' : 'Unavailable'}
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div onClick={() => { setShowReviews(true); fetchReviews(); }} style={{ fontSize: '20px', fontWeight: 700, color: '#1b6b5a', cursor: 'pointer' }} title="View reviews">⭐ {profile.rating || '—'}</div>
-            <div style={{ fontSize: '11px', color: '#999' }}>{profile.reviewCount || 0} reviews</div>
+            <div onClick={() => { setShowReviews(true); fetchReviews(); }} style={{ fontSize: '20px', fontWeight: 700, color: 'var(--role-color)', cursor: 'pointer' }} title="View reviews">⭐ {profile.rating || '—'}</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{profile.reviewCount || 0} reviews</div>
           </div>
         </div>
       </div>
@@ -1202,14 +1202,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             textAlign: 'center',
           }}>
             <div style={{ fontSize: 36, marginBottom: 6 }}>{emoji}</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#e65100', marginBottom: 4 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-warning)', marginBottom: 4 }}>
               {label}
             </div>
             <div style={{ fontSize: 13, color: '#bf360c', marginBottom: 12 }}>
               Congratulations! You've completed {ms.milestone_value} care sessions on inPlace. Thank you for the incredible work you do.
             </div>
             <button onClick={handleAck} style={{
-              padding: '8px 24px', background: '#e65100', color: '#fff', border: 'none',
+              padding: '8px 24px', background: 'var(--color-warning)', color: 'var(--text-on-primary)', border: 'none',
               borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
             }}>Awesome!</button>
           </div>
@@ -1224,8 +1224,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #e8724a', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 24 }}>⏳</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Getting Started</div>
-              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>Complete your profile to start receiving care requests.</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Getting Started</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>Complete your profile to start receiving care requests.</div>
             </div>
           </div>
         );
@@ -1233,32 +1233,32 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 24 }}>🔄</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Background Check</div>
-              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>Your background check is in progress. You'll be notified once it clears.</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Background Check</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>Your background check is in progress. You'll be notified once it clears.</div>
             </div>
           </div>
         );
         if (checkrStatus === 'rejected') return (
           <div className="card" style={{
             marginBottom: 16, padding: '16px 18px',
-            background: '#fff5f5', border: '2px solid #ef5350', borderRadius: 12,
+            background: 'var(--bg-error-light)', border: '2px solid #ef5350', borderRadius: 12,
             boxShadow: '0 2px 12px rgba(239,83,80,0.15)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <span style={{ fontSize: 24 }}>{'\u274C'}</span>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: '#b71c1c' }}>Background Check Not Approved</div>
-                <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-error)' }}>Background Check Not Approved</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                   We were unable to approve your account based on your background check results.
                 </div>
               </div>
             </div>
             {profile.bgCheckRejectionReason && (
-              <div style={{ fontSize: 13, color: '#b71c1c', fontWeight: 600, padding: '6px 10px', background: '#ffebee', borderRadius: 8, marginBottom: 6 }}>
+              <div style={{ fontSize: 13, color: 'var(--color-error)', fontWeight: 600, padding: '6px 10px', background: 'var(--color-error-bg)', borderRadius: 8, marginBottom: 6 }}>
                 {profile.bgCheckRejectionReason}
               </div>
             )}
-            <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
               If you believe this is an error or would like to provide additional context, please check your Messages — we've sent you details and you can reply to appeal.
             </div>
           </div>
@@ -1268,7 +1268,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             <span style={{ fontSize: 24 }}>{'\u26A0\uFE0F'}</span>
             <div>
               <div style={{ fontWeight: 600, fontSize: 14, color: '#92400e' }}>Background Check — Action Needed</div>
-              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                 Your background check requires additional information. Please check your email for instructions from Checkr on how to complete the review process.
               </div>
             </div>
@@ -1278,8 +1278,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #3b82f6', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 24 }}>🔄</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Background Check Processing</div>
-              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>Your background check is being processed. This usually takes 2–5 business days.</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Background Check Processing</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>Your background check is being processed. This usually takes 2–5 business days.</div>
             </div>
           </div>
         );
@@ -1287,8 +1287,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #8b5cf6', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 24 }}>{'\u{1F4DD}'}</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>Background Check — Dispute Under Review</div>
-              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>Your dispute is being reviewed by Checkr. We'll notify you when there's an update.</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Background Check — Dispute Under Review</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>Your dispute is being reviewed by Checkr. We'll notify you when there's an update.</div>
             </div>
           </div>
         );
@@ -1299,24 +1299,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {profile.accountPaused && (
         <div className="card" style={{
           marginBottom: 16, padding: '16px 18px',
-          background: '#fff5f5', border: '2px solid #ef5350', borderRadius: 12,
+          background: 'var(--bg-error-light)', border: '2px solid #ef5350', borderRadius: 12,
           boxShadow: '0 2px 12px rgba(239,83,80,0.15)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <span style={{ fontSize: 24 }}>{'\u{1F6D1}'}</span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#c62828' }}>Account Paused</div>
-              <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-error)' }}>Account Paused</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                 Your account has been temporarily paused and you won't appear in job listings.
               </div>
             </div>
           </div>
           {profile.accountPausedReason && (
-            <div style={{ fontSize: 13, color: '#c62828', fontWeight: 600, padding: '6px 10px', background: '#ffebee', borderRadius: 8, marginBottom: 6 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-error)', fontWeight: 600, padding: '6px 10px', background: 'var(--color-error-bg)', borderRadius: 8, marginBottom: 6 }}>
               Reason: {profile.accountPausedReason}
             </div>
           )}
-          <div style={{ fontSize: 12, color: '#888' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
             An admin will review your account. If you believe this is an error, please contact support.
           </div>
         </div>
@@ -1324,14 +1324,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* First Steps — THE top tile on dashboard when steps remain */}
       {showFirstSteps && (
-        <div style={{ background: '#fff', borderRadius: '14px', border: '2px solid #e8724a', padding: '20px 22px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)' }}>
+        <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '2px solid #e8724a', padding: '20px 22px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#b45309' }}>First Steps</h3>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <div style={{ height: '6px', background: '#f3e8d0', borderRadius: '3px', overflow: 'hidden', width: '120px', marginRight: '10px' }}>
                 <div style={{ height: '100%', background: '#2e5984', borderRadius: '3px', transition: 'width 0.3s', width: (firstStepsDone / firstSteps.length * 100) + '%' }}></div>
               </div>
-              <span style={{ fontSize: '12px', color: '#888', whiteSpace: 'nowrap' }}>{firstStepsDone} of {firstSteps.length} complete</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{firstStepsDone} of {firstSteps.length} complete</span>
             </div>
           </div>
           <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
@@ -1353,7 +1353,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               }} style={{
                 display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px',
                 borderRadius: '10px', border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',
-                background: s.done ? '#f1f8f1' : '#fff',
+                background: s.done ? '#f1f8f1' : 'var(--text-on-primary)',
                 cursor: s.done ? 'default' : 'pointer',
                 transition: 'all 0.15s',
               }}>
@@ -1361,20 +1361,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   width: '28px', height: '28px', borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '13px', fontWeight: 700, flexShrink: 0, marginTop: '1px',
-                  background: s.done ? '#4caf50' : 'transparent',
-                  color: s.done ? '#fff' : '#e8724a',
+                  background: s.done ? 'var(--color-success)' : 'transparent',
+                  color: s.done ? 'var(--text-on-primary)' : 'var(--accent-color)',
                   border: s.done ? '2px solid #4caf50' : '2px solid #e8724a',
                 }}>{s.done ? '\u2713' : (idx + 1)}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{
                     fontSize: '14px', fontWeight: 600,
-                    color: s.done ? '#4caf50' : '#333',
+                    color: s.done ? 'var(--color-success)' : 'var(--text-primary)',
                     textDecoration: s.done ? 'line-through' : 'none',
-                    textDecorationColor: s.done ? '#a5d6a7' : undefined,
+                    textDecorationColor: s.done ? 'var(--color-success-bg)' : undefined,
                   }}>{s.label}</div>
-                  {!s.done && s.desc && <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{s.desc}</div>}
+                  {!s.done && s.desc && <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{s.desc}</div>}
                   {!s.done && s.missing && (
-                    <div style={{ marginTop: '6px', padding: '6px 10px', background: '#fff8f0', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ marginTop: '6px', padding: '6px 10px', background: 'var(--bg-warm)', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '13px' }}>{'\u26A0\uFE0F'}</span> {s.missing}
                     </div>
                   )}
@@ -1384,7 +1384,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     </div>
                   )}
                 </div>
-                {!s.done && <span style={{ color: '#ccc', fontSize: '18px', marginTop: '3px' }}>{'\u203A'}</span>}
+                {!s.done && <span style={{ color: 'var(--text-muted)', fontSize: '18px', marginTop: '3px' }}>{'\u203A'}</span>}
               </div>
             ))}
           </div>
@@ -1393,10 +1393,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* Calendar Placeholder — shown when no availability set yet */}
       {showFirstSteps && !hasAvailability && (
-        <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #e5e7eb', padding: '28px 22px', textAlign: 'center', marginBottom: '20px' }}>
+        <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid #e5e7eb', padding: '28px 22px', textAlign: 'center', marginBottom: '20px' }}>
           <div style={{ fontSize: '40px', marginBottom: '8px', opacity: 0.5 }}>📅</div>
-          <div style={{ fontSize: '14px', color: '#999' }}>Your availability and booked sessions will show here later</div>
-          <div style={{ fontSize: '12px', color: '#bbb', marginTop: '4px' }}>Complete step 2 to set your availability and see your calendar</div>
+          <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Your availability and booked sessions will show here later</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Complete step 2 to set your availability and see your calendar</div>
         </div>
       )}
 
@@ -1409,20 +1409,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             return (
               <div key={alert.id} style={{
                 padding: '14px 16px', marginBottom: 8,
-                background: '#fff5f5', border: '2px solid #ef5350', borderRadius: 12,
+                background: 'var(--bg-error-light)', border: '2px solid #ef5350', borderRadius: 12,
                 boxShadow: '0 2px 8px rgba(239,83,80,0.15)',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 20 }}>{'\u{1F6A8}'}</span>
-                  <span style={{ fontWeight: 700, fontSize: 14, color: '#c62828' }}>Missed Session</span>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-error)' }}>Missed Session</span>
                 </div>
-                <div style={{ fontSize: 13, color: '#333', marginBottom: 4 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 4 }}>
                   You did not check in for <strong>{alert.recipientName || 'a care visit'}</strong> on <strong>{dateLabel}</strong> at <strong>{timeLabel}</strong>.
                 </div>
-                <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600 }}>
+                <div style={{ fontSize: 12, color: 'var(--color-error)', fontWeight: 600 }}>
                   This session was automatically cancelled and no payment was processed. {alert.reviewRequired && !alert.reviewCompleted ? 'A review from the family is pending.' : ''}
                 </div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
                   If this was an error, please contact the family or reach out to support.
                 </div>
               </div>
@@ -1445,7 +1445,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
         return (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-purple-light)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
               {'\u2728'} Just for You
             </div>
             {exclusiveOffers.map(job => {
@@ -1483,37 +1483,37 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     <div style={{ flex: 1, minWidth: '180px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
                         <span className={exclusiveUrgent ? 'exclusive-urgent' : ''} style={{
-                          background: exclusiveUrgent ? '#e8724a' : '#7c3aed', color: '#fff',
+                          background: exclusiveUrgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--text-on-primary)',
                           padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 700,
                         }}>
                           {exclusiveRemaining !== null ? (exclusiveUrgent ? `\u23F1 ${exclusiveRemaining} min left!` : `\u2728 JUST FOR YOU \u00B7 ${exclusiveRemaining} min left`) : '\u2728 JUST FOR YOU'}
                         </span>
                         {hasBonus && (
-                          <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
+                          <span style={{ background: 'var(--accent-color)', color: 'var(--text-on-primary)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
                         )}
                       </div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>{formatServiceType(job.serviceType)}</div>
-                      <div style={{ fontSize: 14, color: '#555', marginTop: 3 }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{formatServiceType(job.serviceType)}</div>
+                      <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 3 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
-                        {effectiveTotal > 0 && <React.Fragment><span> {'\u2022'} </span><span style={{ fontWeight: 800, color: '#1b6b5a', fontSize: 22 }}>${effectiveTotal.toFixed(0)}</span></React.Fragment>}
+                        {effectiveTotal > 0 && <React.Fragment><span> {'\u2022'} </span><span style={{ fontWeight: 800, color: 'var(--role-color)', fontSize: 22 }}>${effectiveTotal.toFixed(0)}</span></React.Fragment>}
                       </div>
-                      {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
-                      {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
+                      {job.recipientCity && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
+                      {job.familyName && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>Requested by {job.familyName}</div>}
                       {hasBonus && basePerHour > 0 && (
                         <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                          <span style={{ textDecoration: 'line-through', color: '#999', fontSize: 12 }}>${basePerHour}/hr</span>
-                          <span style={{ color: '#1b6b5a', fontWeight: 700, fontSize: 14 }}>${effectivePerHour}/hr</span>
+                          <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: 12 }}>${basePerHour}/hr</span>
+                          <span style={{ color: 'var(--role-color)', fontWeight: 700, fontSize: 14 }}>${effectivePerHour}/hr</span>
                         </div>
                       )}
                       {job.healthTags && job.healthTags.length > 0 && (
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
                           {job.healthTags.map((tag, idx) => (
-                            <span key={idx} style={{ fontSize: 10, background: '#fff3e0', color: '#e65100', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }}>{tag}</span>
+                            <span key={idx} style={{ fontSize: 10, background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }}>{tag}</span>
                           ))}
                         </div>
                       )}
                       {job.careSummary && (
-                        <div style={{ marginTop: 6, padding: '6px 8px', background: 'rgba(255,255,255,0.7)', borderLeft: '3px solid #7c3aed', borderRadius: 4, fontSize: 11, color: '#555', lineHeight: 1.4 }}>
+                        <div style={{ marginTop: 6, padding: '6px 8px', background: 'rgba(255,255,255,0.7)', borderLeft: '3px solid #7c3aed', borderRadius: 4, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                           {'\uD83D\uDCCB'} {job.careSummary.length > 150 ? job.careSummary.substring(0, 150) + '...' : job.careSummary}
                         </div>
                       )}
@@ -1523,17 +1523,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       <button onClick={(e) => { if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal); }} disabled={claimingJobId === job.id || profile.accountPaused}
                         title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                         style={{
-                          padding: '12px 24px', background: claimingJobId === job.id || profile.accountPaused ? '#ccc' : '#7c3aed', color: '#fff', border: 'none',
+                          padding: '12px 24px', background: claimingJobId === job.id || profile.accountPaused ? 'var(--border-light)' : 'var(--color-purple-light)', color: 'var(--text-on-primary)', border: 'none',
                           borderRadius: '12px', fontSize: '15px', fontWeight: 700, cursor: claimingJobId === job.id || profile.accountPaused ? 'not-allowed' : 'pointer',
                           boxShadow: '0 2px 8px rgba(124,58,237,0.3)', whiteSpace: 'nowrap',
                         }}>{profile.accountPaused ? '❌ Account Paused' : claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
                       ) : (
-                        <div style={{ padding: '8px 14px', background: '#f5f5f5', borderRadius: 10, fontSize: 11, color: '#888', textAlign: 'center', maxWidth: 140 }}>Complete setup to accept</div>
+                        <div style={{ padding: '8px 14px', background: 'var(--bg-primary)', borderRadius: 10, fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 140 }}>Complete setup to accept</div>
                       )}
                       {job.hasConflict && (
                         <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
                           style={{
-                            padding: '7px 14px', background: '#fff', color: '#7c3aed', border: '2px solid #7c3aed',
+                            padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--color-purple-light)', border: '2px solid #7c3aed',
                             borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>Propose Different Time</button>
                       )}
@@ -1563,7 +1563,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         return (
           <div style={{ marginBottom: 16 }}>
             {(pendingProps.length > 0 || expiredProps.length > 0) && (
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#7b61ff', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-violet)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
                 {'\u{1F4E8}'} My Proposals ({pendingProps.length + expiredProps.length})
               </div>
             )}
@@ -1574,28 +1574,28 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
               return (
                 <div key={p.id} className="card" style={{
-                  marginBottom: 10, padding: '14px 16px', border: '2px solid #e0a030', borderRadius: 12, background: '#fff8e1',
+                  marginBottom: 10, padding: '14px 16px', border: '2px solid #e0a030', borderRadius: 12, background: 'var(--color-warning-bg)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                     <div>
-                      <span style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                         {p.recipientName || 'Care Visit'}
                       </span>
-                      <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                      <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 6 }}>
                         {p.familyName ? `(${p.familyName})` : ''}
                       </span>
                     </div>
                     <span style={{
                       fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
-                      background: '#e0a030', color: '#fff',
+                      background: '#e0a030', color: 'var(--text-on-primary)',
                     }}>
                       {'\u23F0'} Expired
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 4 }}>
                     <div>
-                      <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
-                      <div style={{ fontSize: 13, color: '#888', textDecoration: 'line-through' }}>{origDay} at {formatT(p.originalTime)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-tertiary)', textDecoration: 'line-through' }}>{origDay} at {formatT(p.originalTime)}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: 11, color: '#b07800', fontWeight: 600, textTransform: 'uppercase' }}>You Proposed</div>
@@ -1626,17 +1626,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                     <div>
-                      <span style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                         {p.recipientName || 'Care Visit'}
                       </span>
-                      <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                      <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 6 }}>
                         {p.familyName ? `(${p.familyName})` : ''}
                       </span>
                     </div>
                     {timeLeftLabel && (
                       <span style={{
                         fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
-                        background: isUrgent ? '#e8724a' : '#7b61ff', color: '#fff',
+                        background: isUrgent ? 'var(--accent-color)' : 'var(--color-violet)', color: 'var(--text-on-primary)',
                       }}>
                         {isUrgent ? '\u23F1' : '\u23F3'} {timeLeftLabel}
                       </span>
@@ -1644,20 +1644,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   </div>
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 4 }}>
                     <div>
-                      <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
-                      <div style={{ fontSize: 13, color: '#888', textDecoration: 'line-through' }}>{origDay} at {formatT(p.originalTime)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-tertiary)', textDecoration: 'line-through' }}>{origDay} at {formatT(p.originalTime)}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, color: '#7b61ff', fontWeight: 600, textTransform: 'uppercase' }}>You Proposed</div>
-                      <div style={{ fontSize: 14, color: '#7b61ff', fontWeight: 600 }}>{propDay} at {formatT(p.proposedTime)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-violet)', fontWeight: 600, textTransform: 'uppercase' }}>You Proposed</div>
+                      <div style={{ fontSize: 14, color: 'var(--color-violet)', fontWeight: 600 }}>{propDay} at {formatT(p.proposedTime)}</div>
                     </div>
                   </div>
                   {p.message && (
-                    <div style={{ fontSize: 12, color: '#555', fontStyle: 'italic', background: '#ede7f6', padding: '4px 8px', borderRadius: 6 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', background: '#ede7f6', padding: '4px 8px', borderRadius: 6 }}>
                       "{p.message}"
                     </div>
                   )}
-                  <div style={{ fontSize: 12, color: isUrgent ? '#e8724a' : '#7b61ff', fontWeight: 600, marginTop: 6 }}>
+                  <div style={{ fontSize: 12, color: isUrgent ? 'var(--accent-color)' : 'var(--color-violet)', fontWeight: 600, marginTop: 6 }}>
                     {minsLeft !== null
                       ? (isUrgent ? `\u23F1 Family has ${timeLeftLabel} to respond` : `\u23F3 Waiting for family \u2022 ${timeLeftLabel} left`)
                       : '\u23F3 Waiting for family to respond'}
@@ -1686,7 +1686,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
         return (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Up Next</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Up Next</div>
             {sorted.map(s => {
               const isReady = readySet.has(s.id);
               const isActive = s.status === 'in_progress';
@@ -1715,9 +1715,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               })();
 
               // Styling
-              const borderColor = isActive ? '#f57f17' : isReady ? '#e8724a' : isUpcoming ? '#e8724a' : noAddress ? '#dc2626' : '#1b6b5a';
+              const borderColor = isActive ? 'var(--color-warning)' : isReady ? 'var(--accent-color)' : isUpcoming ? 'var(--accent-color)' : noAddress ? 'var(--color-error)' : 'var(--role-color)';
               const borderWidth = isActive || isReady ? 3 : isUpcoming ? 2 : 2;
-              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : '#fff';
+              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : 'var(--text-on-primary)';
               const shadow = (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
 
               return (
@@ -1743,26 +1743,26 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         const remainLabel = leftMs > 0 ? (hrs > 0 ? `${hrs}h ${mins}m remaining` : `${mins}m remaining`) : 'Expected end time passed';
                         const isPast = leftMs <= 0;
                         return React.createElement(React.Fragment, null,
-                          React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: '#f57f17', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 } }, 'In Progress Now'),
+                          React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: 'var(--color-warning)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 } }, 'In Progress Now'),
                           React.createElement('span', { style: {
                             display: 'inline-block', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, marginBottom: 4,
-                            color: isPast ? '#c62828' : '#1b6b5a',
-                            background: isPast ? '#ffebee' : '#e8f5e9',
+                            color: isPast ? 'var(--color-error)' : 'var(--role-color)',
+                            background: isPast ? 'var(--color-error-bg)' : 'var(--color-success-bg)',
                           }}, remainLabel)
                         );
                       })()}
-                      {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: '#e8724a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
-                      {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: '#e8724a', marginBottom: 3 }}>{countdownLabel}</div>}
-                      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{recipName}</div>
-                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                      {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
+                      {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-color)', marginBottom: 3 }}>{countdownLabel}</div>}
+                      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{recipName}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
                       </div>
                       {loc ? (
-                        <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
                       ) : noAddress ? (
-                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
                       ) : null}
-                      {s.specialInstructions && <div style={{ fontSize: 12, color: '#555', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
+                      {s.specialInstructions && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
                       {/* View Care Profile toggle */}
                       <button onClick={(e) => {
                         e.stopPropagation();
@@ -1781,12 +1781,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         }
                       }} style={{
                         marginTop: 8, padding: '4px 10px', background: 'transparent', border: '1px solid #ddd',
-                        borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#1b6b5a', cursor: 'pointer',
+                        borderRadius: 6, fontSize: 11, fontWeight: 600, color: 'var(--role-color)', cursor: 'pointer',
                       }}>{expandedProfileId === s.id ? 'Hide Care Profile' : 'View Care Profile'}</button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
-                        <div style={{ fontSize: 20, fontWeight: 800, color: '#1b6b5a' }}>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--role-color)' }}>
                           ${(s.caregiverPayout || parseFloat(s.estimatedCost) || 0).toFixed(2)}
                         </div>
                       )}
@@ -1803,7 +1803,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           setEarlyDepartureAcked(false);
                           setCheckOutSession(s);
                         }} style={{
-                          padding: '10px 22px', background: '#c62828', color: '#fff', border: 'none',
+                          padding: '10px 22px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                           boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
                         }}>Check Out</button>
@@ -1825,7 +1825,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                               }
                             } catch { showToast('Network error', 'error'); }
                           }} style={{
-                            padding: '8px 14px', background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80',
+                            padding: '8px 14px', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', border: '1px solid #ffcc80',
                             borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>Nobody Home</button>
                       )}
@@ -1859,14 +1859,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           } catch (e) { console.warn('Briefing fetch failed:', e); }
                           setBriefingLoading(false);
                         }} style={{
-                          padding: '10px 22px', background: '#e8724a', color: '#fff', border: 'none',
+                          padding: '10px 22px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                           boxShadow: '0 2px 8px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
                         }}>Check In Now</button>
                       )}
                       {isUpcoming && (
                         <button disabled style={{
-                          padding: '10px 22px', background: '#f5f5f5', color: '#999', border: '1px solid #ddd',
+                          padding: '10px 22px', background: 'var(--bg-primary)', color: 'var(--text-muted)', border: '1px solid #ddd',
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'default',
                           whiteSpace: 'nowrap',
                         }}>Check in {Math.ceil(minsUntilCheckIn)} min</button>
@@ -1874,8 +1874,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       {!isReady && !isActive && !isUpcoming && (
                         <span style={{
                           padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                          background: s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
-                          color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
+                          background: s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                          color: s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
                           textTransform: 'capitalize',
                         }}>{s.status}</span>
                       )}
@@ -1884,42 +1884,42 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   {/* Expandable Care Profile */}
                   {expandedProfileId === s.id && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
-                      {profileLoading === s.id && <div style={{ fontSize: 12, color: '#888', padding: '8px 0' }}>Loading care profile...</div>}
+                      {profileLoading === s.id && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '8px 0' }}>Loading care profile...</div>}
                       {profileBriefings[s.id] && (() => {
                         const pb = profileBriefings[s.id];
                         return (
                           <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-                            {pb.isExperienced && <div style={{ fontSize: 11, color: '#1b6b5a', fontWeight: 600, marginBottom: 6 }}>{'\u2705'} You've cared for {pb.recipientName} {pb.visitCount} time{pb.visitCount != 1 ? 's' : ''}</div>}
+                            {pb.isExperienced && <div style={{ fontSize: 11, color: 'var(--role-color)', fontWeight: 600, marginBottom: 6 }}>{'\u2705'} You've cared for {pb.recipientName} {pb.visitCount} time{pb.visitCount != 1 ? 's' : ''}</div>}
                             {pb.caregiverBriefing && (
-                              <div style={{ padding: '8px 10px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, marginBottom: 8, color: '#555', whiteSpace: 'pre-line' }}>
+                              <div style={{ padding: '8px 10px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, marginBottom: 8, color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
                                 {pb.caregiverBriefing}
                               </div>
                             )}
                             {pb.healthConditions && pb.healthConditions.length > 0 && (
                               <div style={{ marginBottom: 6 }}>
-                                <span style={{ fontWeight: 600, color: '#333' }}>Health: </span>
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Health: </span>
                                 {pb.healthConditions.map((c, i) => (
-                                  <span key={i} style={{ background: '#fff3e0', color: '#e65100', padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600, marginRight: 4 }}>{c}</span>
+                                  <span key={i} style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600, marginRight: 4 }}>{c}</span>
                                 ))}
                               </div>
                             )}
                             {pb.medications && pb.medications.length > 0 && (
                               <div style={{ marginBottom: 6 }}>
-                                <span style={{ fontWeight: 600, color: '#333' }}>Medications: </span>
-                                <span style={{ color: '#666' }}>{pb.medications.join(', ')}</span>
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Medications: </span>
+                                <span style={{ color: 'var(--text-secondary)' }}>{pb.medications.join(', ')}</span>
                               </div>
                             )}
                             {pb.foodAllergies && (
                               <div style={{ marginBottom: 6 }}>
-                                <span style={{ fontWeight: 600, color: '#c62828' }}>Allergies: </span>
-                                <span style={{ color: '#c62828' }}>{pb.foodAllergies}</span>
+                                <span style={{ fontWeight: 600, color: 'var(--color-error)' }}>Allergies: </span>
+                                <span style={{ color: 'var(--color-error)' }}>{pb.foodAllergies}</span>
                               </div>
                             )}
                             {pb.recentMoods && pb.recentMoods.length > 0 && (
                               <div style={{ marginBottom: 4 }}>
-                                <span style={{ fontWeight: 600, color: '#333' }}>Recent moods: </span>
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Recent moods: </span>
                                 {pb.recentMoods.slice(0, 3).map((m, i) => (
-                                  <span key={i} style={{ fontSize: 11, color: '#666', marginRight: 6 }}>{m.arrivalMood}{'\u2192'}{m.departureMood}</span>
+                                  <span key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', marginRight: 6 }}>{m.arrivalMood}{'\u2192'}{m.departureMood}</span>
                                 ))}
                               </div>
                             )}
@@ -1968,9 +1968,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         });
 
         return (
-          <div style={{ borderRadius: 14, overflow: 'hidden', marginBottom: 20, border: '1px solid #d4edda', background: '#fff' }}>
+          <div style={{ borderRadius: 14, overflow: 'hidden', marginBottom: 20, border: '1px solid #d4edda', background: 'var(--bg-surface)' }}>
             {/* Green header */}
-            <div style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)', color: '#fff', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+            <div style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)', color: 'var(--text-on-primary)', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
               onClick={() => window.__navigateTo && window.__navigateTo('find-work')}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 17 }}>🔍 Find Work</div>
@@ -1979,10 +1979,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <select value={jobSort} onChange={(e) => { e.stopPropagation(); setJobSort(e.target.value); }}
                   onClick={(e) => e.stopPropagation()}
-                  style={{ fontSize: 11, padding: '3px 6px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer' }}>
-                  <option value="best_match" style={{ color: '#333' }}>Best Match</option>
-                  <option value="soonest" style={{ color: '#333' }}>Soonest</option>
-                  <option value="highest_pay" style={{ color: '#333' }}>Highest Pay</option>
+                  style={{ fontSize: 11, padding: '3px 6px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.15)', color: 'var(--text-on-primary)', cursor: 'pointer' }}>
+                  <option value="best_match" style={{ color: 'var(--text-primary)' }}>Best Match</option>
+                  <option value="soonest" style={{ color: 'var(--text-primary)' }}>Soonest</option>
+                  <option value="highest_pay" style={{ color: 'var(--text-primary)' }}>Highest Pay</option>
                 </select>
                 <span style={{ fontSize: 22, opacity: 0.7 }}>→</span>
               </div>
@@ -2020,7 +2020,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   return (
                     <div key={job.id} style={{
                       marginBottom: 8, padding: '14px 16px',
-                      background: (isDirectOffer && !exclusiveExpired) ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : job.hasConflict ? '#fffbf0' : '#fff',
+                      background: (isDirectOffer && !exclusiveExpired) ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : job.hasConflict ? '#fffbf0' : 'var(--text-on-primary)',
                       borderRadius: 0,
                       border: (isDirectOffer && !exclusiveExpired) ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : (!job.hasConflict && job.matchQuality === 'great') ? '2px solid #1b6b5a' : hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
                       borderTop: (isDirectOffer && !exclusiveExpired) ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : '1px solid #f0f0f0',
@@ -2029,12 +2029,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       <div style={{ flex: 1, minWidth: '180px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
                           {isDirectOffer && !exclusiveExpired && (
-                            <span className={exclusiveUrgent ? 'exclusive-urgent' : ''} style={{ background: exclusiveUrgent ? '#e8724a' : '#7c3aed', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
+                            <span className={exclusiveUrgent ? 'exclusive-urgent' : ''} style={{ background: exclusiveUrgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--text-on-primary)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
                               {exclusiveRemaining !== null ? (exclusiveUrgent ? `\u23F1 ${exclusiveRemaining} min left!` : `\u2728 JUST FOR YOU \u00B7 ${exclusiveRemaining} min left`) : '\u2728 JUST FOR YOU'}
                             </span>
                           )}
                           {hasBonus && (
-                            <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
+                            <span style={{ background: 'var(--accent-color)', color: 'var(--text-on-primary)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
                           )}
                           {job.matchQuality === 'great' && !job.hasConflict && !isDirectOffer && (
                             React.createElement(window.IPAiBadge, { size: 'sm' })
@@ -2043,37 +2043,37 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                             <span style={{ background: '#ffd89b', color: '#c86b1f', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\u26A0'} Overlaps {job.conflictWith}</span>
                           ) : (
                             <span onClick={(e) => { e.stopPropagation(); if (calendarRef.current) calendarRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
-                              style={{ background: '#c8e6c9', color: '#2e7d32', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{'\u2713'} No Conflicts</span>
+                              style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{'\u2713'} No Conflicts</span>
                           )}
                           {job.distanceMiles !== null && job.distanceMiles !== undefined && (
-                            <span style={{ fontSize: 11, color: '#888' }}>{job.distanceMiles} mi</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{job.distanceMiles} mi</span>
                           )}
                           {hasBonus && basePerHour > 0 ? (
                             <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ textDecoration: 'line-through', color: '#999', fontSize: 12 }}>${basePerHour}/hr</span>
-                              <span style={{ color: '#1b6b5a', fontWeight: 700, fontSize: 14 }}>${effectivePerHour}/hr</span>
+                              <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: 12 }}>${basePerHour}/hr</span>
+                              <span style={{ color: 'var(--role-color)', fontWeight: 700, fontSize: 14 }}>${effectivePerHour}/hr</span>
                             </span>
                           ) : basePerHour > 0 ? (
-                            <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
+                            <span style={{ background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
                           ) : null}
                         </div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{formatServiceType(job.serviceType)}</div>
-                        <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{formatServiceType(job.serviceType)}</div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                           {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
-                          {effectiveTotal > 0 && <React.Fragment><span> {'\u2022'} </span><span style={{ fontWeight: 800, color: '#1b6b5a', fontSize: 20 }}>${effectiveTotal.toFixed(0)}</span></React.Fragment>}
+                          {effectiveTotal > 0 && <React.Fragment><span> {'\u2022'} </span><span style={{ fontWeight: 800, color: 'var(--role-color)', fontSize: 20 }}>${effectiveTotal.toFixed(0)}</span></React.Fragment>}
                         </div>
-                        {job.recipientCity && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
-                        {job.familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {job.familyName}</div>}
+                        {job.recipientCity && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
+                        {job.familyName && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>Requested by {job.familyName}</div>}
                         {/* Health tags + care summary */}
                         {job.healthTags && job.healthTags.length > 0 && (
                           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
                             {job.healthTags.map((tag, idx) => (
-                              <span key={idx} style={{ fontSize: 10, background: '#fff3e0', color: '#e65100', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }}>{tag}</span>
+                              <span key={idx} style={{ fontSize: 10, background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }}>{tag}</span>
                             ))}
                           </div>
                         )}
                         {job.careSummary && (
-                          <div style={{ marginTop: 6, padding: '6px 8px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, fontSize: 11, color: '#555', lineHeight: 1.4 }}>
+                          <div style={{ marginTop: 6, padding: '6px 8px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                             {'\uD83D\uDCCB'} {job.careSummary.length > 150 ? job.careSummary.substring(0, 150) + '...' : job.careSummary}
                           </div>
                         )}
@@ -2083,17 +2083,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         <button onClick={(e) => { if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal); }} disabled={claimingJobId === job.id || profile.accountPaused}
                           title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                           style={{
-                            padding: '10px 20px', background: claimingJobId === job.id || profile.accountPaused ? '#ccc' : '#e8724a', color: '#fff', border: 'none',
+                            padding: '10px 20px', background: claimingJobId === job.id || profile.accountPaused ? 'var(--border-light)' : 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
                             borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: claimingJobId === job.id || profile.accountPaused ? 'not-allowed' : 'pointer',
                             boxShadow: '0 2px 6px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
                           }}>{profile.accountPaused ? '❌ Account Paused' : claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
                         ) : (
-                          <div style={{ padding: '8px 14px', background: '#f5f5f5', borderRadius: 10, fontSize: 11, color: '#888', textAlign: 'center', maxWidth: 140 }}>Complete setup to accept</div>
+                          <div style={{ padding: '8px 14px', background: 'var(--bg-primary)', borderRadius: 10, fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 140 }}>Complete setup to accept</div>
                         )}
                         {job.hasConflict && (
                           <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
                             style={{
-                              padding: '7px 14px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a',
+                              padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
                               borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                             }}>Propose Different Time</button>
                         )}
@@ -2105,7 +2105,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             )}
             {/* Footer */}
             <div style={{ textAlign: 'center', padding: '10px', borderTop: '1px solid #f0f0f0' }}>
-              <span onClick={() => window.__navigateTo && window.__navigateTo('find-work')} style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600, cursor: 'pointer' }}>
+              <span onClick={() => window.__navigateTo && window.__navigateTo('find-work')} style={{ fontSize: 13, color: 'var(--role-color)', fontWeight: 600, cursor: 'pointer' }}>
                 View all jobs, map & availability →
               </span>
             </div>
@@ -2126,8 +2126,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         if (sorted.length === 0 && filteredUpNext.length === 0) return (
           <div className="card" style={{ marginBottom: 16, padding: '24px', textAlign: 'center', borderLeft: '4px solid #1b6b5a' }}>
             <div style={{ fontSize: 20, marginBottom: 8 }}>{'\uD83D\uDCCB'}</div>
-            <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 4 }}>No upcoming sessions</div>
-            <div style={{ fontSize: 13, color: '#888' }}>Check the <span style={{ color: '#1b6b5a', fontWeight: 600, cursor: 'pointer' }} onClick={() => setActiveTab('schedule')}>Calendar</span> for available care requests in your area.</div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)', marginBottom: 4 }}>No upcoming sessions</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Check the <span style={{ color: 'var(--role-color)', fontWeight: 600, cursor: 'pointer' }} onClick={() => setActiveTab('schedule')}>Calendar</span> for available care requests in your area.</div>
           </div>
         );
 
@@ -2135,7 +2135,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
         return (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
               Scheduled
             </div>
             {sorted.slice(0, 5).map(s => {
@@ -2160,40 +2160,40 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   setExpandedScheduledId(isSchedExpanded ? null : s.id);
                 }} style={{
                   marginBottom: 10, padding: '16px 18px', cursor: 'pointer',
-                  border: `2px solid ${noAddress ? '#dc2626' : '#1b6b5a'}`,
+                  border: `2px solid ${noAddress ? 'var(--color-error)' : 'var(--role-color)'}`,
                   borderRadius: 12,
-                  background: '#fff',
+                  background: 'var(--bg-surface)',
                   boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '180px' }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 3 }}>{dayCountLabel}</div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 3 }}>{dayCountLabel}</div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
                         {recipName}
                         {s.interviewStatus && (
-                          <span style={{ marginLeft: 6, fontSize: 10, color: s.interviewStatus === 'accepted' ? '#2e7d32' : '#7b1fa2' }}>{'\uD83C\uDFA5'}</span>
+                          <span style={{ marginLeft: 6, fontSize: 10, color: s.interviewStatus === 'accepted' ? 'var(--color-success)' : 'var(--color-purple)' }}>{'\uD83C\uDFA5'}</span>
                         )}
                       </div>
-                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
                         {svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
                       </div>
                       {loc ? (
-                        <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
                       ) : noAddress ? (
-                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
                       ) : null}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
-                        <div style={{ fontSize: 20, fontWeight: 800, color: '#1b6b5a' }}>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--role-color)' }}>
                           ${(s.caregiverPayout || parseFloat(s.estimatedCost) || 0).toFixed(2)}
                         </div>
                       )}
                       <span style={{
                         padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                        background: s.status === 'confirmed' ? '#e8f5e9' : '#fff3e0',
-                        color: s.status === 'confirmed' ? '#2e7d32' : '#e65100',
+                        background: s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                        color: s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
                         textTransform: 'capitalize',
                       }}>{s.status}</span>
                     </div>
@@ -2202,7 +2202,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   {isSchedExpanded && (
                     <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #f0f0f0', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                       <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
-                        style={{ padding: '6px 12px', background: '#f5f5f5', color: '#555', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ padding: '6px 12px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         View Details
                       </button>
                       {s.status === 'confirmed' && !s.interviewStatus && (
@@ -2218,15 +2218,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                               showToast && showToast(err.error || 'Could not request interview', 'error');
                             }
                           } catch (err) { console.error('Interview request error:', err); }
-                        }} style={{ padding: '6px 12px', background: '#faf5ff', color: '#7b1fa2', border: '1px solid #e1bee7', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+                        }} style={{ padding: '6px 12px', background: '#faf5ff', color: 'var(--color-purple)', border: '1px solid #e1bee7', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                           {'\uD83C\uDFA5'} Request Interview
                         </button>
                       )}
                       {s.interviewStatus === 'pending' && (
-                        <span style={{ padding: '6px 12px', background: '#faf5ff', color: '#7b1fa2', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>{'\uD83C\uDFA5'} Interview pending</span>
+                        <span style={{ padding: '6px 12px', background: '#faf5ff', color: 'var(--color-purple)', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>{'\uD83C\uDFA5'} Interview pending</span>
                       )}
                       {s.interviewStatus === 'accepted' && (
-                        <span style={{ padding: '6px 12px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>{'\u2713'} Interview set</span>
+                        <span style={{ padding: '6px 12px', background: 'var(--color-success-bg)', color: 'var(--color-success)', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>{'\u2713'} Interview set</span>
                       )}
                     </div>
                   )}
@@ -2235,7 +2235,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             })}
             {sorted.length > 5 && (
               <div style={{ textAlign: 'center', padding: '8px' }}>
-                <span onClick={() => setActiveTab('schedule')} style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600, cursor: 'pointer' }}>
+                <span onClick={() => setActiveTab('schedule')} style={{ fontSize: 13, color: 'var(--role-color)', fontWeight: 600, cursor: 'pointer' }}>
                   View all {sorted.length} sessions {'\u2192'}
                 </span>
               </div>
@@ -2250,7 +2250,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         if (completed.length === 0) return null;
         return (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Completed</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Completed</div>
             {completed.slice(0, 2).map((s, i) => {
               const sDate = (s.date || '').split('T')[0];
               const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
@@ -2258,21 +2258,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const timeLabel = TimezoneHelper.formatTime(s.time);
               const recipName = s.recipientName || 'Session';
               return (
-                <div key={s.id} style={{ padding: '14px 18px', borderRadius: 12, marginBottom: 8, background: '#fafafa', border: '1px solid #e5e7eb', opacity: i === 0 ? 1 : 0.7 }}>
+                <div key={s.id} style={{ padding: '14px 18px', borderRadius: 12, marginBottom: 8, background: 'var(--bg-primary)', border: '1px solid #e5e7eb', opacity: i === 0 ? 1 : 0.7 }}>
                   <div onClick={() => {
                     if (s.id) setVisitDetailSessionId(s.id);
                   }} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{recipName}</div>
-                      <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{recipName}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
                         {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
                       </div>
-                      {s.visitSummary && <div style={{ fontSize: 12, color: '#666', marginTop: 3, fontStyle: 'italic' }}>{s.visitSummary.length > 80 ? s.visitSummary.substring(0, 80) + '...' : s.visitSummary}</div>}
+                      {s.visitSummary && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, fontStyle: 'italic' }}>{s.visitSummary.length > 80 ? s.visitSummary.substring(0, 80) + '...' : s.visitSummary}</div>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                      <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: '#e8f5e9', color: '#2e7d32' }}>{'\u2713'} Done</span>
-                      {s.caregiverPayout > 0 && <span style={{ fontSize: 22, fontWeight: 800, color: '#1b6b5a', background: '#e8f5e9', padding: '4px 10px', borderRadius: 8 }}>${s.caregiverPayout.toFixed(2)}</span>}
+                      <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>{'\u2713'} Done</span>
+                      {s.caregiverPayout > 0 && <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--role-color)', background: 'var(--color-success-bg)', padding: '4px 10px', borderRadius: 8 }}>${s.caregiverPayout.toFixed(2)}</span>}
                     </div>
                   </div>
                 </div>
@@ -2306,63 +2306,63 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {/* Inline Profile Editor (during onboarding) */}
       {activeTab === 'profile' && (
         <div className="card" style={{ padding: '24px' }}>
-          <h3 style={{ margin: '0 0 4px', fontSize: '18px', color: '#1b6b5a' }}>Complete Your Profile</h3>
-          <p style={{ fontSize: '13px', color: '#666', margin: '0 0 20px' }}>This is what families see when deciding who to hire. Make a great first impression!</p>
+          <h3 style={{ margin: '0 0 4px', fontSize: '18px', color: 'var(--role-color)' }}>Complete Your Profile</h3>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 20px' }}>This is what families see when deciding who to hire. Make a great first impression!</p>
           <div style={{ display: 'grid', gap: '16px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>Bio / About You</label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>Bio / About You</label>
               <textarea value={profileForm.bio} onChange={(e) => setProfileForm(p => ({ ...p, bio: e.target.value }))}
                 placeholder="Tell families about yourself — your experience, personality, and why you love caregiving..."
                 rows={4} style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>Your Rates ($/hr)</label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>Your Rates ($/hr)</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                 <div>
-                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>Daytime (6a–6p)</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Daytime (6a–6p)</div>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '10px', top: '10px', color: '#888', fontSize: '14px' }}>$</span>
+                    <span style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-tertiary)', fontSize: '14px' }}>$</span>
                     <input type="number" value={profileForm.rateDaytime} onChange={(e) => setProfileForm(p => ({ ...p, rateDaytime: e.target.value }))}
                       placeholder="25" min="15" max="200" style={{ width: '100%', padding: '10px 10px 10px 24px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>Evening (6p–12a)</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Evening (6p–12a)</div>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '10px', top: '10px', color: '#888', fontSize: '14px' }}>$</span>
+                    <span style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-tertiary)', fontSize: '14px' }}>$</span>
                     <input type="number" value={profileForm.rateNighttime} onChange={(e) => setProfileForm(p => ({ ...p, rateNighttime: e.target.value }))}
                       placeholder="30" min="15" max="200" style={{ width: '100%', padding: '10px 10px 10px 24px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>Overnight (12a–6a)</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Overnight (12a–6a)</div>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '10px', top: '10px', color: '#888', fontSize: '14px' }}>$</span>
+                    <span style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-tertiary)', fontSize: '14px' }}>$</span>
                     <input type="number" value={profileForm.rateOvernight} onChange={(e) => setProfileForm(p => ({ ...p, rateOvernight: e.target.value }))}
                       placeholder="35" min="15" max="200" style={{ width: '100%', padding: '10px 10px 10px 24px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
                   </div>
                 </div>
               </div>
-              <div style={{ fontSize: '11px', color: '#888', marginTop: '6px' }}>6-hour minimum per booking. Typical range: $20–$35/hr.</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '6px' }}>6-hour minimum per booking. Typical range: $20–$35/hr.</div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>Food Allergies <span style={{ color: '#999', fontWeight: 400 }}>(optional — so families know)</span></label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>Food Allergies <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional — so families know)</span></label>
               <input type="text" value={profileForm.foodAllergies} onChange={(e) => setProfileForm(p => ({ ...p, foodAllergies: e.target.value }))}
                 placeholder="e.g. peanuts, shellfish, none" style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>Medical Conditions <span style={{ color: '#999', fontWeight: 400 }}>(optional — anything families should know)</span></label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>Medical Conditions <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional — anything families should know)</span></label>
               <input type="text" value={profileForm.medicalConditions} onChange={(e) => setProfileForm(p => ({ ...p, medicalConditions: e.target.value }))}
                 placeholder="e.g. asthma, none" style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
             <button onClick={() => setActiveTab('schedule')} style={{
-              padding: '10px 24px', background: '#f0f0f0', color: '#555', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              padding: '10px 24px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
             }}>Back</button>
             <button onClick={saveOnboardingProfile} disabled={profileSaving || !profileForm.bio || !profileForm.rateDaytime} style={{
-              padding: '10px 24px', background: profileForm.bio && profileForm.rateDaytime ? '#1b6b5a' : '#ccc',
-              color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600,
+              padding: '10px 24px', background: profileForm.bio && profileForm.rateDaytime ? 'var(--role-color)' : 'var(--border-light)',
+              color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600,
               cursor: profileForm.bio && profileForm.rateDaytime ? 'pointer' : 'not-allowed', opacity: profileSaving ? 0.6 : 1,
             }}>{profileSaving ? 'Saving...' : 'Save Profile'}</button>
           </div>
@@ -2374,44 +2374,44 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         <div onClick={() => setShowReferralSection(!showReferralSection)} style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           cursor: 'pointer', padding: '14px 18px',
-          background: showReferralSection ? 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)' : '#fff',
+          background: showReferralSection ? 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)' : 'var(--text-on-primary)',
           border: '1px solid #c8e6c9', borderRadius: 12,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 22 }}>{'\u{1F91D}'}</span>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1b6b5a' }}>Refer a Caregiver</div>
-              <div style={{ fontSize: 12, color: '#888' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--role-color)' }}>Refer a Caregiver</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                 {referralData ? `${referralData.totalClaimed || 0} joined` : 'Invite friends to join inPlace'}
               </div>
             </div>
           </div>
-          <span style={{ fontSize: 18, color: '#999', transform: showReferralSection ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
+          <span style={{ fontSize: 18, color: 'var(--text-muted)', transform: showReferralSection ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
         </div>
         {showReferralSection && (
-          <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '18px' }}>
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '18px' }}>
             {/* Referral link */}
             {referralData && (
               <div style={{ marginBottom: 16, padding: '12px 14px', background: '#f8fdf8', border: '1px solid #c8e6c9', borderRadius: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#1b6b5a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Your Referral Link</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--role-color)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Your Referral Link</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input type="text" readOnly value={referralData.referralLink || ''} style={{
-                    flex: 1, padding: '8px 10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, color: '#555', background: '#fff',
+                    flex: 1, padding: '8px 10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-surface)',
                   }} />
                   <button onClick={() => {
                     navigator.clipboard?.writeText(referralData.referralLink || '');
                     showToast('Link copied!', 'success');
                   }} style={{
-                    padding: '8px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                    padding: '8px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                   }}>Copy</button>
                 </div>
-                <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Share this link — anyone who signs up through it is automatically credited to you.</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Share this link — anyone who signs up through it is automatically credited to you.</div>
               </div>
             )}
 
             {/* Send referral form */}
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 8 }}>Send a Referral Invite</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Send a Referral Invite</div>
               <div style={{ display: 'grid', gap: 8 }}>
                 <input type="text" value={refName} onChange={(e) => setRefName(e.target.value)}
                   placeholder="Friend's name" style={{ padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
@@ -2420,7 +2420,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 <input type="tel" value={refPhone} onChange={(e) => setRefPhone(e.target.value)}
                   placeholder="Phone (optional)" style={{ padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
               </div>
-              {refMsg && <div style={{ fontSize: 12, color: refMsg.includes('error') || refMsg.includes('already') ? '#c62828' : '#2e7d32', marginTop: 6 }}>{refMsg}</div>}
+              {refMsg && <div style={{ fontSize: 12, color: refMsg.includes('error') || refMsg.includes('already') ? 'var(--color-error)' : 'var(--color-success)', marginTop: 6 }}>{refMsg}</div>}
               <button onClick={async () => {
                 if (!refEmail.trim()) { setRefMsg('Email is required'); return; }
                 setRefSending(true); setRefMsg('');
@@ -2442,7 +2442,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 } catch (err) { setRefMsg('Failed to send referral'); }
                 setRefSending(false);
               }} disabled={refSending} style={{
-                marginTop: 10, padding: '10px 20px', background: refSending ? '#ccc' : '#1b6b5a', color: '#fff',
+                marginTop: 10, padding: '10px 20px', background: refSending ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--text-on-primary)',
                 border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: refSending ? 'wait' : 'pointer',
               }}>{refSending ? 'Sending...' : 'Send Invite'}</button>
             </div>
@@ -2450,7 +2450,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {/* Sent referrals list */}
             {referralList.length > 0 && (
               <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
                   Sent Referrals ({referralList.length})
                 </div>
                 {referralList.slice(0, 10).map(r => (
@@ -2459,13 +2459,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     padding: '8px 10px', borderBottom: '1px solid #f0f0f0', fontSize: 13,
                   }}>
                     <div>
-                      <span style={{ color: '#333' }}>{r.referred_email || r.referred_phone || '—'}</span>
-                      {r.claimed_first_name && <span style={{ color: '#1b6b5a', fontWeight: 600, marginLeft: 6 }}>{r.claimed_first_name} {r.claimed_last_name}</span>}
+                      <span style={{ color: 'var(--text-primary)' }}>{r.referred_email || r.referred_phone || '—'}</span>
+                      {r.claimed_first_name && <span style={{ color: 'var(--role-color)', fontWeight: 600, marginLeft: 6 }}>{r.claimed_first_name} {r.claimed_last_name}</span>}
                     </div>
                     <span style={{
                       fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
-                      background: r.status === 'claimed' ? '#e8f5e9' : '#fff8e1',
-                      color: r.status === 'claimed' ? '#2e7d32' : '#f57c00',
+                      background: r.status === 'claimed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                      color: r.status === 'claimed' ? 'var(--color-success)' : '#f57c00',
                     }}>{r.status === 'claimed' ? '\u2713 Joined' : 'Pending'}</span>
                   </div>
                 ))}
@@ -2474,7 +2474,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
             {/* Milestones summary */}
             {milestones.length > 0 && (
-              <div style={{ marginTop: 16, padding: '12px 14px', background: '#fff8e1', borderRadius: 10, border: '1px solid #ffe082' }}>
+              <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--color-warning-bg)', borderRadius: 10, border: '1px solid #ffe082' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#f57c00', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Your Milestones</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {[10, 25, 50, 100, 250, 500].map(v => {
@@ -2482,8 +2482,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     return (
                       <div key={v} style={{
                         padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600,
-                        background: achieved ? '#4caf50' : '#f5f5f5',
-                        color: achieved ? '#fff' : '#bbb',
+                        background: achieved ? 'var(--color-success)' : 'var(--bg-primary)',
+                        color: achieved ? 'var(--text-on-primary)' : 'var(--text-muted)',
                         border: achieved ? 'none' : '1px solid #e0e0e0',
                       }}>{v} sessions</div>
                     );
@@ -2501,36 +2501,36 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <div onClick={() => setShowTipsSection(!showTipsSection)} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             cursor: 'pointer', padding: '14px 18px',
-            background: showTipsSection ? 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)' : '#fff',
+            background: showTipsSection ? 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)' : 'var(--text-on-primary)',
             border: '1px solid #FFE0B2', borderRadius: 12,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 22 }}>{'\uD83D\uDC9B'}</span>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#E65100' }}>Tips & Thanks</div>
-                <div style={{ fontSize: 12, color: '#888' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-warning)' }}>Tips & Thanks</div>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                   ${(tipsData.totalCents / 100).toFixed(2)} from {tipsData.tips.length} {tipsData.tips.length === 1 ? 'tip' : 'tips'}
                 </div>
               </div>
             </div>
-            <span style={{ fontSize: 18, color: '#999', transform: showTipsSection ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
+            <span style={{ fontSize: 18, color: 'var(--text-muted)', transform: showTipsSection ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
           </div>
           {showTipsSection && (
-            <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 18px' }}>
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 18px' }}>
               {tipsData.tips.slice(0, 20).map(tip => (
                 <div key={tip.id} style={{ padding: '10px 0', borderBottom: '1px solid #f5f5f5', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: '#333' }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
                       <span style={{ fontWeight: 600 }}>{tip.family_name || 'A family'}</span>
-                      {tip.scheduled_date && <span style={{ color: '#999' }}> — {tip.scheduled_date}</span>}
+                      {tip.scheduled_date && <span style={{ color: 'var(--text-muted)' }}> — {tip.scheduled_date}</span>}
                     </div>
                     {tip.reason_text && (
-                      <div style={{ fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 3, lineHeight: 1.4 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: 3, lineHeight: 1.4 }}>
                         "{tip.reason_text}"
                       </div>
                     )}
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#E65100', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-warning)', whiteSpace: 'nowrap' }}>
                     ${(tip.amount_cents / 100).toFixed(2)}
                   </div>
                 </div>
@@ -2542,7 +2542,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* Calendar — always rendered */}
       <div ref={calendarRef} style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>📅 Calendar</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>📅 Calendar</div>
         <CaregiverCalendar
           caregiverId={profile.id}
           sessions={sessions}
@@ -2596,11 +2596,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           alignItems: 'center', justifyContent: 'center', zIndex: 1000,
         }}>
           <div style={{
-            background: '#fff', borderRadius: '12px', padding: '24px', width: '480px', maxWidth: '90vw',
+            background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', width: '480px', maxWidth: '90vw',
             maxHeight: '90vh', overflow: 'auto',
           }}>
             <h3 style={{ marginTop: 0 }}>Log Visit — {visitLogSession.recipientName}</h3>
-            <p style={{ fontSize: '13px', color: '#666' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
               {visitLogSession.date} at {visitLogSession.time} &bull; {formatServiceType(visitLogSession.serviceType)}
             </p>
 
@@ -2618,7 +2618,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 {['great', 'good', 'fair', 'difficult'].map(m => (
                   <button key={m} onClick={() => setLogMood(m)} style={{
                     padding: '6px 14px', borderRadius: '16px', border: logMood === m ? '2px solid #1b6b5a' : '2px solid #ddd',
-                    background: logMood === m ? '#e8f5f1' : '#fff', cursor: 'pointer', fontSize: '12px',
+                    background: logMood === m ? 'var(--bg-teal-light)' : 'var(--text-on-primary)', cursor: 'pointer', fontSize: '12px',
                     fontWeight: logMood === m ? 600 : 400, textTransform: 'capitalize',
                   }}>{m === 'great' ? '😊' : m === 'good' ? '🙂' : m === 'fair' ? '😐' : '😟'} {m}</button>
                 ))}
@@ -2635,15 +2635,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>📸 Visit Photos (up to 5)</label>
-              <p style={{ fontSize: '12px', color: '#888', margin: '0 0 8px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 8px' }}>
                 Share photos from the visit with the family — activities, meals, smiles!
               </p>
               <input type="file" ref={photoInputRef} accept="image/*" multiple onChange={handlePhotoSelect}
                 style={{ display: 'none' }} />
               <button onClick={() => photoInputRef.current?.click()} style={{
-                padding: '16px', background: logPhotos.length > 0 ? '#e8f5e9' : '#f8f9fa',
+                padding: '16px', background: logPhotos.length > 0 ? 'var(--color-success-bg)' : 'var(--bg-primary)',
                 border: logPhotos.length > 0 ? '2px solid #1b6b5a' : '2px dashed #ccc', borderRadius: '10px',
-                cursor: 'pointer', fontSize: '14px', color: logPhotos.length > 0 ? '#1b6b5a' : '#666',
+                cursor: 'pointer', fontSize: '14px', color: logPhotos.length > 0 ? 'var(--role-color)' : 'var(--text-secondary)',
                 width: '100%', fontWeight: logPhotos.length > 0 ? 600 : 400,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               }}>
@@ -2659,7 +2659,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       }} />
                       <button onClick={() => removePhoto(idx)} style={{
                         position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px',
-                        background: '#c62828', color: '#fff', border: 'none', borderRadius: '50%',
+                        background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '50%',
                         fontSize: '12px', cursor: 'pointer', lineHeight: '20px', padding: 0,
                       }}>×</button>
                     </div>
@@ -2670,11 +2670,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => setVisitLogSession(null)} style={{
-                padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: '8px',
+                padding: '10px 20px', border: '1px solid #ddd', background: 'var(--bg-surface)', borderRadius: '8px',
                 cursor: 'pointer', fontSize: '13px',
               }}>Cancel</button>
               <button onClick={handleSubmitVisitLog} disabled={!logSummary.trim() || submittingLog} style={{
-                padding: '10px 20px', background: '#1b6b5a', color: '#fff', border: 'none',
+                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
                 opacity: (!logSummary.trim() || submittingLog) ? 0.5 : 1,
               }}>{submittingLog ? 'Submitting...' : 'Submit Visit Log'}</button>
@@ -2690,7 +2690,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           alignItems: 'center', justifyContent: 'center', zIndex: 1000,
         }}>
           <div style={{
-            background: '#fff', borderRadius: '16px', padding: '28px', width: '480px', maxWidth: '94vw',
+            background: 'var(--bg-surface)', borderRadius: '16px', padding: '28px', width: '480px', maxWidth: '94vw',
             maxHeight: '90vh', overflow: 'auto',
           }}>
 
@@ -2704,68 +2704,68 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     background: 'linear-gradient(135deg, #1b6b5a, #2a9d8f)', borderRadius: 10, padding: '8px 12px',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }},
-                    React.createElement('span', { style: { fontSize: 16 }, dangerouslySetInnerHTML: { __html: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M4.5 16.5c0-3 2.5-4.5 7.5-4.5s7.5 1.5 7.5 4.5"/><circle cx="12" cy="17" r="4"/><path d="M12 15v4m-2-2h4"/></svg>' } }),
-                    React.createElement('span', { style: { color: '#fff', fontSize: 13, fontWeight: 700, letterSpacing: 0.5 } }, 'AI Care Briefing')
+                    React.createElement('span', { style: { fontSize: 16 }, dangerouslySetInnerHTML: { __html: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--bg-surface)" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M4.5 16.5c0-3 2.5-4.5 7.5-4.5s7.5 1.5 7.5 4.5"/><circle cx="12" cy="17" r="4"/><path d="M12 15v4m-2-2h4"/></svg>' } }),
+                    React.createElement('span', { style: { color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 700, letterSpacing: 0.5 } }, 'AI Care Briefing')
                   ),
                   React.createElement('div', { style: { flex: 1 } }),
                   React.createElement('button', {
                     onClick: () => setCheckInSession(null),
-                    style: { background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#999', padding: 4 }
+                    style: { background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }
                   }, '×')
                 ),
 
                 React.createElement('h3', { style: { margin: '0 0 4px 0', fontSize: 20 } },
                   bd?.recipientName || recipName
                 ),
-                React.createElement('p', { style: { fontSize: 13, color: '#888', margin: '0 0 16px 0' } },
+                React.createElement('p', { style: { fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 16px 0' } },
                   (bd?.sessionServiceType || '') + ' · ' + (checkInSession.date || checkInSession.scheduled_date || '') + ' at ' + (checkInSession.time || checkInSession.scheduled_time || '')
                 ),
 
                 briefingLoading
-                  ? React.createElement('div', { style: { textAlign: 'center', padding: '30px 0', color: '#888' } },
+                  ? React.createElement('div', { style: { textAlign: 'center', padding: '30px 0', color: 'var(--text-tertiary)' } },
                       React.createElement('div', { style: { fontSize: 14 } }, 'Loading care briefing...'))
                   : React.createElement('div', null,
                       // ── Experience-aware narrative ──
                       bd?.isExperienced
                         ? React.createElement('div', { style: {
-                            padding: 14, background: '#f0faf7', borderRadius: 10, border: '1px solid #d4edda', marginBottom: 14,
+                            padding: 14, background: 'var(--bg-highlight)', borderRadius: 10, border: '1px solid #d4edda', marginBottom: 14,
                           }},
-                            React.createElement('div', { style: { fontSize: 13, color: '#1b6b5a', fontWeight: 600, marginBottom: 6 } },
+                            React.createElement('div', { style: { fontSize: 13, color: 'var(--role-color)', fontWeight: 600, marginBottom: 6 } },
                               'You\'ve visited ' + (bd?.recipientName || recipName) + ' ' + (bd?.visitCount || 'several') + ' times'),
                             bd?.caregiverBriefing
-                              ? React.createElement('div', { style: { fontSize: 13, color: '#333', lineHeight: 1.55, whiteSpace: 'pre-line' } }, bd.caregiverBriefing)
-                              : React.createElement('div', { style: { fontSize: 13, color: '#666', fontStyle: 'italic' } }, 'No care briefing has been set by the care team yet.')
+                              ? React.createElement('div', { style: { fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.55, whiteSpace: 'pre-line' } }, bd.caregiverBriefing)
+                              : React.createElement('div', { style: { fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic' } }, 'No care briefing has been set by the care team yet.')
                           )
                         : React.createElement('div', null,
                             // New caregiver — full briefing
                             React.createElement('div', { style: {
-                              padding: 14, background: '#fff8f0', borderRadius: 10, border: '1px solid #ffe0c0', marginBottom: 14,
+                              padding: 14, background: 'var(--bg-warm)', borderRadius: 10, border: '1px solid #ffe0c0', marginBottom: 14,
                             }},
-                              React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: '#e8724a', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 } },
+                              React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: 'var(--accent-color)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 } },
                                 'First visit — please review carefully'),
                               bd?.caregiverBriefing
-                                ? React.createElement('div', { style: { fontSize: 13, color: '#333', lineHeight: 1.55, whiteSpace: 'pre-line' } }, bd.caregiverBriefing)
-                                : React.createElement('div', { style: { fontSize: 13, color: '#666', fontStyle: 'italic' } }, 'No care briefing has been set by the care team yet.'),
+                                ? React.createElement('div', { style: { fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.55, whiteSpace: 'pre-line' } }, bd.caregiverBriefing)
+                                : React.createElement('div', { style: { fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic' } }, 'No care briefing has been set by the care team yet.'),
                               bd?.healthConditions && bd.healthConditions.length > 0
                                 ? React.createElement('div', { style: { marginTop: 10 } },
-                                    React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#c62828', marginBottom: 4 } }, 'Health conditions:'),
+                                    React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: 'var(--color-error)', marginBottom: 4 } }, 'Health conditions:'),
                                     bd.healthConditions.map((c, i) =>
-                                      React.createElement('div', { key: i, style: { fontSize: 12, color: '#555', paddingLeft: 10, marginBottom: 2 } }, '• ' + c)
+                                      React.createElement('div', { key: i, style: { fontSize: 12, color: 'var(--text-secondary)', paddingLeft: 10, marginBottom: 2 } }, '• ' + c)
                                     )
                                   )
                                 : null,
                               bd?.medications && bd.medications.length > 0
                                 ? React.createElement('div', { style: { marginTop: 8 } },
-                                    React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#1565c0', marginBottom: 4 } }, 'Current medications:'),
+                                    React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: 'var(--color-info)', marginBottom: 4 } }, 'Current medications:'),
                                     bd.medications.map((m, i) =>
-                                      React.createElement('div', { key: i, style: { fontSize: 12, color: '#555', paddingLeft: 10, marginBottom: 2 } }, '• ' + m)
+                                      React.createElement('div', { key: i, style: { fontSize: 12, color: 'var(--text-secondary)', paddingLeft: 10, marginBottom: 2 } }, '• ' + m)
                                     )
                                   )
                                 : null,
                               bd?.foodAllergies
                                 ? React.createElement('div', { style: { marginTop: 8, fontSize: 12 } },
-                                    React.createElement('span', { style: { fontWeight: 600, color: '#e65100' } }, 'Food allergies: '),
-                                    React.createElement('span', { style: { color: '#555' } }, bd.foodAllergies)
+                                    React.createElement('span', { style: { fontWeight: 600, color: 'var(--color-warning)' } }, 'Food allergies: '),
+                                    React.createElement('span', { style: { color: 'var(--text-secondary)' } }, bd.foodAllergies)
                                   )
                                 : null
                             )
@@ -2774,10 +2774,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       // ── Special instructions for this session ──
                       (checkInSession.special_instructions || checkInSession.specialInstructions)
                         ? React.createElement('div', { style: {
-                            padding: 12, background: '#f0faf7', borderRadius: 8, border: '1px solid #d4edda', marginBottom: 14,
+                            padding: 12, background: 'var(--bg-highlight)', borderRadius: 8, border: '1px solid #d4edda', marginBottom: 14,
                           }},
-                            React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#1b6b5a', marginBottom: 4 } }, 'Today\'s instructions'),
-                            React.createElement('div', { style: { fontSize: 13, color: '#333' } }, checkInSession.special_instructions || checkInSession.specialInstructions)
+                            React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 } }, 'Today\'s instructions'),
+                            React.createElement('div', { style: { fontSize: 13, color: 'var(--text-primary)' } }, checkInSession.special_instructions || checkInSession.specialInstructions)
                           )
                         : null,
 
@@ -2788,16 +2788,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           }},
                             React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#6b21a8', marginBottom: 6 } }, 'Care Note Insights'),
                             bd.notesSynthesis
-                              ? React.createElement('div', { style: { fontSize: 13, color: '#333', lineHeight: 1.5, whiteSpace: 'pre-wrap' } }, bd.notesSynthesis)
+                              ? React.createElement('div', { style: { fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' } }, bd.notesSynthesis)
                               : bd.recentNotes.slice(0, 3).map((n, i) =>
-                                  React.createElement('div', { key: i, style: { fontSize: 12, color: '#555', marginTop: i > 0 ? 4 : 2, lineHeight: 1.4 } }, n.content)
+                                  React.createElement('div', { key: i, style: { fontSize: 12, color: 'var(--text-secondary)', marginTop: i > 0 ? 4 : 2, lineHeight: 1.4 } }, n.content)
                                 ),
                             bd.notesSynthesis && bd.recentNotes && bd.recentNotes.length > 0
                               ? React.createElement('details', { style: { marginTop: 8 } },
                                   React.createElement('summary', { style: { fontSize: 11, color: '#8b5cf6', cursor: 'pointer', fontWeight: 600 } }, `View ${bd.recentNotes.length} original note${bd.recentNotes.length !== 1 ? 's' : ''}`),
                                   React.createElement('div', { style: { marginTop: 6, paddingLeft: 8, borderLeft: '2px solid #e8daff' } },
                                     bd.recentNotes.map((n, i) =>
-                                      React.createElement('div', { key: i, style: { fontSize: 11, color: '#666', marginTop: i > 0 ? 4 : 0, lineHeight: 1.4 } }, n.content)
+                                      React.createElement('div', { key: i, style: { fontSize: 11, color: 'var(--text-secondary)', marginTop: i > 0 ? 4 : 0, lineHeight: 1.4 } }, n.content)
                                     )
                                   )
                                 )
@@ -2809,7 +2809,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       React.createElement('label', {
                         style: {
                           display: 'flex', alignItems: 'flex-start', gap: 10, padding: 14,
-                          background: briefingAcked ? '#e8f5e9' : '#fafafa', borderRadius: 10,
+                          background: briefingAcked ? 'var(--color-success-bg)' : 'var(--bg-primary)', borderRadius: 10,
                           border: briefingAcked ? '2px solid #4caf50' : '2px solid #ddd', cursor: 'pointer',
                           marginTop: 4, transition: 'all 0.2s',
                         }
@@ -2817,9 +2817,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         React.createElement('input', {
                           type: 'checkbox', checked: briefingAcked,
                           onChange: (e) => setBriefingAcked(e.target.checked),
-                          style: { marginTop: 2, width: 18, height: 18, accentColor: '#1b6b5a' }
+                          style: { marginTop: 2, width: 18, height: 18, accentColor: 'var(--role-color)' }
                         }),
-                        React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: briefingAcked ? '#2e7d32' : '#555' } },
+                        React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: briefingAcked ? 'var(--color-success)' : 'var(--text-secondary)' } },
                           'I\'ve reviewed this care briefing')
                       )
                     ),
@@ -2828,7 +2828,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 } },
                   React.createElement('button', {
                     onClick: () => setCheckInSession(null),
-                    style: { padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
+                    style: { padding: '10px 20px', border: '1px solid #ddd', background: 'var(--bg-surface)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
                   }, 'Cancel'),
                   React.createElement('button', {
                     onClick: async () => {
@@ -2851,7 +2851,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     },
                     disabled: !briefingAcked,
                     style: {
-                      padding: '10px 24px', background: briefingAcked ? '#1b6b5a' : '#ccc', color: '#fff', border: 'none',
+                      padding: '10px 24px', background: briefingAcked ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none',
                       borderRadius: 8, cursor: briefingAcked ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700,
                       transition: 'background 0.2s',
                     }
@@ -2865,12 +2865,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               React.createElement('div', { style: { textAlign: 'center', marginBottom: 20 } },
                 React.createElement('div', { style: { fontSize: 40, marginBottom: 8 } }, '\u{1F44B}'),
                 React.createElement('h3', { style: { marginTop: 0, marginBottom: 4, fontSize: 20 } }, 'First Visit Confirmation'),
-                React.createElement('p', { style: { fontSize: 13, color: '#666', margin: 0 } },
+                React.createElement('p', { style: { fontSize: 13, color: 'var(--text-secondary)', margin: 0 } },
                   'This is your first session with ' + firstVisitName + '. Please confirm their awareness.')
               ),
 
-              React.createElement('div', { style: { padding: 16, background: '#FFF3E0', borderRadius: 10, border: '2px solid #e8724a', marginBottom: 16 } },
-                React.createElement('div', { style: { fontSize: 14, fontWeight: 700, marginBottom: 12, color: '#e65100' } },
+              React.createElement('div', { style: { padding: 16, background: 'var(--color-warning-bg)', borderRadius: 10, border: '2px solid #e8724a', marginBottom: 16 } },
+                React.createElement('div', { style: { fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--color-warning)' } },
                   'Is ' + firstVisitName.split(' ')[0] + ' aware that you\'re here to provide care today?'),
                 [
                   { key: 'yes', label: 'Yes, they acknowledged me', emoji: '\u2705' },
@@ -2882,7 +2882,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     style: {
                       display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 6,
                       borderRadius: 8, cursor: 'pointer',
-                      background: firstVisitChoice === opt.key ? '#fff8e1' : '#fff',
+                      background: firstVisitChoice === opt.key ? 'var(--color-warning-bg)' : 'var(--text-on-primary)',
                       border: firstVisitChoice === opt.key ? '2px solid #e8724a' : '2px solid #eee',
                     }
                   },
@@ -2890,7 +2890,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       type: 'radio', name: 'firstVisitChoice', value: opt.key,
                       checked: firstVisitChoice === opt.key,
                       onChange: () => setFirstVisitChoice(opt.key),
-                      style: { accentColor: '#e8724a' }
+                      style: { accentColor: 'var(--accent-color)' }
                     }),
                     React.createElement('span', { style: { fontSize: 16 } }, opt.emoji),
                     React.createElement('span', { style: { fontSize: 13, fontWeight: firstVisitChoice === opt.key ? 700 : 400 } }, opt.label)
@@ -2898,7 +2898,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 ),
 
                 (firstVisitChoice === 'no' || firstVisitChoice === 'unable') && React.createElement('div', { style: { marginTop: 12 } },
-                  React.createElement('label', { style: { display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: '#666' } }, 'Notes (optional — will be shared with the family):'),
+                  React.createElement('label', { style: { display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' } }, 'Notes (optional — will be shared with the family):'),
                   React.createElement('textarea', {
                     value: firstVisitNotes, onChange: e => setFirstVisitNotes(e.target.value),
                     placeholder: 'Describe what you observed...',
@@ -2910,7 +2910,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 } },
                 React.createElement('button', {
                   onClick: () => setCheckInStep('briefing'),
-                  style: { padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
+                  style: { padding: '10px 20px', border: '1px solid #ddd', background: 'var(--bg-surface)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
                 }, '\u2190 Back'),
                 React.createElement('button', {
                   onClick: async () => {
@@ -2927,7 +2927,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   },
                   disabled: !firstVisitChoice || firstVisitSubmitting,
                   style: {
-                    padding: '10px 24px', background: firstVisitChoice ? '#1b6b5a' : '#ccc', color: '#fff', border: 'none',
+                    padding: '10px 24px', background: firstVisitChoice ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none',
                     borderRadius: 8, cursor: firstVisitChoice ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700,
                   }
                 }, firstVisitSubmitting ? 'Submitting...' : 'Continue to Check In \u2192')
@@ -2939,7 +2939,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               React.createElement('div', { style: { textAlign: 'center', marginBottom: 20 } },
                 React.createElement('div', { style: { fontSize: 40, marginBottom: 8 } }, '👋'),
                 React.createElement('h3', { style: { marginTop: 0, marginBottom: 4, fontSize: 20 } }, 'Check In'),
-                React.createElement('p', { style: { fontSize: 13, color: '#666', margin: 0 } },
+                React.createElement('p', { style: { fontSize: 13, color: 'var(--text-secondary)', margin: 0 } },
                   (checkInSession.recipientName || checkInSession.recipient_name || 'Care Session') + ' · ' + (checkInSession.date || checkInSession.scheduled_date) + ' at ' + (checkInSession.time || checkInSession.scheduled_time)
                 )
               ),
@@ -2963,7 +2963,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       style: {
                         padding: '8px 14px', borderRadius: 20,
                         border: checkInMood.includes(m.key) ? '2px solid #e8724a' : '2px solid #eee',
-                        background: checkInMood.includes(m.key) ? '#fff3ed' : '#fafafa', cursor: 'pointer', fontSize: 13,
+                        background: checkInMood.includes(m.key) ? '#fff3ed' : 'var(--bg-primary)', cursor: 'pointer', fontSize: 13,
                         fontWeight: checkInMood.includes(m.key) ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
                       }
                     }, React.createElement('span', { style: { fontSize: 18 } }, m.emoji), ' ' + m.label)
@@ -2972,18 +2972,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               ),
 
               checkInLocation
-                ? React.createElement('div', { style: { marginBottom: 12, padding: 10, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9', fontSize: 12, color: '#1565c0', display: 'flex', alignItems: 'center', gap: 6 } },
+                ? React.createElement('div', { style: { marginBottom: 12, padding: 10, background: 'var(--color-info-bg)', borderRadius: 8, border: '1px solid #90caf9', fontSize: 12, color: 'var(--color-info)', display: 'flex', alignItems: 'center', gap: 6 } },
                     React.createElement('span', { style: { fontSize: 14 } }, '📍'), ' Location captured (' + Math.round(checkInLocation.accuracy || 0) + 'm accuracy)')
                 : null,
               locationError && !checkInLocation
-                ? React.createElement('div', { style: { marginBottom: 12, padding: 10, background: '#fff3e0', borderRadius: 8, border: '1px solid #ffb74d', fontSize: 12, color: '#e65100', display: 'flex', alignItems: 'center', gap: 6 } },
+                ? React.createElement('div', { style: { marginBottom: 12, padding: 10, background: 'var(--color-warning-bg)', borderRadius: 8, border: '1px solid #ffb74d', fontSize: 12, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: 6 } },
                     React.createElement('span', { style: { fontSize: 14 } }, '⚠️'), ' Location unavailable — you can still check in')
                 : null,
 
               React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 } },
                 React.createElement('button', {
                   onClick: () => setCheckInStep(firstVisitNeeded ? 'first-visit' : 'briefing'),
-                  style: { padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
+                  style: { padding: '10px 20px', border: '1px solid #ddd', background: 'var(--bg-surface)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
                 }, '\u2190 Back'),
                 React.createElement('button', {
                   onClick: async () => {
@@ -3015,7 +3015,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   },
                   disabled: checkSubmitting,
                   style: {
-                    padding: '10px 24px', background: '#e8724a', color: '#fff', border: 'none',
+                    padding: '10px 24px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
                     borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 700,
                     opacity: checkSubmitting ? 0.6 : 1,
                   }
@@ -3034,13 +3034,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           alignItems: 'center', justifyContent: 'center', zIndex: 1000,
         }}>
           <div style={{
-            background: '#fff', borderRadius: '16px', padding: '28px', width: '500px', maxWidth: '92vw',
+            background: 'var(--bg-surface)', borderRadius: '16px', padding: '28px', width: '500px', maxWidth: '92vw',
             maxHeight: '90vh', overflow: 'auto',
           }}>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ fontSize: 40, marginBottom: 8 }}>👋</div>
               <h3 style={{ marginTop: 0, marginBottom: 4, fontSize: 20 }}>Check Out</h3>
-              <p style={{ fontSize: 13, color: '#666', margin: 0 }}>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
                 {checkOutSession.recipientName || checkOutSession.recipient_name || 'Care Session'} &bull; {checkOutSession.date || checkOutSession.scheduled_date}
               </p>
             </div>
@@ -3061,7 +3061,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 ].map(m => (
                   <button key={m.key} onClick={() => setCheckOutMood(prev => prev.includes(m.key) ? prev.filter(k => k !== m.key) : [...prev, m.key])} style={{
                     padding: '8px 14px', borderRadius: 20, border: checkOutMood.includes(m.key) ? '2px solid #c62828' : '2px solid #eee',
-                    background: checkOutMood.includes(m.key) ? '#ffebee' : '#fafafa', cursor: 'pointer', fontSize: 13,
+                    background: checkOutMood.includes(m.key) ? 'var(--color-error-bg)' : 'var(--bg-primary)', cursor: 'pointer', fontSize: 13,
                     fontWeight: checkOutMood.includes(m.key) ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
                   }}>
                     <span style={{ fontSize: 18 }}>{m.emoji}</span> {m.label}
@@ -3088,9 +3088,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
                     )} style={{
                       padding: '5px 12px', borderRadius: 16, fontSize: 12,
-                      border: isSelected ? `2px solid ${isPositive ? '#2e7d32' : '#c62828'}` : '1px solid #ddd',
-                      background: isSelected ? (isPositive ? '#e8f5e9' : '#ffebee') : '#fff',
-                      color: isSelected ? (isPositive ? '#2e7d32' : '#c62828') : '#555',
+                      border: isSelected ? `2px solid ${isPositive ? 'var(--color-success)' : 'var(--color-error)'}` : '1px solid #ddd',
+                      background: isSelected ? (isPositive ? 'var(--color-success-bg)' : 'var(--color-error-bg)') : 'var(--text-on-primary)',
+                      color: isSelected ? (isPositive ? 'var(--color-success)' : 'var(--color-error)') : 'var(--text-secondary)',
                       cursor: 'pointer', fontWeight: isSelected ? 600 : 400,
                     }}>{tag}</button>
                   );
@@ -3102,7 +3102,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
                 {'\u{1F4DD}'} Care Notes
               </label>
-              <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px' }}>
+              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 8px' }}>
                 How was the visit? This will be saved as a care note for the family to see.
               </p>
               <textarea value={checkOutSummary} onChange={e => setCheckOutSummary(e.target.value)}
@@ -3125,15 +3125,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
                 📸 Visit Photos (optional, up to 5)
               </label>
-              <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px' }}>
+              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 8px' }}>
                 Share photos from the visit — activities, meals, smiles!
               </p>
               <input type="file" ref={checkOutPhotoRef} accept="image/*" multiple onChange={handleCheckOutPhotoSelect}
                 style={{ display: 'none' }} />
               <button onClick={() => checkOutPhotoRef.current?.click()} style={{
-                padding: 14, background: checkOutPhotos.length > 0 ? '#e8f5e9' : '#f8f9fa',
+                padding: 14, background: checkOutPhotos.length > 0 ? 'var(--color-success-bg)' : 'var(--bg-primary)',
                 border: checkOutPhotos.length > 0 ? '2px solid #1b6b5a' : '2px dashed #ccc', borderRadius: 10,
-                cursor: 'pointer', fontSize: 13, color: checkOutPhotos.length > 0 ? '#1b6b5a' : '#666',
+                cursor: 'pointer', fontSize: 13, color: checkOutPhotos.length > 0 ? 'var(--role-color)' : 'var(--text-secondary)',
                 width: '100%', fontWeight: checkOutPhotos.length > 0 ? 600 : 400,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxSizing: 'border-box',
               }}>
@@ -3149,7 +3149,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       }} />
                       <button onClick={() => removeCheckOutPhoto(idx)} style={{
                         position: 'absolute', top: -6, right: -6, width: 20, height: 20,
-                        background: '#c62828', color: '#fff', border: 'none', borderRadius: '50%',
+                        background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '50%',
                         fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>×</button>
                     </div>
@@ -3186,20 +3186,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const roundedMins = Math.ceil(actualMins / 15) * 15;
               const payPercent = Math.round((roundedMins / totalMins) * 100);
               return React.createElement('div', { style: {
-                background: '#fff3e0', border: '2px solid #e8724a', borderRadius: 12,
+                background: 'var(--color-warning-bg)', border: '2px solid #e8724a', borderRadius: 12,
                 padding: 16, marginBottom: 16,
               }},
                 React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } },
                   React.createElement('span', { style: { fontSize: 20 } }, '⚠️'),
-                  React.createElement('strong', { style: { fontSize: 14, color: '#c62828' } }, 'Early Checkout')
+                  React.createElement('strong', { style: { fontSize: 14, color: 'var(--color-error)' } }, 'Early Checkout')
                 ),
-                React.createElement('p', { style: { fontSize: 13, color: '#333', margin: '0 0 8px', lineHeight: 1.5 } },
+                React.createElement('p', { style: { fontSize: 13, color: 'var(--text-primary)', margin: '0 0 8px', lineHeight: 1.5 } },
                   `This appointment is scheduled until ${endTimeStr}. You are checking out ${Math.round(minsEarly)} minutes early.`
                 ),
-                React.createElement('p', { style: { fontSize: 13, color: '#c62828', fontWeight: 600, margin: '0 0 12px' } },
+                React.createElement('p', { style: { fontSize: 13, color: 'var(--color-error)', fontWeight: 600, margin: '0 0 12px' } },
                   `Pay is calculated in 15-minute blocks — you'll receive ${payPercent}% of the session pay.`
                 ),
-                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#333' } },
+                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' } },
                   'Please let us and the family know why you\'re leaving early: *'
                 ),
                 React.createElement('textarea', {
@@ -3213,7 +3213,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setCheckOutSession(null)} style={{
-                padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: 8,
+                padding: '10px 20px', border: '1px solid #ddd', background: 'var(--bg-surface)', borderRadius: 8,
                 cursor: 'pointer', fontSize: 13,
               }}>Cancel</button>
               <button onClick={async () => {
@@ -3302,7 +3302,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 }
                 setCheckSubmitting(false);
               }} disabled={checkSubmitting} style={{
-                padding: '10px 24px', background: '#c62828', color: '#fff', border: 'none',
+                padding: '10px 24px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 700,
                 opacity: checkSubmitting ? 0.6 : 1,
               }}>{checkSubmitting ? 'Submitting...' : 'Complete Session ✓'}</button>
@@ -3323,23 +3323,23 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {showReviews && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
           onClick={() => setShowReviews(false)}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: 420, maxWidth: '90vw', maxHeight: '70vh', overflowY: 'auto' }}
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 24, width: 420, maxWidth: '90vw', maxHeight: '70vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 18 }}>⭐ Your Reviews</h3>
-              <button onClick={() => setShowReviews(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>×</button>
+              <button onClick={() => setShowReviews(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-tertiary)' }}>×</button>
             </div>
             {reviews.length > 0 ? reviews.map((r, i) => (
               <div key={i} style={{ padding: '12px 0', borderBottom: i < reviews.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{r.reviewer_name || r.reviewerName || 'Family'}</span>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{r.reviewer_name || r.reviewerName || 'Family'}</span>
                   <span style={{ color: '#f59e0b', fontSize: 13 }}>{'⭐'.repeat(r.rating || 0)}</span>
                 </div>
-                {r.comment && <p style={{ fontSize: 13, color: '#555', margin: '4px 0 0', lineHeight: 1.5 }}>{r.comment}</p>}
-                {r.created_at && <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>{new Date(r.created_at).toLocaleDateString()}</div>}
+                {r.comment && <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0', lineHeight: 1.5 }}>{r.comment}</p>}
+                {r.created_at && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{new Date(r.created_at).toLocaleDateString()}</div>}
               </div>
             )) : (
-              <p style={{ color: '#888', fontSize: 14, textAlign: 'center', margin: '20px 0' }}>No reviews yet</p>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 14, textAlign: 'center', margin: '20px 0' }}>No reviews yet</p>
             )}
           </div>
         </div>
@@ -3349,37 +3349,37 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {proposingFor && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
           onClick={() => setProposingFor(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 400, maxHeight: '85vh', overflowY: 'auto' }}>
-            <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: '#333' }}>Propose Different Time</h3>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 16px' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 400, maxHeight: '85vh', overflowY: 'auto' }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Propose Different Time</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 16px' }}>
               Suggest an alternate time for this visit. The family will be notified and can accept or decline.
             </p>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Date</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date</label>
               <input type="date" value={proposalDate} onChange={(e) => setProposalDate(e.target.value)}
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Time</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Time</label>
               <input type="time" value={proposalTime} onChange={(e) => setProposalTime(e.target.value)}
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 18 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Message (optional)</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Message (optional)</label>
               <textarea value={proposalMsg} onChange={(e) => setProposalMsg(e.target.value)}
                 placeholder="e.g., I have another appointment until 1 PM but am free after that"
                 style={{ width: '100%', minHeight: 70, padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setProposingFor(null)}
-                style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid #ddd', background: '#fff', color: '#666', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid #ddd', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
               <button onClick={handlePropose} disabled={proposalLoading || !proposalDate || !proposalTime}
                 style={{
                   flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none',
-                  background: (proposalLoading || !proposalDate || !proposalTime) ? '#ccc' : '#1b6b5a',
-                  color: '#fff', fontSize: 14, fontWeight: 600, cursor: proposalLoading ? 'wait' : 'pointer',
+                  background: (proposalLoading || !proposalDate || !proposalTime) ? 'var(--border-light)' : 'var(--role-color)',
+                  color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 600, cursor: proposalLoading ? 'wait' : 'pointer',
                 }}>
                 {proposalLoading ? 'Sending...' : 'Send Proposal'}
               </button>

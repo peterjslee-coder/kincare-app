@@ -787,17 +787,17 @@ const Messages = window.Messages = () => {
         }
       },
         React.createElement('span', {
-          style: { display: 'flex', alignItems: 'center', color: '#1b6b5a' },
+          style: { display: 'flex', alignItems: 'center', color: 'var(--role-color)' },
           dangerouslySetInnerHTML: { __html: isVideoCall
             ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>'
             : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'
           }
         }),
-        React.createElement('span', { style: { fontWeight: 600, color: '#333', fontSize: 13 } }, callSummaryMatch[2]),
-        React.createElement('span', { style: { color: '#888', fontSize: 12 } }, '\u00B7'),
-        React.createElement('span', { style: { color: '#666', fontSize: 13 } }, callSummaryMatch[3]),
-        React.createElement('span', { style: { color: '#888', fontSize: 12 } }, '\u00B7'),
-        React.createElement('span', { style: { color: '#999', fontSize: 12 } }, callSummaryMatch[4])
+        React.createElement('span', { style: { fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 } }, callSummaryMatch[2]),
+        React.createElement('span', { style: { color: 'var(--text-tertiary)', fontSize: 12 } }, '\u00B7'),
+        React.createElement('span', { style: { color: 'var(--text-secondary)', fontSize: 13 } }, callSummaryMatch[3]),
+        React.createElement('span', { style: { color: 'var(--text-tertiary)', fontSize: 12 } }, '\u00B7'),
+        React.createElement('span', { style: { color: 'var(--text-muted)', fontSize: 12 } }, callSummaryMatch[4])
       );
     }
     // Legacy call messages (old format: "📹 Started a video call")
@@ -811,7 +811,7 @@ const Messages = window.Messages = () => {
           gap: 8,
           padding: '4px 0',
           fontStyle: 'italic',
-          color: '#1b6b5a',
+          color: 'var(--role-color)',
         }
       },
         React.createElement('span', {
@@ -843,7 +843,7 @@ const Messages = window.Messages = () => {
           target: '_blank',
           rel: 'noopener noreferrer',
           style: {
-            color: '#1b6b5a',
+            color: 'var(--role-color)',
             textDecoration: 'underline',
             fontWeight: 600,
             cursor: 'pointer',
@@ -883,7 +883,7 @@ const Messages = window.Messages = () => {
     return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const avatarColors = ['#1b6b5a', '#e8724a', '#5e35b1', '#0277bd', '#c62828', '#2e7d32', '#6a1b9a'];
+  const avatarColors = ['var(--role-color)', 'var(--accent-color)', '#5e35b1', '#0277bd', 'var(--color-error)', 'var(--color-success)', 'var(--color-purple)'];
   const getAvatarColor = (name) => {
     let hash = 0;
     for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -901,15 +901,15 @@ const Messages = window.Messages = () => {
     <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="msg-chat-header">
         <button className="msg-back-btn" onClick={() => { setShowNewChat(false); setCreatingGroup(false); }}
-          style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#1b6b5a', padding: '4px 8px', marginRight: '8px' }}>
+          style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: 'var(--role-color)', padding: '4px 8px', marginRight: '8px' }}>
           ‹
         </button>
-        <div style={{ fontWeight: 600, fontSize: '16px', color: '#333' }}>
+        <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-primary)' }}>
           {creatingGroup ? 'New Group' : 'New Message'}
         </div>
         {!creatingGroup && (
           <button onClick={() => setCreatingGroup(true)}
-            style={{ marginLeft: 'auto', background: 'none', border: '1px solid #1b6b5a', color: '#1b6b5a', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ marginLeft: 'auto', background: 'none', border: '1px solid #1b6b5a', color: 'var(--role-color)', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             Create Group
           </button>
         )}
@@ -923,7 +923,7 @@ const Messages = window.Messages = () => {
           {selectedContacts.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               {selectedContacts.map(c => (
-                <span key={c.id} style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '4px 10px', borderRadius: 16, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span key={c.id} style={{ background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '4px 10px', borderRadius: 16, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                   {c.name}
                   <span onClick={() => setSelectedContacts(prev => prev.filter(p => p.id !== c.id))} style={{ cursor: 'pointer', marginLeft: 2 }}>×</span>
                 </span>
@@ -931,7 +931,7 @@ const Messages = window.Messages = () => {
             </div>
           )}
           <button onClick={handleCreateGroup} disabled={!groupName.trim() || selectedContacts.length === 0}
-            style={{ width: '100%', background: '#1b6b5a', color: 'white', border: 'none', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: (!groupName.trim() || selectedContacts.length === 0) ? 0.5 : 1 }}>
+            style={{ width: '100%', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: (!groupName.trim() || selectedContacts.length === 0) ? 0.5 : 1 }}>
             Create Group ({selectedContacts.length} member{selectedContacts.length !== 1 ? 's' : ''})
           </button>
         </div>
@@ -941,14 +941,14 @@ const Messages = window.Messages = () => {
       <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0' }}>
         <input type="text" placeholder="Search by name or email..." value={contactSearch}
           onChange={e => { setContactSearch(e.target.value); fetchContacts(e.target.value); }}
-          style={{ width: '100%', padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 14, background: '#f8f9fa' }} />
+          style={{ width: '100%', padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 14, background: 'var(--bg-primary)' }} />
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {contactsLoading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading contacts...</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading contacts...</div>
         ) : contacts.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#999', fontSize: '14px' }}>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
             {contactSearch ? 'No users found.' : 'No contacts available.'}
           </div>
         ) : (
@@ -956,18 +956,18 @@ const Messages = window.Messages = () => {
             const isSelected = selectedContacts.find(sc => sc.id === c.id);
             return (
               <div key={c.id} className="msg-contact-item" onClick={() => handleSelectContact(c)}
-                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', transition: 'background 0.15s', background: isSelected ? '#e8f5e9' : 'transparent' }}
-                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = '#f8f9fa'; }}
+                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', transition: 'background 0.15s', background: isSelected ? 'var(--color-success-bg)' : 'transparent' }}
+                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-primary)'; }}
                 onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: getAvatarColor(c.name), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '14px', fontWeight: 600, flexShrink: 0 }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: getAvatarColor(c.name), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-on-primary)', fontSize: '14px', fontWeight: 600, flexShrink: 0 }}>
                   {getInitials(c.name)}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#333' }}>{c.name}</div>
-                  <div style={{ fontSize: '12px', color: '#999' }}>{roleLabel(c.role)}</div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{c.name}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{roleLabel(c.role)}</div>
                 </div>
                 {creatingGroup && isSelected && (
-                  <span style={{ color: '#1b6b5a', fontWeight: 700, fontSize: 18 }}>✓</span>
+                  <span style={{ color: 'var(--role-color)', fontWeight: 700, fontSize: 18 }}>✓</span>
                 )}
               </div>
             );
@@ -982,22 +982,22 @@ const Messages = window.Messages = () => {
     <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="msg-chat-header">
         <button className="msg-back-btn" onClick={() => { setShowFindPeople(false); setPeopleSearch(''); setPeopleResults([]); }}
-          style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#1b6b5a', padding: '4px 8px', marginRight: '8px' }}>
+          style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: 'var(--role-color)', padding: '4px 8px', marginRight: '8px' }}>
           ‹
         </button>
-        <div style={{ fontWeight: 600, fontSize: '16px', color: '#333' }}>Find People</div>
+        <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-primary)' }}>Find People</div>
       </div>
       <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0' }}>
         <input type="text" placeholder="Search by name or email..." value={peopleSearch}
           onChange={e => { setPeopleSearch(e.target.value); searchPeople(e.target.value); }}
           autoFocus
-          style={{ width: '100%', padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 14, background: '#f8f9fa' }} />
+          style={{ width: '100%', padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 8, fontSize: 14, background: 'var(--bg-primary)' }} />
       </div>
 
       {/* Pending connection requests */}
       {pendingRequests.length > 0 && !peopleSearch && (
         <div style={{ borderBottom: '1px solid #f0f0f0' }}>
-          <div style={{ padding: '10px 16px', fontSize: 12, fontWeight: 600, color: '#e65100', background: '#fff8f0' }}>
+          <div style={{ padding: '10px 16px', fontSize: 12, fontWeight: 600, color: 'var(--color-warning)', background: 'var(--bg-warm)' }}>
             Connection Requests ({pendingRequests.length})
           </div>
           {pendingRequests.map(req => (
@@ -1007,15 +1007,15 @@ const Messages = window.Messages = () => {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{req.otherFirstName} {req.otherLastName}</div>
-                <div style={{ fontSize: 12, color: '#888' }}>{req.otherEmail}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{req.otherEmail}</div>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => handleRespondConnection(req.id, 'accept')}
-                  style={{ padding: '6px 12px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  style={{ padding: '6px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                   Accept
                 </button>
                 <button onClick={() => handleRespondConnection(req.id, 'decline')}
-                  style={{ padding: '6px 12px', background: '#fff', color: '#999', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                  style={{ padding: '6px 12px', background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
                   Decline
                 </button>
               </div>
@@ -1026,7 +1026,7 @@ const Messages = window.Messages = () => {
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {peopleLoading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Searching...</div>
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Searching...</div>
         ) : peopleSearch.length < 2 ? (
           <div>
             {/* Recent connections from existing conversations */}
@@ -1045,13 +1045,13 @@ const Messages = window.Messages = () => {
                 }
               });
               if (recentPeople.length === 0) return (
-                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#999', fontSize: 14 }}>
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
                   Search for people on InPlace to start a conversation.
                 </div>
               );
               return (
                 <div>
-                  <div style={{ padding: '10px 16px 6px', fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <div style={{ padding: '10px 16px 6px', fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Recent
                   </div>
                   {recentPeople.slice(0, 10).map(p => (
@@ -1060,17 +1060,17 @@ const Messages = window.Messages = () => {
                       {p.profilePhoto ? (
                         <img src={p.profilePhoto} alt={p.name} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
                       ) : (
-                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: getAvatarColor(p.name || '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#fff' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: getAvatarColor(p.name || '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: 'var(--text-on-primary)' }}>
                           {getInitials(p.name || '?')}
                         </div>
                       )}
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{p.name}</div>
-                        <div style={{ fontSize: 12, color: '#1b6b5a' }}>Message →</div>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{p.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--role-color)' }}>Message →</div>
                       </div>
                     </div>
                   ))}
-                  <div style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12, color: '#999' }}>
+                  <div style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
                     Search above to find more people
                   </div>
                 </div>
@@ -1078,27 +1078,27 @@ const Messages = window.Messages = () => {
             })()}
           </div>
         ) : peopleResults.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 14 }}>No users found.</div>
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No users found.</div>
         ) : (
           peopleResults.map(u => (
             <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: '1px solid #f0f0f0' }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: u.role === 'caregiver' ? '#e8f5e9' : '#f0f4f8',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: u.role === 'caregiver' ? '#1b6b5a' : '#0066cc' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: u.role === 'caregiver' ? 'var(--color-success-bg)' : 'var(--bg-primary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: u.role === 'caregiver' ? 'var(--role-color)' : '#0066cc' }}>
                 {u.firstName?.[0]}{u.lastName?.[0]}
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{u.firstName} {u.lastName}</div>
-                <div style={{ fontSize: 12, color: '#888' }}>{u.role === 'caregiver' ? 'Caregiver' : 'Family'}</div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{u.firstName} {u.lastName}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{u.role === 'caregiver' ? 'Caregiver' : 'Family'}</div>
               </div>
               {u.connection?.status === 'accepted' ? (
-                <span style={{ fontSize: 12, color: '#1b6b5a', fontWeight: 600 }}>✓ Connected</span>
+                <span style={{ fontSize: 12, color: 'var(--role-color)', fontWeight: 600 }}>✓ Connected</span>
               ) : u.connection?.status === 'pending' ? (
-                <span style={{ fontSize: 12, color: '#888', fontWeight: 500 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
                   {u.connection.direction === 'sent' ? 'Request sent' : 'Pending'}
                 </span>
               ) : (
                 <button onClick={() => handleSendConnectionRequest(u.id)}
-                  style={{ padding: '6px 14px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                   Connect
                 </button>
               )}
@@ -1113,7 +1113,7 @@ const Messages = window.Messages = () => {
   const renderConversationList = () => (
     <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="msg-list-header">
-        <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#333', margin: 0 }}>
+        <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
           {selectMode ? `${selectedIds.length} selected` : 'Messages'}
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1121,38 +1121,38 @@ const Messages = window.Messages = () => {
             <>
               <button onClick={handleArchiveSelected}
                 disabled={selectedIds.length === 0}
-                style={{ background: selectedIds.length > 0 ? '#e65100' : '#ccc', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
+                style={{ background: selectedIds.length > 0 ? 'var(--color-warning)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
                 Archive{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
               </button>
               <button onClick={() => selectedIds.length > 0 && setDeleteConfirmId('__bulk__')}
                 disabled={selectedIds.length === 0}
-                style={{ background: selectedIds.length > 0 ? '#dc2626' : '#ccc', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
+                style={{ background: selectedIds.length > 0 ? 'var(--color-error)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
                 Delete{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
               </button>
               <button onClick={() => { setSelectMode(false); setSelectedIds([]); }}
-                style={{ background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
             </>
           ) : (
             <>
               <button onClick={() => setSelectMode(true)}
-                style={{ background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                 title="Select conversations to archive">
                 &#128451;
               </button>
               <button onClick={() => { setShowFindPeople(true); fetchPendingRequests(); }}
-                style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', position: 'relative' }}
+                style={{ background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', position: 'relative' }}
                 title="Find people to connect with">
                 🔍 Find People
                 {pendingRequests.length > 0 && (
-                  <span style={{ position: 'absolute', top: -6, right: -6, background: '#e65100', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-warning)', color: 'var(--text-on-primary)', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {pendingRequests.length}
                   </span>
                 )}
               </button>
               <button onClick={handleNewChat}
-                style={{ background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+                style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
                 title="New message">
                 +
               </button>
@@ -1164,7 +1164,7 @@ const Messages = window.Messages = () => {
         {/* Pending received connection requests — inline at top */}
         {pendingRequests.length > 0 && (
           <div style={{ borderBottom: '1px solid #f0f0f0' }}>
-            <div style={{ padding: '8px 16px', fontSize: 11, fontWeight: 600, color: '#e65100', background: '#fff8f0' }}>
+            <div style={{ padding: '8px 16px', fontSize: 11, fontWeight: 600, color: 'var(--color-warning)', background: 'var(--bg-warm)' }}>
               Connection Requests ({pendingRequests.length})
             </div>
             {pendingRequests.map(req => (
@@ -1174,15 +1174,15 @@ const Messages = window.Messages = () => {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{req.otherFirstName} {req.otherLastName}</div>
-                  <div style={{ fontSize: 12, color: '#e65100' }}>Wants to connect</div>
+                  <div style={{ fontSize: 12, color: 'var(--color-warning)' }}>Wants to connect</div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button onClick={() => handleRespondConnection(req.id, 'accept')}
-                    style={{ padding: '6px 12px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ padding: '6px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Accept
                   </button>
                   <button onClick={() => handleRespondConnection(req.id, 'decline')}
-                    style={{ padding: '6px 12px', background: '#fff', color: '#999', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                    style={{ padding: '6px 12px', background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
                     Decline
                   </button>
                 </div>
@@ -1212,16 +1212,16 @@ const Messages = window.Messages = () => {
                   setActiveConvName('iPAi');
                 }
               }}
-              style={{ borderBottom: '2px solid #e6f5f0', background: isActive ? '#f0fdf4' : '#f8fffe' }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: '-0.5px' }}>iPAi</span>
+              style={{ borderBottom: '2px solid #e6f5f0', background: isActive ? 'var(--color-success-bg)' : '#f8fffe' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ color: 'var(--text-on-primary)', fontSize: 11, fontWeight: 800, letterSpacing: '-0.5px' }}>iPAi</span>
               </div>
               <div style={{ flex: 1, minWidth: 0, marginLeft: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontWeight: 700, fontSize: 15, color: '#1b6b5a' }}>iPAi</span>
+                  <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--role-color)' }}>iPAi</span>
                   {React.createElement(window.IPAiBadge || 'span', { size: 'sm' })}
                 </div>
-                <div style={{ fontSize: 12, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {ipaiConv?.lastMessage ? ipaiConv.lastMessage.substring(0, 50) : 'Your AI care assistant — ask me anything'}
                 </div>
               </div>
@@ -1248,11 +1248,11 @@ const Messages = window.Messages = () => {
                 transition: 'opacity 0.15s',
               }}>
                 <div onClick={(e) => { e.stopPropagation(); handleArchive(c.id); setSwipingId(null); setSwipeOffset(0); }}
-                  style={{ flex: 1, background: '#e65100', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                  style={{ flex: 1, background: 'var(--color-warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-on-primary)', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                   Archive
                 </div>
                 <div onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(c.id); setSwipingId(null); setSwipeOffset(0); }}
-                  style={{ flex: 1, background: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                  style={{ flex: 1, background: 'var(--color-error)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-on-primary)', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                   Delete
                 </div>
               </div>
@@ -1264,7 +1264,7 @@ const Messages = window.Messages = () => {
                 onTouchMove={(e) => !selectMode && onConvTouchMove(e, c.id)}
                 onTouchEnd={() => !selectMode && onConvTouchEnd(c.id)}
                 style={{
-                  position: 'relative', background: selectMode && selectedIds.includes(c.id) ? '#f0f7ff' : '#fff',
+                  position: 'relative', background: selectMode && selectedIds.includes(c.id) ? '#f0f7ff' : 'var(--text-on-primary)',
                   transform: isSwiping ? `translateX(${swipeOffset}px)` : 'none',
                   transition: isSwiping ? 'none' : 'transform 0.2s',
                 }}>
@@ -1272,9 +1272,9 @@ const Messages = window.Messages = () => {
                   <div style={{ display: 'flex', alignItems: 'center', marginRight: 8, flexShrink: 0 }}>
                     <div style={{
                       width: 22, height: 22, borderRadius: 6, border: selectedIds.includes(c.id) ? 'none' : '2px solid #ccc',
-                      background: selectedIds.includes(c.id) ? '#1b6b5a' : '#fff',
+                      background: selectedIds.includes(c.id) ? 'var(--role-color)' : 'var(--text-on-primary)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 14, fontWeight: 700,
+                      color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 700,
                     }}>{selectedIds.includes(c.id) ? '\u2713' : ''}</div>
                   </div>
                 )}
@@ -1284,7 +1284,7 @@ const Messages = window.Messages = () => {
                     {(() => {
                       const avatarMembers = (c.members || []).filter(m => m.id !== currentUser?.id).slice(0, 3);
                       const count = avatarMembers.length;
-                      if (count === 0) return <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1b6b5a', fontSize: '20px' }}>{typeIcon || '\u{1F465}'}</div>;
+                      if (count === 0) return <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--color-success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--role-color)', fontSize: '20px' }}>{typeIcon || '\u{1F465}'}</div>;
                       const size = count === 1 ? 44 : count === 2 ? 28 : 24;
                       const positions = count === 1 ? [[0, 0]] : count === 2 ? [[0, 0], [16, 16]] : [[10, 0], [0, 18], [20, 18]];
                       return avatarMembers.map((m, i) => (
@@ -1297,7 +1297,7 @@ const Messages = window.Messages = () => {
                         ) : (
                           <div key={m.id} style={{
                             width: size, height: size, borderRadius: '50%',
-                            background: getAvatarColor(m.name || '?'), color: '#fff',
+                            background: getAvatarColor(m.name || '?'), color: 'var(--text-on-primary)',
                             fontSize: count === 1 ? 15 : 10, fontWeight: 600,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             position: 'absolute', left: positions[i][0], top: positions[i][1],
@@ -1312,9 +1312,9 @@ const Messages = window.Messages = () => {
                 ) : (c.name === 'InPlace Support' || c.name === 'iPAi') ? (
                   <div style={{
                     width: '44px', height: '44px', borderRadius: '50%',
-                    background: '#1b6b5a',
+                    background: 'var(--role-color)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'white', fontSize: '20px', fontWeight: 700,
+                    color: 'var(--text-on-primary)', fontSize: '20px', fontWeight: 700,
                   }}>iP</div>
                 ) : c.profilePhoto ? (
                   <img src={c.profilePhoto} alt={c.name} style={{
@@ -1325,7 +1325,7 @@ const Messages = window.Messages = () => {
                   width: '44px', height: '44px', borderRadius: '50%',
                   background: getAvatarColor(c.name),
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'white', fontSize: '15px',
+                  color: 'var(--text-on-primary)', fontSize: '15px',
                   fontWeight: 600,
                 }}>
                   {getInitials(c.name)}
@@ -1341,19 +1341,19 @@ const Messages = window.Messages = () => {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                    <span style={{ fontWeight: c.unreadCount > 0 ? 700 : 600, fontSize: '14px', color: '#333' }}>
+                    <span style={{ fontWeight: c.unreadCount > 0 ? 700 : 600, fontSize: '14px', color: 'var(--text-primary)' }}>
                       {c.name}
                     </span>
-                    <span style={{ fontSize: '11px', color: c.unreadCount > 0 ? '#1b6b5a' : '#aaa', fontWeight: c.unreadCount > 0 ? 600 : 400, flexShrink: 0, marginLeft: '8px' }}>
+                    <span style={{ fontSize: '11px', color: c.unreadCount > 0 ? 'var(--role-color)' : 'var(--text-muted)', fontWeight: c.unreadCount > 0 ? 600 : 400, flexShrink: 0, marginLeft: '8px' }}>
                       {formatTime(c.lastMessageAt)}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', color: c.unreadCount > 0 ? '#555' : '#999', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: c.unreadCount > 0 ? 500 : 400 }}>
+                    <span style={{ fontSize: '13px', color: c.unreadCount > 0 ? 'var(--text-secondary)' : 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: c.unreadCount > 0 ? 500 : 400 }}>
                       {isGroup && c.members ? `${c.members.length} members` + (c.lastMessage ? ` · ${c.lastMessage}` : '') : (c.lastMessage || 'No messages yet')}
                     </span>
                     {c.unreadCount > 0 && (
-                      <span style={{ background: '#1b6b5a', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, flexShrink: 0, marginLeft: '8px', minWidth: '18px', textAlign: 'center' }}>
+                      <span style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: '10px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, flexShrink: 0, marginLeft: '8px', minWidth: '18px', textAlign: 'center' }}>
                         {c.unreadCount}
                       </span>
                     )}
@@ -1365,10 +1365,10 @@ const Messages = window.Messages = () => {
         }) : sentRequests.length === 0 && pendingRequests.length === 0 ? (
           <div style={{ padding: '60px 20px', textAlign: 'center' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>💬</div>
-            <div style={{ fontSize: '15px', color: '#666', marginBottom: '8px' }}>No conversations yet</div>
-            <div style={{ fontSize: '13px', color: '#999', marginBottom: '20px' }}>Start a conversation with someone in your care network</div>
+            <div style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '8px' }}>No conversations yet</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>Start a conversation with someone in your care network</div>
             <button onClick={handleNewChat}
-              style={{ background: '#1b6b5a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+              style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
               New Message
             </button>
           </div>
@@ -1391,19 +1391,19 @@ const Messages = window.Messages = () => {
               width: 44, height: 44, borderRadius: '50%',
               background: getAvatarColor((req.otherFirstName || '') + ' ' + (req.otherLastName || '')),
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontSize: 15, fontWeight: 600, flexShrink: 0,
+              color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 600, flexShrink: 0,
             }}>
               {(req.otherFirstName?.[0] || '')}{(req.otherLastName?.[0] || '')}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                 {req.otherFirstName} {req.otherLastName}
               </div>
-              <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
                 Request sent — waiting for response
               </div>
             </div>
-            <span style={{ fontSize: 14, color: '#ccc', flexShrink: 0 }}>⏳</span>
+            <span style={{ fontSize: 14, color: 'var(--text-muted)', flexShrink: 0 }}>⏳</span>
           </div>
         ))}
 
@@ -1414,11 +1414,11 @@ const Messages = window.Messages = () => {
           return (
             <div style={{ borderTop: '1px solid #e0e0e0' }}>
               <div onClick={() => setShowArchived(!showArchived)}
-                style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: '#fafafa' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#888' }}>
+                style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: 'var(--bg-primary)' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-tertiary)' }}>
                   {'\uD83D\uDCE6'} Archived ({archivedConvs.length})
                 </span>
-                <span style={{ fontSize: 11, color: '#aaa', transform: showArchived ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', transform: showArchived ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
               </div>
               {showArchived && archivedConvs.sort((a, b) => {
                 const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
@@ -1427,30 +1427,30 @@ const Messages = window.Messages = () => {
               }).map(c => {
                 const isGroup = isGroupConv(c);
                 return (
-                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid #f5f5f5', background: '#fafafa' }}>
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid #f5f5f5', background: 'var(--bg-primary)' }}>
                     <div onClick={() => handleSelectConversation(c)} style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, cursor: 'pointer' }}>
                       {c.profilePhoto ? (
                         <img src={c.profilePhoto} alt={c.name} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, opacity: 0.7 }} />
                       ) : (
                         <div style={{
                           width: 40, height: 40, borderRadius: '50%',
-                          background: getAvatarColor(c.name || '?'), color: '#fff',
+                          background: getAvatarColor(c.name || '?'), color: 'var(--text-on-primary)',
                           fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.7,
                         }}>{getInitials(c.name || '?')}</div>
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: '#888' }}>{c.name}</div>
-                        <div style={{ fontSize: 12, color: '#bbb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-tertiary)' }}>{c.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {c.lastMessage ? (c.lastMessage.length > 40 ? c.lastMessage.substring(0, 40) + '...' : c.lastMessage) : 'No messages'}
                         </div>
                       </div>
                     </div>
                     <button onClick={() => handleUnarchive(c.id)}
-                      style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      style={{ background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       Restore
                     </button>
                     <button onClick={() => setDeleteConfirmId(c.id)}
-                      style={{ background: '#fff', color: '#dc2626', border: '1px solid #dc2626', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      style={{ background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #dc2626', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       Delete
                     </button>
                   </div>
@@ -1467,18 +1467,18 @@ const Messages = window.Messages = () => {
           onClick={() => setContextMenu(null)}>
           <div onClick={(e) => e.stopPropagation()} style={{
             position: 'fixed', left: contextMenu.x, top: contextMenu.y,
-            background: '#fff', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+            background: 'var(--bg-surface)', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
             padding: '4px 0', minWidth: 160, zIndex: 10000,
           }}>
             <div onClick={() => { handleArchive(contextMenu.convId); setContextMenu(null); }}
-              style={{ padding: '10px 16px', fontSize: 14, color: '#333', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
+              style={{ padding: '10px 16px', fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
               <span style={{ fontSize: 16 }}>&#128230;</span> Archive
             </div>
             <div onClick={() => { setDeleteConfirmId(contextMenu.convId); setContextMenu(null); }}
-              style={{ padding: '10px 16px', fontSize: 14, color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
+              style={{ padding: '10px 16px', fontSize: 14, color: 'var(--color-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-error-subtle)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
               <span style={{ fontSize: 16 }}>&#128465;</span> Delete
             </div>
@@ -1494,24 +1494,24 @@ const Messages = window.Messages = () => {
           zIndex: 10000,
         }} onClick={() => setDeleteConfirmId(null)}>
           <div onClick={(e) => e.stopPropagation()} style={{
-            background: '#fff', borderRadius: 16, padding: '24px', width: '90%', maxWidth: 340,
+            background: 'var(--bg-surface)', borderRadius: 16, padding: '24px', width: '90%', maxWidth: 340,
             boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
           }}>
-            <div style={{ fontWeight: 700, fontSize: 16, color: '#333', marginBottom: 8 }}>Delete Conversation?</div>
-            <div style={{ fontSize: 14, color: '#666', marginBottom: 20, lineHeight: 1.4 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 8 }}>Delete Conversation?</div>
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.4 }}>
               {deleteConfirmId === '__bulk__'
                 ? `This will permanently delete ${selectedIds.length} conversation${selectedIds.length > 1 ? 's' : ''} and all messages. This can't be undone.`
                 : 'This will permanently delete this conversation and all messages. This can\'t be undone.'}
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => setDeleteConfirmId(null)}
-                style={{ background: '#f3f4f6', color: '#555', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ background: '#f3f4f6', color: 'var(--text-secondary)', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
               <button
                 disabled={deleting}
                 onClick={() => deleteConfirmId === '__bulk__' ? handleDeleteSelected() : handleDelete(deleteConfirmId)}
-                style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}>
+                style={{ background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}>
                 {deleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
@@ -1529,29 +1529,29 @@ const Messages = window.Messages = () => {
         <div className="msg-chat-header">
           {(isMobile || !conversations.length) && (
             <button className="msg-back-btn" onClick={handleBack}
-              style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#1b6b5a', padding: '4px 8px', marginRight: '4px' }}>
+              style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: 'var(--role-color)', padding: '4px 8px', marginRight: '4px' }}>
               ‹
             </button>
           )}
           {activeConv && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
               {!isGroup && (activeConv.name === 'InPlace Support' || activeConv.name === 'iPAi') ? (
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 15, fontWeight: 700, flexShrink: 0 }}>iP</div>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 700, flexShrink: 0 }}>iP</div>
               ) : !isGroup && activeConv.profilePhoto ? (
                 <img src={activeConv.profilePhoto} alt={activeConv.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
               ) : (
               <div style={{
                 width: '36px', height: '36px', borderRadius: isGroup ? '10px' : '50%',
-                background: isGroup ? '#e8f5e9' : getAvatarColor(activeConv.name),
+                background: isGroup ? 'var(--color-success-bg)' : getAvatarColor(activeConv.name),
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: isGroup ? '#1b6b5a' : 'white', fontSize: isGroup ? '18px' : '13px', fontWeight: 600,
+                color: isGroup ? 'var(--role-color)' : 'var(--bg-surface)', fontSize: isGroup ? '18px' : '13px', fontWeight: 600,
               }}>
                 {isGroup ? (activeConv.type === 'care_team' ? '👥' : '💬') : getInitials(activeConv.name)}
               </div>
               )}
               <div>
-                <div style={{ fontWeight: 600, fontSize: '15px', color: '#333', lineHeight: 1.2 }}>{activeConv.name}</div>
-                <div style={{ fontSize: '11px', color: '#999' }}>
+                <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)', lineHeight: 1.2 }}>{activeConv.name}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                   {isGroup
                     ? `${activeConv.members?.length || 0} members`
                     : roleLabel(activeConv.members?.find(m => m.id !== activeConv.members?.[0]?.id)?.role)
@@ -1567,7 +1567,7 @@ const Messages = window.Messages = () => {
             style={{
               background: 'none',
               border: '2px solid #1b6b5a',
-              color: '#1b6b5a',
+              color: 'var(--role-color)',
               borderRadius: '8px',
               width: '36px',
               height: '36px',
@@ -1580,12 +1580,12 @@ const Messages = window.Messages = () => {
               flexShrink: 0,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#1b6b5a';
-              e.currentTarget.style.color = 'white';
+              e.currentTarget.style.background = 'var(--role-color)';
+              e.currentTarget.style.color = 'var(--bg-surface)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'none';
-              e.currentTarget.style.color = '#1b6b5a';
+              e.currentTarget.style.color = 'var(--role-color)';
             }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           </button>
@@ -1596,7 +1596,7 @@ const Messages = window.Messages = () => {
             style={{
               background: 'none',
               border: '2px solid #1b6b5a',
-              color: '#1b6b5a',
+              color: 'var(--role-color)',
               borderRadius: '8px',
               width: '36px',
               height: '36px',
@@ -1609,12 +1609,12 @@ const Messages = window.Messages = () => {
               flexShrink: 0,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#1b6b5a';
-              e.currentTarget.style.color = 'white';
+              e.currentTarget.style.background = 'var(--role-color)';
+              e.currentTarget.style.color = 'var(--bg-surface)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'none';
-              e.currentTarget.style.color = '#1b6b5a';
+              e.currentTarget.style.color = 'var(--role-color)';
             }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
           </button>
@@ -1625,24 +1625,24 @@ const Messages = window.Messages = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 24 }}>
               {(activeConvId === '__ipai__' || activeConv?.name === 'iPAi' || activeConv?.otherName === 'iPAi Assistant') ? (
                 <div style={{ textAlign: 'center', maxWidth: 320 }}>
-                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                    <span style={{ color: '#fff', fontSize: 18, fontWeight: 800 }}>iPAi</span>
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                    <span style={{ color: 'var(--text-on-primary)', fontSize: 18, fontWeight: 800 }}>iPAi</span>
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#333', marginBottom: 6 }}>Hi! I'm iPAi</div>
-                  <div style={{ fontSize: 13, color: '#666', lineHeight: 1.5, marginBottom: 16 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Hi! I'm iPAi</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 16 }}>
                     Your care assistant. I know your loved ones, their caregivers, and their visit history. Ask me anything.
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {['When is Cary available this week?', 'How is Betty doing?', 'Find someone for Thursday morning'].map(q => (
                       <button key={q} onClick={() => { setInputText(q); }} style={{
-                        padding: '8px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8,
-                        fontSize: 13, color: '#1b6b5a', cursor: 'pointer', textAlign: 'left',
+                        padding: '8px 14px', background: 'var(--color-success-bg)', border: '1px solid #bbf7d0', borderRadius: 8,
+                        fontSize: 13, color: 'var(--role-color)', cursor: 'pointer', textAlign: 'left',
                       }}>{q}</button>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div style={{ color: '#999', fontSize: 14 }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>
                   {isGroup ? 'No messages yet in this group' : 'Send a message to start the conversation'}
                 </div>
               )}
@@ -1663,7 +1663,7 @@ const Messages = window.Messages = () => {
                     const prevDate = parseTs(messages[i-1].created_at).toDateString();
                     const thisDate = parseTs(m.created_at).toDateString();
                     return prevDate !== thisDate ? (
-                      <div style={{ textAlign: 'center', margin: '16px 0 8px', fontSize: '11px', color: '#aaa' }}>
+                      <div style={{ textAlign: 'center', margin: '16px 0 8px', fontSize: '11px', color: 'var(--text-muted)' }}>
                         {parseTs(m.created_at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
                       </div>
                     ) : null;
@@ -1674,7 +1674,7 @@ const Messages = window.Messages = () => {
                     onTouchEnd={() => onMsgTouchEnd(m)}>
                     {/* Reply arrow indicator on swipe */}
                     {isMsgSwiping && (
-                      <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', opacity: msgSwipeOffset > 20 ? Math.min((msgSwipeOffset - 20) / 30, 1) : 0, fontSize: 18, color: '#1b6b5a', transition: 'opacity 0.1s' }}>
+                      <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', opacity: msgSwipeOffset > 20 ? Math.min((msgSwipeOffset - 20) / 30, 1) : 0, fontSize: 18, color: 'var(--role-color)', transition: 'opacity 0.1s' }}>
                         ↩
                       </div>
                     )}
@@ -1688,11 +1688,11 @@ const Messages = window.Messages = () => {
                         const senderPhoto = senderMember?.profilePhoto || null;
                         const isSupport = m.senderLabel === 'InPlace Support' || activeConv?.name === 'InPlace Support' || activeConv?.name === 'iPAi';
                         return isSupport ? (
-                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11, fontWeight: 700, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>iP</div>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-on-primary)', fontSize: 11, fontWeight: 700, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>iP</div>
                         ) : senderPhoto ? (
                           <img src={senderPhoto} alt={m.senderName} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }} />
                         ) : (
-                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: getAvatarColor(m.senderName || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 10, fontWeight: 600, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: getAvatarColor(m.senderName || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-on-primary)', fontSize: 10, fontWeight: 600, flexShrink: 0, marginRight: 6, marginTop: showName ? 18 : 0 }}>
                             {getInitials(m.senderName || '')}
                           </div>
                         );
@@ -1709,7 +1709,7 @@ const Messages = window.Messages = () => {
                           if (showEmojiFor === m.id) setShowEmojiFor(null);
                         }}>
                         {showName && (
-                          <div style={{ fontSize: 11, color: m.senderLabel ? '#1b6b5a' : getAvatarColor(m.senderName || ''), fontWeight: 600, marginBottom: 2, marginLeft: 4 }}>
+                          <div style={{ fontSize: 11, color: m.senderLabel ? 'var(--role-color)' : getAvatarColor(m.senderName || ''), fontWeight: 600, marginBottom: 2, marginLeft: 4 }}>
                             {m.senderLabel ? `\u{1F6E1}\uFE0F ${m.senderLabel}` : m.senderName}
                           </div>
                         )}
@@ -1720,10 +1720,10 @@ const Messages = window.Messages = () => {
                             background: isSent ? '#15594b' : '#e4e4e4', fontSize: 12, lineHeight: 1.3,
                             borderLeft: isSent ? '3px solid rgba(255,255,255,0.4)' : '3px solid #1b6b5a',
                           }}>
-                            <div style={{ fontWeight: 600, fontSize: 11, color: isSent ? 'rgba(255,255,255,0.7)' : '#1b6b5a', marginBottom: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 11, color: isSent ? 'rgba(255,255,255,0.7)' : 'var(--role-color)', marginBottom: 1 }}>
                               {m.replyTo.senderName || 'Unknown'}
                             </div>
-                            <div style={{ color: isSent ? 'rgba(255,255,255,0.6)' : '#777', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
+                            <div style={{ color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
                               {m.replyTo.content}
                             </div>
                           </div>
@@ -1731,12 +1731,12 @@ const Messages = window.Messages = () => {
                         <div style={{
                           padding: '10px 14px',
                           borderRadius: m.replyTo ? (isSent ? '0 0 4px 18px' : '0 0 18px 4px') : (isSent ? '18px 18px 4px 18px' : '18px 18px 18px 4px'),
-                          background: isSent ? '#1b6b5a' : '#f0f0f0',
-                          color: isSent ? 'white' : '#333',
+                          background: isSent ? 'var(--role-color)' : 'var(--badge-muted-bg)',
+                          color: isSent ? 'var(--bg-surface)' : 'var(--text-primary)',
                           fontSize: '14px', lineHeight: 1.45, wordWrap: 'break-word',
                         }}>
                           {renderMessageContent(m.content)}
-                          <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : '#bbb', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                          <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
                             <span>{(() => {
                               const d = parseTimestamp(m.created_at);
                               if (!d) return '';
@@ -1776,12 +1776,12 @@ const Messages = window.Messages = () => {
                                 title={rList.map(r => r.userName).join(', ')}
                                 style={{
                                   display: 'flex', alignItems: 'center', gap: 3, padding: '2px 6px',
-                                  background: rList.some(r => r.userId === currentUser?.id) ? '#e8f5e9' : '#f5f5f5',
+                                  background: rList.some(r => r.userId === currentUser?.id) ? 'var(--color-success-bg)' : 'var(--bg-primary)',
                                   border: rList.some(r => r.userId === currentUser?.id) ? '1px solid #1b6b5a' : '1px solid #e0e0e0',
                                   borderRadius: 12, fontSize: 13, cursor: 'pointer', lineHeight: 1,
                                 }}>
                                 <span>{emoji}</span>
-                                {rList.length > 1 && <span style={{ fontSize: 10, color: '#666' }}>{rList.length}</span>}
+                                {rList.length > 1 && <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{rList.length}</span>}
                               </button>
                             ))}
                           </div>
@@ -1792,7 +1792,7 @@ const Messages = window.Messages = () => {
                           [isSent ? 'left' : 'right']: -8,
                           transform: isSent ? 'translateX(-100%)' : 'translateX(100%)',
                           display: 'flex', gap: 2, opacity: 0, transition: 'opacity 0.15s',
-                          background: '#fff', borderRadius: 8, boxShadow: '0 1px 6px rgba(0,0,0,0.1)', padding: '2px',
+                          background: 'var(--bg-surface)', borderRadius: 8, boxShadow: '0 1px 6px rgba(0,0,0,0.1)', padding: '2px',
                         }}>
                           <button onClick={() => { setReplyTo(m); if (inputRef.current) inputRef.current.focus(); }}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', fontSize: 14, borderRadius: 6 }}
@@ -1810,13 +1810,13 @@ const Messages = window.Messages = () => {
                           <div style={{
                             position: 'absolute', bottom: '100%', marginBottom: 4,
                             [isSent ? 'right' : 'left']: 0,
-                            background: '#fff', borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+                            background: 'var(--bg-surface)', borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
                             padding: '6px 8px', display: 'flex', gap: 2, zIndex: 10,
                           }}>
                             {REACTION_EMOJIS.map(emoji => (
                               <button key={emoji} onClick={() => handleReaction(m.id, emoji)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: '4px', borderRadius: 8, transition: 'background 0.15s' }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = '#f0f0f0'}
+                                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--badge-muted-bg)'}
                                 onMouseLeave={(e) => e.currentTarget.style.background = 'none'}>
                                 {emoji}
                               </button>
@@ -1839,11 +1839,11 @@ const Messages = window.Messages = () => {
                 ? `${typers[0]} and ${typers[1]} are typing`
                 : `${typers[0]} and ${typers.length - 1} others are typing`;
             return (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px 2px', color: '#999', fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px 2px', color: 'var(--text-muted)', fontSize: 12 }}>
                 <div style={{ display: 'flex', gap: 3 }}>
-                  <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#1b6b5a', opacity: 0.6, animation: 'typingBounce 1.2s ease-in-out infinite' }} />
-                  <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#1b6b5a', opacity: 0.6, animation: 'typingBounce 1.2s ease-in-out 0.2s infinite' }} />
-                  <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#1b6b5a', opacity: 0.6, animation: 'typingBounce 1.2s ease-in-out 0.4s infinite' }} />
+                  <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--role-color)', opacity: 0.6, animation: 'typingBounce 1.2s ease-in-out infinite' }} />
+                  <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--role-color)', opacity: 0.6, animation: 'typingBounce 1.2s ease-in-out 0.2s infinite' }} />
+                  <span className="typing-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--role-color)', opacity: 0.6, animation: 'typingBounce 1.2s ease-in-out 0.4s infinite' }} />
                 </div>
                 <span>{label}</span>
               </div>
@@ -1855,19 +1855,19 @@ const Messages = window.Messages = () => {
         {/* Reply preview bar */}
         {replyTo && (
           <div style={{
-            display: 'flex', alignItems: 'center', padding: '8px 16px', background: '#f0faf7',
+            display: 'flex', alignItems: 'center', padding: '8px 16px', background: 'var(--bg-highlight)',
             borderTop: '1px solid #e0e0e0', borderLeft: '3px solid #1b6b5a', gap: 10,
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--role-color)' }}>
                 Replying to {replyTo.senderName || 'message'}
               </div>
-              <div style={{ fontSize: 12, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {replyTo.content}
               </div>
             </div>
             <button onClick={() => setReplyTo(null)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#999', fontSize: 18, padding: '0 4px', flexShrink: 0 }}>
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, padding: '0 4px', flexShrink: 0 }}>
               ×
             </button>
           </div>
@@ -1885,7 +1885,7 @@ const Messages = window.Messages = () => {
           />
           <button className="msg-send-btn" onClick={handleSendMessage} disabled={sending || !inputText.trim()}>
             {sending ? (
-              <span style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }}></span>
+              <span style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'var(--bg-surface)', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }}></span>
             ) : (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -1903,14 +1903,14 @@ const Messages = window.Messages = () => {
     if (!incomingCall) return null;
     const typeLabel = incomingCall.callType === 'video' ? 'Video' : 'Voice';
     const callSvg = incomingCall.callType === 'video'
-      ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>'
-      : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+      ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--bg-surface)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>'
+      : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--bg-surface)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
     return (
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
         background: 'linear-gradient(135deg, #1b6b5a, #2a9d8f)',
         padding: '16px 24px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', color: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        justifyContent: 'space-between', color: 'var(--text-on-primary)', boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
         animation: 'slideDown 0.3s ease',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1922,11 +1922,11 @@ const Messages = window.Messages = () => {
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button onClick={handleDeclineIncoming}
-            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: '#e74c3c', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: '#e74c3c', color: 'var(--text-on-primary)', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
             Decline
           </button>
           <button onClick={handleAcceptIncoming}
-            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: 'white', color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: 'var(--bg-surface)', color: 'var(--role-color)', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
             Accept
           </button>
         </div>
@@ -1947,7 +1947,7 @@ const Messages = window.Messages = () => {
         {renderIncomingCallBanner()}
         {callOverlay}
         {messagingLimited && !activeConvId && (
-          <div style={{ padding: '10px 16px', background: '#fff8e1', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ padding: '10px 16px', background: 'var(--color-warning-bg)', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 16 }}>🔒</span>
             <span style={{ fontSize: 13, color: '#6d4c00' }}>Messaging limited to InPlace Support until your background check is approved.</span>
           </div>
@@ -1963,21 +1963,21 @@ const Messages = window.Messages = () => {
       {renderIncomingCallBanner()}
       {callOverlay}
       {messagingLimited && (
-        <div style={{ padding: '10px 16px', background: '#fff8e1', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8, borderRadius: '12px 12px 0 0' }}>
+        <div style={{ padding: '10px 16px', background: 'var(--color-warning-bg)', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8, borderRadius: '12px 12px 0 0' }}>
           <span style={{ fontSize: 16 }}>🔒</span>
           <span style={{ fontSize: 13, color: '#6d4c00' }}>Messaging is limited to InPlace Support until your background check is approved.</span>
         </div>
       )}
-      <div style={{ display: 'flex', height: messagingLimited ? 'calc(100vh - 160px)' : 'calc(100vh - 120px)', background: 'white', borderRadius: messagingLimited ? '0 0 12px 12px' : '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
-        <div style={{ width: '320px', borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+      <div style={{ display: 'flex', height: messagingLimited ? 'calc(100vh - 160px)' : 'calc(100vh - 120px)', background: 'var(--bg-surface)', borderRadius: messagingLimited ? '0 0 12px 12px' : '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
+        <div style={{ width: '320px', borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
           {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : renderConversationList()}
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {activeConvId ? renderChatView() : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ccc' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '64px', marginBottom: '16px' }}>💬</div>
-                <div style={{ fontSize: '16px', color: '#999' }}>Select a conversation</div>
+                <div style={{ fontSize: '16px', color: 'var(--text-muted)' }}>Select a conversation</div>
               </div>
             </div>
           )}

@@ -48,13 +48,13 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
 
   const badge = React.createElement(window.IPAiBadge || 'span', { size: 'md' });
 
-  const priorityColor = { high: '#c62828', medium: '#e65100', low: '#1b6b5a' };
-  const priorityBorder = { high: '#ef5350', medium: '#ff9800', low: '#4caf50' };
+  const priorityColor = { high: 'var(--color-error)', medium: 'var(--color-warning)', low: 'var(--role-color)' };
+  const priorityBorder = { high: '#ef5350', medium: 'var(--color-warning)', low: 'var(--color-success)' };
 
   return (
     <div className="card" style={{
       border: intelligence ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-      background: intelligence ? '#f8fffe' : '#fff',
+      background: intelligence ? '#f8fffe' : 'var(--text-on-primary)',
     }}>
       <div className="card-header" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
         {badge}
@@ -64,11 +64,11 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
       {!intelligence && !loading && (
         <div style={{ padding: '12px 0' }}>
           {existingSummary && (
-            <div style={{ fontSize: 13, lineHeight: 1.7, color: '#333', padding: '10px 12px', background: '#f8f9fa', borderRadius: 8, marginBottom: 12, whiteSpace: 'pre-wrap' }}>
+            <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)', padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 8, marginBottom: 12, whiteSpace: 'pre-wrap' }}>
               {existingSummary}
             </div>
           )}
-          <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px', lineHeight: 1.5 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
             {`iPAi learns about ${recipientName} from every visit — tracking patterns, moods, and what works best. The more your family shares, the smarter the guidance becomes for everyone on ${recipientName}'s care team.`}
           </p>
           <button onClick={async () => {
@@ -77,22 +77,22 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
             generate();
           }} disabled={loading} style={{
             padding: '10px 20px', borderRadius: 10, border: 'none',
-            background: '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: 14,
+            background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 600, fontSize: 14,
             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
           }}>
-            {React.createElement(window.IPAiBadge || 'span', { size: 'sm', style: { background: 'rgba(255,255,255,0.2)', color: '#fff' } })}
+            {React.createElement(window.IPAiBadge || 'span', { size: 'sm', style: { background: 'rgba(255,255,255,0.2)', color: 'var(--text-on-primary)' } })}
             {existingSummary ? `Update ${recipientName}'s Care Profile` : `Generate ${recipientName}'s Care Profile`}
           </button>
-          {error && <div style={{ color: '#c62828', fontSize: 13, marginTop: 8 }}>{error}</div>}
+          {error && <div style={{ color: 'var(--color-error)', fontSize: 13, marginTop: 8 }}>{error}</div>}
         </div>
       )}
 
       {loading && (
         <div style={{ padding: '20px 0', textAlign: 'center' }}>
-          <div style={{ fontSize: 14, color: '#1b6b5a', fontWeight: 600, marginBottom: 8 }}>
+          <div style={{ fontSize: 14, color: 'var(--role-color)', fontWeight: 600, marginBottom: 8 }}>
             Analyzing {recipientName}'s care history...
           </div>
-          <div style={{ fontSize: 12, color: '#888' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
             Connecting behavioral observations with care knowledge
           </div>
         </div>
@@ -103,7 +103,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
         return (
           <div style={{ padding: '4px 0' }}>
             {/* Headline */}
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#333', lineHeight: 1.5, marginBottom: 12, padding: '8px 12px', background: '#e6f5f0', borderRadius: 8 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.5, marginBottom: 12, padding: '8px 12px', background: '#e6f5f0', borderRadius: 8 }}>
               {intel.headline}
             </div>
 
@@ -111,24 +111,24 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
             {(intel.insights || []).map((insight, i) => (
               <div key={i} style={{
                 padding: '10px 12px', marginBottom: 8, borderRadius: 8,
-                background: '#fff', border: '1px solid #e5e7eb',
-                borderLeft: `4px solid ${priorityBorder[insight.priority] || '#1b6b5a'}`,
+                background: 'var(--bg-surface)', border: '1px solid #e5e7eb',
+                borderLeft: `4px solid ${priorityBorder[insight.priority] || 'var(--role-color)'}`,
               }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#333', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                   {insight.title}
                   <span style={{
                     fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 600,
-                    background: insight.priority === 'high' ? '#ffebee' : insight.priority === 'medium' ? '#fff3e0' : '#e8f5e9',
-                    color: priorityColor[insight.priority] || '#1b6b5a',
+                    background: insight.priority === 'high' ? 'var(--color-error-bg)' : insight.priority === 'medium' ? 'var(--color-warning-bg)' : 'var(--color-success-bg)',
+                    color: priorityColor[insight.priority] || 'var(--role-color)',
                   }}>{insight.priority}</span>
                 </div>
-                <div style={{ fontSize: 12, color: '#555', lineHeight: 1.5, marginBottom: 4 }}>
-                  <strong style={{ color: '#888' }}>Observed:</strong> {insight.observation}
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 4 }}>
+                  <strong style={{ color: 'var(--text-tertiary)' }}>Observed:</strong> {insight.observation}
                 </div>
-                <div style={{ fontSize: 12, color: '#444', lineHeight: 1.5, marginBottom: 4 }}>
-                  <strong style={{ color: '#888' }}>Why:</strong> {insight.explanation}
+                <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5, marginBottom: 4 }}>
+                  <strong style={{ color: 'var(--text-tertiary)' }}>Why:</strong> {insight.explanation}
                 </div>
-                <div style={{ fontSize: 12, color: '#1b6b5a', lineHeight: 1.5, fontWeight: 500 }}>
+                <div style={{ fontSize: 12, color: 'var(--role-color)', lineHeight: 1.5, fontWeight: 500 }}>
                   <strong>Recommendation:</strong> {insight.recommendation}
                 </div>
               </div>
@@ -136,18 +136,18 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
 
             {/* Scheduling Advice */}
             {intel.schedulingAdvice && (
-              <div style={{ padding: '10px 12px', marginBottom: 8, background: '#e3f2fd', borderRadius: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#1565c0', marginBottom: 4 }}>Scheduling</div>
-                <div style={{ fontSize: 12, color: '#333', lineHeight: 1.5 }}>{intel.schedulingAdvice}</div>
+              <div style={{ padding: '10px 12px', marginBottom: 8, background: 'var(--color-info-bg)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-info)', marginBottom: 4 }}>Scheduling</div>
+                <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>{intel.schedulingAdvice}</div>
               </div>
             )}
 
             {/* Watch List */}
             {intel.watchList?.length > 0 && (
-              <div style={{ padding: '10px 12px', marginBottom: 8, background: '#fff3e0', borderRadius: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#e65100', marginBottom: 4 }}>Watch List</div>
+              <div style={{ padding: '10px 12px', marginBottom: 8, background: 'var(--color-warning-bg)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-warning)', marginBottom: 4 }}>Watch List</div>
                 {intel.watchList.map((item, i) => (
-                  <div key={i} style={{ fontSize: 12, color: '#333', lineHeight: 1.5, paddingLeft: 12, borderLeft: '2px solid #ff9800', marginBottom: 4 }}>
+                  <div key={i} style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5, paddingLeft: 12, borderLeft: '2px solid #ff9800', marginBottom: 4 }}>
                     {item}
                   </div>
                 ))}
@@ -159,15 +159,15 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
               <div style={{ marginTop: 8 }}>
                 <button onClick={() => setShowGuidance(!showGuidance)} style={{
                   padding: '8px 14px', borderRadius: 8, border: '1px solid #1b6b5a',
-                  background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 12,
+                  background: 'var(--bg-surface)', color: 'var(--role-color)', fontWeight: 600, fontSize: 12,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                 }}>
                   {React.createElement(window.IPAiBadge || 'span', { size: 'sm' })}
                   {showGuidance ? 'Hide' : 'Show'} Caregiver Guidance
                 </button>
                 {showGuidance && (
-                  <div style={{ marginTop: 8, padding: '12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
-                    <div style={{ fontSize: 13, color: '#333', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                  <div style={{ marginTop: 8, padding: '12px', background: 'var(--color-success-bg)', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                       {intel.caregiverGuidance}
                     </div>
                   </div>
@@ -197,10 +197,10 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
                         setEditingFamilyNote(false);
                         if (typeof showToast === 'function') showToast('Notes saved — iPAi will incorporate these on next regeneration', 'success');
                       } catch { if (typeof showToast === 'function') showToast('Failed to save notes', 'error'); }
-                    }} style={{ padding: '6px 14px', background: '#3949ab', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                    }} style={{ padding: '6px 14px', background: '#3949ab', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                       Save Notes
                     </button>
-                    <button onClick={() => setEditingFamilyNote(false)} style={{ padding: '6px 14px', background: '#fff', color: '#666', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                    <button onClick={() => setEditingFamilyNote(false)} style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
                       Cancel
                     </button>
                   </div>
@@ -213,7 +213,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
                     </div>
                   ) : null}
                   <button onClick={() => setEditingFamilyNote(true)} style={{
-                    padding: '4px 10px', background: '#fff', color: '#3949ab', border: '1px solid #c5cae9', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    padding: '4px 10px', background: 'var(--bg-surface)', color: '#3949ab', border: '1px solid #c5cae9', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
                   }}>{familyNoteText ? 'Edit Notes' : `+ Add notes about ${recipientName}`}</button>
                 </div>
               )}
@@ -221,13 +221,13 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
 
             {/* Footer */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
-              <div style={{ fontSize: 10, color: '#aaa' }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                 Generated {new Date(intelligence.generatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                 {intelligence.analysis?.stats?.totalVisits > 0 && ` from ${intelligence.analysis.stats.totalVisits} visits`}
               </div>
               <button onClick={generate} disabled={loading} style={{
                 padding: '6px 12px', borderRadius: 6, border: '1px solid #ccc',
-                background: '#fff', color: '#666', fontWeight: 600, fontSize: 11, cursor: 'pointer',
+                background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontWeight: 600, fontSize: 11, cursor: 'pointer',
               }}>Regenerate</button>
             </div>
           </div>

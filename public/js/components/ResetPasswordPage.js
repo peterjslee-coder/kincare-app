@@ -52,8 +52,8 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
             <div style={{ marginBottom: '16px' }}>
               <InPlaceIcon width={50} height={50} />
             </div>
-            <h1 style={{ color: '#1b6b5a' }}>You're all set!</h1>
-            <p style={{ color: '#555', lineHeight: '1.6', marginTop: '12px' }}>
+            <h1 style={{ color: 'var(--role-color)' }}>You're all set!</h1>
+            <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', marginTop: '12px' }}>
               Your new password is saved. Sign in to continue.
             </p>
           </div>
@@ -74,7 +74,7 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
               <InPlaceIcon width={50} height={50} />
             </div>
             <h1>Invalid Reset Link</h1>
-            <p style={{ color: '#555', lineHeight: '1.6', marginTop: '12px' }}>
+            <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', marginTop: '12px' }}>
               This password reset link is invalid or has expired. Please request a new one.
             </p>
           </div>
@@ -82,7 +82,7 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
             Request New Reset Link
           </button>
           <div style={{ textAlign: 'center', marginTop: '12px' }}>
-            <a onClick={() => onNavigate('login')} style={{ color: '#1b6b5a', cursor: 'pointer', fontSize: '14px' }}>Back to Sign In</a>
+            <a onClick={() => onNavigate('login')} style={{ color: 'var(--role-color)', cursor: 'pointer', fontSize: '14px' }}>Back to Sign In</a>
           </div>
         </div>
       </div>
@@ -97,7 +97,7 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
             <InPlaceIcon width={50} height={50} />
           </div>
           <h1>Create New Password</h1>
-          <p style={{ color: '#888' }}>Your password has been reset. Choose a new one below.</p>
+          <p style={{ color: 'var(--text-tertiary)' }}>Your password has been reset. Choose a new one below.</p>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -114,7 +114,7 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
               <button type="button" onClick={() => setShowPassword(!showPassword)}
                 style={{
                   position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', color: '#1b6b5a', cursor: 'pointer',
+                  background: 'none', border: 'none', color: 'var(--role-color)', cursor: 'pointer',
                   fontSize: '13px', fontWeight: 600, padding: '4px 8px',
                 }}>
                 {showPassword ? 'Hide' : 'Show'}
@@ -125,8 +125,8 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
                 {rules.map((r, i) => (
                   <span key={i} style={{
                     fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px',
-                    background: r.met ? '#e8f5e9' : '#fef2f2',
-                    color: r.met ? '#2e7d32' : '#c0392b',
+                    background: r.met ? 'var(--color-success-bg)' : 'var(--bg-error-subtle)',
+                    color: r.met ? 'var(--color-success)' : 'var(--color-error)',
                   }}>
                     {r.met ? '\u2713' : '\u2717'} {r.label}
                   </span>
@@ -143,18 +143,18 @@ const ResetPasswordPage = window.ResetPasswordPage = ({ token, onNavigate }) => 
               placeholder="Re-enter new password"
             />
             {confirmPassword && !passwordsMatch && (
-              <div style={{ fontSize: '12px', color: '#c0392b', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--color-error)', marginTop: '4px' }}>
                 Passwords do not match
               </div>
             )}
             {passwordsMatch && (
-              <div style={{ fontSize: '12px', color: '#2e7d32', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--color-success)', marginTop: '4px' }}>
                 Passwords match
               </div>
             )}
           </div>
           {error && (
-            <div style={{ color: '#c0392b', fontSize: '14px', marginBottom: '12px', padding: '10px', background: '#fdf0ed', borderRadius: '6px' }}>
+            <div style={{ color: 'var(--color-error)', fontSize: '14px', marginBottom: '12px', padding: '10px', background: 'var(--bg-accent-light)', borderRadius: '6px' }}>
               {error}
             </div>
           )}

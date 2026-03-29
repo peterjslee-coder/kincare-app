@@ -34,11 +34,11 @@ const StripePaymentForm = window.StripePaymentForm = ({ amount, description, onS
             style: {
               base: {
                 fontSize: '16px',
-                color: '#333',
+                color: 'var(--text-primary)',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                '::placeholder': { color: '#999' },
+                '::placeholder': { color: 'var(--text-muted)' },
               },
-              invalid: { color: '#e8724a' },
+              invalid: { color: 'var(--accent-color)' },
             },
           });
           card.mount(cardRef.current);
@@ -106,21 +106,21 @@ const StripePaymentForm = window.StripePaymentForm = ({ amount, description, onS
   return (
     <form onSubmit={handleSubmit} style={{ width: '100%' }}>
       {description && (
-        <div style={{ marginBottom: '16px', color: '#666', fontSize: '14px' }}>
+        <div style={{ marginBottom: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
           {description}
         </div>
       )}
 
       <div style={{
         border: '1px solid #ddd', borderRadius: '8px', padding: '14px 12px',
-        marginBottom: '16px', background: '#fafafa', transition: 'border-color 0.2s',
+        marginBottom: '16px', background: 'var(--bg-primary)', transition: 'border-color 0.2s',
       }}>
         <div ref={cardRef} />
       </div>
 
       {error && (
         <div style={{
-          background: '#fff5f5', color: '#c0392b', padding: '10px 14px',
+          background: 'var(--bg-error-light)', color: 'var(--color-error)', padding: '10px 14px',
           borderRadius: '8px', marginBottom: '16px', fontSize: '13px',
           border: '1px solid #f5c6cb',
         }}>
@@ -133,8 +133,8 @@ const StripePaymentForm = window.StripePaymentForm = ({ amount, description, onS
         disabled={processing || !cardReady}
         style={{
           width: '100%', padding: '14px', borderRadius: '8px',
-          border: 'none', background: processing ? '#999' : '#1b6b5a',
-          color: '#fff', fontSize: '16px', fontWeight: 600,
+          border: 'none', background: processing ? 'var(--text-muted)' : 'var(--role-color)',
+          color: 'var(--text-on-primary)', fontSize: '16px', fontWeight: 600,
           cursor: processing ? 'wait' : 'pointer',
           transition: 'background 0.2s',
         }}
@@ -142,7 +142,7 @@ const StripePaymentForm = window.StripePaymentForm = ({ amount, description, onS
         {processing ? '⏳ Processing...' : (buttonText || `Pay $${amount.toFixed(2)}`)}
       </button>
 
-      <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '12px', color: '#999' }}>
+      <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
         🔒 Secured by Stripe. Your card details never touch our servers.
       </div>
     </form>

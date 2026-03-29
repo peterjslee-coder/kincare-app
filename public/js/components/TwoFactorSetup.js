@@ -69,10 +69,10 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
     if (onComplete) onComplete();
   };
 
-  const cardStyle = { background: '#fff', borderRadius: 12, padding: 24 };
+  const cardStyle = { background: 'var(--bg-surface)', borderRadius: 12, padding: 24 };
   const inputStyle = { width: '100%', padding: '12px 14px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box' };
-  const primaryBtn = { padding: '10px 24px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' };
-  const secondaryBtn = { padding: '10px 24px', background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' };
+  const primaryBtn = { padding: '10px 24px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' };
+  const secondaryBtn = { padding: '10px 24px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' };
 
   if (step === 'loading') {
     return <div style={{ textAlign: 'center', padding: 40 }}><LoadingSpinner text="Setting up 2FA..." /></div>;
@@ -84,7 +84,7 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
           <h3 style={{ margin: '0 0 8px' }}>Setup Error</h3>
-          <p style={{ color: '#666', fontSize: 14, margin: '0 0 16px' }}>{error}</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 16px' }}>{error}</p>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
             <button onClick={onCancel} style={secondaryBtn}>Go Back</button>
             <button onClick={() => { setError(null); setStep('loading'); }} style={primaryBtn}>Retry</button>
@@ -99,7 +99,7 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
     return (
       <div style={cardStyle}>
         <h3 style={{ margin: '0 0 4px' }}>Set Up Authenticator App</h3>
-        <p style={{ color: '#666', fontSize: 14, margin: '0 0 20px' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 20px' }}>
           Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
         </p>
 
@@ -109,12 +109,12 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
 
         <div
           onClick={() => { navigator.clipboard?.writeText(secret).then(() => showToast('Code copied!', 'success')).catch(() => {}); }}
-          style={{ background: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 20, cursor: 'pointer', transition: 'background 0.15s' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#e8f5e9'}
-          onMouseLeave={e => e.currentTarget.style.background = '#f8f9fa'}
+          style={{ background: 'var(--bg-primary)', borderRadius: 8, padding: 12, marginBottom: 20, cursor: 'pointer', transition: 'background 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--color-success-bg)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-primary)'}
         >
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#999', textTransform: 'uppercase', marginBottom: 4 }}>Manual entry code <span style={{ fontWeight: 400 }}>— tap to copy</span></div>
-          <code style={{ fontSize: 13, wordBreak: 'break-all', color: '#333' }}>{secret}</code>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Manual entry code <span style={{ fontWeight: 400 }}>— tap to copy</span></div>
+          <code style={{ fontSize: 13, wordBreak: 'break-all', color: 'var(--text-primary)' }}>{secret}</code>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -130,11 +130,11 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
     return (
       <div style={cardStyle}>
         <h3 style={{ margin: '0 0 4px' }}>Verify Your Authenticator</h3>
-        <p style={{ color: '#666', fontSize: 14, margin: '0 0 20px' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 20px' }}>
           Enter the 6-digit code from your authenticator app to confirm setup.
         </p>
 
-        {error && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{error}</div>}
+        {error && <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{error}</div>}
 
         <form onSubmit={handleVerify}>
           <div style={{ marginBottom: 16 }}>
@@ -160,13 +160,13 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>🎉</div>
           <h3 style={{ margin: '0 0 4px' }}>2FA Enabled!</h3>
-          <p style={{ color: '#666', fontSize: 14, margin: 0 }}>Save these backup codes in a safe place. Each code can only be used once.</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>Save these backup codes in a safe place. Each code can only be used once.</p>
         </div>
 
-        <div style={{ background: '#f8f9fa', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+        <div style={{ background: 'var(--bg-primary)', borderRadius: 8, padding: 16, marginBottom: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {backupCodes.map((c, i) => (
-              <div key={i} style={{ fontFamily: 'monospace', fontSize: 14, padding: '6px 8px', background: '#fff', borderRadius: 4, textAlign: 'center', border: '1px solid #e0e0e0' }}>
+              <div key={i} style={{ fontFamily: 'monospace', fontSize: 14, padding: '6px 8px', background: 'var(--bg-surface)', borderRadius: 4, textAlign: 'center', border: '1px solid #e0e0e0' }}>
                 {c}
               </div>
             ))}
@@ -179,7 +179,7 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
           </button>
         </div>
 
-        <div style={{ background: '#fff3cd', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: '#856404' }}>
+        <div style={{ background: 'var(--color-warning-bg)', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: 'var(--color-warning)' }}>
           ⚠️ If you lose your authenticator device and don't have these backup codes, you won't be able to access your account.
         </div>
 

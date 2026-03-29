@@ -47,8 +47,8 @@ const Analytics = window.Analytics = () => {
             const y = chartHeight - chartHeight * pct;
             return (
               <g key={i}>
-                <line x1={leftPad} y1={y} x2={chartWidth - 10} y2={y} stroke="#e8e8e8" strokeWidth="1" />
-                <text x={leftPad - 4} y={y + 4} textAnchor="end" fontSize="10" fill="#999">
+                <line x1={leftPad} y1={y} x2={chartWidth - 10} y2={y} stroke="var(--border-light)" strokeWidth="1" />
+                <text x={leftPad - 4} y={y + 4} textAnchor="end" fontSize="10" fill="var(--text-muted)">
                   {unit === '$' ? `$${Math.round(maxVal * pct)}` : Math.round(maxVal * pct)}
                 </text>
               </g>
@@ -66,11 +66,11 @@ const Analytics = window.Analytics = () => {
                   rx="3" fill={color} opacity={0.85}
                 />
                 {d[dataKey] > 0 && (
-                  <text x={x + (barWidth - 2) / 2} y={chartHeight - barH - 4} textAnchor="middle" fontSize="9" fill="#555" fontWeight="600">
+                  <text x={x + (barWidth - 2) / 2} y={chartHeight - barH - 4} textAnchor="middle" fontSize="9" fill="var(--text-secondary)" fontWeight="600">
                     {unit === '$' ? `$${d[dataKey]}` : d[dataKey]}
                   </text>
                 )}
-                <text x={x + (barWidth - 2) / 2} y={chartHeight + 14} textAnchor="middle" fontSize="10" fill="#888">
+                <text x={x + (barWidth - 2) / 2} y={chartHeight + 14} textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">
                   {d.label}
                 </text>
               </g>
@@ -85,7 +85,7 @@ const Analytics = window.Analytics = () => {
   const DonutChart = ({ data: slices }) => {
     if (!slices.length) return null;
     const total = slices.reduce((s, d) => s + d.count, 0);
-    const colors = ['#1b6b5a', '#e8724a', '#3498db', '#9b59b6', '#f39c12', '#2ecc71'];
+    const colors = ['var(--role-color)', 'var(--accent-color)', '#3498db', '#9b59b6', '#f39c12', '#2ecc71'];
     const serviceLabels = {
       meals: 'Meals', rides: 'Rides', companion: 'Companion',
       companionship: 'Companion', personal_care: 'Personal Care',
@@ -120,15 +120,15 @@ const Analytics = window.Analytics = () => {
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
         <svg width="140" height="140" viewBox="0 0 140 140">
           {arcs.map((a, i) => <path key={i} d={a.path} fill={a.color} />)}
-          <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="700" fill="#333">{total}</text>
-          <text x={cx} y={cy + 12} textAnchor="middle" fontSize="10" fill="#999">sessions</text>
+          <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--text-primary)">{total}</text>
+          <text x={cx} y={cy + 12} textAnchor="middle" fontSize="10" fill="var(--text-muted)">sessions</text>
         </svg>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {arcs.map((a, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
               <div style={{ width: 10, height: 10, borderRadius: '2px', background: a.color, flexShrink: 0 }} />
-              <span style={{ color: '#555' }}>{a.label}</span>
-              <span style={{ color: '#999' }}>({a.pct}%)</span>
+              <span style={{ color: 'var(--text-secondary)' }}>{a.label}</span>
+              <span style={{ color: 'var(--text-muted)' }}>({a.pct}%)</span>
             </div>
           ))}
         </div>
@@ -137,8 +137,8 @@ const Analytics = window.Analytics = () => {
   };
 
   const chartTabs = [
-    { key: 'hours', label: 'Hours', color: '#1b6b5a', unit: '' },
-    { key: 'spend', label: 'Spending', color: '#e8724a', unit: '$' },
+    { key: 'hours', label: 'Hours', color: 'var(--role-color)', unit: '' },
+    { key: 'spend', label: 'Spending', color: 'var(--accent-color)', unit: '$' },
     { key: 'sessions', label: 'Sessions', color: '#3498db', unit: '' },
   ];
   const activeTab = chartTabs.find(t => t.key === activeChart);
@@ -183,8 +183,8 @@ const Analytics = window.Analytics = () => {
               style={{
                 padding: '6px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer',
                 fontSize: '12px', fontWeight: 600,
-                background: activeChart === tab.key ? tab.color : '#f0f0f0',
-                color: activeChart === tab.key ? '#fff' : '#666',
+                background: activeChart === tab.key ? tab.color : 'var(--badge-muted-bg)',
+                color: activeChart === tab.key ? 'var(--text-on-primary)' : 'var(--text-secondary)',
               }}>
               {tab.label}
             </button>
@@ -199,7 +199,7 @@ const Analytics = window.Analytics = () => {
         {serviceBreakdown.length > 0 ? (
           <DonutChart data={serviceBreakdown} />
         ) : (
-          <div style={{ color: '#999', padding: '16px', fontSize: '14px' }}>No service data yet</div>
+          <div style={{ color: 'var(--text-muted)', padding: '16px', fontSize: '14px' }}>No service data yet</div>
         )}
       </div>
 
@@ -214,21 +214,21 @@ const Analytics = window.Analytics = () => {
               return (
                 <div key={idx} style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#333' }}>{cg.name}</span>
-                    <span style={{ fontSize: '12px', color: '#888' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{cg.name}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
                       {cg.sessions} sessions &middot; {cg.hours}h
                       {cg.rating > 0 && <> &middot; ⭐ {cg.rating}</>}
                     </span>
                   </div>
-                  <div style={{ height: '8px', background: '#f0f0f0', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${barPct}%`, background: '#1b6b5a', borderRadius: '4px', transition: 'width 0.5s ease' }} />
+                  <div style={{ height: '8px', background: 'var(--badge-muted-bg)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${barPct}%`, background: 'var(--role-color)', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                   </div>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div style={{ color: '#999', padding: '16px', fontSize: '14px' }}>No caregiver data yet</div>
+          <div style={{ color: 'var(--text-muted)', padding: '16px', fontSize: '14px' }}>No caregiver data yet</div>
         )}
       </div>
     </>

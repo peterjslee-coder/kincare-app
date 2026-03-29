@@ -137,12 +137,12 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
         <button className="modal-close" onClick={onClose}>✕</button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#1b6b5a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700 }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700 }}>
             {initials}
           </div>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#1a1a2e' }}>Schedule {displayName.split(' ')[0]}</div>
-            <div style={{ fontSize: 13, color: '#666' }}>${hourlyRate}/hr{specialtiesText ? ` • ${specialtiesText}` : ''}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--bg-card)' }}>Schedule {displayName.split(' ')[0]}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>${hourlyRate}/hr{specialtiesText ? ` • ${specialtiesText}` : ''}</div>
           </div>
         </div>
 
@@ -151,12 +151,12 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
             {loadingSlots ? (
               <div style={{ textAlign: 'center', padding: '30px 0' }}>
                 <div className="loading-spinner" style={{ margin: '0 auto 12px' }}></div>
-                <div style={{ fontSize: 14, color: '#666' }}>Loading availability...</div>
+                <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Loading availability...</div>
               </div>
             ) : (
               <>
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e', marginBottom: 10 }}>Select a day</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bg-card)', marginBottom: 10 }}>Select a day</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {days.map(day => {
                       const daySlots = getSlotsForDay(day);
@@ -166,12 +166,12 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
                         <button key={day.date} onClick={() => { setSelectedDay(day); setSelectedSlot(null); }}
                           style={{
                             flex: '1 1 0', minWidth: 70, padding: '10px 4px', border: isSelected ? '2px solid #1b6b5a' : isOff && isSelected ? '2px solid #e8724a' : '1px solid #e0e0e0',
-                            borderRadius: 10, background: isSelected ? (isOff ? '#fff8f0' : '#e8f5e9') : isOff ? '#fafafa' : '#fff',
+                            borderRadius: 10, background: isSelected ? (isOff ? 'var(--bg-warm)' : 'var(--color-success-bg)') : isOff ? 'var(--bg-primary)' : 'var(--text-on-primary)',
                             cursor: 'pointer', opacity: isOff ? 0.75 : 1, textAlign: 'center',
                           }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>{day.label}</div>
-                          <div style={{ fontSize: 11, color: '#999' }}>{day.shortDate}</div>
-                          <div style={{ fontSize: 11, color: isOff ? '#e8724a' : '#1b6b5a', fontWeight: 600, marginTop: 4 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{day.label}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{day.shortDate}</div>
+                          <div style={{ fontSize: 11, color: isOff ? 'var(--accent-color)' : 'var(--role-color)', fontWeight: 600, marginTop: 4 }}>
                             {isOff ? 'Off' : `${daySlots.length} slots`}
                           </div>
                         </button>
@@ -182,18 +182,18 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
 
                 {selectedDay && (
                   <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e', marginBottom: 10 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bg-card)', marginBottom: 10 }}>
                       {selectedDaySlots.length > 0 ? `Available times — ${selectedDay.label} ${selectedDay.shortDate}` : `${selectedDay.label} ${selectedDay.shortDate}`}
                     </div>
                     {selectedDaySlots.length === 0 ? (() => {
                       const offDayTimes = getOffDayTimeOptions(selectedDay);
                       return (
                         <div>
-                          <div style={{ padding: 12, borderRadius: 10, background: '#fff8f0', border: '1px solid #ffe0b2', marginBottom: 12 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: '#e65100', marginBottom: 4 }}>
+                          <div style={{ padding: 12, borderRadius: 10, background: 'var(--bg-warm)', border: '1px solid #ffe0b2', marginBottom: 12 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--color-warning)', marginBottom: 4 }}>
                               {displayName.split(' ')[0]} is off this day
                             </div>
-                            <div style={{ fontSize: 13, color: '#795548' }}>
+                            <div style={{ fontSize: 13, color: 'var(--text-brown)' }}>
                               Pick a time to send a request — they can accept, decline, or propose a different time.
                             </div>
                           </div>
@@ -205,15 +205,15 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
                                   style={{
                                     padding: '8px 4px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer',
                                     border: selectedSlot?.start === slot.start ? '2px solid #e8724a' : '1px solid #e0e0e0',
-                                    background: selectedSlot?.start === slot.start ? '#fff8f0' : '#fff',
-                                    color: '#1a1a2e',
+                                    background: selectedSlot?.start === slot.start ? 'var(--bg-warm)' : 'var(--text-on-primary)',
+                                    color: 'var(--bg-card)',
                                   }}>
                                   {formatTime(slot.start)}
                                 </button>
                               ))}
                             </div>
                           ) : (
-                            <div style={{ fontSize: 13, color: '#999', textAlign: 'center', padding: 16 }}>
+                            <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>
                               No times available today — try a different day.
                             </div>
                           )}
@@ -227,8 +227,8 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
                             style={{
                               padding: '10px 6px', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer',
                               border: selectedSlot?.start === slot.start ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                              background: selectedSlot?.start === slot.start ? '#e8f5e9' : '#fff',
-                              color: '#1a1a2e',
+                              background: selectedSlot?.start === slot.start ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+                              color: 'var(--bg-card)',
                             }}>
                             {formatTime(slot.start)}
                           </button>
@@ -251,7 +251,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
 
         {bookingStep === 'details' && (
           <>
-            <div style={{ background: '#f0faf7', padding: 14, borderRadius: 10, marginBottom: 16, fontSize: 14 }}>
+            <div style={{ background: 'var(--bg-highlight)', padding: 14, borderRadius: 10, marginBottom: 16, fontSize: 14 }}>
               <strong>{selectedDay.label} {selectedDay.shortDate}</strong> at <strong>{formatTime(selectedSlot.start)}</strong>
             </div>
             <div className="modal-section">
@@ -289,28 +289,28 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
 
         {bookingStep === 'confirm' && (
           <>
-            <div style={{ background: selectedSlot?.offDay ? '#fff8f0' : '#f8f9fa', padding: 16, borderRadius: 10, marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: selectedSlot?.offDay ? '#e8724a' : '#1b6b5a' }}>
+            <div style={{ background: selectedSlot?.offDay ? 'var(--bg-warm)' : 'var(--bg-primary)', padding: 16, borderRadius: 10, marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: selectedSlot?.offDay ? 'var(--accent-color)' : 'var(--role-color)' }}>
                 {selectedSlot?.offDay ? 'Care Request (Off Day)' : 'Booking Summary'}
               </div>
               {selectedSlot?.offDay && (
-                <div style={{ fontSize: 13, color: '#795548', marginBottom: 12, padding: '8px 10px', background: '#ffe0b2', borderRadius: 6 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-brown)', marginBottom: 12, padding: '8px 10px', background: '#ffe0b2', borderRadius: 6 }}>
                   {displayName.split(' ')[0]} is off this day. This sends a request they can accept, decline, or propose a different time.
                 </div>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px 12px', fontSize: 14 }}>
-                <div style={{ color: '#666' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{displayName}</div>
-                <div style={{ color: '#666' }}>Date</div><div>{selectedDay.label} {selectedDay.shortDate}</div>
-                <div style={{ color: '#666' }}>Time</div><div>{formatTime(selectedSlot.start)}</div>
-                <div style={{ color: '#666' }}>Duration</div><div>{duration} hour(s)</div>
-                <div style={{ color: '#666' }}>Service</div><div>{formatServiceType(serviceType)}</div>
-                <div style={{ color: '#666' }}>Est. Cost</div><div style={{ fontWeight: 600, color: selectedSlot?.offDay ? '#e8724a' : '#1b6b5a' }}>${hourlyRate * parseInt(duration)}</div>
-                {instructions && <><div style={{ color: '#666' }}>Notes</div><div>{instructions}</div></>}
+                <div style={{ color: 'var(--text-secondary)' }}>Caregiver</div><div style={{ fontWeight: 600 }}>{displayName}</div>
+                <div style={{ color: 'var(--text-secondary)' }}>Date</div><div>{selectedDay.label} {selectedDay.shortDate}</div>
+                <div style={{ color: 'var(--text-secondary)' }}>Time</div><div>{formatTime(selectedSlot.start)}</div>
+                <div style={{ color: 'var(--text-secondary)' }}>Duration</div><div>{duration} hour(s)</div>
+                <div style={{ color: 'var(--text-secondary)' }}>Service</div><div>{formatServiceType(serviceType)}</div>
+                <div style={{ color: 'var(--text-secondary)' }}>Est. Cost</div><div style={{ fontWeight: 600, color: selectedSlot?.offDay ? 'var(--accent-color)' : 'var(--role-color)' }}>${hourlyRate * parseInt(duration)}</div>
+                {instructions && <><div style={{ color: 'var(--text-secondary)' }}>Notes</div><div>{instructions}</div></>}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
               <button className="btn btn-outline" onClick={() => setBookingStep('details')}>Back</button>
-              <button className="btn btn-primary" style={selectedSlot?.offDay ? { background: '#e8724a' } : {}} onClick={handleBook}>
+              <button className="btn btn-primary" style={selectedSlot?.offDay ? { background: 'var(--accent-color)' } : {}} onClick={handleBook}>
                 {selectedSlot?.offDay ? 'Send Request' : 'Confirm Booking'}
               </button>
             </div>

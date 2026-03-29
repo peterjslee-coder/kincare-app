@@ -97,11 +97,11 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
   const [statusFilter, setStatusFilter] = useState('active'); // 'active', 'all', 'resolved', 'dismissed'
 
   if (safetyLoading) {
-    return React.createElement('div', { style: { textAlign: 'center', padding: 40, color: '#888' } }, 'Loading safety flags...');
+    return React.createElement('div', { style: { textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' } }, 'Loading safety flags...');
   }
 
   if (safetyFlags.length === 0) {
-    return React.createElement('div', { className: 'card', style: { textAlign: 'center', color: '#888', padding: 40 } },
+    return React.createElement('div', { className: 'card', style: { textAlign: 'center', color: 'var(--text-tertiary)', padding: 40 } },
       'No safety flags. All conversations are monitored for abuse, exploitation, and off-platform circumvention.'
     );
   }
@@ -125,19 +125,19 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
     onClick: () => filterType === 'type' ? setTypeFilter(value) : setStatusFilter(value),
     style: {
       padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
-      background: (filterType === 'type' ? typeFilter : statusFilter) === value ? '#1b6b5a' : '#f3f4f6',
-      color: (filterType === 'type' ? typeFilter : statusFilter) === value ? '#fff' : '#555',
+      background: (filterType === 'type' ? typeFilter : statusFilter) === value ? 'var(--role-color)' : '#f3f4f6',
+      color: (filterType === 'type' ? typeFilter : statusFilter) === value ? 'var(--text-on-primary)' : 'var(--text-secondary)',
     },
   }, label + (count !== undefined ? ` (${count})` : ''));
 
   return React.createElement('div', null,
     // Filter bar
     React.createElement('div', { style: { display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' } },
-      React.createElement('span', { style: { fontSize: 12, color: '#888', fontWeight: 600, marginRight: 4 } }, 'Type:'),
+      React.createElement('span', { style: { fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 600, marginRight: 4 } }, 'Type:'),
       filterBtn('All', 'all', 'type'),
       filterBtn('\u{1F6A8} Safety', 'safety', 'type', safetyCount),
       filterBtn('\u26A0\uFE0F Off-Platform', 'circumvention', 'type', circumventionCount),
-      React.createElement('span', { style: { fontSize: 12, color: '#888', fontWeight: 600, marginLeft: 12, marginRight: 4 } }, 'Status:'),
+      React.createElement('span', { style: { fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 600, marginLeft: 12, marginRight: 4 } }, 'Status:'),
       filterBtn('Active', 'active', 'status'),
       filterBtn('Resolved', 'resolved', 'status'),
       filterBtn('Dismissed', 'dismissed', 'status'),
@@ -145,7 +145,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
     ),
 
     filteredFlags.length === 0
-      ? React.createElement('div', { style: { textAlign: 'center', padding: 30, color: '#999', fontSize: 13 } }, 'No flags match this filter.')
+      ? React.createElement('div', { style: { textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 } }, 'No flags match this filter.')
       : null,
 
     filteredFlags.map(f => {
@@ -160,14 +160,14 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
       key: f.id, className: 'card',
       style: {
         marginBottom: 12,
-        border: isEscalated ? '2px solid #b71c1c' : isPending ? `2px solid ${isAbuse ? '#dc2626' : '#ff9800'}` : '1px solid #e5e7eb',
-        background: isEscalated ? '#fff5f5' : isPending ? (isAbuse ? '#fef2f2' : '#fff8f0') : '#fff',
+        border: isEscalated ? '2px solid #b71c1c' : isPending ? `2px solid ${isAbuse ? 'var(--color-error)' : 'var(--color-warning)'}` : '1px solid #e5e7eb',
+        background: isEscalated ? 'var(--bg-error-light)' : isPending ? (isAbuse ? 'var(--bg-error-subtle)' : 'var(--bg-warm)') : 'var(--text-on-primary)',
         position: 'relative',
       },
     },
       // Unread indicator
       unread && React.createElement('div', {
-        style: { position: 'absolute', top: 10, right: 10, width: 10, height: 10, borderRadius: '50%', background: '#dc2626' },
+        style: { position: 'absolute', top: 10, right: 10, width: 10, height: 10, borderRadius: '50%', background: 'var(--color-error)' },
         title: 'Unread',
       }),
 
@@ -178,27 +178,27 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
       },
         React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } },
           React.createElement('span', { style: { fontSize: 16 } }, isEscalated ? '\u{1F6A8}\u{1F6A8}' : isAbuse ? '\u{1F6A8}' : '\u26A0\uFE0F'),
-          React.createElement('span', { style: { fontWeight: 700, fontSize: 14, color: isAbuse || isEscalated ? '#dc2626' : '#e65100' } },
+          React.createElement('span', { style: { fontWeight: 700, fontSize: 14, color: isAbuse || isEscalated ? 'var(--color-error)' : 'var(--color-warning)' } },
             f.flag_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Flagged'
           ),
           React.createElement('span', {
             style: {
               fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
-              background: isEscalated ? '#b71c1c' : isPending ? '#ffebee' : f.status === 'resolved' ? '#e8f5e9' : f.status === 'dismissed' ? '#f5f5f5' : '#f5f5f5',
-              color: isEscalated ? '#fff' : isPending ? '#c62828' : f.status === 'resolved' ? '#2e7d32' : '#888',
+              background: isEscalated ? 'var(--color-error)' : isPending ? 'var(--color-error-bg)' : f.status === 'resolved' ? 'var(--color-success-bg)' : f.status === 'dismissed' ? 'var(--bg-primary)' : 'var(--bg-primary)',
+              color: isEscalated ? 'var(--text-on-primary)' : isPending ? 'var(--color-error)' : f.status === 'resolved' ? 'var(--color-success)' : 'var(--text-tertiary)',
             }
           }, f.status.toUpperCase()),
-          React.createElement('span', { style: { fontSize: 12, color: '#888', marginLeft: 'auto' } },
+          React.createElement('span', { style: { fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 'auto' } },
             isExpanded ? '\u25B2 Collapse' : '\u25BC View Thread'
           ),
         ),
         React.createElement('div', { style: { fontWeight: 600, fontSize: 13 } },
           `${f.first_name} ${f.last_name}`,
-          React.createElement('span', { style: { fontWeight: 400, color: '#888', marginLeft: 6, fontSize: 12 } }, f.email),
+          React.createElement('span', { style: { fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 6, fontSize: 12 } }, f.email),
         ),
-        React.createElement('div', { style: { fontSize: 11, color: '#999', marginTop: 2 } }, fmtDateTime(f.created_at)),
+        React.createElement('div', { style: { fontSize: 11, color: 'var(--text-muted)', marginTop: 2 } }, fmtDateTime(f.created_at)),
         React.createElement('div', {
-          style: { marginTop: 6, padding: 10, background: '#f8f9fa', borderRadius: 8, fontSize: 13, color: '#333', lineHeight: 1.5, borderLeft: `3px solid ${isAbuse ? '#dc2626' : '#ff9800'}` }
+          style: { marginTop: 6, padding: 10, background: 'var(--bg-primary)', borderRadius: 8, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5, borderLeft: `3px solid ${isAbuse ? 'var(--color-error)' : 'var(--color-warning)'}` }
         }, `\u201C${f.user_message}\u201D`),
       ),
 
@@ -211,61 +211,61 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
         }),
         !isEscalated && React.createElement('button', {
           onClick: () => { handleReviewFlag(f.id, 'escalated'); loadSafetyFlags(); },
-          style: { padding: '6px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
+          style: { padding: '6px 14px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
         }, '\u{1F6A8} Escalate'),
         React.createElement('button', {
           onClick: () => { handleReviewFlag(f.id, 'resolved'); },
           disabled: flagPasskeyLoading,
-          style: { padding: '6px 14px', background: (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'resolved') ? '#145a4a' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 },
+          style: { padding: '6px 14px', background: (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'resolved') ? '#145a4a' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 },
         }, (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'resolved')
           ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to resolve')
           : '\u2713 Resolve'),
         React.createElement('button', {
           onClick: () => { handleReviewFlag(f.id, 'dismissed'); },
           disabled: flagPasskeyLoading,
-          style: { padding: '6px 14px', background: (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'dismissed') ? '#e0e0e0' : '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 },
+          style: { padding: '6px 14px', background: (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'dismissed') ? 'var(--border-light)' : 'var(--bg-primary)', color: 'var(--text-tertiary)', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 },
         }, (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'dismissed')
           ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to dismiss')
           : 'Dismiss'),
         // Passkey error display
         flagPasskeyError && flagPasskeyConfirm?.flagId === f.id && React.createElement('div', {
-          style: { fontSize: 11, color: '#c62828', width: '100%' },
+          style: { fontSize: 11, color: 'var(--color-error)', width: '100%' },
         }, flagPasskeyError),
       ),
 
       // ── Expanded evidence thread ──
       isExpanded && React.createElement('div', { style: { marginTop: 16, borderTop: '2px solid #e0e0e0', paddingTop: 16 } },
         threadLoading
-          ? React.createElement('div', { style: { textAlign: 'center', padding: 20, color: '#888' } }, 'Loading evidence thread...')
+          ? React.createElement('div', { style: { textAlign: 'center', padding: 20, color: 'var(--text-tertiary)' } }, 'Loading evidence thread...')
           : threadData && React.createElement(React.Fragment, null,
 
             // ─── SECTION 1: Original Conversation (Evidence) ───
             React.createElement('div', { style: { marginBottom: 20 } },
-              React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 } },
+              React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 } },
                 '\u{1F4DD} Original Conversation (Evidence)'
               ),
               threadData.evidenceMessages.length === 0
-                ? React.createElement('div', { style: { fontSize: 12, color: '#999', fontStyle: 'italic', padding: 8 } }, 'No conversation messages found.')
-                : React.createElement('div', { style: { background: '#fafafa', borderRadius: 8, padding: 8, maxHeight: 400, overflowY: 'auto' } },
+                ? React.createElement('div', { style: { fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: 8 } }, 'No conversation messages found.')
+                : React.createElement('div', { style: { background: 'var(--bg-primary)', borderRadius: 8, padding: 8, maxHeight: 400, overflowY: 'auto' } },
                   threadData.evidenceMessages.map(m => {
                     const isFlaggedMsg = m.content === f.user_message;
                     return React.createElement('div', {
                       key: m.id,
                       style: {
                         padding: '8px 12px', marginBottom: 4, borderRadius: 8,
-                        background: isFlaggedMsg ? '#ffebee' : '#fff',
+                        background: isFlaggedMsg ? 'var(--color-error-bg)' : 'var(--text-on-primary)',
                         border: isFlaggedMsg ? '1px solid #ef9a9a' : '1px solid #eee',
                       },
                     },
                       React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 } },
-                        React.createElement('span', { style: { fontWeight: 600, fontSize: 12, color: '#333' } },
+                        React.createElement('span', { style: { fontWeight: 600, fontSize: 12, color: 'var(--text-primary)' } },
                           m.sender_label || `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Unknown',
-                          React.createElement('span', { style: { fontWeight: 400, color: '#aaa', marginLeft: 6, fontSize: 10 } }, m.role || ''),
+                          React.createElement('span', { style: { fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6, fontSize: 10 } }, m.role || ''),
                         ),
-                        React.createElement('span', { style: { fontSize: 10, color: '#999', whiteSpace: 'nowrap' } }, fmtDateTime(m.created_at)),
+                        React.createElement('span', { style: { fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' } }, fmtDateTime(m.created_at)),
                       ),
-                      React.createElement('div', { style: { fontSize: 13, color: '#333', marginTop: 4, lineHeight: 1.4 } }, m.content),
-                      isFlaggedMsg && React.createElement('div', { style: { fontSize: 10, color: '#c62828', fontWeight: 600, marginTop: 4 } }, '\u2191 FLAGGED MESSAGE'),
+                      React.createElement('div', { style: { fontSize: 13, color: 'var(--text-primary)', marginTop: 4, lineHeight: 1.4 } }, m.content),
+                      isFlaggedMsg && React.createElement('div', { style: { fontSize: 10, color: 'var(--color-error)', fontWeight: 600, marginTop: 4 } }, '\u2191 FLAGGED MESSAGE'),
                     );
                   })
                 ),
@@ -273,7 +273,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
 
             // ─── SECTION 2: Admin Outreach Threads ───
             React.createElement('div', { style: { marginBottom: 20 } },
-              React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 } },
+              React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 } },
                 '\u{1F4AC} Admin Outreach'
               ),
 
@@ -287,9 +287,9 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
                     onClick: () => { setMsgTarget({ userId: p.user_id, name: `${p.first_name} ${p.last_name}` }); setMsgText(''); },
                     style: {
                       padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      background: msgTarget?.userId === p.user_id ? '#1b6b5a' : '#f5f5f5',
-                      color: msgTarget?.userId === p.user_id ? '#fff' : '#1b6b5a',
-                      border: `1px solid ${msgTarget?.userId === p.user_id ? '#1b6b5a' : '#ccc'}`,
+                      background: msgTarget?.userId === p.user_id ? 'var(--role-color)' : 'var(--bg-primary)',
+                      color: msgTarget?.userId === p.user_id ? 'var(--text-on-primary)' : 'var(--role-color)',
+                      border: `1px solid ${msgTarget?.userId === p.user_id ? 'var(--role-color)' : 'var(--border-light)'}`,
                     },
                   }, `Message ${p.first_name} ${p.last_name} (${p.role})`)
                 ),
@@ -299,7 +299,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
               msgTarget && React.createElement('div', {
                 style: { background: '#f0faf6', border: '1px solid #b2dfdb', borderRadius: 8, padding: 12, marginBottom: 10 },
               },
-                React.createElement('div', { style: { fontSize: 12, color: '#1b6b5a', fontWeight: 600, marginBottom: 6 } },
+                React.createElement('div', { style: { fontSize: 12, color: 'var(--role-color)', fontWeight: 600, marginBottom: 6 } },
                   `Sending as InPlace Support to ${msgTarget.name}`
                 ),
                 React.createElement('textarea', {
@@ -312,24 +312,24 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
                   React.createElement('button', {
                     onClick: () => sendMessage(f.id, msgTarget.userId),
                     disabled: msgSending || !msgText.trim(),
-                    style: { padding: '6px 16px', background: msgSending || !msgText.trim() ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
+                    style: { padding: '6px 16px', background: msgSending || !msgText.trim() ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
                   }, msgSending ? 'Sending...' : 'Send as InPlace Support'),
                   React.createElement('button', {
                     onClick: () => { setMsgTarget(null); setMsgText(''); },
-                    style: { padding: '6px 12px', background: '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' },
+                    style: { padding: '6px 12px', background: 'var(--bg-primary)', color: 'var(--text-tertiary)', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' },
                   }, 'Cancel'),
                 ),
               ),
 
               // Existing outreach threads
               threadData.outreachMessages.length === 0 && !msgTarget
-                ? React.createElement('div', { style: { fontSize: 12, color: '#999', fontStyle: 'italic', padding: 8 } }, 'No outreach messages sent yet.')
+                ? React.createElement('div', { style: { fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: 8 } }, 'No outreach messages sent yet.')
                 : threadData.outreachMessages.map(thread =>
                   React.createElement('div', {
                     key: thread.threadId,
                     style: { background: '#f0faf6', borderRadius: 8, padding: 10, marginBottom: 8, border: '1px solid #e0e0e0' },
                   },
-                    React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: '#1b6b5a', marginBottom: 6, textTransform: 'uppercase' } },
+                    React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: 'var(--role-color)', marginBottom: 6, textTransform: 'uppercase' } },
                       `Thread with ${thread.participant.firstName} ${thread.participant.lastName} (${thread.participant.email})`
                     ),
                     thread.messages.map(m => {
@@ -338,19 +338,19 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
                         key: m.id,
                         style: {
                           padding: '8px 12px', marginBottom: 4, borderRadius: 8,
-                          background: isAdmin ? '#e8f5e9' : '#fff',
+                          background: isAdmin ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
                           border: '1px solid #eee',
                           marginLeft: isAdmin ? 20 : 0,
                           marginRight: isAdmin ? 0 : 20,
                         },
                       },
                         React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 } },
-                          React.createElement('span', { style: { fontWeight: 600, fontSize: 12, color: isAdmin ? '#1b6b5a' : '#333' } },
+                          React.createElement('span', { style: { fontWeight: 600, fontSize: 12, color: isAdmin ? 'var(--role-color)' : 'var(--text-primary)' } },
                             isAdmin ? 'InPlace Support (You)' : `${m.first_name || ''} ${m.last_name || ''}`.trim()
                           ),
-                          React.createElement('span', { style: { fontSize: 10, color: '#999', whiteSpace: 'nowrap' } }, fmtDateTime(m.created_at)),
+                          React.createElement('span', { style: { fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' } }, fmtDateTime(m.created_at)),
                         ),
-                        React.createElement('div', { style: { fontSize: 13, color: '#333', marginTop: 4, lineHeight: 1.4 } }, m.content),
+                        React.createElement('div', { style: { fontSize: 13, color: 'var(--text-primary)', marginTop: 4, lineHeight: 1.4 } }, m.content),
                       );
                     }),
                   )
@@ -359,7 +359,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
 
             // ─── SECTION 3: Internal Notes ───
             React.createElement('div', { style: { marginBottom: 20 } },
-              React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 } },
+              React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 } },
                 '\u{1F4CB} Internal Notes & Audit Trail'
               ),
               React.createElement('div', { style: { display: 'flex', gap: 8, marginBottom: 10 } },
@@ -372,13 +372,13 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
                 React.createElement('button', {
                   onClick: () => addNote(f.id),
                   disabled: noteSending || !noteText.trim(),
-                  style: { padding: '6px 14px', background: noteSending || !noteText.trim() ? '#999' : '#555', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
+                  style: { padding: '6px 14px', background: noteSending || !noteText.trim() ? 'var(--text-muted)' : 'var(--text-secondary)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
                 }, noteSending ? '...' : 'Add Note'),
               ),
 
               // Audit trail timeline
               threadData.events.length === 0
-                ? React.createElement('div', { style: { fontSize: 12, color: '#999', fontStyle: 'italic', padding: 8 } }, 'No audit events yet.')
+                ? React.createElement('div', { style: { fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: 8 } }, 'No audit events yet.')
                 : React.createElement('div', { style: { borderLeft: '2px solid #e0e0e0', marginLeft: 8, paddingLeft: 16 } },
                   threadData.events.map(evt =>
                     React.createElement('div', {
@@ -389,11 +389,11 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
                       React.createElement('div', {
                         style: {
                           position: 'absolute', left: -22, top: 4, width: 8, height: 8, borderRadius: '50%',
-                          background: evt.event_type === 'admin_message' ? '#1b6b5a' : evt.event_type === 'admin_note' ? '#555' : evt.event_type.includes('escalat') ? '#dc2626' : evt.event_type.includes('resolved') ? '#4caf50' : '#999',
+                          background: evt.event_type === 'admin_message' ? 'var(--role-color)' : evt.event_type === 'admin_note' ? 'var(--text-secondary)' : evt.event_type.includes('escalat') ? 'var(--color-error)' : evt.event_type.includes('resolved') ? 'var(--color-success)' : 'var(--text-muted)',
                         },
                       }),
-                      React.createElement('div', { style: { color: '#999', fontSize: 10, marginBottom: 2 } }, fmtDateTime(evt.created_at)),
-                      React.createElement('div', { style: { color: '#333' } },
+                      React.createElement('div', { style: { color: 'var(--text-muted)', fontSize: 10, marginBottom: 2 } }, fmtDateTime(evt.created_at)),
+                      React.createElement('div', { style: { color: 'var(--text-primary)' } },
                         React.createElement('span', { style: { fontWeight: 600 } }, evt.actor_first ? `${evt.actor_first} ${evt.actor_last}` : evt.actor_label || 'System'),
                         ` \u2014 `,
                         evt.event_type === 'admin_viewed' ? 'Viewed this flag'

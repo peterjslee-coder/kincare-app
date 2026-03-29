@@ -19,22 +19,22 @@ const InviteLandingPage = window.InviteLandingPage = ({ inviteInfo, onNavigate }
       <div style={{ padding: '24px 0 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
         <InPlaceIcon width={36} height={36} />
         <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '24px', letterSpacing: '-1px' }}>
-          <span style={{ fontWeight: 200, color: '#999' }}>in</span>
-          <span style={{ fontWeight: 800, color: '#1b6b5a' }}>Place</span>
+          <span style={{ fontWeight: 200, color: 'var(--text-muted)' }}>in</span>
+          <span style={{ fontWeight: 800, color: 'var(--role-color)' }}>Place</span>
         </span>
       </div>
 
       {/* Main Card */}
       <div style={{
         maxWidth: '440px', width: '100%', marginTop: '24px',
-        background: '#fff', borderRadius: '16px',
+        background: 'var(--bg-surface)', borderRadius: '16px',
         boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
         overflow: 'hidden',
       }}>
         {/* Green banner */}
         <div style={{
           background: 'linear-gradient(135deg, #1b6b5a 0%, #2a8f7a 100%)',
-          padding: '28px 24px', textAlign: 'center', color: '#fff',
+          padding: '28px 24px', textAlign: 'center', color: 'var(--text-on-primary)',
         }}>
           <div style={{ fontSize: '40px', marginBottom: '12px' }}>👋</div>
           <h1 style={{ margin: '0 0 8px', fontSize: '22px', fontWeight: 700, lineHeight: 1.3 }}>
@@ -51,7 +51,7 @@ const InviteLandingPage = window.InviteLandingPage = ({ inviteInfo, onNavigate }
         <div style={{ padding: '24px' }}>
           {loaded ? (
             <div>
-              <p style={{ fontSize: '15px', color: '#555', lineHeight: 1.6, margin: '0 0 8px' }}>
+              <p style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 8px' }}>
                 As a care team <strong>{role}</strong>, you'll be able to:
               </p>
               <div style={{ margin: '16px 0 24px' }}>
@@ -66,28 +66,28 @@ const InviteLandingPage = window.InviteLandingPage = ({ inviteInfo, onNavigate }
                     padding: '10px 0', borderBottom: i < 3 ? '1px solid #f0f0f0' : 'none',
                   }}>
                     <span style={{ fontSize: '20px' }}>{item.icon}</span>
-                    <span style={{ fontSize: '14px', color: '#444' }}>{item.text}</span>
+                    <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{item.text}</span>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '16px 0' }}>
-              <div style={{ color: '#999', fontSize: '14px' }}>Loading invite details...</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Loading invite details...</div>
             </div>
           )}
 
           {/* CTAs */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <button onClick={() => onNavigate('register')} style={{
-              width: '100%', padding: '14px', background: '#1b6b5a', color: '#fff',
+              width: '100%', padding: '14px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
               border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: 700,
               cursor: 'pointer', transition: 'background 0.2s',
             }}>
               Create Account & Join
             </button>
             <button onClick={() => onNavigate('login')} style={{
-              width: '100%', padding: '14px', background: '#fff', color: '#1b6b5a',
+              width: '100%', padding: '14px', background: 'var(--bg-surface)', color: 'var(--role-color)',
               border: '2px solid #1b6b5a', borderRadius: '10px', fontSize: '16px', fontWeight: 700,
               cursor: 'pointer', transition: 'background 0.2s',
             }}>
@@ -96,7 +96,7 @@ const InviteLandingPage = window.InviteLandingPage = ({ inviteInfo, onNavigate }
           </div>
 
           {inviteInfo?.email && (
-            <p style={{ fontSize: '12px', color: '#999', textAlign: 'center', marginTop: '16px', marginBottom: 0 }}>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '16px', marginBottom: 0 }}>
               This invite was sent to <strong>{inviteInfo.email}</strong>
             </p>
           )}
@@ -105,7 +105,7 @@ const InviteLandingPage = window.InviteLandingPage = ({ inviteInfo, onNavigate }
 
       {/* Footer */}
       <div style={{ marginTop: '32px', paddingBottom: '32px', textAlign: 'center' }}>
-        <p style={{ fontSize: '13px', color: '#999', margin: 0 }}>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
           InPlace — On-demand care coordination for your loved ones
         </p>
       </div>

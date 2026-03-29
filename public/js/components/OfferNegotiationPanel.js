@@ -90,7 +90,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
     setSubmitting(false);
   };
 
-  if (loading) return <div style={{ padding: '8px', color: '#999', fontSize: '13px' }}>Loading offers...</div>;
+  if (loading) return <div style={{ padding: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>Loading offers...</div>;
 
   const maxRounds = 3;
   const latestPending = offers.find(o => o.status === 'pending');
@@ -102,8 +102,8 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
   // Accepted state
   if (accepted) {
     return (
-      <div style={{ padding: '10px 14px', background: '#e8f5e9', borderRadius: '8px', border: '1px solid #a5d6a7' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#2e7d32', fontSize: '14px' }}>
+      <div style={{ padding: '10px 14px', background: 'var(--color-success-bg)', borderRadius: '8px', border: '1px solid #a5d6a7' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--color-success)', fontSize: '14px' }}>
           <span>✅</span> Rate agreed: ${accepted.offered_rate}/hr
         </div>
       </div>
@@ -111,21 +111,21 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
   }
 
   const panelStyle = compact
-    ? { padding: '8px', background: '#fafafa', borderRadius: '8px', border: '1px solid #e0e0e0' }
-    : { padding: '14px', background: '#fafafa', borderRadius: '10px', border: '1px solid #e0e0e0' };
+    ? { padding: '8px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid #e0e0e0' }
+    : { padding: '14px', background: 'var(--bg-primary)', borderRadius: '10px', border: '1px solid #e0e0e0' };
 
   return (
     <div style={panelStyle}>
       {/* Offer chain */}
       {offers.length > 0 && (
         <div style={{ marginBottom: '10px' }}>
-          <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px', fontWeight: 600 }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '6px', fontWeight: 600 }}>
             Negotiation · Round {currentRound} of {maxRounds}
           </div>
           {offers.map((offer, idx) => {
             const isFromMe = offer.from_user_id === currentUser?.id;
             const statusColors = {
-              pending: '#ff9800', accepted: '#4caf50', rejected: '#f44336',
+              pending: 'var(--color-warning)', accepted: 'var(--color-success)', rejected: 'var(--color-error)',
               expired: '#9e9e9e', countered: '#2196f3',
             };
             const timeAgo = formatTimeAgo(offer.created_at);
@@ -137,24 +137,24 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
               }}>
                 <div style={{
                   padding: '8px 12px', borderRadius: '10px', maxWidth: '85%',
-                  background: isFromMe ? '#e3f2fd' : '#fff',
-                  border: `1px solid ${isFromMe ? '#bbdefb' : '#e0e0e0'}`,
+                  background: isFromMe ? 'var(--color-info-bg)' : 'var(--text-on-primary)',
+                  border: `1px solid ${isFromMe ? '#bbdefb' : 'var(--border-light)'}`,
                 }}>
-                  <div style={{ fontSize: '12px', color: '#888', marginBottom: '2px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '2px' }}>
                     {isFromMe ? 'You' : `${offer.first_name || ''} ${offer.last_name || ''}`.trim()}
-                    <span style={{ marginLeft: '6px', color: statusColors[offer.status] || '#999', fontWeight: 600 }}>
+                    <span style={{ marginLeft: '6px', color: statusColors[offer.status] || 'var(--text-muted)', fontWeight: 600 }}>
                       {offer.status}
                     </span>
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#333' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
                     ${offer.offered_rate}/hr
                   </div>
                   {offer.message && (
-                    <div style={{ fontSize: '12px', color: '#666', marginTop: '2px', fontStyle: 'italic' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', fontStyle: 'italic' }}>
                       "{offer.message}"
                     </div>
                   )}
-                  <div style={{ fontSize: '10px', color: '#aaa', marginTop: '2px' }}>{timeAgo}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>{timeAgo}</div>
                 </div>
               </div>
             );
@@ -170,7 +170,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
             disabled={submitting}
             style={{
               padding: '7px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-              background: '#1b6b5a', color: '#fff', fontWeight: 600, fontSize: '13px',
+              background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 600, fontSize: '13px',
             }}>
             Accept ${latestPending.offered_rate}/hr
           </button>
@@ -179,7 +179,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
             disabled={submitting}
             style={{
               padding: '7px 16px', borderRadius: '6px', border: '1px solid #e0e0e0', cursor: 'pointer',
-              background: '#fff', color: '#666', fontWeight: 600, fontSize: '13px',
+              background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '13px',
             }}>
             Decline
           </button>
@@ -188,7 +188,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
               onClick={() => { setShowCounter(true); setCounterRate(''); }}
               style={{
                 padding: '7px 16px', borderRadius: '6px', border: '1px solid #e8724a', cursor: 'pointer',
-                background: '#fff', color: '#e8724a', fontWeight: 600, fontSize: '13px',
+                background: 'var(--bg-surface)', color: 'var(--accent-color)', fontWeight: 600, fontSize: '13px',
               }}>
               Counter
             </button>
@@ -201,7 +201,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
       {(showCounter || (!latestPending && !accepted && offers.filter(o => o.status === 'rejected').length < maxRounds)) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', color: '#666' }}>$</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>$</span>
             <input
               type="number" step="0.50" min="1" max="500"
               value={counterRate}
@@ -212,7 +212,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
                 border: '1px solid #ddd', fontSize: '14px',
               }}
             />
-            <span style={{ fontSize: '13px', color: '#666' }}>/hr</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>/hr</span>
             <input
               type="text" maxLength={100}
               value={counterMessage}
@@ -230,7 +230,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
               disabled={submitting || !counterRate}
               style={{
                 padding: '7px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                background: '#e8724a', color: '#fff', fontWeight: 600, fontSize: '13px',
+                background: 'var(--accent-color)', color: 'var(--text-on-primary)', fontWeight: 600, fontSize: '13px',
                 opacity: submitting || !counterRate ? 0.5 : 1,
               }}>
               {submitting ? 'Sending...' : (latestPending ? 'Send Counter' : 'Make Offer')}
@@ -240,7 +240,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
                 onClick={() => setShowCounter(false)}
                 style={{
                   padding: '7px 16px', borderRadius: '6px', border: '1px solid #ddd', cursor: 'pointer',
-                  background: '#fff', color: '#666', fontSize: '13px',
+                  background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: '13px',
                 }}>
                 Cancel
               </button>
@@ -249,11 +249,11 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
         </div>
       )}
 
-      {error && <div style={{ color: '#d32f2f', fontSize: '12px', marginTop: '6px' }}>{error}</div>}
+      {error && <div style={{ color: 'var(--color-error)', fontSize: '12px', marginTop: '6px' }}>{error}</div>}
 
       {/* Expiry warning */}
       {latestPending && (
-        <div style={{ fontSize: '11px', color: '#999', marginTop: '6px' }}>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
           Expires {formatTimeAgo(latestPending.expires_at, true)}
         </div>
       )}

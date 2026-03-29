@@ -58,7 +58,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
   };
 
   const statusColors = {
-    pending: '#e8724a',
+    pending: 'var(--accent-color)',
     ai_review: '#4299e1',
     ai_flagged: '#f56565',
     approved: '#48bb78',
@@ -89,11 +89,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
   };
 
   const roleColors = {
-    family: '#1b6b5a',
+    family: 'var(--role-color)',
     admin: '#9f7aea',
     ai: '#4299e1',
-    system: '#718096',
-    caregiver: '#e8724a',
+    system: 'var(--text-secondary)',
+    caregiver: 'var(--accent-color)',
   };
 
   // Load care recipients on mount
@@ -466,8 +466,8 @@ const Documents = window.Documents = ({ onNavigate }) => {
           }}
           style={{
             padding: '8px 16px',
-            backgroundColor: '#1b6b5a',
-            color: 'white',
+            backgroundColor: 'var(--role-color)',
+            color: 'var(--text-on-primary)',
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',
@@ -489,7 +489,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
             border: '1px solid #e2e8f0',
             borderRadius: '6px',
             fontSize: '14px',
-            backgroundColor: 'white',
+            backgroundColor: 'var(--bg-surface)',
             cursor: 'pointer',
           }}
         >
@@ -507,7 +507,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
             border: '1px solid #e2e8f0',
             borderRadius: '6px',
             fontSize: '14px',
-            backgroundColor: 'white',
+            backgroundColor: 'var(--bg-surface)',
             cursor: 'pointer',
           }}
         >
@@ -527,7 +527,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
             border: '1px solid #e2e8f0',
             borderRadius: '6px',
             fontSize: '14px',
-            backgroundColor: 'white',
+            backgroundColor: 'var(--bg-surface)',
             cursor: 'pointer',
           }}
         >
@@ -543,11 +543,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
       {/* Documents Grid */}
       {documentsLoading ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
           Loading documents...
         </div>
       ) : documents.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
           No documents found
         </div>
       ) : (
@@ -563,7 +563,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 border: '1px solid #e2e8f0',
                 borderRadius: '8px',
                 padding: '16px',
-                backgroundColor: 'white',
+                backgroundColor: 'var(--bg-surface)',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
               }}
             >
@@ -574,7 +574,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 <div
                   style={{
                     backgroundColor: statusColors[doc.status] || '#cbd5e0',
-                    color: 'white',
+                    color: 'var(--text-on-primary)',
                     padding: '4px 8px',
                     borderRadius: '4px',
                     fontSize: '12px',
@@ -589,11 +589,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 {humanizeDocType(doc.document_type)}
               </h3>
 
-              <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: '#4a5568' }}>
+              <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: 'var(--text-slate)' }}>
                 <strong>{getRecipientName(doc.owner_id)}</strong> · {doc.category}
               </p>
 
-              <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: '#718096' }}>
+              <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
                 Uploaded {formatDate(doc.created_at)}
               </p>
 
@@ -601,8 +601,8 @@ const Documents = window.Documents = ({ onNavigate }) => {
               {doc.ai_classification?.confidence !== undefined && (
                 <div style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: '500', color: '#4a5568' }}>AI Confidence</span>
-                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#1b6b5a' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-slate)' }}>AI Confidence</span>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--role-color)' }}>
                       {Math.round(doc.ai_classification.confidence)}%
                     </span>
                   </div>
@@ -617,7 +617,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                       style={{
                         height: '100%',
                         width: `${doc.ai_classification.confidence}%`,
-                        backgroundColor: '#1b6b5a',
+                        backgroundColor: 'var(--role-color)',
                       }}
                     />
                   </div>
@@ -627,12 +627,12 @@ const Documents = window.Documents = ({ onNavigate }) => {
               {/* AI Summary */}
               {doc.ai_classification?.summary && (
                 <div style={{
-                  backgroundColor: '#f7fafc',
+                  backgroundColor: 'var(--bg-neutral)',
                   padding: '8px',
                   borderRadius: '4px',
                   marginBottom: '12px',
                   fontSize: '12px',
-                  color: '#4a5568',
+                  color: 'var(--text-slate)',
                   borderLeft: '3px solid #1b6b5a',
                 }}>
                   {doc.ai_classification.summary}
@@ -648,7 +648,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                   padding: '8px',
                   marginBottom: '12px',
                 }}>
-                  <p style={{ margin: '0 0 4px 0', fontSize: '12px', fontWeight: '600', color: '#e8724a' }}>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '12px', fontWeight: '600', color: 'var(--accent-color)' }}>
                     ⚠️ AI Concerns:
                   </p>
                   <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: '#c05621' }}>
@@ -666,13 +666,13 @@ const Documents = window.Documents = ({ onNavigate }) => {
                   style={{
                     flex: 1,
                     padding: '8px',
-                    backgroundColor: '#f7fafc',
+                    backgroundColor: 'var(--bg-neutral)',
                     border: '1px solid #cbd5e0',
                     borderRadius: '4px',
                     cursor: 'pointer',
                     fontSize: '13px',
                     fontWeight: '500',
-                    color: '#1b6b5a',
+                    color: 'var(--role-color)',
                   }}
                 >
                   View
@@ -682,13 +682,13 @@ const Documents = window.Documents = ({ onNavigate }) => {
                   style={{
                     flex: 1,
                     padding: '8px',
-                    backgroundColor: '#f7fafc',
+                    backgroundColor: 'var(--bg-neutral)',
                     border: '1px solid #cbd5e0',
                     borderRadius: '4px',
                     cursor: 'pointer',
                     fontSize: '13px',
                     fontWeight: '500',
-                    color: '#1b6b5a',
+                    color: 'var(--role-color)',
                   }}
                 >
                   Download
@@ -699,13 +699,13 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     style={{
                       flex: 1,
                       padding: '8px',
-                      backgroundColor: '#fff5f5',
+                      backgroundColor: 'var(--bg-error-light)',
                       border: '1px solid #fed7d7',
                       borderRadius: '4px',
                       cursor: 'pointer',
                       fontSize: '13px',
                       fontWeight: '500',
-                      color: '#c53030',
+                      color: 'var(--color-error)',
                     }}
                   >
                     Delete
@@ -725,11 +725,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
       <h2 style={{ margin: '0 0 24px 0', fontSize: '20px', fontWeight: '600' }}>Consent Status</h2>
 
       {consentLoading ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
           Loading consent data...
         </div>
       ) : careRecipients.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
           No care recipients found
         </div>
       ) : (
@@ -745,7 +745,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                   border: '1px solid #e2e8f0',
                   borderRadius: '8px',
                   padding: '16px',
-                  backgroundColor: 'white',
+                  backgroundColor: 'var(--bg-surface)',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                 }}
               >
@@ -770,7 +770,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     {consent.authorization_tier && (
                       <div style={{
                         fontSize: '12px',
-                        color: '#718096',
+                        color: 'var(--text-secondary)',
                         marginTop: '2px',
                       }}>
                         Tier {consent.authorization_tier}
@@ -783,7 +783,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
                   {consent.consent_status && (
                     <div style={{ marginBottom: '8px' }}>
-                      <span style={{ fontSize: '12px', color: '#718096' }}>Consent Status:</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Consent Status:</span>
                       <span style={{
                         marginLeft: '8px',
                         fontSize: '13px',
@@ -797,7 +797,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
                   {consent.consent_method && (
                     <div style={{ marginBottom: '8px' }}>
-                      <span style={{ fontSize: '12px', color: '#718096' }}>Method:</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Method:</span>
                       <span style={{ marginLeft: '8px', fontSize: '13px', fontWeight: '500' }}>
                         {consent.consent_method}
                       </span>
@@ -806,7 +806,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
                   {consent.consent_verified_at && (
                     <div style={{ marginBottom: '8px' }}>
-                      <span style={{ fontSize: '12px', color: '#718096' }}>Verified:</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Verified:</span>
                       <span style={{ marginLeft: '8px', fontSize: '13px', fontWeight: '500' }}>
                         {formatDate(consent.consent_verified_at)}
                       </span>
@@ -815,7 +815,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
                   {consent.permission_tier && (
                     <div style={{ marginBottom: '0' }}>
-                      <span style={{ fontSize: '12px', color: '#718096' }}>Permission Tier:</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Permission Tier:</span>
                       <span style={{ marginLeft: '8px', fontSize: '13px', fontWeight: '500' }}>
                         {consent.permission_tier === 'full' ? 'Full Access' : consent.permission_tier === 'collaborative' ? 'Collaborative' : 'Managed'}
                       </span>
@@ -840,11 +840,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     <div style={{
                       marginTop: '12px',
                       padding: '10px',
-                      backgroundColor: '#f7fafc',
+                      backgroundColor: 'var(--bg-neutral)',
                       borderRadius: '6px',
                       border: '1px solid #e2e8f0',
                     }}>
-                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-slate)', marginBottom: '6px' }}>
                         📊 Participation Level
                       </div>
                       <select
@@ -861,7 +861,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                           borderRadius: '4px',
                           border: '1px solid #cbd5e0',
                           fontSize: '13px',
-                          backgroundColor: participationSaving === recipient.id ? '#edf2f7' : 'white',
+                          backgroundColor: participationSaving === recipient.id ? '#edf2f7' : 'var(--bg-surface)',
                         }}
                       >
                         <option value="full">Full — self-governing, can book sessions</option>
@@ -869,7 +869,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                         <option value="managed">Managed — view-only, care team decides</option>
                       </select>
                       {participationSaving === recipient.id && (
-                        <div style={{ fontSize: '11px', color: '#718096', marginTop: '4px' }}>Saving...</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>Saving...</div>
                       )}
                     </div>
                   )}
@@ -878,18 +878,18 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 {/* ── Attestation Details ── */}
                 {consent.attestation && (
                   <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#4a5568', marginBottom: 6 }}>📝 Who Authorized This</div>
-                    <div style={{ fontSize: '13px', color: '#2d3748' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-slate)', marginBottom: 6 }}>📝 Who Authorized This</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-dark)' }}>
                       <strong>{consent.attestation.signatureName}</strong>
-                      {consent.attestation.relationship && <span style={{ color: '#718096' }}> ({consent.attestation.relationship})</span>}
+                      {consent.attestation.relationship && <span style={{ color: 'var(--text-secondary)' }}> ({consent.attestation.relationship})</span>}
                     </div>
                     {consent.attestation.signedAt && (
-                      <div style={{ fontSize: '12px', color: '#718096', marginTop: 2 }}>Signed {formatDate(consent.attestation.signedAt)}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 2 }}>Signed {formatDate(consent.attestation.signedAt)}</div>
                     )}
                     {consent.attestation.adminStatus && consent.attestation.adminStatus !== 'pending' && (
                       <div style={{ marginTop: 4, fontSize: 12, color: consent.attestation.adminStatus === 'approved' ? '#38a169' : '#e53e3e', fontWeight: 600 }}>
                         {consent.attestation.adminStatus === 'approved' ? '✅ Admin approved' : '❌ Admin rejected'}
-                        {consent.attestation.adminNotes && <span style={{ fontWeight: 400, color: '#666' }}> — {consent.attestation.adminNotes}</span>}
+                        {consent.attestation.adminNotes && <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}> — {consent.attestation.adminNotes}</span>}
                       </div>
                     )}
                     {consent.attestation.adminStatus === 'pending' && (
@@ -901,30 +901,30 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 {/* ── Outreach Email Details ── */}
                 {consent.outreach && (
                   <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#4a5568', marginBottom: 6 }}>📧 Consent Email Sent To Your Loved One</div>
-                    <div style={{ fontSize: '13px', color: '#2d3748' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-slate)', marginBottom: 6 }}>📧 Consent Email Sent To Your Loved One</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-dark)' }}>
                       <strong>{consent.outreach.sentToEmail}</strong>
                     </div>
                     {consent.outreach.sentAt && (
-                      <div style={{ fontSize: '12px', color: '#718096', marginTop: 2 }}>Sent {formatDate(consent.outreach.sentAt)}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 2 }}>Sent {formatDate(consent.outreach.sentAt)}</div>
                     )}
                     {consent.outreach.isExpired && !consent.outreach.recipientResponse && (
-                      <div style={{ marginTop: 6, fontSize: 12, background: '#fff3cd', color: '#856404', padding: '4px 8px', borderRadius: 4 }}>
+                      <div style={{ marginTop: 6, fontSize: 12, background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '4px 8px', borderRadius: 4 }}>
                         ⚠️ This email link has expired. Resend from the care profile if needed.
                       </div>
                     )}
                     {!consent.outreach.recipientResponse && !consent.outreach.isExpired && (
-                      <div style={{ marginTop: 6, fontSize: 12, color: '#718096' }}>
+                      <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                         Waiting for their response — you can share the email with them or call to let them know it's coming.
                       </div>
                     )}
                     {consent.outreach.recipientResponse && (
-                      <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 6, background: consent.outreach.recipientResponse === 'aware' ? '#e8f5e9' : consent.outreach.recipientResponse === 'did_not_authorize' ? '#fde8e8' : '#fff8e1', border: `1px solid ${consent.outreach.recipientResponse === 'aware' ? '#a5d6a7' : consent.outreach.recipientResponse === 'did_not_authorize' ? '#f5c6cb' : '#ffe082'}` }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: consent.outreach.recipientResponse === 'aware' ? '#2e7d32' : consent.outreach.recipientResponse === 'did_not_authorize' ? '#c62828' : '#795548' }}>
+                      <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 6, background: consent.outreach.recipientResponse === 'aware' ? 'var(--color-success-bg)' : consent.outreach.recipientResponse === 'did_not_authorize' ? '#fde8e8' : 'var(--color-warning-bg)', border: `1px solid ${consent.outreach.recipientResponse === 'aware' ? 'var(--color-success-bg)' : consent.outreach.recipientResponse === 'did_not_authorize' ? '#f5c6cb' : '#ffe082'}` }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: consent.outreach.recipientResponse === 'aware' ? 'var(--color-success)' : consent.outreach.recipientResponse === 'did_not_authorize' ? 'var(--color-error)' : 'var(--text-brown)' }}>
                           {consent.outreach.recipientResponse === 'aware' ? '✅ They confirmed they are aware' : consent.outreach.recipientResponse === 'did_not_authorize' ? '🚫 They said they did NOT authorize this' : '❓ They have questions'}
                         </div>
-                        {consent.outreach.recipientResponseNotes && <div style={{ fontSize: 12, color: '#555', marginTop: 3 }}>{consent.outreach.recipientResponseNotes}</div>}
-                        {consent.outreach.respondedAt && <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>Responded {formatDate(consent.outreach.respondedAt)}</div>}
+                        {consent.outreach.recipientResponseNotes && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>{consent.outreach.recipientResponseNotes}</div>}
+                        {consent.outreach.respondedAt && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3 }}>Responded {formatDate(consent.outreach.respondedAt)}</div>}
                       </div>
                     )}
                   </div>
@@ -933,7 +933,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 {/* Consent Journey Timeline */}
                 {trail.length > 0 && (
                   <div style={{ marginBottom: '16px' }}>
-                    <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '600', color: '#2d3748' }}>
+                    <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '600', color: 'var(--text-dark)' }}>
                       Consent Journey
                     </h4>
                     <div style={{ fontSize: '12px' }}>
@@ -944,7 +944,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                             height: '20px',
                             borderRadius: '50%',
                             backgroundColor: roleColors[entry.actor_role] || '#cbd5e0',
-                            color: 'white',
+                            color: 'var(--text-on-primary)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -956,10 +956,10 @@ const Documents = window.Documents = ({ onNavigate }) => {
                             {entry.actor_role === 'family' ? '👥' : entry.actor_role === 'admin' ? '⚙️' : entry.actor_role === 'ai' ? '🤖' : entry.actor_role === 'caregiver' ? '💼' : '📋'}
                           </div>
                           <div>
-                            <div style={{ fontSize: '11px', color: '#4a5568' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-slate)' }}>
                               {formatDateTime(entry.created_at)}
                             </div>
-                            <div style={{ fontSize: '12px', color: '#2d3748', marginTop: '2px' }}>
+                            <div style={{ fontSize: '12px', color: 'var(--text-dark)', marginTop: '2px' }}>
                               {entry.description}
                             </div>
                           </div>
@@ -977,8 +977,8 @@ const Documents = window.Documents = ({ onNavigate }) => {
                       style={{
                         flex: 1,
                         padding: '8px 12px',
-                        backgroundColor: '#1b6b5a',
-                        color: 'white',
+                        backgroundColor: 'var(--role-color)',
+                        color: 'var(--text-on-primary)',
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -1002,8 +1002,8 @@ const Documents = window.Documents = ({ onNavigate }) => {
                       style={{
                         flex: 1,
                         padding: '8px 12px',
-                        backgroundColor: '#1b6b5a',
-                        color: 'white',
+                        backgroundColor: 'var(--role-color)',
+                        color: 'var(--text-on-primary)',
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -1038,7 +1038,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
             border: '1px solid #e2e8f0',
             borderRadius: '6px',
             fontSize: '14px',
-            backgroundColor: 'white',
+            backgroundColor: 'var(--bg-surface)',
             cursor: 'pointer',
           }}
         >
@@ -1056,7 +1056,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
             border: '1px solid #e2e8f0',
             borderRadius: '6px',
             fontSize: '14px',
-            backgroundColor: 'white',
+            backgroundColor: 'var(--bg-surface)',
             cursor: 'pointer',
           }}
         >
@@ -1076,11 +1076,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
       {/* Audit Entries */}
       {auditLoading ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
           Loading audit trail...
         </div>
       ) : auditEntries.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
           No audit entries found
         </div>
       ) : (
@@ -1098,7 +1098,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 onClick={() => setExpandedAuditId(expandedAuditId === (entry.id || idx) ? null : (entry.id || idx))}
                 style={{
                   padding: '12px 16px',
-                  backgroundColor: 'white',
+                  backgroundColor: 'var(--bg-surface)',
                   cursor: 'pointer',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -1111,7 +1111,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     height: '32px',
                     borderRadius: '50%',
                     backgroundColor: roleColors[entry.actor_role] || '#cbd5e0',
-                    color: 'white',
+                    color: 'var(--text-on-primary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1126,17 +1126,17 @@ const Documents = window.Documents = ({ onNavigate }) => {
                         fontSize: '12px',
                         fontWeight: '600',
                         backgroundColor: roleColors[entry.actor_role] || '#cbd5e0',
-                        color: 'white',
+                        color: 'var(--text-on-primary)',
                         padding: '2px 6px',
                         borderRadius: '3px',
                       }}>
                         {entry.actor_role || 'system'}
                       </span>
-                      <span style={{ fontSize: '12px', color: '#718096' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {formatDateTime(entry.created_at)}
                       </span>
                     </div>
-                    <div style={{ fontSize: '13px', color: '#2d3748', fontWeight: '500' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-dark)', fontWeight: '500' }}>
                       {entry.description}
                     </div>
                   </div>
@@ -1150,10 +1150,10 @@ const Documents = window.Documents = ({ onNavigate }) => {
               {expandedAuditId === (entry.id || idx) && entry.metadata && (
                 <div style={{
                   padding: '12px 16px',
-                  backgroundColor: '#f7fafc',
+                  backgroundColor: 'var(--bg-neutral)',
                   borderTop: '1px solid #e2e8f0',
                   fontSize: '12px',
-                  color: '#4a5568',
+                  color: 'var(--text-slate)',
                   fontFamily: 'monospace',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-all',
@@ -1179,7 +1179,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
       <div style={{
         display: 'flex',
         borderBottom: '1px solid #e2e8f0',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--bg-surface)',
       }}>
         {[
           { id: 'documents', label: 'Documents' },
@@ -1193,7 +1193,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
               padding: '12px 24px',
               fontSize: '14px',
               fontWeight: '500',
-              color: activeTab === tab.id ? '#1b6b5a' : '#718096',
+              color: activeTab === tab.id ? 'var(--role-color)' : 'var(--text-secondary)',
               backgroundColor: 'transparent',
               border: 'none',
               borderBottom: activeTab === tab.id ? '2px solid #1b6b5a' : 'none',
@@ -1230,7 +1230,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              backgroundColor: 'white',
+              backgroundColor: 'var(--bg-surface)',
               borderRadius: '8px',
               padding: '24px',
               maxWidth: '500px',
@@ -1247,7 +1247,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
             {uploadResult ? (
               <div style={{
                 padding: '16px',
-                backgroundColor: '#f0fdf4',
+                backgroundColor: 'var(--color-success-bg)',
                 border: '1px solid #dcfce7',
                 borderRadius: '6px',
                 marginBottom: '16px',
@@ -1274,7 +1274,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
             ) : (
               <form onSubmit={handleUploadSubmit}>
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: '#2d3748' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: 'var(--text-dark)' }}>
                     Care Recipient
                   </label>
                   <select
@@ -1286,7 +1286,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                       border: '1px solid #cbd5e0',
                       borderRadius: '6px',
                       fontSize: '14px',
-                      backgroundColor: 'white',
+                      backgroundColor: 'var(--bg-surface)',
                       cursor: 'pointer',
                     }}
                   >
@@ -1298,7 +1298,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: '#2d3748' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: 'var(--text-dark)' }}>
                     Category
                   </label>
                   <select
@@ -1313,7 +1313,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                       border: '1px solid #cbd5e0',
                       borderRadius: '6px',
                       fontSize: '14px',
-                      backgroundColor: 'white',
+                      backgroundColor: 'var(--bg-surface)',
                       cursor: 'pointer',
                     }}
                   >
@@ -1326,7 +1326,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: '#2d3748' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: 'var(--text-dark)' }}>
                     Document Type
                   </label>
                   <select
@@ -1338,7 +1338,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                       border: '1px solid #cbd5e0',
                       borderRadius: '6px',
                       fontSize: '14px',
-                      backgroundColor: 'white',
+                      backgroundColor: 'var(--bg-surface)',
                       cursor: 'pointer',
                     }}
                   >
@@ -1349,7 +1349,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: '#2d3748' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: 'var(--text-dark)' }}>
                     File (PDF or Image)
                   </label>
                   <input
@@ -1365,7 +1365,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                       cursor: 'pointer',
                     }}
                   />
-                  <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#718096' }}>
+                  <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
                     Max 5MB. PDF or JPEG/PNG image.
                   </p>
                 </div>
@@ -1373,12 +1373,12 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 {uploadError && (
                   <div style={{
                     padding: '12px',
-                    backgroundColor: '#fff5f5',
+                    backgroundColor: 'var(--bg-error-light)',
                     border: '1px solid #fed7d7',
                     borderRadius: '6px',
                     marginBottom: '16px',
                     fontSize: '13px',
-                    color: '#c53030',
+                    color: 'var(--color-error)',
                   }}>
                     {uploadError}
                   </div>
@@ -1394,13 +1394,13 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     }}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: '#f7fafc',
+                      backgroundColor: 'var(--bg-neutral)',
                       border: '1px solid #cbd5e0',
                       borderRadius: '6px',
                       cursor: 'pointer',
                       fontSize: '14px',
                       fontWeight: '500',
-                      color: '#2d3748',
+                      color: 'var(--text-dark)',
                     }}
                   >
                     Cancel
@@ -1410,8 +1410,8 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     disabled={uploadLoading}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: '#1b6b5a',
-                      color: 'white',
+                      backgroundColor: 'var(--role-color)',
+                      color: 'var(--text-on-primary)',
                       border: 'none',
                       borderRadius: '6px',
                       cursor: uploadLoading ? 'not-allowed' : 'pointer',
@@ -1449,7 +1449,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              backgroundColor: 'white',
+              backgroundColor: 'var(--bg-surface)',
               borderRadius: '8px',
               padding: '24px',
               maxWidth: '800px',
@@ -1470,7 +1470,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                   border: 'none',
                   fontSize: '24px',
                   cursor: 'pointer',
-                  color: '#718096',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 ✕
@@ -1479,12 +1479,12 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
             {/* Metadata */}
             <div style={{
-              backgroundColor: '#f7fafc',
+              backgroundColor: 'var(--bg-neutral)',
               padding: '12px',
               borderRadius: '6px',
               marginBottom: '16px',
               fontSize: '13px',
-              color: '#4a5568',
+              color: 'var(--text-slate)',
             }}>
               <p style={{ margin: '0 0 6px 0' }}>
                 <strong>Recipient:</strong> {getRecipientName(previewDocument.owner_id)}
@@ -1528,28 +1528,28 @@ const Documents = window.Documents = ({ onNavigate }) => {
             {/* AI Classification */}
             {previewDocument.ai_classification && (
               <div style={{
-                backgroundColor: '#f7fafc',
+                backgroundColor: 'var(--bg-neutral)',
                 padding: '12px',
                 borderRadius: '6px',
                 marginBottom: '16px',
                 fontSize: '13px',
               }}>
-                <p style={{ margin: '0 0 8px 0', fontWeight: '600', color: '#2d3748' }}>AI Classification</p>
-                <p style={{ margin: '0 0 6px 0', color: '#4a5568' }}>
+                <p style={{ margin: '0 0 8px 0', fontWeight: '600', color: 'var(--text-dark)' }}>AI Classification</p>
+                <p style={{ margin: '0 0 6px 0', color: 'var(--text-slate)' }}>
                   <strong>Category:</strong> {previewDocument.ai_classification.predicted_category}
                 </p>
-                <p style={{ margin: '0 0 6px 0', color: '#4a5568' }}>
+                <p style={{ margin: '0 0 6px 0', color: 'var(--text-slate)' }}>
                   <strong>Confidence:</strong> {Math.round(previewDocument.ai_classification.confidence)}%
                 </p>
                 {previewDocument.ai_classification.summary && (
-                  <p style={{ margin: '0 0 6px 0', color: '#4a5568' }}>
+                  <p style={{ margin: '0 0 6px 0', color: 'var(--text-slate)' }}>
                     <strong>Summary:</strong> {previewDocument.ai_classification.summary}
                   </p>
                 )}
                 {previewDocument.ai_classification.concerns && previewDocument.ai_classification.concerns.length > 0 && (
                   <div style={{ marginTop: '6px' }}>
-                    <strong style={{ color: '#c53030' }}>Concerns:</strong>
-                    <ul style={{ margin: '4px 0 0 16px', paddingLeft: 0, color: '#c53030' }}>
+                    <strong style={{ color: 'var(--color-error)' }}>Concerns:</strong>
+                    <ul style={{ margin: '4px 0 0 16px', paddingLeft: 0, color: 'var(--color-error)' }}>
                       {previewDocument.ai_classification.concerns.map((concern, idx) => (
                         <li key={idx} style={{ marginBottom: '2px' }}>{concern}</li>
                       ))}
@@ -1579,13 +1579,13 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 onClick={() => handleDownload(previewDocument)}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: '#f7fafc',
+                  backgroundColor: 'var(--bg-neutral)',
                   border: '1px solid #cbd5e0',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   fontSize: '14px',
                   fontWeight: '500',
-                  color: '#2d3748',
+                  color: 'var(--text-dark)',
                 }}
               >
                 Download
@@ -1594,8 +1594,8 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 onClick={() => setShowPreviewModal(false)}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: '#1b6b5a',
-                  color: 'white',
+                  backgroundColor: 'var(--role-color)',
+                  color: 'var(--text-on-primary)',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
@@ -1624,7 +1624,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              backgroundColor: 'white', borderRadius: '8px', padding: '24px',
+              backgroundColor: 'var(--bg-surface)', borderRadius: '8px', padding: '24px',
               maxWidth: '420px', width: '90%',
               boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
             }}
@@ -1632,7 +1632,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
             <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>
               Change Participation Level
             </h3>
-            <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4a5568', lineHeight: 1.5 }}>
+            <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: 'var(--text-slate)', lineHeight: 1.5 }}>
               Change <strong>{participationConfirm.recipientName}</strong>'s participation to{' '}
               <strong>
                 {participationConfirm.newTier === 'full' ? 'Full' : participationConfirm.newTier === 'collaborative' ? 'Collaborative' : 'Managed'}
@@ -1646,7 +1646,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
               <button
                 onClick={() => setParticipationConfirm(null)}
                 style={{
-                  padding: '8px 16px', backgroundColor: 'white',
+                  padding: '8px 16px', backgroundColor: 'var(--bg-surface)',
                   border: '1px solid #cbd5e0', borderRadius: '6px',
                   cursor: 'pointer', fontSize: '13px', fontWeight: '500',
                 }}
@@ -1657,7 +1657,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 onClick={() => handleParticipationChange(participationConfirm.recipientId, participationConfirm.newTier)}
                 disabled={participationSaving === participationConfirm.recipientId}
                 style={{
-                  padding: '8px 16px', backgroundColor: '#1b6b5a', color: 'white',
+                  padding: '8px 16px', backgroundColor: 'var(--role-color)', color: 'var(--text-on-primary)',
                   border: 'none', borderRadius: '6px',
                   cursor: 'pointer', fontSize: '13px', fontWeight: '500',
                   opacity: participationSaving ? 0.6 : 1,

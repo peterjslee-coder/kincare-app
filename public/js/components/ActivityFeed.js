@@ -102,7 +102,7 @@ const ActivityFeed = window.ActivityFeed = () => {
           <p className="page-subtitle">Recent updates{recipientName ? ` about ${recipientName}'s care` : ''}</p>
         </div>
         {unreadCount > 0 && (
-          <button onClick={markAllAsRead} style={{ padding: '8px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+          <button onClick={markAllAsRead} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             Mark all read ({unreadCount})
           </button>
         )}
@@ -127,13 +127,13 @@ const ActivityFeed = window.ActivityFeed = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div className="activity-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {!activity.is_read && <span style={{ color: '#1b6b5a', marginRight: 6 }}>●</span>}
+                    {!activity.is_read && <span style={{ color: 'var(--role-color)', marginRight: 6 }}>●</span>}
                     {activity.title}
                   </div>
                   <div className="activity-time">{formatActivityTime(activity.created_at)}</div>
                 </div>
                 {!activity.is_read && (
-                  <button onClick={(e) => markAsRead(activity.id, e)} style={{ padding: '3px 6px', background: 'transparent', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 6, lineHeight: 1.2 }}>
+                  <button onClick={(e) => markAsRead(activity.id, e)} style={{ padding: '3px 6px', background: 'transparent', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 6, lineHeight: 1.2 }}>
                     ✓ Read
                   </button>
                 )}
@@ -149,7 +149,7 @@ const ActivityFeed = window.ActivityFeed = () => {
                       if (photos.length > 0) {
                         return (
                           <div style={{ marginTop: '10px' }}>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '6px' }}>📸 Visit Photos ({photos.length})</div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>📸 Visit Photos ({photos.length})</div>
                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                               {photos.map((p, pi) => (
                                 <img key={pi} src={p.photo_url} alt={p.caption || `Visit photo ${pi + 1}`}
@@ -178,7 +178,7 @@ const ActivityFeed = window.ActivityFeed = () => {
                         } catch (e2) {}
                         if (window.__navigateTo) window.__navigateTo('schedule');
                       }}
-                        style={{ padding: '2px 8px', background: '#e3f2fd', color: '#1565c0', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ padding: '2px 8px', background: 'var(--color-info-bg)', color: 'var(--color-info)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         View on Schedule
                       </button>
                     )}
@@ -200,13 +200,13 @@ const ActivityFeed = window.ActivityFeed = () => {
             <img src={lightboxPhoto.photo_url} alt={lightboxPhoto.caption || 'Visit photo'}
               style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: '8px', objectFit: 'contain' }} />
             {lightboxPhoto.caption && (
-              <div style={{ textAlign: 'center', color: '#fff', marginTop: '10px', fontSize: '14px' }}>
+              <div style={{ textAlign: 'center', color: 'var(--text-on-primary)', marginTop: '10px', fontSize: '14px' }}>
                 {lightboxPhoto.caption}
               </div>
             )}
             <button onClick={() => setLightboxPhoto(null)} style={{
               position: 'absolute', top: '-12px', right: '-12px', width: '32px', height: '32px',
-              background: '#fff', color: '#333', border: 'none', borderRadius: '50%',
+              background: 'var(--bg-surface)', color: 'var(--text-primary)', border: 'none', borderRadius: '50%',
               fontSize: '18px', cursor: 'pointer', fontWeight: 700,
             }}>×</button>
           </div>

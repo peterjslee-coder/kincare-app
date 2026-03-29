@@ -155,21 +155,21 @@ const AvailabilityTab = window.AvailabilityTab = ({
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
-          <h3 style={{ margin: 0, color: '#333' }}>My Availability</h3>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#666' }}>Click a day to view details, or drag across days to set availability in bulk</p>
+          <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>My Availability</h3>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>Click a day to view details, or drag across days to set availability in bulk</p>
         </div>
         <button onClick={() => {
           setEditingRule(null);
           setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '' });
           setShowAddRule(true);
         }} style={{
-          padding: '8px 16px', background: '#1b6b5a', color: '#fff', border: 'none',
+          padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
           borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
         }}>+ Add Rule</button>
       </div>
 
       {loading ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading availability...</div>
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading availability...</div>
       ) : (
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
           {/* Month Calendar */}
@@ -177,14 +177,14 @@ const AvailabilityTab = window.AvailabilityTab = ({
             {/* Month Nav */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0 12px' }}>
               <button onClick={prevMonth} style={{ background: 'none', border: '1px solid #ddd', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '14px' }}>‹</button>
-              <h3 style={{ margin: 0, fontSize: '16px', color: '#333' }}>{monthNames[month]} {year}</h3>
+              <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-primary)' }}>{monthNames[month]} {year}</h3>
               <button onClick={nextMonth} style={{ background: 'none', border: '1px solid #ddd', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '14px' }}>›</button>
             </div>
 
             {/* Day headers */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
               {dayAbbr.map(d => (
-                <div key={d} style={{ textAlign: 'center', fontSize: '11px', fontWeight: 600, color: '#888', padding: '4px 0' }}>{d}</div>
+                <div key={d} style={{ textAlign: 'center', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', padding: '4px 0' }}>{d}</div>
               ))}
             </div>
 
@@ -207,8 +207,8 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 const hasRequested = daySessions.some(s => s.status === 'requested');
 
                 // Color logic
-                let bg = '#fafafa';
-                let borderColor = '#f0f0f0';
+                let bg = 'var(--bg-primary)';
+                let borderColor = 'var(--badge-muted-bg)';
                 if (bookedHrs > 0) {
                   const pct = Math.min(20 + bookedHrs * 8, 60);
                   bg = `hsl(210, 60%, ${100 - pct}%)`;
@@ -216,7 +216,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 } else if (availHrs > 0) {
                   const pct = Math.min(15 + availHrs * 3, 45);
                   bg = `hsl(145, 50%, ${100 - pct}%)`;
-                  borderColor = '#a5d6a7';
+                  borderColor = 'var(--color-success-bg)';
                 }
                 if (hasBlocked && !bookedHrs) {
                   borderColor = '#ef9a9a';
@@ -229,24 +229,24 @@ const AvailabilityTab = window.AvailabilityTab = ({
                     onMouseUp={() => { if (isDragging) endDrag(day); }}
                     style={{
                     minHeight: '54px', padding: '4px', borderRadius: '6px', cursor: 'pointer',
-                    background: inDrag ? '#e8f5f1' : isSelected ? '#e8f5f1' : bg,
+                    background: inDrag ? 'var(--bg-teal-light)' : isSelected ? 'var(--bg-teal-light)' : bg,
                     border: inDrag ? '2px solid #1b6b5a' : isSelected ? '2px solid #1b6b5a' : isToday ? '2px solid #e8724a' : `1px solid ${borderColor}`,
                     transition: 'all 0.15s', position: 'relative',
                   }}>
-                    <div style={{ fontSize: '12px', fontWeight: isToday ? 700 : 500, color: isToday ? '#e8724a' : '#333' }}>{day}</div>
+                    <div style={{ fontSize: '12px', fontWeight: isToday ? 700 : 500, color: isToday ? 'var(--accent-color)' : 'var(--text-primary)' }}>{day}</div>
                     <div style={{ display: 'flex', gap: '2px', marginTop: '2px', flexWrap: 'wrap' }}>
                       {bookedHrs > 0 && (
-                        <span style={{ fontSize: '9px', background: '#e3f2fd', color: '#1565c0', padding: '1px 4px', borderRadius: '3px', fontWeight: 600 }}>
+                        <span style={{ fontSize: '9px', background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '1px 4px', borderRadius: '3px', fontWeight: 600 }}>
                           {bookedHrs}h
                         </span>
                       )}
                       {availHrs > 0 && !bookedHrs && (
-                        <span style={{ fontSize: '9px', background: '#e8f5e9', color: '#2e7d32', padding: '1px 4px', borderRadius: '3px' }}>
+                        <span style={{ fontSize: '9px', background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '1px 4px', borderRadius: '3px' }}>
                           {availHrs}h avail
                         </span>
                       )}
                       {hasRequested && (
-                        <span style={{ fontSize: '9px', background: '#fce4ec', color: '#c62828', padding: '1px 4px', borderRadius: '3px' }}>req</span>
+                        <span style={{ fontSize: '9px', background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: '1px 4px', borderRadius: '3px' }}>req</span>
                       )}
                     </div>
                   </div>
@@ -255,10 +255,10 @@ const AvailabilityTab = window.AvailabilityTab = ({
             </div>
 
             {/* Legend */}
-            <div style={{ display: 'flex', gap: '14px', marginTop: '12px', fontSize: '11px', color: '#666', flexWrap: 'wrap' }}>
-              <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#c8e6c9', borderRadius: '2px', verticalAlign: 'middle', marginRight: '3px' }}></span>Available</span>
+            <div style={{ display: 'flex', gap: '14px', marginTop: '12px', fontSize: '11px', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
+              <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: 'var(--color-success-bg)', borderRadius: '2px', verticalAlign: 'middle', marginRight: '3px' }}></span>Available</span>
               <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#bbdefb', borderRadius: '2px', verticalAlign: 'middle', marginRight: '3px' }}></span>Booked</span>
-              <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#fce4ec', borderRadius: '2px', verticalAlign: 'middle', marginRight: '3px', border: '1px solid #ef9a9a' }}></span>Request</span>
+              <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: 'var(--color-error-bg)', borderRadius: '2px', verticalAlign: 'middle', marginRight: '3px', border: '1px solid #ef9a9a' }}></span>Request</span>
             </div>
           </div>
 
@@ -272,28 +272,28 @@ const AvailabilityTab = window.AvailabilityTab = ({
                     {new Date(selectedDateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                   </span>
                   <button onClick={() => setSelectedDate(null)} style={{
-                    background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#999',
+                    background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: 'var(--text-muted)',
                   }}>×</button>
                 </div>
 
                 {/* Sessions for this day */}
                 {selectedSessions.length > 0 && (
                   <div style={{ marginBottom: '14px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '6px', textTransform: 'uppercase' }}>Booked Sessions</div>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase' }}>Booked Sessions</div>
                     {selectedSessions.map(s => (
                       <div key={s.id} style={{
-                        padding: '8px 12px', background: s.status === 'requested' ? '#fce4ec' : '#e3f2fd',
+                        padding: '8px 12px', background: s.status === 'requested' ? 'var(--color-error-bg)' : 'var(--color-info-bg)',
                         borderRadius: '6px', marginBottom: '6px', fontSize: '13px',
                       }}>
-                        <div style={{ fontWeight: 600, color: '#333' }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                           {s.recipient_name || 'Client'} — {(s.service_type || '').replace(/_/g, ' ')}
                         </div>
-                        <div style={{ color: '#666', fontSize: '12px' }}>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
                           {formatTime(s.scheduled_time)} &bull; {s.duration_hours}h &bull;
                           <span style={{
                             marginLeft: '4px', padding: '1px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 600,
-                            background: s.status === 'confirmed' ? '#e0f2e9' : s.status === 'requested' ? '#fff3e0' : '#f5f5f5',
-                            color: s.status === 'confirmed' ? '#1b6b5a' : s.status === 'requested' ? '#e65100' : '#888',
+                            background: s.status === 'confirmed' ? 'var(--role-color-light)' : s.status === 'requested' ? 'var(--color-warning-bg)' : 'var(--bg-primary)',
+                            color: s.status === 'confirmed' ? 'var(--role-color)' : s.status === 'requested' ? 'var(--color-warning)' : 'var(--text-tertiary)',
                           }}>{s.status}</span>
                         </div>
                       </div>
@@ -303,33 +303,33 @@ const AvailabilityTab = window.AvailabilityTab = ({
 
                 {/* Availability rules for this day */}
                 <div style={{ marginBottom: '14px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '6px', textTransform: 'uppercase' }}>Availability Rules</div>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase' }}>Availability Rules</div>
                   {selectedAvail.all.length === 0 ? (
-                    <div style={{ color: '#999', fontSize: '13px', padding: '8px 0' }}>No rules set for this day</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '8px 0' }}>No rules set for this day</div>
                   ) : (
                     selectedAvail.all.map(rule => (
                       <div key={rule.id} style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '8px 10px', background: rule.type === 'available' ? '#f0faf5' : '#fef2f2',
+                        padding: '8px 10px', background: rule.type === 'available' ? 'var(--bg-highlight)' : 'var(--bg-error-subtle)',
                         borderRadius: '6px', marginBottom: '4px',
-                        borderLeft: `3px solid ${rule.type === 'available' ? '#1b6b5a' : '#dc2626'}`,
+                        borderLeft: `3px solid ${rule.type === 'available' ? 'var(--role-color)' : 'var(--color-error)'}`,
                       }}>
                         <div style={{ fontSize: '12px' }}>
                           <span style={{ fontWeight: 600 }}>{formatTime(rule.startTime)} – {formatTime(rule.endTime)}</span>
-                          <span style={{ color: '#888', marginLeft: '6px' }}>
+                          <span style={{ color: 'var(--text-tertiary)', marginLeft: '6px' }}>
                             {rule.type === 'available' ? '✅' : '🚫'}
                             {rule.isRecurring ? ' (weekly)' : ' (one-time)'}
                           </span>
-                          {rule.note && <div style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>{rule.note}</div>}
+                          {rule.note && <div style={{ color: 'var(--text-secondary)', fontSize: '11px', marginTop: '2px' }}>{rule.note}</div>}
                         </div>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <button onClick={() => startEditRule(rule)} style={{
-                            padding: '3px 8px', background: '#fff', border: '1px solid #ddd', borderRadius: '4px',
+                            padding: '3px 8px', background: 'var(--bg-surface)', border: '1px solid #ddd', borderRadius: '4px',
                             cursor: 'pointer', fontSize: '10px',
                           }}>Edit</button>
                           <button onClick={() => handleDeleteRule(rule.id)} style={{
-                            padding: '3px 8px', background: '#fff', border: '1px solid #fca5a5', borderRadius: '4px',
-                            cursor: 'pointer', fontSize: '10px', color: '#dc2626',
+                            padding: '3px 8px', background: 'var(--bg-surface)', border: '1px solid #fca5a5', borderRadius: '4px',
+                            cursor: 'pointer', fontSize: '10px', color: 'var(--color-error)',
                           }}>×</button>
                         </div>
                       </div>
@@ -348,8 +348,8 @@ const AvailabilityTab = window.AvailabilityTab = ({
                   });
                   setShowAddRule(true);
                 }} style={{
-                  width: '100%', padding: '10px', background: '#f8f9fa', border: '1px dashed #ccc',
-                  borderRadius: '8px', cursor: 'pointer', fontSize: '13px', color: '#666',
+                  width: '100%', padding: '10px', background: 'var(--bg-primary)', border: '1px dashed #ccc',
+                  borderRadius: '8px', cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)',
                 }}>
                   + Add availability for this day
                 </button>
@@ -366,11 +366,11 @@ const AvailabilityTab = window.AvailabilityTab = ({
           alignItems: 'center', justifyContent: 'center', zIndex: 1000,
         }}>
           <div style={{
-            background: '#fff', borderRadius: '12px', padding: '24px', width: '420px', maxWidth: '90vw',
+            background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', width: '420px', maxWidth: '90vw',
           }}>
             <h3 style={{ marginTop: 0 }}>{editingRule ? 'Edit Rule' : ruleForm._batchDays ? `Set Availability for ${ruleForm._batchDays.length} Days` : 'Add Availability Rule'}</h3>
             {ruleForm._batchDays && (
-              <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#f0faf5', borderRadius: '8px', fontSize: '13px', color: '#1b6b5a' }}>
+              <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'var(--bg-highlight)', borderRadius: '8px', fontSize: '13px', color: 'var(--role-color)' }}>
                 {ruleForm._batchDays.map(d => {
                   const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                   return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -385,7 +385,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 {['available', 'blocked'].map(t => (
                   <button key={t} onClick={() => setRuleForm(f => ({ ...f, type: t }))} style={{
                     flex: 1, padding: '8px', border: ruleForm.type === t ? '2px solid #1b6b5a' : '2px solid #ddd',
-                    borderRadius: '8px', background: ruleForm.type === t ? (t === 'available' ? '#f0faf5' : '#fef2f2') : '#fff',
+                    borderRadius: '8px', background: ruleForm.type === t ? (t === 'available' ? 'var(--bg-highlight)' : 'var(--bg-error-subtle)') : 'var(--text-on-primary)',
                     cursor: 'pointer', fontSize: '13px', fontWeight: ruleForm.type === t ? 600 : 400,
                   }}>{t === 'available' ? '✅ Available' : '🚫 Blocked'}</button>
                 ))}
@@ -400,7 +400,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 {[true, false].map(rec => (
                   <button key={String(rec)} onClick={() => setRuleForm(f => ({ ...f, isRecurring: rec }))} style={{
                     flex: 1, padding: '8px', border: ruleForm.isRecurring === rec ? '2px solid #1b6b5a' : '2px solid #ddd',
-                    borderRadius: '8px', background: ruleForm.isRecurring === rec ? '#f0faf5' : '#fff',
+                    borderRadius: '8px', background: ruleForm.isRecurring === rec ? 'var(--bg-highlight)' : 'var(--text-on-primary)',
                     cursor: 'pointer', fontSize: '13px', fontWeight: ruleForm.isRecurring === rec ? 600 : 400,
                   }}>{rec ? '🔄 Every Week' : '📌 Specific Date'}</button>
                 ))}
@@ -435,18 +435,18 @@ const AvailabilityTab = window.AvailabilityTab = ({
                         }} style={{
                           padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: sel ? 600 : 400,
                           border: sel ? '2px solid #1b6b5a' : '2px solid #ddd',
-                          background: sel ? '#f0faf5' : '#fff', cursor: 'pointer',
-                          color: sel ? '#1b6b5a' : '#555',
+                          background: sel ? 'var(--bg-highlight)' : 'var(--text-on-primary)', cursor: 'pointer',
+                          color: sel ? 'var(--role-color)' : 'var(--text-secondary)',
                         }}>{dayAbbr[idx]}</button>
                       );
                     })}
                     <button type="button" onClick={() => setRuleForm(f => ({ ...f, selectedDays: [1,2,3,4,5] }))} style={{
                       padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 500,
-                      border: '1px solid #ddd', background: '#f8f9fa', cursor: 'pointer', color: '#666',
+                      border: '1px solid #ddd', background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)',
                     }}>Weekdays</button>
                     <button type="button" onClick={() => setRuleForm(f => ({ ...f, selectedDays: [0,6] }))} style={{
                       padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 500,
-                      border: '1px solid #ddd', background: '#f8f9fa', cursor: 'pointer', color: '#666',
+                      border: '1px solid #ddd', background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)',
                     }}>Weekends</button>
                   </div>
                 )}
@@ -495,11 +495,11 @@ const AvailabilityTab = window.AvailabilityTab = ({
             {/* Actions */}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => { setShowAddRule(false); setEditingRule(null); }} style={{
-                padding: '10px 20px', border: '1px solid #ddd', background: '#fff', borderRadius: '8px',
+                padding: '10px 20px', border: '1px solid #ddd', background: 'var(--bg-surface)', borderRadius: '8px',
                 cursor: 'pointer', fontSize: '13px',
               }}>Cancel</button>
               <button onClick={handleSaveRule} style={{
-                padding: '10px 20px', background: '#1b6b5a', color: '#fff', border: 'none',
+                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
               }}>{editingRule ? 'Update Rule' : 'Add Rule'}</button>
             </div>

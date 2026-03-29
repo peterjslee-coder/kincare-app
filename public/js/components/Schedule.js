@@ -124,13 +124,13 @@ const Schedule = window.Schedule = () => {
 
   const getStatusBadge = (status) => {
     const colors = {
-      completed: { bg: '#e0f2e9', text: '#1b6b5a' },
-      confirmed: { bg: '#e3f2fd', text: '#1565c0' },
-      pending: { bg: '#fff3e0', text: '#e65100' },
-      requested: { bg: '#fce4ec', text: '#c62828' },
-      open: { bg: '#fff8e1', text: '#f57f17' },
-      in_progress: { bg: '#f3e5f5', text: '#7b1fa2' },
-      cancelled: { bg: '#fce4ec', text: '#c62828' },
+      completed: { bg: 'var(--role-color-light)', text: 'var(--role-color)' },
+      confirmed: { bg: 'var(--color-info-bg)', text: 'var(--color-info)' },
+      pending: { bg: 'var(--color-warning-bg)', text: 'var(--color-warning)' },
+      requested: { bg: 'var(--color-error-bg)', text: 'var(--color-error)' },
+      open: { bg: 'var(--color-warning-bg)', text: 'var(--color-warning)' },
+      in_progress: { bg: 'var(--color-purple-bg)', text: 'var(--color-purple)' },
+      cancelled: { bg: 'var(--color-error-bg)', text: 'var(--color-error)' },
     };
     const c = colors[status] || colors.pending;
     const labels = {
@@ -159,15 +159,15 @@ const Schedule = window.Schedule = () => {
       </div>
 
       {authGate && (
-        <div style={{ background: '#FFF3E0', border: '1px solid #ffe0b2', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ background: 'var(--color-warning-bg)', border: '1px solid #ffe0b2', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <span style={{ fontSize: 22 }}>🔒</span>
           <div>
-            <div style={{ fontWeight: 600, color: '#e65100', fontSize: 15, marginBottom: 4 }}>Authorization Required</div>
+            <div style={{ fontWeight: 600, color: 'var(--color-warning)', fontSize: 15, marginBottom: 4 }}>Authorization Required</div>
             <div style={{ fontSize: 13, color: '#6d4c00', lineHeight: 1.5 }}>
               Before scheduling care, you'll need to add a loved one and complete the care authorization process.
               This ensures everyone involved is aware and has consented to care arrangements.
             </div>
-            <button onClick={() => window.__navigateTo && window.__navigateTo('recipients')} style={{ marginTop: 10, padding: '8px 18px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <button onClick={() => window.__navigateTo && window.__navigateTo('recipients')} style={{ marginTop: 10, padding: '8px 18px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               Complete Authorization
             </button>
           </div>
@@ -178,10 +178,10 @@ const Schedule = window.Schedule = () => {
       {sessions.length === 0 && (
         <div className="card" style={{ textAlign: 'center', padding: '48px 24px', marginBottom: 20 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
-          <h3 style={{ margin: '0 0 8px', color: '#1a1a2e', fontSize: 18 }}>No care sessions scheduled yet</h3>
+          <h3 style={{ margin: '0 0 8px', color: 'var(--bg-card)', fontSize: 18 }}>No care sessions scheduled yet</h3>
           {getActiveRole() === 'caregiver' ? (
             <React.Fragment>
-              <p style={{ color: '#666', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>
                 Find work opportunities near you to get started. Accepted sessions will appear here on your calendar.
               </p>
               <button className="btn btn-primary" onClick={() => {
@@ -192,7 +192,7 @@ const Schedule = window.Schedule = () => {
             </React.Fragment>
           ) : (
             <React.Fragment>
-              <p style={{ color: '#666', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>
                 Select a day on the calendar below to book your first care session. Your sessions will appear here so you can track everything in one place.
               </p>
             </React.Fragment>
@@ -204,28 +204,28 @@ const Schedule = window.Schedule = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div style={{ flex: 1 }} />
         <button onClick={prevMonth} style={{
-          padding: '8px 16px', background: '#fff', border: '1px solid #d0d0d0',
+          padding: '8px 16px', background: 'var(--bg-surface)', border: '1px solid #d0d0d0',
           borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
         }}>← Prev</button>
-        <h2 style={{ margin: 0, color: '#1b6b5a', fontSize: '20px' }}>
+        <h2 style={{ margin: 0, color: 'var(--role-color)', fontSize: '20px' }}>
           {monthNames[month]} {year}
         </h2>
         <button onClick={nextMonth} style={{
-          padding: '8px 16px', background: '#fff', border: '1px solid #d0d0d0',
+          padding: '8px 16px', background: 'var(--bg-surface)', border: '1px solid #d0d0d0',
           borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
         }}>Next →</button>
       </div>
 
       {/* Legend — dot indicators */}
-      <div style={{ display: 'flex', gap: '14px', marginBottom: '12px', fontSize: '11px', color: '#999', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '14px', marginBottom: '12px', fontSize: '11px', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#1b6b5a', display: 'inline-block' }}></span> Confirmed
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--role-color)', display: 'inline-block' }}></span> Confirmed
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'transparent', border: '2px solid #e8724a', display: 'inline-block' }}></span> Awaiting caregiver
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f57f17', display: 'inline-block' }}></span> In progress
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--color-warning)', display: 'inline-block' }}></span> In progress
         </span>
       </div>
 
@@ -234,12 +234,12 @@ const Schedule = window.Schedule = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
           {/* Day headers — row 1 */}
           {dayNames.map(d => (
-            <div key={d} style={{ padding: '10px 0', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#999', textTransform: 'uppercase', background: '#fafafa', borderBottom: '1px solid #eee' }}>{d}</div>
+            <div key={d} style={{ padding: '10px 0', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', background: 'var(--bg-primary)', borderBottom: '1px solid #eee' }}>{d}</div>
           ))}
           {/* Day cells */}
           {cells.map((day, idx) => {
             if (day === null) {
-              return <div key={`empty-${idx}`} style={{ minHeight: 64, background: '#fafafa', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }}></div>;
+              return <div key={`empty-${idx}`} style={{ minHeight: 64, background: 'var(--bg-primary)', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }}></div>;
             }
             const dateStr = getDateStr(day);
             const past = isPast(dateStr);
@@ -251,8 +251,8 @@ const Schedule = window.Schedule = () => {
             return (
               <div key={dateStr} onClick={() => setSelectedDate(isSelected ? null : dateStr)} style={{
                 minHeight: 64, padding: '6px', cursor: 'pointer',
-                background: isSelected ? '#1b6b5a' : '#fff',
-                color: isSelected ? '#fff' : past ? '#bbb' : '#333',
+                background: isSelected ? 'var(--role-color)' : 'var(--text-on-primary)',
+                color: isSelected ? 'var(--text-on-primary)' : past ? 'var(--text-muted)' : 'var(--text-primary)',
                 borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0',
                 position: 'relative', transition: 'background 0.15s',
                 opacity: past && !hasSessions ? 0.45 : 1,
@@ -263,7 +263,7 @@ const Schedule = window.Schedule = () => {
                 }}>
                   {isToday && <span style={{
                     width: 6, height: 6, borderRadius: '50%',
-                    background: isSelected ? '#fff' : '#e8724a', display: 'inline-block',
+                    background: isSelected ? 'var(--text-on-primary)' : 'var(--accent-color)', display: 'inline-block',
                   }}></span>}
                   {day}
                 </div>
@@ -273,8 +273,8 @@ const Schedule = window.Schedule = () => {
                     {daySessions.sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).slice(0, 4).map((s, si) => {
                       const isPending = ['open', 'requested', 'pending'].includes(s.status);
                       const isInProgress = s.status === 'in_progress';
-                      const dotColor = isInProgress ? '#f57f17' : isPending ? 'transparent' : past ? '#ccc' : '#1b6b5a';
-                      const dotBorder = isPending ? '2px solid ' + (isSelected ? '#fff' : '#e8724a') : 'none';
+                      const dotColor = isInProgress ? 'var(--color-warning)' : isPending ? 'transparent' : past ? 'var(--border-light)' : 'var(--role-color)';
+                      const dotBorder = isPending ? '2px solid ' + (isSelected ? 'var(--text-on-primary)' : 'var(--accent-color)') : 'none';
                       return (
                         <span key={si} style={{
                           width: 9, height: 9, borderRadius: '50%',
@@ -285,7 +285,7 @@ const Schedule = window.Schedule = () => {
                       );
                     })}
                     {daySessions.length > 4 && (
-                      <span style={{ fontSize: 9, color: isSelected ? 'rgba(255,255,255,0.7)' : '#999', lineHeight: '9px', fontWeight: 600 }}>+{daySessions.length - 4}</span>
+                      <span style={{ fontSize: 9, color: isSelected ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)', lineHeight: '9px', fontWeight: 600 }}>+{daySessions.length - 4}</span>
                     )}
                   </div>
                 )}
@@ -302,9 +302,9 @@ const Schedule = window.Schedule = () => {
             <span>
               <span className="card-icon">📋</span>
               {(() => { const p = selectedDate.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }); })()}
-              {isPast(selectedDate) && <span style={{ marginLeft: 8, fontSize: 11, color: '#999', fontWeight: 400 }}>(Past)</span>}
+              {isPast(selectedDate) && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>(Past)</span>}
             </span>
-            <span style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600 }}>{hoursMap[selectedDate] || 0} total hours</span>
+            <span style={{ fontSize: 13, color: 'var(--role-color)', fontWeight: 600 }}>{hoursMap[selectedDate] || 0} total hours</span>
           </div>
 
           {selectedSessions.length > 0 ? (
@@ -317,11 +317,11 @@ const Schedule = window.Schedule = () => {
                   }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: isPast(selectedDate) ? '#888' : '#333' }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: isPast(selectedDate) ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>
                         {s.scheduled_time || '—'}
-                        <span style={{ fontWeight: 400, marginLeft: 8, color: '#666' }}>{formatServiceType(s.service_type)}</span>
+                        <span style={{ fontWeight: 400, marginLeft: 8, color: 'var(--text-secondary)' }}>{formatServiceType(s.service_type)}</span>
                       </div>
-                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                         {s.caregiver_name || (s.status === 'open' ? 'Waiting for caregiver' : 'Unmatched')} — {s.recipient_name || 'Care recipient'}
                       </div>
                     </div>
@@ -332,30 +332,30 @@ const Schedule = window.Schedule = () => {
                         </span>
                       )}
                       <span style={getStatusBadge(s.status).style}>{getStatusBadge(s.status).label}</span>
-                      <span style={{ color: '#999', fontSize: 16 }}>{expandedSession === s.id ? '▾' : '▸'}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 16 }}>{expandedSession === s.id ? '▾' : '▸'}</span>
                     </div>
                   </div>
                   {expandedSession === s.id && (
-                    <div style={{ marginTop: 12, padding: '12px', background: '#f9f9f9', borderRadius: 8, fontSize: 13 }}>
+                    <div style={{ marginTop: 12, padding: '12px', background: 'var(--bg-neutral)', borderRadius: 8, fontSize: 13 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' }}>
-                        <div><span style={{ color: '#888' }}>Duration:</span> <strong>{s.duration_hours || 2} hours</strong></div>
-                        <div><span style={{ color: '#888' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong></div>
-                        <div><span style={{ color: '#888' }}>Service:</span> <strong>{formatServiceType(s.service_type)}</strong></div>
-                        <div><span style={{ color: '#888' }}>Caregiver:</span> <strong>{s.caregiver_name || 'Pending match'}</strong></div>
+                        <div><span style={{ color: 'var(--text-tertiary)' }}>Duration:</span> <strong>{s.duration_hours || 2} hours</strong></div>
+                        <div><span style={{ color: 'var(--text-tertiary)' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong></div>
+                        <div><span style={{ color: 'var(--text-tertiary)' }}>Service:</span> <strong>{formatServiceType(s.service_type)}</strong></div>
+                        <div><span style={{ color: 'var(--text-tertiary)' }}>Caregiver:</span> <strong>{s.caregiver_name || 'Pending match'}</strong></div>
                       </div>
                       {s.special_instructions && (
-                        <div style={{ marginTop: 8, padding: '8px', background: '#fff', borderRadius: 6, border: '1px solid #eee' }}>
-                          <div style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>Special Instructions</div>
+                        <div style={{ marginTop: 8, padding: '8px', background: 'var(--bg-surface)', borderRadius: 6, border: '1px solid #eee' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>Special Instructions</div>
                           <div>{s.special_instructions}</div>
                         </div>
                       )}
                       {s.caregiver_rating > 0 && (
-                        <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
+                        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-tertiary)' }}>
                           Caregiver rating: ⭐ {s.caregiver_rating}
                         </div>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
-                        style={{ marginTop: 10, padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ marginTop: 10, padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         View Full Details
                       </button>
                     </div>
@@ -366,7 +366,7 @@ const Schedule = window.Schedule = () => {
                 <div onClick={() => window.__openRequestCareModal && window.__openRequestCareModal(selectedDate)}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    padding: '14px', cursor: 'pointer', color: '#e8724a', fontSize: 13, fontWeight: 700,
+                    padding: '14px', cursor: 'pointer', color: 'var(--accent-color)', fontSize: 13, fontWeight: 700,
                     borderTop: '1px solid #f0f0f0', marginTop: 4, transition: 'background 0.15s',
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = '#fff8f4'}
@@ -378,13 +378,13 @@ const Schedule = window.Schedule = () => {
           ) : (
             <div style={{ padding: '24px 16px', textAlign: 'center' }}>
               {isPast(selectedDate) ? (
-                <p style={{ color: '#999', fontSize: 14 }}>No sessions on this date.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No sessions on this date.</p>
               ) : (
                 <>
-                  <p style={{ fontSize: 14, color: '#888', marginBottom: 14 }}>No care scheduled for this day yet.</p>
+                  <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 14 }}>No care scheduled for this day yet.</p>
                   <button onClick={() => window.__openRequestCareModal && window.__openRequestCareModal(selectedDate)}
                     style={{
-                      padding: '12px 28px', background: '#e8724a', color: '#fff', border: 'none',
+                      padding: '12px 28px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
                       borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer',
                       boxShadow: '0 2px 8px rgba(232, 114, 74, 0.3)',
                     }}>
@@ -398,7 +398,7 @@ const Schedule = window.Schedule = () => {
       )}
 
       {/* Month summary */}
-      <div style={{ marginTop: '16px', fontSize: '13px', color: '#666', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+      <div style={{ marginTop: '16px', fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
         {(() => {
           const monthSessions = sessions.filter(s => {
             const d = s.scheduled_date;

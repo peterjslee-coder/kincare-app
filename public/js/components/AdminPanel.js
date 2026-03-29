@@ -1153,20 +1153,20 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         <div style={{ flex: '1 1 0', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
             <span style={{
-              background: '#1b6b5a', color: 'white', padding: '4px 10px', borderRadius: '6px',
+              background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '4px 10px', borderRadius: '6px',
               fontSize: '13px', fontWeight: 700, letterSpacing: '0.5px', flexShrink: 0,
             }}>ADMIN</span>
             <h1 className="greeting" style={{ margin: 0, fontSize: '22px', lineHeight: '1.3' }}>
               Platform Dashboard
             </h1>
           </div>
-          <div style={{ color: '#666', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             Manage users, approvals, and platform operations
-            <span style={{ fontSize: '11px', color: '#aaa', fontWeight: 600 }}>v{window.APP_VERSION || ''}</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>v{window.APP_VERSION || ''}</span>
           </div>
         </div>
         <button onClick={() => { if (window.__navigateTo) window.__navigateTo('account'); }} style={{
-          padding: '8px 16px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a',
+          padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
           borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', flexShrink: 0,
         }}>⚙️ My Account</button>
@@ -1175,30 +1175,30 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {/* ── ACTION REQUIRED BANNER — always visible when pending approvals exist ── */}
       {(pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 || bgCheckActionItems.length > 0 || safetyFlagCount > 0) && (
         <div style={{ marginBottom: 16, padding: 16, background: safetyFlagCount > 0 ? 'linear-gradient(135deg, #fce4ec, #ffcdd2)' : 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: safetyFlagCount > 0 ? '2px solid #c62828' : '2px solid #ff9800', borderRadius: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: safetyFlagCount > 0 ? '#c62828' : '#e65100', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: safetyFlagCount > 0 ? 'var(--color-error)' : 'var(--color-warning)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             {safetyFlagCount > 0 ? '\u{1F6A8}' : '\u{1F514}'} Action Required
-            <span style={{ background: safetyFlagCount > 0 ? '#c62828' : '#e65100', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
+            <span style={{ background: safetyFlagCount > 0 ? 'var(--color-error)' : 'var(--color-warning)', color: 'var(--text-on-primary)', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
               {pendingApprovals.length + consentAlerts.length + pausedCaregivers.length + checkrAlertCount + bgCheckActionItems.length + safetyFlagCount}
             </span>
           </div>
 
           {/* Account approvals */}
           {pendingApprovals.length > 0 && (
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Account Approvals</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Account Approvals</div>
           )}
           {pendingApprovals.map(u => (
-            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10, border: '1px solid #ffe0b2', flexWrap: 'wrap', gap: 8 }}>
+            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid #ffe0b2', flexWrap: 'wrap', gap: 8 }}>
               <div style={{ flex: '1 1 200px' }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{u.first_name} {u.last_name}</div>
-                <div style={{ fontSize: 12, color: '#888' }}>{u.email} {'\u00B7'} {u.role} {'\u00B7'} signed up {new Date(u.created_at).toLocaleDateString()}</div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{u.first_name} {u.last_name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{u.email} {'\u00B7'} {u.role} {'\u00B7'} signed up {new Date(u.created_at).toLocaleDateString()}</div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => handleApprove(u.id)} disabled={approvalLoading === u.id}
-                  style={{ padding: '6px 16px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: approvalLoading === u.id ? 0.6 : 1 }}>
+                  style={{ padding: '6px 16px', background: 'var(--color-success)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: approvalLoading === u.id ? 0.6 : 1 }}>
                   {approvalLoading === u.id ? '...' : '\u2713 Approve'}
                 </button>
                 <button onClick={() => handleReject(u.id)} disabled={approvalLoading === u.id}
-                  style={{ padding: '6px 12px', background: '#f5f5f5', color: '#c62828', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  style={{ padding: '6px 12px', background: 'var(--bg-primary)', color: 'var(--color-error)', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                   Reject
                 </button>
               </div>
@@ -1207,7 +1207,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
           {/* Consent / verification alerts */}
           {consentAlerts.length > 0 && (
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: pendingApprovals.length > 0 ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Care Verification</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, marginTop: pendingApprovals.length > 0 ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Care Verification</div>
           )}
           {consentAlerts.map(a => {
             const isFlagged = a.outreach_response === 'did_not_authorize';
@@ -1217,42 +1217,42 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             const isPendingAttestation = !a.outreach_response && !a.outreach_sent_to;
             return (
               <div key={a.id} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: '#fff', borderRadius: 10,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 6, background: 'var(--bg-surface)', borderRadius: 10,
                 border: isFlagged || isPaused ? '2px solid #c62828' : isAwaitingResponse ? '1px solid #ffcc80' : '1px solid #ffe0b2', flexWrap: 'wrap', gap: 8,
               }}>
                 <div style={{ flex: '1 1 200px' }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: isFlagged || isPaused ? '#c62828' : '#333' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: isFlagged || isPaused ? 'var(--color-error)' : 'var(--text-primary)' }}>
                     {isFlagged || isPaused ? '\u{1F6A8} ' : hasQuestions ? '\u2753 ' : isAwaitingResponse ? '\u{1F4E8} ' : '\u{1F4DD} '}
                     {a.first_name} {a.last_name}
-                    <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                    <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 6 }}>
                       (care recipient)
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#888' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                     Family: {a.family_first_name} {a.family_last_name} ({a.family_email})
                   </div>
                   {isPaused && (
-                    <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600, marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-error)', fontWeight: 600, marginTop: 2 }}>
                       {'\u{1F6D1}'} Bookings paused{a.bookings_paused_reason ? ` \u2014 ${a.bookings_paused_reason}` : ''}
                     </div>
                   )}
                   {isFlagged && (
-                    <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600, marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-error)', fontWeight: 600, marginTop: 2 }}>
                       Recipient says they did NOT authorize care{a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''}
                     </div>
                   )}
                   {hasQuestions && (
-                    <div style={{ fontSize: 12, color: '#e65100', fontWeight: 600, marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-warning)', fontWeight: 600, marginTop: 2 }}>
                       Recipient has questions{a.outreach_response_notes ? ` \u2014 "${a.outreach_response_notes}"` : ''}
                     </div>
                   )}
                   {isAwaitingResponse && !isFlagged && !hasQuestions && (
-                    <div style={{ fontSize: 12, color: '#e65100', fontWeight: 600, marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-warning)', fontWeight: 600, marginTop: 2 }}>
                       {'\u{1F4E7}'} Outreach email sent to {a.outreach_sent_to} \u2014 no response yet
                     </div>
                   )}
                   {isPendingAttestation && (
-                    <div style={{ fontSize: 12, color: '#888', fontStyle: 'italic', marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 2 }}>
                       Attestation submitted, needs review
                     </div>
                   )}
@@ -1263,12 +1263,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       if (!confirm(`Unpause bookings for ${a.first_name} ${a.last_name}? This will restore their account.`)) return;
                       handleAuthzAction(a.id, 'unpause');
                     }} disabled={authzActionLoading === a.id}
-                      style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: authzActionLoading === a.id ? 0.6 : 1 }}>
+                      style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: authzActionLoading === a.id ? 0.6 : 1 }}>
                       {authzActionLoading === a.id ? '...' : '\u2705 Restore'}
                     </button>
                   )}
                   <button onClick={() => { setActiveTab('authorizations'); }}
-                    style={{ padding: '6px 14px', background: isPaused || isFlagged ? '#c62828' : '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                    style={{ padding: '6px 14px', background: isPaused || isFlagged ? 'var(--color-error)' : 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                     Details
                   </button>
                 </div>
@@ -1278,44 +1278,44 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
           {/* Paused caregivers */}
           {pausedCaregivers.length > 0 && (
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Paused Caregivers</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Paused Caregivers</div>
           )}
           {pausedCaregivers.map(cg => (
             <div key={cg.user_id} style={{
-              padding: '12px 14px', marginBottom: 6, background: '#fff', borderRadius: 10,
+              padding: '12px 14px', marginBottom: 6, background: 'var(--bg-surface)', borderRadius: 10,
               border: '2px solid #dc2626',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
                 <div style={{ flex: '1 1 200px' }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#c62828' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--color-error)' }}>
                     {'\u{1F6D1}'} {cg.first_name} {cg.last_name}
                   </div>
-                  <div style={{ fontSize: 12, color: '#888' }}>{cg.email}{cg.phone ? ` \u00B7 ${cg.phone}` : ''}</div>
-                  <div style={{ fontSize: 12, color: '#c62828', fontWeight: 600, marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{cg.email}{cg.phone ? ` \u00B7 ${cg.phone}` : ''}</div>
+                  <div style={{ fontSize: 12, color: 'var(--color-error)', fontWeight: 600, marginTop: 2 }}>
                     {cg.account_paused_reason || 'Account paused'}
                   </div>
                   {cg.no_show_session_id && (
-                    <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
                       Missed session: {cg.no_show_recipient_name || 'Unknown'} on {cg.no_show_date}{cg.no_show_time ? ` at ${cg.no_show_time}` : ''}
                     </div>
                   )}
-                  <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     {cg.completed_count || 0} completed sessions \u00B7 {cg.no_show_count || 0} no-shows \u00B7 Rating: {cg.rating_avg ? Number(cg.rating_avg).toFixed(1) : 'n/a'}
                   </div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                 <button onClick={() => { setAdminMsgTarget({ userId: cg.user_id, name: cg.first_name + ' ' + cg.last_name }); setAdminMsgText(''); }}
-                  style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                   {'\u{1F4AC}'} Message {cg.first_name}
                 </button>
                 <button onClick={() => handleReinstate(cg.user_id)} disabled={reinstateLoading === cg.user_id}
-                  style={{ padding: '6px 14px', background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: reinstateLoading === cg.user_id ? 0.6 : 1 }}>
+                  style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: reinstateLoading === cg.user_id ? 0.6 : 1 }}>
                   {reinstateLoading === cg.user_id ? '...' : '\u2705 Reinstate'}
                 </button>
                 {cg.phone && (
                   <a href={`tel:${cg.phone}`}
-                    style={{ padding: '6px 14px', background: '#f5f5f5', color: '#333', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                    style={{ padding: '6px 14px', background: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                     {'\u{1F4DE}'} Call
                   </a>
                 )}
@@ -1326,7 +1326,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           {/* Background check updates — individual cards like safety flags */}
           {(bgCheckActionItems.length > 0 || checkrAlertCount > 0) && (
             <>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Background Checks</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Background Checks</div>
               {bgCheckActionItems.map(item => {
                 const statusLabel = (item.checkrStatus || '').replace(/_/g, ' ');
                 const isConsider = item.checkrStatus === 'consider';
@@ -1338,13 +1338,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
                     <div style={{ flex: '1 1 200px' }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: isRejected ? '#c62828' : '#283593' }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: isRejected ? 'var(--color-error)' : '#283593' }}>
                         {isRejected ? '\u{1F6D1}' : '\u{1F50D}'}{' '}
                         {item.name}
-                        <span style={{ marginLeft: 6, padding: '1px 8px', background: isRejected ? '#c62828' : isConsider ? '#ef6c00' : '#5c6bc0', color: '#fff', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{statusLabel}</span>
+                        <span style={{ marginLeft: 6, padding: '1px 8px', background: isRejected ? 'var(--color-error)' : isConsider ? '#ef6c00' : 'var(--color-indigo)', color: 'var(--text-on-primary)', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{statusLabel}</span>
                       </div>
-                      <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{item.email}</div>
-                      <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : ''}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{item.email}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : ''}</div>
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                       {isConsider && (
@@ -1358,7 +1358,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             if (r.ok) { alert(item.name + ' approved!'); loadAlerts(); } else { const d = await r.json(); alert(d.error || 'Failed'); }
                           } catch (err) { alert('Error: ' + err.message); }
                         }}
-                          style={{ padding: '6px 12px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                          style={{ padding: '6px 12px', background: 'var(--color-success)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                           {'\u2713'} Approve
                         </button>
                       )}
@@ -1374,15 +1374,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           if (r.ok) { alert(item.name + ' rejected.'); loadAlerts(); } else { const d = await r.json(); alert(d.error || 'Failed'); }
                         } catch (err) { alert('Error: ' + err.message); }
                       }}
-                        style={{ padding: '6px 12px', background: isRejected ? '#c62828' : '#f5f5f5', color: isRejected ? '#fff' : '#888', border: isRejected ? 'none' : '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                        style={{ padding: '6px 12px', background: isRejected ? 'var(--color-error)' : 'var(--bg-primary)', color: isRejected ? 'var(--text-on-primary)' : 'var(--text-tertiary)', border: isRejected ? 'none' : '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                         {'\u2717'} Reject
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setAdminMsgTarget({ userId: item.userId, name: item.name }); setAdminMsgText(''); }}
-                        style={{ padding: '6px 12px', background: '#f5f5f5', color: '#1b6b5a', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                        style={{ padding: '6px 12px', background: 'var(--bg-primary)', color: 'var(--role-color)', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                         {'\u{1F4AC}'} Message
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setActiveTab('bgchecks'); loadBgChecks(); }}
-                        style={{ padding: '6px 12px', background: '#f5f5f5', color: '#5c6bc0', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                        style={{ padding: '6px 12px', background: 'var(--bg-primary)', color: 'var(--color-indigo)', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                         View Details
                       </button>
                     </div>
@@ -1393,13 +1393,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {/* Generic count for any other checkr alerts not in the action items */}
               {checkrAlertCount > bgCheckActionItems.length && (
                 <div style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#fff', borderRadius: 10, border: '1px solid #ffe0b2', cursor: 'pointer',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid #ffe0b2', cursor: 'pointer',
                 }} onClick={() => { setActiveTab('bgchecks'); loadBgChecks(); }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1565c0' }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--color-info)' }}>
                       {'\u{1F50D}'} {checkrAlertCount - bgCheckActionItems.length} more background check update{(checkrAlertCount - bgCheckActionItems.length) !== 1 ? 's' : ''}
                     </div>
-                    <div style={{ fontSize: 12, color: '#888' }}>Click to review in BG Checks tab</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Click to review in BG Checks tab</div>
                   </div>
                 </div>
               )}
@@ -1409,50 +1409,50 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           {/* Safety flags */}
           {safetyFlagCount > 0 && (
             <>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Safety Flags</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Safety Flags</div>
               {safetyFlags.filter(f => f.status === 'pending' || f.status === 'escalated').map(flag => {
                 const isSevere = flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat');
                 const isEscalated = flag.status === 'escalated';
                 return (
                 <div key={flag.id} style={{
-                  padding: '12px 14px', marginBottom: 6, background: isEscalated ? '#fff5f5' : '#fff', borderRadius: 10,
+                  padding: '12px 14px', marginBottom: 6, background: isEscalated ? 'var(--bg-error-light)' : 'var(--text-on-primary)', borderRadius: 10,
                   border: isEscalated ? '2px solid #b71c1c' : isSevere ? '2px solid #c62828' : '1px solid #ffcc80',
                   cursor: 'pointer',
                 }} onClick={() => { setActiveTab('safety'); }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
                     <div style={{ flex: '1 1 200px' }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: isSevere || isEscalated ? '#c62828' : '#e65100' }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: isSevere || isEscalated ? 'var(--color-error)' : 'var(--color-warning)' }}>
                         {isEscalated ? '\u{1F6A8}\u{1F6A8}' : isSevere ? '\u{1F6A8}' : '\u26A0\uFE0F'}{' '}
                         {flag.first_name} {flag.last_name}
-                        <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 6 }}>
+                        <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 6 }}>
                           ({flag.flag_type?.replace(/_/g, ' ') || 'flagged'})
                         </span>
                         {isEscalated && (
-                          <span style={{ marginLeft: 6, padding: '1px 8px', background: '#b71c1c', color: '#fff', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Escalated</span>
+                          <span style={{ marginLeft: 6, padding: '1px 8px', background: 'var(--color-error)', color: 'var(--text-on-primary)', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Escalated</span>
                         )}
                       </div>
-                      <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
                         {'\u201C'}{(flag.user_message || '').substring(0, 120)}{(flag.user_message || '').length > 120 ? '...' : ''}{'\u201D'}
                       </div>
-                      <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>{flag.email} {'\u00B7'} {new Date(flag.created_at).toLocaleString()}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{flag.email} {'\u00B7'} {new Date(flag.created_at).toLocaleString()}</div>
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                       {!isEscalated && (
                         <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'escalated'); }}
-                          style={{ padding: '6px 12px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                          style={{ padding: '6px 12px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                           {'\u{1F6A8}'} Escalate
                         </button>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'resolved'); }}
                         disabled={flagPasskeyLoading}
-                        style={{ padding: '6px 12px', background: (flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'resolved') ? '#2e7d32' : '#4caf50', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 }}>
+                        style={{ padding: '6px 12px', background: (flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'resolved') ? 'var(--color-success)' : 'var(--color-success)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 }}>
                         {(flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'resolved')
                           ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to resolve')
                           : '\u2713 Resolve'}
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'dismissed'); }}
                         disabled={flagPasskeyLoading}
-                        style={{ padding: '6px 12px', background: (flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'dismissed') ? '#e0e0e0' : '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 }}>
+                        style={{ padding: '6px 12px', background: (flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'dismissed') ? 'var(--border-light)' : 'var(--bg-primary)', color: 'var(--text-tertiary)', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 }}>
                         {(flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'dismissed')
                           ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to dismiss')
                           : 'Dismiss'}
@@ -1460,21 +1460,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     </div>
                   </div>
                   {flagPasskeyError && flagPasskeyConfirm?.flagId === flag.id && (
-                    <div style={{ fontSize: 11, color: '#c62828', marginTop: 4, textAlign: 'right' }}>{flagPasskeyError}</div>
+                    <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 4, textAlign: 'right' }}>{flagPasskeyError}</div>
                   )}
                   {/* Conversation participants — message anyone involved */}
                   {flag.participants && flag.participants.length > 0 && (
                     <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #eee', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Message:</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Message:</span>
                       {flag.participants.map(p => (
                         <button key={p.user_id} onClick={(e) => {
                           e.stopPropagation();
                           setAdminMsgTarget({ userId: p.user_id, name: `${p.first_name} ${p.last_name}` });
                           setAdminMsgText('');
                         }}
-                          style={{ padding: '4px 10px', background: '#f5f5f5', color: '#1b6b5a', border: '1px solid #ccc', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          style={{ padding: '4px 10px', background: 'var(--bg-primary)', color: 'var(--role-color)', border: '1px solid #ccc', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           {'\u{1F4AC}'} {p.first_name} {p.last_name}
-                          <span style={{ fontWeight: 400, fontSize: 10, color: '#888' }}>({p.role})</span>
+                          <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-tertiary)' }}>({p.role})</span>
                         </button>
                       ))}
                     </div>
@@ -1489,7 +1489,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
       {/* ── UNIVERSAL SEARCH BAR ── */}
       <div style={{ position: 'relative', marginBottom: 16 }}>
-        <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, color: '#999' }}>{'\u{1F50D}'}</span>
+        <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 18, color: 'var(--text-muted)' }}>{'\u{1F50D}'}</span>
         <input
           type="text" placeholder="Search people by name or email..."
           value={userSearch}
@@ -1503,13 +1503,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           }}
           style={{
             width: '100%', padding: '14px 16px 14px 44px', border: '2px solid #e0e0e0',
-            borderRadius: 12, fontSize: 15, background: '#fff', outline: 'none',
+            borderRadius: 12, fontSize: 15, background: 'var(--bg-surface)', outline: 'none',
             transition: 'border-color 0.2s', boxSizing: 'border-box',
           }}
-          onFocus={(e) => { e.target.style.borderColor = '#1b6b5a'; }}
-          onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; }}
+          onFocus={(e) => { e.target.style.borderColor = 'var(--role-color)'; }}
+          onBlur={(e) => { e.target.style.borderColor = 'var(--border-light)'; }}
         />
-        <span style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#bbb' }}>
+        <span style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--text-muted)' }}>
           searches users, waitlist & invites
         </span>
       </div>
@@ -1518,7 +1518,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       <div style={{ marginBottom: 20 }}>
         {tabGroups.map(group => (
           <div key={group.label} style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#999', marginBottom: 6, paddingLeft: 4 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: 6, paddingLeft: 4 }}>
               {group.label}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -1526,8 +1526,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '10px 6px',
                   border: 'none', borderRadius: 10, cursor: 'pointer',
-                  background: activeTab === tab.id ? '#1b6b5a' : '#f0f0f0',
-                  color: activeTab === tab.id ? '#fff' : '#555',
+                  background: activeTab === tab.id ? 'var(--role-color)' : 'var(--badge-muted-bg)',
+                  color: activeTab === tab.id ? 'var(--text-on-primary)' : 'var(--text-secondary)',
                   fontSize: 13, fontWeight: 600, transition: 'all 0.15s', position: 'relative',
                   boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
                   whiteSpace: 'nowrap',
@@ -1537,7 +1537,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   {tab.badge ? (
                     <span style={{
                       position: 'absolute', top: -4, right: -4,
-                      background: '#e65100', color: '#fff', fontSize: 10, fontWeight: 700,
+                      background: 'var(--color-warning)', color: 'var(--text-on-primary)', fontSize: 10, fontWeight: 700,
                       borderRadius: 10, padding: '1px 6px', minWidth: 18, textAlign: 'center',
                     }}>{tab.badge}</span>
                   ) : null}
@@ -1587,9 +1587,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     const x = i * 40 + 10;
                     return (
                       <g key={i}>
-                        <rect x={x} y={100 - barH} width="24" height={barH} rx="4" fill="#1b6b5a" opacity="0.85" />
-                        <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="10" fill="#333" fontWeight="600">{d.count}</text>
-                        <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill="#999">
+                        <rect x={x} y={100 - barH} width="24" height={barH} rx="4" fill="var(--role-color)" opacity="0.85" />
+                        <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="10" fill="var(--text-primary)" fontWeight="600">{d.count}</text>
+                        <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill="var(--text-muted)">
                           {(parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </text>
                       </g>
@@ -1612,9 +1612,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     const x = i * 40 + 10;
                     return (
                       <g key={i}>
-                        <rect x={x} y={100 - barH} width="24" height={barH} rx="4" fill="#e8724a" opacity="0.85" />
-                        <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="10" fill="#333" fontWeight="600">{d.count}</text>
-                        <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill="#999">
+                        <rect x={x} y={100 - barH} width="24" height={barH} rx="4" fill="var(--accent-color)" opacity="0.85" />
+                        <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="10" fill="var(--text-primary)" fontWeight="600">{d.count}</text>
+                        <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill="var(--text-muted)">
                           {(parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </text>
                       </g>
@@ -1632,11 +1632,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', padding: '12px 0' }}>
                 {stats.sessionsByStatus.map((s, i) => (
                   <div key={i} style={{
-                    padding: '12px 20px', background: '#f8f9fa', borderRadius: '8px',
+                    padding: '12px 20px', background: 'var(--bg-primary)', borderRadius: '8px',
                     textAlign: 'center', flex: '1 1 100px',
                   }}>
-                    <div style={{ fontSize: '24px', fontWeight: 700, color: '#1b6b5a' }}>{s.count}</div>
-                    <div style={{ fontSize: '12px', color: '#666', textTransform: 'capitalize' }}>{s.status}</div>
+                    <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--role-color)' }}>{s.count}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{s.status}</div>
                   </div>
                 ))}
               </div>
@@ -1647,12 +1647,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           <div className="card" style={{ marginTop: '16px' }}>
             <div className="card-header"><span className="card-icon">🌐</span>Site Analytics</div>
             <div style={{ padding: '12px 0' }}>
-              <p style={{ fontSize: '14px', color: '#666', marginBottom: '12px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
                 Detailed site traffic, page views, referrers, and visitor geography are tracked via Plausible Analytics.
               </p>
               <a href="https://plausible.io/yourinplace.com" target="_blank" rel="noopener noreferrer" style={{
                 display: 'inline-flex', alignItems: 'center', gap: '8px',
-                padding: '10px 20px', background: '#1b6b5a', color: 'white', borderRadius: '8px',
+                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: '8px',
                 textDecoration: 'none', fontSize: '14px', fontWeight: 600,
               }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1669,7 +1669,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {activeTab === 'people' && (
         <div>
           {/* Sub-tabs */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#f5f5f5', borderRadius: 8, padding: 3 }}>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--bg-primary)', borderRadius: 8, padding: 3 }}>
             {[
               { id: 'users', label: `Users (${usersTotal})`, badge: pendingApprovals.length || null },
               { id: 'waitlist', label: `Waitlist (${waitlistTotal})` },
@@ -1677,10 +1677,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             ].map(st => (
               <button key={st.id} onClick={() => setPeopleSubTab(st.id)}
                 style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: peopleSubTab === st.id ? 700 : 500,
-                  background: peopleSubTab === st.id ? '#fff' : 'transparent', color: peopleSubTab === st.id ? '#1b6b5a' : '#888',
+                  background: peopleSubTab === st.id ? 'var(--text-on-primary)' : 'transparent', color: peopleSubTab === st.id ? 'var(--role-color)' : 'var(--text-tertiary)',
                   cursor: 'pointer', boxShadow: peopleSubTab === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s', position: 'relative' }}>
                 {st.label}
-                {st.badge ? <span style={{ background: '#e65100', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700, marginLeft: 4 }}>{st.badge} new</span> : null}
+                {st.badge ? <span style={{ background: 'var(--color-warning)', color: 'var(--text-on-primary)', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700, marginLeft: 4 }}>{st.badge} new</span> : null}
               </button>
             ))}
           </div>
@@ -1698,15 +1698,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   <option value="care_for">Care Recipient</option>
                 </select>
                 <button onClick={loadUsers} style={{
-                  padding: '10px 20px', background: '#1b6b5a', color: 'white', border: 'none',
+                  padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                   borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                 }}>Search</button>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#888', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={userDemoFilter === 'all'} onChange={(e) => setUserDemoFilter(e.target.checked ? 'all' : 'real')}
-                    style={{ accentColor: '#1b6b5a' }} />
+                    style={{ accentColor: 'var(--role-color)' }} />
                   Show demo
                 </label>
-                <span style={{ fontSize: '13px', color: '#888' }}>{usersTotal} total</span>
+                <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{usersTotal} total</span>
               </div>
 
               {/* Users table */}
@@ -1714,14 +1714,14 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Name</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Status</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Tester</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Kindred</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Joined</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Name</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Email</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Role</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Status</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Tester</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Kindred</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Joined</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1731,20 +1731,20 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <tr key={u.id} style={{ borderBottom: '1px solid #f0f0f0', background: isPending ? '#fffbf5' : 'transparent', borderLeft: isPending ? '4px solid #ff9800' : 'none' }}>
                         <td style={{ padding: '10px 12px', fontWeight: 500 }}>
                           {u.first_name} {u.last_name}
-                          {u.is_admin ? <span style={{ marginLeft: '6px', fontSize: '10px', background: '#1b6b5a', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>ADMIN</span> : ''}
+                          {u.is_admin ? <span style={{ marginLeft: '6px', fontSize: '10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '2px 6px', borderRadius: '4px' }}>ADMIN</span> : ''}
                         </td>
-                        <td style={{ padding: '10px 12px', color: '#555' }}>{u.email}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{u.email}</td>
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{
                             padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
-                            background: u.role === 'family' ? '#e0f2e9' : u.role === 'caregiver' ? '#e3f2fd' : '#fff3e0',
-                            color: u.role === 'family' ? '#1b6b5a' : u.role === 'caregiver' ? '#1565c0' : '#e65100',
+                            background: u.role === 'family' ? 'var(--role-color-light)' : u.role === 'caregiver' ? 'var(--color-info-bg)' : 'var(--color-warning-bg)',
+                            color: u.role === 'family' ? 'var(--role-color)' : u.role === 'caregiver' ? 'var(--color-info)' : 'var(--color-warning)',
                             textTransform: 'capitalize',
                           }}>{u.role === 'care_for' ? 'Care Recipient' : u.role}</span>
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                           {isPending ? (
-                            <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: '#fff3e0', color: '#e65100' }}>
+                            <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>
                               {'\u23F3'} Pending
                             </span>
                           ) : (
@@ -1758,8 +1758,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                               } catch (err) { console.error('Toggle verify error:', err); }
                             }} style={{
                               padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: 'none',
-                              background: u.email_verified ? '#e8f5e9' : '#fff3e0',
-                              color: u.email_verified ? '#1b6b5a' : '#e65100',
+                              background: u.email_verified ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                              color: u.email_verified ? 'var(--role-color)' : 'var(--color-warning)',
                             }} title={u.email_verified ? 'Click to revoke email verification' : 'Click to manually verify email'}>
                               {u.email_verified ? '\u2705 Verified' : '\u26A0 Unverified'}
                             </button>
@@ -1776,8 +1776,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             } catch (err) { console.error('Toggle tester error:', err); }
                           }} style={{
                             padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: 'none',
-                            background: u.is_tester ? '#e8f5e9' : '#f5f5f5',
-                            color: u.is_tester ? '#1b6b5a' : '#999',
+                            background: u.is_tester ? 'var(--color-success-bg)' : 'var(--bg-primary)',
+                            color: u.is_tester ? 'var(--role-color)' : 'var(--text-muted)',
                           }} title={u.is_tester ? 'Click to remove tester access' : 'Click to grant tester access'}>
                             {u.is_tester ? '\u2713 Yes' : 'No'}
                           </button>
@@ -1793,31 +1793,31 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             } catch (err) { console.error('Toggle companion error:', err); }
                           }} style={{
                             padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', border: 'none',
-                            background: u.companion_access ? '#e3f2fd' : '#f5f5f5',
-                            color: u.companion_access ? '#1565c0' : '#999',
+                            background: u.companion_access ? 'var(--color-info-bg)' : 'var(--bg-primary)',
+                            color: u.companion_access ? 'var(--color-info)' : 'var(--text-muted)',
                           }} title={u.companion_access ? 'Click to revoke Kindred access' : 'Click to grant Kindred access'}>
                             {u.companion_access ? '\u2713 Yes' : 'No'}
                           </button>
                         </td>
-                        <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-tertiary)', fontSize: '12px' }}>
                           {formatDate(u.created_at)}
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                           {isPending ? (
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                               <button onClick={() => handleApprove(u.id)} disabled={approvalLoading === u.id}
-                                style={{ padding: '4px 12px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                                style={{ padding: '4px 12px', background: 'var(--color-success)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                                 {approvalLoading === u.id ? '...' : 'Approve'}
                               </button>
                               <button onClick={() => handleReject(u.id)}
-                                style={{ padding: '4px 10px', background: '#f5f5f5', color: '#c62828', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                                style={{ padding: '4px 10px', background: 'var(--bg-primary)', color: 'var(--color-error)', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
                                 Reject
                               </button>
                             </div>
                           ) : u.is_admin && u.role !== 'caregiver' ? (
                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                               <button onClick={() => { setAdminMsgTarget({ userId: u.id, name: `${u.first_name} ${u.last_name}` }); setAdminMsgText(''); }}
-                                style={{ padding: '4px 8px', background: '#fff', color: '#1b6b5a', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
                                 title="Message as InPlace Support">
                                 {'\u{1F4AC}'}
                               </button>
@@ -1825,50 +1825,50 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           ) : u.is_admin && u.role === 'caregiver' ? (
                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                               <button onClick={() => openOnboardingModal(u.id)}
-                                style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                                 Manage
                               </button>
                             </div>
                           ) : u.role === 'caregiver' ? (
                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                               <button onClick={() => openOnboardingModal(u.id)}
-                                style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                                 Manage
                               </button>
                               <button onClick={() => { setFreezeTarget({ userId: u.id, name: `${u.first_name} ${u.last_name}` }); setFreezeReason(''); }}
-                                style={{ padding: '4px 8px', background: '#fff', color: '#dc2626', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
                                 title="Freeze caregiver account">
                                 {'\u{1F6D1}'}
                               </button>
                               <button onClick={() => { setAdminMsgTarget({ userId: u.id, name: `${u.first_name} ${u.last_name}` }); setAdminMsgText(''); }}
-                                style={{ padding: '4px 8px', background: '#fff', color: '#1b6b5a', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
                                 title="Message as InPlace Support">
                                 {'\u{1F4AC}'}
                               </button>
                               <button onClick={() => handleForcePasswordReset(u.id, u.email)} disabled={resetPwLoading === u.id}
-                                style={{ padding: '4px 8px', background: '#fff', color: '#d97706', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
+                                style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--color-warning)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
                                 title="Send password reset email">
                                 {resetPwLoading === u.id ? '\u2026' : resetPwMsg?.id === u.id ? (resetPwMsg.type === 'success' ? '\u2713' : '\u2715') : '\u{1F511}'}
                               </button>
                               {deleteConfirm === u.id ? (
                                 <>
                                   <button onClick={() => handleDeleteUser(u.id, u.email)} disabled={deleteLoading}
-                                    style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                                    style={{ padding: '4px 10px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
                                     {deleteLoading ? '...' : 'Confirm'}
                                   </button>
                                   <button onClick={() => setDeleteConfirm(null)}
-                                    style={{ padding: '4px 8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                                    style={{ padding: '4px 8px', background: 'var(--badge-muted-bg)', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
                                     {'\u2715'}
                                   </button>
                                 </>
                               ) : (
                                 <button onClick={() => handleDeleteUser(u.id, u.email)}
-                                  style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                                  style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
                                   Delete
                                 </button>
                               )}
                               <button onClick={() => handleNukeUser(u.id, u.email)}
-                                style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
                                 title="Permanently delete all data (requires passkey)">
                                 {'\u2622\uFE0F'}
                               </button>
@@ -1876,28 +1876,28 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           ) : (
                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                               <button onClick={() => { setAdminMsgTarget({ userId: u.id, name: `${u.first_name} ${u.last_name}` }); setAdminMsgText(''); }}
-                                style={{ padding: '4px 8px', background: '#fff', color: '#1b6b5a', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
                                 title="Message as InPlace Support">
                                 {'\u{1F4AC}'}
                               </button>
                               <button onClick={() => handleForcePasswordReset(u.id, u.email)} disabled={resetPwLoading === u.id}
-                                style={{ padding: '4px 8px', background: '#fff', color: '#d97706', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
+                                style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--color-warning)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', opacity: resetPwLoading === u.id ? 0.5 : 1 }}
                                 title="Send password reset email">
                                 {resetPwLoading === u.id ? '\u2026' : resetPwMsg?.id === u.id ? (resetPwMsg.type === 'success' ? '\u2713' : '\u2715') : '\u{1F511}'}
                               </button>
                               <button onClick={() => handleDeleteUser(u.id, u.email)}
-                                style={{ padding: '4px 10px', background: '#fff', color: '#c62828', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                                style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
                                 Delete
                               </button>
                               <button onClick={() => handleNukeUser(u.id, u.email)}
-                                style={{ padding: '4px 8px', background: '#fff', color: '#555', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
                                 title="Permanently delete all data (requires passkey)">
                                 {'\u2622\uFE0F'}
                               </button>
                             </div>
                           )}
                           {nukeError && nukeConfirm === u.id && (
-                            <div style={{ fontSize: '10px', color: '#c62828', marginTop: 4, textAlign: 'center' }}>{nukeError}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--color-error)', marginTop: 4, textAlign: 'center' }}>{nukeError}</div>
                           )}
                         </td>
                       </tr>
@@ -1905,7 +1905,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   </tbody>
                 </table>
                 {users.length === 0 && (
-                  <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No users found</div>
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No users found</div>
                 )}
               </div>
             </div>
@@ -1915,7 +1915,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           {(peopleSubTab === 'waitlist') && waitlist.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
               <button onClick={exportWaitlistCSV} style={{
-                padding: '6px 16px', background: '#1b6b5a', color: 'white', border: 'none',
+                padding: '6px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: '6px',
               }}>
@@ -1932,25 +1932,25 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Name</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Source</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Action</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Email</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Name</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Role</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Source</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Date</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {waitlist.map((w) => (
                       <tr key={w.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                         <td style={{ padding: '10px 12px', fontWeight: 500 }}>{w.email}</td>
-                        <td style={{ padding: '10px 12px', color: '#555' }}>{w.name || '—'}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{w.name || '—'}</td>
                         <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{w.role || 'family'}</td>
-                        <td style={{ padding: '10px 12px', color: '#888' }}>{w.source || 'splash'}</td>
-                        <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(w.created_at)}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-tertiary)' }}>{w.source || 'splash'}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-tertiary)', fontSize: '12px' }}>{formatDate(w.created_at)}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                           <button onClick={() => { setInviteSearch(w.email); setPeopleSubTab('invites'); }} style={{
-                            padding: '4px 12px', background: '#e8724a', color: 'white', border: 'none',
+                            padding: '4px 12px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
                             borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '6px',
                           }}>Invite</button>
                           <button onClick={async () => {
@@ -1958,7 +1958,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             const res = await apiFetch(`/api/waitlist/${w.id}`, { method: 'DELETE' });
                             if (res?.ok) { setWaitlist(prev => prev.filter(x => x.id !== w.id)); }
                           }} style={{
-                            padding: '4px 10px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545',
+                            padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #dc3545',
                             borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
                           }}>Remove</button>
                         </td>
@@ -1967,7 +1967,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   </tbody>
                 </table>
                 {waitlist.length === 0 && (
-                  <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No waitlist entries yet</div>
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No waitlist entries yet</div>
                 )}
               </div>
             </div>
@@ -1986,7 +1986,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}
                 />
                 <button onClick={handleSearchEmail} disabled={searchLoading} style={{
-                  padding: '10px 20px', background: '#1b6b5a', color: 'white', border: 'none',
+                  padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                   borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                   opacity: searchLoading ? 0.6 : 1,
                 }}>
@@ -1996,30 +1996,30 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
               {/* Search Result */}
               {searchResult && (
-                <div style={{ padding: '14px', background: '#f8f9fa', borderRadius: '8px', marginBottom: '12px' }}>
+                <div style={{ padding: '14px', background: 'var(--bg-primary)', borderRadius: '8px', marginBottom: '12px' }}>
                   {searchResult.user && (
                     <div style={{ marginBottom: '8px' }}>
-                      <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#e0f2e9', color: '#1b6b5a' }}>REGISTERED</span>
+                      <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: 'var(--role-color-light)', color: 'var(--role-color)' }}>REGISTERED</span>
                       <span style={{ marginLeft: '10px', fontWeight: 500 }}>{searchResult.user.first_name} {searchResult.user.last_name}</span>
-                      <span style={{ color: '#888', marginLeft: '8px', fontSize: '13px' }}>{searchResult.user.email}</span>
-                      <span style={{ color: '#888', marginLeft: '8px', fontSize: '12px' }}>({searchResult.user.role}, joined {formatDate(searchResult.user.created_at)})</span>
+                      <span style={{ color: 'var(--text-tertiary)', marginLeft: '8px', fontSize: '13px' }}>{searchResult.user.email}</span>
+                      <span style={{ color: 'var(--text-tertiary)', marginLeft: '8px', fontSize: '12px' }}>({searchResult.user.role}, joined {formatDate(searchResult.user.created_at)})</span>
                     </div>
                   )}
                   {searchResult.waitlist && (
                     <div style={{ marginBottom: '8px' }}>
-                      <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#fff3e0', color: '#e65100' }}>WAITLIST</span>
+                      <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>WAITLIST</span>
                       <span style={{ marginLeft: '10px', fontWeight: 500 }}>{searchResult.waitlist.name || 'No name'}</span>
-                      <span style={{ color: '#888', marginLeft: '8px', fontSize: '13px' }}>{searchResult.waitlist.email}</span>
-                      <span style={{ color: '#888', marginLeft: '8px', fontSize: '12px' }}>(signed up {formatDate(searchResult.waitlist.created_at)})</span>
+                      <span style={{ color: 'var(--text-tertiary)', marginLeft: '8px', fontSize: '13px' }}>{searchResult.waitlist.email}</span>
+                      <span style={{ color: 'var(--text-tertiary)', marginLeft: '8px', fontSize: '12px' }}>(signed up {formatDate(searchResult.waitlist.created_at)})</span>
                     </div>
                   )}
                   {searchResult.invite && (
                     <div style={{ marginBottom: '8px' }}>
                       <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
-                        background: searchResult.invite.status === 'accepted' ? '#e0f2e9' : searchResult.invite.status === 'pending' ? '#e3f2fd' : '#f5f5f5',
-                        color: searchResult.invite.status === 'accepted' ? '#1b6b5a' : searchResult.invite.status === 'pending' ? '#1565c0' : '#888',
+                        background: searchResult.invite.status === 'accepted' ? 'var(--role-color-light)' : searchResult.invite.status === 'pending' ? 'var(--color-info-bg)' : 'var(--bg-primary)',
+                        color: searchResult.invite.status === 'accepted' ? 'var(--role-color)' : searchResult.invite.status === 'pending' ? 'var(--color-info)' : 'var(--text-tertiary)',
                       }}>INVITE: {searchResult.invite.status.toUpperCase()}</span>
-                      <span style={{ color: '#888', marginLeft: '10px', fontSize: '13px' }}>
+                      <span style={{ color: 'var(--text-tertiary)', marginLeft: '10px', fontSize: '13px' }}>
                         {searchResult.invite.role} — sent {formatDate(searchResult.invite.created_at)}
                       </span>
                     </div>
@@ -2029,10 +2029,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       {searchResult.careTeamInvites.map((cti, idx) => (
                         <div key={idx} style={{ marginBottom: 4 }}>
                           <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
-                            background: cti.status === 'accepted' ? '#e0f2e9' : cti.status === 'pending' ? '#fff3e0' : '#f5f5f5',
-                            color: cti.status === 'accepted' ? '#1b6b5a' : cti.status === 'pending' ? '#e65100' : '#888',
+                            background: cti.status === 'accepted' ? 'var(--role-color-light)' : cti.status === 'pending' ? 'var(--color-warning-bg)' : 'var(--bg-primary)',
+                            color: cti.status === 'accepted' ? 'var(--role-color)' : cti.status === 'pending' ? 'var(--color-warning)' : 'var(--text-tertiary)',
                           }}>CARE TEAM INVITE: {cti.status.toUpperCase()}</span>
-                          <span style={{ color: '#888', marginLeft: '10px', fontSize: '13px' }}>
+                          <span style={{ color: 'var(--text-tertiary)', marginLeft: '10px', fontSize: '13px' }}>
                             {cti.care_team_name} — sent by {cti.inviter_first_name} {cti.inviter_last_name}, {formatDate(cti.created_at)}
                           </span>
                         </div>
@@ -2040,7 +2040,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     </div>
                   )}
                   {!searchResult.user && !searchResult.waitlist && !searchResult.invite && (!searchResult.careTeamInvites || searchResult.careTeamInvites.length === 0) && (
-                    <div style={{ color: '#999' }}>No records found for this email.</div>
+                    <div style={{ color: 'var(--text-muted)' }}>No records found for this email.</div>
                   )}
 
                   {/* Send Invite — only show if not already registered and no pending invite */}
@@ -2053,7 +2053,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <option value="care_for">Cared-For</option>
                       </select>
                       <button onClick={() => handleSendInvite()} disabled={inviteSending} style={{
-                        padding: '8px 20px', background: '#e8724a', color: 'white', border: 'none',
+                        padding: '8px 20px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
                         borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                         opacity: inviteSending ? 0.6 : 1,
                       }}>
@@ -2068,8 +2068,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {inviteMsg && (
                 <div style={{
                   padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 500,
-                  background: inviteMsg.type === 'success' ? '#e0f2e9' : '#fde8e8',
-                  color: inviteMsg.type === 'success' ? '#1b6b5a' : '#c0392b',
+                  background: inviteMsg.type === 'success' ? 'var(--role-color-light)' : '#fde8e8',
+                  color: inviteMsg.type === 'success' ? 'var(--role-color)' : 'var(--color-error)',
                 }}>
                   {inviteMsg.text}
                 </div>
@@ -2081,18 +2081,18 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           <div className="card">
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span><span className="card-icon">✉️</span>Platform Invites</span>
-              <span style={{ fontSize: '13px', color: '#888', fontWeight: 400 }}>{invitesTotal} total</span>
+              <span style={{ fontSize: '13px', color: 'var(--text-tertiary)', fontWeight: 400 }}>{invitesTotal} total</span>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Status</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Sent By</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Expires</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Email</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Role</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Sent By</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Expires</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2105,38 +2105,38 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{
                             padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, textTransform: 'capitalize',
-                            background: inv.role === 'caregiver' ? '#e3f2fd' : inv.role === 'family' ? '#e0f2e9' : '#fff3e0',
-                            color: inv.role === 'caregiver' ? '#1565c0' : inv.role === 'family' ? '#1b6b5a' : '#e65100',
+                            background: inv.role === 'caregiver' ? 'var(--color-info-bg)' : inv.role === 'family' ? 'var(--role-color-light)' : 'var(--color-warning-bg)',
+                            color: inv.role === 'caregiver' ? 'var(--color-info)' : inv.role === 'family' ? 'var(--role-color)' : 'var(--color-warning)',
                           }}>{inv.role === 'care_for' ? 'Cared-For' : inv.role}</span>
                         </td>
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{
                             padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, textTransform: 'capitalize',
-                            background: displayStatus === 'accepted' ? '#e0f2e9' : displayStatus === 'pending' ? '#e3f2fd' : displayStatus === 'cancelled' ? '#f5f5f5' : '#fff3e0',
-                            color: displayStatus === 'accepted' ? '#1b6b5a' : displayStatus === 'pending' ? '#1565c0' : displayStatus === 'cancelled' ? '#888' : '#e65100',
+                            background: displayStatus === 'accepted' ? 'var(--role-color-light)' : displayStatus === 'pending' ? 'var(--color-info-bg)' : displayStatus === 'cancelled' ? 'var(--bg-primary)' : 'var(--color-warning-bg)',
+                            color: displayStatus === 'accepted' ? 'var(--role-color)' : displayStatus === 'pending' ? 'var(--color-info)' : displayStatus === 'cancelled' ? 'var(--text-tertiary)' : 'var(--color-warning)',
                           }}>{displayStatus}</span>
                         </td>
-                        <td style={{ padding: '10px 12px', color: '#555', fontSize: '12px' }}>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '12px' }}>
                           {inv.inviter_first_name} {inv.inviter_last_name}
                         </td>
-                        <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(inv.expires_at)}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-tertiary)', fontSize: '12px' }}>{formatDate(inv.expires_at)}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                           {inv.status === 'pending' && !isExpired && (
                             <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                               <button onClick={() => handleResendInvite(inv.id)} style={{
-                                padding: '4px 10px', background: '#f0f0f0', border: '1px solid #ddd',
+                                padding: '4px 10px', background: 'var(--badge-muted-bg)', border: '1px solid #ddd',
                                 borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
                               }}>Resend</button>
                               <button onClick={() => handleCancelInvite(inv.id)} style={{
                                 padding: '4px 10px', background: '#fff0f0', border: '1px solid #fdd',
-                                borderRadius: '6px', fontSize: '11px', cursor: 'pointer', color: '#c00',
+                                borderRadius: '6px', fontSize: '11px', cursor: 'pointer', color: 'var(--color-red-strong)',
                               }}>Cancel</button>
                             </div>
                           )}
-                          {(inv.status === 'accepted') && <span style={{ color: '#1b6b5a', fontSize: '12px' }}>Completed</span>}
+                          {(inv.status === 'accepted') && <span style={{ color: 'var(--role-color)', fontSize: '12px' }}>Completed</span>}
                           {(isExpired || inv.status === 'cancelled') && (
                             <button onClick={() => { setInviteSearch(inv.invited_email); setPeopleSubTab('invites'); }} style={{
-                              padding: '4px 10px', background: '#f0f0f0', border: '1px solid #ddd',
+                              padding: '4px 10px', background: 'var(--badge-muted-bg)', border: '1px solid #ddd',
                               borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
                             }}>Re-invite</button>
                           )}
@@ -2147,7 +2147,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 </tbody>
               </table>
               {invites.length === 0 && (
-                <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No invites sent yet</div>
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No invites sent yet</div>
               )}
             </div>
           </div>
@@ -2156,18 +2156,18 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           <div className="card" style={{ marginTop: '20px' }}>
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span><span className="card-icon">👨‍👩‍👦</span>Care Team Invites</span>
-              <span style={{ fontSize: '13px', color: '#888', fontWeight: 400 }}>{careTeamInvites.length} total</span>
+              <span style={{ fontSize: '13px', color: 'var(--text-tertiary)', fontWeight: 400 }}>{careTeamInvites.length} total</span>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Care Team</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Role</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Status</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Sent By</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Email</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Care Team</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Role</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Sent By</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Date</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2177,30 +2177,30 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     return (
                       <tr key={cti.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                         <td style={{ padding: '10px 12px', fontWeight: 500 }}>{cti.invited_email}</td>
-                        <td style={{ padding: '10px 12px', color: '#555' }}>{cti.team_name}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{cti.team_name}</td>
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{
                             padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, textTransform: 'capitalize',
-                            background: cti.role === 'caregiver' ? '#e3f2fd' : '#e0f2e9',
-                            color: cti.role === 'caregiver' ? '#1565c0' : '#1b6b5a',
+                            background: cti.role === 'caregiver' ? 'var(--color-info-bg)' : 'var(--role-color-light)',
+                            color: cti.role === 'caregiver' ? 'var(--color-info)' : 'var(--role-color)',
                           }}>{cti.role}</span>
                         </td>
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{
                             padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, textTransform: 'capitalize',
-                            background: displayStatus === 'accepted' ? '#e0f2e9' : displayStatus === 'pending' ? '#e3f2fd' : '#fff3e0',
-                            color: displayStatus === 'accepted' ? '#1b6b5a' : displayStatus === 'pending' ? '#1565c0' : '#e65100',
+                            background: displayStatus === 'accepted' ? 'var(--role-color-light)' : displayStatus === 'pending' ? 'var(--color-info-bg)' : 'var(--color-warning-bg)',
+                            color: displayStatus === 'accepted' ? 'var(--role-color)' : displayStatus === 'pending' ? 'var(--color-info)' : 'var(--color-warning)',
                           }}>{displayStatus}</span>
                         </td>
-                        <td style={{ padding: '10px 12px', color: '#555', fontSize: '12px' }}>{cti.inviter_first_name} {cti.inviter_last_name}</td>
-                        <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(cti.created_at)}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '12px' }}>{cti.inviter_first_name} {cti.inviter_last_name}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-tertiary)', fontSize: '12px' }}>{formatDate(cti.created_at)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
               {careTeamInvites.length === 0 && (
-                <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No care team invites yet</div>
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No care team invites yet</div>
               )}
             </div>
           </div>
@@ -2223,21 +2223,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   }}>
                     <div>
                       <span style={{ fontWeight: 600, fontSize: '14px' }}>{u.first_name} {u.last_name}</span>
-                      <span style={{ color: '#888', fontSize: '13px', marginLeft: '8px' }}>{u.email}</span>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginLeft: '8px' }}>{u.email}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={{
                         padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
-                        background: u.role === 'family' ? '#e0f2e9' : u.role === 'caregiver' ? '#e3f2fd' : '#fff3e0',
-                        color: u.role === 'family' ? '#1b6b5a' : u.role === 'caregiver' ? '#1565c0' : '#e65100',
+                        background: u.role === 'family' ? 'var(--role-color-light)' : u.role === 'caregiver' ? 'var(--color-info-bg)' : 'var(--color-warning-bg)',
+                        color: u.role === 'family' ? 'var(--role-color)' : u.role === 'caregiver' ? 'var(--color-info)' : 'var(--color-warning)',
                         textTransform: 'capitalize',
                       }}>{u.role}</span>
-                      <span style={{ fontSize: '12px', color: '#999' }}>{formatDateTime(u.created_at)}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{formatDateTime(u.created_at)}</span>
                     </div>
                   </div>
                 ))}
               </div>
-            ) : <div style={{ padding: '16px', color: '#999', textAlign: 'center' }}>No registrations yet</div>}
+            ) : <div style={{ padding: '16px', color: 'var(--text-muted)', textAlign: 'center' }}>No registrations yet</div>}
           </div>
 
           {/* Recent Waitlist */}
@@ -2252,13 +2252,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   }}>
                     <div>
                       <span style={{ fontWeight: 600, fontSize: '14px' }}>{w.email}</span>
-                      {w.name && <span style={{ color: '#888', fontSize: '13px', marginLeft: '8px' }}>({w.name})</span>}
+                      {w.name && <span style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginLeft: '8px' }}>({w.name})</span>}
                     </div>
-                    <span style={{ fontSize: '12px', color: '#999' }}>{formatDateTime(w.created_at)}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{formatDateTime(w.created_at)}</span>
                   </div>
                 ))}
               </div>
-            ) : <div style={{ padding: '16px', color: '#999', textAlign: 'center' }}>No waitlist signups yet</div>}
+            ) : <div style={{ padding: '16px', color: 'var(--text-muted)', textAlign: 'center' }}>No waitlist signups yet</div>}
           </div>
 
           {/* Recent Sessions */}
@@ -2273,24 +2273,24 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   }}>
                     <div>
                       <span style={{ fontWeight: 600, fontSize: '14px' }}>{s.recipient_name}</span>
-                      <span style={{ color: '#888', fontSize: '13px', marginLeft: '8px' }}>({s.family_name})</span>
-                      <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: '#f0faf8', color: '#1b6b5a', textTransform: 'capitalize' }}>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginLeft: '8px' }}>({s.family_name})</span>
+                      <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: 'var(--bg-highlight)', color: 'var(--role-color)', textTransform: 'capitalize' }}>
                         {s.service_type?.replace(/_/g, ' ')}
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={{
                         padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
-                        background: s.status === 'completed' ? '#e0f2e9' : s.status === 'confirmed' ? '#e3f2fd' : '#fff3e0',
-                        color: s.status === 'completed' ? '#1b6b5a' : s.status === 'confirmed' ? '#1565c0' : '#e65100',
+                        background: s.status === 'completed' ? 'var(--role-color-light)' : s.status === 'confirmed' ? 'var(--color-info-bg)' : 'var(--color-warning-bg)',
+                        color: s.status === 'completed' ? 'var(--role-color)' : s.status === 'confirmed' ? 'var(--color-info)' : 'var(--color-warning)',
                         textTransform: 'capitalize',
                       }}>{s.status}</span>
-                      <span style={{ fontSize: '12px', color: '#999' }}>{s.scheduled_date}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.scheduled_date}</span>
                     </div>
                   </div>
                 ))}
               </div>
-            ) : <div style={{ padding: '16px', color: '#999', textAlign: 'center' }}>No sessions yet</div>}
+            ) : <div style={{ padding: '16px', color: 'var(--text-muted)', textAlign: 'center' }}>No sessions yet</div>}
           </div>
         </div>
       )}
@@ -2318,13 +2318,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               <option value="done">Done</option>
               <option value="dismissed">Dismissed</option>
             </select>
-            <span style={{ fontSize: 12, color: '#888', marginLeft: 'auto' }}>{feedbackTotal} total</span>
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{feedbackTotal} total</span>
           </div>
 
           {feedbackLoading ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Loading feedback...</div>
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading feedback...</div>
           ) : feedbackItems.length === 0 ? (
-            <div className="card" style={{ padding: 40, textAlign: 'center', color: '#999' }}>
+            <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
               No feedback yet. The floating feedback button will appear for all users.
             </div>
@@ -2332,9 +2332,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             <div style={{ display: 'grid', gap: 12 }}>
               {feedbackItems.map(fb => {
                 const isExpanded = expandedFeedback === fb.id;
-                const categoryColors = { bug: '#c62828', feature: '#1565c0', general: '#555', complaint: '#e65100', praise: '#2e7d32' };
+                const categoryColors = { bug: 'var(--color-error)', feature: 'var(--color-info)', general: 'var(--text-secondary)', complaint: 'var(--color-warning)', praise: 'var(--color-success)' };
                 const categoryLabels = { bug: 'Bug', feature: 'Feature', general: 'General', complaint: 'Complaint', praise: 'Praise' };
-                const statusColors = { new: '#e8724a', reviewed: '#1565c0', planned: '#7b1fa2', done: '#2e7d32', dismissed: '#999' };
+                const statusColors = { new: 'var(--accent-color)', reviewed: 'var(--color-info)', planned: 'var(--color-purple)', done: 'var(--color-success)', dismissed: 'var(--text-muted)' };
                 const moodEmojis = { great: '😊', good: '🙂', okay: '😐', bad: '😟', terrible: '😡' };
 
                 return (
@@ -2342,22 +2342,22 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     {/* Summary row */}
                     <div
                       onClick={() => { setExpandedFeedback(isExpanded ? null : fb.id); setFeedbackEditNotes(fb.adminNotes || ''); }}
-                      style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: isExpanded ? '#f8f9fa' : '#fff' }}
+                      style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: isExpanded ? 'var(--bg-primary)' : 'var(--text-on-primary)' }}
                     >
                       {fb.mood && <span style={{ fontSize: 18 }}>{moodEmojis[fb.mood] || ''}</span>}
                       <span style={{
                         padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                        background: (categoryColors[fb.category] || '#555') + '18', color: categoryColors[fb.category] || '#555',
+                        background: (categoryColors[fb.category] || 'var(--text-secondary)') + '18', color: categoryColors[fb.category] || 'var(--text-secondary)',
                       }}>{categoryLabels[fb.category] || fb.category}</span>
-                      <span style={{ flex: 1, fontSize: 13, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {fb.description.substring(0, 80)}{fb.description.length > 80 ? '...' : ''}
                       </span>
-                      <span style={{ fontSize: 11, color: '#999', whiteSpace: 'nowrap' }}>{fb.userName}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fb.userName}</span>
                       <span style={{
                         padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-                        background: (statusColors[fb.status] || '#999') + '18', color: statusColors[fb.status] || '#999',
+                        background: (statusColors[fb.status] || 'var(--text-muted)') + '18', color: statusColors[fb.status] || 'var(--text-muted)',
                       }}>{fb.status}</span>
-                      <span style={{ fontSize: 11, color: '#bbb', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                         {(parseTimestamp(fb.createdAt) || new Date(0)).toLocaleDateString()}
                       </span>
                     </div>
@@ -2365,9 +2365,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     {/* Expanded detail */}
                     {isExpanded && (
                       <div style={{ padding: '16px', borderTop: '1px solid #eee' }}>
-                        <div style={{ fontSize: 14, color: '#333', lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{fb.description}</div>
+                        <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{fb.description}</div>
 
-                        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#888', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12 }}>
                           <span>From: <strong>{fb.userName}</strong> ({fb.userEmail || '—'})</span>
                           <span>Role: {fb.userRole || '—'}</span>
                           {fb.pageContext && <span>Page: {fb.pageContext.page}</span>}
@@ -2377,9 +2377,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
                         {/* Rich device context (collapsible) */}
                         {fb.pageContext && (fb.pageContext.browser || fb.pageContext.os) && (
-                          <details style={{ marginBottom: 12, fontSize: 12, color: '#666' }}>
-                            <summary style={{ cursor: 'pointer', fontWeight: 600, color: '#555', marginBottom: 6 }}>Device &amp; Environment Details</summary>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '4px 16px', padding: '8px 12px', background: '#f8f9fa', borderRadius: 8 }}>
+                          <details style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+                            <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Device &amp; Environment Details</summary>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '4px 16px', padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 8 }}>
                               {fb.pageContext.browser && <span><strong>Browser:</strong> {fb.pageContext.browser}</span>}
                               {fb.pageContext.os && <span><strong>OS:</strong> {fb.pageContext.os}</span>}
                               {fb.pageContext.screenResolution && <span><strong>Screen:</strong> {fb.pageContext.screenResolution}</span>}
@@ -2394,9 +2394,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             </div>
                             {fb.pageContext.recentErrors && fb.pageContext.recentErrors.length > 0 && (
                               <div style={{ marginTop: 8, padding: '8px 12px', background: '#fff3f3', borderRadius: 8, border: '1px solid #fdd' }}>
-                                <strong style={{ color: '#c62828' }}>Console Errors ({fb.pageContext.recentErrors.length}):</strong>
+                                <strong style={{ color: 'var(--color-error)' }}>Console Errors ({fb.pageContext.recentErrors.length}):</strong>
                                 {fb.pageContext.recentErrors.map((err, i) => (
-                                  <div key={i} style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11, color: '#c62828', wordBreak: 'break-all' }}>
+                                  <div key={i} style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11, color: 'var(--color-error)', wordBreak: 'break-all' }}>
                                     {err.message}{err.timestamp ? ` (${(parseTimestamp(err.timestamp) || new Date(0)).toLocaleTimeString()})` : ''}
                                   </div>
                                 ))}
@@ -2416,9 +2416,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           {['new', 'reviewed', 'planned', 'done', 'dismissed'].map(s => (
                             <button key={s} onClick={() => updateFeedbackItem(fb.id, { status: s })}
                               style={{
-                                padding: '4px 12px', borderRadius: 12, border: fb.status === s ? '2px solid ' + (statusColors[s] || '#999') : '1px solid #ddd',
-                                background: fb.status === s ? (statusColors[s] || '#999') + '18' : '#fff',
-                                color: fb.status === s ? statusColors[s] : '#666', fontSize: 11, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize',
+                                padding: '4px 12px', borderRadius: 12, border: fb.status === s ? '2px solid ' + (statusColors[s] || 'var(--text-muted)') : '1px solid #ddd',
+                                background: fb.status === s ? (statusColors[s] || 'var(--text-muted)') + '18' : 'var(--text-on-primary)',
+                                color: fb.status === s ? statusColors[s] : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize',
                               }}
                             >{s}</button>
                           ))}
@@ -2426,14 +2426,14 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
                         {/* Create FAQ from feedback */}
                         <button onClick={() => createFaqFromFeedback(fb)} style={{
-                          padding: '6px 14px', background: '#e8f5f0', color: '#1b6b5a',
+                          padding: '6px 14px', background: '#e8f5f0', color: 'var(--role-color)',
                           border: '1px solid #1b6b5a', borderRadius: '8px', cursor: 'pointer',
                           fontSize: '12px', fontWeight: 600, marginBottom: 12, display: 'inline-block',
                         }}>❓ Create FAQ from this</button>
 
                         {/* Admin notes */}
                         <div>
-                          <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Admin Notes</label>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Admin Notes</label>
                           <textarea
                             value={feedbackEditNotes}
                             onChange={e => setFeedbackEditNotes(e.target.value)}
@@ -2443,7 +2443,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           />
                           {feedbackEditNotes !== (fb.adminNotes || '') && (
                             <button onClick={() => updateFeedbackItem(fb.id, { adminNotes: feedbackEditNotes })}
-                              style={{ marginTop: 6, padding: '4px 14px', borderRadius: 6, border: 'none', background: '#1b6b5a', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                              style={{ marginTop: 6, padding: '4px 14px', borderRadius: 6, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                             >Save Notes</button>
                           )}
                         </div>
@@ -2467,15 +2467,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {obEvents.flowSummary && obEvents.flowSummary.length > 0 && (
                 <div className="stats-grid" style={{ marginBottom: '20px' }}>
                   {obEvents.flowSummary.map(f => {
-                    const flowColors = { login: '#0369a1', registration: '#7c3aed', onboarding: '#1b6b5a', password_reset: '#d97706', demo: '#6b7280' };
+                    const flowColors = { login: '#0369a1', registration: 'var(--color-purple-light)', onboarding: 'var(--role-color)', password_reset: 'var(--color-warning)', demo: '#6b7280' };
                     const flowIcons = { login: '🔑', registration: '📝', onboarding: '🚦', password_reset: '🔄', demo: '🎭' };
                     const flowLabels = { login: 'Logins', registration: 'Registrations', onboarding: 'Caregiver Onboarding', password_reset: 'Password Resets', demo: 'Demo Logins' };
                     return (
-                      <div key={f.flow} className="stat-card" style={{ borderLeft: `4px solid ${flowColors[f.flow] || '#999'}` }}>
+                      <div key={f.flow} className="stat-card" style={{ borderLeft: `4px solid ${flowColors[f.flow] || 'var(--text-muted)'}` }}>
                         <div style={{ fontSize: '20px', marginBottom: '4px' }}>{flowIcons[f.flow] || '📊'}</div>
                         <div className="stat-number">{f.total_events}</div>
                         <div className="stat-label">{flowLabels[f.flow] || f.flow}</div>
-                        <div style={{ fontSize: '11px', color: '#999' }}>{f.unique_users} users, {f.error_count} errors (30d)</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{f.unique_users} users, {f.error_count} errors (30d)</div>
                       </div>
                     );
                   })}
@@ -2485,24 +2485,24 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {/* Per-flow event breakdown */}
               {obEvents.stats && obEvents.stats.length > 0 && (
                 <div className="card" style={{ marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#1b6b5a' }}>Event Breakdown by Flow (30 days)</h3>
+                  <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: 'var(--role-color)' }}>Event Breakdown by Flow (30 days)</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     {obEvents.stats.map((s, i) => {
-                      const flowColors = { login: '#0369a1', registration: '#7c3aed', onboarding: '#1b6b5a', password_reset: '#d97706', demo: '#6b7280' };
+                      const flowColors = { login: '#0369a1', registration: 'var(--color-purple-light)', onboarding: 'var(--role-color)', password_reset: 'var(--color-warning)', demo: '#6b7280' };
                       return (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', fontSize: '12px' }}>
                           <span style={{
                             padding: '1px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600,
-                            background: (flowColors[s.flow] || '#999') + '18', color: flowColors[s.flow] || '#999',
+                            background: (flowColors[s.flow] || 'var(--text-muted)') + '18', color: flowColors[s.flow] || 'var(--text-muted)',
                             minWidth: '80px', textAlign: 'center',
                           }}>{s.flow}</span>
                           <span style={{
                             padding: '1px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600,
-                            background: s.event_type === 'error' ? '#fef2f2' : s.event_type.includes('success') || s.event_type.includes('complete') ? '#ecfdf5' : '#f0f9ff',
-                            color: s.event_type === 'error' ? '#dc2626' : s.event_type.includes('success') || s.event_type.includes('complete') ? '#059669' : '#0369a1',
+                            background: s.event_type === 'error' ? 'var(--bg-error-subtle)' : s.event_type.includes('success') || s.event_type.includes('complete') ? 'var(--color-success-bg)' : '#f0f9ff',
+                            color: s.event_type === 'error' ? 'var(--color-error)' : s.event_type.includes('success') || s.event_type.includes('complete') ? '#059669' : '#0369a1',
                           }}>{s.event_type}</span>
-                          <span style={{ fontWeight: 600, color: '#333' }}>{s.count}</span>
-                          <span style={{ color: '#999' }}>({s.unique_users} users)</span>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{s.count}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>({s.unique_users} users)</span>
                         </div>
                       );
                     })}
@@ -2513,23 +2513,23 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {/* Onboarding Funnel */}
               {obEvents.funnel && obEvents.funnel.length > 0 && (
                 <div className="card" style={{ marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#1b6b5a' }}>Caregiver Onboarding Funnel (30 days)</h3>
+                  <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: 'var(--role-color)' }}>Caregiver Onboarding Funnel (30 days)</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {obEvents.funnel.map(f => {
                       const maxCount = Math.max(...obEvents.funnel.map(x => x.completions));
                       const pct = maxCount > 0 ? (f.completions / maxCount * 100) : 0;
                       return (
                         <div key={f.step} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{ width: '140px', fontSize: '12px', color: '#555', flexShrink: 0 }}>
+                          <div style={{ width: '140px', fontSize: '12px', color: 'var(--text-secondary)', flexShrink: 0 }}>
                             Step {f.step}: {f.step_name}
                           </div>
-                          <div style={{ flex: 1, background: '#f0f0f0', borderRadius: '4px', height: '22px', position: 'relative' }}>
+                          <div style={{ flex: 1, background: 'var(--badge-muted-bg)', borderRadius: '4px', height: '22px', position: 'relative' }}>
                             <div style={{
                               width: pct + '%', height: '100%', borderRadius: '4px',
-                              background: f.step === 9 ? '#22c55e' : '#1b6b5a',
+                              background: f.step === 9 ? '#22c55e' : 'var(--role-color)',
                               transition: 'width 0.3s',
                             }} />
-                            <span style={{ position: 'absolute', left: '8px', top: '3px', fontSize: '11px', fontWeight: 600, color: pct > 30 ? '#fff' : '#333' }}>
+                            <span style={{ position: 'absolute', left: '8px', top: '3px', fontSize: '11px', fontWeight: 600, color: pct > 30 ? 'var(--text-on-primary)' : 'var(--text-primary)' }}>
                               {f.completions} ({f.unique_users} users)
                             </span>
                           </div>
@@ -2542,31 +2542,31 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
               {/* Recent Errors (all flows) */}
               <div className="card" style={{ marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: '#dc2626' }}>Recent Errors (All Flows)</h3>
+                <h3 style={{ fontSize: '15px', margin: '0 0 12px', color: 'var(--color-error)' }}>Recent Errors (All Flows)</h3>
                 {(!obEvents.recentErrors || obEvents.recentErrors.length === 0) ? (
-                  <p style={{ color: '#888', fontSize: '13px', margin: 0 }}>No errors recorded yet.</p>
+                  <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>No errors recorded yet.</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {obEvents.recentErrors.map(e => {
                       const meta = e.metadata ? JSON.parse(e.metadata) : {};
-                      const flowColors = { login: '#0369a1', registration: '#7c3aed', onboarding: '#1b6b5a', password_reset: '#d97706', demo: '#6b7280' };
+                      const flowColors = { login: '#0369a1', registration: 'var(--color-purple-light)', onboarding: 'var(--role-color)', password_reset: 'var(--color-warning)', demo: '#6b7280' };
                       const eFlow = e.flow || 'onboarding';
                       return (
                         <div key={e.id} style={{
-                          padding: '10px 12px', background: '#fef2f2', borderRadius: '8px',
-                          border: '1px solid #fecaca', fontSize: '13px', borderLeft: `4px solid ${flowColors[eFlow] || '#dc2626'}`,
+                          padding: '10px 12px', background: 'var(--bg-error-subtle)', borderRadius: '8px',
+                          border: '1px solid #fecaca', fontSize: '13px', borderLeft: `4px solid ${flowColors[eFlow] || 'var(--color-error)'}`,
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                            <span style={{ fontWeight: 600, color: '#dc2626' }}>
-                              <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '10px', background: (flowColors[eFlow] || '#999') + '18', color: flowColors[eFlow] || '#999', marginRight: '6px' }}>{eFlow}</span>
+                            <span style={{ fontWeight: 600, color: 'var(--color-error)' }}>
+                              <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '10px', background: (flowColors[eFlow] || 'var(--text-muted)') + '18', color: flowColors[eFlow] || 'var(--text-muted)', marginRight: '6px' }}>{eFlow}</span>
                               {e.step ? `Step ${e.step}: ${e.step_name}` : e.error_source || 'Error'}
                             </span>
-                            <span style={{ color: '#888', fontSize: '11px' }}>
+                            <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>
                               {(parseTimestamp(e.created_at) || new Date(0)).toLocaleString()}
                             </span>
                           </div>
                           <div style={{ color: '#b91c1c' }}>{e.error_message}</div>
-                          <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: '#888', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: 'var(--text-tertiary)', flexWrap: 'wrap' }}>
                             <span>User: {e.email || e.user_id || 'anon'}</span>
                             <span>Source: {e.error_source || '?'}</span>
                             <span>Online: {meta.online !== undefined ? String(meta.online) : '?'}</span>
@@ -2582,9 +2582,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {/* All Events */}
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h3 style={{ fontSize: '15px', margin: 0, color: '#333' }}>All Events (recent)</h3>
+                  <h3 style={{ fontSize: '15px', margin: 0, color: 'var(--text-primary)' }}>All Events (recent)</h3>
                   <button onClick={loadOnboardingEvents} style={{
-                    padding: '6px 12px', background: '#1b6b5a', color: '#fff', border: 'none',
+                    padding: '6px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                     borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
                   }}>Refresh</button>
                 </div>
@@ -2602,24 +2602,24 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     </thead>
                     <tbody>
                       {(obEvents.events || []).map(e => {
-                        const flowColors = { login: '#0369a1', registration: '#7c3aed', onboarding: '#1b6b5a', password_reset: '#d97706', demo: '#6b7280' };
+                        const flowColors = { login: '#0369a1', registration: 'var(--color-purple-light)', onboarding: 'var(--role-color)', password_reset: 'var(--color-warning)', demo: '#6b7280' };
                         const eFlow = e.flow || 'onboarding';
                         return (
                         <tr key={e.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                          <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: '#888' }}>
+                          <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: 'var(--text-tertiary)' }}>
                             {(parseTimestamp(e.created_at) || new Date(0)).toLocaleString()}
                           </td>
                           <td style={{ padding: '6px 8px' }}>
                             <span style={{
                               padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600,
-                              background: (flowColors[eFlow] || '#999') + '18', color: flowColors[eFlow] || '#999',
+                              background: (flowColors[eFlow] || 'var(--text-muted)') + '18', color: flowColors[eFlow] || 'var(--text-muted)',
                             }}>{eFlow}</span>
                           </td>
                           <td style={{ padding: '6px 8px' }}>
                             <span style={{
                               padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
-                              background: e.event_type === 'error' ? '#fef2f2' : e.event_type.includes('success') || e.event_type.includes('complete') ? '#ecfdf5' : '#f0f9ff',
-                              color: e.event_type === 'error' ? '#dc2626' : e.event_type.includes('success') || e.event_type.includes('complete') ? '#059669' : '#0369a1',
+                              background: e.event_type === 'error' ? 'var(--bg-error-subtle)' : e.event_type.includes('success') || e.event_type.includes('complete') ? 'var(--color-success-bg)' : '#f0f9ff',
+                              color: e.event_type === 'error' ? 'var(--color-error)' : e.event_type.includes('success') || e.event_type.includes('complete') ? '#059669' : '#0369a1',
                             }}>{e.event_type}</span>
                           </td>
                           <td style={{ padding: '6px 8px' }}>
@@ -2628,7 +2628,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           <td style={{ padding: '6px 8px', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {e.email || e.user_id || '—'}
                           </td>
-                          <td style={{ padding: '6px 8px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', color: '#666' }}>
+                          <td style={{ padding: '6px 8px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-secondary)' }}>
                             {e.error_message || '—'}
                           </td>
                         </tr>
@@ -2647,23 +2647,23 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {activeTab === 'customerservice' && (
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Customer Service — Flagged Reviews</h2>
-          <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
             Reviews rated below 3 stars are automatically flagged for admin review. Triage each one, add notes, and mark as reviewed, escalated, or resolved.
           </p>
 
           {/* Summary badges */}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
             {[
-              { key: 'pending', label: 'Pending', color: '#e65100', bg: '#fff3e0' },
-              { key: 'flagged', label: 'Flagged', color: '#c62828', bg: '#ffebee' },
-              { key: 'reviewed', label: 'Reviewed', color: '#1565c0', bg: '#e3f2fd' },
-              { key: 'escalated', label: 'Escalated', color: '#6a1b9a', bg: '#f3e5f5' },
-              { key: 'resolved', label: 'Resolved', color: '#2e7d32', bg: '#e8f5e9' },
+              { key: 'pending', label: 'Pending', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+              { key: 'flagged', label: 'Flagged', color: 'var(--color-error)', bg: 'var(--color-error-bg)' },
+              { key: 'reviewed', label: 'Reviewed', color: 'var(--color-info)', bg: 'var(--color-info-bg)' },
+              { key: 'escalated', label: 'Escalated', color: 'var(--color-purple)', bg: 'var(--color-purple-bg)' },
+              { key: 'resolved', label: 'Resolved', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
             ].map(b => (
               <div key={b.key} onClick={() => setCsFilter(b.key)} style={{
                 padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 background: csFilter === b.key ? b.color : b.bg,
-                color: csFilter === b.key ? '#fff' : b.color,
+                color: csFilter === b.key ? 'var(--text-on-primary)' : b.color,
                 border: `1px solid ${b.color}`,
                 transition: 'all 0.15s',
               }}>
@@ -2672,8 +2672,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             ))}
             <div onClick={() => setCsFilter('all')} style={{
               padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: csFilter === 'all' ? '#555' : '#f5f5f5',
-              color: csFilter === 'all' ? '#fff' : '#555',
+              background: csFilter === 'all' ? 'var(--text-secondary)' : 'var(--bg-primary)',
+              color: csFilter === 'all' ? 'var(--text-on-primary)' : 'var(--text-secondary)',
               border: '1px solid #ccc',
             }}>
               All ({csCounts.total_flagged || 0})
@@ -2681,9 +2681,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           </div>
 
           {csLoading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>Loading reviews...</div>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading reviews...</div>
           ) : csReviews.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#999', background: '#f9f9f9', borderRadius: 12 }}>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', background: 'var(--bg-neutral)', borderRadius: 12 }}>
               No {csFilter !== 'all' ? csFilter : 'flagged'} reviews found.
             </div>
           ) : (
@@ -2691,12 +2691,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {csReviews.map((r) => {
                 const isExpanded = csExpanded === r.id;
                 const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
-                const statusColors = { pending: '#e65100', flagged: '#c62828', reviewed: '#1565c0', escalated: '#6a1b9a', resolved: '#2e7d32', ok: '#999' };
+                const statusColors = { pending: 'var(--color-warning)', flagged: 'var(--color-error)', reviewed: 'var(--color-info)', escalated: 'var(--color-purple)', resolved: 'var(--color-success)', ok: 'var(--text-muted)' };
                 const st = r.admin_status || 'pending';
                 return (
                   <div key={r.id} style={{
                     marginBottom: 10, borderRadius: 12, border: '1px solid #e0e0e0',
-                    background: st === 'flagged' || st === 'pending' ? '#fffbf5' : '#fff',
+                    background: st === 'flagged' || st === 'pending' ? '#fffbf5' : 'var(--text-on-primary)',
                     overflow: 'hidden',
                   }}>
                     {/* Review header — clickable to expand */}
@@ -2704,26 +2704,26 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <span style={{ color: '#e8724a', fontSize: 16, letterSpacing: 1 }}>{stars}</span>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{r.caregiver_name}</span>
+                          <span style={{ color: 'var(--accent-color)', fontSize: 16, letterSpacing: 1 }}>{stars}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{r.caregiver_name}</span>
                           <span style={{
                             padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700,
                             background: statusColors[st] + '20', color: statusColors[st],
                             textTransform: 'uppercase',
                           }}>{st}</span>
                         </div>
-                        <div style={{ fontSize: 12, color: '#666' }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                           From {r.family_name} • {r.recipient_name || 'Care Visit'}
                           {r.service_type ? ` • ${r.service_type}` : ''}
                           {r.scheduled_date ? ` • ${new Date(r.scheduled_date).toLocaleDateString()}` : ''}
                         </div>
                         {r.comment && (
-                          <div style={{ fontSize: 13, color: '#444', marginTop: 6, fontStyle: 'italic' }}>
+                          <div style={{ fontSize: 13, color: 'var(--text-primary)', marginTop: 6, fontStyle: 'italic' }}>
                             "{r.comment.length > 120 && !isExpanded ? r.comment.slice(0, 120) + '...' : r.comment}"
                           </div>
                         )}
                       </div>
-                      <div style={{ fontSize: 11, color: '#999', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                         {new Date(r.created_at).toLocaleDateString()}
                         <div style={{ marginTop: 2 }}>{isExpanded ? '▲' : '▼'}</div>
                       </div>
@@ -2734,41 +2734,41 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <div style={{ padding: '0 16px 16px', borderTop: '1px solid #f0f0f0' }}>
                         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 12, marginBottom: 12 }}>
                           <div>
-                            <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Caregiver</div>
-                            <div style={{ fontSize: 13, color: '#333' }}>{r.caregiver_name}</div>
-                            <div style={{ fontSize: 12, color: '#666' }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Caregiver</div>
+                            <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{r.caregiver_name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                               Overall: {'★'.repeat(Math.round(r.caregiver_rating_avg || 0))} {r.caregiver_rating_avg || 'N/A'} ({r.caregiver_rating_count || 0} reviews)
                             </div>
                           </div>
                           <div>
-                            <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Family</div>
-                            <div style={{ fontSize: 13, color: '#333' }}>{r.family_name}</div>
-                            <div style={{ fontSize: 12, color: '#666' }}>{r.family_email}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Family</div>
+                            <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{r.family_name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.family_email}</div>
                           </div>
                           <div>
-                            <div style={{ fontSize: 11, color: '#999', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Session</div>
-                            <div style={{ fontSize: 13, color: '#333' }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Session</div>
+                            <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
                               {r.scheduled_date ? new Date(r.scheduled_date).toLocaleDateString() : 'N/A'}
                               {r.scheduled_time ? ` at ${r.scheduled_time}` : ''}
                             </div>
-                            <div style={{ fontSize: 12, color: '#666' }}>{r.review_type === 'late_cancellation' ? 'Late cancellation review' : 'Session review'}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.review_type === 'late_cancellation' ? 'Late cancellation review' : 'Session review'}</div>
                           </div>
                         </div>
 
                         {r.comment && (
-                          <div style={{ padding: '10px 14px', background: '#f9f9f9', borderRadius: 8, marginBottom: 12, fontSize: 13, color: '#333', lineHeight: 1.5 }}>
+                          <div style={{ padding: '10px 14px', background: 'var(--bg-neutral)', borderRadius: 8, marginBottom: 12, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
                             {r.comment}
                           </div>
                         )}
 
                         {r.admin_reviewed_at && (
-                          <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
                             Last reviewed by {r.reviewed_by_name || 'admin'} on {new Date(r.admin_reviewed_at).toLocaleString()}
                           </div>
                         )}
 
                         <div style={{ marginBottom: 12 }}>
-                          <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Admin Notes</label>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Admin Notes</label>
                           <textarea value={csNotes} onChange={(e) => setCsNotes(e.target.value)}
                             placeholder="Add internal notes about this review (optional)..."
                             style={{ width: '100%', minHeight: 60, padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
@@ -2777,25 +2777,25 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {st !== 'reviewed' && (
                             <button disabled={csActionLoading === r.id} onClick={() => handleCsAction(r.id, 'reviewed')}
-                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#1565c0', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
+                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--color-info)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
                               Mark Reviewed
                             </button>
                           )}
                           {st !== 'escalated' && (
                             <button disabled={csActionLoading === r.id} onClick={() => handleCsAction(r.id, 'escalated')}
-                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#6a1b9a', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
+                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
                               Escalate
                             </button>
                           )}
                           {st !== 'resolved' && (
                             <button disabled={csActionLoading === r.id} onClick={() => handleCsAction(r.id, 'resolved')}
-                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2e7d32', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
+                              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--color-success)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
                               Resolve
                             </button>
                           )}
                           {st !== 'pending' && (
                             <button disabled={csActionLoading === r.id} onClick={() => handleCsAction(r.id, 'pending')}
-                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', color: '#666', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
+                              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: csActionLoading === r.id ? 0.6 : 1 }}>
                               Reset to Pending
                             </button>
                           )}
@@ -2818,14 +2818,14 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         <div>
           {/* Header with Add button */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, color: '#1b6b5a' }}>Help Articles ({helpArticles.length})</h3>
+            <h3 style={{ margin: 0, color: 'var(--role-color)' }}>Help Articles ({helpArticles.length})</h3>
             <button onClick={() => openHelpEditor()} style={{
-              padding: '8px 16px', background: '#1b6b5a', color: 'white', border: 'none',
+              padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
               borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
             }}>+ New Article</button>
           </div>
 
-          {helpLoading && <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>Loading...</div>}
+          {helpLoading && <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>Loading...</div>}
 
           {/* Articles table */}
           {!helpLoading && helpArticles.map(article => (
@@ -2835,26 +2835,26 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             }}>
               <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '13px', color: '#999', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '4px' }}>
                     <span style={{
-                      display: 'inline-block', padding: '2px 8px', background: '#f0f0f0',
+                      display: 'inline-block', padding: '2px 8px', background: 'var(--badge-muted-bg)',
                       borderRadius: '4px', fontSize: '11px', fontWeight: 600, marginRight: '8px'
                     }}>{article.category}</span>
-                    {!article.is_published && <span style={{ color: '#e8724a', fontWeight: 600 }}>DRAFT</span>}
-                    {article.link_page && <span style={{ color: '#1b6b5a', marginLeft: '8px' }}>→ {article.link_page}</span>}
+                    {!article.is_published && <span style={{ color: 'var(--accent-color)', fontWeight: 600 }}>DRAFT</span>}
+                    {article.link_page && <span style={{ color: 'var(--role-color)', marginLeft: '8px' }}>→ {article.link_page}</span>}
                   </div>
                   <div style={{ fontWeight: 500, fontSize: '14px', marginBottom: '4px' }}>{article.question}</div>
-                  <div style={{ fontSize: '12px', color: '#888', maxHeight: '40px', overflow: 'hidden' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', maxHeight: '40px', overflow: 'hidden' }}>
                     {article.answer?.slice(0, 120)}{article.answer?.length > 120 ? '...' : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                   <button onClick={() => openHelpEditor(article)} style={{
-                    padding: '6px 12px', background: '#f0f0f0', border: 'none',
+                    padding: '6px 12px', background: 'var(--badge-muted-bg)', border: 'none',
                     borderRadius: '6px', cursor: 'pointer', fontSize: '12px'
                   }}>Edit</button>
                   <button onClick={() => toggleHelpPublished(article)} style={{
-                    padding: '6px 12px', background: article.is_published ? '#fff3cd' : '#d4edda',
+                    padding: '6px 12px', background: article.is_published ? 'var(--color-warning-bg)' : 'var(--color-success-bg)',
                     border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px'
                   }}>{article.is_published ? 'Unpublish' : 'Publish'}</button>
                 </div>
@@ -2870,15 +2870,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               justifyContent: 'center', zIndex: 1000, padding: '20px',
             }} onClick={(e) => { if (e.target === e.currentTarget) setHelpEditModal(null); }}>
               <div style={{
-                background: 'white', borderRadius: '16px', padding: '24px',
+                background: 'var(--bg-surface)', borderRadius: '16px', padding: '24px',
                 maxWidth: '600px', width: '100%', maxHeight: '80vh', overflow: 'auto',
               }}>
-                <h3 style={{ margin: '0 0 16px', color: '#1b6b5a' }}>
+                <h3 style={{ margin: '0 0 16px', color: 'var(--role-color)' }}>
                   {helpEditModal.id ? 'Edit Article' : 'New Help Article'}
                 </h3>
 
                 <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Category</label>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Category</label>
                   <select value={helpForm.category} onChange={e => setHelpForm({...helpForm, category: e.target.value})}
                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }}>
                     <option value="getting-started">Getting Started</option>
@@ -2890,13 +2890,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 </div>
 
                 <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Question</label>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Question</label>
                   <input type="text" value={helpForm.question} onChange={e => setHelpForm({...helpForm, question: e.target.value})}
                     placeholder="How do I...?" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
                 </div>
 
                 <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Answer</label>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Answer</label>
                   <textarea value={helpForm.answer} onChange={e => setHelpForm({...helpForm, answer: e.target.value})}
                     placeholder="Use **bold** for emphasis. Each line becomes a paragraph."
                     rows={6} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', resize: 'vertical' }} />
@@ -2904,30 +2904,30 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Link to page (optional)</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Link to page (optional)</label>
                     <input type="text" value={helpForm.link_page} onChange={e => setHelpForm({...helpForm, link_page: e.target.value})}
                       placeholder="e.g. schedule, caregivers" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Link label</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Link label</label>
                     <input type="text" value={helpForm.link_label} onChange={e => setHelpForm({...helpForm, link_label: e.target.value})}
                       placeholder="e.g. Go to Schedule" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
                   </div>
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#666', marginBottom: '4px' }}>Sort order</label>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Sort order</label>
                   <input type="number" value={helpForm.sort_order} onChange={e => setHelpForm({...helpForm, sort_order: parseInt(e.target.value) || 0})}
                     style={{ width: '80px', padding: '8px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }} />
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                   <button onClick={() => setHelpEditModal(null)} style={{
-                    padding: '8px 20px', background: '#f0f0f0', border: 'none',
+                    padding: '8px 20px', background: 'var(--badge-muted-bg)', border: 'none',
                     borderRadius: '8px', cursor: 'pointer', fontSize: '14px',
                   }}>Cancel</button>
                   <button onClick={saveHelpArticle} style={{
-                    padding: '8px 20px', background: '#1b6b5a', color: 'white', border: 'none',
+                    padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                     borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 600,
                   }}>{helpEditModal.id ? 'Save Changes' : 'Create Article'}</button>
                 </div>
@@ -2946,27 +2946,27 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {['dashboard', 'audit-log'].map(v => (
                 <button key={v} onClick={() => setSecView(v)} style={{
                   padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  background: secView === v ? '#1b6b5a' : '#f0f0f0', color: secView === v ? '#fff' : '#555',
+                  background: secView === v ? 'var(--role-color)' : 'var(--badge-muted-bg)', color: secView === v ? 'var(--text-on-primary)' : 'var(--text-secondary)',
                   border: secView === v ? 'none' : '1px solid #ddd',
                 }}>{v === 'dashboard' ? 'Dashboard' : 'Audit Log'}</button>
               ))}
               <button onClick={() => { loadSecDashboard(); loadSecAuditLog(); }} style={{
                 padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a',
+                background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a',
               }}>Refresh</button>
             </div>
           </div>
 
           {secLoading && !secDashboard ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>Loading security data...</div>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading security data...</div>
           ) : secView === 'dashboard' && secDashboard ? (
             <div>
               {/* Active threats banner */}
               {secDashboard.activeThreats?.length > 0 && (
-                <div style={{ padding: '12px 16px', background: '#ffebee', border: '2px solid #c62828', borderRadius: 12, marginBottom: 16 }}>
-                  <div style={{ fontWeight: 700, color: '#c62828', fontSize: 14, marginBottom: 6 }}>Active Threats Detected</div>
+                <div style={{ padding: '12px 16px', background: 'var(--color-error-bg)', border: '2px solid #c62828', borderRadius: 12, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 700, color: 'var(--color-error)', fontSize: 14, marginBottom: 6 }}>Active Threats Detected</div>
                   {secDashboard.activeThreats.map((t, i) => (
-                    <div key={i} style={{ fontSize: 13, color: '#b71c1c', marginBottom: 2 }}>
+                    <div key={i} style={{ fontSize: 13, color: 'var(--color-error)', marginBottom: 2 }}>
                       IP {t.ip}: {t.failedCount} failed login attempts since {new Date(t.since).toLocaleTimeString()}
                     </div>
                   ))}
@@ -2976,10 +2976,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {/* Severity summary cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
                 {[
-                  { key: 'critical', label: 'Critical', color: '#c62828', bg: '#ffebee' },
-                  { key: 'error', label: 'Errors', color: '#e65100', bg: '#fff3e0' },
-                  { key: 'warn', label: 'Warnings', color: '#f9a825', bg: '#fffde7' },
-                  { key: 'info', label: 'Info', color: '#1565c0', bg: '#e3f2fd' },
+                  { key: 'critical', label: 'Critical', color: 'var(--color-error)', bg: 'var(--color-error-bg)' },
+                  { key: 'error', label: 'Errors', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+                  { key: 'warn', label: 'Warnings', color: 'var(--color-warning)', bg: '#fffde7' },
+                  { key: 'info', label: 'Info', color: 'var(--color-info)', bg: 'var(--color-info-bg)' },
                 ].map(s => {
                   const count = secDashboard.severityCounts?.find(c => c.severity === s.key)?.count || 0;
                   return (
@@ -2994,17 +2994,17 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {/* Failed logins */}
               {secDashboard.failedLogins?.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#c62828', marginBottom: 8 }}>Failed Login Attempts (24h)</div>
-                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-error)', marginBottom: 8 }}>Failed Login Attempts (24h)</div>
+                  <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
                     {secDashboard.failedLogins.map((f, i) => (
                       <div key={i} style={{ padding: '10px 14px', borderBottom: i < secDashboard.failedLogins.length - 1 ? '1px solid #f0f0f0' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <span style={{ fontWeight: 600, fontSize: 13 }}>{f.user_email || 'Unknown'}</span>
-                          <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>from {f.ip_address}</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 8 }}>from {f.ip_address}</span>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontWeight: 700, color: f.count >= 10 ? '#c62828' : '#e65100', fontSize: 14 }}>{f.count}x</span>
-                          <div style={{ fontSize: 11, color: '#999' }}>{new Date(f.last_attempt).toLocaleTimeString()}</div>
+                          <span style={{ fontWeight: 700, color: f.count >= 10 ? 'var(--color-error)' : 'var(--color-warning)', fontSize: 14 }}>{f.count}x</span>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(f.last_attempt).toLocaleTimeString()}</div>
                         </div>
                       </div>
                     ))}
@@ -3015,17 +3015,17 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {/* Admin access */}
               {secDashboard.adminAccess?.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#333', marginBottom: 8 }}>Admin Access (24h)</div>
-                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Admin Access (24h)</div>
+                  <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
                     {secDashboard.adminAccess.map((a, i) => (
                       <div key={i} style={{ padding: '10px 14px', borderBottom: i < secDashboard.adminAccess.length - 1 ? '1px solid #f0f0f0' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <span style={{ fontWeight: 600, fontSize: 13 }}>{a.user_email}</span>
-                          <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>from {a.ip_address}</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 8 }}>from {a.ip_address}</span>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <span style={{ fontSize: 13, fontWeight: 600 }}>{a.count} requests</span>
-                          <div style={{ fontSize: 11, color: '#999' }}>Last: {new Date(a.last_access).toLocaleTimeString()}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Last: {new Date(a.last_access).toLocaleTimeString()}</div>
                         </div>
                       </div>
                     ))}
@@ -3035,19 +3035,19 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
               {/* Top actions */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#333', marginBottom: 8 }}>Activity by Action (24h)</div>
-                <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Activity by Action (24h)</div>
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
                   {(secDashboard.topActions || []).map((a, i) => (
                     <div key={i} style={{ padding: '8px 14px', borderBottom: i < (secDashboard.topActions || []).length - 1 ? '1px solid #f5f5f5' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 13, fontWeight: 500 }}>{a.action.replace(/_/g, ' ')}</span>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, color: '#888' }}>{a.unique_users} users \u00B7 {a.unique_ips} IPs</span>
-                        <span style={{ fontWeight: 700, fontSize: 14, color: '#1b6b5a', minWidth: 30, textAlign: 'right' }}>{a.count}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{a.unique_users} users \u00B7 {a.unique_ips} IPs</span>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--role-color)', minWidth: 30, textAlign: 'right' }}>{a.count}</span>
                       </div>
                     </div>
                   ))}
                   {(!secDashboard.topActions || secDashboard.topActions.length === 0) && (
-                    <div style={{ padding: 20, textAlign: 'center', color: '#999', fontSize: 13 }}>No activity recorded yet</div>
+                    <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No activity recorded yet</div>
                   )}
                 </div>
               </div>
@@ -3055,8 +3055,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {/* Critical events */}
               {secDashboard.criticalEvents?.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#c62828', marginBottom: 8 }}>Critical & Error Events (7 days)</div>
-                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-error)', marginBottom: 8 }}>Critical & Error Events (7 days)</div>
+                  <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
                     {secDashboard.criticalEvents.map((e, i) => {
                       const det = typeof e.details === 'string' ? JSON.parse(e.details || '{}') : (e.details || {});
                       return (
@@ -3065,16 +3065,16 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             <div>
                               <span style={{
                                 padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, marginRight: 6,
-                                background: e.severity === 'critical' ? '#c62828' : '#e65100', color: '#fff',
+                                background: e.severity === 'critical' ? 'var(--color-error)' : 'var(--color-warning)', color: 'var(--text-on-primary)',
                               }}>{e.severity.toUpperCase()}</span>
                               <span style={{ fontWeight: 600, fontSize: 13 }}>{e.action.replace(/_/g, ' ')}</span>
-                              <span style={{ fontSize: 12, color: '#888', marginLeft: 6 }}>{e.method} {e.endpoint}</span>
+                              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginLeft: 6 }}>{e.method} {e.endpoint}</span>
                             </div>
-                            <span style={{ fontSize: 11, color: '#999', whiteSpace: 'nowrap' }}>{new Date(e.created_at).toLocaleString()}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(e.created_at).toLocaleString()}</span>
                           </div>
-                          <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
                             {e.user_email || 'Anonymous'} from {e.ip_address}
-                            {det.anomaly && <span style={{ color: '#c62828', fontWeight: 600, marginLeft: 8 }}>{det.anomaly.replace(/_/g, ' ')}</span>}
+                            {det.anomaly && <span style={{ color: 'var(--color-error)', fontWeight: 600, marginLeft: 8 }}>{det.anomaly.replace(/_/g, ' ')}</span>}
                             {det.statusCode && <span style={{ marginLeft: 8 }}>HTTP {det.statusCode}</span>}
                           </div>
                         </div>
@@ -3109,15 +3109,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   <option value="caregiver_profile_access">Caregiver Profile</option>
                   <option value="passkey_auth">Passkey Auth</option>
                 </select>
-                <span style={{ fontSize: 12, color: '#888', alignSelf: 'center' }}>{secAuditTotal} total entries</span>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)', alignSelf: 'center' }}>{secAuditTotal} total entries</span>
               </div>
 
               {/* Log entries */}
-              <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 12, overflow: 'hidden' }}>
                 {secAuditLog.length === 0 ? (
-                  <div style={{ padding: 30, textAlign: 'center', color: '#999', fontSize: 13 }}>No audit log entries found. Activity will appear here once the system logs requests.</div>
+                  <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No audit log entries found. Activity will appear here once the system logs requests.</div>
                 ) : secAuditLog.map((entry, i) => {
-                  const sevColors = { critical: '#c62828', error: '#e65100', warn: '#f9a825', info: '#90a4ae' };
+                  const sevColors = { critical: 'var(--color-error)', error: 'var(--color-warning)', warn: 'var(--color-warning)', info: '#90a4ae' };
                   const det = typeof entry.details === 'string' ? JSON.parse(entry.details || '{}') : (entry.details || {});
                   return (
                     <div key={entry.id || i} style={{ padding: '8px 14px', borderBottom: i < secAuditLog.length - 1 ? '1px solid #f5f5f5' : 'none', fontSize: 12 }}>
@@ -3125,15 +3125,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, flexWrap: 'wrap' }}>
                           <span style={{
                             width: 8, height: 8, borderRadius: 4, display: 'inline-block',
-                            background: sevColors[entry.severity] || '#ccc',
+                            background: sevColors[entry.severity] || 'var(--border-light)',
                           }} />
                           <span style={{ fontWeight: 600 }}>{entry.action?.replace(/_/g, ' ')}</span>
-                          <span style={{ color: '#888' }}>{entry.method} {entry.endpoint}</span>
-                          {det.anomaly && <span style={{ color: '#c62828', fontWeight: 600, background: '#ffebee', padding: '1px 6px', borderRadius: 4, fontSize: 10 }}>{det.anomaly.replace(/_/g, ' ')}</span>}
+                          <span style={{ color: 'var(--text-tertiary)' }}>{entry.method} {entry.endpoint}</span>
+                          {det.anomaly && <span style={{ color: 'var(--color-error)', fontWeight: 600, background: 'var(--color-error-bg)', padding: '1px 6px', borderRadius: 4, fontSize: 10 }}>{det.anomaly.replace(/_/g, ' ')}</span>}
                         </div>
-                        <span style={{ color: '#999', whiteSpace: 'nowrap' }}>{new Date(entry.created_at).toLocaleString()}</span>
+                        <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(entry.created_at).toLocaleString()}</span>
                       </div>
-                      <div style={{ color: '#888', marginTop: 2 }}>
+                      <div style={{ color: 'var(--text-tertiary)', marginTop: 2 }}>
                         {entry.user_email || 'anonymous'} \u00B7 {entry.ip_address} \u00B7 HTTP {det.statusCode || '?'} \u00B7 {det.durationMs || 0}ms
                       </div>
                     </div>
@@ -3145,21 +3145,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               {secAuditTotal > 30 && (
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 12 }}>
                   <button disabled={secLogPage === 0} onClick={() => setSecLogPage(p => p - 1)}
-                    style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, cursor: secLogPage === 0 ? 'default' : 'pointer', opacity: secLogPage === 0 ? 0.5 : 1 }}>
+                    style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 12, cursor: secLogPage === 0 ? 'default' : 'pointer', opacity: secLogPage === 0 ? 0.5 : 1 }}>
                     Previous
                   </button>
-                  <span style={{ fontSize: 12, color: '#888', alignSelf: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)', alignSelf: 'center' }}>
                     Page {secLogPage + 1} of {Math.ceil(secAuditTotal / 30)}
                   </span>
                   <button disabled={(secLogPage + 1) * 30 >= secAuditTotal} onClick={() => setSecLogPage(p => p + 1)}
-                    style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, cursor: (secLogPage + 1) * 30 >= secAuditTotal ? 'default' : 'pointer', opacity: (secLogPage + 1) * 30 >= secAuditTotal ? 0.5 : 1 }}>
+                    style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 12, cursor: (secLogPage + 1) * 30 >= secAuditTotal ? 'default' : 'pointer', opacity: (secLogPage + 1) * 30 >= secAuditTotal ? 0.5 : 1 }}>
                     Next
                   </button>
                 </div>
               )}
             </div>
           ) : (
-            <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>Loading...</div>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading...</div>
           )}
         </div>
       )}
@@ -3170,26 +3170,26 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           {/* Add blocked email form */}
           <div className="card" style={{ marginBottom: '16px' }}>
             <div className="card-header"><span className="card-icon">🚫</span>Block an Email</div>
-            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
               Blocked emails cannot register or create accounts. They'll see a generic error message.
             </p>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <div style={{ flex: '1 1 220px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#555', marginBottom: '4px' }}>Email</label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Email</label>
                 <input type="email" placeholder="user@example.com" value={blockEmailInput}
                   onChange={(e) => setBlockEmailInput(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: '1 1 180px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#555', marginBottom: '4px' }}>Reason (optional)</label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Reason (optional)</label>
                 <input type="text" placeholder="e.g. Spam, abuse" value={blockReasonInput}
                   onChange={(e) => setBlockReasonInput(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box' }} />
               </div>
               <button onClick={handleBlockEmail} disabled={blockLoading || !blockEmailInput.trim()}
                 style={{
-                  padding: '10px 20px', background: blockLoading || !blockEmailInput.trim() ? '#ccc' : '#c62828',
-                  color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600,
+                  padding: '10px 20px', background: blockLoading || !blockEmailInput.trim() ? 'var(--border-light)' : 'var(--color-error)',
+                  color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600,
                   cursor: blockLoading ? 'wait' : 'pointer', whiteSpace: 'nowrap',
                 }}>
                 {blockLoading ? '...' : 'Block Email'}
@@ -3204,23 +3204,23 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Email</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Reason</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Blocked By</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#666', fontWeight: 600 }}>Date</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontWeight: 600 }}>Actions</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Email</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Reason</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Blocked By</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Date</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {blockedEmails.map(b => (
                     <tr key={b.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                       <td style={{ padding: '10px 12px', fontWeight: 500 }}>{b.email}</td>
-                      <td style={{ padding: '10px 12px', color: '#666' }}>{b.reason || '—'}</td>
-                      <td style={{ padding: '10px 12px', color: '#666' }}>{b.blocked_by_name || '—'}</td>
-                      <td style={{ padding: '10px 12px', color: '#888', fontSize: '12px' }}>{formatDate(b.created_at)}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{b.reason || '—'}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{b.blocked_by_name || '—'}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-tertiary)', fontSize: '12px' }}>{formatDate(b.created_at)}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                         <button onClick={() => handleUnblockEmail(b.id)}
-                          style={{ padding: '4px 12px', background: '#e8f5e9', color: '#2e7d32', border: '1px solid #c8e6c9', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                          style={{ padding: '4px 12px', background: 'var(--color-success-bg)', color: 'var(--color-success)', border: '1px solid #c8e6c9', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
                           Unblock
                         </button>
                       </td>
@@ -3229,7 +3229,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 </tbody>
               </table>
             ) : (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#999' }}>No blocked emails</div>
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No blocked emails</div>
             )}
           </div>
         </div>
@@ -3246,8 +3246,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   style={{
                     padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600,
                     cursor: 'pointer',
-                    background: authzFilter === f ? '#1b6b5a' : '#f0f0f0',
-                    color: authzFilter === f ? '#fff' : '#555',
+                    background: authzFilter === f ? 'var(--role-color)' : 'var(--badge-muted-bg)',
+                    color: authzFilter === f ? 'var(--text-on-primary)' : 'var(--text-secondary)',
                   }}>
                   {f || 'All'}
                 </button>
@@ -3256,7 +3256,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           </div>
           {authzLoading && <LoadingSpinner text="Loading authorizations..." />}
           {!authzLoading && authzList.length === 0 && (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>No authorization records found.</div>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No authorization records found.</div>
           )}
           {!authzLoading && authzList.length > 0 && (
             <div style={{ overflowX: 'auto' }}>
@@ -3274,41 +3274,41 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 <tbody>
                   {authzList.map(a => {
                     const tierLabels = { tier1: 'Self-signup', tier2: 'POA/Guardian', tier3: 'Family consent', unset: 'Unset' };
-                    const statusColors = { verified: '#1b6b5a', pending: '#e8724a', attested: '#1565C0', rejected: '#c0392b', revoked: '#999' };
+                    const statusColors = { verified: 'var(--role-color)', pending: 'var(--accent-color)', attested: '#1565C0', rejected: 'var(--color-error)', revoked: 'var(--text-muted)' };
                     return (
                       <tr key={a.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                         <td style={{ padding: '10px 8px', fontWeight: 600 }}>{a.first_name} {a.last_name}</td>
-                        <td style={{ padding: '10px 8px' }}>{a.family_first_name} {a.family_last_name}<br /><span style={{ fontSize: '11px', color: '#999' }}>{a.family_email}</span></td>
+                        <td style={{ padding: '10px 8px' }}>{a.family_first_name} {a.family_last_name}<br /><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{a.family_email}</span></td>
                         <td style={{ padding: '10px 8px' }}>
                           <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
-                            background: a.authorization_tier === 'tier1' ? '#e8f5f2' : a.authorization_tier === 'tier2' ? '#e8eaf6' : '#FFF3E0',
-                            color: a.authorization_tier === 'tier1' ? '#1b6b5a' : a.authorization_tier === 'tier2' ? '#5c6bc0' : '#e8724a',
+                            background: a.authorization_tier === 'tier1' ? 'var(--bg-teal-light)' : a.authorization_tier === 'tier2' ? 'var(--color-purple-bg)' : 'var(--color-warning-bg)',
+                            color: a.authorization_tier === 'tier1' ? 'var(--role-color)' : a.authorization_tier === 'tier2' ? 'var(--color-indigo)' : 'var(--accent-color)',
                           }}>{tierLabels[a.authorization_tier] || a.authorization_tier}</span>
                         </td>
                         <td style={{ padding: '10px 8px' }}>
-                          <span style={{ color: statusColors[a.consent_status] || '#999', fontWeight: 600 }}>
+                          <span style={{ color: statusColors[a.consent_status] || 'var(--text-muted)', fontWeight: 600 }}>
                             {a.consent_status === 'verified' ? '\u2705' : a.consent_status === 'attested' ? '\u{1F4DD}' : a.consent_status === 'pending' ? '\u23F3' : a.consent_status === 'rejected' ? '\u274C' : '\u{1F6AB}'} {a.consent_status}
                           </span>
                           {a.attestation_signed_at && (
-                            <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
                               Attested by {a.attestation_signer || 'N/A'} on {new Date(a.attestation_signed_at).toLocaleDateString()}
                             </div>
                           )}
                           {a.attestation_relationship && (
-                            <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
                               Relationship: {a.attestation_relationship}
                             </div>
                           )}
                           {a.recipient_email && a.authorization_tier === 'tier3' && (
-                            <div style={{ fontSize: '11px', color: '#1565c0', marginTop: '2px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--color-info)', marginTop: '2px' }}>
                               {'\u{1F4E7}'} Recipient: {a.recipient_email}
                             </div>
                           )}
                           {a.outreach_response && (
                             <div style={{
                               fontSize: '11px', marginTop: '4px', padding: '3px 8px', borderRadius: '4px',
-                              background: a.outreach_response === 'yes_aware' ? '#e8f5e9' : a.outreach_response === 'did_not_authorize' ? '#fce4ec' : '#fff3e0',
-                              color: a.outreach_response === 'yes_aware' ? '#2e7d32' : a.outreach_response === 'did_not_authorize' ? '#c62828' : '#e65100',
+                              background: a.outreach_response === 'yes_aware' ? 'var(--color-success-bg)' : a.outreach_response === 'did_not_authorize' ? 'var(--color-error-bg)' : 'var(--color-warning-bg)',
+                              color: a.outreach_response === 'yes_aware' ? 'var(--color-success)' : a.outreach_response === 'did_not_authorize' ? 'var(--color-error)' : 'var(--color-warning)',
                               fontWeight: 600,
                             }}>
                               {a.outreach_response === 'yes_aware' ? '\u2705 Aware' : a.outreach_response === 'did_not_authorize' ? '\u{1F6A8} Not authorized' : '\u2753 Has questions'}
@@ -3316,21 +3316,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             </div>
                           )}
                           {a.outreach_sent_to && !a.outreach_response && (
-                            <div style={{ fontSize: '11px', color: '#999', marginTop: '2px', fontStyle: 'italic' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', fontStyle: 'italic' }}>
                               Outreach sent, awaiting response...
                             </div>
                           )}
                           {a.bookings_paused === 1 && (
-                            <div style={{ fontSize: '11px', color: '#c62828', fontWeight: 600, marginTop: '4px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--color-error)', fontWeight: 600, marginTop: '4px' }}>
                               {'\u{1F6D1}'} Bookings paused{a.bookings_paused_reason ? `: ${a.bookings_paused_reason}` : ''}
                             </div>
                           )}
                           {a.doc_id && (
-                            <div style={{ fontSize: '11px', color: '#5c6bc0', marginTop: '4px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--color-indigo)', marginTop: '4px' }}>
                               {'\u{1F4C4}'} {a.doc_type?.replace('_', ' ') || 'Document'}: {a.doc_file_name || 'file'}
                               <span style={{ marginLeft: '6px', padding: '1px 6px', borderRadius: '3px', fontSize: '10px', fontWeight: 600,
-                                background: a.doc_upload_status === 'approved' ? '#e8f5f2' : a.doc_upload_status === 'rejected' ? '#fce4ec' : '#fff3e0',
-                                color: a.doc_upload_status === 'approved' ? '#1b6b5a' : a.doc_upload_status === 'rejected' ? '#c62828' : '#e8724a',
+                                background: a.doc_upload_status === 'approved' ? 'var(--bg-teal-light)' : a.doc_upload_status === 'rejected' ? 'var(--color-error-bg)' : 'var(--color-warning-bg)',
+                                color: a.doc_upload_status === 'approved' ? 'var(--role-color)' : a.doc_upload_status === 'rejected' ? 'var(--color-error)' : 'var(--accent-color)',
                               }}>{a.doc_upload_status}</span>
                             </div>
                           )}
@@ -3340,20 +3340,20 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                             {a.doc_id && (
                               <button onClick={() => handleDocPreview(a.doc_id)} disabled={docPreviewLoading}
-                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#e8eaf6', color: '#5c6bc0' }}>
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: 'var(--color-purple-bg)', color: 'var(--color-indigo)' }}>
                                 {'\u{1F50D}'} Preview
                               </button>
                             )}
                             {a.consent_status !== 'verified' && (
                               <button onClick={() => handleAuthzAction(a.id, 'approve')} disabled={authzActionLoading === a.id}
-                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#e8f5f2', color: '#1b6b5a' }}>
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: 'var(--bg-teal-light)', color: 'var(--role-color)' }}>
                                 Approve
                               </button>
                             )}
                             {a.consent_status !== 'rejected' && a.consent_status !== 'verified' && (
                               <button onClick={() => { setRejectModal({ id: a.id, name: `${a.first_name} ${a.last_name}` }); setRejectNotes(''); }}
                                 disabled={authzActionLoading === a.id}
-                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#fce4ec', color: '#c62828' }}>
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: 'var(--color-error-bg)', color: 'var(--color-error)' }}>
                                 Reject
                               </button>
                             )}
@@ -3362,13 +3362,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                                 if (!confirm(`Unpause bookings for ${a.first_name} ${a.last_name}? This will allow new sessions to be scheduled.`)) return;
                                 handleAuthzAction(a.id, 'unpause');
                               }} disabled={authzActionLoading === a.id}
-                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#1b6b5a', color: '#fff' }}>
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: 'var(--role-color)', color: 'var(--text-on-primary)' }}>
                                 {'\u2705'} Unpause Bookings
                               </button>
                             )}
                             {a.consent_status === 'verified' && (
                               <button onClick={() => handleAuthzAction(a.id, 'revoke')} disabled={authzActionLoading === a.id}
-                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#f5f5f5', color: '#999' }}>
+                                style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
                                 Revoke
                               </button>
                             )}
@@ -3386,11 +3386,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           {docPreview && (
             <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={() => setDocPreview(null)}>
-              <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+              <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
                 onClick={e => e.stopPropagation()}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h3 style={{ margin: 0, fontSize: '16px' }}>{'\u{1F4C4}'} {docPreview.fileName}</h3>
-                  <button onClick={() => setDocPreview(null)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#999' }}>{'\u2715'}</button>
+                  <button onClick={() => setDocPreview(null)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>{'\u2715'}</button>
                 </div>
                 <div style={{ flex: 1, overflow: 'auto', minHeight: '300px' }}>
                   {docPreview.mimeType === 'application/pdf' ? (
@@ -3407,18 +3407,18 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           {rejectModal && (
             <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={() => setRejectModal(null)}>
-              <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '480px', width: '90%' }}
+              <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '480px', width: '90%' }}
                 onClick={e => e.stopPropagation()}>
                 <h3 style={{ margin: '0 0 12px', fontSize: '16px' }}>{'\u274C'} Reject Authorization — {rejectModal.name}</h3>
-                <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px' }}>Provide a reason so the family knows what to correct:</p>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>Provide a reason so the family knows what to correct:</p>
                 <textarea value={rejectNotes} onChange={e => setRejectNotes(e.target.value)}
                   placeholder="e.g., Document is expired, signature is missing, illegible scan..."
                   style={{ width: '100%', minHeight: '100px', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box' }} />
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
                   <button onClick={() => setRejectModal(null)}
-                    style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #ddd', background: '#fff', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                    style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
                   <button onClick={handleRejectWithNotes} disabled={authzActionLoading === rejectModal.id}
-                    style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#c62828', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: 'var(--color-error)', color: 'var(--text-on-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
                     Reject Authorization
                   </button>
                 </div>
@@ -3431,35 +3431,35 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {/* ─── Sessions Tab ─── */}
       {activeTab === 'sessions' && (
         <div>
-          <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 700, color: '#1b6b5a' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 700, color: 'var(--role-color)' }}>
             No-Show Cancelled Sessions
           </h3>
-          <p style={{ fontSize: '13px', color: '#666', marginBottom: '16px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
             Sessions auto-cancelled by the system when no check-in was recorded within 30 minutes. Use "Restore" to return a session to confirmed status if it was cancelled in error.
           </p>
           {noShowLoading ? (
-            <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>Loading...</div>
+            <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>Loading...</div>
           ) : noShowSessions.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '30px', color: '#999', background: '#f9f9f9', borderRadius: '12px' }}>
+            <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', background: 'var(--bg-neutral)', borderRadius: '12px' }}>
               No system-cancelled no-show sessions found.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {noShowSessions.map(s => (
                 <div key={s.id} style={{
-                  background: s.status === 'cancelled' ? '#fff5f5' : '#f0faf7',
-                  border: `1px solid ${s.status === 'cancelled' ? '#ffcdd2' : '#c8e6c9'}`,
+                  background: s.status === 'cancelled' ? 'var(--bg-error-light)' : 'var(--bg-highlight)',
+                  border: `1px solid ${s.status === 'cancelled' ? 'var(--color-error-bg)' : 'var(--color-success-bg)'}`,
                   borderRadius: '10px', padding: '14px 16px',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
                 }}>
                   <div style={{ flex: 1, minWidth: '200px' }}>
-                    <div style={{ fontWeight: 600, fontSize: '14px', color: '#333' }}>
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
                       {s.recipient_name || 'Unknown'} — {s.scheduled_date} at {s.scheduled_time}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#777', marginTop: '4px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                       Caregiver: {s.caregiver_name || 'None'} · Family: {s.family_name || 'Unknown'}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                       Cancelled: {s.cancelled_at ? new Date(s.cancelled_at).toLocaleString() : '—'} · Status: {s.status}
                     </div>
                   </div>
@@ -3468,7 +3468,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       onClick={() => handleRestoreSession(s.id)}
                       disabled={restoreLoading === s.id}
                       style={{
-                        padding: '8px 18px', background: '#1b6b5a', color: '#fff', border: 'none',
+                        padding: '8px 18px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                         borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                         opacity: restoreLoading === s.id ? 0.5 : 1,
                       }}
@@ -3477,7 +3477,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     </button>
                   )}
                   {s.status !== 'cancelled' && (
-                    <span style={{ fontSize: '12px', color: '#1b6b5a', fontWeight: 600 }}>Restored ✓</span>
+                    <span style={{ fontSize: '12px', color: 'var(--role-color)', fontWeight: 600 }}>Restored ✓</span>
                   )}
                 </div>
               ))}
@@ -3487,34 +3487,34 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           {/* Paused Caregivers — accounts paused after no-show */}
           <div className="card" style={{ marginTop: '20px' }}>
             <div className="card-header"><span className="card-icon">{'\u{1F6D1}'}</span>Paused Caregiver Accounts</div>
-            <p style={{ fontSize: '13px', color: '#666', marginBottom: '16px' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
               Caregivers whose accounts were automatically paused after a no-show. Use "Reinstate" to restore their account and make them available for jobs again.
             </p>
             {pausedLoading ? (
-              <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>Loading...</div>
+              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>Loading...</div>
             ) : pausedCaregivers.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px', color: '#999', background: '#f9f9f9', borderRadius: '12px' }}>
+              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', background: 'var(--bg-neutral)', borderRadius: '12px' }}>
                 No paused caregiver accounts.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {pausedCaregivers.map(cg => (
                   <div key={cg.user_id} style={{
-                    background: '#fff5f5', border: '1px solid #ffcdd2',
+                    background: 'var(--bg-error-light)', border: '1px solid #ffcdd2',
                     borderRadius: '10px', padding: '14px 16px',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
                   }}>
                     <div style={{ flex: 1, minWidth: '200px' }}>
-                      <div style={{ fontWeight: 600, fontSize: '14px', color: '#333' }}>
+                      <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
                         {cg.first_name} {cg.last_name}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#777', marginTop: '2px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                         {cg.email} {'\u00B7'} {'\u2B50'} {cg.rating_avg || '—'} ({cg.rating_count || 0} reviews)
                       </div>
-                      <div style={{ fontSize: '12px', color: '#c62828', marginTop: '4px', fontWeight: 600 }}>
+                      <div style={{ fontSize: '12px', color: 'var(--color-error)', marginTop: '4px', fontWeight: 600 }}>
                         {cg.account_paused_reason || 'No reason recorded'}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                         Paused: {cg.account_paused_at ? new Date(cg.account_paused_at).toLocaleString() : '—'}
                         {' \u00B7 '} No-shows: {cg.no_show_count || 0} {' \u00B7 '} Completed: {cg.completed_count || 0}
                       </div>
@@ -3523,7 +3523,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       onClick={() => handleReinstate(cg.user_id)}
                       disabled={reinstateLoading === cg.user_id}
                       style={{
-                        padding: '8px 18px', background: '#1b6b5a', color: '#fff', border: 'none',
+                        padding: '8px 18px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                         borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                         opacity: reinstateLoading === cg.user_id ? 0.5 : 1,
                       }}
@@ -3574,13 +3574,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           <div>
             <div className="card" style={{ padding: '16px' }}>
               <div className="card-header" style={{ marginBottom: '4px' }}>Admin Notification Preferences</div>
-              <p style={{ fontSize: 13, color: '#888', margin: '0 0 16px' }}>
+              <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 16px' }}>
                 Choose how you're notified for each event type. Push sends to your phone; email goes to {user?.email || 'your email'}.
               </p>
 
               {notifCategories.map(cat => (
                 <div key={cat.category} style={{ marginBottom: '16px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1b6b5a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', paddingBottom: '4px', borderBottom: '2px solid #e8f5e9' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--role-color)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', paddingBottom: '4px', borderBottom: '2px solid #e8f5e9' }}>
                     {cat.category}
                   </div>
                   {cat.events.map(({ event, label }) => {
@@ -3592,20 +3592,20 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <div key={event} style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         padding: '10px 12px', marginBottom: '4px', borderRadius: '8px',
-                        background: '#fafafa', gap: '8px', flexWrap: 'wrap',
+                        background: 'var(--bg-primary)', gap: '8px', flexWrap: 'wrap',
                       }}>
-                        <span style={{ fontSize: '13px', color: '#333', flex: 1, minWidth: '140px' }}>{label}</span>
+                        <span style={{ fontSize: '13px', color: 'var(--text-primary)', flex: 1, minWidth: '140px' }}>{label}</span>
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '12px' }}>
                             <input type="checkbox" checked={pushOn} onChange={(e) => togglePref(pushKey, e.target.checked)}
-                              style={{ accentColor: '#1b6b5a' }} />
+                              style={{ accentColor: 'var(--role-color)' }} />
                             <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                               <span style={{ fontSize: '14px' }}>🔔</span> Push
                             </span>
                           </label>
                           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '12px' }}>
                             <input type="checkbox" checked={emailOn} onChange={(e) => togglePref(emailKey, e.target.checked)}
-                              style={{ accentColor: '#e8724a' }} />
+                              style={{ accentColor: 'var(--accent-color)' }} />
                             <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                               <span style={{ fontSize: '14px' }}>📧</span> Email
                             </span>
@@ -3617,7 +3617,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 </div>
               ))}
 
-              <div style={{ marginTop: '12px', padding: '10px', background: '#fff8e1', borderRadius: '8px', fontSize: '12px', color: '#795548' }}>
+              <div style={{ marginTop: '12px', padding: '10px', background: 'var(--color-warning-bg)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-brown)' }}>
                 Push notifications require the app to be installed (Add to Home Screen). Email uses your Resend-verified sender.
               </div>
             </div>
@@ -3632,7 +3632,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             <div className="modal-header" style={{ fontSize: '17px' }}>
               Caregiver Onboarding — {onboardingModal.user?.name || onboardingModal.user?.email}
             </div>
-            <div style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>{onboardingModal.user?.email}</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginBottom: '16px' }}>{onboardingModal.user?.email}</div>
 
             {onboardingModal.flags ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -3645,21 +3645,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 ].map(flag => (
                   <div key={flag.key} style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '12px', background: onboardingModal.flags[flag.key] ? '#e8f5e9' : '#fce4ec',
-                    borderRadius: '8px', border: `1px solid ${onboardingModal.flags[flag.key] ? '#a5d6a7' : '#ef9a9a'}`,
+                    padding: '12px', background: onboardingModal.flags[flag.key] ? 'var(--color-success-bg)' : 'var(--color-error-bg)',
+                    borderRadius: '8px', border: `1px solid ${onboardingModal.flags[flag.key] ? 'var(--color-success-bg)' : '#ef9a9a'}`,
                   }}>
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '14px', color: '#333' }}>
+                      <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
                         {onboardingModal.flags[flag.key] ? '✅' : '❌'} {flag.label}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{flag.desc}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{flag.desc}</div>
                     </div>
                     <button onClick={() => toggleOnboardingFlag(flag.key, onboardingModal.flags[flag.key])}
                       style={{
                         padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
                         border: 'none', cursor: 'pointer',
-                        background: onboardingModal.flags[flag.key] ? '#ef5350' : '#1b6b5a',
-                        color: '#fff',
+                        background: onboardingModal.flags[flag.key] ? '#ef5350' : 'var(--role-color)',
+                        color: 'var(--text-on-primary)',
                       }}>
                       {onboardingModal.flags[flag.key] ? 'Revoke' : 'Grant'}
                     </button>
@@ -3667,37 +3667,37 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 ))}
 
                 {/* Extra info */}
-                <div style={{ marginTop: '8px', padding: '12px', background: '#f8f9fa', borderRadius: '8px', fontSize: '13px' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '6px', color: '#555' }}>Additional Info</div>
+                <div style={{ marginTop: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', fontSize: '13px' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '6px', color: 'var(--text-secondary)' }}>Additional Info</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
-                    <span style={{ color: '#888' }}>BG Check Consent:</span>
+                    <span style={{ color: 'var(--text-tertiary)' }}>BG Check Consent:</span>
                     <span>{onboardingModal.flags.backgroundCheckConsent ? 'Yes' : 'No'}</span>
-                    <span style={{ color: '#888' }}>Has Photo:</span>
+                    <span style={{ color: 'var(--text-tertiary)' }}>Has Photo:</span>
                     <span>{onboardingModal.flags.hasPhoto ? 'Yes' : 'No'}</span>
-                    <span style={{ color: '#888' }}>Drivers License:</span>
+                    <span style={{ color: 'var(--text-tertiary)' }}>Drivers License:</span>
                     <span>{onboardingModal.flags.hasDriversLicense ? 'Yes' : 'No'}</span>
-                    <span style={{ color: '#888' }}>Program Reports:</span>
+                    <span style={{ color: 'var(--text-tertiary)' }}>Program Reports:</span>
                     <span>{onboardingModal.flags.needsHourReports ? 'Yes' : 'No'}</span>
                     {onboardingModal.flags.academicProgram && <>
-                      <span style={{ color: '#888' }}>Program:</span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>Program:</span>
                       <span>{onboardingModal.flags.academicProgram}</span>
-                      <span style={{ color: '#888' }}>Program Year:</span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>Program Year:</span>
                       <span>{onboardingModal.flags.academicProgramYear || '—'}</span>
                     </>}
                   </div>
                   {onboardingModal.documents?.length > 0 && (
                     <div style={{ marginTop: '8px' }}>
-                      <span style={{ color: '#888' }}>Uploaded docs:</span> {onboardingModal.documents.map(d => d.doc_type).join(', ')}
+                      <span style={{ color: 'var(--text-tertiary)' }}>Uploaded docs:</span> {onboardingModal.documents.map(d => d.doc_type).join(', ')}
                     </div>
                   )}
                 </div>
 
-                <div style={{ marginTop: '8px', padding: '10px', background: '#fff8e1', borderRadius: '8px', fontSize: '12px', color: '#795548' }}>
+                <div style={{ marginTop: '8px', padding: '10px', background: 'var(--color-warning-bg)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-brown)' }}>
                   Each flag is independent — grant only what you want to skip. For example, to skip the background check but keep Stripe setup required, grant "BG Check Paid" and "BG Check Cleared" but leave "Stripe Connected" off.
                 </div>
               </div>
             ) : (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                 No caregiver profile found for this user.
               </div>
             )}
@@ -3712,11 +3712,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         const filedItems = bgCheckCandidates.filter(c => filedStatuses.includes(c.checkr_status) || c.is_background_checked || c.bg_check_admin_approved);
         const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
 
-        const getStatusColor = (s) => s === 'clear' ? '#2e7d32' : s === 'consider' ? '#e65100' :
-          s === 'adverse_action' ? '#c62828' : s === 'suspended' ? '#e65100' : s === 'disputed' ? '#6a1b9a' :
-          s === 'consider_approved' ? '#2e7d32' : s === 'rejected' ? '#b71c1c' : s === 'did_not_pass' ? '#b71c1c' :
-          s === 'processing' ? '#1565c0' : s === 'invitation_sent' ? '#7b1fa2' :
-          s === 'invitation_expired' ? '#888' : s === 'invitation_canceled' ? '#888' : '#555';
+        const getStatusColor = (s) => s === 'clear' ? 'var(--color-success)' : s === 'consider' ? 'var(--color-warning)' :
+          s === 'adverse_action' ? 'var(--color-error)' : s === 'suspended' ? 'var(--color-warning)' : s === 'disputed' ? 'var(--color-purple)' :
+          s === 'consider_approved' ? 'var(--color-success)' : s === 'rejected' ? 'var(--color-error)' : s === 'did_not_pass' ? 'var(--color-error)' :
+          s === 'processing' ? 'var(--color-info)' : s === 'invitation_sent' ? 'var(--color-purple)' :
+          s === 'invitation_expired' ? 'var(--text-tertiary)' : s === 'invitation_canceled' ? 'var(--text-tertiary)' : 'var(--text-secondary)';
         const getStatusIcon = (s) => s === 'clear' ? '\u2705' : s === 'consider' ? '\u26A0\uFE0F' :
           s === 'adverse_action' ? '\u{1F6A8}' : s === 'suspended' ? '\u26A0\uFE0F' : s === 'disputed' ? '\u2696\uFE0F' :
           s === 'consider_approved' ? '\u2705' : s === 'rejected' ? '\u274C' : s === 'did_not_pass' ? '\u{1F6AB}' :
@@ -3741,10 +3741,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: '#333' }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
                     {c.legal_first_name || c.first_name} {c.legal_last_name || c.last_name}
                   </div>
-                  <div style={{ fontSize: 12, color: '#888' }}>{c.email}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{c.email}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                     <span>{getStatusIcon(effectiveStatus)}</span>
                     <span style={{ fontWeight: 600, fontSize: 13, color: statusColor }}>
@@ -3752,7 +3752,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       {c.bg_check_admin_approved && !c.checkr_candidate_id ? ' (Admin)' : ''}
                     </span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                     {c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted'}
                     {c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : ''}
                   </div>
@@ -3763,7 +3763,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
                     const etaLabel = diffDays > 0 ? `~${diffDays} day${diffDays !== 1 ? 's' : ''} remaining` : 'Due any time now';
                     return (
-                      <div style={{ fontSize: 11, color: '#1565c0', marginTop: 2, fontStyle: 'italic' }}>
+                      <div style={{ fontSize: 11, color: 'var(--color-info)', marginTop: 2, fontStyle: 'italic' }}>
                         ETA: {eta.toLocaleDateString()} ({etaLabel})
                       </div>
                     );
@@ -3772,13 +3772,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {c.checkr_candidate_id && (
                     <a href={`${checkrDashUrl}/candidates/${c.checkr_candidate_id}`} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: '5px 12px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
+                      style={{ padding: '5px 12px', background: 'var(--color-info)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
                       View on Checkr
                     </a>
                   )}
                   {c.checkr_report_id && (
                     <a href={`${checkrDashUrl}/reports/${c.checkr_report_id}`} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: '5px 12px', background: '#fff', color: '#1565c0', border: '1px solid #1565c0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
+                      style={{ padding: '5px 12px', background: 'var(--bg-surface)', color: 'var(--color-info)', border: '1px solid #1565c0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>
                       View Report
                     </a>
                   )}
@@ -3791,17 +3791,17 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           showToast('Caregiver approved — moved to Reviewed', 'success');
                           loadBgChecks();
                         } catch {}
-                      }} style={{ padding: '4px 10px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                      }} style={{ padding: '4px 10px', background: 'var(--color-success)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         Approve
                       </button>
                       <button onClick={() => { setRejectBgTarget({ userId: c.user_id, name: `${c.first_name} ${c.last_name}` }); setRejectBgReason(''); }}
-                        style={{ padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ padding: '4px 10px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         Reject
                       </button>
                     </div>
                   )}
                   <button onClick={() => { setAdminMsgTarget({ userId: c.user_id, name: `${c.first_name} ${c.last_name}` }); setAdminMsgText(''); }}
-                    style={{ padding: '4px 10px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                     {'\u{1F4AC}'} Message
                   </button>
                 </div>
@@ -3814,20 +3814,20 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>Background Check Status</div>
-                <div style={{ fontSize: 12, color: '#888' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Background Check Status</div>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                   {bgCheckCandidates.length} candidates{actionItems.length > 0 ? ` \u00B7 ${actionItems.length} need attention` : ''}
                 </div>
               </div>
-              <button onClick={loadBgChecks} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={loadBgChecks} style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Refresh
               </button>
             </div>
 
             {bgCheckLoading ? (
-              <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Loading background checks...</div>
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>Loading background checks...</div>
             ) : bgCheckCandidates.length === 0 ? (
-              <div className="card" style={{ textAlign: 'center', color: '#888', padding: 40 }}>
+              <div className="card" style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: 40 }}>
                 No caregivers have consented to background checks yet.
               </div>
             ) : (
@@ -3842,11 +3842,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 {/* ─── DIVIDER ─── */}
                 {filedItems.length > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 16px' }}>
-                    <div style={{ flex: 1, height: 1, background: '#e0e0e0' }}></div>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                    <div style={{ flex: 1, height: 1, background: 'var(--border-light)' }}></div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
                       Reviewed ({filedItems.length})
                     </span>
-                    <div style={{ flex: 1, height: 1, background: '#e0e0e0' }}></div>
+                    <div style={{ flex: 1, height: 1, background: 'var(--border-light)' }}></div>
                   </div>
                 )}
 
@@ -3871,7 +3871,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               apiFetch, showToast, currentUserId: currentUser?.id,
               flagPasskeyConfirm, flagPasskeyLoading, flagPasskeyError,
             })
-          : React.createElement('div', { style: { padding: 40, textAlign: 'center', color: '#888' } }, 'Safety flags component loading... Please refresh the page.')
+          : React.createElement('div', { style: { padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' } }, 'Safety flags component loading... Please refresh the page.')
       )}
 
       {/* ── COSTS TAB ── */}
@@ -3885,10 +3885,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 {costRecurring.map(r => (
                   editingRecurring === r.id ? (
                     // Edit mode - inline form
-                    <div key={r.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                    <div key={r.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px', background: 'var(--color-success-bg)', borderRadius: 8, border: '1px solid #bbf7d0' }}>
                       <div>
                         <span style={{ fontWeight: 600, fontSize: 13 }}>{r.category}</span>
-                        <span style={{ marginLeft: 6, fontSize: 10, background: '#e8f5e9', color: '#2e7d32', padding: '1px 6px', borderRadius: 4 }}>
+                        <span style={{ marginLeft: 6, fontSize: 10, background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '1px 6px', borderRadius: 4 }}>
                           {r.recurrence === 'monthly' ? '/mo' : '/yr'} since {r.start_month}
                         </span>
                       </div>
@@ -3912,37 +3912,37 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                         <button
                           onClick={() => { setEditingRecurring(null); setEditRecurringData({}); }}
-                          style={{ padding: '4px 12px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                          style={{ padding: '4px 12px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
                           Cancel
                         </button>
                         <button
                           onClick={() => handleDeactivateRecurring(r.id)}
                           disabled={recurSaving}
-                          style={{ padding: '4px 12px', background: recurSaving ? '#ccc' : '#fff3cd', color: '#856404', border: '1px solid #ffc107', borderRadius: 4, fontSize: 11, cursor: recurSaving ? 'not-allowed' : 'pointer' }}>
+                          style={{ padding: '4px 12px', background: recurSaving ? 'var(--border-light)' : 'var(--color-warning-bg)', color: 'var(--color-warning)', border: '1px solid #ffc107', borderRadius: 4, fontSize: 11, cursor: recurSaving ? 'not-allowed' : 'pointer' }}>
                           Deactivate
                         </button>
                         <button
                           onClick={() => handleSaveRecurring(r.id)}
                           disabled={recurSaving}
-                          style={{ padding: '4px 12px', background: recurSaving ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: recurSaving ? 'not-allowed' : 'pointer' }}>
+                          style={{ padding: '4px 12px', background: recurSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: recurSaving ? 'not-allowed' : 'pointer' }}>
                           {recurSaving ? 'Saving...' : 'Save'}
                         </button>
                       </div>
                     </div>
                   ) : (
                     // View mode - regular display
-                    <div key={r.id} onClick={() => { setEditingRecurring(r.id); setEditRecurringData({ amount: r.amount, description: r.description }); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', cursor: 'pointer' }}>
+                    <div key={r.id} onClick={() => { setEditingRecurring(r.id); setEditRecurringData({ amount: r.amount, description: r.description }); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--color-success-bg)', borderRadius: 8, border: '1px solid #bbf7d0', cursor: 'pointer' }}>
                       <div>
                         <span style={{ fontWeight: 600, fontSize: 13 }}>{r.category}</span>
-                        <span style={{ marginLeft: 6, fontSize: 11, color: '#888' }}>{r.description || ''}</span>
-                        <span style={{ marginLeft: 6, fontSize: 10, background: '#e8f5e9', color: '#2e7d32', padding: '1px 6px', borderRadius: 4 }}>
+                        <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>{r.description || ''}</span>
+                        <span style={{ marginLeft: 6, fontSize: 10, background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '1px 6px', borderRadius: 4 }}>
                           {r.recurrence === 'monthly' ? '/mo' : '/yr'} since {r.start_month}
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontWeight: 700, fontSize: 13 }}>${parseFloat(r.amount).toFixed(2)}</span>
                         <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`Remove ${r.category} recurring expense?`)) return; try { const res = await apiFetch(`/api/costs/recurring/${r.id}`, { method: 'DELETE' }); if (res?.ok) loadCosts(); } catch {} }}
-                          style={{ padding: '2px 6px', background: '#fff', color: '#c62828', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                          style={{ padding: '2px 6px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
                           {'\u2715'}
                         </button>
                       </div>
@@ -3951,7 +3951,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>No recurring expenses yet.</div>
+              <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 12 }}>No recurring expenses yet.</div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
               <select value={newRecurring.category || ''} onChange={e => setNewRecurring({ ...newRecurring, category: e.target.value })}
@@ -3975,7 +3975,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               onChange={e => setNewRecurring({ ...newRecurring, description: e.target.value })}
               style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }} />
             <button onClick={handleAddRecurring} disabled={recurSaving || !newRecurring.category || !newRecurring.amount}
-              style={{ padding: '6px 16px', background: !newRecurring.category || !newRecurring.amount ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ padding: '6px 16px', background: !newRecurring.category || !newRecurring.amount ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               {recurSaving ? 'Adding...' : 'Add Recurring'}
             </button>
           </div>
@@ -4002,16 +4002,16 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               onChange={e => setNewCost({ ...newCost, notes: e.target.value })}
               style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 8, fontSize: 13, marginBottom: 8, boxSizing: 'border-box' }} />
             <button onClick={handleAddCost} disabled={costSaving || !newCost.category || !newCost.amount}
-              style={{ padding: '6px 16px', background: !newCost.category || !newCost.amount ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ padding: '6px 16px', background: !newCost.category || !newCost.amount ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               {costSaving ? 'Saving...' : 'Add One-Time'}
             </button>
           </div>
 
           {/* Monthly Summary */}
           {costLoading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Loading costs...</div>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>Loading costs...</div>
           ) : costSummary.filter(m => m.total > 0).length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', color: '#888', padding: 40 }}>
+            <div className="card" style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: 40 }}>
               No cost data yet. Add recurring expenses or one-time entries above.
             </div>
           ) : (
@@ -4020,15 +4020,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 <div key={month.month} className="card" style={{ marginBottom: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: '#333' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
                         {new Date(month.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                       </div>
                       {month.runningTotal !== undefined && (
-                        <div style={{ fontSize: 11, color: '#888' }}>Running total: ${month.runningTotal.toFixed(2)}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Running total: ${month.runningTotal.toFixed(2)}</div>
                       )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: month.total > 0 ? '#c62828' : '#888' }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: month.total > 0 ? 'var(--color-error)' : 'var(--text-tertiary)' }}>
                         ${month.total.toFixed(2)}
                       </div>
                     </div>
@@ -4037,14 +4037,14 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     <div style={{ display: 'grid', gap: 4 }}>
                       {Object.entries(month.categories).sort((a, b) => b[1].amount - a[1].amount).map(([cat, data]) => (
                         <div key={cat}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#f8f9fa', borderRadius: 6, fontSize: 13 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--bg-primary)', borderRadius: 6, fontSize: 13 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <span style={{ fontWeight: 600 }}>{cat}</span>
                               {data.source === 'auto' && (
-                                <span style={{ fontSize: 9, background: '#e3f2fd', color: '#1565c0', padding: '1px 5px', borderRadius: 3 }}>auto</span>
+                                <span style={{ fontSize: 9, background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '1px 5px', borderRadius: 3 }}>auto</span>
                               )}
                               {data.source === 'recurring' && (
-                                <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', padding: '1px 5px', borderRadius: 3 }}>recurring</span>
+                                <span style={{ fontSize: 9, background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '1px 5px', borderRadius: 3 }}>recurring</span>
                               )}
                             </div>
                             <span style={{ fontWeight: 700 }}>${data.amount.toFixed(2)}</span>
@@ -4052,7 +4052,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           {/* Individual manual entries with edit/notes */}
                           {(data.entries || []).map(entry => (
                             editingCost === entry.id ? (
-                              <div key={entry.id} style={{ margin: '4px 0 4px 16px', padding: '8px 10px', background: '#f0fdf4', borderRadius: 6, border: '1px solid #bbf7d0' }}>
+                              <div key={entry.id} style={{ margin: '4px 0 4px 16px', padding: '8px 10px', background: 'var(--color-success-bg)', borderRadius: 6, border: '1px solid #bbf7d0' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
                                   <select value={editCostData.category || cat} onChange={e => setEditCostData({ ...editCostData, category: e.target.value })}
                                     style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12 }}>
@@ -4074,31 +4074,31 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                                   placeholder="Notes (e.g. legal fees, LLC filing Mar 2026)" />
                                 <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                                   <button onClick={() => { setEditingCost(null); setEditCostData({}); }}
-                                    style={{ padding: '3px 10px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                                    style={{ padding: '3px 10px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
                                     Cancel
                                   </button>
                                   <button onClick={() => handleDeleteCost(entry.id)}
-                                    style={{ padding: '3px 10px', background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                                    style={{ padding: '3px 10px', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', border: '1px solid #ffc107', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
                                     Delete
                                   </button>
                                   <button onClick={() => handleSaveCost(entry.id)} disabled={costSaving}
-                                    style={{ padding: '3px 10px', background: costSaving ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: costSaving ? 'not-allowed' : 'pointer' }}>
+                                    style={{ padding: '3px 10px', background: costSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: costSaving ? 'not-allowed' : 'pointer' }}>
                                     {costSaving ? 'Saving...' : 'Save'}
                                   </button>
                                 </div>
                               </div>
                             ) : (
                               <div key={entry.id} onClick={() => { setEditingCost(entry.id); setEditCostData({ category: cat, amount: entry.amount, description: entry.description || '', notes: entry.notes || '', period_month: month.month }); }}
-                                style={{ margin: '4px 0 4px 16px', padding: '4px 10px', background: '#fff', borderRadius: 4, border: '1px solid #eee', fontSize: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                                style={{ margin: '4px 0 4px 16px', padding: '4px 10px', background: 'var(--bg-surface)', borderRadius: 4, border: '1px solid #eee', fontSize: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                                 <div style={{ flex: 1 }}>
-                                  <span style={{ color: '#555' }}>{entry.description || cat}</span>
+                                  <span style={{ color: 'var(--text-secondary)' }}>{entry.description || cat}</span>
                                   {entry.notes && (
-                                    <div style={{ fontSize: 11, color: '#888', marginTop: 2, fontStyle: 'italic' }}>
+                                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, fontStyle: 'italic' }}>
                                       {'\u{1F4DD}'} {entry.notes}
                                     </div>
                                   )}
                                 </div>
-                                <span style={{ fontWeight: 600, color: '#555', whiteSpace: 'nowrap' }}>${entry.amount.toFixed(2)}</span>
+                                <span style={{ fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>${entry.amount.toFixed(2)}</span>
                               </div>
                             )
                           ))}
@@ -4117,11 +4117,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {freezeTarget && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
           onClick={(e) => { if (e.target === e.currentTarget) setFreezeTarget(null); }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 480, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#c62828', marginBottom: 4 }}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 24, maxWidth: 480, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-error)', marginBottom: 4 }}>
               {'\u{1F6D1}'} Freeze {freezeTarget.name}'s Account
             </div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}>
               This will pause their account, hide them from job listings, and prevent them from accepting work. They'll see a "Account Paused" banner when they log in.
             </div>
             <input
@@ -4131,16 +4131,16 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               style={{ width: '100%', padding: 12, border: '2px solid #e5e7eb', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8 }}
               autoFocus
             />
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>
               This reason will be visible to the caregiver on their dashboard.
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => setFreezeTarget(null)}
-                style={{ padding: '8px 20px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
               <button onClick={handleFreezeCaregiver} disabled={freezeSending || !freezeReason.trim()}
-                style={{ padding: '8px 20px', background: freezeSending || !freezeReason.trim() ? '#999' : '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: freezeSending || !freezeReason.trim() ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 {freezeSending ? 'Freezing...' : 'Freeze Account'}
               </button>
             </div>
@@ -4152,11 +4152,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {rejectBgTarget && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
           onClick={(e) => { if (e.target === e.currentTarget) setRejectBgTarget(null); }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 480, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#b71c1c', marginBottom: 4 }}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 24, maxWidth: 480, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-error)', marginBottom: 4 }}>
               {'\u274C'} Reject {rejectBgTarget.name}
             </div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}>
               This will mark their background check as rejected. They can still log in but will see a rejection notice and can message you to appeal.
             </div>
             <textarea
@@ -4167,16 +4167,16 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               style={{ width: '100%', padding: 12, border: '2px solid #e5e7eb', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8, resize: 'vertical' }}
               autoFocus
             />
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>
               The caregiver will receive a message with this reason and instructions to appeal.
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => setRejectBgTarget(null)}
-                style={{ padding: '8px 20px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
               <button onClick={handleRejectBgCheck} disabled={rejectBgSending || !rejectBgReason.trim()}
-                style={{ padding: '8px 20px', background: rejectBgSending || !rejectBgReason.trim() ? '#999' : '#b71c1c', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: rejectBgSending || !rejectBgReason.trim() ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 {rejectBgSending ? 'Rejecting...' : 'Reject Caregiver'}
               </button>
             </div>
@@ -4188,11 +4188,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {adminMsgTarget && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
           onClick={(e) => { if (e.target === e.currentTarget) setAdminMsgTarget(null); }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 480, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#333', marginBottom: 4 }}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 24, maxWidth: 480, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
               {'\u{1F4AC}'} Message {adminMsgTarget.name}
             </div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}>
               Sent as <strong>InPlace Support</strong> — {adminMsgTarget.name} will see this in their Messages
             </div>
             <textarea
@@ -4204,11 +4204,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             />
             <div style={{ display: 'flex', gap: 10, marginTop: 14, justifyContent: 'flex-end' }}>
               <button onClick={() => setAdminMsgTarget(null)}
-                style={{ padding: '8px 20px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
               <button onClick={handleAdminMessage} disabled={adminMsgSending || !adminMsgText.trim()}
-                style={{ padding: '8px 20px', background: adminMsgSending || !adminMsgText.trim() ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: adminMsgSending || !adminMsgText.trim() ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 {adminMsgSending ? 'Sending...' : 'Send as InPlace Support'}
               </button>
             </div>

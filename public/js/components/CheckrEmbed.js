@@ -106,9 +106,9 @@ const CheckrEmbed = window.CheckrEmbed = ({ onComplete, onError }) => {
 
   if (error) {
     return (
-      <div style={{ padding: 16, background: '#fff8f0', border: '1px solid #ffcc80', borderRadius: 10, fontSize: 13, lineHeight: 1.5 }}>
-        <div style={{ color: '#e65100', fontWeight: 600, marginBottom: 8 }}>Background check form unavailable in staging</div>
-        <div style={{ color: '#666', marginBottom: 12 }}>The in-app form is available in production. For staging testing, use the email invitation flow — Checkr will send you a link to complete the check.</div>
+      <div style={{ padding: 16, background: 'var(--bg-warm)', border: '1px solid #ffcc80', borderRadius: 10, fontSize: 13, lineHeight: 1.5 }}>
+        <div style={{ color: 'var(--color-warning)', fontWeight: 600, marginBottom: 8 }}>Background check form unavailable in staging</div>
+        <div style={{ color: 'var(--text-secondary)', marginBottom: 12 }}>The in-app form is available in production. For staging testing, use the email invitation flow — Checkr will send you a link to complete the check.</div>
         <button onClick={async () => {
           try {
             const res = await apiFetch('/api/checkr/initiate', { method: 'POST' });
@@ -123,7 +123,7 @@ const CheckrEmbed = window.CheckrEmbed = ({ onComplete, onError }) => {
           } catch (err) {
             if (typeof showToast === 'function') showToast('Failed to initiate. Contact support.', 'error');
           }
-        }} style={{ padding: '8px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+        }} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
           Start Background Check via Email
         </button>
       </div>
@@ -135,7 +135,7 @@ const CheckrEmbed = window.CheckrEmbed = ({ onComplete, onError }) => {
       <div style={{
         padding: 20,
         textAlign: 'center',
-        color: '#888',
+        color: 'var(--text-tertiary)',
         fontSize: 14
       }}>
         Loading background check form...
@@ -150,10 +150,10 @@ const CheckrEmbed = window.CheckrEmbed = ({ onComplete, onError }) => {
         <div style={{
           marginTop: 8,
           padding: 6,
-          background: '#fff3e0',
+          background: 'var(--color-warning-bg)',
           borderRadius: 6,
           fontSize: 11,
-          color: '#e65100',
+          color: 'var(--color-warning)',
           textAlign: 'center'
         }}>
           Staging environment — using test data

@@ -258,11 +258,11 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   };
 
   if (loading) return <LoadingSpinner text="Loading care team..." />;
-  if (!team) return <div className="card"><p style={{ color: '#666' }}>Care team not found.</p></div>;
+  if (!team) return <div className="card"><p style={{ color: 'var(--text-secondary)' }}>Care team not found.</p></div>;
 
   const isLeader = team.myRole === 'leader';
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' };
-  const roleColors = { leader: '#1b6b5a', member: '#0066cc', viewer: '#888' };
+  const roleColors = { leader: 'var(--role-color)', member: '#0066cc', viewer: 'var(--text-tertiary)' };
   const roleLabels = { leader: 'Team Leader', member: 'Member', viewer: 'View Only' };
 
   const myUserId = team.myUserId;
@@ -271,30 +271,30 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        {onBack && <button onClick={onBack} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#1b6b5a' }}>←</button>}
+        {onBack && <button onClick={onBack} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--role-color)' }}>←</button>}
         <div style={{ flex: 1 }}>
           {editingName && isLeader ? (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input value={newName} onChange={(e) => setNewName(e.target.value)} style={{ ...inputStyle, maxWidth: 300 }} autoFocus
                 onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateName(); if (e.key === 'Escape') setEditingName(false); }} />
-              <button onClick={handleUpdateName} style={{ padding: '8px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Save</button>
-              <button onClick={() => setEditingName(false)} style={{ padding: '8px 16px', background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleUpdateName} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Save</button>
+              <button onClick={() => setEditingName(false)} style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
             </div>
           ) : (
             <h1 className="greeting" style={{ cursor: isLeader ? 'pointer' : 'default' }}
               onClick={() => isLeader && setEditingName(true)}>
               {team.name}
-              {isLeader && <span style={{ fontSize: 14, color: '#aaa', marginLeft: 8 }}>✏️</span>}
+              {isLeader && <span style={{ fontSize: 14, color: 'var(--text-muted)', marginLeft: 8 }}>✏️</span>}
             </h1>
           )}
-          <p style={{ color: '#888', fontSize: 13, margin: '4px 0 0' }}>
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: '4px 0 0' }}>
             Caring for {team.recipient_first_name} {team.recipient_last_name}
             {team.recipient_city && ` · ${team.recipient_city}, ${team.recipient_state}`}
           </p>
         </div>
         {isLeader && (
           <button onClick={() => setShowInviteForm(true)}
-            style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
             + Invite
           </button>
         )}
@@ -303,7 +303,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
       {/* My Relationship Label */}
       <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 13, color: '#555' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             <span style={{ fontWeight: 600 }}>I am {team.recipient_first_name}'s:</span>{' '}
             {editingLabel ? (
               <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
@@ -311,8 +311,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                   placeholder="e.g. Son, Daughter, Spouse, Friend"
                   style={{ padding: '4px 8px', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 13, width: 200 }}
                   autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleSaveLabel(); if (e.key === 'Escape') setEditingLabel(false); }} />
-                <button onClick={handleSaveLabel} style={{ padding: '4px 10px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>
-                <button onClick={() => setEditingLabel(false)} style={{ padding: '4px 10px', background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleSaveLabel} style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+                <button onClick={() => setEditingLabel(false)} style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
               </span>
             ) : (
               <span>
@@ -321,13 +321,13 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                   return label ? (
                     <span style={{ fontStyle: 'italic' }}>{label}</span>
                   ) : (
-                    <span style={{ color: '#bbb', fontStyle: 'italic' }}>Not set</span>
+                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not set</span>
                   );
                 })()}
                 <button onClick={() => {
                   setLabelText(myMember?.relationshipLabel || '');
                   setEditingLabel(true);
-                }} style={{ background: 'none', border: 'none', fontSize: 12, color: '#1b6b5a', cursor: 'pointer', marginLeft: 6, fontWeight: 600 }}>
+                }} style={{ background: 'none', border: 'none', fontSize: 12, color: 'var(--role-color)', cursor: 'pointer', marginLeft: 6, fontWeight: 600 }}>
                   Edit
                 </button>
               </span>
@@ -341,7 +341,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1b6b5a' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Invite to Care Team</span>
-            <button onClick={() => setShowInviteForm(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999' }}>&times;</button>
+            <button onClick={() => setShowInviteForm(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
           </div>
           <form onSubmit={handleInvite}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -353,14 +353,14 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 <option value="viewer">Viewer</option>
               </select>
               <button type="submit" disabled={inviting}
-                style={{ padding: '10px 20px', background: inviting ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: inviting ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                style={{ padding: '10px 20px', background: inviting ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: inviting ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
                 {inviting ? 'Sending...' : 'Send Invite'}
               </button>
             </div>
-            <div style={{ fontSize: 12, color: '#666', margin: '10px 0 0', background: '#f8f9fa', padding: '10px 12px', borderRadius: 8, lineHeight: 1.6 }}>
-              <div style={{ marginBottom: 4 }}><strong style={{ color: '#1b6b5a' }}>Leader</strong> — Full control: manage members, edit care profile, schedule sessions, assign caregivers, manage payments.</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '10px 0 0', background: 'var(--bg-primary)', padding: '10px 12px', borderRadius: 8, lineHeight: 1.6 }}>
+              <div style={{ marginBottom: 4 }}><strong style={{ color: 'var(--role-color)' }}>Leader</strong> — Full control: manage members, edit care profile, schedule sessions, assign caregivers, manage payments.</div>
               <div style={{ marginBottom: 4 }}><strong style={{ color: '#0066cc' }}>Member</strong> — View and coordinate: see the schedule, send messages, request care, view care notes. Cannot invite/remove members.</div>
-              <div><strong style={{ color: '#888' }}>View Only</strong> — Read-only access: see the schedule and care notes, but cannot make changes or send messages on behalf of the team.</div>
+              <div><strong style={{ color: 'var(--text-tertiary)' }}>View Only</strong> — Read-only access: see the schedule and care notes, but cannot make changes or send messages on behalf of the team.</div>
             </div>
           </form>
         </div>
@@ -378,50 +378,50 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 onClick={() => canManage && setExpandedMember(isExpanded ? null : m.userId)}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0',
                   cursor: canManage ? 'pointer' : 'default', transition: 'background 0.15s',
-                  ...(isExpanded ? { background: '#f8faf9', margin: '0 -16px', padding: '14px 16px' } : {}) }}
+                  ...(isExpanded ? { background: 'var(--bg-highlight)', margin: '0 -16px', padding: '14px 16px' } : {}) }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   {m.avatarUrl ? (
                     <img src={m.avatarUrl} alt={`${m.firstName?.[0] || ''}${m.lastName?.[0] || ''}`} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{ width: 42, height: 42, borderRadius: '50%',
-                      background: m.role === 'leader' ? '#e0f2e9' : '#f0f4f8',
+                      background: m.role === 'leader' ? 'var(--role-color-light)' : 'var(--bg-primary)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 16, fontWeight: 700, color: roleColors[m.role] || '#1b6b5a' }}>
+                      fontSize: 16, fontWeight: 700, color: roleColors[m.role] || 'var(--role-color)' }}>
                       {m.firstName?.[0]}{m.lastName?.[0]}
                     </div>
                   )}
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{m.firstName} {m.lastName}</div>
-                    <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>
-                      {m.relationshipLabel ? <span style={{ color: '#666' }}>{m.relationshipLabel}</span> : <span style={{ color: '#aaa', fontStyle: 'italic' }}>{roleLabels[m.role] || m.role}</span>}
+                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{m.firstName} {m.lastName}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                      {m.relationshipLabel ? <span style={{ color: 'var(--text-secondary)' }}>{m.relationshipLabel}</span> : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{roleLabels[m.role] || m.role}</span>}
                     </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: roleColors[m.role],
-                    background: m.role === 'leader' ? '#e0f2e9' : m.role === 'viewer' ? '#f5f5f5' : '#e8f0fe',
+                    background: m.role === 'leader' ? 'var(--role-color-light)' : m.role === 'viewer' ? 'var(--bg-primary)' : '#e8f0fe',
                     padding: '4px 10px', borderRadius: 12 }}>
                     {roleLabels[m.role] || m.role}
                   </span>
-                  {canManage && <span style={{ fontSize: 14, color: '#bbb', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>}
+                  {canManage && <span style={{ fontSize: 14, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>}
                 </div>
               </div>
               {isExpanded && canManage && (
-                <div style={{ padding: '0 0 14px', margin: '0 -16px', padding: '0 16px 14px', background: '#f8faf9', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ padding: '0 0 14px', margin: '0 -16px', padding: '0 16px 14px', background: 'var(--bg-highlight)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'member'); }}
-                    style={{ padding: '6px 14px', background: m.role === 'member' ? '#1b6b5a' : '#fff', color: m.role === 'member' ? '#fff' : '#1b6b5a',
+                    style={{ padding: '6px 14px', background: m.role === 'member' ? 'var(--role-color)' : 'var(--text-on-primary)', color: m.role === 'member' ? 'var(--text-on-primary)' : 'var(--role-color)',
                       border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Member
                   </button>
                   <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'viewer'); }}
-                    style={{ padding: '6px 14px', background: m.role === 'viewer' ? '#666' : '#fff', color: m.role === 'viewer' ? '#fff' : '#666',
+                    style={{ padding: '6px 14px', background: m.role === 'viewer' ? 'var(--text-secondary)' : 'var(--text-on-primary)', color: m.role === 'viewer' ? 'var(--text-on-primary)' : 'var(--text-secondary)',
                       border: '1px solid #999', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     View Only
                   </button>
                   <div style={{ flex: 1 }}></div>
                   <button onClick={(e) => { e.stopPropagation(); handleRemoveMember(m.userId, `${m.firstName} ${m.lastName}`); }}
-                    style={{ padding: '6px 14px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545',
+                    style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #dc3545',
                       borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Remove from Team
                   </button>
@@ -437,7 +437,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-header">Billing Contact</div>
           <div style={{ padding: '14px 0' }}>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
               Choose who pays for {team.recipient_first_name}'s care sessions. If set, this person's payment method will be charged when any team member books a session.
             </p>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -465,12 +465,12 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 } catch { showToast('Failed to update billing contact', 'error'); }
                 setSavingBilling(false);
               }} disabled={savingBilling}
-                style={{ padding: '10px 20px', background: savingBilling ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingBilling ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                style={{ padding: '10px 20px', background: savingBilling ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingBilling ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
                 {savingBilling ? 'Saving...' : 'Save'}
               </button>
             </div>
             {billingUserId && team.billing_contact_name && (
-              <div style={{ marginTop: 10, background: '#f0f8f5', padding: '10px 14px', borderRadius: 8, fontSize: 13, color: '#1b6b5a' }}>
+              <div style={{ marginTop: 10, background: '#f0f8f5', padding: '10px 14px', borderRadius: 8, fontSize: 13, color: 'var(--role-color)' }}>
                 {team.billing_contact_name} will be charged for all sessions booked for {team.recipient_first_name}.
               </div>
             )}
@@ -484,13 +484,13 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
           <span>{team.recipient_first_name}'s Caregivers ({recipientCaregivers.length})</span>
           {isLeader && (
             <button onClick={openAssignPicker}
-              style={{ padding: '5px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+              style={{ padding: '5px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
               + Assign
             </button>
           )}
         </div>
         {recipientCaregivers.length === 0 && (
-          <div style={{ padding: '20px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+          <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
             No caregivers assigned yet. Tap "+ Assign" to add one.
           </div>
         )}
@@ -499,18 +499,18 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             {cg.avatar_url ? (
               <img src={cg.avatar_url} alt={`${cg.first_name?.[0]}${cg.last_name?.[0]}`} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
             ) : (
-              <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#e8f5e9',
+              <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--color-success-bg)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 16, fontWeight: 700, color: '#1b6b5a' }}>
+                fontSize: 16, fontWeight: 700, color: 'var(--role-color)' }}>
                 {cg.first_name?.[0]}{cg.last_name?.[0]}
               </div>
             )}
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#333', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 {cg.first_name} {cg.last_name}
                 {cg.is_favorite ? <span title="Favorite" style={{ fontSize: 14 }}>⭐</span> : null}
               </div>
-              <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
                 {cg.visit_count > 0 ? `${cg.visit_count} visit${cg.visit_count !== 1 ? 's' : ''}` : 'No visits yet'}
                 {cg.last_visit_date ? ` · Last: ${cg.last_visit_date}` : ''}
               </div>
@@ -518,11 +518,11 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             {cg.is_assigned ? (
               <button onClick={() => handleUnassignCaregiver(cg.assignment_id, `${cg.first_name} ${cg.last_name}`)}
                 title="Remove assignment"
-                style={{ fontSize: 11, fontWeight: 600, color: '#1b6b5a', background: '#e0f2e9', padding: '4px 10px', borderRadius: 12, border: 'none', cursor: 'pointer' }}>
+                style={{ fontSize: 11, fontWeight: 600, color: 'var(--role-color)', background: 'var(--role-color-light)', padding: '4px 10px', borderRadius: 12, border: 'none', cursor: 'pointer' }}>
                 Assigned ✕
               </button>
             ) : (
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#888', background: '#f5f5f5', padding: '4px 10px', borderRadius: 12 }}>Past</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--bg-primary)', padding: '4px 10px', borderRadius: 12 }}>Past</span>
             )}
           </div>
         ))}
@@ -536,13 +536,13 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             <div className="modal-header" style={{ fontSize: 17 }}>
               Assign Caregiver to {team.recipient_first_name}
             </div>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 14px' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 14px' }}>
               Pick a caregiver to assign. They'll be able to see {team.recipient_first_name}'s care info and accept sessions.
             </p>
             {loadingAvailable ? (
-              <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>Loading caregivers...</div>
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading caregivers...</div>
             ) : availableCaregivers.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 20, color: '#999', fontSize: 13 }}>
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
                 No additional caregivers available to assign.
               </div>
             ) : (
@@ -551,22 +551,22 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                   {cg.profilePhoto ? (
                     <img src={cg.profilePhoto} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
-                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#e8f5e9',
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--color-success-bg)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 15, fontWeight: 700, color: '#1b6b5a' }}>
+                      fontSize: 15, fontWeight: 700, color: 'var(--role-color)' }}>
                       {cg.name?.split(' ').map(n => n[0]).join('') || '?'}
                     </div>
                   )}
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{cg.name}</div>
-                    <div style={{ fontSize: 12, color: '#888' }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{cg.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                       {cg.city ? `${cg.city}, ${cg.state}` : 'No location'}
                       {cg.distance !== undefined ? ` · ${cg.distance} mi` : ''}
                       {cg.hourlyRate ? ` · $${cg.hourlyRate}/hr` : ''}
                     </div>
                   </div>
                   <button onClick={() => handleAssignCaregiver(cg.id)}
-                    style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Assign
                   </button>
                 </div>
@@ -584,17 +584,17 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             <div key={inv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{inv.email}</div>
-                <div style={{ fontSize: 12, color: '#888' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                   Invited as {inv.role} · Expires {(parseTimestamp(inv.expiresAt) || new Date(0)).toLocaleDateString()}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => handleResendInvite(inv.id, inv.email)}
-                  style={{ padding: '4px 10px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                   Resend
                 </button>
                 <button onClick={() => handleCancelInvite(inv.id)}
-                  style={{ padding: '4px 10px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #dc3545', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                   Cancel
                 </button>
               </div>
@@ -605,8 +605,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
 
       {/* Recent Visits */}
       {recentVisits.length > 0 && (
-        <div style={{ marginTop: 24, background: '#fff', borderRadius: 12, border: '1px solid #e0e0e0', padding: '16px 20px' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#1b6b5a', marginBottom: 12 }}>Recent Visits</div>
+        <div style={{ marginTop: 24, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid #e0e0e0', padding: '16px 20px' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--role-color)', marginBottom: 12 }}>Recent Visits</div>
           {recentVisits.map((s) => {
             const svcLabel = formatServiceType(s.service_type);
             return (
@@ -615,20 +615,20 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f8f5'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                     {s.scheduled_date} — {svcLabel}
                   </div>
-                  <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                     {s.caregiver_name || 'No caregiver'} · {s.duration_hours || 2}h
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{
                     padding: '3px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-                    background: s.status === 'completed' ? '#e8f5e9' : '#e3f2fd',
-                    color: s.status === 'completed' ? '#2e7d32' : '#1565c0',
+                    background: s.status === 'completed' ? 'var(--color-success-bg)' : 'var(--color-info-bg)',
+                    color: s.status === 'completed' ? 'var(--color-success)' : 'var(--color-info)',
                   }}>{s.status === 'completed' ? 'Completed' : 'In Progress'}</span>
-                  <span style={{ color: '#1b6b5a', fontSize: 12, fontWeight: 600 }}>View →</span>
+                  <span style={{ color: 'var(--role-color)', fontSize: 12, fontWeight: 600 }}>View →</span>
                 </div>
               </div>
             );
@@ -642,16 +642,16 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
           <button onClick={() => setA11yExpanded(!a11yExpanded)}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 20px', background: '#fff', border: '1px solid #e0e0e0', borderRadius: a11yExpanded ? '12px 12px 0 0' : 12,
+              padding: '14px 20px', background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: a11yExpanded ? '12px 12px 0 0' : 12,
               cursor: 'pointer', transition: 'border-radius 0.2s',
             }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: '#1b6b5a' }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--role-color)' }}>
               Accessibility Options for {team.recipient_first_name}
             </span>
-            <span style={{ fontSize: 18, color: '#999', transition: 'transform 0.2s', transform: a11yExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>
+            <span style={{ fontSize: 18, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: a11yExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>
           </button>
           {a11yExpanded && (
-            <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '16px 20px' }}>
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '16px 20px' }}>
 
               {/* Display Settings for Care Recipient */}
               {team.recipient_linked_user_id && (() => {
@@ -674,11 +674,11 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 };
                 return (
                   <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid #f0f0f0' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#7c3aed', marginBottom: 6 }}>Display Settings</div>
-                    <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-purple-light)', marginBottom: 6 }}>Display Settings</div>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 12px' }}>
                       Control what {team.recipient_first_name} sees when they log in. Changes apply to their view of the app.
                     </p>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 8 }}>Text Size</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Text Size</div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <button onClick={() => handleRecipientTextSize('default')}
                         className={`text-size-pill text-size-pill-default ${recipSize === 'default' ? 'active' : ''}`}>
@@ -699,13 +699,13 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
 
               {/* Notification Settings for Care Recipient */}
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#e8724a', marginBottom: 6 }}>{team.recipient_first_name}'s Notifications</div>
-                <p style={{ fontSize: 13, color: '#666', margin: '0 0 14px' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-color)', marginBottom: 6 }}>{team.recipient_first_name}'s Notifications</div>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 14px' }}>
                   Choose how {team.recipient_first_name} gets reminders about upcoming care sessions.
                 </p>
 
                 <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Reminder method</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Reminder method</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {[
                       { value: 'push', label: 'App only', icon: '📱' },
@@ -717,8 +717,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                         style={{
                           padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                           border: notifChannel === opt.value ? '2px solid #e8724a' : '1px solid #d0d0d0',
-                          background: notifChannel === opt.value ? '#fff5f0' : '#fff',
-                          color: notifChannel === opt.value ? '#e8724a' : '#555',
+                          background: notifChannel === opt.value ? '#fff5f0' : 'var(--text-on-primary)',
+                          color: notifChannel === opt.value ? 'var(--accent-color)' : 'var(--text-secondary)',
                         }}>
                         {opt.icon} {opt.label}
                       </button>
@@ -728,20 +728,20 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
 
                 {['sms', 'both'].includes(notifChannel) && (
                   <div style={{ marginBottom: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
                       {team.recipient_first_name}'s phone number
-                      <button type="button" onClick={() => { setIntlPhone(!intlPhone); setSmsPhone(''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                      <button type="button" onClick={() => { setIntlPhone(!intlPhone); setSmsPhone(''); }} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                         {intlPhone ? 'US number' : 'International'}
                       </button>
                     </div>
                     <input type="tel" value={smsPhone} onChange={(e) => setSmsPhone(formatPhone(e.target.value, intlPhone))}
                       placeholder={intlPhone ? '+44 20 7946 0958' : '(540) 555-1234'}
                       style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }} />
-                    {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
+                    {intlPhone && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
                   </div>
                 )}
 
-                <div style={{ background: '#f0f8f5', padding: '10px 14px', borderRadius: 8, fontSize: 13, color: '#1b6b5a', marginBottom: 14 }}>
+                <div style={{ background: '#f0f8f5', padding: '10px 14px', borderRadius: 8, fontSize: 13, color: 'var(--role-color)', marginBottom: 14 }}>
                   {notifChannel === 'none'
                     ? `${team.recipient_first_name} won't receive any session reminders.`
                     : notifChannel === 'sms'
@@ -752,7 +752,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 </div>
 
                 <button onClick={handleSaveNotifications} disabled={savingNotif}
-                  style={{ padding: '9px 20px', background: savingNotif ? '#999' : '#e8724a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingNotif ? 'wait' : 'pointer' }}>
+                  style={{ padding: '9px 20px', background: savingNotif ? 'var(--text-muted)' : 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingNotif ? 'wait' : 'pointer' }}>
                   {savingNotif ? 'Saving...' : 'Save Settings'}
                 </button>
               </div>

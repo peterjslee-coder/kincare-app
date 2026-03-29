@@ -238,12 +238,12 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   };
 
   const cellColors = {
-    available: { bg: '#e8f5e9', border: '#a5d6a7', label: '', overlay: '' },
-    booked: { bg: '#e3f2fd', border: '#64b5f6', label: '●', overlay: '#1e88e5' },
-    request: { bg: '#fff3e0', border: '#ffb74d', label: '!', overlay: '#fb8c00' },
-    blocked: { bg: '#fce4ec', border: '#e57373', label: '✕', overlay: '' },
-    off: { bg: '#fafafa', border: '#f0f0f0', label: '', overlay: '' },
-    proposal: { bg: '#f3e5f5', border: '#ce93d8', label: '?', overlay: '#9c27b0' },
+    available: { bg: 'var(--color-success-bg)', border: 'var(--color-success-bg)', label: '', overlay: '' },
+    booked: { bg: 'var(--color-info-bg)', border: '#64b5f6', label: '●', overlay: '#1e88e5' },
+    request: { bg: 'var(--color-warning-bg)', border: '#ffb74d', label: '!', overlay: 'var(--color-warning)' },
+    blocked: { bg: 'var(--color-error-bg)', border: '#e57373', label: '✕', overlay: '' },
+    off: { bg: 'var(--bg-primary)', border: 'var(--badge-muted-bg)', label: '', overlay: '' },
+    proposal: { bg: 'var(--color-purple-bg)', border: '#ce93d8', label: '?', overlay: '#9c27b0' },
   };
 
   // Selected day details
@@ -272,9 +272,9 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <button onClick={() => setWeekOffset(w => w - 1)} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>← Prev</button>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1a2e' }}>{formatMonth()}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--bg-card)' }}>{formatMonth()}</div>
           {weekOffset !== 0 && (
-            <button onClick={() => setWeekOffset(0)} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 12, cursor: 'pointer', fontWeight: 600, marginTop: 2 }}>Today</button>
+            <button onClick={() => setWeekOffset(0)} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 12, cursor: 'pointer', fontWeight: 600, marginTop: 2 }}>Today</button>
           )}
         </div>
         <button onClick={() => setWeekOffset(w => w + 1)} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>Next →</button>
@@ -289,7 +289,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: careRequests.length > 0 ? 8 : 0 }}>
             <span style={{ fontSize: 22 }}>🔔</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#e65100' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-warning)' }}>
                 {careRequests.length} Care Request{careRequests.length !== 1 ? 's' : ''} This Week
               </div>
             </div>
@@ -315,13 +315,13 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                   padding: '6px 10px', background: 'rgba(255,255,255,0.7)', borderRadius: 6, cursor: 'pointer',
                   borderLeft: '3px solid #fb8c00', fontSize: 13,
                 }}>
-                  <div style={{ fontWeight: 600, color: '#333' }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                     {name}
                   </div>
-                  <div style={{ color: '#666', fontSize: 12, display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: 12, display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                     <span>{dateLabel}{timeLabel ? ', ' + timeLabel : ''}</span>
                     <span style={{ fontWeight: 600 }}>{hrs}h</span>
-                    {cost && <span style={{ fontWeight: 700, color: '#e65100' }}>${Math.round(parseFloat(cost))}</span>}
+                    {cost && <span style={{ fontWeight: 700, color: 'var(--color-warning)' }}>${Math.round(parseFloat(cost))}</span>}
                   </div>
                 </div>
               );
@@ -334,7 +334,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
       )}
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 12, fontSize: 11, color: '#666', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12, fontSize: 11, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ width: 14, height: 14, borderRadius: 3, background: cellColors.available.bg, border: `2px solid ${cellColors.available.border}`, display: 'inline-block' }}></span> Available
         </span>
@@ -342,7 +342,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
           <span style={{ width: 14, height: 14, borderRadius: 3, background: '#1e88e5', display: 'inline-block' }}></span> Booked
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ width: 14, height: 14, borderRadius: 3, background: '#fb8c00', display: 'inline-block' }}></span> Care Request
+          <span style={{ width: 14, height: 14, borderRadius: 3, background: 'var(--color-warning)', display: 'inline-block' }}></span> Care Request
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ width: 14, height: 14, borderRadius: 3, background: `repeating-linear-gradient(-45deg, #fce4ec, #fce4ec 2px, #e57373 2px, #e57373 4px)`, border: '1px solid #e57373', display: 'inline-block' }}></span> Blocked
@@ -416,7 +416,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th style={{ width: 44, padding: '8px 4px', borderBottom: '2px solid #e0e0e0', background: '#fafafa', position: 'sticky', left: 0, zIndex: 1 }}></th>
+              <th style={{ width: 44, padding: '8px 4px', borderBottom: '2px solid #e0e0e0', background: 'var(--bg-primary)', position: 'sticky', left: 0, zIndex: 1 }}></th>
               {weekDates.map((d, i) => {
                 const today = isToday(d);
                 const dateStr = toLocalDateStr(d);
@@ -428,13 +428,13 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                 const hasBlocked = dayBlocked.length > 0;
                 return (
                   <th key={i} onClick={() => setSelectedDay(d)}
-                    style={{ padding: '8px 2px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', cursor: 'pointer', background: today ? '#e8f5e9' : selectedDay && d.toDateString() === selectedDay.toDateString() ? '#f0f4ff' : '#fafafa' }}>
-                    <div style={{ fontWeight: 600, color: today ? '#1b6b5a' : '#555' }}>{dayNames[d.getDay()]}</div>
-                    <div style={{ fontSize: 13, fontWeight: today ? 800 : 600, color: today ? '#fff' : '#333', background: today ? '#1b6b5a' : 'transparent', borderRadius: '50%', width: 24, height: 24, lineHeight: '24px', margin: '2px auto 0', display: 'inline-block' }}>{d.getDate()}</div>
+                    style={{ padding: '8px 2px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', cursor: 'pointer', background: today ? 'var(--color-success-bg)' : selectedDay && d.toDateString() === selectedDay.toDateString() ? '#f0f4ff' : 'var(--bg-primary)' }}>
+                    <div style={{ fontWeight: 600, color: today ? 'var(--role-color)' : 'var(--text-secondary)' }}>{dayNames[d.getDay()]}</div>
+                    <div style={{ fontSize: 13, fontWeight: today ? 800 : 600, color: today ? 'var(--text-on-primary)' : 'var(--text-primary)', background: today ? 'var(--role-color)' : 'transparent', borderRadius: '50%', width: 24, height: 24, lineHeight: '24px', margin: '2px auto 0', display: 'inline-block' }}>{d.getDate()}</div>
                     {(hasBooked || hasRequests || hasBlocked) && (
                       <div style={{ display: 'flex', justifyContent: 'center', gap: 3, marginTop: 3 }}>
                         {hasBooked && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1e88e5', display: 'inline-block' }} title={`${daySessions.length} confirmed`}></span>}
-                        {hasRequests && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fb8c00', display: 'inline-block' }} title={`${dayRequests.length} request(s)`}></span>}
+                        {hasRequests && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-warning)', display: 'inline-block' }} title={`${dayRequests.length} request(s)`}></span>}
                         {hasBlocked && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e57373', display: 'inline-block' }} title="Blocked time"></span>}
                       </div>
                     )}
@@ -449,7 +449,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
               const dayBlocks = window.__calDayBlocks || [];
               return (
                 <tr key={hour}>
-                  <td style={{ padding: '0 4px', fontSize: 10, color: '#999', textAlign: 'right', borderRight: '1px solid #e8e8e8', background: '#fafafa', position: 'sticky', left: 0, zIndex: 1, height: 28 }}>
+                  <td style={{ padding: '0 4px', fontSize: 10, color: 'var(--text-muted)', textAlign: 'right', borderRight: '1px solid #e8e8e8', background: 'var(--bg-primary)', position: 'sticky', left: 0, zIndex: 1, height: 28 }}>
                     {hour <= 12 ? hour : hour - 12}{hour < 12 ? 'a' : 'p'}
                   </td>
                   {weekDates.map((d, di) => {
@@ -463,8 +463,8 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                     if (block && block.span) {
                       const isProposal = block.type === 'proposal';
                       const isRequest = block.type === 'request';
-                      const borderColor = isProposal ? '#9c27b0' : isRequest ? '#fb8c00' : '#1e88e5';
-                      const textColor = isProposal ? '#7b1fa2' : isRequest ? '#e65100' : '#1565c0';
+                      const borderColor = isProposal ? '#9c27b0' : isRequest ? 'var(--color-warning)' : '#1e88e5';
+                      const textColor = isProposal ? 'var(--color-purple)' : isRequest ? 'var(--color-warning)' : 'var(--color-info)';
                       const bgGradient = isProposal
                         ? 'linear-gradient(180deg, rgba(156,39,176,0.28) 0%, rgba(156,39,176,0.12) 100%)'
                         : isRequest
@@ -525,7 +525,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         }}>
                         {cell.type === 'blocked' && (
                           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: 8, fontWeight: 800, color: '#c62828', opacity: 0.6 }}>{'\u2715'}</span>
+                            <span style={{ fontSize: 8, fontWeight: 800, color: 'var(--color-error)', opacity: 0.6 }}>{'\u2715'}</span>
                           </div>
                         )}
                       </td>
@@ -546,19 +546,19 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
         if (weekConfirmed === 0 && weekPending === 0) return null;
         return (
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 120, padding: '10px 14px', background: '#e3f2fd', borderRadius: 10, textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#1565c0', fontWeight: 600 }}>Confirmed</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#1565c0' }}>${Math.round(weekConfirmed)}</div>
+            <div style={{ flex: 1, minWidth: 120, padding: '10px 14px', background: 'var(--color-info-bg)', borderRadius: 10, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--color-info)', fontWeight: 600 }}>Confirmed</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-info)' }}>${Math.round(weekConfirmed)}</div>
             </div>
             {weekPending > 0 && (
-              <div style={{ flex: 1, minWidth: 120, padding: '10px 14px', background: '#fff3e0', borderRadius: 10, textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: '#e65100', fontWeight: 600 }}>Pending</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#e65100' }}>${Math.round(weekPending)}</div>
+              <div style={{ flex: 1, minWidth: 120, padding: '10px 14px', background: 'var(--color-warning-bg)', borderRadius: 10, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: 'var(--color-warning)', fontWeight: 600 }}>Pending</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-warning)' }}>${Math.round(weekPending)}</div>
               </div>
             )}
-            <div style={{ flex: 1, minWidth: 120, padding: '10px 14px', background: '#f0faf7', borderRadius: 10, textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#1b6b5a', fontWeight: 600 }}>Week Total</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#1b6b5a' }}>${Math.round(weekConfirmed + weekPending)}</div>
+            <div style={{ flex: 1, minWidth: 120, padding: '10px 14px', background: 'var(--bg-highlight)', borderRadius: 10, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--role-color)', fontWeight: 600 }}>Week Total</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--role-color)' }}>${Math.round(weekConfirmed + weekPending)}</div>
             </div>
           </div>
         );
@@ -575,9 +575,9 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
           {/* Availability summary */}
           {selectedAvail.available.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#2e7d32', marginBottom: 4 }}>Available</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-success)', marginBottom: 4 }}>Available</div>
               {selectedAvail.available.map((a, i) => (
-                <div key={i} style={{ fontSize: 13, color: '#555', padding: '2px 0' }}>
+                <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '2px 0' }}>
                   {formatTime12(a.startH, a.startM)} – {formatTime12(a.endH, a.endM)}
                 </div>
               ))}
@@ -585,50 +585,50 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
           )}
           {selectedAvail.blocked.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#c62828', marginBottom: 4 }}>Blocked</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-error)', marginBottom: 4 }}>Blocked</div>
               {selectedAvail.blocked.map((b, i) => (
-                <div key={i} style={{ fontSize: 13, color: '#555', padding: '2px 0' }}>
+                <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '2px 0' }}>
                   {formatTime12(b.startH, b.startM)} – {formatTime12(b.endH, b.endM)}
-                  {b.note && <span style={{ color: '#999', marginLeft: 6 }}>({b.note})</span>}
+                  {b.note && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>({b.note})</span>}
                 </div>
               ))}
             </div>
           )}
           {selectedAvail.available.length === 0 && selectedAvail.blocked.length === 0 && (
-            <div style={{ fontSize: 13, color: '#999', marginBottom: 12 }}>No availability rules for this day</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>No availability rules for this day</div>
           )}
 
           {/* Care Requests */}
           {selectedRequests.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#e65100', marginBottom: 8 }}>Care Requests</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-warning)', marginBottom: 8 }}>Care Requests</div>
               {selectedRequests.map((s, idx) => {
                 const hrs = s.durationHours || s.duration_hours || 2;
                 const estCost = s.estimated_cost || s.estimatedCost;
                 const budgetMax = s.budget_max || s.budgetMax;
                 const shortNoticeSurcharge = s.short_notice_surcharge || s.shortNoticeSurcharge || 0;
                 return (
-                  <div key={idx} style={{ padding: '10px 12px', background: '#fff3e0', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #fb8c00' }}>
+                  <div key={idx} style={{ padding: '10px 12px', background: 'var(--color-warning-bg)', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #fb8c00' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--bg-card)' }}>
                           {s.recipientName || s.recipient_name || 'Client'}{estCost ? `, $${Math.round(parseFloat(estCost))}` : ''}
                           {shortNoticeSurcharge > 0 && (
-                            <span style={{ marginLeft: 6, background: '#e8724a', color: '#fff', padding: '2px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600 }}>
+                            <span style={{ marginLeft: 6, background: 'var(--accent-color)', color: 'var(--text-on-primary)', padding: '2px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600 }}>
                               Short Notice +20%
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize: 12, color: '#666' }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                           {formatTimeStr(s.time || s.scheduled_time)} · {hrs}h · {formatServiceType(s.serviceType || s.service_type)}
                         </div>
                         {budgetMax && (
-                          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
                             Budget: up to ${budgetMax}/hr
                           </div>
                         )}
                         {(s.specialInstructions || s.special_instructions) && (
-                          <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 4 }}>
                             {s.specialInstructions || s.special_instructions}
                           </div>
                         )}
@@ -636,7 +636,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 8 }}>
                         <button onClick={() => handleClaim(s.id)} disabled={claimingId === s.id}
                           style={{
-                            padding: '6px 16px', background: '#1b6b5a', color: '#fff', border: 'none',
+                            padding: '6px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                             borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
                             opacity: claimingId === s.id ? 0.5 : 1,
                           }}>
@@ -644,7 +644,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         </button>
                         <button onClick={() => setOfferingOnId(offeringOnId === s.id ? null : s.id)}
                           style={{
-                            padding: '5px 12px', background: '#fff', color: '#e8724a', border: '1px solid #e8724a',
+                            padding: '5px 12px', background: 'var(--bg-surface)', color: 'var(--accent-color)', border: '1px solid #e8724a',
                             borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600,
                           }}>
                           {offeringOnId === s.id ? 'Cancel' : 'Make Offer'}
@@ -669,22 +669,22 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
           {/* Booked Sessions */}
           {selectedSessions.length > 0 ? (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#1565c0', marginBottom: 8 }}>Booked Sessions</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-info)', marginBottom: 8 }}>Booked Sessions</div>
               {selectedSessions.map((s, idx) => {
                 const cost = parseFloat(s.estimatedCost || s.estimated_cost || s.actual_cost || 0);
                 const name = s.recipientName || s.recipient_name || 'Client';
                 return (
-                  <div key={idx} style={{ padding: '10px 12px', background: '#e3f2fd', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #42a5f5' }}>
+                  <div key={idx} style={{ padding: '10px 12px', background: 'var(--color-info-bg)', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #42a5f5' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--bg-card)' }}>
                           {name}{cost > 0 ? `, $${Math.round(cost)}` : ''}
                         </div>
-                        <div style={{ fontSize: 12, color: '#666' }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                           {formatTimeStr(s.time || s.scheduled_time)} · {s.durationHours || s.duration_hours}h · {formatServiceType(s.serviceType || s.service_type)}
                         </div>
                         {(s.specialInstructions || s.special_instructions) && (
-                          <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 4 }}>
                             {s.specialInstructions || s.special_instructions}
                           </div>
                         )}
@@ -692,8 +692,8 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
                         <span style={{
                           padding: '3px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
-                          background: s.status === 'in_progress' ? '#fff8e1' : s.status === 'confirmed' ? '#e8f5e9' : s.status === 'completed' ? '#e0e0e0' : '#fff3e0',
-                          color: s.status === 'in_progress' ? '#f57f17' : s.status === 'confirmed' ? '#2e7d32' : s.status === 'completed' ? '#666' : '#e65100',
+                          background: s.status === 'in_progress' ? 'var(--color-warning-bg)' : s.status === 'confirmed' ? 'var(--color-success-bg)' : s.status === 'completed' ? 'var(--border-light)' : 'var(--color-warning-bg)',
+                          color: s.status === 'in_progress' ? 'var(--color-warning)' : s.status === 'confirmed' ? 'var(--color-success)' : s.status === 'completed' ? 'var(--text-secondary)' : 'var(--color-warning)',
                           textTransform: 'capitalize',
                         }}>{s.status}</span>
                         {s.status === 'confirmed' && onLogVisit && (() => {
@@ -707,19 +707,19 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                             const earliest = new Date(sessionStartET.getTime() - 15 * 60000);
                             if (etNow < earliest) {
                               const minsUntil = Math.ceil((earliest.getTime() - etNow.getTime()) / 60000);
-                              return React.createElement('div', { style: { fontSize: 10, color: '#999', padding: '4px 0', textAlign: 'right', maxWidth: 110 } },
+                              return React.createElement('div', { style: { fontSize: 10, color: 'var(--text-muted)', padding: '4px 0', textAlign: 'right', maxWidth: 110 } },
                                 '\u23F0 Check-in opens ' + (minsUntil > 60 ? Math.ceil(minsUntil / 60) + 'h' : minsUntil + 'min') + ' before'
                               );
                             }
                           }
                           return React.createElement('button', {
                             onClick: () => onLogVisit({ ...s, action: 'check-in' }),
-                            style: { padding: '4px 10px', background: '#e8724a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 700 }
+                            style: { padding: '4px 10px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 700 }
                           }, 'Check In');
                         })()}
                         {s.status === 'in_progress' && onLogVisit && (
                           <button onClick={() => onLogVisit({ ...s, action: 'check-out' })} style={{
-                            padding: '4px 10px', background: '#c62828', color: '#fff', border: 'none',
+                            padding: '4px 10px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
                             borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 700,
                           }}>Check Out</button>
                         )}
@@ -734,9 +734,9 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                 const dayTotal = selectedSessions.reduce((sum, s) => sum + parseFloat(s.estimatedCost || s.estimated_cost || s.actual_cost || 0), 0);
                 const requestTotal = selectedRequests.reduce((sum, s) => sum + parseFloat(s.estimated_cost || s.estimatedCost || 0), 0);
                 return dayTotal > 0 || requestTotal > 0 ? (
-                  <div style={{ padding: '8px 12px', background: '#f0faf7', borderRadius: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a' }}>Day Total</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#1b6b5a' }}>
+                  <div style={{ padding: '8px 12px', background: 'var(--bg-highlight)', borderRadius: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--role-color)' }}>Day Total</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--role-color)' }}>
                       ${Math.round(dayTotal)}{requestTotal > 0 ? ` (+$${Math.round(requestTotal)} pending)` : ''}
                     </span>
                   </div>
@@ -744,7 +744,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
               })()}
             </div>
           ) : (
-            selectedRequests.length === 0 && <div style={{ fontSize: 13, color: '#999' }}>No sessions booked this day</div>
+            selectedRequests.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No sessions booked this day</div>
           )}
         </div>
       )}

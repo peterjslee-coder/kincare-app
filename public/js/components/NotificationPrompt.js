@@ -147,7 +147,7 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
     return React.createElement('div', {
       style: {
         background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)',
-        color: '#fff',
+        color: 'var(--text-on-primary)',
         padding: '16px 20px',
         borderRadius: '12px',
         marginBottom: '16px',
@@ -196,7 +196,7 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
   return React.createElement('div', {
     style: {
       background: 'linear-gradient(135deg, #1b6b5a 0%, #24897a 100%)',
-      color: '#fff',
+      color: 'var(--text-on-primary)',
       padding: '14px 20px',
       borderRadius: '12px',
       marginBottom: '16px',
@@ -222,8 +222,8 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
       onClick: handleEnable,
       disabled: subscribing,
       style: {
-        background: '#fff',
-        color: '#1b6b5a',
+        background: 'var(--bg-surface)',
+        color: 'var(--role-color)',
         border: 'none',
         borderRadius: '8px',
         padding: '8px 18px',
@@ -354,7 +354,7 @@ const NotificationSettings = window.NotificationSettings = () => {
 
   return React.createElement('div', {
     style: {
-      background: '#fff',
+      background: 'var(--bg-surface)',
       borderRadius: '12px',
       padding: '20px',
       border: '1px solid #e5e7eb',
@@ -362,7 +362,7 @@ const NotificationSettings = window.NotificationSettings = () => {
     },
   },
     React.createElement('h3', {
-      style: { margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600, color: '#1b6b5a' },
+      style: { margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600, color: 'var(--role-color)' },
     }, '🔔 Push Notifications'),
 
     // Status row
@@ -377,7 +377,7 @@ const NotificationSettings = window.NotificationSettings = () => {
       }),
       React.createElement('span', { style: { fontSize: '14px', fontWeight: 500 } }, statusText),
       subCount !== null && React.createElement('span', {
-        style: { fontSize: '12px', color: '#888', marginLeft: '8px' },
+        style: { fontSize: '12px', color: 'var(--text-tertiary)', marginLeft: '8px' },
       }, `(${subCount} device${subCount !== 1 ? 's' : ''} registered)`),
     ),
 
@@ -386,7 +386,7 @@ const NotificationSettings = window.NotificationSettings = () => {
       onClick: handleEnable,
       disabled: subscribing,
       style: {
-        background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: '8px',
+        background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px',
         padding: '10px 20px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
         marginRight: '8px',
       },
@@ -396,7 +396,7 @@ const NotificationSettings = window.NotificationSettings = () => {
       onClick: handleSendTest,
       disabled: testSending,
       style: {
-        background: '#f0f9f6', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: '8px',
+        background: '#f0f9f6', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: '8px',
         padding: '10px 20px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
       },
     }, testSending ? 'Sending...' : 'Send Test Notification'),
@@ -414,7 +414,7 @@ const NotificationSettings = window.NotificationSettings = () => {
     ),
 
     permState === 'denied' && !iosNeedInstall && React.createElement('p', {
-      style: { fontSize: '13px', color: '#666', margin: '8px 0 0 0' },
+      style: { fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0 0 0' },
     },
       'Notifications are blocked by your browser. To enable them, open your browser settings and allow notifications for this site, then refresh the page.'
     ),
@@ -423,7 +423,7 @@ const NotificationSettings = window.NotificationSettings = () => {
     testResult && React.createElement('div', {
       style: {
         marginTop: '12px', padding: '10px 14px', borderRadius: '8px',
-        background: testResult.type === 'success' ? '#f0fdf4' : '#fef2f2',
+        background: testResult.type === 'success' ? 'var(--color-success-bg)' : 'var(--bg-error-subtle)',
         color: testResult.type === 'success' ? '#166534' : '#991b1b',
         fontSize: '13px',
       },

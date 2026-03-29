@@ -237,8 +237,8 @@ const Caregivers = window.Caregivers = () => {
     if (searchCenter) {
       circleRef.current = L.circle([searchCenter.lat, searchCenter.lng], {
         radius: searchRadius * 1609.34,
-        color: '#e8724a',
-        fillColor: '#e8724a',
+        color: 'var(--accent-color)',
+        fillColor: 'var(--accent-color)',
         fillOpacity: 0.06,
         weight: 2,
         dashArray: '6 4',
@@ -301,7 +301,7 @@ const Caregivers = window.Caregivers = () => {
 
       const isAssigned = cg.isAssigned || assignedCgIds.has(cg.id);
       const displayName = privacyName(cg, isAssigned);
-      const pinColor = isAssigned ? '#e8724a' : '#2563eb';
+      const pinColor = isAssigned ? 'var(--accent-color)' : '#2563eb';
       const distLabel = cg.distance != null ? ` &bull; ${cg.distance}mi` : '';
       const photoHtml = cg.profilePhoto
         ? `<img src="${cg.profilePhoto}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid ${pinColor};margin-right:8px;flex-shrink:0" />`
@@ -393,17 +393,17 @@ const Caregivers = window.Caregivers = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '20px', fontWeight: 700, color: '#1a1a2e' }}>{privacyName(cg, isAssigned)}</span>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--bg-card)' }}>{privacyName(cg, isAssigned)}</span>
               {isAssigned && (
-                <span style={{ padding: '2px 8px', background: '#e8f5e9', color: '#2e7d32', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>Assigned</span>
+                <span style={{ padding: '2px 8px', background: 'var(--color-success-bg)', color: 'var(--color-success)', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>Assigned</span>
               )}
               {showDistance && cg.distance !== undefined && (
-                <span style={{ padding: '2px 8px', background: '#fff3e0', color: '#e65100', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>
+                <span style={{ padding: '2px 8px', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>
                   {cg.distance} mi away
                 </span>
               )}
             </div>
-            <div style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
               <span title="Family rating of this caregiver">⭐ {cg.rating || '—'}</span> &bull; {cg.reviewCount || 0} reviews &bull;
               {(cg.rateDaytime && cg.rateNighttime && cg.rateDaytime !== cg.rateNighttime)
                 ? <> Day ${cg.rateDaytime} · Night ${cg.rateNighttime} · Overnight ${cg.rateOvernight}/hr</>
@@ -412,22 +412,22 @@ const Caregivers = window.Caregivers = () => {
               {cg.city && <> • {cg.city}, {cg.state || ''}</>}
             </div>
             {cg.bio && (
-              <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px', lineHeight: '1.4' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', lineHeight: '1.4' }}>
                 {cg.bio.length > 120 ? cg.bio.slice(0, 120) + '...' : cg.bio}
               </div>
             )}
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
               {(cg.specialties || []).map((s, i) => (
-                <span key={i} style={{ padding: '2px 8px', background: '#f0faf8', color: '#1b6b5a', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }}>{s}</span>
+                <span key={i} style={{ padding: '2px 8px', background: 'var(--bg-highlight)', color: 'var(--role-color)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }}>{s}</span>
               ))}
               {cg.isBackgroundChecked && (
-                <span style={{ padding: '2px 8px', background: '#e3f2fd', color: '#1565c0', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }}>✓ Background checked</span>
+                <span style={{ padding: '2px 8px', background: 'var(--color-info-bg)', color: 'var(--color-info)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }}>✓ Background checked</span>
               )}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginLeft: '12px' }}>
             <button onClick={() => scheduleCaregiver(cg)} style={{
-              padding: '8px 14px', background: '#1b6b5a', color: '#fff', border: 'none',
+              padding: '8px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
               borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
             }}>Schedule</button>
             {!isAssigned && recipients.length > 0 && (
@@ -436,7 +436,7 @@ const Caregivers = window.Caregivers = () => {
                 e.target.value = '';
               }} style={{
                 padding: '6px 8px', border: '1px solid #1b6b5a', borderRadius: '6px',
-                fontSize: '11px', color: '#1b6b5a', cursor: 'pointer', background: '#fff',
+                fontSize: '11px', color: 'var(--role-color)', cursor: 'pointer', background: 'var(--bg-surface)',
               }}>
                 <option value="">+ Assign to...</option>
                 {recipients.map(r => (
@@ -467,7 +467,7 @@ const Caregivers = window.Caregivers = () => {
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
             fontSize: '13px', fontWeight: activeTab === tab.id ? 700 : 400,
-            color: activeTab === tab.id ? '#1b6b5a' : '#888',
+            color: activeTab === tab.id ? 'var(--role-color)' : 'var(--text-tertiary)',
             borderBottom: activeTab === tab.id ? '3px solid #1b6b5a' : '3px solid transparent',
             marginBottom: '-2px',
           }}>
@@ -488,13 +488,13 @@ const Caregivers = window.Caregivers = () => {
                   {cg?.profilePhoto ? (
                     <div style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={cg.profilePhoto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
                   ) : (
-                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
                       {(cg?.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
                     </div>
                   )}
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '15px', fontWeight: 600, color: '#333' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {cg?.name || (a.first_name ? `${a.first_name} ${a.last_name || ''}`.trim() : 'Caregiver')}
                       </span>
                       <button onClick={() => handleToggleFavorite(a.id)} style={{
@@ -503,11 +503,11 @@ const Caregivers = window.Caregivers = () => {
                         {a.is_favorite ? '⭐' : '☆'}
                       </button>
                     </div>
-                    <div style={{ fontSize: '13px', color: '#666' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                       Assigned to: <strong>{a.recipient_first_name || ''} {a.recipient_last_name || ''}</strong>
                     </div>
                     {cg && (
-                      <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
                         <span title="Family rating of this caregiver">⭐ {cg.rating || '—'}</span> &bull;
                         {(cg.rateDaytime && cg.rateNighttime && cg.rateDaytime !== cg.rateNighttime)
                           ? <> Day ${cg.rateDaytime} · Night ${cg.rateNighttime} · Overnight ${cg.rateOvernight}/hr</>
@@ -519,12 +519,12 @@ const Caregivers = window.Caregivers = () => {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     {cg && (
                       <button onClick={() => scheduleCaregiver(cg)} style={{
-                        padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none',
+                        padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                         borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600,
                       }}>Schedule</button>
                     )}
                     <button onClick={() => handleUnassign(a.id)} style={{
-                      padding: '6px 14px', background: '#fff', color: '#c00', border: '1px solid #fcc',
+                      padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-red-strong)', border: '1px solid #fcc',
                       borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
                     }}>Remove</button>
                   </div>
@@ -532,7 +532,7 @@ const Caregivers = window.Caregivers = () => {
               </div>
             );
           }) : (
-            <div className="card" style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
               No caregivers assigned yet. Browse available caregivers to get started.
             </div>
           )}
@@ -545,7 +545,7 @@ const Caregivers = window.Caregivers = () => {
           {caregivers.length > 0 ? caregivers.map((cg, idx) => (
             <CaregiverCard key={idx} cg={cg} showDistance={false} />
           )) : (
-            <div className="card" style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
               No caregivers available right now.
             </div>
           )}
@@ -560,7 +560,7 @@ const Caregivers = window.Caregivers = () => {
             display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'flex-end', flexWrap: 'wrap',
           }}>
             <div style={{ flex: '1 1 250px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: '#666', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
                 Location (address, city, or zip)
               </label>
               <input
@@ -576,11 +576,11 @@ const Caregivers = window.Caregivers = () => {
               />
             </div>
             <div>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: '#666', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
                 Radius
               </label>
               <select value={searchRadius} onChange={(e) => setSearchRadius(parseInt(e.target.value))} style={{
-                padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', background: '#fff',
+                padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', background: 'var(--bg-surface)',
               }}>
                 <option value={5}>5 miles</option>
                 <option value={10}>10 miles</option>
@@ -591,7 +591,7 @@ const Caregivers = window.Caregivers = () => {
               </select>
             </div>
             <button onClick={handleLocationSearch} disabled={locationLoading} style={{
-              padding: '10px 20px', background: '#1b6b5a', color: '#fff', border: 'none',
+              padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
               borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
               opacity: locationLoading ? 0.7 : 1,
             }}>
@@ -610,7 +610,7 @@ const Caregivers = window.Caregivers = () => {
           {/* Results list */}
           {hasSearched && (
             <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '10px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>
                 {locationResults.length > 0
                   ? `${locationResults.length} caregiver${locationResults.length !== 1 ? 's' : ''} within ${searchRadius} miles`
                   : 'No caregivers found in this area. Try expanding the search radius.'
@@ -623,7 +623,7 @@ const Caregivers = window.Caregivers = () => {
           )}
 
           {!hasSearched && (
-            <div className="card" style={{ textAlign: 'center', padding: '30px', color: '#999' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
               Enter an address above and search to find caregivers nearby.
             </div>
           )}

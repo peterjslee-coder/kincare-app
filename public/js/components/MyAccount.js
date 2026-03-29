@@ -45,12 +45,12 @@ const DeleteAccountSection = ({ onDeleted }) => {
   if (step === 'goodbye') {
     return (
       <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #e0e0e0' }}>
-        <div style={{ padding: '24px', background: '#f8faf9', borderRadius: '12px', border: '1px solid #d0e8e0', textAlign: 'center' }}>
+        <div style={{ padding: '24px', background: 'var(--bg-highlight)', borderRadius: '12px', border: '1px solid #d0e8e0', textAlign: 'center' }}>
           <div style={{ fontSize: '28px', marginBottom: '12px' }}>{'We\'re sorry to see you go'}</div>
-          <p style={{ fontSize: '15px', color: '#555', margin: '0 0 8px', lineHeight: '1.6' }}>
+          <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: '1.6' }}>
             Your account has been deleted. Thank you for being part of InPlace.
           </p>
-          <p style={{ fontSize: '13px', color: '#888', margin: 0 }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', margin: 0 }}>
             You will be logged out shortly...
           </p>
         </div>
@@ -62,7 +62,7 @@ const DeleteAccountSection = ({ onDeleted }) => {
     <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #fdd' }}>
       {step === 'idle' && (
         <button onClick={() => setStep('reason')} style={{
-          width: '100%', padding: '12px 20px', background: '#fff', color: '#999',
+          width: '100%', padding: '12px 20px', background: 'var(--bg-surface)', color: 'var(--text-muted)',
           border: '1px solid #e0e0e0', borderRadius: 10, fontSize: 13, fontWeight: 500,
           cursor: 'pointer',
         }}>
@@ -72,23 +72,23 @@ const DeleteAccountSection = ({ onDeleted }) => {
 
       {step === 'reason' && (
         <div style={{ padding: '16px', background: '#fff8f8', borderRadius: '10px', border: '1px solid #fdd' }}>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: '#c62828', marginBottom: '4px' }}>
+          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-error)', marginBottom: '4px' }}>
             We're sorry to see you go
           </div>
-          <p style={{ fontSize: '13px', color: '#666', margin: '0 0 14px', lineHeight: '1.5' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 14px', lineHeight: '1.5' }}>
             Before you go, would you mind telling us why? This helps us improve InPlace for everyone.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
             {EXIT_REASONS.map(r => (
               <label key={r.value} style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px',
-                background: reason === r.value ? '#fef0ed' : '#fff', borderRadius: '6px',
+                background: reason === r.value ? '#fef0ed' : 'var(--text-on-primary)', borderRadius: '6px',
                 border: reason === r.value ? '1px solid #e8724a' : '1px solid #eee',
-                cursor: 'pointer', fontSize: '13px', color: '#444', transition: 'all 0.15s',
+                cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)', transition: 'all 0.15s',
               }}>
                 <input type="radio" name="exit-reason" value={r.value}
                   checked={reason === r.value} onChange={() => setReason(r.value)}
-                  style={{ accentColor: '#e8724a' }} />
+                  style={{ accentColor: 'var(--accent-color)' }} />
                 {r.label}
               </label>
             ))}
@@ -104,12 +104,12 @@ const DeleteAccountSection = ({ onDeleted }) => {
           )}
           <div style={{ display: 'flex', gap: '10px' }}>
             <button onClick={reset} style={{
-              flex: 1, padding: '10px', background: '#f0f0f0', color: '#555', border: 'none',
+              flex: 1, padding: '10px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: 'none',
               borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
             }}>Cancel</button>
             <button onClick={() => setStep('confirm')} disabled={!reason} style={{
-              flex: 1, padding: '10px', background: reason ? '#c62828' : '#e0e0e0',
-              color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+              flex: 1, padding: '10px', background: reason ? 'var(--color-error)' : 'var(--border-light)',
+              color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
               cursor: reason ? 'pointer' : 'not-allowed',
             }}>Continue</button>
           </div>
@@ -118,13 +118,13 @@ const DeleteAccountSection = ({ onDeleted }) => {
 
       {step === 'confirm' && (
         <div style={{ padding: '16px', background: '#fff8f8', borderRadius: '10px', border: '1px solid #fdd' }}>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: '#c62828', marginBottom: '8px' }}>
+          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-error)', marginBottom: '8px' }}>
             Confirm Account Deletion
           </div>
-          <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px', lineHeight: '1.5' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: '1.5' }}>
             This action cannot be undone. Your profile and personal data will be removed, though some records may be retained for legal and safety purposes.
           </p>
-          <p style={{ fontSize: '13px', color: '#333', margin: '0 0 8px', fontWeight: 500 }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '0 0 8px', fontWeight: 500 }}>
             Type <strong>DELETE</strong> to confirm:
           </p>
           <input type="text" value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
@@ -132,15 +132,15 @@ const DeleteAccountSection = ({ onDeleted }) => {
               width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px',
               fontSize: '14px', marginBottom: '12px', boxSizing: 'border-box',
             }} />
-          {error && <div style={{ fontSize: '13px', color: '#c62828', marginBottom: '10px' }}>{error}</div>}
+          {error && <div style={{ fontSize: '13px', color: 'var(--color-error)', marginBottom: '10px' }}>{error}</div>}
           <div style={{ display: 'flex', gap: '10px' }}>
             <button onClick={() => setStep('reason')} style={{
-              flex: 1, padding: '10px', background: '#f0f0f0', color: '#555', border: 'none',
+              flex: 1, padding: '10px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: 'none',
               borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
             }}>Back</button>
             <button onClick={handleDelete} disabled={confirmText !== 'DELETE' || deleting} style={{
-              flex: 1, padding: '10px', background: confirmText === 'DELETE' ? '#c62828' : '#e0e0e0',
-              color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+              flex: 1, padding: '10px', background: confirmText === 'DELETE' ? 'var(--color-error)' : 'var(--border-light)',
+              color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
               cursor: confirmText === 'DELETE' ? 'pointer' : 'not-allowed',
               opacity: deleting ? 0.6 : 1,
             }}>{deleting ? 'Deleting...' : 'Delete My Account'}</button>
@@ -816,11 +816,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   if (loading) return <LoadingSpinner text="Loading account..." />;
 
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' };
-  const fieldLabel = { fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' };
+  const fieldLabel = { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' };
   const tabStyle = (id) => ({
     padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === id ? '3px solid #1b6b5a' : '3px solid transparent',
     fontWeight: activeTab === id ? 700 : 500, fontSize: 14, cursor: 'pointer',
-    color: activeTab === id ? '#1b6b5a' : '#888', fontFamily: 'inherit', transition: 'all 0.15s',
+    color: activeTab === id ? 'var(--role-color)' : 'var(--text-tertiary)', fontFamily: 'inherit', transition: 'all 0.15s',
   });
 
   const isDemo = user?.is_demo || user?.isDemo;
@@ -858,14 +858,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
         <h1 className="greeting" style={{ margin: 0 }}>My Account</h1>
         {activeTab === 'profile' && !editing && (
-          <button onClick={startEditing} style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          <button onClick={startEditing} style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             Edit Profile
           </button>
         )}
         {activeTab === 'profile' && editing && (
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={cancelEditing} style={{ padding: '8px 16px', background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
-            <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
+            <button onClick={cancelEditing} style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
@@ -901,8 +901,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 style={{
                   padding: '8px 14px', border: activeTab === s.id ? '2px solid #1b6b5a' : '1px solid #bbf7d0',
                   borderRadius: 10, fontSize: 13, fontWeight: activeTab === s.id ? 700 : 500,
-                  background: activeTab === s.id ? '#1b6b5a' : '#fff',
-                  color: activeTab === s.id ? '#fff' : '#166534', cursor: 'pointer',
+                  background: activeTab === s.id ? 'var(--role-color)' : 'var(--text-on-primary)',
+                  color: activeTab === s.id ? 'var(--text-on-primary)' : '#166534', cursor: 'pointer',
                 }}>
                 {s.icon} {s.label}
               </button>
@@ -923,16 +923,16 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             <input type="file" ref={photoInputRef} accept="image/*" style={{ display: 'none' }} onChange={handlePhotoUpload} />
             <div style={{
               width: 96, height: 96, borderRadius: '50%', margin: '0 auto 16px',
-              background: user?.profile_photo ? `url(${user.profile_photo}) center/cover no-repeat` : '#e8724a',
+              background: user?.profile_photo ? `url(${user.profile_photo}) center/cover no-repeat` : 'var(--accent-color)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontSize: 36, fontWeight: 700, overflow: 'hidden',
+              color: 'var(--text-on-primary)', fontSize: 36, fontWeight: 700, overflow: 'hidden',
               border: '3px solid #e0e0e0',
             }}>
               {!user?.profile_photo && (user?.first_name?.[0] || '?').toUpperCase()}
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto} style={{
-                padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none',
+                padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: uploadingPhoto ? 'wait' : 'pointer',
                 opacity: uploadingPhoto ? 0.7 : 1,
               }}>
@@ -940,12 +940,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               </button>
               {user?.profile_photo && (
                 <button onClick={removePhoto} style={{
-                  padding: '8px 16px', background: '#fff', color: '#999', border: '1px solid #e0e0e0',
+                  padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid #e0e0e0',
                   borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer',
                 }}>Remove</button>
               )}
             </div>
-            <div style={{ fontSize: 11, color: '#999', marginTop: 10 }}>JPG, PNG, or GIF — any size, we'll resize it for you.</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>JPG, PNG, or GIF — any size, we'll resize it for you.</div>
           </div>
 
           <div className="card">
@@ -963,16 +963,16 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={fieldLabel}>Phone</div>
-                    <button type="button" onClick={() => { setIntlPhone(!intlPhone); ed('phone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                    <button type="button" onClick={() => { setIntlPhone(!intlPhone); ed('phone', ''); }} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                       {intlPhone ? 'US number' : 'International number'}
                     </button>
                   </div>
                   <input type="tel" style={inputStyle} value={editData.phone} onChange={(e) => ed('phone', formatPhone(e.target.value, intlPhone))} placeholder={intlPhone ? '+44 20 7946 0958' : '(555) 123-4567'} />
-                  {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
+                  {intlPhone && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
                 </div>
                 <div>
                   <div style={fieldLabel}>Email</div>
-                  <input style={{ ...inputStyle, background: '#f5f5f5', color: '#999' }} value={user?.email || ''} disabled />
+                  <input style={{ ...inputStyle, background: 'var(--bg-primary)', color: 'var(--text-muted)' }} value={user?.email || ''} disabled />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <div style={fieldLabel}>Do you have pets?</div>
@@ -1034,7 +1034,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <div className="info-label">Address</div>
                   <div className="info-value">{user?.address_line1
                     ? `${[user.address_line1, user.address_line2].filter(Boolean).join(', ')}${user.city || user.state ? `, ${[user.city, user.state, user.zip].filter(Boolean).join(' ')}` : ''}`
-                    : React.createElement('span', { style: { color: '#e8724a', cursor: 'pointer' }, onClick: () => setEditing(true) }, '+ Add your address')
+                    : React.createElement('span', { style: { color: 'var(--accent-color)', cursor: 'pointer' }, onClick: () => setEditing(true) }, '+ Add your address')
                   }</div>
                 </div>
                 {/* Your Profiles — unified role display */}
@@ -1056,7 +1056,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                           style: {
                             display: 'flex', alignItems: 'center', gap: 12,
                             padding: '12px 14px', borderRadius: 10,
-                            background: isActive ? (isCurrentView ? '#e8f5f0' : '#f8faf9') : '#fafafa',
+                            background: isActive ? (isCurrentView ? '#e8f5f0' : 'var(--bg-highlight)') : 'var(--bg-primary)',
                             border: isActive ? (isCurrentView ? '2px solid #1b6b5a' : '1px solid #d0e8e0') : '1px dashed #ddd',
                             opacity: isActive ? 1 : 0.55,
                             cursor: isActive ? 'default' : 'pointer',
@@ -1096,25 +1096,25 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                         },
                           React.createElement('span', { style: { fontSize: 24, flexShrink: 0 } }, r.icon),
                           React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-                            React.createElement('div', { style: { fontWeight: isActive ? 600 : 400, fontSize: 14, color: isActive ? '#333' : '#999', display: 'flex', alignItems: 'center', gap: 6 } },
+                            React.createElement('div', { style: { fontWeight: isActive ? 600 : 400, fontSize: 14, color: isActive ? 'var(--text-primary)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 } },
                               r.label,
                               isActive && isCurrentView && React.createElement('span', {
-                                style: { fontSize: 10, background: '#1b6b5a', color: '#fff', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }
+                                style: { fontSize: 10, background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }
                               }, 'ACTIVE'),
                               isActive && !isCurrentView && React.createElement('span', {
-                                style: { fontSize: 10, background: '#e0e0e0', color: '#666', padding: '2px 7px', borderRadius: 10, fontWeight: 500 }
+                                style: { fontSize: 10, background: 'var(--border-light)', color: 'var(--text-secondary)', padding: '2px 7px', borderRadius: 10, fontWeight: 500 }
                               }, 'ADDED'),
                             ),
-                            React.createElement('div', { style: { fontSize: 12, color: isActive ? '#666' : '#bbb', marginTop: 2 } },
+                            React.createElement('div', { style: { fontSize: 12, color: isActive ? 'var(--text-secondary)' : 'var(--text-muted)', marginTop: 2 } },
                               isActive ? r.desc : 'Tap to add this profile'
                             ),
                           ),
-                          !isActive && React.createElement('span', { style: { fontSize: 18, color: '#bbb', fontWeight: 300 } }, '+'),
+                          !isActive && React.createElement('span', { style: { fontSize: 18, color: 'var(--text-muted)', fontWeight: 300 } }, '+'),
                         );
                       })
                     );
                   })()}
-                  {isDemo && <div style={{ marginTop: 6, fontSize: 11, background: '#fff3cd', color: '#856404', padding: '4px 10px', borderRadius: 8, display: 'inline-block' }}>Demo Account</div>}
+                  {isDemo && <div style={{ marginTop: 6, fontSize: 11, background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '4px 10px', borderRadius: 8, display: 'inline-block' }}>Demo Account</div>}
                 </div>
               </div>
             )}
@@ -1125,19 +1125,19 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Identity Verification</span>
               {familyIdentityStatus === 'verified'
-                ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#2e7d32', background: '#e8f5e9', padding: '2px 10px', borderRadius: 12 } }, '\u2705 Verified')
+                ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '2px 10px', borderRadius: 12 } }, '\u2705 Verified')
                 : familyIdentityStatus === 'pending'
-                  ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#e65100', background: '#fff3e0', padding: '2px 10px', borderRadius: 12 } }, 'Pending')
-                  : React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#5c6bc0', background: '#e8eaf6', padding: '2px 10px', borderRadius: 12 } }, 'Not Started')
+                  ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--color-warning)', background: 'var(--color-warning-bg)', padding: '2px 10px', borderRadius: 12 } }, 'Pending')
+                  : React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--color-indigo)', background: 'var(--color-purple-bg)', padding: '2px 10px', borderRadius: 12 } }, 'Not Started')
               }
             </div>
-            <div style={{ padding: '8px 0', color: '#666', fontSize: 14, lineHeight: 1.6 }}>
+            <div style={{ padding: '8px 0', color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6 }}>
               {familyIdentityStatus === 'verified' ? (
                 <p style={{ margin: 0 }}>Your identity has been verified. Thank you for helping keep InPlace safe.</p>
               ) : (
                 <>
                   <p style={{ margin: '0 0 10px' }}>Verify your identity with a photo ID to ensure the safety of everyone on the platform.</p>
-                  <div style={{ padding: '10px 14px', background: '#fff3e0', borderRadius: 8, fontSize: 13, color: '#e65100' }}>
+                  <div style={{ padding: '10px 14px', background: 'var(--color-warning-bg)', borderRadius: 8, fontSize: 13, color: 'var(--color-warning)' }}>
                     Identity verification will be available soon. We'll notify you when it's ready.
                   </div>
                 </>
@@ -1156,7 +1156,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   { key: 'medicalConditions', label: 'Medical Conditions', ph: 'e.g., asthma, diabetes' },
                 ].map(f => (
                   <div key={f.key}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 3 }}>{f.label}</label>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>{f.label}</label>
                     <input style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }}
                       value={editData[f.key] || ''} onChange={(e) => setEditData(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.ph} />
                   </div>
@@ -1192,24 +1192,24 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           {/* ─── Security Section ─── */}
           {!isDemo && (
           <div>
-          <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>Security</h3>
+          <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary)' }}>Security</h3>
           <div className="card">
             <div className="card-header">Password</div>
             {!changingPassword ? (
               <div>
-                <p style={{ color: '#666', fontSize: 14, margin: '0 0 12px' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 12px' }}>
                   {user?.password_changed_at
                     ? `Last changed ${(parseTimestamp(user.password_changed_at) || new Date(0)).toLocaleDateString()}`
                     : 'Manage your account password'}
                 </p>
                 <button onClick={() => setChangingPassword(true)}
-                  style={{ padding: '8px 20px', background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                  style={{ padding: '8px 20px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
                   Change Password
                 </button>
               </div>
             ) : (
               <form onSubmit={handlePasswordChange}>
-                {pwError && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
+                {pwError && <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
                 <div style={{ display: 'grid', gap: 12, maxWidth: 400 }}>
                   <div>
                     <div style={fieldLabel}>Current Password</div>
@@ -1227,9 +1227,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                   <button type="button" onClick={() => { setChangingPassword(false); setPwError(null); setPwData({ current: '', new: '', confirm: '' }); }}
-                    style={{ padding: '8px 16px', background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+                    style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
                   <button type="submit" disabled={pwSaving}
-                    style={{ padding: '8px 20px', background: pwSaving ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: pwSaving ? 'wait' : 'pointer' }}>
+                    style={{ padding: '8px 20px', background: pwSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: pwSaving ? 'wait' : 'pointer' }}>
                     {pwSaving ? 'Saving...' : 'Update Password'}
                   </button>
                 </div>
@@ -1248,27 +1248,27 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             ) : twoFAStatus.enabled ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <span style={{ background: '#e0f2e9', color: '#1b6b5a', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>Enabled</span>
+                  <span style={{ background: 'var(--role-color-light)', color: 'var(--role-color)', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>Enabled</span>
                   {twoFAStatus.setupDate && (
-                    <span style={{ color: '#999', fontSize: 13 }}>since {(parseTimestamp(twoFAStatus.setupDate) || new Date(0)).toLocaleDateString()}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>since {(parseTimestamp(twoFAStatus.setupDate) || new Date(0)).toLocaleDateString()}</span>
                   )}
                 </div>
-                <p style={{ color: '#666', fontSize: 14, margin: '0 0 16px' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 16px' }}>
                   Your account is protected with an authenticator app. You'll need a code each time you sign in from a new device.
                 </p>
 
                 {/* Disable 2FA */}
                 <details style={{ marginTop: 8 }}>
-                  <summary style={{ fontSize: 14, color: '#c00', cursor: 'pointer', fontWeight: 500 }}>Disable two-factor authentication</summary>
+                  <summary style={{ fontSize: 14, color: 'var(--color-red-strong)', cursor: 'pointer', fontWeight: 500 }}>Disable two-factor authentication</summary>
                   <form onSubmit={handleDisable2FA} style={{ marginTop: 12, maxWidth: 400 }}>
-                    {pwError && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
-                    <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>Enter a code from your authenticator app to confirm.</p>
+                    {pwError && <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 12px' }}>Enter a code from your authenticator app to confirm.</p>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input type="text" inputMode="numeric" autoComplete="one-time-code" placeholder="000000" value={disableCode}
                         onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, '').substring(0, 6))}
                         style={{ ...inputStyle, maxWidth: 160, textAlign: 'center', letterSpacing: 4 }} />
                       <button type="submit" disabled={disabling2FA || disableCode.length < 6}
-                        style={{ padding: '8px 20px', background: disabling2FA ? '#999' : '#dc3545', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        style={{ padding: '8px 20px', background: disabling2FA ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                         {disabling2FA ? 'Disabling...' : 'Disable 2FA'}
                       </button>
                     </div>
@@ -1277,11 +1277,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               </div>
             ) : (
               <div>
-                <p style={{ color: '#666', fontSize: 14, margin: '0 0 16px' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 16px' }}>
                   Add an extra layer of security to your account. You'll need an authenticator app like Google Authenticator or Authy.
                 </p>
                 <button onClick={() => setShowSetup2FA(true)}
-                  style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                  style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
                   Enable Two-Factor Authentication
                 </button>
               </div>
@@ -1291,11 +1291,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           {/* Passkeys / Biometric Login — always show, even without WebAuthn */}
           <div className="card">
             <div className="card-header">Passkeys</div>
-            <p style={{ color: '#666', fontSize: 14, margin: '0 0 16px' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 16px' }}>
               Sign in with Face ID, Touch ID, Windows Hello, or a security key. Passkeys are more secure than passwords and skip 2FA.
             </p>
             {!passkeySupported && (
-              <div style={{ background: '#fff3cd', color: '#856404', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+              <div style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
                 Passkey management isn't available in this app. To add or remove passkeys, open <strong>yourinplace.com</strong> in your phone's browser (Safari or Chrome).
               </div>
             )}
@@ -1308,14 +1308,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                     {passkeys.map((pk, i) => (
                       <div key={pk.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderBottom: i < passkeys.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0f2e9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1b6b5a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--role-color-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--role-color)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
                             </svg>
                           </div>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: 14 }}>{pk.name}</div>
-                            <div style={{ fontSize: 12, color: '#888' }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                               Added {(parseTimestamp(pk.createdAt) || new Date(0)).toLocaleDateString()}
                               {pk.lastUsed ? (' · Last used ' + (parseTimestamp(pk.lastUsed) || new Date(0)).toLocaleDateString()) : ''}
                             </div>
@@ -1323,7 +1323,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                         </div>
                         {passkeySupported && (
                           <button onClick={() => handleDeletePasskey(pk.id)}
-                            style={{ padding: '6px 14px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #dc3545', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                             Remove
                           </button>
                         )}
@@ -1331,7 +1331,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                     ))}
                   </div>
                 )}
-                {pwError && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
+                {pwError && <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: 12, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{pwError}</div>}
                 {passkeySupported && (
                   showPasskeyNameInput ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1340,16 +1340,16 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                         style={{ width: '100%', padding: '8px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} autoFocus />
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button onClick={handleRegisterPasskey} disabled={registeringPasskey}
-                          style={{ flex: 1, padding: '8px 16px', background: registeringPasskey ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                          style={{ flex: 1, padding: '8px 16px', background: registeringPasskey ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
                           {registeringPasskey ? 'Registering...' : 'Create Passkey'}
                         </button>
                         <button onClick={() => { setShowPasskeyNameInput(false); setPwError(null); }}
-                          style={{ padding: '8px 16px', background: '#f0f0f0', color: '#666', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+                          style={{ padding: '8px 16px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
                       </div>
                     </div>
                   ) : (
                     <button onClick={() => setShowPasskeyNameInput(true)}
-                      style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                      style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
                       Add a Passkey
                     </button>
                   )
@@ -1365,20 +1365,20 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               <div>
                 {linkedAccounts.map((acct, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: i < linkedAccounts.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
-                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f0f4f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {acct.provider === 'google' ? (
                         <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
                       ) : '🔗'}
                     </div>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 14, textTransform: 'capitalize' }}>{acct.provider}</div>
-                      <div style={{ fontSize: 13, color: '#888' }}>{acct.email}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{acct.email}</div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p style={{ color: '#666', fontSize: 14, margin: 0 }}>No linked accounts. You can link your Google account by signing in with Google.</p>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>No linked accounts. You can link your Google account by signing in with Google.</p>
             )}
           </div>
 
@@ -1386,13 +1386,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           <div className="card">
             <div className="card-header">Trusted Devices</div>
             {!twoFAStatus.enabled ? (
-              <p style={{ color: '#666', fontSize: 14, margin: 0 }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
                 Enable two-factor authentication to use trusted devices. Trusted devices let you skip the 2FA code for 30 days.
               </p>
             ) : loadingDevices ? (
               <LoadingSpinner text="Loading devices..." />
             ) : devices.length === 0 ? (
-              <p style={{ color: '#666', fontSize: 14, margin: 0 }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
                 No trusted devices. When you sign in with 2FA and check "Remember this device," it will appear here.
               </p>
             ) : (
@@ -1401,12 +1401,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 0', borderBottom: i < devices.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>{d.device_name || 'Unknown Device'}</div>
-                      <div style={{ fontSize: 12, color: '#888' }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                         Last used: {(parseTimestamp(d.last_used) || new Date(0)).toLocaleDateString()} · Expires: {(parseTimestamp(d.expires_at) || new Date(0)).toLocaleDateString()}
                       </div>
                     </div>
                     <button onClick={() => revokeDevice(d.id)}
-                      style={{ padding: '6px 14px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #dc3545', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       Revoke
                     </button>
                   </div>
@@ -1418,13 +1418,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           )}
           {/* ─── Notifications Section ─── */}
           <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: 16, marginTop: 16 }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>Notifications</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary)' }}>Notifications</h3>
           </div>
           {typeof NotificationSettings !== 'undefined' && React.createElement(NotificationSettings, null)}
           <div className="card">
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Email Notifications</span>
-              {savingNotifs && <span style={{ fontSize: 11, color: '#999' }}>Saving...</span>}
+              {savingNotifs && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Saving...</span>}
             </div>
             {['sessionUpdates', 'caregiverMessages', 'healthAlerts', 'reminderEmails'].map(key => (
               <label key={key} className="toggle-label">
@@ -1435,7 +1435,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           </div>
           <div className="card" style={{ marginTop: 16 }}>
             <div className="card-header">Push Notifications</div>
-            <p style={{ padding: '0 16px', fontSize: 13, color: '#888', margin: '0 0 8px' }}>Choose which events send push notifications to your phone.</p>
+            <p style={{ padding: '0 16px', fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 8px' }}>Choose which events send push notifications to your phone.</p>
             {[
               { key: 'push_messages', label: 'New messages' },
               { key: 'push_care_request', label: 'Care requests (for caregivers)' },
@@ -1473,10 +1473,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             };
             return (
               <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: 16, marginTop: 16 }}>
-                <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>Accessibility</h3>
+                <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary)' }}>Accessibility</h3>
                 <div className="card" style={{ padding: 20, marginBottom: 16 }}>
                   <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Text Size</div>
-                  <div style={{ color: '#666', marginBottom: 16 }}>Choose a text size that works best for you.</div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>Choose a text size that works best for you.</div>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <button className={`text-size-pill text-size-pill-default ${currentSize === 'default' ? 'active' : ''}`}
                       onClick={() => handleTextSize('default')}>Default</button>
@@ -1551,7 +1551,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{
                 width: 12, height: 12, borderRadius: '50%',
-                background: stripeStatus?.connected ? '#1b6b5a' : stripeStatus?.onboardingStarted ? '#f59e0b' : '#e8724a'
+                background: stripeStatus?.connected ? 'var(--role-color)' : stripeStatus?.onboardingStarted ? '#f59e0b' : 'var(--accent-color)'
               }}></div>
               <span style={{ fontSize: 14, fontWeight: 500 }}>
                 {stripeStatus?.connected ? 'Connected' : stripeStatus?.onboardingStarted ? 'Setup incomplete' : 'Not connected'}
@@ -1559,13 +1559,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             </div>
             {stripeStatus?.connected ? (
               <button onClick={handleStripeDashboard}
-                style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 View Stripe Dashboard
               </button>
             ) : (
               <div>
                 <button onClick={handleConnectStripe}
-                  style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                   {stripeStatus?.onboardingStarted ? 'Complete Stripe Setup' : 'Connect with Stripe'}
                 </button>
                 {stripeStatus?.onboardingStarted && (
@@ -1586,7 +1586,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   onChange={(e) => setPayoutPref(e.target.value)} style={{ margin: 0 }} />
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>Standard (Free)</div>
-                  <div style={{ fontSize: 12, color: '#888' }}>1-2 business days</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>1-2 business days</div>
                 </div>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
@@ -1594,12 +1594,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   onChange={(e) => setPayoutPref(e.target.value)} style={{ margin: 0 }} />
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>Instant (+2% fee)</div>
-                  <div style={{ fontSize: 12, color: '#888' }}>Same day</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Same day</div>
                 </div>
               </label>
             </div>
             <button onClick={handleSavePayoutPref} disabled={savingPayout}
-              style={{ padding: '8px 20px', background: savingPayout ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ padding: '8px 20px', background: savingPayout ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               {savingPayout ? 'Saving...' : 'Save Preference'}
             </button>
           </div>
@@ -1610,44 +1610,44 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             {checkrStatus === 'complete' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 18 }}>✓</span>
-                <span style={{ fontSize: 14, color: '#1b6b5a', fontWeight: 600 }}>Background check complete</span>
+                <span style={{ fontSize: 14, color: 'var(--role-color)', fontWeight: 600 }}>Background check complete</span>
               </div>
             ) : checkrStatus === 'in_progress' || checkrStatus === 'processing' || checkrStatus === 'invitation_created' ? (
-              <div style={{ color: '#666', fontSize: 14 }}>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
                 <div style={{ marginBottom: 12 }}>
-                  <strong style={{ color: '#1b6b5a' }}>Processing your background check...</strong>
+                  <strong style={{ color: 'var(--role-color)' }}>Processing your background check...</strong>
                 </div>
                 <p style={{ margin: '0 0 8px', fontSize: 13 }}>
                   We're reviewing your information. You'll receive an email when the process is complete.
                 </p>
-                <p style={{ margin: 0, fontSize: 13, color: '#888' }}>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-tertiary)' }}>
                   Status: <strong>{checkrStatus === 'invitation_created' ? 'Check your email to complete' : 'In Progress'}</strong>
                 </p>
               </div>
             ) : checkrError ? (
-              <div style={{ color: '#dc2626', fontSize: 14, padding: 12, background: '#fef2f2', borderRadius: 8, border: '1px solid #fca5a5' }}>
+              <div style={{ color: 'var(--color-error)', fontSize: 14, padding: 12, background: 'var(--bg-error-subtle)', borderRadius: 8, border: '1px solid #fca5a5' }}>
                 <strong>Error:</strong> {checkrError}
                 <div style={{ marginTop: 12 }}>
                   <button onClick={() => { setCheckrError(null); setCheckrStatus('not_initiated'); }}
-                    style={{ padding: '6px 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ padding: '6px 12px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Try Again
                   </button>
                 </div>
               </div>
             ) : !bgCheckPaid ? (
               <div>
-                <p style={{ fontSize: 14, color: '#666', margin: '0 0 4px' }}>
-                  <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>$30</span> one-time fee. Refunded after 10 completed sessions.
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 4px' }}>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>$30</span> one-time fee. Refunded after 10 completed sessions.
                 </p>
-                <p style={{ fontSize: 13, color: '#888', margin: '0 0 16px' }}>
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 16px' }}>
                   A background check is required to participate on InPlace. Your report is reviewed fairly — you'll be given a chance to provide context on anything that comes up.
                 </p>
                 {checkrStaging ? (
-                  <div style={{ padding: 16, background: '#fff8f0', border: '1px solid #ffcc80', borderRadius: 10 }}>
-                    <div style={{ color: '#e65100', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Staging Mode</div>
-                    <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>In production, caregivers pay $30 here via Stripe. For staging testing, skip payment and go straight to the Checkr flow.</div>
+                  <div style={{ padding: 16, background: 'var(--bg-warm)', border: '1px solid #ffcc80', borderRadius: 10 }}>
+                    <div style={{ color: 'var(--color-warning)', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Staging Mode</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>In production, caregivers pay $30 here via Stripe. For staging testing, skip payment and go straight to the Checkr flow.</div>
                     <div style={{ marginBottom: 12 }}>
-                      <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Checkr invitation email (auto-strips plus-address if blank):</label>
+                      <label style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Checkr invitation email (auto-strips plus-address if blank):</label>
                       <input type="email" value={checkrStagingEmail} onChange={e => setCheckrStagingEmail(e.target.value)}
                         placeholder="Leave blank to auto-strip plus-address"
                         style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
@@ -1679,12 +1679,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                       } catch (err) {
                         if (typeof showToast === 'function') showToast('Failed to initiate. Contact support.', 'error');
                       }
-                    }} style={{ padding: '10px 20px', background: '#e65100', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                    }} style={{ padding: '10px 20px', background: 'var(--color-warning)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                       Skip Payment & Start Checkr (Staging)
                     </button>
                   </div>
                 ) : (
-                  <div style={{ padding: 16, background: '#f9f9f9', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+                  <div style={{ padding: 16, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
                     {typeof StripePaymentForm !== 'undefined' ? React.createElement(StripePaymentForm, {
                       amount: 30,
                       description: 'Background check fee — one-time, refunded after 10 sessions.',
@@ -1699,7 +1699,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                         setCheckrError(msg || 'Payment failed');
                       },
                     }) : (
-                      <div style={{ padding: 12, color: '#888', fontSize: 13, textAlign: 'center' }}>
+                      <div style={{ padding: 12, color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center' }}>
                         Loading payment form...
                       </div>
                     )}
@@ -1709,14 +1709,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             ) : checkrStaging ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 16, color: '#1b6b5a' }}>✓</span>
-                  <span style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600 }}>Payment received</span>
+                  <span style={{ fontSize: 16, color: 'var(--role-color)' }}>✓</span>
+                  <span style={{ fontSize: 13, color: 'var(--role-color)', fontWeight: 600 }}>Payment received</span>
                 </div>
-                <div style={{ padding: 16, background: '#fff8f0', border: '1px solid #ffcc80', borderRadius: 10 }}>
-                  <div style={{ color: '#e65100', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Staging Mode — Start Checkr via Email</div>
-                  <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>The in-app Checkr form doesn't work in staging. Click below to send the Checkr invitation via email instead.</div>
+                <div style={{ padding: 16, background: 'var(--bg-warm)', border: '1px solid #ffcc80', borderRadius: 10 }}>
+                  <div style={{ color: 'var(--color-warning)', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Staging Mode — Start Checkr via Email</div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>The in-app Checkr form doesn't work in staging. Click below to send the Checkr invitation via email instead.</div>
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 4 }}>Checkr invitation email (auto-strips plus-address if blank):</label>
+                    <label style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Checkr invitation email (auto-strips plus-address if blank):</label>
                     <input type="email" value={checkrStagingEmail} onChange={e => setCheckrStagingEmail(e.target.value)}
                       placeholder="Leave blank to auto-strip plus-address"
                       style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
@@ -1745,7 +1745,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                     } catch (err) {
                       if (typeof showToast === 'function') showToast('Failed to initiate. Contact support.', 'error');
                     }
-                  }} style={{ padding: '10px 20px', background: '#e65100', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  }} style={{ padding: '10px 20px', background: 'var(--color-warning)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                     Start Checkr via Email (Staging)
                   </button>
                 </div>
@@ -1753,10 +1753,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             ) : (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 16, color: '#1b6b5a' }}>✓</span>
-                  <span style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 600 }}>Payment received</span>
+                  <span style={{ fontSize: 16, color: 'var(--role-color)' }}>✓</span>
+                  <span style={{ fontSize: 13, color: 'var(--role-color)', fontWeight: 600 }}>Payment received</span>
                 </div>
-                <div style={{ padding: 16, background: '#f9f9f9', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+                <div style={{ padding: 16, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
                   {typeof CheckrEmbed !== 'undefined' ? React.createElement(CheckrEmbed, {
                     onComplete: (data) => {
                       console.log('Background check initiated:', data);
@@ -1768,7 +1768,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                       setCheckrStatus('error');
                     },
                   }) : (
-                    <div style={{ padding: 12, color: '#888', fontSize: 13, textAlign: 'center' }}>
+                    <div style={{ padding: 12, color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center' }}>
                       Loading background check form...
                     </div>
                   )}
@@ -1780,19 +1780,19 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           {/* Fee Breakdown Card */}
           <div className="card">
             <div className="card-header">Fee Breakdown</div>
-            <div style={{ fontSize: 14, color: '#666', lineHeight: 1.6 }}>
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               <p>
-                <strong>Platform Fee:</strong> InPlace adds a <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>20%</span> platform fee to the family's cost. This does not reduce your earnings.
+                <strong>Platform Fee:</strong> InPlace adds a <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>20%</span> platform fee to the family's cost. This does not reduce your earnings.
               </p>
               <p>
-                <strong>Rush Surcharge:</strong> Short-notice bookings (less than 24 hours) include a <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>20%</span> rush surcharge. <span style={{ fontSize: 18, fontWeight: 800, color: '#1b6b5a' }}>75%</span> of the surcharge goes to you as an incentive.
+                <strong>Rush Surcharge:</strong> Short-notice bookings (less than 24 hours) include a <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>20%</span> rush surcharge. <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>75%</span> of the surcharge goes to you as an incentive.
               </p>
             </div>
           </div>
 
           {/* Hour Reports — moved from Dashboard */}
           <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: 20, marginTop: 20 }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>📊 Hour Reports</h3>
+            <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary)' }}>📊 Hour Reports</h3>
             {typeof HourReports !== 'undefined' && React.createElement(HourReports, {
               profileName: user?.first_name ? user.first_name + ' ' + (user.last_name || '') : '',
               academicProgram: null,
@@ -1822,19 +1822,19 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               return exp <= soon;
             });
             if (expiring.length === 0) return null;
-            return React.createElement('div', { className: 'card', style: { background: '#fff5f5', border: '2px solid #e53e3e', marginBottom: 16 } },
+            return React.createElement('div', { className: 'card', style: { background: 'var(--bg-error-light)', border: '2px solid #e53e3e', marginBottom: 16 } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } },
                 React.createElement('span', { style: { fontSize: 20 } }, '⚠️'),
-                React.createElement('span', { style: { fontSize: 14, fontWeight: 700, color: '#c53030' } }, 'Expiring Soon')
+                React.createElement('span', { style: { fontSize: 14, fontWeight: 700, color: 'var(--color-error)' } }, 'Expiring Soon')
               ),
               expiring.map((c, i) => {
                 const exp = new Date(c.expiryDate);
                 const expired = exp < now;
-                return React.createElement('div', { key: i, style: { padding: '6px 0', fontSize: 13, color: expired ? '#c53030' : '#c05621' } },
+                return React.createElement('div', { key: i, style: { padding: '6px 0', fontSize: 13, color: expired ? 'var(--color-error)' : '#c05621' } },
                   React.createElement('span', { style: { fontWeight: 600 } }, c.certType || 'Certification'),
                   ' — ',
                   expired
-                    ? React.createElement('span', { style: { fontWeight: 700, color: '#c53030' } }, 'EXPIRED ' + exp.toLocaleDateString())
+                    ? React.createElement('span', { style: { fontWeight: 700, color: 'var(--color-error)' } }, 'EXPIRED ' + exp.toLocaleDateString())
                     : React.createElement('span', null, 'Expires ' + exp.toLocaleDateString())
                 );
               })
@@ -1858,12 +1858,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
                     {uploaded.map(doc => (
                       <div key={doc.id} style={{ position: 'relative', cursor: 'pointer' }} onClick={() => handleViewDocument(doc.id)}>
-                        <div style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', border: docPreviews[doc.id] ? '2px solid #1b6b5a' : '1px solid #ddd', background: '#f9f9f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', border: docPreviews[doc.id] ? '2px solid #1b6b5a' : '1px solid #ddd', background: 'var(--bg-neutral)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {docPreviews[doc.id]
                             ? <img src={docPreviews[doc.id]} alt={doc.file_name || docLabel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             : <span style={{ fontSize: 28, opacity: 0.4 }}>📄</span>}
                         </div>
-                        <div style={{ fontSize: 10, color: '#888', textAlign: 'center', marginTop: 2, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center', marginTop: 2, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {new Date(doc.created_at).toLocaleDateString()}
                         </div>
                       </div>
@@ -1873,7 +1873,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 {/* Full-size preview when a thumbnail is clicked */}
                 {isUploaded && uploaded.some(doc => docPreviews[doc.id]) && uploaded.filter(doc => docPreviews[doc.id]).map(doc => (
                   <div key={`preview-${doc.id}`} style={{ marginBottom: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid #ddd' }}>
-                    <img src={docPreviews[doc.id]} alt={docLabel} style={{ width: '100%', maxHeight: 300, objectFit: 'contain', background: '#f9f9f9' }} />
+                    <img src={docPreviews[doc.id]} alt={docLabel} style={{ width: '100%', maxHeight: 300, objectFit: 'contain', background: 'var(--bg-neutral)' }} />
                   </div>
                 ))}
 
@@ -1882,7 +1882,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   acctDocInputRef.current?.click();
                 }}
                   disabled={docUploading === docType}
-                  style={{ padding: '8px 16px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: docUploading === docType ? 0.7 : 1 }}>
+                  style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: docUploading === docType ? 0.7 : 1 }}>
                   {docUploading === docType ? 'Uploading...' : (isUploaded ? 'Replace' : 'Upload')}
                 </button>
               </div>
@@ -1901,13 +1901,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 return (
                   <div key={i} style={{ padding: '8px 0', borderBottom: i < cgCertifications.length - 1 ? '1px solid #eee' : 'none' }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{cert.certType}</div>
-                    <div style={{ fontSize: 12, color: '#666' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                       {cert.certNumber && <span>#{cert.certNumber} </span>}
                       {cert.issuer && <span>· {cert.issuer} </span>}
                     </div>
                     {exp && (
                       <div style={{ fontSize: 12, marginTop: 2, fontWeight: isExpired || isSoon ? 700 : 400,
-                        color: isExpired ? '#c53030' : isSoon ? '#c05621' : '#666' }}>
+                        color: isExpired ? 'var(--color-error)' : isSoon ? '#c05621' : 'var(--text-secondary)' }}>
                         {isExpired ? '🔴 EXPIRED' : isSoon ? '🟡 Expiring soon' : '✅ Valid'} — {exp.toLocaleDateString()}
                       </div>
                     )}
@@ -1948,17 +1948,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           { id: 'spiritual', label: 'Spiritual or religious practice support', icon: '\uD83D\uDD4A\uFE0F' },
         ];
         const CG_RATING_OPTIONS = [
-          { value: 'none', label: 'No pref', color: '#e0e0e0', textColor: '#999' },
-          { value: 'green', label: 'Comfortable', color: '#e8f5e9', textColor: '#2e7d32' },
-          { value: 'yellow', label: 'With support', color: '#fff3e0', textColor: '#e65100' },
-          { value: 'red', label: 'Not comfortable', color: '#ffebee', textColor: '#c62828' },
+          { value: 'none', label: 'No pref', color: 'var(--border-light)', textColor: 'var(--text-muted)' },
+          { value: 'green', label: 'Comfortable', color: 'var(--color-success-bg)', textColor: 'var(--color-success)' },
+          { value: 'yellow', label: 'With support', color: 'var(--color-warning-bg)', textColor: 'var(--color-warning)' },
+          { value: 'red', label: 'Not comfortable', color: 'var(--color-error-bg)', textColor: 'var(--color-error)' },
         ];
         const prefs = preferences || {};
         const ratedCount = Object.values(prefs).filter(v => v && v !== 'none').length;
         return (
           <div>
-            <div style={{ background: '#f0faf8', border: '1px solid #c8e6c9', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: '#1b6b5a', fontWeight: 500, lineHeight: 1.5 }}>
+            <div style={{ background: 'var(--bg-highlight)', border: '1px solid #c8e6c9', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: 'var(--role-color)', fontWeight: 500, lineHeight: 1.5 }}>
                 Tell families what you're comfortable with. This helps us match you to compatible clients. <strong>{ratedCount}/{CG_PREFS_LIST.length} rated</strong>
               </div>
             </div>
@@ -1976,20 +1976,20 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 return (
                   <div key={pref.id} style={{
                     borderRadius: 8,
-                    background: val !== 'none' ? ratingObj.color + '40' : '#fafafa',
-                    border: '1px solid ' + (val !== 'none' ? ratingObj.color : '#eee'),
+                    background: val !== 'none' ? ratingObj.color + '40' : 'var(--bg-primary)',
+                    border: '1px solid ' + (val !== 'none' ? ratingObj.color : 'var(--border-light)'),
                     transition: 'all 0.2s',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
                       <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{pref.icon}</span>
-                      <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: '#333', lineHeight: 1.3 }}>{pref.label}</div>
+                      <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.3 }}>{pref.label}</div>
                       <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
                         {CG_RATING_OPTIONS.slice(1).map(r => (
                           <button key={r.value} onClick={() => setPreferences({ ...prefs, [pref.id]: val === r.value ? 'none' : r.value })} style={{
                             padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
                             border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
-                            background: val === r.value ? r.color : '#fff',
-                            color: val === r.value ? r.textColor : '#999',
+                            background: val === r.value ? r.color : 'var(--text-on-primary)',
+                            color: val === r.value ? r.textColor : 'var(--text-muted)',
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}>{r.label}</button>
                         ))}
@@ -2001,7 +2001,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             </div>
 
             <button onClick={handleSavePreferences} disabled={savingPrefs}
-              style={{ marginTop: 16, padding: '12px 24px', background: savingPrefs ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
+              style={{ marginTop: 16, padding: '12px 24px', background: savingPrefs ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
               {savingPrefs ? 'Saving...' : 'Save Preferences'}
             </button>
           </div>
@@ -2017,8 +2017,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         const roleLabels = { family: 'Family / Care Team', caregiver: 'Caregiver', care_for: 'Care Recipient' };
         const roleIcons = { family: '👪', caregiver: '💼', care_for: '🏠' };
         return React.createElement('div', { className: 'card', style: { marginTop: 20, padding: 20, border: '1px solid #fdd' } },
-          React.createElement('div', { className: 'card-header', style: { marginBottom: 12, color: '#c62828' } }, 'Remove a Role'),
-          React.createElement('p', { style: { fontSize: 13, color: '#888', margin: '0 0 16px' } },
+          React.createElement('div', { className: 'card-header', style: { marginBottom: 12, color: 'var(--color-error)' } }, 'Remove a Role'),
+          React.createElement('p', { style: { fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 16px' } },
             'Remove a role you no longer need. Your account and other roles will remain intact.'
           ),
           currentRoles.map(r =>
@@ -2026,7 +2026,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               key: r,
               style: {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 14px', marginBottom: 6, background: '#fff',
+                padding: '10px 14px', marginBottom: 6, background: 'var(--bg-surface)',
                 border: '1px solid #e0e0e0', borderRadius: 8,
               }
             },
@@ -2069,7 +2069,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 },
                 style: {
                   padding: '6px 14px', background: 'none', border: '1px solid #e57373',
-                  borderRadius: 6, color: '#c62828', fontSize: 12, fontWeight: 500,
+                  borderRadius: 6, color: 'var(--color-error)', fontSize: 12, fontWeight: 500,
                   cursor: 'pointer',
                 },
               }, 'Remove')
@@ -2081,7 +2081,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       {/* Logout — always visible, especially important for mobile PWA */}
       <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid #e0e0e0' }}>
         <button onClick={handleLogoutFromAccount} style={{
-          width: '100%', padding: '14px 20px', background: '#fff', color: '#c62828',
+          width: '100%', padding: '14px 20px', background: 'var(--bg-surface)', color: 'var(--color-error)',
           border: '1px solid #e0e0e0', borderRadius: 10, fontSize: 15, fontWeight: 600,
           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}>
@@ -2109,7 +2109,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         <DeleteAccountSection onDeleted={handleLogoutFromAccount} />
       )}
 
-      <div style={{ textAlign: 'center', marginTop: 10, marginBottom: 20, fontSize: 11, color: '#bbb' }}>
+      <div style={{ textAlign: 'center', marginTop: 10, marginBottom: 20, fontSize: 11, color: 'var(--text-muted)' }}>
         v{window.APP_VERSION || '?'}
       </div>
     </div>

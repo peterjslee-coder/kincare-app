@@ -15,7 +15,7 @@ const IPAiBadge = window.IPAiBadge = ({ size = 'sm', style: customStyle }) => {
   };
 
   const config = specs[size] || specs.sm;
-  const tealColor = '#1b6b5a';
+  const tealColor = 'var(--role-color)';
 
   const badgeStyle = {
     display: 'inline-flex',

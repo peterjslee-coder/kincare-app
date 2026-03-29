@@ -406,10 +406,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   };
 
   const RATING_OPTIONS = [
-    { value: 0, label: 'Not needed', color: '#e0e0e0', textColor: '#999' },
-    { value: 1, label: 'Nice to have', color: '#fff3e0', textColor: '#e65100' },
-    { value: 2, label: 'Important', color: '#e8f5e9', textColor: '#2e7d32' },
-    { value: 3, label: 'Must have', color: '#1b6b5a', textColor: '#fff' },
+    { value: 0, label: 'Not needed', color: 'var(--border-light)', textColor: 'var(--text-muted)' },
+    { value: 1, label: 'Nice to have', color: 'var(--color-warning-bg)', textColor: 'var(--color-warning)' },
+    { value: 2, label: 'Important', color: 'var(--color-success-bg)', textColor: 'var(--color-success)' },
+    { value: 3, label: 'Must have', color: 'var(--role-color)', textColor: 'var(--text-on-primary)' },
   ];
 
   const resizeImg = (file, maxDim, quality) => new Promise((resolve, reject) => {
@@ -661,7 +661,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' };
   const textareaStyle = { ...inputStyle, minHeight: 80, resize: 'vertical' };
-  const fieldLabel = { fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' };
+  const fieldLabel = { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' };
 
   // Build address string
   const addressParts = [profile.location_address, profile.location_city, profile.location_state].filter(Boolean);
@@ -677,18 +677,18 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         <h1 className="page-title">My Loved One</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {!editing && onNavigate && (
-            <button onClick={() => onNavigate('recipients')} style={{ padding: '8px 14px', background: '#fff', color: '#1b6b5a', border: '1.5px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            <button onClick={() => onNavigate('recipients')} style={{ padding: '8px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1.5px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
               + Add Another Person
             </button>
           )}
           {!editing ? (
-            canEdit && <button onClick={startEditing} style={{ padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            canEdit && <button onClick={startEditing} style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
               Edit Profile
             </button>
           ) : (
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={cancelEditing} style={{ padding: '8px 16px', background: '#fff', color: '#666', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
+              <button onClick={cancelEditing} style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveProfile} disabled={saving} style={{ padding: '8px 20px', background: saving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer' }}>
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
@@ -700,7 +700,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
           {allRecipients.map(r => (
             <button key={r.id} onClick={() => { setProfile(r); fetchNotes(r.id); setEditing(false); setPermTier(r.permission_tier || 'full'); try { setVisSettings(r.visibility_settings ? JSON.parse(r.visibility_settings) : null); } catch { setVisSettings(null); } }}
-              style={{ padding: '6px 14px', borderRadius: 20, border: r.id === profile?.id ? '2px solid #1b6b5a' : '1px solid #d0d0d0', background: r.id === profile?.id ? '#e0f2e9' : '#fff', color: r.id === profile?.id ? '#1b6b5a' : '#666', fontSize: 13, fontWeight: r.id === profile?.id ? 600 : 400, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', borderRadius: 20, border: r.id === profile?.id ? '2px solid #1b6b5a' : '1px solid #d0d0d0', background: r.id === profile?.id ? 'var(--role-color-light)' : 'var(--text-on-primary)', color: r.id === profile?.id ? 'var(--role-color)' : 'var(--text-secondary)', fontSize: 13, fontWeight: r.id === profile?.id ? 600 : 400, cursor: 'pointer' }}>
               {r.first_name} {r.last_name}
             </button>
           ))}
@@ -708,7 +708,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       )}
 
       {saveMsg && (
-        <div style={{ padding: '10px 16px', borderRadius: 8, marginBottom: 16, background: saveMsg.includes('success') ? '#e8f5e9' : '#fce4ec', color: saveMsg.includes('success') ? '#2e7d32' : '#c62828', fontWeight: 500, fontSize: 14 }}>
+        <div style={{ padding: '10px 16px', borderRadius: 8, marginBottom: 16, background: saveMsg.includes('success') ? 'var(--color-success-bg)' : 'var(--color-error-bg)', color: saveMsg.includes('success') ? 'var(--color-success)' : 'var(--color-error)', fontWeight: 500, fontSize: 14 }}>
           {saveMsg}
         </div>
       )}
@@ -717,30 +717,30 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {!editing ? (
         <div className="card" style={{ padding: '16px 20px' }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <div onClick={handlePhotoUpload} style={{ cursor: 'pointer', position: 'relative', width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#e8f5e9' }} title="Click to change photo">
+            <div onClick={handlePhotoUpload} style={{ cursor: 'pointer', position: 'relative', width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: 'var(--color-success-bg)' }} title="Click to change photo">
               {profile.photo
                 ? <img src={profile.photo} alt={profile.first_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <span style={{ fontSize: 28, fontWeight: 700, color: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>{profile.first_name?.[0]}{profile.last_name?.[0]}</span>}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: 9, textAlign: 'center', padding: '2px 0', fontWeight: 600 }}>
+                : <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>{profile.first_name?.[0]}{profile.last_name?.[0]}</span>}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.45)', color: 'var(--text-on-primary)', fontSize: 9, textAlign: 'center', padding: '2px 0', fontWeight: 600 }}>
                 {photoUploading ? '...' : '\uD83D\uDCF7'}
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#1a1a2e', lineHeight: 1.2 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--bg-card)', lineHeight: 1.2 }}>
                 {profile.first_name} {profile.last_name}
-                <span style={{ fontSize: 14, fontWeight: 400, color: '#888', marginLeft: 8 }}>{profile.age} years old</span>
+                <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>{profile.age} years old</span>
               </div>
-              <div style={{ fontSize: 13, color: '#555', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ flexShrink: 0 }}>{'\uD83D\uDCCD'}</span>
                 <span>{fullAddress}</span>
               </div>
               {profile.emergency_contact_name && (
-                <div style={{ fontSize: 12, color: '#888', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ flexShrink: 0 }}>{'\uD83D\uDEA8'}</span>
                   <span>Emergency: {profile.emergency_contact_name}{profile.emergency_contact_phone ? ' \u00B7 ' + formatPhone(profile.emergency_contact_phone) : ''}</span>
                   {profile.emergency_contact_phone && (
                     <a href={'tel:' + profile.emergency_contact_phone.replace(/\D/g, '')}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, background: '#e8f5e9', color: '#1b6b5a', fontSize: 11, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, background: 'var(--color-success-bg)', color: 'var(--role-color)', fontSize: 11, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
                       {'\uD83D\uDCDE'} Call
                     </a>
                   )}
@@ -821,24 +821,24 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Conditions</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Conditions</div>
               {healthConditions.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {healthConditions.map((c, i) => (
-                    <div key={i} style={{ fontSize: 13, color: '#333', paddingLeft: 10, borderLeft: '2px solid #1b6b5a' }}>{c}</div>
+                    <div key={i} style={{ fontSize: 13, color: 'var(--text-primary)', paddingLeft: 10, borderLeft: '2px solid #1b6b5a' }}>{c}</div>
                   ))}
                 </div>
-              ) : <span style={{ fontSize: 13, color: '#999' }}>None listed</span>}
+              ) : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>None listed</span>}
             </div>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Medications</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Medications</div>
               {medications.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {medications.map((m, i) => (
-                    <div key={i} style={{ fontSize: 13, color: '#333', paddingLeft: 10, borderLeft: '2px solid #e8724a' }}>{m}</div>
+                    <div key={i} style={{ fontSize: 13, color: 'var(--text-primary)', paddingLeft: 10, borderLeft: '2px solid #e8724a' }}>{m}</div>
                   ))}
                 </div>
-              ) : <span style={{ fontSize: 13, color: '#999' }}>None listed</span>}
+              ) : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>None listed</span>}
             </div>
           </div>
         )}
@@ -846,32 +846,32 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
             <div onClick={() => { setDoctorReportOpen(!doctorReportOpen); setDoctorReport(''); }}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '6px 0' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#1b6b5a' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--role-color)' }}>
                 {'\uD83E\uDE7A'} AI Report for {profile.first_name}'s Doctor
               </div>
-              <span style={{ fontSize: 11, color: '#999', transform: doctorReportOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', transform: doctorReportOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'\u25BC'}</span>
             </div>
             {doctorReportOpen && (
-              <div style={{ marginTop: 8, padding: 12, background: '#f8faf9', borderRadius: 10, border: '1px solid #e0ebe7' }}>
-                <p style={{ fontSize: 12, color: '#666', margin: '0 0 10px', lineHeight: 1.5 }}>
+              <div style={{ marginTop: 8, padding: 12, background: 'var(--bg-highlight)', borderRadius: 10, border: '1px solid #e0ebe7' }}>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 10px', lineHeight: 1.5 }}>
                   Generate an AI-powered report tailored for a specific medical appointment.
                   InPlace analyzes {profile.first_name}'s care notes, visit logs, and health data to surface what's relevant for the specialist.
                 </p>
                 <div style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555', display: 'block', marginBottom: 3 }}>Type of Appointment *</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Type of Appointment *</label>
                   <input value={doctorApptType} onChange={e => setDoctorApptType(e.target.value)}
                     placeholder="e.g. Podiatrist, Neurologist, Primary Care, Urologist..."
                     style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555', display: 'block', marginBottom: 3 }}>Appointment Details (optional)</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Appointment Details (optional)</label>
                   <textarea value={doctorApptDetails} onChange={e => setDoctorApptDetails(e.target.value)}
                     placeholder="Purpose of visit, specific concerns, questions you want addressed..."
                     rows={3}
                     style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
                 </div>
                 <div style={{ marginBottom: 10 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#555', display: 'block', marginBottom: 3 }}>Doctor's Email (optional — sends report directly)</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Doctor's Email (optional — sends report directly)</label>
                   <input value={doctorEmail} onChange={e => setDoctorEmail(e.target.value)}
                     placeholder="doctor@clinic.com"
                     type="email"
@@ -880,29 +880,29 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 <button onClick={handleGenerateDoctorReport} disabled={doctorReportLoading}
                   style={{
                     width: '100%', padding: '10px 16px', borderRadius: 8,
-                    border: 'none', background: doctorReportLoading ? '#a0c4b8' : '#1b6b5a',
-                    color: '#fff', fontWeight: 700, fontSize: 13, cursor: doctorReportLoading ? 'wait' : 'pointer',
+                    border: 'none', background: doctorReportLoading ? '#a0c4b8' : 'var(--role-color)',
+                    color: 'var(--text-on-primary)', fontWeight: 700, fontSize: 13, cursor: doctorReportLoading ? 'wait' : 'pointer',
                     transition: 'background 0.2s',
                   }}>
                   {doctorReportLoading ? 'Analyzing care data...' : doctorEmail.trim() ? 'Generate & Email Report' : 'Generate Report'}
                 </button>
                 {doctorEmailSent && (
-                  <div style={{ marginTop: 8, padding: '8px 10px', background: '#e8f5e9', borderRadius: 6, fontSize: 12, color: '#2e7d32' }}>
+                  <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--color-success-bg)', borderRadius: 6, fontSize: 12, color: 'var(--color-success)' }}>
                     {'\u2709\uFE0F'} Report emailed to {doctorEmail.trim()}
                   </div>
                 )}
                 {doctorReport && (
                   <div style={{ marginTop: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#333' }}>Generated Report</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Generated Report</span>
                       <button onClick={() => { navigator.clipboard.writeText(doctorReport); if (typeof showToast === 'function') showToast('Report copied to clipboard', 'success'); }}
-                        style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid #ddd', background: '#fff', fontSize: 11, cursor: 'pointer', color: '#555' }}>
+                        style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 11, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                         Copy
                       </button>
                     </div>
                     <div style={{
-                      padding: 14, background: '#fff', borderRadius: 8, border: '1px solid #e0e0e0',
-                      fontSize: 13, lineHeight: 1.7, color: '#333', whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto',
+                      padding: 14, background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid #e0e0e0',
+                      fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto',
                     }}>{doctorReport}</div>
                   </div>
                 )}
@@ -919,17 +919,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           <div className="card-header" style={{ margin: 0 }}>
             <span className="card-icon">{'\u2728'}</span>Care Preferences
             {Object.keys(carePrefs).length > 0 && (
-              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1b6b5a', background: '#e8f5e9', padding: '2px 8px', borderRadius: 10 }}>
+              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: 'var(--role-color)', background: 'var(--color-success-bg)', padding: '2px 8px', borderRadius: 10 }}>
                 {Object.keys(carePrefs).length}/{CARE_PREFS_LIST.length} rated
               </span>
             )}
           </div>
-          <span style={{ fontSize: 18, color: '#999', transition: 'transform 0.2s', transform: prefsExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
+          <span style={{ fontSize: 18, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: prefsExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
         </div>
 
         {prefsExpanded && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ background: '#fff3e0', border: '2px solid #e8724a', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ background: 'var(--color-warning-bg)', border: '2px solid #e8724a', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <span style={{ fontSize: 20, flexShrink: 0 }}>{'\u2695\uFE0F'}</span>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14, color: '#bf360c', marginBottom: 2 }}>InPlace is not a medical service</div>
@@ -937,7 +937,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               </div>
             </div>
 
-            <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
               Rate what matters for {profile.first_name}'s care. For important items, add details to help match the right caregiver. You can update these anytime.
             </p>
 
@@ -953,17 +953,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 const hasFollowUp = PREF_FOLLOW_UPS[pref.id];
                 const showDetail = hasFollowUp && val >= 2;
                 return (
-                  <div key={pref.id} style={{ borderRadius: 8, background: val > 0 ? RATING_OPTIONS[val].color + '40' : '#fafafa', border: '1px solid ' + (val > 0 ? RATING_OPTIONS[val].color : '#eee'), transition: 'all 0.2s', overflow: 'hidden' }}>
+                  <div key={pref.id} style={{ borderRadius: 8, background: val > 0 ? RATING_OPTIONS[val].color + '40' : 'var(--bg-primary)', border: '1px solid ' + (val > 0 ? RATING_OPTIONS[val].color : 'var(--border-light)'), transition: 'all 0.2s', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
                       <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{pref.icon}</span>
-                      <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: '#333', lineHeight: 1.3 }}>{pref.label}</div>
+                      <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.3 }}>{pref.label}</div>
                       <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
                         {RATING_OPTIONS.map(r => (
                           <button key={r.value} onClick={() => handlePrefRate(pref.id, r.value)} style={{
                             padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
                             border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
-                            background: val === r.value ? r.color : '#fff',
-                            color: val === r.value ? r.textColor : '#999',
+                            background: val === r.value ? r.color : 'var(--text-on-primary)',
+                            color: val === r.value ? r.textColor : 'var(--text-muted)',
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}>{r.label}</button>
                         ))}
@@ -971,12 +971,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     </div>
                     {showDetail && (
                       <div style={{ padding: '0 12px 10px 46px' }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: '#1b6b5a', marginBottom: 3 }}>
-                          {hasFollowUp} <span style={{ fontWeight: 400, color: '#999' }}>(optional)</span>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--role-color)', marginBottom: 3 }}>
+                          {hasFollowUp} <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span>
                         </div>
                         <input type="text" value={careDetails[pref.id] || ''} onChange={(e) => handlePrefDetail(pref.id, e.target.value)}
                           placeholder="Add details..."
-                          style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 12, color: '#333', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 12, color: 'var(--text-primary)', boxSizing: 'border-box', fontFamily: 'inherit' }} />
                       </div>
                     )}
                   </div>
@@ -987,7 +987,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             {!showAllPrefs && (
               <button onClick={() => setShowAllPrefs(true)} style={{
                 width: '100%', padding: '10px', marginTop: 8, borderRadius: 8,
-                border: '1px dashed #ccc', background: '#fafafa', color: '#666',
+                border: '1px dashed #ccc', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
                 fontWeight: 600, fontSize: 13, cursor: 'pointer',
               }}>Show {CARE_PREFS_LIST.length - 10} more preferences</button>
             )}
@@ -995,13 +995,13 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
               <button onClick={savePreferences} disabled={savingPrefs} style={{
                 padding: '10px 20px', borderRadius: 8, border: '1px solid #1b6b5a',
-                background: '#fff', color: '#1b6b5a', fontWeight: 600, fontSize: 13,
+                background: 'var(--bg-surface)', color: 'var(--role-color)', fontWeight: 600, fontSize: 13,
                 cursor: savingPrefs ? 'wait' : 'pointer',
               }}>{savingPrefs ? 'Saving...' : 'Save Preferences'}</button>
               <button onClick={generateAISummary} disabled={generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3} style={{
                 padding: '10px 20px', borderRadius: 8, border: 'none',
-                background: Object.values(carePrefs).filter(v => v > 0).length >= 3 ? '#1b6b5a' : '#ccc',
-                color: '#fff', fontWeight: 600, fontSize: 13,
+                background: Object.values(carePrefs).filter(v => v > 0).length >= 3 ? 'var(--role-color)' : 'var(--border-light)',
+                color: 'var(--text-on-primary)', fontWeight: 600, fontSize: 13,
                 cursor: (generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3) ? 'default' : 'pointer',
               }}>{generatingAI ? 'Generating...' : '\u2728 Generate Care Summary with inPlace\'s AI tool'}</button>
             </div>
@@ -1016,12 +1016,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           <div className="card-header" style={{ margin: 0 }}>
             <span className="card-icon">{'\uD83D\uDCDD'}</span>Care Notes
             {notes.length > 0 && (
-              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1b6b5a', background: '#E8F8F0', padding: '2px 8px', borderRadius: 10 }}>
+              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: 'var(--role-color)', background: '#E8F8F0', padding: '2px 8px', borderRadius: 10 }}>
                 {notes.length}
               </span>
             )}
           </div>
-          <span style={{ fontSize: 18, color: '#999', transition: 'transform 0.2s', transform: notesOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
+          <span style={{ fontSize: 18, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: notesOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
         </div>
         {notesOpen && (
           <div style={{ marginTop: 14 }}>
@@ -1033,15 +1033,15 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 style={{ width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && newNote.trim()) { e.preventDefault(); handleAddNote(); } }} />
               <button onClick={(e) => { e.stopPropagation(); handleAddNote(); }} disabled={addingNote || !newNote.trim()}
-                style={{ padding: '10px 20px', background: addingNote ? '#999' : '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                style={{ padding: '10px 20px', background: addingNote ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
                 {addingNote ? '...' : 'Add Note'}
               </button>
             </div>
             {notes.length > 0 ? notes.map((n) => (
               <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, color: '#333', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.content}</div>
-                  <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
+                  <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.content}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                     {n.author_first_name} {n.author_last_name}
                     {' \u00B7 '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                   </div>
@@ -1052,11 +1052,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     if (!confirm('Delete this note?')) return;
                     const res = await apiFetch(`/api/notes/${n.id}`, { method: 'DELETE' });
                     if (res?.ok) fetchNotes(profile.id);
-                  }} style={{ padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: 4, cursor: 'pointer', fontSize: 11, color: '#c00', whiteSpace: 'nowrap', flexShrink: 0 }}>Delete</button>
+                  }} style={{ padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: 4, cursor: 'pointer', fontSize: 11, color: 'var(--color-red-strong)', whiteSpace: 'nowrap', flexShrink: 0 }}>Delete</button>
                 )}
               </div>
             )) : (
-              <p style={{ color: '#999', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
             )}
           </div>
         )}
@@ -1070,12 +1070,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             <div className="card-header" style={{ margin: 0 }}>
               <span className="card-icon">{'\uD83C\uDFA4'}</span>Kindred
               {companionConvos.length > 0 && (
-                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1A5276', background: '#D6EAF8', padding: '2px 8px', borderRadius: 10 }}>
+                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 8px', borderRadius: 10 }}>
                   {companionConvos.length} conversation{companionConvos.length !== 1 ? 's' : ''}
                 </span>
               )}
             </div>
-            <span style={{ fontSize: 18, color: '#999', transition: 'transform 0.2s', transform: companionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
+            <span style={{ fontSize: 18, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: companionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
           </div>
 
           {companionOpen && (
@@ -1092,8 +1092,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   <button key={tab.id} onClick={(e) => { e.stopPropagation(); setCompanionTab(tab.id); }}
                     style={{
                       flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      background: companionTab === tab.id ? '#fff' : 'transparent',
-                      color: companionTab === tab.id ? '#1A5276' : '#7F8C8D',
+                      background: companionTab === tab.id ? 'var(--text-on-primary)' : 'transparent',
+                      color: companionTab === tab.id ? 'var(--color-info)' : 'var(--text-tertiary)',
                       boxShadow: companionTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                       transition: 'all 0.2s',
                     }}>
@@ -1107,7 +1107,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 <div>
                   {/* Header + buttons */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1A5276' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-info)' }}>
                       {'\u23F0'} Scheduled Reminders
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -1121,11 +1121,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                             fetchKindredReminders(profile.id);
                           }
                         } catch {}
-                      }} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #D6EAF8', background: '#fff', color: '#1A5276', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      }} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #D6EAF8', background: 'var(--bg-surface)', color: 'var(--color-info)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         {'\uD83D\uDCC5'} Sync Calendar
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setShowAddReminder(!showAddReminder); }}
-                        style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: showAddReminder ? '#E8EEF2' : '#1A5276', color: showAddReminder ? '#666' : '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: showAddReminder ? '#E8EEF2' : 'var(--color-info)', color: showAddReminder ? 'var(--text-secondary)' : 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                         {showAddReminder ? 'Cancel' : '+ Add Reminder'}
                       </button>
                     </div>
@@ -1135,27 +1135,27 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   {showAddReminder && (
                     <div style={{ padding: 16, background: '#F0F7FF', borderRadius: 12, marginBottom: 16, border: '1px solid #D6EAF8' }}>
                       <div style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Label (optional)</label>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Label (optional)</label>
                         <input type="text" value={newReminderLabel} onChange={(e) => setNewReminderLabel(e.target.value)} onClick={(e) => e.stopPropagation()}
                           placeholder="e.g., Morning medication, Physical therapy"
                           style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, outline: 'none' }} />
                       </div>
                       <div style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Reminder message *</label>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Reminder message *</label>
                         <textarea value={newReminderText} onChange={(e) => setNewReminderText(e.target.value)} onClick={(e) => e.stopPropagation()}
                           placeholder="What should Kindred say? e.g., Time to take your morning pills!"
                           style={{ width: '100%', minHeight: 60, padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
                       </div>
                       <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                         <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Time</label>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Time</label>
                           <input type="time" value={newReminderTime} onChange={(e) => setNewReminderTime(e.target.value)} onClick={(e) => e.stopPropagation()}
                             style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, outline: 'none' }} />
                         </div>
                         <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Repeats</label>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Repeats</label>
                           <select value={newReminderRecurrence} onChange={(e) => setNewReminderRecurrence(e.target.value)} onClick={(e) => e.stopPropagation()}
-                            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, outline: 'none', background: '#fff' }}>
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #D6EAF8', fontSize: 13, outline: 'none', background: 'var(--bg-surface)' }}>
                             <option value="none">One-time</option>
                             <option value="daily">Daily</option>
                             <option value="weekdays">Weekdays</option>
@@ -1166,7 +1166,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       </div>
                       {newReminderRecurrence === 'custom' && (
                         <div style={{ marginBottom: 12 }}>
-                          <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 6 }}>Select days</label>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Select days</label>
                           <div style={{ display: 'flex', gap: 4 }}>
                             {[{ key: 'mon', label: 'M' }, { key: 'tue', label: 'T' }, { key: 'wed', label: 'W' }, { key: 'thu', label: 'T' }, { key: 'fri', label: 'F' }, { key: 'sat', label: 'S' }, { key: 'sun', label: 'S' }].map(d => {
                               const days = newReminderDays.split(',').filter(Boolean);
@@ -1180,7 +1180,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                                 },
                                 style: {
                                   width: 36, height: 36, borderRadius: '50%', border: active ? '2px solid #1A5276' : '1px solid #ccc',
-                                  background: active ? '#1A5276' : '#fff', color: active ? '#fff' : '#666',
+                                  background: active ? 'var(--color-info)' : 'var(--text-on-primary)', color: active ? 'var(--text-on-primary)' : 'var(--text-secondary)',
                                   fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 }
                               }, d.label);
@@ -1189,7 +1189,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                         </div>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); handleSaveReminder(); }} disabled={savingReminder || !newReminderText.trim()}
-                        style={{ width: '100%', padding: '10px 16px', borderRadius: 8, border: 'none', background: newReminderText.trim() ? '#1A5276' : '#ccc', color: '#fff', fontSize: 14, fontWeight: 600, cursor: newReminderText.trim() ? 'pointer' : 'not-allowed' }}>
+                        style={{ width: '100%', padding: '10px 16px', borderRadius: 8, border: 'none', background: newReminderText.trim() ? 'var(--color-info)' : 'var(--border-light)', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 600, cursor: newReminderText.trim() ? 'pointer' : 'not-allowed' }}>
                         {savingReminder ? 'Saving...' : 'Save Reminder'}
                       </button>
                     </div>
@@ -1197,12 +1197,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
                   {/* Reminders list */}
                   {remindersLoading ? (
-                    <div style={{ textAlign: 'center', padding: 20, color: '#999', fontSize: 13 }}>Loading reminders...</div>
+                    <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Loading reminders...</div>
                   ) : kindredReminders.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '30px 20px', background: '#F8F9FA', borderRadius: 12 }}>
                       <div style={{ fontSize: 32, marginBottom: 8 }}>{'\u23F0'}</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#555', marginBottom: 4 }}>No reminders yet</div>
-                      <div style={{ fontSize: 12, color: '#999', lineHeight: 1.5 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>No reminders yet</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
                         Set up voice reminders for {profile?.first_name || 'your loved one'}. Kindred will call at the scheduled time to deliver the message in a familiar voice.
                       </div>
                     </div>
@@ -1216,19 +1216,19 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                         return React.createElement('div', {
                           key: r.id,
                           style: {
-                            padding: '12px 14px', background: '#fff', borderRadius: 10, border: '1px solid #E8EEF2',
+                            padding: '12px 14px', background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid #E8EEF2',
                             opacity: isDelivered && r.recurrence === 'none' ? 0.6 : 1,
                           }
                         },
                           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } },
                             React.createElement('div', { style: { flex: 1 } },
-                              r.label && React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: '#1A5276', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 } }, r.label),
-                              React.createElement('div', { style: { fontSize: 13, color: '#333', lineHeight: 1.4, marginBottom: 4 } }, r.message_text),
+                              r.label && React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: 'var(--color-info)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 } }, r.label),
+                              React.createElement('div', { style: { fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4, marginBottom: 4 } }, r.message_text),
                               React.createElement('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } },
-                                React.createElement('span', { style: { fontSize: 11, color: '#888', background: '#F0F0F0', padding: '2px 8px', borderRadius: 6 } }, timeStr),
-                                React.createElement('span', { style: { fontSize: 11, color: '#888', background: '#F0F0F0', padding: '2px 8px', borderRadius: 6 } }, recLabel),
+                                React.createElement('span', { style: { fontSize: 11, color: 'var(--text-tertiary)', background: '#F0F0F0', padding: '2px 8px', borderRadius: 6 } }, timeStr),
+                                React.createElement('span', { style: { fontSize: 11, color: 'var(--text-tertiary)', background: '#F0F0F0', padding: '2px 8px', borderRadius: 6 } }, recLabel),
                                 isPending && React.createElement('span', { style: { fontSize: 11, color: '#27AE60', fontWeight: 600 } }, '\u2022 Active'),
-                                isDelivered && r.recurrence === 'none' && React.createElement('span', { style: { fontSize: 11, color: '#999' } }, '\u2713 Delivered'),
+                                isDelivered && r.recurrence === 'none' && React.createElement('span', { style: { fontSize: 11, color: 'var(--text-muted)' } }, '\u2713 Delivered'),
                                 r.source === 'calendar' && React.createElement('span', { style: { fontSize: 11, color: '#8E44AD', background: '#F4ECF7', padding: '2px 8px', borderRadius: 6 } }, '\uD83D\uDCC5 Auto'),
                               ),
                             ),
@@ -1244,7 +1244,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   )}
 
                   {/* Info note */}
-                  <div style={{ marginTop: 16, padding: '10px 14px', background: '#FFF8E1', borderRadius: 8, fontSize: 12, color: '#8D6E08', lineHeight: 1.5 }}>
+                  <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--color-warning-bg)', borderRadius: 8, fontSize: 12, color: '#8D6E08', lineHeight: 1.5 }}>
                     {'\uD83D\uDCA1'} Reminders are delivered as voice calls via Kindred. {profile?.first_name || 'Your loved one'} will hear the message in a familiar voice at the scheduled time.
                   </div>
                 </div>
@@ -1268,13 +1268,13 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   )}
 
                   {/* ── Care Team Instructions for Kindred ── */}
-                  <div style={{ marginBottom: 16, padding: '14px 16px', background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: 10 }}>
+                  <div style={{ marginBottom: 16, padding: '14px 16px', background: 'var(--color-warning-bg)', border: '1px solid #FFE082', borderRadius: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: '#F57F17', display: 'flex', alignItems: 'center', gap: 6 }}>
                         {'\uD83D\uDCDD'} Guidance for Kindred
                       </div>
                       {instructionsMeta.updated_at && (
-                        <span style={{ fontSize: 10, color: '#999' }}>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                           {instructionsMeta.updated_by_name ? `${instructionsMeta.updated_by_name} \u2022 ` : ''}
                           {new Date(instructionsMeta.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                         </span>
@@ -1292,17 +1292,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       style={{
                         width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid #FFE082', borderRadius: 8,
                         fontSize: 13, fontFamily: 'inherit', resize: 'vertical', background: '#FFFDE7',
-                        color: '#333', lineHeight: 1.5, outline: 'none',
+                        color: 'var(--text-primary)', lineHeight: 1.5, outline: 'none',
                       }}
                     />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                      <span style={{ fontSize: 11, color: '#999' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                         {kindredInstructionsDraft.length}/2000
                       </span>
                       <div style={{ display: 'flex', gap: 8 }}>
                         {kindredInstructionsDraft !== kindredInstructions && (
                           <button onClick={(e) => { e.stopPropagation(); setKindredInstructionsDraft(kindredInstructions); }}
-                            style={{ padding: '4px 12px', border: '1px solid #ddd', borderRadius: 6, background: '#fff', color: '#666', fontSize: 11, cursor: 'pointer' }}>
+                            style={{ padding: '4px 12px', border: '1px solid #ddd', borderRadius: 6, background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 11, cursor: 'pointer' }}>
                             Cancel
                           </button>
                         )}
@@ -1311,7 +1311,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           style={{
                             padding: '4px 14px', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: savingInstructions || kindredInstructionsDraft === kindredInstructions ? 'default' : 'pointer',
                             background: kindredInstructionsDraft !== kindredInstructions ? '#F57F17' : '#E0E0E0',
-                            color: kindredInstructionsDraft !== kindredInstructions ? '#fff' : '#999',
+                            color: kindredInstructionsDraft !== kindredInstructions ? 'var(--text-on-primary)' : 'var(--text-muted)',
                             transition: 'all 0.2s',
                           }}>
                           {savingInstructions ? 'Saving...' : 'Update'}
@@ -1323,21 +1323,21 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   {/* ── AI Care Summary ── */}
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#2C3E50' }}>Care Intelligence</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-navy)' }}>Care Intelligence</div>
                       <button onClick={(e) => { e.stopPropagation(); fetchKindredSummary(profile?.id); }}
                         disabled={summaryLoading}
-                        style={{ padding: '4px 12px', border: '1px solid #E8EEF2', borderRadius: 6, background: '#fff', color: '#1A5276', fontSize: 11, fontWeight: 600, cursor: summaryLoading ? 'wait' : 'pointer' }}>
+                        style={{ padding: '4px 12px', border: '1px solid #E8EEF2', borderRadius: 6, background: 'var(--bg-surface)', color: 'var(--color-info)', fontSize: 11, fontWeight: 600, cursor: summaryLoading ? 'wait' : 'pointer' }}>
                         {summaryLoading ? 'Analyzing...' : '\u21BB Refresh Summary'}
                       </button>
                     </div>
 
                     {summaryLoading && !kindredSummary ? (
-                      <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>Analyzing conversations...</div>
+                      <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>Analyzing conversations...</div>
                     ) : !kindredSummary || kindredSummary.message === 'No conversations to summarize' ? (
-                      <div style={{ textAlign: 'center', padding: 24, color: '#999', background: '#fafafa', borderRadius: 10 }}>
+                      <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', background: 'var(--bg-primary)', borderRadius: 10 }}>
                         <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83C\uDFA4'}</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#666', marginBottom: 4 }}>No conversations yet</div>
-                        <div style={{ fontSize: 12, color: '#999' }}>When {profile?.first_name} talks to Kindred, care insights will appear here.</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>No conversations yet</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>When {profile?.first_name} talks to Kindred, care insights will appear here.</div>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1347,14 +1347,14 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                             <span style={{ fontSize: 16 }}>
                               {kindredSummary.mood_trend === 'positive' ? '\uD83D\uDE0A' : kindredSummary.mood_trend === 'concerning' ? '\uD83D\uDE1F' : kindredSummary.mood_trend === 'declining' ? '\uD83D\uDE14' : '\uD83D\uDE10'}
                             </span>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: kindredSummary.mood_trend === 'positive' ? '#27AE60' : kindredSummary.mood_trend === 'concerning' ? '#E74C3C' : kindredSummary.mood_trend === 'declining' ? '#E67E22' : '#7F8C8D', textTransform: 'capitalize' }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: kindredSummary.mood_trend === 'positive' ? '#27AE60' : kindredSummary.mood_trend === 'concerning' ? '#E74C3C' : kindredSummary.mood_trend === 'declining' ? '#E67E22' : 'var(--text-tertiary)', textTransform: 'capitalize' }}>
                               {kindredSummary.mood_trend} mood
                             </span>
-                            <span style={{ fontSize: 11, color: '#999', marginLeft: 'auto' }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
                               {kindredSummary.message_count} messages analyzed
                             </span>
                           </div>
-                          <div style={{ fontSize: 13, color: '#333', lineHeight: 1.6 }}>{kindredSummary.summary}</div>
+                          <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>{kindredSummary.summary}</div>
                         </div>
 
                         {/* Medical alerts */}
@@ -1372,9 +1372,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                         {/* Care insights */}
                         {kindredSummary.care_insights?.length > 0 && (
                           <div style={{ padding: '12px 16px', background: '#EBF5FB', border: '1px solid #D6EAF8', borderRadius: 10 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1A5276', marginBottom: 6 }}>{'\uD83D\uDCA1'} Care Insights</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-info)', marginBottom: 6 }}>{'\uD83D\uDCA1'} Care Insights</div>
                             {kindredSummary.care_insights.map((insight, i) => (
-                              <div key={i} style={{ fontSize: 13, color: '#1A5276', lineHeight: 1.5, padding: '3px 0' }}>
+                              <div key={i} style={{ fontSize: 13, color: 'var(--color-info)', lineHeight: 1.5, padding: '3px 0' }}>
                                 {'\u2022'} {insight}
                               </div>
                             ))}
@@ -1382,7 +1382,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                         )}
 
                         {kindredSummary.generated_at && (
-                          <div style={{ fontSize: 11, color: '#999', textAlign: 'right' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
                             Last updated: {new Date(kindredSummary.generated_at).toLocaleString()}
                           </div>
                         )}
@@ -1394,14 +1394,14 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   {companionConvos.length > 0 && (
                     <div style={{ borderTop: '1px solid #E8EEF2', paddingTop: 14 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#666' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
                           Conversation Log ({companionConvos.length})
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                           {selectedConvos.size > 0 && (
                             <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${selectedConvos.size} conversation(s)? This cannot be undone.`)) deleteSelectedConversations(); }}
                               disabled={deletingConvos}
-                              style={{ padding: '4px 12px', border: 'none', borderRadius: 6, background: '#E74C3C', color: '#fff', fontSize: 11, fontWeight: 600, cursor: deletingConvos ? 'wait' : 'pointer' }}>
+                              style={{ padding: '4px 12px', border: 'none', borderRadius: 6, background: '#E74C3C', color: 'var(--text-on-primary)', fontSize: 11, fontWeight: 600, cursor: deletingConvos ? 'wait' : 'pointer' }}>
                               {deletingConvos ? 'Deleting...' : `Delete ${selectedConvos.size} selected`}
                             </button>
                           )}
@@ -1412,7 +1412,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                             } else {
                               setSelectedConvos(new Set(companionConvos.map(c => c.conversation_id)));
                             }
-                          }} style={{ padding: '4px 10px', border: '1px solid #ddd', borderRadius: 6, background: '#fff', color: '#666', fontSize: 11, cursor: 'pointer' }}>
+                          }} style={{ padding: '4px 10px', border: '1px solid #ddd', borderRadius: 6, background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 11, cursor: 'pointer' }}>
                             {selectedConvos.size === companionConvos.length ? 'Deselect all' : 'Select all'}
                           </button>
                         </div>
@@ -1423,7 +1423,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           const startDate = convo.started_at ? new Date(convo.started_at) : null;
                           return (
                             <div key={convo.conversation_id}
-                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: isSelected ? '1px solid #E74C3C' : '1px solid #f0f0f0', background: isSelected ? '#FEF5F5' : '#fff', transition: 'all 0.15s' }}>
+                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: isSelected ? '1px solid #E74C3C' : '1px solid #f0f0f0', background: isSelected ? '#FEF5F5' : 'var(--text-on-primary)', transition: 'all 0.15s' }}>
                               <input type="checkbox" checked={isSelected}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
@@ -1434,21 +1434,21 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                                 }}
                                 style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#E74C3C' }} />
                               <div style={{ flex: 1 }}>
-                                <span style={{ fontSize: 12, fontWeight: 500, color: '#2C3E50' }}>
+                                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-navy)' }}>
                                   {startDate ? startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Conversation'}
                                 </span>
-                                <span style={{ fontSize: 11, color: '#999', marginLeft: 6 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>
                                   {startDate ? startDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''}
                                 </span>
                               </div>
-                              <span style={{ fontSize: 10, color: '#999', background: '#F4F6F7', padding: '2px 6px', borderRadius: 6 }}>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', background: '#F4F6F7', padding: '2px 6px', borderRadius: 6 }}>
                                 {convo.message_count} msg{convo.message_count !== 1 ? 's' : ''}
                               </span>
                             </div>
                           );
                         })}
                       </div>
-                      <p style={{ fontSize: 11, color: '#999', marginTop: 8, lineHeight: 1.4 }}>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.4 }}>
                         Raw conversations are not visible to the care team. Only the AI-generated care summary above is shared. Select conversations to delete them permanently.
                       </p>
                     </div>
@@ -1506,20 +1506,20 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
                 return (
                   <div>
-                    <p style={{ fontSize: 12, color: '#888', margin: '0 0 12px', lineHeight: 1.5 }}>
+                    <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 12px', lineHeight: 1.5 }}>
                       Choose which voice speaks for each message type. Pete's cloned voice uses more credits; pre-made voices are lower cost.
                     </p>
 
                     {/* Summary bar */}
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', background: '#EBF5FB', borderRadius: 8, marginBottom: 12 }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#1A5276', background: '#D6EAF8', padding: '2px 8px', borderRadius: 10 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 8px', borderRadius: 10 }}>
                         {peteCount} use Pete's voice
                       </span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#666', background: '#F4F6F7', padding: '2px 8px', borderRadius: 10 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', background: '#F4F6F7', padding: '2px 8px', borderRadius: 10 }}>
                         {otherCount} use pre-made voice
                       </span>
                       {otherCount > 0 && (
-                        <span style={{ fontSize: 11, color: '#7F8C8D', marginLeft: 'auto' }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
                           ~{Math.round(otherCount / MESSAGE_TYPES.length * 100)}% credit savings
                         </span>
                       )}
@@ -1534,12 +1534,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           <div key={mt.id} style={{
                             padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
                             borderBottom: i < MESSAGE_TYPES.length - 1 ? '1px solid #f0f0f0' : 'none',
-                            background: i % 2 === 0 ? '#fff' : '#FAFCFE',
+                            background: i % 2 === 0 ? 'var(--text-on-primary)' : '#FAFCFE',
                           }}>
                             {/* Message type info */}
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: '#2C3E50' }}>{mt.label}</div>
-                              <div style={{ fontSize: 11, color: '#7F8C8D' }}>{mt.desc}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-navy)' }}>{mt.label}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{mt.desc}</div>
                             </div>
 
                             {/* Priority badge */}
@@ -1558,17 +1558,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                                   display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
                                   border: '1px solid #E8EEF2', fontSize: 12, cursor: 'pointer', minWidth: 170,
                                   background: assigned.name.includes('Pete') ? '#EBF5FB' : '#F4F6F7',
-                                  color: '#2C3E50',
+                                  color: 'var(--color-navy)',
                                 }}>
                                 <span>{assigned.icon}</span>
                                 <span style={{ flex: 1, textAlign: 'left' }}>{assigned.name}</span>
-                                <span style={{ fontSize: 10, color: '#999' }}>{'\u25BC'}</span>
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{'\u25BC'}</span>
                               </button>
 
                               {/* Dropdown */}
                               {isOpen && (
                                 <div style={{
-                                  position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#fff',
+                                  position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--bg-surface)',
                                   borderRadius: 10, border: '1px solid #E8EEF2', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                                   zIndex: 9999, width: 220, overflow: 'hidden',
                                 }}>
@@ -1581,7 +1581,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                                       style={{
                                         width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none',
                                         background: assigned.name === voice.name ? '#EBF5FB' : 'transparent',
-                                        cursor: savingRoute === mt.id ? 'wait' : 'pointer', fontSize: 12, color: '#2C3E50',
+                                        cursor: savingRoute === mt.id ? 'wait' : 'pointer', fontSize: 12, color: 'var(--color-navy)',
                                         display: 'flex', alignItems: 'center', gap: 8,
                                         borderBottom: vi < KNOWN_VOICES.length - 1 ? '1px solid #f8f8f8' : 'none',
                                       }}>
@@ -1603,7 +1603,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       <span style={{ fontSize: 16 }}>{'\uD83D\uDCA1'}</span>
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: '#7D6608' }}>Credit-saving tip</div>
-                        <div style={{ fontSize: 12, color: '#2C3E50', marginTop: 2, lineHeight: 1.5 }}>
+                        <div style={{ fontSize: 12, color: 'var(--color-navy)', marginTop: 2, lineHeight: 1.5 }}>
                           Daily check-ins and alerts happen frequently but don't need Pete's voice to feel personal. Using Sarah or Brian for these saves roughly 40% of monthly credits without affecting {profile?.first_name}'s experience.
                         </div>
                       </div>
@@ -1617,10 +1617,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 <div>
                   {/* Called-by name setting */}
                   <div style={{ marginBottom: 16, padding: '14px 16px', background: '#F0F7FF', borderRadius: 10, border: '1px solid #D6EAF8' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1A5276', marginBottom: 6 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-info)', marginBottom: 6 }}>
                       {'\uD83D\uDCAC'} What does your family call {profile?.first_name || 'your loved one'}?
                     </div>
-                    <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px', lineHeight: 1.4 }}>
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.4 }}>
                       Kindred will use this name when speaking. Example: "Mom", "Mama", "Nana", or their first name.
                     </p>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -1637,31 +1637,31 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           });
                           if (res?.ok && typeof showToast === 'function') showToast('Saved!', 'success');
                         } catch {}
-                      }} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#1A5276', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+                      }} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--color-info)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
                     </div>
                   </div>
 
-                  <p style={{ fontSize: 12, color: '#888', margin: '0 0 16px', lineHeight: 1.5 }}>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 16px', lineHeight: 1.5 }}>
                     Adjust how the companion speaks to {profile?.first_name}. These are the baseline settings; the companion also adapts in real time when {profile?.first_name} asks it to speak differently.
                   </p>
                   {voicePrefsLoading ? (
-                    <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>Loading voice settings...</div>
+                    <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>Loading voice settings...</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                       {/* Speed slider */}
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                           <div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: '#2C3E50' }}>Speaking Speed</div>
-                            <div style={{ fontSize: 11, color: '#7F8C8D' }}>0.7 (very slow) to 1.2 (brisk)</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-navy)' }}>Speaking Speed</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>0.7 (very slow) to 1.2 (brisk)</div>
                           </div>
-                          <span style={{ fontSize: 18, fontWeight: 700, color: '#1A5276' }}>{voicePrefs.speed.toFixed(2)}x</span>
+                          <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-info)' }}>{voicePrefs.speed.toFixed(2)}x</span>
                         </div>
                         <input type="range" min="0.7" max="1.2" step="0.05" value={voicePrefs.speed}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => setVoicePrefs(p => ({ ...p, speed: parseFloat(e.target.value) }))}
-                          style={{ width: '100%', accentColor: '#1A5276' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#999', marginTop: 2 }}>
+                          style={{ width: '100%', accentColor: 'var(--color-info)' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                           <span>Slower</span><span>Default</span><span>Faster</span>
                         </div>
                       </div>
@@ -1670,16 +1670,16 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                           <div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: '#2C3E50' }}>Voice Stability</div>
-                            <div style={{ fontSize: 11, color: '#7F8C8D' }}>Higher = more consistent. Lower = more expressive.</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-navy)' }}>Voice Stability</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Higher = more consistent. Lower = more expressive.</div>
                           </div>
-                          <span style={{ fontSize: 18, fontWeight: 700, color: '#1A5276' }}>{(voicePrefs.stability * 100).toFixed(0)}%</span>
+                          <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-info)' }}>{(voicePrefs.stability * 100).toFixed(0)}%</span>
                         </div>
                         <input type="range" min="0" max="1" step="0.05" value={voicePrefs.stability}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => setVoicePrefs(p => ({ ...p, stability: parseFloat(e.target.value) }))}
-                          style={{ width: '100%', accentColor: '#1A5276' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#999', marginTop: 2 }}>
+                          style={{ width: '100%', accentColor: 'var(--color-info)' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                           <span>Expressive</span><span>Balanced</span><span>Consistent</span>
                         </div>
                       </div>
@@ -1688,16 +1688,16 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                           <div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: '#2C3E50' }}>Voice Similarity</div>
-                            <div style={{ fontSize: 11, color: '#7F8C8D' }}>How closely the output matches the original recording.</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-navy)' }}>Voice Similarity</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>How closely the output matches the original recording.</div>
                           </div>
-                          <span style={{ fontSize: 18, fontWeight: 700, color: '#1A5276' }}>{(voicePrefs.similarity_boost * 100).toFixed(0)}%</span>
+                          <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-info)' }}>{(voicePrefs.similarity_boost * 100).toFixed(0)}%</span>
                         </div>
                         <input type="range" min="0" max="1" step="0.05" value={voicePrefs.similarity_boost}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => setVoicePrefs(p => ({ ...p, similarity_boost: parseFloat(e.target.value) }))}
-                          style={{ width: '100%', accentColor: '#1A5276' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#999', marginTop: 2 }}>
+                          style={{ width: '100%', accentColor: 'var(--color-info)' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                           <span>Less alike</span><span>Balanced</span><span>Most alike</span>
                         </div>
                       </div>
@@ -1705,7 +1705,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       <button onClick={(e) => { e.stopPropagation(); saveVoicePreferences(); }} disabled={savingVoicePrefs}
                         style={{
                           padding: '10px 20px', borderRadius: 8, border: 'none',
-                          background: savingVoicePrefs ? '#a0c4b8' : '#1A5276', color: '#fff',
+                          background: savingVoicePrefs ? '#a0c4b8' : 'var(--color-info)', color: 'var(--text-on-primary)',
                           fontWeight: 700, fontSize: 13, cursor: savingVoicePrefs ? 'wait' : 'pointer', alignSelf: 'flex-start',
                         }}>
                         {savingVoicePrefs ? 'Saving...' : 'Save Voice Settings'}
@@ -1718,19 +1718,19 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               {/* ── Usage Tab ── */}
               {companionTab === 'usage' && (
                 <div>
-                  <p style={{ fontSize: 12, color: '#888', margin: '0 0 16px', lineHeight: 1.5 }}>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 16px', lineHeight: 1.5 }}>
                     Track voice companion usage and ElevenLabs credit consumption.
                   </p>
                   {usageLoading ? (
-                    <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>Loading usage data...</div>
+                    <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>Loading usage data...</div>
                   ) : !companionUsage ? (
-                    <div style={{ textAlign: 'center', padding: 24, color: '#999', background: '#fafafa', borderRadius: 10 }}>No usage data yet</div>
+                    <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', background: 'var(--bg-primary)', borderRadius: 10 }}>No usage data yet</div>
                   ) : (
                     <div>
                       {/* Summary cards */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
                         {[
-                          { label: 'Total Messages', value: companionUsage.summary?.total_messages || 0, icon: '\uD83D\uDCAC', color: '#1A5276' },
+                          { label: 'Total Messages', value: companionUsage.summary?.total_messages || 0, icon: '\uD83D\uDCAC', color: 'var(--color-info)' },
                           { label: 'Conversations', value: companionUsage.summary?.conversation_count || 0, icon: '\uD83D\uDDE3\uFE0F', color: '#27AE60' },
                           { label: 'Credits Used', value: companionUsage.summary?.total_credits_used || 0, icon: '\uD83D\uDCB0', color: '#E67E22' },
                           { label: 'Proj. Monthly', value: companionUsage.summary?.projected_monthly_credits || 0, icon: '\uD83D\uDCC8', color: '#8E44AD' },
@@ -1738,7 +1738,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           <div key={i} style={{ textAlign: 'center', padding: 14, background: '#F4F6F7', borderRadius: 10 }}>
                             <div style={{ fontSize: 20, marginBottom: 4 }}>{stat.icon}</div>
                             <div style={{ fontSize: 20, fontWeight: 700, color: stat.color }}>{typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}</div>
-                            <div style={{ fontSize: 11, color: '#7F8C8D', marginTop: 2 }}>{stat.label}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{stat.label}</div>
                           </div>
                         ))}
                       </div>
@@ -1746,24 +1746,24 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       {/* Daily breakdown */}
                       {companionUsage.daily_breakdown && companionUsage.daily_breakdown.length > 0 && (
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#2C3E50', marginBottom: 8 }}>Past 7 Days</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-navy)', marginBottom: 8 }}>Past 7 Days</div>
                           <div style={{ border: '1px solid #E8EEF2', borderRadius: 10, overflow: 'hidden' }}>
                             {companionUsage.daily_breakdown.map((day, i) => (
                               <div key={i} style={{
                                 display: 'flex', alignItems: 'center', padding: '10px 14px', gap: 12,
                                 borderBottom: i < companionUsage.daily_breakdown.length - 1 ? '1px solid #f0f0f0' : 'none',
-                                background: i % 2 === 0 ? '#fff' : '#FAFCFE',
+                                background: i % 2 === 0 ? 'var(--text-on-primary)' : '#FAFCFE',
                               }}>
-                                <span style={{ fontSize: 13, color: '#2C3E50', fontWeight: 500, width: 90 }}>
+                                <span style={{ fontSize: 13, color: 'var(--color-navy)', fontWeight: 500, width: 90 }}>
                                   {new Date(day.day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                                 </span>
                                 <div style={{ flex: 1, height: 8, background: '#F4F6F7', borderRadius: 4, overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', background: '#1A5276', borderRadius: 4, width: `${Math.min(100, (day.credits_used / Math.max(1, ...companionUsage.daily_breakdown.map(d => d.credits_used))) * 100)}%` }} />
+                                  <div style={{ height: '100%', background: 'var(--color-info)', borderRadius: 4, width: `${Math.min(100, (day.credits_used / Math.max(1, ...companionUsage.daily_breakdown.map(d => d.credits_used))) * 100)}%` }} />
                                 </div>
-                                <span style={{ fontSize: 11, color: '#7F8C8D', width: 60, textAlign: 'right' }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', width: 60, textAlign: 'right' }}>
                                   {(day.credits_used || 0).toLocaleString()} cr
                                 </span>
-                                <span style={{ fontSize: 11, color: '#7F8C8D', width: 50, textAlign: 'right' }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', width: 50, textAlign: 'right' }}>
                                   {day.message_count} msg
                                 </span>
                               </div>
@@ -1774,7 +1774,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
                       {/* ElevenLabs plan info */}
                       <div style={{ marginTop: 16, padding: 14, background: '#EBF5FB', borderRadius: 10, border: '1px solid #D6EAF8' }}>
-                        <div style={{ fontSize: 13, color: '#2C3E50', lineHeight: 1.5 }}>
+                        <div style={{ fontSize: 13, color: 'var(--color-navy)', lineHeight: 1.5 }}>
                           <strong>ElevenLabs Starter Plan:</strong> 40,000 credits/month ($5/mo).
                           {companionUsage.summary?.projected_monthly_credits > 40000 && (
                             <span style={{ color: '#E67E22', fontWeight: 600 }}>
@@ -1796,12 +1796,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   window.open(`/kindred?token=${encodeURIComponent(token)}`, '_blank');
                 }} style={{
                   padding: '8px 16px', borderRadius: 8, border: '2px solid #1A5276',
-                  background: '#fff', color: '#1A5276', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  background: 'var(--bg-surface)', color: 'var(--color-info)', fontWeight: 700, fontSize: 13, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 6,
                 }}>
                   {'\uD83C\uDFA4'} Open Kindred
                 </button>
-                <span style={{ fontSize: 12, color: '#999' }}>Opens {profile?.first_name}'s Kindred in a new tab</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Opens {profile?.first_name}'s Kindred in a new tab</span>
               </div>
             </div>
           )}
@@ -1812,10 +1812,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {canEdit && (
         profile?.linked_user_id ? (
         <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{'\uD83D\uDD10'}</span> {profile.first_name}'s App Permissions
           </div>
-          <p style={{ fontSize: 12, color: '#888', marginBottom: 14, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 14, lineHeight: 1.5 }}>
             Control what {profile.first_name} sees and can do when they log into their own account.
           </p>
 
@@ -1831,17 +1831,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 else if (!visSettings) setVisSettings({ calendar: true, healthConditions: true, medications: true, allergies: true, preferences: true, pets: true, emergencyContact: true, notes: true });
               }} style={{
                 flex: '1 1 140px', padding: '10px 12px', border: permTier === t.id ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                borderRadius: 10, background: permTier === t.id ? '#e8f5e9' : '#fff', cursor: 'pointer', textAlign: 'left',
+                borderRadius: 10, background: permTier === t.id ? 'var(--color-success-bg)' : 'var(--text-on-primary)', cursor: 'pointer', textAlign: 'left',
               }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{t.icon} {t.label}</div>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{t.desc}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t.icon} {t.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{t.desc}</div>
               </button>
             ))}
           </div>
 
           {permTier !== 'full' && visSettings && (
             <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 {profile.first_name} can see:
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 6 }}>
@@ -1857,13 +1857,13 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 ].map(s => (
                   <label key={s.key} style={{
                     display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
-                    background: visSettings[s.key] ? '#f0faf5' : '#fafafa', borderRadius: 8,
-                    border: `1px solid ${visSettings[s.key] ? '#1b6b5a40' : '#e0e0e0'}`, cursor: 'pointer',
+                    background: visSettings[s.key] ? 'var(--bg-highlight)' : 'var(--bg-primary)', borderRadius: 8,
+                    border: `1px solid ${visSettings[s.key] ? '#1b6b5a40' : 'var(--border-light)'}`, cursor: 'pointer',
                   }}>
                     <input type="checkbox" checked={!!visSettings[s.key]}
                       onChange={() => setVisSettings(v => ({ ...v, [s.key]: !v[s.key] }))}
-                      style={{ accentColor: '#1b6b5a' }} />
-                    <span style={{ fontSize: 12, color: '#333' }}>{s.icon} {s.label}</span>
+                      style={{ accentColor: 'var(--role-color)' }} />
+                    <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{s.icon} {s.label}</span>
                   </label>
                 ))}
               </div>
@@ -1890,7 +1890,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             } catch { showToast('Failed to update permissions', 'error'); }
             setSavingPerms(false);
           }} disabled={savingPerms} style={{
-            padding: '8px 20px', background: savingPerms ? '#999' : '#1b6b5a', color: '#fff',
+            padding: '8px 20px', background: savingPerms ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)',
             border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: savingPerms ? 'wait' : 'pointer',
           }}>
             {savingPerms ? 'Saving...' : 'Save Permissions'}
@@ -1898,10 +1898,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         </div>
         ) : (
         <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0', opacity: 0.55 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{'\uD83D\uDD10'}</span> {profile.first_name}'s App Permissions
           </div>
-          <p style={{ fontSize: 13, color: '#888', margin: 0, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>
             Control {profile.first_name}'s access on the app if {profile.first_name} joins. Once {profile.first_name} has their own account linked here, you'll be able to choose what they can see and do.
           </p>
           <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap', pointerEvents: 'none' }}>
@@ -1912,9 +1912,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             ].map(t => (
               <div key={t.label} style={{
                 flex: '1 1 120px', padding: '8px 10px', border: '1px solid #e0e0e0',
-                borderRadius: 10, background: '#fafafa', textAlign: 'left',
+                borderRadius: 10, background: 'var(--bg-primary)', textAlign: 'left',
               }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#aaa' }}>{t.icon} {t.label}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>{t.icon} {t.label}</div>
               </div>
             ))}
           </div>
@@ -1926,10 +1926,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {!editing && onNavigate && (
         <div className="card" style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', cursor: 'pointer' }} onClick={() => onNavigate('care-team')}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#1b6b5a' }}>👪 Care Team</div>
-            <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>View members, invite family, and manage caregivers</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--role-color)' }}>👪 Care Team</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 2 }}>View members, invite family, and manage caregivers</div>
           </div>
-          <span style={{ fontSize: 20, color: '#ccc' }}>›</span>
+          <span style={{ fontSize: 20, color: 'var(--text-muted)' }}>›</span>
         </div>
       )}
     </>

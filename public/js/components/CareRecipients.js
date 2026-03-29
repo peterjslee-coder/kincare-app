@@ -112,10 +112,10 @@ const CareRecipients = window.CareRecipients = () => {
   };
 
   const RATING_OPTIONS = [
-    { value: 0, label: 'Not needed', color: '#e0e0e0', textColor: '#999' },
-    { value: 1, label: 'Nice to have', color: '#fff3e0', textColor: '#e65100' },
-    { value: 2, label: 'Important', color: '#e8f5e9', textColor: '#2e7d32' },
-    { value: 3, label: 'Must have', color: '#1b6b5a', textColor: '#fff' },
+    { value: 0, label: 'Not needed', color: 'var(--border-light)', textColor: 'var(--text-muted)' },
+    { value: 1, label: 'Nice to have', color: 'var(--color-warning-bg)', textColor: 'var(--color-warning)' },
+    { value: 2, label: 'Important', color: 'var(--color-success-bg)', textColor: 'var(--color-success)' },
+    { value: 3, label: 'Must have', color: 'var(--role-color)', textColor: 'var(--text-on-primary)' },
   ];
 
   const fetchRecipients = async () => {
@@ -498,7 +498,7 @@ const CareRecipients = window.CareRecipients = () => {
     }
     const initials = ((r.first_name || r.firstName || '')[0] || '') + ((r.last_name || r.lastName || '')[0] || '');
     return React.createElement('div', {
-      style: { width: size, height: size, borderRadius: '50%', background: '#e0f2e9', color: '#1b6b5a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.4, fontWeight: 700, cursor: clickable ? 'pointer' : 'default', flexShrink: 0 },
+      style: { width: size, height: size, borderRadius: '50%', background: 'var(--role-color-light)', color: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.4, fontWeight: 700, cursor: clickable ? 'pointer' : 'default', flexShrink: 0 },
       onClick: clickable ? (e) => { e.stopPropagation(); handlePhotoUpload(r.id); } : undefined,
       title: clickable ? 'Click to add photo' : undefined,
     }, initials.toUpperCase());
@@ -550,8 +550,8 @@ const CareRecipients = window.CareRecipients = () => {
                   width: 40,
                   height: 40,
                   borderRadius: '50%',
-                  background: isCompleted ? '#2e7d32' : isCurrent ? '#e8724a' : '#e0e0e0',
-                  color: isCompleted || isCurrent ? '#fff' : '#999',
+                  background: isCompleted ? 'var(--color-success)' : isCurrent ? 'var(--accent-color)' : 'var(--border-light)',
+                  color: isCompleted || isCurrent ? 'var(--text-on-primary)' : 'var(--text-muted)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -564,7 +564,7 @@ const CareRecipients = window.CareRecipients = () => {
                 }}>
                   {isCompleted ? '✓' : (idx + 1)}
                 </div>
-                <div style={{ fontSize: 12, marginTop: 8, textAlign: 'center', maxWidth: 100, color: isCurrent ? '#333' : isClickable ? '#2e7d32' : '#999', fontWeight: isClickable ? 500 : 400 }}>
+                <div style={{ fontSize: 12, marginTop: 8, textAlign: 'center', maxWidth: 100, color: isCurrent ? 'var(--text-primary)' : isClickable ? 'var(--color-success)' : 'var(--text-muted)', fontWeight: isClickable ? 500 : 400 }}>
                   {step}
                 </div>
               </div>
@@ -577,7 +577,7 @@ const CareRecipients = window.CareRecipients = () => {
           left: 0,
           right: 0,
           height: 2,
-          background: '#e0e0e0',
+          background: 'var(--border-light)',
           zIndex: 1,
           width: '100%',
         }} />
@@ -586,7 +586,7 @@ const CareRecipients = window.CareRecipients = () => {
           top: 20,
           left: 0,
           height: 2,
-          background: '#2e7d32',
+          background: 'var(--color-success)',
           zIndex: 1,
           width: `${(currentStep / displaySteps.length) * 100}%`,
           transition: 'width 0.3s ease',
@@ -603,8 +603,8 @@ const CareRecipients = window.CareRecipients = () => {
     return (
       <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
         <WizardProgressBar currentStep={1} />
-        <h3 style={{ marginBottom: '8px', color: '#1b6b5a' }}>Care Preferences</h3>
-        <p style={{ color: '#666', fontSize: 14, marginBottom: '24px' }}>
+        <h3 style={{ marginBottom: '8px', color: 'var(--role-color)' }}>Care Preferences</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: '24px' }}>
           Tell us about the care your loved one needs. We'll use this to match you with the right caregivers.
         </p>
 
@@ -613,7 +613,7 @@ const CareRecipients = window.CareRecipients = () => {
             <div key={pref.id} style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                 <span style={{ fontSize: 20 }}>{pref.icon}</span>
-                <span style={{ flex: 1, fontWeight: 500, color: '#333' }}>{pref.label}</span>
+                <span style={{ flex: 1, fontWeight: 500, color: 'var(--text-primary)' }}>{pref.label}</span>
               </div>
               <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
                 {RATING_OPTIONS.map(opt => (
@@ -624,8 +624,8 @@ const CareRecipients = window.CareRecipients = () => {
                       padding: '6px 12px',
                       borderRadius: '6px',
                       border: carePrefs[pref.id] === opt.value ? `2px solid ${opt.color}` : '1px solid #ddd',
-                      background: carePrefs[pref.id] === opt.value ? opt.color : '#fff',
-                      color: carePrefs[pref.id] === opt.value ? opt.textColor : '#666',
+                      background: carePrefs[pref.id] === opt.value ? opt.color : 'var(--text-on-primary)',
+                      color: carePrefs[pref.id] === opt.value ? opt.textColor : 'var(--text-secondary)',
                       fontSize: 12,
                       fontWeight: carePrefs[pref.id] === opt.value ? 600 : 500,
                       cursor: 'pointer',
@@ -638,7 +638,7 @@ const CareRecipients = window.CareRecipients = () => {
               </div>
 
               {pref.id === 'med_reminders' && carePrefs[pref.id] >= 1 && (
-                <div style={{ marginTop: '6px', marginLeft: '32px', padding: '6px 10px', background: '#e8f5e9', borderRadius: 6, fontSize: 12, color: '#2e7d32' }}>
+                <div style={{ marginTop: '6px', marginLeft: '32px', padding: '6px 10px', background: 'var(--color-success-bg)', borderRadius: 6, fontSize: 12, color: 'var(--color-success)' }}>
                   💊 Note: Caregivers can remind your loved one to take their medication — they do not administer or handle medications directly.
                 </div>
               )}
@@ -669,8 +669,8 @@ const CareRecipients = window.CareRecipients = () => {
               onClick={() => setShowAllPrefs(true)}
               style={{
                 padding: '8px 12px',
-                color: '#1b6b5a',
-                background: '#e8f5f2',
+                color: 'var(--role-color)',
+                background: 'var(--bg-teal-light)',
                 border: '1px solid #1b6b5a',
                 borderRadius: '6px',
                 fontWeight: 500,
@@ -736,39 +736,39 @@ const CareRecipients = window.CareRecipients = () => {
     return (
       <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
         <WizardProgressBar currentStep={2} />
-        <h3 style={{ marginBottom: '24px', color: '#1b6b5a' }}>Verify Identity & Set Up Payments</h3>
+        <h3 style={{ marginBottom: '24px', color: 'var(--role-color)' }}>Verify Identity & Set Up Payments</h3>
 
         {/* Identity Verification Section */}
         <div style={{
           padding: '24px',
           borderRadius: '12px',
           border: '1px solid #e0e0e0',
-          background: '#fafafa',
+          background: 'var(--bg-primary)',
           marginBottom: '20px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <div style={{
               width: 36, height: 36, borderRadius: '50%',
-              background: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--color-success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 18,
             }}>🛡️</div>
             <div>
-              <h4 style={{ margin: 0, color: '#333', fontSize: 16 }}>Identity Verification</h4>
-              <p style={{ margin: 0, color: '#888', fontSize: 13 }}>Verify your identity with a photo ID</p>
+              <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: 16 }}>Identity Verification</h4>
+              <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: 13 }}>Verify your identity with a photo ID</p>
             </div>
           </div>
           <div style={{
             display: 'inline-block',
             padding: '6px 12px',
-            background: '#fff3e0',
-            color: '#e8724a',
+            background: 'var(--color-warning-bg)',
+            color: 'var(--accent-color)',
             borderRadius: '6px',
             fontSize: 12,
             fontWeight: 600,
           }}>
             Coming Soon — Powered by Stripe Identity
           </div>
-          <p style={{ color: '#666', fontSize: 13, marginTop: '12px', marginBottom: 0 }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: '12px', marginBottom: 0 }}>
             Identity verification will be required before care can begin. We'll notify you when this is available.
           </p>
         </div>
@@ -778,18 +778,18 @@ const CareRecipients = window.CareRecipients = () => {
           padding: '24px',
           borderRadius: '12px',
           border: stripeStatus === 'complete' ? '2px solid #4caf50' : '1px solid #e0e0e0',
-          background: stripeStatus === 'complete' ? '#e8f5e9' : '#fff',
+          background: stripeStatus === 'complete' ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <div style={{
               width: 36, height: 36, borderRadius: '50%',
-              background: stripeStatus === 'complete' ? '#c8e6c9' : '#e3f2fd',
+              background: stripeStatus === 'complete' ? 'var(--color-success-bg)' : 'var(--color-info-bg)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 18,
             }}>{stripeStatus === 'complete' ? '✅' : '💳'}</div>
             <div>
-              <h4 style={{ margin: 0, color: '#333', fontSize: 16 }}>Payment Setup</h4>
-              <p style={{ margin: 0, color: '#888', fontSize: 13 }}>
+              <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: 16 }}>Payment Setup</h4>
+              <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: 13 }}>
                 {stripeStatus === 'complete'
                   ? 'Stripe Connect is set up and ready'
                   : 'Set up secure payments via Stripe Connect'}
@@ -800,9 +800,9 @@ const CareRecipients = window.CareRecipients = () => {
           {stripeStatus === 'complete' ? (
             <div style={{
               padding: '12px 16px',
-              background: '#c8e6c9',
+              background: 'var(--color-success-bg)',
               borderRadius: '8px',
-              color: '#2e7d32',
+              color: 'var(--color-success)',
               fontSize: 14,
               fontWeight: 500,
             }}>
@@ -812,9 +812,9 @@ const CareRecipients = window.CareRecipients = () => {
             <div>
               <div style={{
                 padding: '12px 16px',
-                background: '#fff3e0',
+                background: 'var(--color-warning-bg)',
                 borderRadius: '8px',
-                color: '#e65100',
+                color: 'var(--color-warning)',
                 fontSize: 14,
                 marginBottom: '12px',
               }}>
@@ -831,10 +831,10 @@ const CareRecipients = window.CareRecipients = () => {
             </div>
           ) : (
             <div>
-              <p style={{ color: '#666', fontSize: 14, marginBottom: '16px' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: '16px' }}>
                 Connect your bank account or debit card so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe.
               </p>
-              <ul style={{ color: '#666', fontSize: 13, marginBottom: '16px', paddingLeft: '20px' }}>
+              <ul style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: '16px', paddingLeft: '20px' }}>
                 <li style={{ marginBottom: '6px' }}>Secure, encrypted payment processing</li>
                 <li style={{ marginBottom: '6px' }}>Pay caregivers directly after visits</li>
                 <li style={{ marginBottom: '6px' }}>Full transaction history and receipts</li>
@@ -854,10 +854,10 @@ const CareRecipients = window.CareRecipients = () => {
         <div style={{
           marginTop: '16px',
           padding: '12px',
-          background: '#f5f5f5',
+          background: 'var(--bg-primary)',
           borderRadius: '8px',
           fontSize: 12,
-          color: '#888',
+          color: 'var(--text-tertiary)',
           textAlign: 'center',
         }}>
           Powered by Stripe — Your financial data is never stored on InPlace servers.
@@ -894,14 +894,14 @@ const CareRecipients = window.CareRecipients = () => {
     return (
       <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
         <WizardProgressBar currentStep={3} />
-        <h3 style={{ marginBottom: '24px', color: '#1b6b5a' }}>Attest & Notify</h3>
+        <h3 style={{ marginBottom: '24px', color: 'var(--role-color)' }}>Attest & Notify</h3>
 
         {attestError && (
           <div style={{
             padding: '12px 16px',
             borderRadius: '8px',
-            background: '#fce4ec',
-            color: '#c62828',
+            background: 'var(--color-error-bg)',
+            color: 'var(--color-error)',
             marginBottom: '20px',
             fontSize: 13,
           }}>
@@ -909,8 +909,8 @@ const CareRecipients = window.CareRecipients = () => {
           </div>
         )}
 
-        <div style={{ background: '#f9f9f9', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
-          <p style={{ fontSize: 13, lineHeight: '1.6', color: '#333', margin: 0 }}>
+        <div style={{ background: 'var(--bg-neutral)', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
+          <p style={{ fontSize: 13, lineHeight: '1.6', color: 'var(--text-primary)', margin: 0 }}>
             I confirm that <strong>{recipientName}</strong> is aware that I am arranging non-medical companion care services through InPlace on their behalf. I understand that <strong>{recipientName}</strong> will be contacted directly by InPlace to verify their awareness and consent before any caregiver visit is scheduled. I understand that misrepresenting this consent may result in immediate account termination, referral to appropriate authorities, and potential legal liability under Virginia law.
           </p>
         </div>
@@ -923,13 +923,13 @@ const CareRecipients = window.CareRecipients = () => {
               onChange={(e) => setAttestAgreed(e.target.checked)}
               style={{ cursor: 'pointer', width: 18, height: 18 }}
             />
-            <span style={{ fontSize: 13, color: '#333' }}>I attest to the above statement</span>
+            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>I attest to the above statement</span>
           </label>
         </div>
 
         <div className="form-group" style={{ marginBottom: '20px' }}>
           <label style={{ fontWeight: 600, marginBottom: '8px', display: 'block' }}>Your Signature</label>
-          <p style={{ fontSize: 12, color: '#888', marginBottom: '8px', marginTop: 0 }}>Type your full name exactly as it appears</p>
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: '8px', marginTop: 0 }}>Type your full name exactly as it appears</p>
           <input
             type="text"
             placeholder="e.g., John Smith"
@@ -955,8 +955,8 @@ const CareRecipients = window.CareRecipients = () => {
           </select>
         </div>
 
-        <div style={{ background: '#e8f5f2', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#1b6b5a', marginTop: 0, marginBottom: '12px' }}>How should we contact {recipientName}?</p>
+        <div style={{ background: 'var(--bg-teal-light)', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--role-color)', marginTop: 0, marginBottom: '12px' }}>How should we contact {recipientName}?</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
               { id: 'email', label: 'Email', value: formData.email },
@@ -972,8 +972,8 @@ const CareRecipients = window.CareRecipients = () => {
                   onChange={(e) => setAttestNotifyMethod(e.target.value)}
                   style={{ cursor: 'pointer' }}
                 />
-                <span style={{ fontSize: 13, color: '#333' }}>
-                  {opt.label} {opt.value && <span style={{ color: '#888' }}>({opt.value})</span>}
+                <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                  {opt.label} {opt.value && <span style={{ color: 'var(--text-tertiary)' }}>({opt.value})</span>}
                 </span>
               </label>
             ))}
@@ -1010,14 +1010,14 @@ const CareRecipients = window.CareRecipients = () => {
         <WizardProgressBar currentStep={formData.authorizationTier === 'tier3' ? 4 : 3} />
 
         <div style={{ fontSize: 48, marginBottom: '16px' }}>✓</div>
-        <h3 style={{ color: '#2e7d32', marginBottom: '12px' }}>You're All Set!</h3>
-        <p style={{ color: '#666', fontSize: 15, marginBottom: '24px' }}>
+        <h3 style={{ color: 'var(--color-success)', marginBottom: '12px' }}>You're All Set!</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 15, marginBottom: '24px' }}>
           {recipientName} has been added to your care team. We're verifying the information you provided and will reach out to confirm everything.
         </p>
 
-        <div style={{ background: '#f9f9f9', padding: '20px', borderRadius: '8px', marginBottom: '32px', textAlign: 'left' }}>
-          <p style={{ fontWeight: 600, color: '#333', marginTop: 0, marginBottom: '12px' }}>While we verify, you can:</p>
-          <ul style={{ margin: 0, paddingLeft: '20px', color: '#666', fontSize: 14 }}>
+        <div style={{ background: 'var(--bg-neutral)', padding: '20px', borderRadius: '8px', marginBottom: '32px', textAlign: 'left' }}>
+          <p style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: 0, marginBottom: '12px' }}>While we verify, you can:</p>
+          <ul style={{ margin: 0, paddingLeft: '20px', color: 'var(--text-secondary)', fontSize: 14 }}>
             <li>Review care preferences and make adjustments</li>
             <li>Upload additional photos or documents</li>
             <li>Invite family members to the care team</li>
@@ -1043,7 +1043,7 @@ const CareRecipients = window.CareRecipients = () => {
               fetchRecipients();
               if (window.__navigateTo) window.__navigateTo('care-team');
             }}
-            style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a' }}
+            style={{ background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a' }}
           >
             Invite Family to Care Team
           </button>
@@ -1054,7 +1054,7 @@ const CareRecipients = window.CareRecipients = () => {
               fetchRecipients();
               if (window.__navigateTo) window.__navigateTo('caregivers');
             }}
-            style={{ background: '#fff', color: '#1b6b5a', border: '1px solid #1b6b5a' }}
+            style={{ background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a' }}
           >
             Browse Caregivers in Your Area
           </button>
@@ -1073,7 +1073,7 @@ const CareRecipients = window.CareRecipients = () => {
     <div>
       {/* Show welcome hero for first-time users entering the wizard */}
       {recipients.length === 0 && isInWizardFlow && (
-        <div style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #2a9d8f 100%)', borderRadius: 16, padding: '32px 28px', color: '#fff', marginBottom: 24, textAlign: 'center' }}>
+        <div style={{ background: 'linear-gradient(135deg, #1b6b5a 0%, #2a9d8f 100%)', borderRadius: 16, padding: '32px 28px', color: 'var(--text-on-primary)', marginBottom: 24, textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 10 }}>👋</div>
           <h1 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 700 }}>Let's set up care for your loved one</h1>
           <p style={{ margin: 0, fontSize: 15, opacity: 0.9, maxWidth: 440, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
@@ -1095,8 +1095,8 @@ const CareRecipients = window.CareRecipients = () => {
                 {(r.location_city || r.city) && <p className="text-muted" style={{ fontSize: '13px' }}>{r.location_city ? `${r.location_city}, ${r.location_state}` : r.city}</p>}
                 {r.consent_status && r.consent_status !== 'verified' && (
                   <div style={{ marginTop: '6px', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, display: 'inline-block',
-                    background: r.consent_status === 'pending' ? '#FFF3E0' : r.consent_status === 'attested' ? '#E3F2FD' : '#fce4ec',
-                    color: r.consent_status === 'pending' ? '#e8724a' : r.consent_status === 'attested' ? '#1565C0' : '#c62828',
+                    background: r.consent_status === 'pending' ? 'var(--color-warning-bg)' : r.consent_status === 'attested' ? '#E3F2FD' : 'var(--color-error-bg)',
+                    color: r.consent_status === 'pending' ? 'var(--accent-color)' : r.consent_status === 'attested' ? '#1565C0' : 'var(--color-error)',
                   }}>
                     {r.consent_status === 'pending' ? '\u23F3 Pending' : r.consent_status === 'attested' ? '\u{1F4DD} Attested \u2014 awaiting code' : '\u274C ' + r.consent_status}
                   </div>
@@ -1113,13 +1113,13 @@ const CareRecipients = window.CareRecipients = () => {
                   <span>{getName(selected)}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button onClick={() => handlePhotoUpload(selected.id)} disabled={photoUploading} style={{ padding: '6px 14px', background: '#f0f0f0', color: '#555', border: '1px solid #ddd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>
+                  <button onClick={() => handlePhotoUpload(selected.id)} disabled={photoUploading} style={{ padding: '6px 14px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>
                     {photoUploading ? 'Uploading...' : (selected.photo ? 'Change Photo' : 'Add Photo')}
                   </button>
                   {selected.photo && (
-                    <button onClick={() => handleRemovePhoto(selected.id)} style={{ padding: '6px 10px', background: '#fff0f0', color: '#c00', border: '1px solid #fdd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>Remove</button>
+                    <button onClick={() => handleRemovePhoto(selected.id)} style={{ padding: '6px 10px', background: '#fff0f0', color: 'var(--color-red-strong)', border: '1px solid #fdd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>Remove</button>
                   )}
-                  <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
+                  <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
                 </div>
               </div>
               <div className="info-grid">
@@ -1129,49 +1129,49 @@ const CareRecipients = window.CareRecipients = () => {
               {(selected.health_conditions || selected.healthConditions) && (
                 <div style={{ marginTop: '16px' }}>
                   <strong>Health Conditions:</strong>
-                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{parseDisplay(selected.health_conditions || selected.healthConditions)}</p>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>{parseDisplay(selected.health_conditions || selected.healthConditions)}</p>
                 </div>
               )}
               {selected.medications && (
                 <div style={{ marginTop: '16px' }}>
                   <strong>Medications:</strong>
-                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{parseDisplay(selected.medications)}</p>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>{parseDisplay(selected.medications)}</p>
                 </div>
               )}
               {selected.pets && (
                 <div style={{ marginTop: '16px' }}>
                   <strong>Pets in the home:</strong>
-                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.pets}</p>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>{selected.pets}</p>
                 </div>
               )}
               {selected.pet_allergies && (
                 <div style={{ marginTop: '16px' }}>
                   <strong>Pet allergies:</strong>
-                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.pet_allergies}</p>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>{selected.pet_allergies}</p>
                 </div>
               )}
               {selected.food_allergies && (
                 <div style={{ marginTop: '16px' }}>
                   <strong>Food allergies:</strong>
-                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.food_allergies}</p>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>{selected.food_allergies}</p>
                 </div>
               )}
               {selected.medical_conditions && (
                 <div style={{ marginTop: '16px' }}>
                   <strong>Additional medical conditions:</strong>
-                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.medical_conditions}</p>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>{selected.medical_conditions}</p>
                 </div>
               )}
               {selected.preferences && (
                 <div style={{ marginTop: '16px' }}>
                   <strong>Preferences:</strong>
-                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.preferences}</p>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>{selected.preferences}</p>
                 </div>
               )}
               {(selected.emergency_contact_name || selected.emergencyContactName) && (
                 <div style={{ marginTop: '16px' }}>
                   <strong>Emergency Contact:</strong>
-                  <p style={{ color: '#6c757d', marginTop: '8px' }}>{selected.emergency_contact_name || selected.emergencyContactName} — {formatPhone(selected.emergency_contact_phone || selected.emergencyContactPhone)}</p>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>{selected.emergency_contact_name || selected.emergencyContactName} — {formatPhone(selected.emergency_contact_phone || selected.emergencyContactPhone)}</p>
                 </div>
               )}
             </div>
@@ -1179,8 +1179,8 @@ const CareRecipients = window.CareRecipients = () => {
 
           {selected && (selected.authorization_tier === 'tier3' || selected.authorization_tier === 'tier2') && selected.consent_status && selected.consent_status !== 'verified' && (
             <div style={{ marginTop: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#e65100', marginBottom: 12 }}>⏳ Verification Status</h3>
-              <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px', lineHeight: 1.5 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-warning)', marginBottom: 12 }}>⏳ Verification Status</h3>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
                 We're verifying that {getName(selected)} is aware of and comfortable with care arrangements. This is a safety requirement before you can schedule care.
               </p>
             </div>
@@ -1201,10 +1201,10 @@ const CareRecipients = window.CareRecipients = () => {
 
       {showAddForm && wizardStep === null && (
         <div className="card" style={{ marginTop: '32px', borderLeft: '4px solid #1b6b5a' }}>
-          <h3 style={{ marginBottom: '4px', color: '#1b6b5a' }}>{editingId ? 'Edit Care Recipient' : 'Who are you setting up care for?'}</h3>
-          {!editingId && <p style={{ fontSize: 13, color: '#888', marginTop: 0, marginBottom: '20px' }}>Add details about the person who will be receiving care — a parent, spouse, or other loved one.</p>}
+          <h3 style={{ marginBottom: '4px', color: 'var(--role-color)' }}>{editingId ? 'Edit Care Recipient' : 'Who are you setting up care for?'}</h3>
+          {!editingId && <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 0, marginBottom: '20px' }}>Add details about the person who will be receiving care — a parent, spouse, or other loved one.</p>}
           {saveMsg && (
-            <div style={{ padding: '10px 16px', borderRadius: 8, marginBottom: 16, background: saveMsg.includes('Error') ? '#fce4ec' : '#e8f5e9', color: saveMsg.includes('Error') ? '#c62828' : '#2e7d32', fontWeight: 500, fontSize: 14 }}>{saveMsg}</div>
+            <div style={{ padding: '10px 16px', borderRadius: 8, marginBottom: 16, background: saveMsg.includes('Error') ? 'var(--color-error-bg)' : 'var(--color-success-bg)', color: saveMsg.includes('Error') ? 'var(--color-error)' : 'var(--color-success)', fontWeight: 500, fontSize: 14 }}>{saveMsg}</div>
           )}
           <div className="form-row">
             <div className="form-group">
@@ -1236,25 +1236,25 @@ const CareRecipients = window.CareRecipients = () => {
           {!editingId && (
             <div className="form-group" style={{ marginTop: '8px' }}>
               <label style={{ fontWeight: 600, marginBottom: '8px', display: 'block' }}>Care Authorization</label>
-              <p style={{ fontSize: '13px', color: '#666', marginBottom: '12px', marginTop: 0 }}>How are you authorized to arrange care for this person?</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px', marginTop: 0 }}>How are you authorized to arrange care for this person?</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {[
-                  { id: 'tier1', label: 'They signed up themselves', desc: 'The care recipient has their own account', color: '#1b6b5a', bg: '#e8f5f2' },
-                  { id: 'tier2', label: 'I have Power of Attorney or legal guardianship', desc: 'You\'ll need to upload your legal document for review', color: '#5c6bc0', bg: '#e8eaf6' },
-                  { id: 'tier3', label: 'They know and agree to me arranging care', desc: 'We\'ll verify their awareness before the first visit', color: '#e8724a', bg: '#FFF3E0' },
+                  { id: 'tier1', label: 'They signed up themselves', desc: 'The care recipient has their own account', color: 'var(--role-color)', bg: 'var(--bg-teal-light)' },
+                  { id: 'tier2', label: 'I have Power of Attorney or legal guardianship', desc: 'You\'ll need to upload your legal document for review', color: 'var(--color-indigo)', bg: 'var(--color-purple-bg)' },
+                  { id: 'tier3', label: 'They know and agree to me arranging care', desc: 'We\'ll verify their awareness before the first visit', color: 'var(--accent-color)', bg: 'var(--color-warning-bg)' },
                 ].map(opt => (
                   <div key={opt.id} onClick={() => fd('authorizationTier', opt.id)}
                     style={{
                       padding: '12px 16px', borderRadius: '10px', cursor: 'pointer',
                       border: formData.authorizationTier === opt.id ? `2px solid ${opt.color}` : '2px solid #e8e8e8',
-                      background: formData.authorizationTier === opt.id ? opt.bg : '#fff',
+                      background: formData.authorizationTier === opt.id ? opt.bg : 'var(--text-on-primary)',
                       transition: 'all 0.2s',
                     }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ width: 18, height: 18, borderRadius: '50%', border: formData.authorizationTier === opt.id ? `5px solid ${opt.color}` : '2px solid #ccc', flexShrink: 0, background: '#fff' }} />
+                      <div style={{ width: 18, height: 18, borderRadius: '50%', border: formData.authorizationTier === opt.id ? `5px solid ${opt.color}` : '2px solid #ccc', flexShrink: 0, background: 'var(--bg-surface)' }} />
                       <div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#333' }}>{opt.label}</div>
-                        <div style={{ fontSize: '12px', color: '#777', marginTop: '2px' }}>{opt.desc}</div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{opt.label}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{opt.desc}</div>
                       </div>
                     </div>
                   </div>
@@ -1268,37 +1268,37 @@ const CareRecipients = window.CareRecipients = () => {
               {['👵', '👴', '👩', '👨', '🧓', '👶', '🧑', '🌷', '💜', '💙', '🌻', '🐕'].map(em => (
                 <button key={em} type="button" onClick={() => fd('emoji', formData.emoji === em ? '' : em)} style={{
                   width: 40, height: 40, fontSize: 22, border: formData.emoji === em ? '2px solid #1b6b5a' : '1px solid #ddd',
-                  borderRadius: 8, background: formData.emoji === em ? '#e0f2e9' : '#fff', cursor: 'pointer',
+                  borderRadius: 8, background: formData.emoji === em ? 'var(--role-color-light)' : 'var(--text-on-primary)', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>{em}</button>
               ))}
               {formData.emoji && (
                 <button type="button" onClick={() => fd('emoji', '')} style={{
                   padding: '4px 10px', fontSize: 11, border: '1px solid #ddd', borderRadius: 8,
-                  background: '#f5f5f5', color: '#888', cursor: 'pointer', alignSelf: 'center',
+                  background: 'var(--bg-primary)', color: 'var(--text-tertiary)', cursor: 'pointer', alignSelf: 'center',
                 }}>Clear</button>
               )}
             </div>
           </div>
           <div style={{ borderTop: '1px solid #eee', paddingTop: 12, marginTop: 8, marginBottom: 8 }}>
             <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Contact & Address</label>
-            <p style={{ fontSize: 13, color: '#666', marginTop: 0, marginBottom: 12 }}>Where does this person live? This helps verify their identity and lets caregivers find the location. This info will be used to contact your loved one and verify consent to visits.</p>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0, marginBottom: 12 }}>Where does this person live? This helps verify their identity and lets caregivers find the location. This info will be used to contact your loved one and verify consent to visits.</p>
           </div>
           <div className="form-row" style={{ alignItems: 'start' }}>
             <div className="form-group">
               <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 20, marginBottom: 6 }}>
                 Phone Number
-                <button type="button" onClick={() => { setIntlPhone(!intlPhone); fd('phone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                <button type="button" onClick={() => { setIntlPhone(!intlPhone); fd('phone', ''); }} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                   {intlPhone ? 'US number' : 'International number'}
                 </button>
               </label>
               <input type="tel" value={formData.phone} onChange={(e) => fd('phone', formatPhone(e.target.value, intlPhone))} placeholder={intlPhone ? '+44 20 7946 0958' : '(555) 123-4567'} />
-              {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
+              {intlPhone && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
             </div>
             <div className="form-group">
-              <label style={{ display: 'flex', alignItems: 'center', height: 20, marginBottom: 6 }}>Email {!editingId && <span style={{ color: '#e8724a', marginLeft: 4 }}>*required</span>}</label>
-              <input type="email" value={formData.email} onChange={(e) => fd('email', e.target.value)} placeholder="mom@email.com" style={!editingId && !formData.email.trim() ? { borderColor: '#e8724a' } : {}} />
-              <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>Used for care awareness verification — we'll email them to confirm they're aware</div>
+              <label style={{ display: 'flex', alignItems: 'center', height: 20, marginBottom: 6 }}>Email {!editingId && <span style={{ color: 'var(--accent-color)', marginLeft: 4 }}>*required</span>}</label>
+              <input type="email" value={formData.email} onChange={(e) => fd('email', e.target.value)} placeholder="mom@email.com" style={!editingId && !formData.email.trim() ? { borderColor: 'var(--accent-color)' } : {}} />
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Used for care awareness verification — we'll email them to confirm they're aware</div>
             </div>
           </div>
           <div className="form-group">
@@ -1360,7 +1360,7 @@ const CareRecipients = window.CareRecipients = () => {
             <div className="form-group">
               <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 20, marginBottom: 6 }}>
                 Phone
-                <button type="button" onClick={() => { setIntlEmergencyPhone(!intlEmergencyPhone); fd('emergencyContactPhone', ''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                <button type="button" onClick={() => { setIntlEmergencyPhone(!intlEmergencyPhone); fd('emergencyContactPhone', ''); }} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                   {intlEmergencyPhone ? 'US number' : 'International'}
                 </button>
               </label>

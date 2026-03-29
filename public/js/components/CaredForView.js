@@ -220,10 +220,10 @@ const CaredForView = window.CaredForView = () => {
   ];
 
   const noteTypeColors = {
-    personal: { bg: '#e3f2fd', color: '#1565c0', label: 'Personal' },
-    health: { bg: '#fce4ec', color: '#c62828', label: 'Health' },
-    general: { bg: '#f3e5f5', color: '#7b1fa2', label: 'General' },
-    family: { bg: '#e8f5e9', color: '#2e7d32', label: 'Family' },
+    personal: { bg: 'var(--color-info-bg)', color: 'var(--color-info)', label: 'Personal' },
+    health: { bg: 'var(--color-error-bg)', color: 'var(--color-error)', label: 'Health' },
+    general: { bg: 'var(--color-purple-bg)', color: 'var(--color-purple)', label: 'General' },
+    family: { bg: 'var(--color-success-bg)', color: 'var(--color-success)', label: 'Family' },
   };
 
   const formatTime12 = (t) => {
@@ -239,19 +239,19 @@ const CaredForView = window.CaredForView = () => {
       {/* Push notification prompt — shows if not yet enabled */}
       {typeof NotificationPrompt !== 'undefined' && React.createElement(NotificationPrompt, null)}
       <h1 className="greeting" style={{ marginBottom: '4px' }}>Hello, {userName}!</h1>
-      <p style={{ color: '#666', fontSize: '14px', marginBottom: permissionTier !== 'full' ? '12px' : '20px' }}>Here's what's coming up for you</p>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: permissionTier !== 'full' ? '12px' : '20px' }}>Here's what's coming up for you</p>
 
       {/* Managed / Collaborative mode banner */}
       {permissionTier === 'managed' && (
         <div style={{
           padding: '12px 16px', marginBottom: '20px', borderRadius: '10px',
-          background: '#fff8e1', border: '1px solid #ffe082',
+          background: 'var(--color-warning-bg)', border: '1px solid #ffe082',
           display: 'flex', alignItems: 'center', gap: '10px',
         }}>
           <span style={{ fontSize: '20px' }}>🔒</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: '13px', color: '#e65100' }}>Managed Account</div>
-            <div style={{ fontSize: '12px', color: '#795548', marginTop: '2px' }}>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-warning)' }}>Managed Account</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-brown)', marginTop: '2px' }}>
               Your care is being managed by {managedByName || 'your care team'}.
               {managedReason ? ` (${managedReason})` : ''} Contact them to request changes.
             </div>
@@ -261,12 +261,12 @@ const CaredForView = window.CaredForView = () => {
       {permissionTier === 'collaborative' && (
         <div style={{
           padding: '12px 16px', marginBottom: '20px', borderRadius: '10px',
-          background: '#e3f2fd', border: '1px solid #90caf9',
+          background: 'var(--color-info-bg)', border: '1px solid #90caf9',
           display: 'flex', alignItems: 'center', gap: '10px',
         }}>
           <span style={{ fontSize: '20px' }}>🤝</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: '13px', color: '#1565c0' }}>Collaborative Care</div>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-info)' }}>Collaborative Care</div>
             <div style={{ fontSize: '12px', color: '#37474f', marginTop: '2px' }}>
               Your care is co-managed with {managedByName || 'your care team'}.
               You can request care sessions — your care team will review and approve them.
@@ -276,7 +276,7 @@ const CaredForView = window.CaredForView = () => {
       )}
 
       {/* Tabs — card grid (matches admin panel layout) */}
-      {(() => { const rc = window.ROLE_COLOR || '#1b6b5a'; return (
+      {(() => { const rc = window.ROLE_COLOR || 'var(--role-color)'; return (
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
         gap: '8px', marginBottom: '20px',
@@ -289,8 +289,8 @@ const CaredForView = window.CaredForView = () => {
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             gap: '4px', padding: '14px 8px', border: 'none', borderRadius: '12px', cursor: 'pointer',
-            background: activeTab === tab.id ? rc : '#f5f5f5',
-            color: activeTab === tab.id ? '#fff' : '#555',
+            background: activeTab === tab.id ? rc : 'var(--bg-primary)',
+            color: activeTab === tab.id ? 'var(--text-on-primary)' : 'var(--text-secondary)',
             transition: 'all 0.15s', minHeight: '72px',
             boxShadow: activeTab === tab.id ? `0 2px 8px ${rc}4d` : 'none',
           }}>
@@ -307,21 +307,21 @@ const CaredForView = window.CaredForView = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <button onClick={() => { setMonthOffset(m => m - 1); setSelectedDay(null); }} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>← Prev</button>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1a2e' }}>{monthName}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--bg-card)' }}>{monthName}</div>
               {monthOffset !== 0 && (
-                <button onClick={() => { setMonthOffset(0); setSelectedDay(null); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 12, cursor: 'pointer', fontWeight: 600, marginTop: 2 }}>Today</button>
+                <button onClick={() => { setMonthOffset(0); setSelectedDay(null); }} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 12, cursor: 'pointer', fontWeight: 600, marginTop: 2 }}>Today</button>
               )}
             </div>
             <button onClick={() => { setMonthOffset(m => m + 1); setSelectedDay(null); }} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>Next →</button>
           </div>
 
           {/* Legend */}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 11, color: '#666' }}>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 11, color: 'var(--text-secondary)' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#fce4ec', border: '1px solid #f48fb1', display: 'inline-block' }}></span> Seeking Help
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--color-error-bg)', border: '1px solid #f48fb1', display: 'inline-block' }}></span> Seeking Help
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#e3f2fd', border: '1px solid #90caf9', display: 'inline-block' }}></span> Confirmed
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--color-info-bg)', border: '1px solid #90caf9', display: 'inline-block' }}></span> Confirmed
             </span>
           </div>
 
@@ -330,7 +330,7 @@ const CaredForView = window.CaredForView = () => {
             {/* Day headers */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#999', padding: '4px 0' }}>{d}</div>
+                <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', padding: '4px 0' }}>{d}</div>
               ))}
             </div>
 
@@ -338,7 +338,7 @@ const CaredForView = window.CaredForView = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
               {calendarCells.map((day, i) => {
                 if (day === null) {
-                  return <div key={i} style={{ minHeight: 60, background: '#fafafa', borderRadius: 4 }}></div>;
+                  return <div key={i} style={{ minHeight: 60, background: 'var(--bg-primary)', borderRadius: 4 }}></div>;
                 }
                 const counts = getDayCounts(day);
                 const isTodayCell = isToday(day);
@@ -347,10 +347,10 @@ const CaredForView = window.CaredForView = () => {
                 const hasConfirmed = counts.confirmed > 0;
 
                 // Determine cell background
-                let cellBg = '#fff';
+                let cellBg = 'var(--text-on-primary)';
                 if (hasRequested && hasConfirmed) cellBg = 'linear-gradient(135deg, #fce4ec 50%, #e3f2fd 50%)';
-                else if (hasRequested) cellBg = '#fce4ec';
-                else if (hasConfirmed) cellBg = '#e3f2fd';
+                else if (hasRequested) cellBg = 'var(--color-error-bg)';
+                else if (hasConfirmed) cellBg = 'var(--color-info-bg)';
 
                 return (
                   <div key={i}
@@ -369,7 +369,7 @@ const CaredForView = window.CaredForView = () => {
                     <div style={{
                       fontSize: 13,
                       fontWeight: isTodayCell ? 800 : 600,
-                      color: isTodayCell ? '#e8724a' : '#333',
+                      color: isTodayCell ? 'var(--accent-color)' : 'var(--text-primary)',
                       marginBottom: 2,
                     }}>
                       {day}
@@ -377,12 +377,12 @@ const CaredForView = window.CaredForView = () => {
                     {/* Badges */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                       {hasRequested && (
-                        <div style={{ fontSize: 9, fontWeight: 600, color: '#c62828', background: '#fff', borderRadius: 8, padding: '1px 5px', display: 'inline-block', width: 'fit-content' }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-error)', background: 'var(--bg-surface)', borderRadius: 8, padding: '1px 5px', display: 'inline-block', width: 'fit-content' }}>
                           {counts.requested} request{counts.requested > 1 ? 's' : ''}
                         </div>
                       )}
                       {hasConfirmed && (
-                        <div style={{ fontSize: 9, fontWeight: 600, color: '#1565c0', background: '#fff', borderRadius: 8, padding: '1px 5px', display: 'inline-block', width: 'fit-content' }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-info)', background: 'var(--bg-surface)', borderRadius: 8, padding: '1px 5px', display: 'inline-block', width: 'fit-content' }}>
                           {counts.confirmed} booked
                         </div>
                       )}
@@ -397,10 +397,10 @@ const CaredForView = window.CaredForView = () => {
           {selectedDay && (
             <div className="card" style={{ marginTop: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e' }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--bg-card)' }}>
                   📋 {selectedDateLabel}
                 </div>
-                <button onClick={() => setSelectedDay(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999' }}>✕</button>
+                <button onClick={() => setSelectedDay(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
               </div>
 
               {/* Sessions list */}
@@ -411,30 +411,30 @@ const CaredForView = window.CaredForView = () => {
                     return (
                       <div key={idx} style={{
                         padding: '10px 12px',
-                        background: isRequested ? '#fce4ec' : '#e3f2fd',
+                        background: isRequested ? 'var(--color-error-bg)' : 'var(--color-info-bg)',
                         borderRadius: 8,
                         marginBottom: 8,
                         borderLeft: `3px solid ${isRequested ? '#f48fb1' : '#42a5f5'}`,
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--bg-card)' }}>
                               {formatTime12(s.scheduled_time || s.time)} · {s.service_type || s.serviceType}
                             </div>
-                            <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
                               {s.duration_hours || s.durationHours || 1}h
                               {(s.caregiver_name || s.caregiverName) ? ` · with ${s.caregiver_name || s.caregiverName}` : ''}
                             </div>
                             {(s.special_instructions || s.specialInstructions) && (
-                              <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
+                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 4 }}>
                                 {s.special_instructions || s.specialInstructions}
                               </div>
                             )}
                           </div>
                           <span style={{
                             padding: '3px 10px', borderRadius: 10, fontSize: 10, fontWeight: 600,
-                            background: isRequested ? '#fff' : '#e8f5e9',
-                            color: isRequested ? '#c62828' : '#2e7d32',
+                            background: isRequested ? 'var(--text-on-primary)' : 'var(--color-success-bg)',
+                            color: isRequested ? 'var(--color-error)' : 'var(--color-success)',
                             textTransform: 'capitalize',
                           }}>
                             {isRequested ? 'Seeking Help' : s.status}
@@ -445,13 +445,13 @@ const CaredForView = window.CaredForView = () => {
                   })}
                 </div>
               ) : (
-                <div style={{ fontSize: 13, color: '#999', marginBottom: 16 }}>No sessions on this day</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>No sessions on this day</div>
               )}
 
               {/* Request Care button / form (hidden in managed mode) */}
               {canRequest && !showRequestForm && (
                 <button onClick={() => setShowRequestForm(true)} style={{
-                  width: '100%', padding: '10px', background: '#fce4ec', color: '#c62828',
+                  width: '100%', padding: '10px', background: 'var(--color-error-bg)', color: 'var(--color-error)',
                   border: '1px dashed #f48fb1', borderRadius: 8, cursor: 'pointer',
                   fontSize: 13, fontWeight: 600,
                 }}>
@@ -460,11 +460,11 @@ const CaredForView = window.CaredForView = () => {
               )}
               {canRequest && showRequestForm && (
                 <div style={{ background: '#fef7f9', borderRadius: 8, padding: 16, border: '1px solid #f8bbd0' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#c62828', marginBottom: 12 }}>Request Care</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-error)', marginBottom: 12 }}>Request Care</div>
                   {permissionTier === 'collaborative' && (
                     <div style={{
-                      padding: '8px 12px', background: '#e3f2fd', borderRadius: 6,
-                      fontSize: 12, color: '#1565c0', marginBottom: 12,
+                      padding: '8px 12px', background: 'var(--color-info-bg)', borderRadius: 6,
+                      fontSize: 12, color: 'var(--color-info)', marginBottom: 12,
                       borderLeft: '3px solid #42a5f5',
                     }}>
                       This request will be sent to your care team for approval before a caregiver is matched.
@@ -472,7 +472,7 @@ const CaredForView = window.CaredForView = () => {
                   )}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                     <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: '#666', display: 'block', marginBottom: 4 }}>Service Type</label>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Service Type</label>
                       <select value={requestForm.serviceType} onChange={e => setRequestForm(f => ({ ...f, serviceType: e.target.value }))}
                         style={{ width: '100%', padding: '8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}>
                         {serviceTypes.map(st => (
@@ -481,12 +481,12 @@ const CaredForView = window.CaredForView = () => {
                       </select>
                     </div>
                     <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: '#666', display: 'block', marginBottom: 4 }}>Time</label>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Time</label>
                       <input type="time" value={requestForm.time} onChange={e => setRequestForm(f => ({ ...f, time: e.target.value }))}
                         style={{ width: '100%', padding: '8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }} />
                     </div>
                     <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: '#666', display: 'block', marginBottom: 4 }}>Hours</label>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Hours</label>
                       <select value={requestForm.hours} onChange={e => setRequestForm(f => ({ ...f, hours: e.target.value }))}
                         style={{ width: '100%', padding: '8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}>
                         {[1, 1.5, 2, 2.5, 3, 4, 5, 6].map(h => (
@@ -496,19 +496,19 @@ const CaredForView = window.CaredForView = () => {
                     </div>
                   </div>
                   <div style={{ marginBottom: 10 }}>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: '#666', display: 'block', marginBottom: 4 }}>Note (optional)</label>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Note (optional)</label>
                     <textarea value={requestForm.note} onChange={e => setRequestForm(f => ({ ...f, note: e.target.value }))}
                       placeholder="Any details about what you need help with..."
                       style={{ width: '100%', minHeight: 60, padding: 8, borderRadius: 6, border: '1px solid #ddd', fontSize: 13, resize: 'vertical' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={handleRequestCare} disabled={submitting} style={{
-                      padding: '8px 20px', background: '#c62828', color: '#fff', border: 'none',
+                      padding: '8px 20px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
                       borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
                       opacity: submitting ? 0.5 : 1,
                     }}>{submitting ? 'Submitting...' : 'Request Help'}</button>
                     <button onClick={() => setShowRequestForm(false)} style={{
-                      padding: '8px 20px', background: '#fff', border: '1px solid #ddd',
+                      padding: '8px 20px', background: 'var(--bg-surface)', border: '1px solid #ddd',
                       borderRadius: 6, cursor: 'pointer', fontSize: 13,
                     }}>Cancel</button>
                   </div>
@@ -527,9 +527,9 @@ const CaredForView = window.CaredForView = () => {
               {/* Health Conditions */}
               {canSee('healthConditions') && careProfile.healthConditions && careProfile.healthConditions.length > 0 && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>🩺 Health Conditions</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>🩺 Health Conditions</div>
                   {careProfile.healthConditions.map((c, i) => (
-                    <div key={i} style={{ padding: '6px 10px', background: '#fce4ec', borderRadius: 6, marginBottom: 4, fontSize: 13, color: '#333' }}>{c}</div>
+                    <div key={i} style={{ padding: '6px 10px', background: 'var(--color-error-bg)', borderRadius: 6, marginBottom: 4, fontSize: 13, color: 'var(--text-primary)' }}>{c}</div>
                   ))}
                 </div>
               )}
@@ -537,9 +537,9 @@ const CaredForView = window.CaredForView = () => {
               {/* Medications */}
               {canSee('medications') && careProfile.medications && careProfile.medications.length > 0 && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>💊 Medications</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>💊 Medications</div>
                   {careProfile.medications.map((m, i) => (
-                    <div key={i} style={{ padding: '6px 10px', background: '#e3f2fd', borderRadius: 6, marginBottom: 4, fontSize: 13, color: '#333' }}>{m}</div>
+                    <div key={i} style={{ padding: '6px 10px', background: 'var(--color-info-bg)', borderRadius: 6, marginBottom: 4, fontSize: 13, color: 'var(--text-primary)' }}>{m}</div>
                   ))}
                 </div>
               )}
@@ -547,9 +547,9 @@ const CaredForView = window.CaredForView = () => {
               {/* Allergies */}
               {canSee('allergies') && careProfile.foodAllergies && careProfile.foodAllergies.length > 0 && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>⚠️ Food Allergies</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>⚠️ Food Allergies</div>
                   {careProfile.foodAllergies.map((a, i) => (
-                    <div key={i} style={{ padding: '6px 10px', background: '#fff3e0', borderRadius: 6, marginBottom: 4, fontSize: 13, color: '#e65100' }}>{a}</div>
+                    <div key={i} style={{ padding: '6px 10px', background: 'var(--color-warning-bg)', borderRadius: 6, marginBottom: 4, fontSize: 13, color: 'var(--color-warning)' }}>{a}</div>
                   ))}
                 </div>
               )}
@@ -557,26 +557,26 @@ const CaredForView = window.CaredForView = () => {
               {/* Preferences */}
               {canSee('preferences') && careProfile.preferences && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>✨ Care Preferences</div>
-                  <div style={{ fontSize: 13, color: '#555', lineHeight: 1.6 }}>{careProfile.preferences}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>✨ Care Preferences</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{careProfile.preferences}</div>
                 </div>
               )}
 
               {/* Pets */}
               {canSee('pets') && careProfile.pets && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>🐾 Pets at Home</div>
-                  <div style={{ fontSize: 13, color: '#555', lineHeight: 1.6 }}>{careProfile.pets}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>🐾 Pets at Home</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{careProfile.pets}</div>
                 </div>
               )}
 
               {/* Emergency Contact */}
               {canSee('emergencyContact') && careProfile.emergencyContactName && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 }}>🆘 Emergency Contact</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>{careProfile.emergencyContactName}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>🆘 Emergency Contact</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{careProfile.emergencyContactName}</div>
                   {careProfile.emergencyContactPhone && (
-                    <a href={'tel:' + careProfile.emergencyContactPhone} style={{ fontSize: 13, color: '#1b6b5a', textDecoration: 'none' }}>
+                    <a href={'tel:' + careProfile.emergencyContactPhone} style={{ fontSize: 13, color: 'var(--role-color)', textDecoration: 'none' }}>
                       📞 {formatPhone(careProfile.emergencyContactPhone)}
                     </a>
                   )}
@@ -585,7 +585,7 @@ const CaredForView = window.CaredForView = () => {
 
               {/* Permission notice */}
               {(permissionTier === 'managed' || permissionTier === 'collaborative') && (
-                <div style={{ padding: '10px 14px', background: '#fff8e1', borderRadius: 8, fontSize: 12, color: '#f57f17', textAlign: 'center', marginTop: 8 }}>
+                <div style={{ padding: '10px 14px', background: 'var(--color-warning-bg)', borderRadius: 8, fontSize: 12, color: 'var(--color-warning)', textAlign: 'center', marginTop: 8 }}>
                   {permissionTier === 'managed'
                     ? `This profile is managed by ${managedByName || 'your care team'}.`
                     : `Profile changes are coordinated with ${managedByName || 'your care team'}.`}
@@ -593,7 +593,7 @@ const CaredForView = window.CaredForView = () => {
               )}
             </React.Fragment>
           ) : (
-            <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
               <div style={{ fontSize: '40px', marginBottom: '12px' }}>💊</div>
               <div>No care profile linked yet. Ask your care team to connect your profile.</div>
             </div>
@@ -614,7 +614,7 @@ const CaredForView = window.CaredForView = () => {
                 style={{ width: '100%', minHeight: '80px', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', resize: 'vertical', marginBottom: '8px' }}
               />
               <button onClick={handleAddNote} disabled={!newNote.trim() || saving} style={{
-                padding: '8px 20px', background: '#1b6b5a', color: '#fff', border: 'none',
+                padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
                 opacity: (!newNote.trim() || saving) ? 0.5 : 1,
               }}>{saving ? 'Saving...' : 'Save Note'}</button>
@@ -633,11 +633,11 @@ const CaredForView = window.CaredForView = () => {
                     />
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button onClick={() => handleEditNote(n.id)} disabled={saving} style={{
-                        padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none',
+                        padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                         borderRadius: '6px', cursor: 'pointer', fontSize: '12px',
                       }}>Save</button>
                       <button onClick={() => setEditingNote(null)} style={{
-                        padding: '6px 14px', background: '#fff', border: '1px solid #ddd',
+                        padding: '6px 14px', background: 'var(--bg-surface)', border: '1px solid #ddd',
                         borderRadius: '6px', cursor: 'pointer', fontSize: '12px',
                       }}>Cancel</button>
                     </div>
@@ -650,29 +650,29 @@ const CaredForView = window.CaredForView = () => {
                           padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600,
                           background: typeStyle.bg, color: typeStyle.color,
                         }}>{typeStyle.label}</span>
-                        <span style={{ fontSize: '11px', color: '#999' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                           by {n.authorName} ({n.authorRole === 'care_for' ? 'me' : n.authorRole})
                         </span>
                       </div>
                       {canAddNotes && (<div style={{ display: 'flex', gap: '6px' }}>
                         <button onClick={() => { setEditingNote(n.id); setEditContent(n.content); }} style={{
                           padding: '3px 8px', background: 'none', border: '1px solid #ddd', borderRadius: '4px',
-                          cursor: 'pointer', fontSize: '11px', color: '#666',
+                          cursor: 'pointer', fontSize: '11px', color: 'var(--text-secondary)',
                         }}>Edit</button>
                         <button onClick={() => handleDeleteNote(n.id)} style={{
                           padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: '4px',
-                          cursor: 'pointer', fontSize: '11px', color: '#c00',
+                          cursor: 'pointer', fontSize: '11px', color: 'var(--color-red-strong)',
                         }}>Delete</button>
                       </div>)}
                     </div>
-                    <div style={{ fontSize: '14px', color: '#333', lineHeight: 1.5 }}>{n.content}</div>
-                    <div style={{ fontSize: '11px', color: '#aaa', marginTop: '6px' }}>{n.createdAt ? (parseTimestamp(n.createdAt) || new Date()).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>{n.content}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{n.createdAt ? (parseTimestamp(n.createdAt) || new Date()).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
                   </div>
                 )}
               </div>
             );
           }) : (
-            <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
               <div style={{ fontSize: '40px', marginBottom: '12px' }}>📝</div>
               <div>No notes yet — write your first one above!</div>
             </div>

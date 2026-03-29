@@ -371,7 +371,7 @@ const FindWork = window.FindWork = () => {
 
       circleRef.current = L.circle(profileCenter, {
         radius: radiusMiles * 1609.34,
-        color: '#1b6b5a', fillColor: '#1b6b5a', fillOpacity: 0.06, weight: 2, dashArray: '6 4',
+        color: 'var(--role-color)', fillColor: 'var(--role-color)', fillOpacity: 0.06, weight: 2, dashArray: '6 4',
       }).addTo(map);
     }
 
@@ -404,7 +404,7 @@ const FindWork = window.FindWork = () => {
       const exRemain = exUntil ? Math.max(0, Math.floor((exUntil - new Date()) / 60000)) : null;
       const exExpired = exUntil && exRemain <= 0;
       const activeOffer = isOffer && !exExpired;
-      const pinColor = activeOffer ? '#7c3aed' : '#fb8c00';
+      const pinColor = activeOffer ? 'var(--color-purple-light)' : 'var(--color-warning)';
 
       const icon = L.divIcon({
         className: '',
@@ -430,7 +430,7 @@ const FindWork = window.FindWork = () => {
           <div style="font-size:12px;color:#666;margin-bottom:2px">📅 ${dateStr} 🕐 ${time || ''}</div>
           ${cost ? '<div style="font-size:14px;font-weight:700;color:#1b6b5a;margin-top:4px">$' + Math.round(parseFloat(s.caregiverPayout || s.caregiver_payout || cost)) + ' <span style=\\"font-size:10px;font-weight:600;color:#1b6b5a\\">your earnings</span></div>' : ''}
           ${!caregiverCleared ? '<div style="margin-top:8px;padding:6px 10px;background:#f5f5f5;border-radius:6px;text-align:center;font-size:11px;color:#888;">Complete setup to accept jobs</div>' : `<button onclick="${accountPaused ? '' : "document.dispatchEvent(new CustomEvent('findwork-claim',{detail:'" + s.id + "'}));"}" style="
-            margin-top:8px;width:100%;padding:8px;background:${accountPaused ? '#ccc' : '#1b6b5a'};color:#fff;border:none;border-radius:6px;
+            margin-top:8px;width:100%;padding:8px;background:${accountPaused ? 'var(--border-light)' : 'var(--role-color)'};color:#fff;border:none;border-radius:6px;
             font-size:13px;font-weight:600;cursor:${accountPaused ? 'not-allowed' : 'pointer'};opacity:${accountPaused ? 0.6 : 1};
           " ${accountPaused ? 'disabled title="Your account is paused. Contact support for assistance."' : ''}>${accountPaused ? '❌ Account Paused' : 'Accept Request'}</button>
           ${accountPaused ? '<div style="margin-top:6px;font-size:11px;color:#c62828;font-weight:600;text-align:center;">Your account is paused. Contact support.</div>' : ''}`}
@@ -546,7 +546,7 @@ const FindWork = window.FindWork = () => {
     padding: '8px 18px', background: 'none', border: 'none',
     borderBottom: subTab === id ? '3px solid #1b6b5a' : '3px solid transparent',
     fontWeight: subTab === id ? 700 : 500, fontSize: 13, cursor: 'pointer',
-    color: subTab === id ? '#1b6b5a' : '#888', fontFamily: 'inherit', transition: 'all 0.15s',
+    color: subTab === id ? 'var(--role-color)' : 'var(--text-tertiary)', fontFamily: 'inherit', transition: 'all 0.15s',
   });
 
   return (
@@ -575,20 +575,20 @@ const FindWork = window.FindWork = () => {
               ruleForm, setRuleForm, handleSaveRule, handleDeleteRule, startEditRule,
               dayNames, dayAbbr,
             })
-          : <div className="card" style={{ padding: 24, textAlign: 'center', color: '#888' }}>Availability calendar loading...</div>
+          : <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}>Availability calendar loading...</div>
       )}
 
       {/* ═══ MY RATES SUB-TAB ═══ */}
       {subTab === 'rates' && (
         <div>
           <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 16, color: '#1b6b5a' }}>💰 Your Hourly Rates</h3>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px', lineHeight: 1.6 }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 16, color: 'var(--role-color)' }}>💰 Your Hourly Rates</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.6 }}>
               Set your rates for each time tier. Families see these rates when booking, and your earnings are calculated based on when the session falls.
             </p>
-            <div style={{ padding: '10px 14px', background: '#f0faf8', borderRadius: 8, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ padding: '10px 14px', background: 'var(--bg-highlight)', borderRadius: 8, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 16 }}>{'\uD83D\uDCA1'}</span>
-              <span style={{ fontSize: 12, color: '#555', lineHeight: 1.5 }}>Most caregivers in your area charge <strong style={{ color: '#1b6b5a' }}>$25–$35/hr</strong> for daytime care. Setting competitive rates helps you get matched with more families.</span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>Most caregivers in your area charge <strong style={{ color: 'var(--role-color)' }}>$25–$35/hr</strong> for daytime care. Setting competitive rates helps you get matched with more families.</span>
             </div>
             <div style={{ display: 'grid', gap: 14 }}>
               {[
@@ -598,40 +598,40 @@ const FindWork = window.FindWork = () => {
               ].map(tier => (
                 <div key={tier.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 18, width: 28, textAlign: 'center' }}>{tier.icon}</span>
-                  <label style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#333' }}>{tier.label}</label>
+                  <label style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{tier.label}</label>
                   <div style={{ position: 'relative', width: 100 }}>
-                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#888' }}>$</span>
+                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--text-tertiary)' }}>$</span>
                     <input type="number" value={rates[tier.key]} onChange={e => setRates(r => ({ ...r, [tier.key]: e.target.value }))}
                       placeholder="0" min="0" step="0.50"
                       style={{ width: '100%', padding: '8px 10px 8px 24px', borderRadius: 8, border: '1px solid #d0d0d0', fontSize: 14, boxSizing: 'border-box' }} />
                   </div>
-                  <span style={{ fontSize: 12, color: '#888' }}>/hr</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>/hr</span>
                 </div>
               ))}
             </div>
 
-            <div style={{ marginTop: 16, padding: '12px 14px', background: '#f0faf8', borderRadius: 8 }}>
+            <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bg-highlight)', borderRadius: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: '#333', flex: 1 }}>Overnight minimum hours</label>
+                <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>Overnight minimum hours</label>
                 <input type="number" value={minOvernightHours} onChange={e => setMinOvernightHours(e.target.value)}
                   min="1" max="12" step="1"
                   style={{ width: 70, padding: '6px 10px', borderRadius: 8, border: '1px solid #d0d0d0', fontSize: 14, textAlign: 'center' }} />
-                <span style={{ fontSize: 12, color: '#888' }}>hrs</span>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>hrs</span>
               </div>
-              <p style={{ fontSize: 11, color: '#666', margin: '6px 0 0', lineHeight: 1.5 }}>
+              <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '6px 0 0', lineHeight: 1.5 }}>
                 If a session includes overnight hours, the family is charged for at least this many hours at your overnight rate.
               </p>
             </div>
 
             <button onClick={handleSaveRates} disabled={savingRates}
-              style={{ marginTop: 16, width: '100%', padding: 12, background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: savingRates ? 'wait' : 'pointer', opacity: savingRates ? 0.7 : 1 }}>
+              style={{ marginTop: 16, width: '100%', padding: 12, background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: savingRates ? 'wait' : 'pointer', opacity: savingRates ? 0.7 : 1 }}>
               {savingRates ? 'Saving...' : 'Save Rates'}
             </button>
           </div>
 
           <div className="card" style={{ padding: 20 }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#333' }}>How Pricing Works</h3>
-            <div style={{ fontSize: 13, color: '#555', lineHeight: 1.7 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary)' }}>How Pricing Works</h3>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
               <p style={{ margin: '0 0 10px' }}><strong>Platform fee (20%)</strong> — added to the family's cost, not deducted from your earnings. If your rate is $30/hr, you receive $30/hr.</p>
               <p style={{ margin: '0 0 10px' }}><strong>Short-notice bookings (&lt;24 hours)</strong> — a 20% rush surcharge is added. 75% of the surcharge goes to you as an incentive for taking last-minute work.</p>
               <p style={{ margin: 0 }}><strong>Instant payouts</strong> — choose instant payouts in Account → Payments for same-day deposits (+2% processing fee), or keep standard free payouts (1–2 business days).</p>
@@ -644,7 +644,7 @@ const FindWork = window.FindWork = () => {
       {subTab === 'families' && (
         <div>
           {loadingAssignments ? (
-            <div className="card" style={{ padding: 24, textAlign: 'center', color: '#888' }}>Loading assigned families...</div>
+            <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading assigned families...</div>
           ) : assignments.length > 0 ? (
             <div style={{ display: 'grid', gap: 12 }}>
               {assignments.map(a => {
@@ -657,18 +657,18 @@ const FindWork = window.FindWork = () => {
                   <div key={a.id || a.care_recipient_id} className="card" style={{ padding: 16, borderLeft: isFav ? '4px solid #f59e0b' : '4px solid #42a5f5' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 16, color: '#1a1a2e', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--bg-card)', display: 'flex', alignItems: 'center', gap: 6 }}>
                           {isFav && <span title="Favorite">⭐</span>}
                           {name}
                         </div>
-                        {city && <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>📍 {city}{a.location_state ? `, ${a.location_state}` : ''}</div>}
-                        {a.location_address && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{a.location_address}</div>}
+                        {city && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>📍 {city}{a.location_state ? `, ${a.location_state}` : ''}</div>}
+                        {a.location_address && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{a.location_address}</div>}
                       </div>
                     </div>
                     {condList.length > 0 && (
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
                         {condList.map((c, i) => (
-                          <span key={i} style={{ padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: '#fff3e0', color: '#e65100' }}>{c}</span>
+                          <span key={i} style={{ padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>{c}</span>
                         ))}
                       </div>
                     )}
@@ -679,8 +679,8 @@ const FindWork = window.FindWork = () => {
           ) : (
             <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>👪</div>
-              <h3 style={{ margin: '0 0 8px', color: '#333', fontSize: 16 }}>No assigned families yet</h3>
-              <p style={{ color: '#888', fontSize: 13, margin: 0 }}>
+              <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 16 }}>No assigned families yet</h3>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>
                 When you accept care requests, families will appear here as your assigned clients.
               </p>
             </div>
@@ -694,7 +694,7 @@ const FindWork = window.FindWork = () => {
       {/* Clearance banner — shown when BG check or Stripe not done */}
       {!caregiverCleared && (
         <div style={{
-          padding: '12px 16px', marginBottom: 12, background: '#fff8e1', border: '1px solid #ffe082',
+          padding: '12px 16px', marginBottom: 12, background: 'var(--color-warning-bg)', border: '1px solid #ffe082',
           borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span style={{ fontSize: 18 }}>🔒</span>
@@ -705,7 +705,7 @@ const FindWork = window.FindWork = () => {
             window.__accountTab = 'payments';
             window.__navigateTo && window.__navigateTo('account');
           }} style={{
-            padding: '6px 14px', background: '#1b6b5a', color: '#fff', border: 'none',
+            padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
             borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
           }}>Complete Setup</button>
         </div>
@@ -721,8 +721,8 @@ const FindWork = window.FindWork = () => {
           {[{ key: 'list', label: '📋 List' }, { key: 'map', label: '🗺️ Map' }].map(v => (
             <button key={v.key} onClick={() => setViewMode(v.key)} style={{
               padding: '5px 14px', border: 'none',
-              background: viewMode === v.key ? '#1b6b5a' : '#fff',
-              color: viewMode === v.key ? '#fff' : '#555',
+              background: viewMode === v.key ? 'var(--role-color)' : 'var(--text-on-primary)',
+              color: viewMode === v.key ? 'var(--text-on-primary)' : 'var(--text-secondary)',
               fontSize: 12, fontWeight: 600, cursor: 'pointer',
             }}>{v.label}</button>
           ))}
@@ -740,7 +740,7 @@ const FindWork = window.FindWork = () => {
               fontSize: 12, width: 140, outline: 'none',
             }}
           />
-          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#999' }}>📍</span>
+          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-muted)' }}>📍</span>
         </div>
 
         {/* Date range */}
@@ -748,9 +748,9 @@ const FindWork = window.FindWork = () => {
           {[7, 14, 30].map(d => (
             <button key={d} onClick={() => setRangeDays(d)} style={{
               padding: '5px 10px', borderRadius: 8, border: '1px solid',
-              borderColor: rangeDays === d ? '#1b6b5a' : '#d0d0d0',
-              background: rangeDays === d ? '#1b6b5a' : '#fff',
-              color: rangeDays === d ? '#fff' : '#555',
+              borderColor: rangeDays === d ? 'var(--role-color)' : '#d0d0d0',
+              background: rangeDays === d ? 'var(--role-color)' : 'var(--text-on-primary)',
+              color: rangeDays === d ? 'var(--text-on-primary)' : 'var(--text-secondary)',
               fontSize: 11, fontWeight: 600, cursor: 'pointer',
             }}>{d === 7 ? '1w' : d === 14 ? '2w' : '1mo'}</button>
           ))}
@@ -760,7 +760,7 @@ const FindWork = window.FindWork = () => {
         {serviceTypes.length > 1 && (
           <select value={filterService} onChange={e => setFilterService(e.target.value)} style={{
             padding: '5px 10px', borderRadius: 8, border: '1px solid #d0d0d0',
-            fontSize: 12, color: '#555', background: '#fff', cursor: 'pointer',
+            fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-surface)', cursor: 'pointer',
           }}>
             <option value="all">All types</option>
             {serviceTypes.map(t => (
@@ -773,7 +773,7 @@ const FindWork = window.FindWork = () => {
         {viewMode === 'list' && (
           <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
             padding: '5px 10px', borderRadius: 8, border: '1px solid #d0d0d0',
-            fontSize: 12, color: '#555', background: '#fff', cursor: 'pointer',
+            fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-surface)', cursor: 'pointer',
           }}>
             <option value="date">Soonest first</option>
             <option value="match">Best match</option>
@@ -784,15 +784,15 @@ const FindWork = window.FindWork = () => {
 
         <button onClick={fetchData} style={{
           padding: '5px 12px', borderRadius: 8, border: '1px solid #1b6b5a',
-          background: '#fff', color: '#1b6b5a', fontSize: 12, fontWeight: 600,
+          background: 'var(--bg-surface)', color: 'var(--role-color)', fontSize: 12, fontWeight: 600,
           cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto',
         }}>↻ Refresh</button>
       </div>
 
       {lastFetched && (
-        <div style={{ fontSize: 11, color: '#aaa', marginBottom: 10, textAlign: 'right' }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, textAlign: 'right' }}>
           Last checked: {lastFetched.toLocaleTimeString()}
-          {filteredRequests.length > 0 && <span style={{ marginLeft: 8, color: '#e65100', fontWeight: 600 }}>{filteredRequests.length} open</span>}
+          {filteredRequests.length > 0 && <span style={{ marginLeft: 8, color: 'var(--color-warning)', fontWeight: 600 }}>{filteredRequests.length} open</span>}
         </div>
       )}
 
@@ -802,15 +802,15 @@ const FindWork = window.FindWork = () => {
           {/* Radius control */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-            padding: '8px 14px', background: '#f0faf8', borderRadius: 8,
+            padding: '8px 14px', background: 'var(--bg-highlight)', borderRadius: 8,
           }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#1b6b5a' }}>Radius:</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--role-color)' }}>Radius:</span>
             {[5, 10, 15, 25].map(r => (
               <button key={r} onClick={() => setRadiusMiles(r)} style={{
                 padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
                 border: radiusMiles === r ? '2px solid #1b6b5a' : '1px solid #ccc',
-                background: radiusMiles === r ? '#1b6b5a' : '#fff',
-                color: radiusMiles === r ? '#fff' : '#666', cursor: 'pointer',
+                background: radiusMiles === r ? 'var(--role-color)' : 'var(--text-on-primary)',
+                color: radiusMiles === r ? 'var(--text-on-primary)' : 'var(--text-secondary)', cursor: 'pointer',
               }}>{r} mi</button>
             ))}
           </div>
@@ -818,14 +818,14 @@ const FindWork = window.FindWork = () => {
           <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #e0e0e0', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
             <div ref={mapRef} style={{ height: 420, width: '100%' }} />
           </div>
-          <div style={{ marginTop: 6, fontSize: 11, color: '#aaa', textAlign: 'center' }}>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
             Map data &copy; OpenStreetMap &bull; Orange pins = open requests &bull; Click a pin to accept
           </div>
 
           {filteredRequests.length === 0 && (
             <div className="card" style={{ textAlign: 'center', padding: '24px 20px', marginTop: 12 }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
-              <p style={{ color: '#888', fontSize: 13, margin: 0 }}>No open requests in the next {rangeDays} days</p>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>No open requests in the next {rangeDays} days</p>
             </div>
           )}
         </div>
@@ -837,15 +837,15 @@ const FindWork = window.FindWork = () => {
         {/* Open Care Requests */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 17, color: '#1a1a2e', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={{ margin: 0, fontSize: 17, color: 'var(--bg-card)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 28, height: 28, borderRadius: '50%', background: '#fce4ec', fontSize: 14,
+                width: 28, height: 28, borderRadius: '50%', background: 'var(--color-error-bg)', fontSize: 14,
               }}>🔔</span>
               Open Requests
               {filteredRequests.length > 0 && (
                 <span style={{
-                  padding: '2px 10px', background: '#c62828', color: '#fff', borderRadius: 12,
+                  padding: '2px 10px', background: 'var(--color-error)', color: 'var(--text-on-primary)', borderRadius: 12,
                   fontSize: 12, fontWeight: 700, marginLeft: 4,
                 }}>{filteredRequests.length}</span>
               )}
@@ -906,14 +906,14 @@ const FindWork = window.FindWork = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
                       {activeOffer && (
                         <span className={exUrgent ? 'exclusive-urgent' : ''} style={{
-                          background: exUrgent ? '#e8724a' : '#7c3aed', color: '#fff', padding: '2px 10px',
+                          background: exUrgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--text-on-primary)', padding: '2px 10px',
                           borderRadius: 12, fontSize: 11, fontWeight: 700,
                         }}>
                           {exUrgent ? '\u23F1' : '\u2728'} {exRemain !== null ? (exUrgent ? `${exRemain} min left!` : `JUST FOR YOU \u00B7 ${exRemain} min`) : 'JUST FOR YOU'}
                         </span>
                       )}
                       {hasBonus && (
-                        <span style={{ background: '#e8724a', color: '#fff', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
+                        <span style={{ background: 'var(--accent-color)', color: 'var(--text-on-primary)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
                       )}
                       {matchScore > 0 && (
                         <span title={matchScore >= 80
@@ -922,8 +922,8 @@ const FindWork = window.FindWork = () => {
                           ? 'Good match — review the care notes to see if this is a good fit for you'
                           : 'Lower match — review care notes and health tags carefully to make sure you\'re comfortable with this job'
                         } style={{
-                          background: matchScore >= 80 ? '#c8e6c9' : matchScore >= 60 ? '#fff9c4' : '#ffccbc',
-                          color: matchScore >= 80 ? '#2e7d32' : matchScore >= 60 ? '#f57f17' : '#d84315',
+                          background: matchScore >= 80 ? 'var(--color-success-bg)' : matchScore >= 60 ? '#fff9c4' : '#ffccbc',
+                          color: matchScore >= 80 ? 'var(--color-success)' : matchScore >= 60 ? 'var(--color-warning)' : '#d84315',
                           padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
                           cursor: 'help',
                         }}>✓ {matchScore}%</span>
@@ -931,47 +931,47 @@ const FindWork = window.FindWork = () => {
                       {hasConflict ? (
                         <span style={{ background: '#ffd89b', color: '#c86b1f', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\u26A0'} Conflict</span>
                       ) : (
-                        <span style={{ background: '#c8e6c9', color: '#2e7d32', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\u2713'} No Conflicts</span>
+                        <span style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{'\u2713'} No Conflicts</span>
                       )}
                       {distMiles !== null && distMiles !== undefined && (
-                        <span style={{ fontSize: 11, color: '#888' }}>{distMiles} mi</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{distMiles} mi</span>
                       )}
                       {basePerHour > 0 && (
-                        <span style={{ background: '#e8f5e9', color: '#1b6b5a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
+                        <span style={{ background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
                       )}
                       {s.interviewRequired && (
-                        <span style={{ background: '#f3e5f5', color: '#7b1fa2', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\uD83C\uDFA5'} Interview</span>
+                        <span style={{ background: 'var(--color-purple-bg)', color: 'var(--color-purple)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{'\uD83C\uDFA5'} Interview</span>
                       )}
                       {visitCounts[s.careRecipientId || s.care_recipient_id] > 0 && (() => {
                         const vc = visitCounts[s.careRecipientId || s.care_recipient_id];
                         const rName = (s.recipientName || '').split(' ')[0] || 'this person';
-                        return <span title={`You have cared for ${rName} ${vc} time${vc > 1 ? 's' : ''}`} style={{ background: '#e8eaf6', color: '#3f51b5', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'default' }}>{'\uD83D\uDD01'} {vc}x</span>;
+                        return <span title={`You have cared for ${rName} ${vc} time${vc > 1 ? 's' : ''}`} style={{ background: 'var(--color-purple-bg)', color: '#3f51b5', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'default' }}>{'\uD83D\uDD01'} {vc}x</span>;
                       })()}
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 16, color: '#1a1a2e', marginBottom: 2 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--bg-card)', marginBottom: 2 }}>
                           {(service || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                         </div>
-                        <div style={{ fontSize: 13, color: '#555', marginBottom: 2 }}>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 2 }}>
                           {dayLabel}{time ? ` at ${formatTimeStr(time)}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
-                          {dayDiff !== null && dayDiff >= 2 && <span style={{ color: '#888', marginLeft: 6, fontSize: 11 }}>in {dayDiff} days</span>}
+                          {dayDiff !== null && dayDiff >= 2 && <span style={{ color: 'var(--text-tertiary)', marginLeft: 6, fontSize: 11 }}>in {dayDiff} days</span>}
                         </div>
-                        {city && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>{'\uD83D\uDCCD'} {city}</div>}
-                        {familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Requested by {familyName}</div>}
+                        {city && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>{'\uD83D\uDCCD'} {city}</div>}
+                        {familyName && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>Requested by {familyName}</div>}
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: '#1b6b5a' }}>
+                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--role-color)' }}>
                           ${effectiveTotal > 0 ? effectiveTotal.toFixed(0) : (cost ? Math.round(parseFloat(cost)) : '\u2014')}
                         </div>
-                        <div style={{ fontSize: 11, color: '#1b6b5a', fontWeight: 600 }}>Your earnings</div>
+                        <div style={{ fontSize: 11, color: 'var(--role-color)', fontWeight: 600 }}>Your earnings</div>
                       </div>
                     </div>
 
                     {instructions && (
                       <div style={{
-                        fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 6,
+                        fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: 6,
                         whiteSpace: isExpanded ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>
                         {'\uD83D\uDCDD'} "{instructions}"
@@ -984,7 +984,7 @@ const FindWork = window.FindWork = () => {
                         {s.healthTags.map((tag, i) => (
                           <span key={i} style={{
                             padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-                            background: '#fff3e0', color: '#e65100',
+                            background: 'var(--color-warning-bg)', color: 'var(--color-warning)',
                           }}>{tag}</span>
                         ))}
                       </div>
@@ -994,9 +994,9 @@ const FindWork = window.FindWork = () => {
                     {s.careSummary && (
                       <div style={{
                         marginTop: 8, padding: '8px 12px', borderLeft: '3px solid #e8724a',
-                        background: '#fff8f5', borderRadius: '0 6px 6px 0', fontSize: 12, color: '#555', lineHeight: 1.4,
+                        background: '#fff8f5', borderRadius: '0 6px 6px 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4,
                       }}>
-                        <div style={{ fontWeight: 600, fontSize: 11, color: '#e8724a', marginBottom: 3 }}>Care Notes</div>
+                        <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--accent-color)', marginBottom: 3 }}>Care Notes</div>
                         {s.careSummary.length >= 200 ? s.careSummary + '...' : s.careSummary}
                       </div>
                     )}
@@ -1004,7 +1004,7 @@ const FindWork = window.FindWork = () => {
                     {isExpanded && (
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
                         {!caregiverCleared ? (
-                          <div style={{ padding: '12px 16px', background: '#f5f5f5', borderRadius: 8, textAlign: 'center', fontSize: 13, color: '#888' }}>
+                          <div style={{ padding: '12px 16px', background: 'var(--bg-primary)', borderRadius: 8, textAlign: 'center', fontSize: 13, color: 'var(--text-tertiary)' }}>
                             Complete your background check and payment setup to accept jobs.
                           </div>
                         ) : (
@@ -1012,7 +1012,7 @@ const FindWork = window.FindWork = () => {
                           disabled={claimingId === s.id || accountPaused}
                           title={accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                           style={{
-                            width: '100%', padding: 14, background: accountPaused ? '#ccc' : '#e8724a', color: '#fff',
+                            width: '100%', padding: 14, background: accountPaused ? 'var(--border-light)' : 'var(--accent-color)', color: 'var(--text-on-primary)',
                             border: 'none', borderRadius: 10, fontSize: 16, fontWeight: 700,
                             cursor: claimingId === s.id || accountPaused ? 'not-allowed' : 'pointer', opacity: claimingId === s.id || accountPaused ? 0.6 : 1,
                             boxShadow: '0 2px 6px rgba(232,114,74,0.3)',
@@ -1021,7 +1021,7 @@ const FindWork = window.FindWork = () => {
                         </button>
                         )}
                         {accountPaused && (
-                          <div style={{ marginTop: 8, padding: '8px 12px', background: '#fff5f5', border: '1px solid #ef5350', borderRadius: 8, fontSize: 12, color: '#c62828', fontWeight: 600, textAlign: 'center' }}>
+                          <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-error-light)', border: '1px solid #ef5350', borderRadius: 8, fontSize: 12, color: 'var(--color-error)', fontWeight: 600, textAlign: 'center' }}>
                             Your account is paused. Contact support for assistance.
                           </div>
                         )}
@@ -1029,7 +1029,7 @@ const FindWork = window.FindWork = () => {
                           <button onClick={(e) => { e.stopPropagation(); openProposalModal(s); }}
                             style={{
                               width: '100%', padding: 12, marginTop: 8,
-                              background: '#fff', color: '#1b6b5a', border: '2px solid #1b6b5a',
+                              background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
                               borderRadius: 10, fontSize: 14, fontWeight: 600,
                               cursor: 'pointer',
                             }}>
@@ -1045,20 +1045,20 @@ const FindWork = window.FindWork = () => {
           ) : (
             <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-              <h3 style={{ margin: '0 0 8px', color: '#333', fontSize: 16 }}>No open requests in the next {rangeDays} days</h3>
-              <p style={{ color: '#888', fontSize: 13, margin: '0 0 12px' }}>
+              <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 16 }}>No open requests in the next {rangeDays} days</h3>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: '0 0 12px' }}>
                 Care requests from families in your area will appear here automatically.
               </p>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
                 {rangeDays < 30 && (
                   <button onClick={() => setRangeDays(30)} style={{
                     padding: '8px 16px', borderRadius: 8, border: '1px solid #1b6b5a',
-                    background: '#fff', color: '#1b6b5a', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    background: 'var(--bg-surface)', color: 'var(--role-color)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
                   }}>Try 1 month range</button>
                 )}
                 <button onClick={fetchData} style={{
                   padding: '8px 16px', borderRadius: 8, border: '1px solid #e0e0e0',
-                  background: '#f5f5f5', color: '#666', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
                 }}>↻ Refresh</button>
               </div>
             </div>
@@ -1067,15 +1067,15 @@ const FindWork = window.FindWork = () => {
 
         {/* Upcoming Booked Sessions */}
         <div>
-          <h2 style={{ margin: '0 0 12px', fontSize: 17, color: '#1a1a2e', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2 style={{ margin: '0 0 12px', fontSize: 17, color: 'var(--bg-card)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 28, height: 28, borderRadius: '50%', background: '#e3f2fd', fontSize: 14,
+              width: 28, height: 28, borderRadius: '50%', background: 'var(--color-info-bg)', fontSize: 14,
             }}>📅</span>
             Your Upcoming Sessions
             {upcomingSessions.length > 0 && (
               <span style={{
-                padding: '2px 10px', background: '#1b6b5a', color: '#fff', borderRadius: 12,
+                padding: '2px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: 12,
                 fontSize: 12, fontWeight: 700, marginLeft: 4,
               }}>{upcomingSessions.length}</span>
             )}
@@ -1094,12 +1094,12 @@ const FindWork = window.FindWork = () => {
             return (
             <div key={dateStr} style={{ marginBottom: 16 }}>
               <div style={{
-                fontSize: 14, fontWeight: 700, color: '#1b6b5a', marginBottom: 8,
+                fontSize: 14, fontWeight: 700, color: 'var(--role-color)', marginBottom: 8,
                 padding: '6px 0', borderBottom: '2px solid #e8f5f1',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}>
                 <span>{dateLabel}</span>
-                {countdownLabel && <span style={{ fontSize: 11, fontWeight: 600, color: '#888', background: '#f5f5f5', padding: '2px 8px', borderRadius: 10 }}>{countdownLabel}</span>}
+                {countdownLabel && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: 10 }}>{countdownLabel}</span>}
               </div>
               {sessionsByDate[dateStr].map(s => {
                 const time = s.time || s.scheduled_time;
@@ -1113,10 +1113,10 @@ const FindWork = window.FindWork = () => {
                 const careSummary = s.careSummary || '';
                 const instructions = s.specialInstructions || s.special_instructions || '';
                 const statusColors = {
-                  confirmed: { bg: '#e8f5e9', text: '#2e7d32', label: 'Confirmed' },
-                  pending: { bg: '#fff3e0', text: '#e65100', label: 'Pending' },
-                  in_progress: { bg: '#e3f2fd', text: '#1565c0', label: 'In Progress' },
-                  completed: { bg: '#e0e0e0', text: '#666', label: 'Completed' },
+                  confirmed: { bg: 'var(--color-success-bg)', text: 'var(--color-success)', label: 'Confirmed' },
+                  pending: { bg: 'var(--color-warning-bg)', text: 'var(--color-warning)', label: 'Pending' },
+                  in_progress: { bg: 'var(--color-info-bg)', text: 'var(--color-info)', label: 'In Progress' },
+                  completed: { bg: 'var(--border-light)', text: 'var(--text-secondary)', label: 'Completed' },
                 };
                 const sc = statusColors[s.status] || statusColors.pending;
 
@@ -1128,7 +1128,7 @@ const FindWork = window.FindWork = () => {
                     {/* Header: service type + status + cancel */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 700, fontSize: 16, color: '#333' }}>
+                        <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
                           {(service || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                         </span>
                         <span style={{
@@ -1137,27 +1137,27 @@ const FindWork = window.FindWork = () => {
                         }}>{sc.label}</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {cost && <span style={{ fontSize: 20, fontWeight: 700, color: '#1b6b5a' }}>${Math.round(parseFloat(cost))}</span>}
+                        {cost && <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--role-color)' }}>${Math.round(parseFloat(cost))}</span>}
                         {['confirmed', 'pending'].includes(s.status) && (
                           <button onClick={() => setCancellingId(s.id)} style={{
                             padding: '3px 10px', borderRadius: 6, border: '1px solid #e0e0e0',
-                            background: '#fff', color: '#c62828', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                           }}>Cancel</button>
                         )}
                       </div>
                     </div>
 
                     {/* Details row: recipient, time, location */}
-                    <div style={{ fontSize: 13, color: '#555', marginBottom: 2 }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 2 }}>
                       <span style={{ fontWeight: 600 }}>{recipient}</span>
                       {time ? ` \u2022 ${formatTimeStr(time)}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
                     </div>
-                    {location && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{'\uD83D\uDCCD'} {location}</div>}
-                    {familyName && <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>Family: {familyName}</div>}
+                    {location && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {location}</div>}
+                    {familyName && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>Family: {familyName}</div>}
 
                     {/* Special instructions from appointment maker */}
                     {instructions && (
-                      <div style={{ fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 6 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: 6 }}>
                         {'\uD83D\uDCDD'} "{instructions}"
                       </div>
                     )}
@@ -1168,7 +1168,7 @@ const FindWork = window.FindWork = () => {
                         {healthTags.map((tag, i) => (
                           <span key={i} style={{
                             padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-                            background: '#fff3e0', color: '#e65100',
+                            background: 'var(--color-warning-bg)', color: 'var(--color-warning)',
                           }}>{tag}</span>
                         ))}
                       </div>
@@ -1178,9 +1178,9 @@ const FindWork = window.FindWork = () => {
                     {careSummary && (
                       <div style={{
                         marginTop: 8, padding: '8px 12px', borderLeft: '3px solid #e8724a',
-                        background: '#fff8f5', borderRadius: '0 6px 6px 0', fontSize: 12, color: '#555', lineHeight: 1.4,
+                        background: '#fff8f5', borderRadius: '0 6px 6px 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4,
                       }}>
-                        <div style={{ fontWeight: 600, fontSize: 11, color: '#e8724a', marginBottom: 3 }}>Care Notes</div>
+                        <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--accent-color)', marginBottom: 3 }}>Care Notes</div>
                         {careSummary.length >= 200 ? careSummary + '...' : careSummary}
                       </div>
                     )}
@@ -1192,7 +1192,7 @@ const FindWork = window.FindWork = () => {
           }) : (
             <div className="card" style={{ textAlign: 'center', padding: '24px 20px' }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-              <p style={{ color: '#888', fontSize: 13, margin: 0 }}>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>
                 No upcoming sessions. Accept a care request above to get started!
               </p>
             </div>
@@ -1206,7 +1206,7 @@ const FindWork = window.FindWork = () => {
       {/* Cancel Confirmation Modal */}
       {cancellingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw' }}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 18 }}>Cancel Session</h3>
             {(() => {
               const s = upcomingSessions.find(x => x.id === cancellingId);
@@ -1216,27 +1216,27 @@ const FindWork = window.FindWork = () => {
               const isLate = hoursAway < 24;
               return (
                 <div>
-                  <div style={{ fontSize: 14, color: '#333', marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, color: 'var(--text-primary)', marginBottom: 12 }}>
                     {s.recipientName || s.recipient_name} — {s.date || s.scheduled_date}
                   </div>
                   {isLate && (
-                    <div style={{ padding: '10px 14px', background: '#fce4ec', borderRadius: 8, border: '1px solid #ef9a9a', marginBottom: 12, fontSize: 13, color: '#c62828' }}>
+                    <div style={{ padding: '10px 14px', background: 'var(--color-error-bg)', borderRadius: 8, border: '1px solid #ef9a9a', marginBottom: 12, fontSize: 13, color: 'var(--color-error)' }}>
                       This is a <strong>late cancellation</strong> (less than 24 hours before the session). The family will be able to leave a review.
                     </div>
                   )}
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontSize: 12, color: '#888', marginBottom: 4 }}>Reason (optional)</label>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Reason (optional)</label>
                     <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
                       placeholder="Why are you cancelling?"
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, minHeight: 60, resize: 'vertical' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                     <button onClick={() => { setCancellingId(null); setCancelReason(''); }}
-                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                       Keep Session
                     </button>
                     <button onClick={() => handleCancelSession(cancellingId)} disabled={cancelLoading}
-                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: cancelLoading ? '#999' : '#c62828', color: '#fff', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'wait' : 'pointer' }}>
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: cancelLoading ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'wait' : 'pointer' }}>
                       {cancelLoading ? 'Cancelling...' : 'Cancel Session'}
                     </button>
                   </div>
@@ -1252,38 +1252,38 @@ const FindWork = window.FindWork = () => {
           onClick={() => setProposingFor(null)}>
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }}></div>
           <div style={{
-            position: 'relative', background: '#fff', borderRadius: 16, padding: 24,
+            position: 'relative', background: 'var(--bg-surface)', borderRadius: 16, padding: 24,
             maxWidth: 420, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
           }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 4px', fontSize: 18, color: '#333' }}>Propose Different Time</h3>
-            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#888' }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 18, color: 'var(--text-primary)' }}>Propose Different Time</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-tertiary)' }}>
               Suggest a time that works for you. The family will be notified and can accept or decline.
             </p>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#444', marginBottom: 4 }}>Date</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Date</label>
               <input type="date" value={proposalDate} onChange={(e) => setProposalDate(e.target.value)}
                 style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#444', marginBottom: 4 }}>Time</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Time</label>
               <input type="time" value={proposalTime} onChange={(e) => setProposalTime(e.target.value)}
                 style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#444', marginBottom: 4 }}>Note to family (optional)</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Note to family (optional)</label>
               <textarea value={proposalMsg} onChange={(e) => setProposalMsg(e.target.value)}
                 placeholder="e.g., I have another appointment until 1 PM but am free after that"
                 rows={2} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setProposingFor(null)}
-                style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #ddd', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#666' }}>
+                style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                 Cancel
               </button>
               <button onClick={handlePropose} disabled={proposalLoading || !proposalDate || !proposalTime}
                 style={{
                   flex: 2, padding: 12, borderRadius: 10, border: 'none',
-                  background: '#1b6b5a', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                  background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
                   opacity: (proposalLoading || !proposalDate || !proposalTime) ? 0.6 : 1,
                 }}>
                 {proposalLoading ? 'Sending...' : 'Send Proposal'}

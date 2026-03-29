@@ -68,8 +68,8 @@ const PWAInstallBanner = window.PWAInstallBanner = () => {
           <div className="pwa-instructions-modal" onClick={(e) => e.stopPropagation()}>
             <button className="pwa-instructions-close" onClick={() => setShowInstructions(false)}>&times;</button>
             <img src="/icons/icon-192.png" alt="InPlace" style={{ width: 56, height: 56, borderRadius: 12, marginBottom: 12 }} />
-            <h3 style={{ margin: '0 0 4px', fontSize: 18, color: '#1b6b5a' }}>Install InPlace</h3>
-            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#888' }}>Add to your home screen for the best experience</p>
+            <h3 style={{ margin: '0 0 4px', fontSize: 18, color: 'var(--role-color)' }}>Install InPlace</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-tertiary)' }}>Add to your home screen for the best experience</p>
 
             {(isSafari || isIOS) && (
               <div className="pwa-instructions-section">
@@ -143,7 +143,7 @@ const OfflineIndicator = window.OfflineIndicator = () => {
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-      background: '#e65100', color: '#fff', textAlign: 'center',
+      background: 'var(--color-warning)', color: 'var(--text-on-primary)', textAlign: 'center',
       padding: '6px 12px', fontSize: '13px', fontWeight: 600,
     }}>
       You're offline — some features may be unavailable
@@ -158,9 +158,9 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
   const [switching, setSwitching] = useState(null);
 
   const demoAccounts = [
-    { email: 'paul@inplace.care', label: 'Paul', icon: '👨‍👩‍👧', color: '#1b6b5a' },
-    { email: 'maria@inplace.care', label: 'Maria', icon: '🤝', color: '#2e7d6d' },
-    { email: 'barbara@inplace.care', label: 'Barbara', icon: '🌷', color: '#e8724a' },
+    { email: 'paul@inplace.care', label: 'Paul', icon: '👨‍👩‍👧', color: 'var(--role-color)' },
+    { email: 'maria@inplace.care', label: 'Maria', icon: '🤝', color: 'var(--role-color)' },
+    { email: 'barbara@inplace.care', label: 'Barbara', icon: '🌷', color: 'var(--accent-color)' },
   ];
 
   const handleSwitch = async (account) => {
@@ -230,9 +230,9 @@ const DemoModeBanner = window.DemoModeBanner = ({ currentUser, onSwitchAccount, 
 const _DayIcon = () => {
   const day = new Date().getDate();
   return React.createElement('svg', { width: 20, height: 20, viewBox: '0 0 20 20', style: { display: 'inline-block', verticalAlign: 'middle' } },
-    React.createElement('rect', { x: 0, y: 0, width: 20, height: 20, rx: 3, fill: '#fff', stroke: '#ccc', strokeWidth: 1 }),
-    React.createElement('rect', { x: 0, y: 0, width: 20, height: 6, rx: 3, fill: '#d32f2f' }),
-    React.createElement('text', { x: 10, y: 15.5, textAnchor: 'middle', fontSize: 9, fontWeight: 700, fill: '#333' }, day)
+    React.createElement('rect', { x: 0, y: 0, width: 20, height: 20, rx: 3, fill: 'var(--text-on-primary)', stroke: 'var(--border-light)', strokeWidth: 1 }),
+    React.createElement('rect', { x: 0, y: 0, width: 20, height: 6, rx: 3, fill: 'var(--color-error)' }),
+    React.createElement('text', { x: 10, y: 15.5, textAnchor: 'middle', fontSize: 9, fontWeight: 700, fill: 'var(--text-primary)' }, day)
   );
 };
 
@@ -503,9 +503,9 @@ const App = () => {
   // Must be here (before any early returns) to satisfy Rules of Hooks
   useEffect(() => {
     const roleColors = {
-      family:    { main: '#1b6b5a', light: '#e0f2e9', dark: '#0f4238' },
+      family:    { main: 'var(--role-color)', light: 'var(--role-color-light)', dark: 'var(--role-color-dark)' },
       caregiver: { main: '#2e5984', light: '#dce8f3', dark: '#1a3a5c' },
-      care_for:  { main: '#7b5ea7', light: '#ede7f6', dark: '#4a2d7a' },
+      care_for:  { main: '#7b5ea7', light: 'var(--color-purple-bg)', dark: '#4a2d7a' },
     };
     const rc = roleColors[activeRole] || roleColors.family;
     const root = document.documentElement;
@@ -1052,11 +1052,11 @@ const App = () => {
     invite: <InviteLandingPage inviteInfo={inviteInfo} onNavigate={handleNavigate} />,
     splash: <SplashPage onNavigate={handleNavigate} inviteInfo={inviteInfo} />,
     demo: <DemoPickerPage onLogin={handleLogin} onNavigate={handleNavigate} />,
-    'verifying-email': <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f5f5f5', padding: 24 }}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: '48px 40px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+    'verifying-email': <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-primary)', padding: 24 }}>
+      <div style={{ background: 'var(--text-on-primary)', borderRadius: 16, padding: '48px 40px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>{'\u2709\uFE0F'}</div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700, color: '#333' }}>Verifying your email...</h2>
-        <p style={{ fontSize: 15, color: '#666', margin: 0 }}>Just a moment while we confirm your address.</p>
+        <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Verifying your email...</h2>
+        <p style={{ fontSize: 15, color: 'var(--text-secondary)', margin: 0 }}>Just a moment while we confirm your address.</p>
       </div>
     </div>,
     login: <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />,
@@ -1076,9 +1076,9 @@ const App = () => {
   // ─── Role-specific color theming ───
   // Changes sidebar active color, role switcher accent, and other themed elements per role
   const roleColors = {
-    family:    { main: '#1b6b5a', light: '#e0f2e9', dark: '#0f4238' },
+    family:    { main: 'var(--role-color)', light: 'var(--role-color-light)', dark: 'var(--role-color-dark)' },
     caregiver: { main: '#2e5984', light: '#dce8f3', dark: '#1a3a5c' },
-    care_for:  { main: '#7b5ea7', light: '#ede7f6', dark: '#4a2d7a' },
+    care_for:  { main: '#7b5ea7', light: 'var(--color-purple-bg)', dark: '#4a2d7a' },
   };
   const currentRoleColor = roleColors[role] || roleColors.family;
 
@@ -1149,7 +1149,7 @@ const App = () => {
       if (wizardData && currentPage !== 'recipients' && currentPage !== 'account' && currentPage !== 'help' && currentPage !== 'care-team') {
         // Auto-redirect to wizard — use setTimeout to avoid render-during-render
         setTimeout(() => setCurrentPage('recipients'), 0);
-        return <div key={pageKey} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: '#666' }}>Returning to setup...</div>;
+        return <div key={pageKey} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: 'var(--text-secondary)' }}>Returning to setup...</div>;
       }
     } catch {}
 
@@ -1227,7 +1227,7 @@ const App = () => {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 16px 14px', gap: '6px' }}>
             <div className="sidebar-avatar" style={{
               width: 44, height: 44, borderRadius: '50%',
-              background: currentUser.profilePhoto ? `url(${currentUser.profilePhoto}) center/cover` : '#e8724a',
+              background: currentUser.profilePhoto ? `url(${currentUser.profilePhoto}) center/cover` : 'var(--accent-color)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'white', fontSize: 16, fontWeight: 600, flexShrink: 0, overflow: 'hidden',
             }}>
@@ -1284,7 +1284,7 @@ const App = () => {
                   : () => { handlePageChange(item.id); setSidebarOpen(false); };
                 return (
                   <li key={item.id} className="nav-item">
-                    <button onClick={actionClick} className="nav-link" style={item.disabled ? { background: '#999', color: 'rgba(255,255,255,0.5)', fontWeight: 600, cursor: 'not-allowed', opacity: 0.5 } : item.id === '_launch_kindred' ? { background: '#1A5276', color: '#fff', fontWeight: 600 } : { background: '#e8724a', color: '#fff', fontWeight: 600 }} title={item.disabled ? 'Complete your profile first' : item.id === '_launch_kindred' ? 'Open Kindred (new tab)' : ''}>
+                    <button onClick={actionClick} className="nav-link" style={item.disabled ? { background: 'var(--text-muted)', color: 'rgba(255,255,255,0.5)', fontWeight: 600, cursor: 'not-allowed', opacity: 0.5 } : item.id === '_launch_kindred' ? { background: 'var(--color-info)', color: 'var(--text-on-primary)', fontWeight: 600 } : { background: 'var(--accent-color)', color: 'var(--text-on-primary)', fontWeight: 600 }} title={item.disabled ? 'Complete your profile first' : item.id === '_launch_kindred' ? 'Open Kindred (new tab)' : ''}>
                       <span className="nav-icon">{item.icon}</span> {item.label} {item.disabled && '🔒'}
                     </button>
                   </li>
@@ -1299,7 +1299,7 @@ const App = () => {
                     {item.label} {item.disabled && '🔒'}
                     {item.id === 'messages' && unreadMsgCount > 0 && (
                       <span style={{
-                        marginLeft: 'auto', background: '#e8724a', color: '#fff', borderRadius: 10,
+                        marginLeft: 'auto', background: 'var(--accent-color)', color: 'var(--text-on-primary)', borderRadius: 10,
                         padding: '1px 6px', fontSize: 10, fontWeight: 700,
                         minWidth: 18, textAlign: 'center', lineHeight: '16px',
                       }}>{unreadMsgCount > 99 ? '99+' : unreadMsgCount}</span>
@@ -1312,7 +1312,7 @@ const App = () => {
                         adminAlertDetails.newFeedback && `${adminAlertDetails.newFeedback} new feedback`,
                         adminAlertDetails.checkrAlerts && `${adminAlertDetails.checkrAlerts} background check updates`,
                       ].filter(Boolean).join(', ') : ''} style={{
-                        marginLeft: 'auto', background: '#dc2626', color: '#fff', borderRadius: 10,
+                        marginLeft: 'auto', background: 'var(--color-error)', color: 'var(--text-on-primary)', borderRadius: 10,
                         padding: '1px 6px', fontSize: 10, fontWeight: 700,
                         minWidth: 18, textAlign: 'center', lineHeight: '16px',
                       }}>{adminAlertCount > 99 ? '99+' : adminAlertCount}</span>
@@ -1361,7 +1361,7 @@ const App = () => {
         {currentUser?.roles?.length > 1 && (
           <div className="role-switcher-bar" style={{
             display: 'flex', gap: '4px', padding: '6px 8px', marginBottom: '12px',
-            background: '#f0f0f0', borderRadius: '10px', width: 'fit-content',
+            background: 'var(--badge-muted-bg)', borderRadius: '10px', width: 'fit-content',
           }}>
             {['family', 'caregiver', 'care_for'].map(r => {
               const labels = { family: 'Family', caregiver: 'Caregiver', care_for: 'Recipient' };
@@ -1378,7 +1378,7 @@ const App = () => {
                   cursor: hasRole ? 'pointer' : 'default',
                   fontSize: '13px', fontWeight: isActive ? 600 : 400,
                   background: isActive ? btnColor : 'transparent',
-                  color: isActive ? 'white' : hasRole ? '#666' : '#ccc',
+                  color: isActive ? 'white' : hasRole ? 'var(--text-secondary)' : 'var(--border-light)',
                   transition: 'all 0.2s',
                   opacity: hasRole ? 1 : 0.5,
                 },
@@ -1389,8 +1389,8 @@ const App = () => {
         {verifyMessage && (
           <div style={{
             padding: '12px 16px', marginBottom: '16px', borderRadius: '8px', fontSize: '14px', fontWeight: 500,
-            background: verifyMessage.type === 'success' ? '#e0f2e9' : verifyMessage.type === 'info' ? '#e3f2fd' : '#fce4ec',
-            color: verifyMessage.type === 'success' ? '#1b6b5a' : verifyMessage.type === 'info' ? '#1565c0' : '#c62828',
+            background: verifyMessage.type === 'success' ? 'var(--role-color-light)' : verifyMessage.type === 'info' ? 'var(--color-info-bg)' : 'var(--color-error-bg)',
+            color: verifyMessage.type === 'success' ? 'var(--role-color)' : verifyMessage.type === 'info' ? 'var(--color-info)' : 'var(--color-error)',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <span>{verifyMessage.type === 'success' ? '✅ ' : '⚠️ '}{verifyMessage.text}</span>
@@ -1404,34 +1404,34 @@ const App = () => {
         {currentUser && !currentUser.account_approved && !currentUser.isDemo && !currentUser.is_admin ? (
           <div style={{ maxWidth: 500, margin: '60px auto', textAlign: 'center', padding: 32 }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>{'\u23F3'}</div>
-            <h2 style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 700, color: '#333' }}>Account Pending Approval</h2>
-            <p style={{ fontSize: 15, color: '#666', lineHeight: 1.6, margin: '0 0 20px' }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>Account Pending Approval</h2>
+            <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 20px' }}>
               Thank you for signing up for InPlace! Your account is being reviewed by our team.
               You'll receive a notification once you've been approved to continue.
             </p>
 
             {/* Email verification info */}
-            <div style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 12, padding: 16, margin: '0 0 20px', textAlign: 'center' }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#1565c0', marginBottom: 4 }}>Email verification</div>
-              <p style={{ fontSize: 13, color: '#1976d2', margin: 0, lineHeight: 1.5 }}>
+            <div style={{ background: 'var(--color-info-bg)', border: '1px solid #90caf9', borderRadius: 12, padding: 16, margin: '0 0 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-info)', marginBottom: 4 }}>Email verification</div>
+              <p style={{ fontSize: 13, color: 'var(--color-info)', margin: 0, lineHeight: 1.5 }}>
                 Once your account is approved, you'll receive an email to verify your address and complete sign-up.
               </p>
             </div>
 
-            <div style={{ background: '#f0faf7', border: '1px solid #b2dfdb', borderRadius: 12, padding: 16, margin: '0 0 20px', textAlign: 'left' }}>
-              <p style={{ fontSize: 14, color: '#444', lineHeight: 1.6, margin: '0 0 12px' }}>
+            <div style={{ background: 'var(--bg-highlight)', border: '1px solid #b2dfdb', borderRadius: 12, padding: 16, margin: '0 0 20px', textAlign: 'left' }}>
+              <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6, margin: '0 0 12px' }}>
                 If you're reading this message and you haven't spoken to admin about creating an account, thank you for your interest and we'll be in touch.
               </p>
-              <p style={{ fontSize: 14, color: '#444', lineHeight: 1.6, margin: 0 }}>
+              <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6, margin: 0 }}>
                 If you have spoken to admin, your account creation will be approved shortly.
               </p>
             </div>
 
-            <p style={{ fontSize: 13, color: '#999' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
               If you have questions, contact us at support@yourinplace.com.
             </p>
             <button onClick={() => { AUTH_TOKEN = null; fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {}); window.location.reload(); }}
-              style={{ marginTop: 20, padding: '10px 24px', background: '#f5f5f5', color: '#666', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
+              style={{ marginTop: 20, padding: '10px 24px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
               Log Out
             </button>
           </div>
@@ -1440,12 +1440,12 @@ const App = () => {
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav">
         {getBottomNavItems().map(item => (
-          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: '#e8724a' } : {}), ...(item.isKindred ? { color: '#1A5276' } : {}) }}>
-            <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: '#fff3ed', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
+          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: 'var(--accent-color)' } : {}), ...(item.isKindred ? { color: 'var(--color-info)' } : {}) }}>
+            <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: 'var(--bg-accent-light)', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
             {item.id === 'messages' && unreadMsgCount > 0 && (
               <span style={{
                 position: 'absolute', top: 2, right: '50%', marginRight: -18,
-                background: '#e8724a', color: '#fff', borderRadius: 10,
+                background: 'var(--accent-color)', color: 'var(--text-on-primary)', borderRadius: 10,
                 padding: '1px 5px', fontSize: 9, fontWeight: 700,
                 minWidth: 16, textAlign: 'center', lineHeight: '14px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
@@ -1454,7 +1454,7 @@ const App = () => {
             {item.id === 'admin' && adminAlertCount > 0 && (
               <span style={{
                 position: 'absolute', top: 2, right: '50%', marginRight: -18,
-                background: '#dc2626', color: '#fff', borderRadius: 10,
+                background: 'var(--color-error)', color: 'var(--text-on-primary)', borderRadius: 10,
                 padding: '1px 5px', fontSize: 9, fontWeight: 700,
                 minWidth: 16, textAlign: 'center', lineHeight: '14px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.3)',

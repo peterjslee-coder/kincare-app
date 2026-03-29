@@ -158,7 +158,7 @@ const AdminFinancials = window.AdminFinancials = () => {
         <div className="stat-label">{label}</div>
         <div style={{
           fontSize: 11, fontWeight: 600, marginTop: 4,
-          color: isPositive ? '#2e7d32' : '#c62828',
+          color: isPositive ? 'var(--color-success)' : 'var(--color-error)',
         }}>
           {isPositive ? '▲' : '▼'} {change}% vs last month
         </div>
@@ -183,8 +183,8 @@ const AdminFinancials = window.AdminFinancials = () => {
             const y = chartHeight - chartHeight * pct;
             return (
               <g key={i}>
-                <line x1={leftPad} y1={y} x2={chartWidth - 10} y2={y} stroke="#e8e8e8" strokeWidth="1" />
-                <text x={leftPad - 6} y={y + 4} textAnchor="end" fontSize="10" fill="#999">
+                <line x1={leftPad} y1={y} x2={chartWidth - 10} y2={y} stroke="var(--border-light)" strokeWidth="1" />
+                <text x={leftPad - 6} y={y + 4} textAnchor="end" fontSize="10" fill="var(--text-muted)">
                   ${Math.round(maxVal * pct).toLocaleString()}
                 </text>
               </g>
@@ -200,23 +200,23 @@ const AdminFinancials = window.AdminFinancials = () => {
                 {/* Caregiver payout (bottom, gray) */}
                 <rect x={x} y={chartHeight - totalH} width={barWidth} height={Math.max(totalH - platformH, 0)} rx="2" fill="#d0d0d0" opacity={0.7} />
                 {/* Platform fee (top, teal) */}
-                <rect x={x} y={chartHeight - totalH} width={barWidth} height={Math.max(platformH, 0)} rx="2" fill="#1b6b5a" opacity={0.85} />
+                <rect x={x} y={chartHeight - totalH} width={barWidth} height={Math.max(platformH, 0)} rx="2" fill="var(--role-color)" opacity={0.85} />
                 {/* Value label */}
                 {d.grossRevenue > 0 && (
-                  <text x={x + barWidth / 2} y={chartHeight - totalH - 4} textAnchor="middle" fontSize="8" fill="#555" fontWeight="600">
+                  <text x={x + barWidth / 2} y={chartHeight - totalH - 4} textAnchor="middle" fontSize="8" fill="var(--text-secondary)" fontWeight="600">
                     ${Math.round(d.grossRevenue)}
                   </text>
                 )}
                 {/* Month label */}
-                <text x={x + barWidth / 2} y={chartHeight + 14} textAnchor="middle" fontSize="10" fill="#888">
+                <text x={x + barWidth / 2} y={chartHeight + 14} textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">
                   {d.label}
                 </text>
               </g>
             );
           })}
         </svg>
-        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 4, fontSize: 11, color: '#666' }}>
-          <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#1b6b5a', borderRadius: 2, marginRight: 4, verticalAlign: 'middle' }}></span>Platform Fee</span>
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 4, fontSize: 11, color: 'var(--text-secondary)' }}>
+          <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--role-color)', borderRadius: 2, marginRight: 4, verticalAlign: 'middle' }}></span>Platform Fee</span>
           <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#d0d0d0', borderRadius: 2, marginRight: 4, verticalAlign: 'middle' }}></span>Caregiver Payout</span>
         </div>
       </div>
@@ -225,10 +225,10 @@ const AdminFinancials = window.AdminFinancials = () => {
 
   // ─── Donut Chart (Service Breakdown) ───
   const ServiceDonut = ({ data }) => {
-    if (!data || !data.length) return <p style={{ color: '#999', fontSize: 13 }}>No service data yet</p>;
+    if (!data || !data.length) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No service data yet</p>;
     const total = data.reduce((s, d) => s + d.revenue, 0);
-    if (total === 0) return <p style={{ color: '#999', fontSize: 13 }}>No revenue data yet</p>;
-    const colors = ['#1b6b5a', '#e8724a', '#3498db', '#9b59b6', '#f39c12', '#2ecc71'];
+    if (total === 0) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No revenue data yet</p>;
+    const colors = ['var(--role-color)', 'var(--accent-color)', '#3498db', '#9b59b6', '#f39c12', '#2ecc71'];
     const cx = 70, cy = 70, r = 55, ir = 35;
     let cumAngle = 0;
 
@@ -252,15 +252,15 @@ const AdminFinancials = window.AdminFinancials = () => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         <svg width="140" height="140" viewBox="0 0 140 140">
           {arcs.map((a, i) => <path key={i} d={a.path} fill={a.color} />)}
-          <text x={cx} y={cy - 4} textAnchor="middle" fontSize="16" fontWeight="700" fill="#333">{fmt(total)}</text>
-          <text x={cx} y={cy + 12} textAnchor="middle" fontSize="9" fill="#999">total revenue</text>
+          <text x={cx} y={cy - 4} textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{fmt(total)}</text>
+          <text x={cx} y={cy + 12} textAnchor="middle" fontSize="9" fill="var(--text-muted)">total revenue</text>
         </svg>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {arcs.map((a, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
               <div style={{ width: 10, height: 10, borderRadius: 2, background: a.color, flexShrink: 0 }} />
-              <span style={{ color: '#555' }}>{a.label}</span>
-              <span style={{ color: '#999' }}>({a.pct}% · {fmt(a.revenue)})</span>
+              <span style={{ color: 'var(--text-secondary)' }}>{a.label}</span>
+              <span style={{ color: 'var(--text-muted)' }}>({a.pct}% · {fmt(a.revenue)})</span>
             </div>
           ))}
         </div>
@@ -271,10 +271,10 @@ const AdminFinancials = window.AdminFinancials = () => {
   // ─── Insight Card ───
   const InsightCard = ({ insight }) => {
     const severityStyles = {
-      positive: { bg: '#e8f5e9', border: '#a5d6a7', icon: '✅', color: '#2e7d32' },
-      neutral: { bg: '#e3f2fd', border: '#90caf9', icon: 'ℹ️', color: '#1565c0' },
-      warning: { bg: '#fff8e1', border: '#ffe082', icon: '⚠️', color: '#f57f17' },
-      critical: { bg: '#fce4ec', border: '#ef9a9a', icon: '🚨', color: '#c62828' },
+      positive: { bg: 'var(--color-success-bg)', border: 'var(--color-success-bg)', icon: '✅', color: 'var(--color-success)' },
+      neutral: { bg: 'var(--color-info-bg)', border: '#90caf9', icon: 'ℹ️', color: 'var(--color-info)' },
+      warning: { bg: 'var(--color-warning-bg)', border: '#ffe082', icon: '⚠️', color: 'var(--color-warning)' },
+      critical: { bg: 'var(--color-error-bg)', border: '#ef9a9a', icon: '🚨', color: 'var(--color-error)' },
     };
     const s = severityStyles[insight.severity] || severityStyles.neutral;
     return (
@@ -288,15 +288,15 @@ const AdminFinancials = window.AdminFinancials = () => {
           </div>
           {insight.metric && (
             <div style={{
-              padding: '2px 10px', borderRadius: 12, background: '#fff', fontSize: 13,
+              padding: '2px 10px', borderRadius: 12, background: 'var(--bg-surface)', fontSize: 13,
               fontWeight: 700, color: s.color, border: `1px solid ${s.border}`,
             }}>
               {insight.metric}
             </div>
           )}
         </div>
-        <div style={{ fontSize: 13, color: '#555', lineHeight: 1.5, marginBottom: 8 }}>{insight.description}</div>
-        <div style={{ fontSize: 12, color: '#333', fontWeight: 600, background: 'rgba(255,255,255,0.6)', padding: '8px 10px', borderRadius: 6 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 8 }}>{insight.description}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600, background: 'rgba(255,255,255,0.6)', padding: '8px 10px', borderRadius: 6 }}>
           💡 {insight.recommendation}
         </div>
       </div>
@@ -306,10 +306,10 @@ const AdminFinancials = window.AdminFinancials = () => {
   // ─── Status Badge ───
   const StatusBadge = ({ status }) => {
     const styles = {
-      completed: { bg: '#e8f5e9', color: '#2e7d32' },
-      pending: { bg: '#fff8e1', color: '#f57f17' },
-      failed: { bg: '#fce4ec', color: '#c62828' },
-      refunded: { bg: '#fff3e0', color: '#e65100' },
+      completed: { bg: 'var(--color-success-bg)', color: 'var(--color-success)' },
+      pending: { bg: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
+      failed: { bg: 'var(--color-error-bg)', color: 'var(--color-error)' },
+      refunded: { bg: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
     };
     const s = styles[status] || styles.pending;
     return (
@@ -342,7 +342,7 @@ const AdminFinancials = window.AdminFinancials = () => {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Platform Financials</h2>
           {lastUpdated && (
-            <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
               Last updated: {lastUpdated.toLocaleTimeString()} · Auto-refreshes every 60s
             </div>
           )}
@@ -352,8 +352,8 @@ const AdminFinancials = window.AdminFinancials = () => {
           disabled={refreshing}
           style={{
             padding: '6px 16px', borderRadius: 8, border: '1px solid #d0d0d0',
-            background: refreshing ? '#f0f0f0' : '#fff', cursor: refreshing ? 'wait' : 'pointer',
-            fontSize: 13, fontWeight: 600, color: '#555',
+            background: refreshing ? 'var(--badge-muted-bg)' : 'var(--text-on-primary)', cursor: refreshing ? 'wait' : 'pointer',
+            fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)',
           }}>
           {refreshing ? '↻ Refreshing...' : '↻ Refresh'}
         </button>
@@ -364,10 +364,10 @@ const AdminFinancials = window.AdminFinancials = () => {
         <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1565c0' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div><span className="card-icon">{'\u{1F3E6}'}</span>Cash Position</div>
-            <div style={{ fontSize: 11, color: '#888' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
               {treasury.connected?.mercury && <span style={{ marginRight: 8 }}>{'\u2705'} Mercury</span>}
               {treasury.connected?.stripe && <span>{'\u2705'} Stripe</span>}
-              {!treasury.connected?.mercury && <span style={{ marginRight: 8, color: '#999' }}>{'\u274C'} Mercury (add MERCURY_API_TOKEN)</span>}
+              {!treasury.connected?.mercury && <span style={{ marginRight: 8, color: 'var(--text-muted)' }}>{'\u274C'} Mercury (add MERCURY_API_TOKEN)</span>}
             </div>
           </div>
 
@@ -376,21 +376,21 @@ const AdminFinancials = window.AdminFinancials = () => {
             {/* Mercury total */}
             {treasury.mercury && (
               <div style={{ flex: '1 1 200px', padding: 16, background: 'linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%)', borderRadius: 12, textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Mercury</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: '#1565c0' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Mercury</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--color-info)' }}>
                   ${treasury.mercury.totalBalance?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{treasury.mercury.accounts?.length || 0} account{treasury.mercury.accounts?.length !== 1 ? 's' : ''}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{treasury.mercury.accounts?.length || 0} account{treasury.mercury.accounts?.length !== 1 ? 's' : ''}</div>
               </div>
             )}
             {/* Stripe balance */}
             {treasury.stripe && (
               <div style={{ flex: '1 1 200px', padding: 16, background: 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)', borderRadius: 12, textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Stripe</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: '#2e7d32' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Stripe</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--color-success)' }}>
                   ${treasury.stripe.balance?.total?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
                   ${treasury.stripe.balance?.available?.toFixed(2)} available · ${treasury.stripe.balance?.pending?.toFixed(2)} pending
                 </div>
               </div>
@@ -398,11 +398,11 @@ const AdminFinancials = window.AdminFinancials = () => {
             {/* Combined total */}
             {treasury.mercury && treasury.stripe && (
               <div style={{ flex: '1 1 200px', padding: 16, background: 'linear-gradient(135deg, #f3e5f5 0%, #fce4ec 100%)', borderRadius: 12, textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Total Cash</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: '#7b1fa2' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Total Cash</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--color-purple)' }}>
                   ${((treasury.mercury.totalBalance || 0) + (treasury.stripe.balance?.total || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>All accounts combined</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>All accounts combined</div>
               </div>
             )}
           </div>
@@ -413,43 +413,43 @@ const AdminFinancials = window.AdminFinancials = () => {
               <div onClick={() => setTreasuryExpanded(treasuryExpanded === `m-${acct.id}` ? null : `m-${acct.id}`)}
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f5f7fa', borderRadius: 8, cursor: 'pointer', border: '1px solid #e0e0e0' }}>
                 <div>
-                  <span style={{ fontWeight: 600, fontSize: 13, color: '#1565c0' }}>{acct.name}</span>
-                  <span style={{ marginLeft: 8, fontSize: 10, background: '#e3f2fd', color: '#1565c0', padding: '1px 6px', borderRadius: 4 }}>{acct.type}</span>
-                  {acct.accountNumber && <span style={{ marginLeft: 8, fontSize: 11, color: '#999' }}>{acct.accountNumber}</span>}
+                  <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--color-info)' }}>{acct.name}</span>
+                  <span style={{ marginLeft: 8, fontSize: 10, background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '1px 6px', borderRadius: 4 }}>{acct.type}</span>
+                  {acct.accountNumber && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>{acct.accountNumber}</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 14, color: '#333' }}>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
                     ${(acct.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
-                  <span style={{ fontSize: 12, color: '#888' }}>{treasuryExpanded === `m-${acct.id}` ? '\u25B2' : '\u25BC'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{treasuryExpanded === `m-${acct.id}` ? '\u25B2' : '\u25BC'}</span>
                 </div>
               </div>
               {/* Recent transactions for this account */}
               {treasuryExpanded === `m-${acct.id}` && acct.recentTransactions && (
                 <div style={{ margin: '4px 0 0 0', border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
                   {acct.recentTransactions.length === 0 ? (
-                    <div style={{ padding: 12, textAlign: 'center', color: '#999', fontSize: 12 }}>No recent transactions</div>
+                    <div style={{ padding: 12, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No recent transactions</div>
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
-                        <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #e0e0e0' }}>
-                          <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Date</th>
-                          <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Counterparty</th>
-                          <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Note</th>
-                          <th style={{ textAlign: 'right', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Amount</th>
+                        <tr style={{ background: 'var(--bg-primary)', borderBottom: '1px solid #e0e0e0' }}>
+                          <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600 }}>Date</th>
+                          <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600 }}>Counterparty</th>
+                          <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600 }}>Note</th>
+                          <th style={{ textAlign: 'right', padding: '6px 10px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600 }}>Amount</th>
                         </tr>
                       </thead>
                       <tbody>
                         {acct.recentTransactions.map(tx => (
                           <tr key={tx.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                            <td style={{ padding: '6px 10px', color: '#666', whiteSpace: 'nowrap' }}>
+                            <td style={{ padding: '6px 10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                               {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
                             </td>
                             <td style={{ padding: '6px 10px', fontWeight: 500 }}>{tx.counterpartyName}</td>
-                            <td style={{ padding: '6px 10px', color: '#888', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <td style={{ padding: '6px 10px', color: 'var(--text-tertiary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {tx.note || '—'}
                             </td>
-                            <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: tx.amount >= 0 ? '#2e7d32' : '#c62828' }}>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: tx.amount >= 0 ? 'var(--color-success)' : 'var(--color-error)' }}>
                               {tx.amount >= 0 ? '+' : ''}{tx.amount?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                             </td>
                           </tr>
@@ -468,10 +468,10 @@ const AdminFinancials = window.AdminFinancials = () => {
               {/* 30-day Stripe stats */}
               {treasury.stripe.last30Days?.count > 0 && (
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-                  <div style={{ padding: '6px 12px', background: '#f5f5f5', borderRadius: 6, fontSize: 12, color: '#555' }}>
+                  <div style={{ padding: '6px 12px', background: 'var(--bg-primary)', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                     30-day volume: <strong>${treasury.stripe.last30Days.volume?.toFixed(2)}</strong> ({treasury.stripe.last30Days.count} charges)
                   </div>
-                  <div style={{ padding: '6px 12px', background: '#f5f5f5', borderRadius: 6, fontSize: 12, color: '#555' }}>
+                  <div style={{ padding: '6px 12px', background: 'var(--bg-primary)', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                     Stripe fees: <strong>${treasury.stripe.last30Days.fees?.toFixed(2)}</strong> ({treasury.stripe.last30Days.effectiveFeeRate}%)
                   </div>
                 </div>
@@ -482,30 +482,30 @@ const AdminFinancials = window.AdminFinancials = () => {
                 <div>
                   <div onClick={() => setTreasuryExpanded(treasuryExpanded === 'stripe-payouts' ? null : 'stripe-payouts')}
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f0f7f0', borderRadius: 8, cursor: 'pointer', border: '1px solid #c8e6c9', marginBottom: 4 }}>
-                    <span style={{ fontWeight: 600, fontSize: 13, color: '#2e7d32' }}>Stripe Payouts (to Mercury)</span>
-                    <span style={{ fontSize: 12, color: '#888' }}>{treasuryExpanded === 'stripe-payouts' ? '\u25B2' : '\u25BC'} {treasury.stripe.recentPayouts.length} recent</span>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--color-success)' }}>Stripe Payouts (to Mercury)</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{treasuryExpanded === 'stripe-payouts' ? '\u25B2' : '\u25BC'} {treasury.stripe.recentPayouts.length} recent</span>
                   </div>
                   {treasuryExpanded === 'stripe-payouts' && (
                     <div style={{ border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden', marginBottom: 8 }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
-                          <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #e0e0e0' }}>
-                            <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Date</th>
-                            <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Arrival</th>
-                            <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Status</th>
-                            <th style={{ textAlign: 'right', padding: '6px 10px', fontSize: 10, color: '#888', fontWeight: 600 }}>Amount</th>
+                          <tr style={{ background: 'var(--bg-primary)', borderBottom: '1px solid #e0e0e0' }}>
+                            <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600 }}>Date</th>
+                            <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600 }}>Arrival</th>
+                            <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600 }}>Status</th>
+                            <th style={{ textAlign: 'right', padding: '6px 10px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600 }}>Amount</th>
                           </tr>
                         </thead>
                         <tbody>
                           {treasury.stripe.recentPayouts.map(p => (
                             <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                              <td style={{ padding: '6px 10px', color: '#666' }}>{new Date(p.created).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
-                              <td style={{ padding: '6px 10px', color: '#666' }}>{new Date(p.arrivalDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
+                              <td style={{ padding: '6px 10px', color: 'var(--text-secondary)' }}>{new Date(p.created).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
+                              <td style={{ padding: '6px 10px', color: 'var(--text-secondary)' }}>{new Date(p.arrivalDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
                               <td style={{ padding: '6px 10px' }}>
                                 <span style={{
                                   fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600,
-                                  background: p.status === 'paid' ? '#e8f5e9' : p.status === 'pending' ? '#fff8e1' : p.status === 'in_transit' ? '#e3f2fd' : '#f5f5f5',
-                                  color: p.status === 'paid' ? '#2e7d32' : p.status === 'pending' ? '#f57f17' : p.status === 'in_transit' ? '#1565c0' : '#888',
+                                  background: p.status === 'paid' ? 'var(--color-success-bg)' : p.status === 'pending' ? 'var(--color-warning-bg)' : p.status === 'in_transit' ? 'var(--color-info-bg)' : 'var(--bg-primary)',
+                                  color: p.status === 'paid' ? 'var(--color-success)' : p.status === 'pending' ? 'var(--color-warning)' : p.status === 'in_transit' ? 'var(--color-info)' : 'var(--text-tertiary)',
                                 }}>{p.status}</span>
                               </td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>${p.amount?.toFixed(2)}</td>
@@ -520,12 +520,12 @@ const AdminFinancials = window.AdminFinancials = () => {
 
               {/* Open disputes alert */}
               {treasury.stripe.openDisputes?.length > 0 && (
-                <div style={{ padding: '10px 14px', background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, marginTop: 4 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: '#e65100', marginBottom: 4 }}>
+                <div style={{ padding: '10px 14px', background: 'var(--color-warning-bg)', border: '1px solid #ffcc80', borderRadius: 8, marginTop: 4 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-warning)', marginBottom: 4 }}>
                     {'\u26A0\uFE0F'} {treasury.stripe.openDisputes.length} Open Dispute{treasury.stripe.openDisputes.length > 1 ? 's' : ''}
                   </div>
                   {treasury.stripe.openDisputes.map(d => (
-                    <div key={d.id} style={{ fontSize: 12, color: '#555', marginBottom: 2 }}>
+                    <div key={d.id} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>
                       ${d.amount.toFixed(2)} — {d.reason} — due {d.evidenceDueBy ? new Date(d.evidenceDueBy).toLocaleDateString() : 'N/A'}
                     </div>
                   ))}
@@ -536,7 +536,7 @@ const AdminFinancials = window.AdminFinancials = () => {
 
           {/* Errors */}
           {treasury.errors?.length > 0 && (
-            <div style={{ marginTop: 8, padding: 8, background: '#fce4ec', borderRadius: 6, fontSize: 11, color: '#c62828' }}>
+            <div style={{ marginTop: 8, padding: 8, background: 'var(--color-error-bg)', borderRadius: 6, fontSize: 11, color: 'var(--color-error)' }}>
               {treasury.errors.map((e, i) => <div key={i}>{e}</div>)}
             </div>
           )}
@@ -545,9 +545,9 @@ const AdminFinancials = window.AdminFinancials = () => {
 
       {/* Not connected prompt */}
       {treasury && !treasury.connected?.mercury && !treasury.connected?.stripe && (
-        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #ff9800', background: '#fff8f0' }}>
+        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #ff9800', background: 'var(--bg-warm)' }}>
           <div className="card-header"><span className="card-icon">{'\u{1F3E6}'}</span>Connect Your Accounts</div>
-          <div style={{ fontSize: 13, color: '#555' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             Add <strong>MERCURY_API_TOKEN</strong> and/or <strong>STRIPE_SECRET_KEY</strong> to your Railway environment variables to see live account balances, transactions, and payouts here.
           </div>
         </div>
@@ -566,21 +566,21 @@ const AdminFinancials = window.AdminFinancials = () => {
       {/* Payment Kill Switch */}
       <div className="card" style={{
         marginBottom: 16,
-        borderLeft: `4px solid ${paymentsEnabled ? '#2e7d32' : '#c62828'}`,
-        background: paymentsEnabled ? '#f1f8e9' : '#fff3e0',
+        borderLeft: `4px solid ${paymentsEnabled ? 'var(--color-success)' : 'var(--color-error)'}`,
+        background: paymentsEnabled ? '#f1f8e9' : 'var(--color-warning-bg)',
       }}>
         <div className="card-header">
           <span className="card-icon">{paymentsEnabled ? '✅' : '🔒'}</span>
           Live Payments
           <span style={{
             marginLeft: 8, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-            background: paymentsEnabled ? '#2e7d32' : '#c62828', color: '#fff',
+            background: paymentsEnabled ? 'var(--color-success)' : 'var(--color-error)', color: 'var(--text-on-primary)',
           }}>
             {paymentsEnabled ? 'ENABLED' : 'DISABLED'}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 13, color: '#555', flex: '1 1 300px' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 300px' }}>
             {paymentsEnabled
               ? 'Real payments are active. Stripe will process charges, caregivers will receive payouts, and platform fees will settle to Mercury.'
               : 'Payments are disabled. No charges will be processed. Caregivers cannot onboard to Stripe, and families cannot check out. Enable when ready to go live.'}
@@ -592,7 +592,7 @@ const AdminFinancials = window.AdminFinancials = () => {
               style={{
                 padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: 700,
                 cursor: 'pointer', whiteSpace: 'nowrap',
-                background: paymentsEnabled ? '#c62828' : '#2e7d32', color: '#fff',
+                background: paymentsEnabled ? 'var(--color-error)' : 'var(--color-success)', color: 'var(--text-on-primary)',
               }}
             >
               {paymentsEnabled ? 'Disable Payments' : 'Enable Payments'}
@@ -602,7 +602,7 @@ const AdminFinancials = window.AdminFinancials = () => {
               display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
               background: 'rgba(0,0,0,0.05)', borderRadius: 8,
             }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: paymentsEnabled ? '#c62828' : '#2e7d32' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: paymentsEnabled ? 'var(--color-error)' : 'var(--color-success)' }}>
                 {paymentsEnabled ? 'Disable real payments?' : 'Enable real payments? Real money will flow.'}
               </span>
               <button
@@ -611,7 +611,7 @@ const AdminFinancials = window.AdminFinancials = () => {
                 style={{
                   padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 700,
                   cursor: paymentToggleLoading ? 'wait' : 'pointer',
-                  background: paymentsEnabled ? '#c62828' : '#2e7d32', color: '#fff',
+                  background: paymentsEnabled ? 'var(--color-error)' : 'var(--color-success)', color: 'var(--text-on-primary)',
                 }}
               >
                 {paymentToggleLoading ? '...' : 'Confirm'}
@@ -619,8 +619,8 @@ const AdminFinancials = window.AdminFinancials = () => {
               <button
                 onClick={() => setPaymentToggleConfirm(false)}
                 style={{
-                  padding: '5px 14px', borderRadius: 6, border: '1px solid #ccc', background: '#fff',
-                  fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#666',
+                  padding: '5px 14px', borderRadius: 6, border: '1px solid #ccc', background: 'var(--bg-surface)',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--text-secondary)',
                 }}
               >
                 Cancel
@@ -634,9 +634,9 @@ const AdminFinancials = window.AdminFinancials = () => {
       <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1b6b5a' }}>
         <div className="card-header"><span className="card-icon">⚙️</span>Platform Fee Rate</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 13, color: '#555', flex: '1 1 200px' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 200px' }}>
             The platform takes <strong>{feePercent}%</strong> of every session. Families pay the full rate, caregivers receive <strong>{100 - feePercent}%</strong>.
-            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
               Example: $100 session → Caregiver gets ${100 - feePercent}, Platform gets ${feePercent}
             </div>
           </div>
@@ -648,17 +648,17 @@ const AdminFinancials = window.AdminFinancials = () => {
                 onChange={e => setFeeInput(e.target.value)}
                 style={{ width: 60, padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 14, textAlign: 'center' }}
               />
-              <span style={{ fontSize: 14, color: '#666' }}>%</span>
+              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>%</span>
             </div>
             <button onClick={saveFee} disabled={feeSaving} style={{
               padding: '6px 16px', borderRadius: 6, border: 'none',
-              background: feeSaving ? '#999' : '#1b6b5a', color: '#fff',
+              background: feeSaving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)',
               fontSize: 13, fontWeight: 600, cursor: feeSaving ? 'wait' : 'pointer',
             }}>
               {feeSaving ? 'Saving...' : 'Update'}
             </button>
             {feeMsg && (
-              <span style={{ fontSize: 12, color: feeMsg === 'Saved!' ? '#2e7d32' : '#c62828', fontWeight: 600 }}>{feeMsg}</span>
+              <span style={{ fontSize: 12, color: feeMsg === 'Saved!' ? 'var(--color-success)' : 'var(--color-error)', fontWeight: 600 }}>{feeMsg}</span>
             )}
           </div>
         </div>
@@ -666,7 +666,7 @@ const AdminFinancials = window.AdminFinancials = () => {
 
       {/* All-time summary */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        <div style={{ padding: '8px 16px', borderRadius: 8, background: '#f5f5f5', fontSize: 13, color: '#555' }}>
+        <div style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--bg-primary)', fontSize: 13, color: 'var(--text-secondary)' }}>
           All-time: <strong>{fmt(allTime.grossRevenue)}</strong> gross · <strong>{fmt(allTime.platformRevenue)}</strong> platform · <strong>{allTime.paymentCount}</strong> transactions
         </div>
       </div>
@@ -687,18 +687,18 @@ const AdminFinancials = window.AdminFinancials = () => {
           <div className="card-header"><span className="card-icon">⚡</span>Payout Speed Breakdown</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1, padding: 12, borderRadius: 8, background: '#f5f5f5', textAlign: 'center' }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#1b6b5a' }}>{standardPayout.count}</div>
-                <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>Standard (48h)</div>
-                <div style={{ fontSize: 11, color: '#999' }}>{fmt(standardPayout.revenue)}</div>
+              <div style={{ flex: 1, padding: 12, borderRadius: 8, background: 'var(--bg-primary)', textAlign: 'center' }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--role-color)' }}>{standardPayout.count}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Standard (48h)</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmt(standardPayout.revenue)}</div>
               </div>
-              <div style={{ flex: 1, padding: 12, borderRadius: 8, background: '#fff3e0', textAlign: 'center' }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#e65100' }}>{instantPayout.count}</div>
-                <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>Instant (same-day)</div>
-                <div style={{ fontSize: 11, color: '#999' }}>{fmt(instantPayout.revenue)}</div>
+              <div style={{ flex: 1, padding: 12, borderRadius: 8, background: 'var(--color-warning-bg)', textAlign: 'center' }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-warning)' }}>{instantPayout.count}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Instant (same-day)</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmt(instantPayout.revenue)}</div>
               </div>
             </div>
-            <div style={{ padding: '10px 12px', borderRadius: 8, background: '#e8f5e9', fontSize: 12, color: '#2e7d32', fontWeight: 500 }}>
+            <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--color-success-bg)', fontSize: 12, color: 'var(--color-success)', fontWeight: 500 }}>
               💰 Estimated instant payout surcharge revenue: <strong>{fmt(instantSurchargeRevenue)}</strong> (2% of instant volume)
             </div>
           </div>
@@ -713,13 +713,13 @@ const AdminFinancials = window.AdminFinancials = () => {
             {visibleInsights.map((insight, i) => <InsightCard key={insight.id || i} insight={insight} />)}
             {insights.length > 5 && (
               <button onClick={() => setShowAllInsights(!showAllInsights)}
-                style={{ padding: '8px 16px', border: '1px solid #d0d0d0', borderRadius: 8, background: '#fff', fontSize: 13, fontWeight: 600, color: '#555', cursor: 'pointer', width: '100%', marginTop: 4 }}>
+                style={{ padding: '8px 16px', border: '1px solid #d0d0d0', borderRadius: 8, background: 'var(--bg-surface)', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer', width: '100%', marginTop: 4 }}>
                 {showAllInsights ? 'Show less' : `Show all ${insights.length} insights`}
               </button>
             )}
           </>
         ) : (
-          <p style={{ color: '#999', fontSize: 13 }}>Insights will appear as payment data accumulates.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Insights will appear as payment data accumulates.</p>
         )}
       </div>
 
@@ -731,24 +731,24 @@ const AdminFinancials = window.AdminFinancials = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                  <th style={{ textAlign: 'left', padding: '6px 4px', fontSize: 11, color: '#888', fontWeight: 600 }}>Name</th>
-                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: '#888', fontWeight: 600 }}>Spent</th>
-                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: '#888', fontWeight: 600 }}>Sessions</th>
-                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: '#888', fontWeight: 600 }}>Avg</th>
+                  <th style={{ textAlign: 'left', padding: '6px 4px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>Name</th>
+                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>Spent</th>
+                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>Sessions</th>
+                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>Avg</th>
                 </tr>
               </thead>
               <tbody>
                 {breakdown.topFamilies.map((f, i) => (
                   <tr key={f.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                     <td style={{ padding: '8px 4px', fontWeight: 500 }}>{i + 1}. {f.name}</td>
-                    <td style={{ padding: '8px 4px', textAlign: 'right', color: '#1b6b5a', fontWeight: 600 }}>{fmt(f.totalSpent)}</td>
-                    <td style={{ padding: '8px 4px', textAlign: 'right', color: '#666' }}>{f.sessionCount}</td>
-                    <td style={{ padding: '8px 4px', textAlign: 'right', color: '#888' }}>{fmt(f.avgSession)}</td>
+                    <td style={{ padding: '8px 4px', textAlign: 'right', color: 'var(--role-color)', fontWeight: 600 }}>{fmt(f.totalSpent)}</td>
+                    <td style={{ padding: '8px 4px', textAlign: 'right', color: 'var(--text-secondary)' }}>{f.sessionCount}</td>
+                    <td style={{ padding: '8px 4px', textAlign: 'right', color: 'var(--text-tertiary)' }}>{fmt(f.avgSession)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <p style={{ color: '#999', fontSize: 13 }}>No payment data yet</p>}
+          ) : <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No payment data yet</p>}
         </div>
         <div className="card">
           <div className="card-header"><span className="card-icon">🤝</span>Top Caregivers by Earnings</div>
@@ -756,24 +756,24 @@ const AdminFinancials = window.AdminFinancials = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
-                  <th style={{ textAlign: 'left', padding: '6px 4px', fontSize: 11, color: '#888', fontWeight: 600 }}>Name</th>
-                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: '#888', fontWeight: 600 }}>Earned</th>
-                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: '#888', fontWeight: 600 }}>Sessions</th>
-                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: '#888', fontWeight: 600 }}>Rating</th>
+                  <th style={{ textAlign: 'left', padding: '6px 4px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>Name</th>
+                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>Earned</th>
+                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>Sessions</th>
+                  <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>Rating</th>
                 </tr>
               </thead>
               <tbody>
                 {breakdown.topCaregivers.map((c, i) => (
                   <tr key={c.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                     <td style={{ padding: '8px 4px', fontWeight: 500 }}>{i + 1}. {c.name}</td>
-                    <td style={{ padding: '8px 4px', textAlign: 'right', color: '#1b6b5a', fontWeight: 600 }}>{fmt(c.totalEarned)}</td>
-                    <td style={{ padding: '8px 4px', textAlign: 'right', color: '#666' }}>{c.sessionCount}</td>
-                    <td style={{ padding: '8px 4px', textAlign: 'right', color: '#888' }}>{c.rating > 0 ? `⭐ ${c.rating.toFixed(1)}` : '—'}</td>
+                    <td style={{ padding: '8px 4px', textAlign: 'right', color: 'var(--role-color)', fontWeight: 600 }}>{fmt(c.totalEarned)}</td>
+                    <td style={{ padding: '8px 4px', textAlign: 'right', color: 'var(--text-secondary)' }}>{c.sessionCount}</td>
+                    <td style={{ padding: '8px 4px', textAlign: 'right', color: 'var(--text-tertiary)' }}>{c.rating > 0 ? `⭐ ${c.rating.toFixed(1)}` : '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <p style={{ color: '#999', fontSize: 13 }}>No payment data yet</p>}
+          ) : <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No payment data yet</p>}
         </div>
       </div>
 
@@ -794,22 +794,22 @@ const AdminFinancials = window.AdminFinancials = () => {
                 <thead>
                   <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
                     {['Date', 'Family', 'Caregiver', 'Service', 'Amount', 'Platform Fee', 'Payout', 'Speed', 'Status'].map(h => (
-                      <th key={h} style={{ textAlign: h === 'Date' || h === 'Family' || h === 'Caregiver' || h === 'Service' ? 'left' : 'right', padding: '8px 6px', fontSize: 11, color: '#888', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ textAlign: h === 'Date' || h === 'Family' || h === 'Caregiver' || h === 'Service' ? 'left' : 'right', padding: '8px 6px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredTx.map(t => (
                     <tr key={t.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                      <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', color: '#555' }}>{(parseTimestamp(t.date) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
+                      <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{(parseTimestamp(t.date) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
                       <td style={{ padding: '8px 6px', fontWeight: 500 }}>{t.familyName || '—'}</td>
                       <td style={{ padding: '8px 6px' }}>{t.caregiverName || '—'}</td>
-                      <td style={{ padding: '8px 6px', color: '#666' }}>{serviceLabels[t.serviceType] || t.serviceType}</td>
+                      <td style={{ padding: '8px 6px', color: 'var(--text-secondary)' }}>{serviceLabels[t.serviceType] || t.serviceType}</td>
                       <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600 }}>{fmt(t.amount)}</td>
-                      <td style={{ padding: '8px 6px', textAlign: 'right', color: '#1b6b5a' }}>{fmt(t.platformFee)}</td>
-                      <td style={{ padding: '8px 6px', textAlign: 'right', color: '#666' }}>{fmt(t.caregiverPayout)}</td>
+                      <td style={{ padding: '8px 6px', textAlign: 'right', color: 'var(--role-color)' }}>{fmt(t.platformFee)}</td>
+                      <td style={{ padding: '8px 6px', textAlign: 'right', color: 'var(--text-secondary)' }}>{fmt(t.caregiverPayout)}</td>
                       <td style={{ padding: '8px 6px', textAlign: 'right' }}>
-                        <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 8, background: t.payoutSpeed === 'instant' ? '#fff3e0' : '#f5f5f5', color: t.payoutSpeed === 'instant' ? '#e65100' : '#888' }}>
+                        <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 8, background: t.payoutSpeed === 'instant' ? 'var(--color-warning-bg)' : 'var(--bg-primary)', color: t.payoutSpeed === 'instant' ? 'var(--color-warning)' : 'var(--text-tertiary)' }}>
                           {t.payoutSpeed === 'instant' ? '⚡ Instant' : 'Standard'}
                         </span>
                       </td>
@@ -825,23 +825,23 @@ const AdminFinancials = window.AdminFinancials = () => {
                 <button
                   onClick={() => setTxPage(Math.max(1, txPage - 1))}
                   disabled={txPage <= 1}
-                  style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d0d0d0', background: '#fff', cursor: txPage <= 1 ? 'default' : 'pointer', fontSize: 13, opacity: txPage <= 1 ? 0.5 : 1 }}>
+                  style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d0d0d0', background: 'var(--bg-surface)', cursor: txPage <= 1 ? 'default' : 'pointer', fontSize: 13, opacity: txPage <= 1 ? 0.5 : 1 }}>
                   ← Prev
                 </button>
-                <span style={{ fontSize: 13, color: '#666' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                   Page {transactions.page} of {transactions.totalPages} ({transactions.total} total)
                 </span>
                 <button
                   onClick={() => setTxPage(Math.min(transactions.totalPages, txPage + 1))}
                   disabled={txPage >= transactions.totalPages}
-                  style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d0d0d0', background: '#fff', cursor: txPage >= transactions.totalPages ? 'default' : 'pointer', fontSize: 13, opacity: txPage >= transactions.totalPages ? 0.5 : 1 }}>
+                  style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d0d0d0', background: 'var(--bg-surface)', cursor: txPage >= transactions.totalPages ? 'default' : 'pointer', fontSize: 13, opacity: txPage >= transactions.totalPages ? 0.5 : 1 }}>
                   Next →
                 </button>
               </div>
             )}
           </>
         ) : (
-          <p style={{ color: '#999', fontSize: 13, padding: '8px 0' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>
             {txFilter ? 'No transactions match your search.' : 'No transactions yet. They\'ll appear here once payments are processed through Stripe.'}
           </p>
         )}

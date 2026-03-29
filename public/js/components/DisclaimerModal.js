@@ -34,19 +34,19 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000,
-      background: '#f5f5f5',
+      background: 'var(--bg-primary)',
       display: 'flex', flexDirection: 'column',
     }}>
       {/* Header — fixed at top */}
       <div style={{
-        padding: '16px 20px', background: 'white',
+        padding: '16px 20px', background: 'var(--bg-surface)',
         borderBottom: '1px solid #e0e0e0', flexShrink: 0,
       }}>
         <div style={{ maxWidth: '560px', margin: '0 auto' }}>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: '#333', marginBottom: '2px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>
             Important Notice
           </div>
-          <div style={{ fontSize: '13px', color: '#999' }}>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
             Please read and scroll to the bottom to continue
           </div>
         </div>
@@ -62,14 +62,14 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
       >
         <div style={{
           maxWidth: '560px', margin: '0 auto', padding: '20px',
-          fontSize: '14px', lineHeight: '1.7', color: '#444',
+          fontSize: '14px', lineHeight: '1.7', color: 'var(--text-primary)',
         }}>
           <p style={{ margin: '0 0 16px' }}>
             Welcome to InPlace. Before you begin using our platform, please carefully read and acknowledge the following important disclosures.
           </p>
 
           <div style={{
-            background: '#FFF3E0', border: '2px solid #E65100', borderRadius: '10px',
+            background: 'var(--color-warning-bg)', border: '2px solid #E65100', borderRadius: '10px',
             padding: '16px 18px', marginBottom: '16px',
           }}>
             <p style={{ margin: 0, fontWeight: 700, fontSize: '15px', color: '#BF360C' }}>
@@ -102,7 +102,7 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
             By using InPlace, you acknowledge that you understand these limitations and agree to use the platform solely for non-medical care coordination purposes.
           </p>
 
-          <p style={{ margin: '0', fontSize: '12px', color: '#999', fontStyle: 'italic' }}>
+          <p style={{ margin: '0', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
             Disclaimer version 1.0 — Last updated February 2026
           </p>
         </div>
@@ -110,19 +110,19 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept }) => {
 
       {/* Footer — fixed at bottom */}
       <div style={{
-        padding: '14px 20px', background: 'white',
+        padding: '14px 20px', background: 'var(--bg-surface)',
         borderTop: '1px solid #e0e0e0', flexShrink: 0,
         paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
       }}>
         <div style={{ maxWidth: '560px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {!scrolledToBottom && (
-            <div style={{ textAlign: 'center', fontSize: '12px', color: '#999', fontStyle: 'italic' }}>
+            <div style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
               ↓ Scroll down to read the full notice ↓
             </div>
           )}
           <button onClick={handleAccept} disabled={!scrolledToBottom || accepting} style={{
-            width: '100%', padding: '14px', background: scrolledToBottom ? '#1b6b5a' : '#ccc',
-            color: 'white', border: 'none', borderRadius: '10px', fontSize: '15px',
+            width: '100%', padding: '14px', background: scrolledToBottom ? 'var(--role-color)' : 'var(--border-light)',
+            color: 'var(--text-on-primary)', border: 'none', borderRadius: '10px', fontSize: '15px',
             fontWeight: 600, cursor: scrolledToBottom ? 'pointer' : 'not-allowed',
             opacity: accepting ? 0.7 : 1,
             transition: 'background 0.2s',

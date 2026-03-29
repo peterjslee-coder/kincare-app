@@ -266,10 +266,10 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     setLoading(false);
   };
 
-  const cardStyle = { background: '#fff', borderRadius: 12, padding: 32, maxWidth: 420, width: '100%' };
+  const cardStyle = { background: 'var(--bg-surface)', borderRadius: 12, padding: 32, maxWidth: 420, width: '100%' };
   const inputStyle = { width: '100%', padding: '12px 14px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box' };
-  const primaryBtn = { width: '100%', padding: 12, background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: 'pointer' };
-  const googleBtnStyle = { width: '100%', padding: 12, background: '#fff', color: '#333', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 };
+  const primaryBtn = { width: '100%', padding: 12, background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: 'pointer' };
+  const googleBtnStyle = { width: '100%', padding: 12, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 };
 
   // ─── 2FA Verification Screen ───
   if (show2FA) {
@@ -279,16 +279,16 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <InPlaceIcon width={48} height={48} />
             <h2 style={{ marginTop: 12, marginBottom: 4 }}>Two-Factor Authentication</h2>
-            <p style={{ color: '#666', fontSize: 14, margin: 0 }}>Enter the code from your authenticator app</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>Enter the code from your authenticator app</p>
           </div>
-          {error && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{error}</div>}
+          {error && <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{error}</div>}
           <form onSubmit={handle2FASubmit}>
             <div style={{ marginBottom: 16 }}>
               <input type="text" inputMode="numeric" autoComplete="one-time-code" placeholder="000000" value={twoFACode}
                 onChange={(e) => setTwoFACode(e.target.value.replace(/[^0-9a-f]/gi, '').substring(0, 8))}
                 style={{ ...inputStyle, textAlign: 'center', fontSize: 24, letterSpacing: 8 }} autoFocus />
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 14, color: '#555', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 14, color: 'var(--text-secondary)', cursor: 'pointer' }}>
               <input type="checkbox" checked={rememberDevice} onChange={(e) => setRememberDevice(e.target.checked)} />
               Remember this device for 30 days
             </label>
@@ -297,9 +297,9 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
             </button>
           </form>
           <div style={{ textAlign: 'center', marginTop: 12 }}>
-            <a onClick={() => { setShow2FA(false); setTwoFACode(''); setError(null); }} style={{ fontSize: 13, color: '#1b6b5a', cursor: 'pointer' }}>← Back to login</a>
+            <a onClick={() => { setShow2FA(false); setTwoFACode(''); setError(null); }} style={{ fontSize: 13, color: 'var(--role-color)', cursor: 'pointer' }}>← Back to login</a>
           </div>
-          <p style={{ fontSize: 12, color: '#999', marginTop: 16, textAlign: 'center', margin: '16px 0 0' }}>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 16, textAlign: 'center', margin: '16px 0 0' }}>
             You can also use a backup code if you've lost access to your authenticator app.
           </p>
         </div>
@@ -315,16 +315,16 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <InPlaceIcon width={48} height={48} />
             <h2 style={{ marginTop: 12, marginBottom: 4 }}>Set Your Password</h2>
-            <p style={{ color: '#666', fontSize: 14, margin: 0 }}>Please set a new password to continue.</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>Please set a new password to continue.</p>
           </div>
-          {error && <div style={{ background: '#f8d7da', color: '#721c24', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{error}</div>}
+          {error && <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{error}</div>}
           <form onSubmit={handlePasswordChange}>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 4 }}>New Password</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>New Password</label>
               <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} style={inputStyle} placeholder="8+ chars, uppercase, number, symbol" required />
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 4 }}>Confirm Password</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Confirm Password</label>
               <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} style={inputStyle} required />
             </div>
             <button type="submit" style={{ ...primaryBtn, opacity: loading || newPw.length < 8 ? 0.6 : 1 }} disabled={loading || newPw.length < 8}>
@@ -343,29 +343,29 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <InPlaceIcon width={48} height={48} />
           <div style={{ marginTop: 12, fontFamily: "'DM Sans', sans-serif", fontSize: 28, letterSpacing: '-1.5px', lineHeight: 1 }}>
-            <span style={{ fontWeight: 200, color: '#999' }}>in</span><span style={{ fontWeight: 800, color: '#1b6b5a' }}>Place</span>
+            <span style={{ fontWeight: 200, color: 'var(--text-muted)' }}>in</span><span style={{ fontWeight: 800, color: 'var(--role-color)' }}>Place</span>
           </div>
         </div>
         <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>{inviteInfo ? 'Join the Care Team' : 'Welcome Back'}</h2>
-        <p className="login-subtitle" style={{ textAlign: 'center', color: '#666', fontSize: 14, margin: '0 0 20px' }}>
+        <p className="login-subtitle" style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 14, margin: '0 0 20px' }}>
           {inviteInfo ? `Sign in to join ${inviteInfo.recipientName}'s care team` : 'Sign in to manage care for your loved ones'}
         </p>
 
         {inviteInfo && (
           <div style={{
             padding: '12px 14px', marginBottom: '16px', borderRadius: '8px', fontSize: '13px',
-            background: '#e8f5e9', border: '1px solid #c8e6c9', color: '#2e7d32',
+            background: 'var(--color-success-bg)', border: '1px solid #c8e6c9', color: 'var(--color-success)',
           }}>
             👋 <strong>{inviteInfo.inviterName}</strong> invited you to help coordinate care for <strong>{inviteInfo.recipientName}</strong>.
-            Sign in below, or <a onClick={() => onNavigate('register')} style={{ color: '#1b6b5a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>create an account</a>.
+            Sign in below, or <a onClick={() => onNavigate('register')} style={{ color: 'var(--role-color)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>create an account</a>.
           </div>
         )}
 
         {banner && (
           <div style={{
             padding: '12px 14px', marginBottom: '16px', borderRadius: '8px', fontSize: '13px', fontWeight: 500,
-            background: banner.type === 'info' ? '#e3f2fd' : banner.type === 'success' ? '#e0f2e9' : '#fce4ec',
-            color: banner.type === 'info' ? '#1565c0' : banner.type === 'success' ? '#1b6b5a' : '#c62828',
+            background: banner.type === 'info' ? 'var(--color-info-bg)' : banner.type === 'success' ? 'var(--role-color-light)' : 'var(--color-error-bg)',
+            color: banner.type === 'info' ? 'var(--color-info)' : banner.type === 'success' ? 'var(--role-color)' : 'var(--color-error)',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <span>{banner.type === 'info' ? 'ℹ️ ' : banner.type === 'success' ? '✅ ' : '⚠️ '}{banner.text}</span>
@@ -374,21 +374,21 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         )}
 
         {error && (
-          <div style={{ background: '#f8d7da', color: '#721c24', padding: '12px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13, lineHeight: 1.5 }}>
+          <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: '12px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13, lineHeight: 1.5 }}>
             <div>{error}</div>
             {(errorCode === 'WRONG_PASSWORD' || errorCode === 'PASSWORD_RESET_PENDING') && (
               <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(114,28,36,0.15)' }}>
-                <a onClick={() => onNavigate('forgot-password')} style={{ color: '#721c24', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Reset your password</a>
+                <a onClick={() => onNavigate('forgot-password')} style={{ color: 'var(--color-error)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Reset your password</a>
               </div>
             )}
             {errorCode === 'EMAIL_NOT_FOUND' && (
               <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(114,28,36,0.15)' }}>
-                <a onClick={() => onNavigate('register')} style={{ color: '#721c24', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Create a new account</a>
+                <a onClick={() => onNavigate('register')} style={{ color: 'var(--color-error)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Create a new account</a>
               </div>
             )}
             {failCount >= 3 && !errorCode && (
               <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(114,28,36,0.15)', fontSize: 12, color: '#944' }}>
-                Having trouble? Try <a onClick={() => onNavigate('forgot-password')} style={{ color: '#721c24', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>resetting your password</a> or contact support.
+                Having trouble? Try <a onClick={() => onNavigate('forgot-password')} style={{ color: 'var(--color-error)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>resetting your password</a> or contact support.
               </div>
             )}
           </div>
@@ -404,7 +404,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
             {!passkeyAvailable && (
               <div style={{ position: 'relative', textAlign: 'center', margin: '16px 0' }}>
                 <div style={{ borderTop: '1px solid #e0e0e0' }}></div>
-                <span style={{ position: 'relative', top: '-10px', background: '#fff', padding: '0 12px', color: '#aaa', fontSize: 12 }}>or sign in with email</span>
+                <span style={{ position: 'relative', top: '-10px', background: 'var(--bg-surface)', padding: '0 12px', color: 'var(--text-muted)', fontSize: 12 }}>or sign in with email</span>
               </div>
             )}
           </div>
@@ -414,9 +414,9 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         {passkeyAvailable && (
           <div style={{ marginBottom: 16 }}>
             <button onClick={handlePasskeyLogin} disabled={loading} style={{
-              ...googleBtnStyle, background: '#f0f7f5', border: '1px solid #c8e6c9', color: '#1b6b5a', fontWeight: 600,
+              ...googleBtnStyle, background: '#f0f7f5', border: '1px solid #c8e6c9', color: 'var(--role-color)', fontWeight: 600,
             }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1b6b5a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--role-color)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
               </svg>
               {loading ? 'Checking...' : 'Sign in with passkey'}
@@ -428,39 +428,39 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         {(googleAvailable || passkeyAvailable) && (
           <div style={{ position: 'relative', textAlign: 'center', margin: '16px 0' }}>
             <div style={{ borderTop: '1px solid #e0e0e0' }}></div>
-            <span style={{ position: 'relative', top: '-10px', background: '#fff', padding: '0 12px', color: '#aaa', fontSize: 12 }}>or sign in with email</span>
+            <span style={{ position: 'relative', top: '-10px', background: 'var(--bg-surface)', padding: '0 12px', color: 'var(--text-muted)', fontSize: 12 }}>or sign in with email</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group" style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 4 }}>Email</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Email</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required style={inputStyle} />
           </div>
           <div className="form-group" style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 4 }}>Password</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Password</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={inputStyle} />
           </div>
           <button type="submit" disabled={loading} style={{ ...primaryBtn, opacity: loading ? 0.6 : 1 }}>{loading ? 'Signing in...' : 'Sign In'}</button>
         </form>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
-          <a onClick={() => onNavigate('forgot-password')} style={{ fontSize: 13, color: '#1b6b5a', cursor: 'pointer' }}>Forgot password?</a>
-          <a onClick={() => onNavigate('register')} style={{ fontSize: 13, color: '#1b6b5a', cursor: 'pointer' }}>Create account</a>
+          <a onClick={() => onNavigate('forgot-password')} style={{ fontSize: 13, color: 'var(--role-color)', cursor: 'pointer' }}>Forgot password?</a>
+          <a onClick={() => onNavigate('register')} style={{ fontSize: 13, color: 'var(--role-color)', cursor: 'pointer' }}>Create account</a>
         </div>
 
         {/* Demo Toggle */}
         <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 24, paddingTop: 16, textAlign: 'center' }}>
-          <a onClick={() => setShowDemo(!showDemo)} style={{ fontSize: 13, color: '#999', cursor: 'pointer', textDecoration: 'none' }}>
+          <a onClick={() => setShowDemo(!showDemo)} style={{ fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer', textDecoration: 'none' }}>
             {showDemo ? 'Hide demo accounts ▲' : 'Try the demo ▼'}
           </a>
           {showDemo && (
             <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
               {demoAccounts.map(acct => (
                 <button key={acct.email} onClick={() => handleQuickLogin(acct)} disabled={loading}
-                  style={{ padding: '8px 12px', background: '#f8f9fa', border: '1px solid #e0e0e0', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontSize: 12, minWidth: 80, transition: 'all 0.15s' }}>
+                  style={{ padding: '8px 12px', background: 'var(--bg-primary)', border: '1px solid #e0e0e0', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontSize: 12, minWidth: 80, transition: 'all 0.15s' }}>
                   <div style={{ fontSize: 18, marginBottom: 2 }}>{acct.icon}</div>
-                  <div style={{ fontWeight: 600, color: '#333' }}>{acct.label}</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{acct.label}</div>
                 </button>
               ))}
             </div>
@@ -468,9 +468,9 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         </div>
 
         <div style={{ textAlign: 'center', marginTop: 12 }}>
-          <a onClick={() => onNavigate('splash')} style={{ fontSize: 13, color: '#888', cursor: 'pointer' }}>← Back to home</a>
+          <a onClick={() => onNavigate('splash')} style={{ fontSize: 13, color: 'var(--text-tertiary)', cursor: 'pointer' }}>← Back to home</a>
         </div>
-        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 11, color: '#ccc' }}>v{window.APP_VERSION || '?'}</div>
+        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 11, color: 'var(--text-muted)' }}>v{window.APP_VERSION || '?'}</div>
       </div>
     </div>
   );

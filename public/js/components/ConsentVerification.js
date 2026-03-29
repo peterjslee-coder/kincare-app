@@ -172,11 +172,11 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
   // ─── Verified state ───
   if (status === 'verified') {
     return (
-      <div style={{ background: '#e8f5e9', border: '1px solid #c8e6c9', borderRadius: '12px', padding: '20px', marginTop: '16px' }}>
+      <div style={{ background: 'var(--color-success-bg)', border: '1px solid #c8e6c9', borderRadius: '12px', padding: '20px', marginTop: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '24px' }}>{'\u2705'}</span>
           <div>
-            <div style={{ fontWeight: 600, color: '#2e7d32', fontSize: '15px' }}>Verified</div>
+            <div style={{ fontWeight: 600, color: 'var(--color-success)', fontSize: '15px' }}>Verified</div>
             <div style={{ color: '#558b2f', fontSize: '13px' }}>{recipientName}'s care authorization is complete. You can now book care sessions.</div>
           </div>
         </div>
@@ -187,12 +187,12 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
   // ─── Rejected state ───
   if (status === 'rejected' && authorizationTier === 'tier3') {
     return (
-      <div style={{ background: '#fce4ec', border: '1px solid #ef9a9a', borderRadius: '12px', padding: '20px', marginTop: '16px' }}>
+      <div style={{ background: 'var(--color-error-bg)', border: '1px solid #ef9a9a', borderRadius: '12px', padding: '20px', marginTop: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
           <span style={{ fontSize: '24px' }}>{'\u274C'}</span>
           <div>
-            <div style={{ fontWeight: 600, color: '#c62828', fontSize: '15px' }}>Authorization Not Approved</div>
-            <div style={{ color: '#666', fontSize: '13px' }}>
+            <div style={{ fontWeight: 600, color: 'var(--color-error)', fontSize: '15px' }}>Authorization Not Approved</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
               {attestation?.adminNotes || 'Your attestation was reviewed and not approved. Please contact support or try a different authorization method.'}
             </div>
           </div>
@@ -208,22 +208,22 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
     const hasUploaded = uploadedDocs.length > 0;
 
     return (
-      React.createElement('div', { style: { background: '#fff', border: '2px solid #5c6bc0', borderRadius: '12px', padding: '24px', marginTop: '16px' } },
-        React.createElement('h3', { style: { color: '#5c6bc0', margin: '0 0 8px 0', fontSize: '17px' } }, '\u{1F4C4} Upload Authorization Document'),
-        React.createElement('p', { style: { color: '#666', fontSize: '13px', margin: '0 0 20px 0' } },
+      React.createElement('div', { style: { background: 'var(--bg-surface)', border: '2px solid #5c6bc0', borderRadius: '12px', padding: '24px', marginTop: '16px' } },
+        React.createElement('h3', { style: { color: 'var(--color-indigo)', margin: '0 0 8px 0', fontSize: '17px' } }, '\u{1F4C4} Upload Authorization Document'),
+        React.createElement('p', { style: { color: 'var(--text-secondary)', fontSize: '13px', margin: '0 0 20px 0' } },
           'Upload your Power of Attorney, guardianship order, or other legal document to verify your authorization to arrange care for ', firstName, '.'
         ),
 
-        error && React.createElement('div', { style: { background: '#fce4ec', color: '#c62828', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' } }, error),
-        success && React.createElement('div', { style: { background: '#e8f5e9', color: '#2e7d32', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' } }, success),
+        error && React.createElement('div', { style: { background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' } }, error),
+        success && React.createElement('div', { style: { background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' } }, success),
 
-        rejectedDocs.length > 0 && React.createElement('div', { style: { background: '#fce4ec', border: '1px solid #ef9a9a', borderRadius: '8px', padding: '14px', marginBottom: '16px', fontSize: '13px' } },
-          React.createElement('div', { style: { fontWeight: 600, color: '#c62828', marginBottom: '4px' } }, '\u274C Document rejected'),
-          React.createElement('div', { style: { color: '#666' } }, rejectedDocs[0].admin_notes || 'Please upload a valid document.'),
+        rejectedDocs.length > 0 && React.createElement('div', { style: { background: 'var(--color-error-bg)', border: '1px solid #ef9a9a', borderRadius: '8px', padding: '14px', marginBottom: '16px', fontSize: '13px' } },
+          React.createElement('div', { style: { fontWeight: 600, color: 'var(--color-error)', marginBottom: '4px' } }, '\u274C Document rejected'),
+          React.createElement('div', { style: { color: 'var(--text-secondary)' } }, rejectedDocs[0].admin_notes || 'Please upload a valid document.'),
         ),
 
         React.createElement('div', { style: { marginBottom: '16px' } },
-          React.createElement('label', { style: { display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' } }, 'Document type'),
+          React.createElement('label', { style: { display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' } }, 'Document type'),
           React.createElement('select', {
             value: selectedDocType,
             onChange: function(e) { setSelectedDocType(e.target.value); },
@@ -243,7 +243,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
             disabled: docUploading,
             style: {
               padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '14px', cursor: docUploading ? 'not-allowed' : 'pointer',
-              background: docUploading ? '#ccc' : '#5c6bc0', color: '#fff',
+              background: docUploading ? 'var(--border-light)' : 'var(--color-indigo)', color: 'var(--text-on-primary)',
             },
           }, docUploading ? 'Uploading...' : '\u{1F4CE} Choose File (PDF or image, max 5MB)'),
           React.createElement('input', {
@@ -256,25 +256,25 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
         ),
 
         documents.length > 0 && React.createElement('div', { style: { borderTop: '1px solid #e0e0e0', paddingTop: '16px' } },
-          React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '10px' } }, 'Submitted Documents'),
+          React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '10px' } }, 'Submitted Documents'),
           documents.map(function(doc) {
-            var statusColor = doc.upload_status === 'uploaded' ? '#e8724a' : doc.upload_status === 'approved' ? '#1b6b5a' : '#c62828';
+            var statusColor = doc.upload_status === 'uploaded' ? 'var(--accent-color)' : doc.upload_status === 'approved' ? 'var(--role-color)' : 'var(--color-error)';
             var statusLabel = doc.upload_status === 'uploaded' ? '\u23F3 Under review' : doc.upload_status === 'approved' ? '\u2705 Approved' : '\u274C Rejected';
-            return React.createElement('div', { key: doc.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f9f9f9', borderRadius: '8px', marginBottom: '8px' } },
+            return React.createElement('div', { key: doc.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg-neutral)', borderRadius: '8px', marginBottom: '8px' } },
               React.createElement('div', null,
                 React.createElement('div', { style: { fontWeight: 600, fontSize: '13px' } }, (doc.document_type || '').replace(/_/g, ' ')),
-                React.createElement('div', { style: { fontSize: '12px', color: '#888' } }, doc.file_name, ' \u2022 ', ((doc.file_size || 0) / 1024).toFixed(1), ' KB'),
+                React.createElement('div', { style: { fontSize: '12px', color: 'var(--text-tertiary)' } }, doc.file_name, ' \u2022 ', ((doc.file_size || 0) / 1024).toFixed(1), ' KB'),
                 React.createElement('div', { style: { fontSize: '12px', color: statusColor, fontWeight: 600, marginTop: '2px' } }, statusLabel)
               ),
               doc.upload_status !== 'approved' && React.createElement('button', {
                 onClick: function() { handleDeleteDoc(doc.id); },
-                style: { padding: '4px 10px', borderRadius: '4px', border: '1px solid #ef9a9a', background: '#fff', color: '#c62828', fontSize: '11px', cursor: 'pointer' },
+                style: { padding: '4px 10px', borderRadius: '4px', border: '1px solid #ef9a9a', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: '11px', cursor: 'pointer' },
               }, 'Delete')
             );
           })
         ),
 
-        hasUploaded && React.createElement('div', { style: { marginTop: '12px', fontSize: '13px', color: '#666', fontStyle: 'italic' } },
+        hasUploaded && React.createElement('div', { style: { marginTop: '12px', fontSize: '13px', color: 'var(--text-secondary)', fontStyle: 'italic' } },
           'Your document has been submitted for review. You\u2019ll be notified when it\u2019s approved.'
         )
       )
@@ -288,30 +288,30 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
   // ─── Step 1: Attestation form (status === 'pending') ───
   if (status === 'pending') {
     return (
-      <div style={{ background: '#fff', border: '2px solid #e8724a', borderRadius: '12px', padding: '24px', marginTop: '16px' }}>
-        <h3 style={{ color: '#e8724a', margin: '0 0 4px 0', fontSize: '17px' }}>Verify Care Authorization</h3>
-        <p style={{ color: '#666', fontSize: '13px', margin: '0 0 20px 0' }}>
+      <div style={{ background: 'var(--bg-surface)', border: '2px solid #e8724a', borderRadius: '12px', padding: '24px', marginTop: '16px' }}>
+        <h3 style={{ color: 'var(--accent-color)', margin: '0 0 4px 0', fontSize: '17px' }}>Verify Care Authorization</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '0 0 20px 0' }}>
           Before booking care for {firstName}, we need to confirm they're aware of this arrangement. This helps keep everyone safe.
         </p>
 
-        {error && <div style={{ background: '#fce4ec', color: '#c62828', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
-        {success && <div style={{ background: '#e8f5e9', color: '#2e7d32', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
+        {error && <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+        {success && <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
 
         {/* Attestation statement */}
-        <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '8px', padding: '16px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6', color: '#5D4037' }}>
-          <div style={{ fontWeight: 600, marginBottom: '8px', color: '#E65100' }}>Attestation Statement</div>
+        <div style={{ background: 'var(--color-warning-bg)', border: '1px solid #FFE082', borderRadius: '8px', padding: '16px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6', color: '#5D4037' }}>
+          <div style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--color-warning)' }}>Attestation Statement</div>
           {attestationText}
         </div>
 
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', marginBottom: '20px' }}>
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)}
-            style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: '#1b6b5a' }} />
-          <span style={{ fontSize: '14px', color: '#333' }}>I have read and agree to the above statement</span>
+            style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: 'var(--role-color)' }} />
+          <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>I have read and agree to the above statement</span>
         </label>
 
         {/* Relationship */}
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Your relationship to {firstName}</label>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>Your relationship to {firstName}</label>
           <select value={relationship} onChange={(e) => setRelationship(e.target.value)}
             style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px' }}>
             <option value="">Select...</option>
@@ -328,28 +328,28 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
 
         {/* Signature */}
         <div style={{ marginBottom: '20px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '6px' }}>Type your full name as signature</label>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>Type your full name as signature</label>
           <input type="text" value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
             placeholder="Your full legal name"
-            style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '1px solid #bbb', fontSize: '20px', fontFamily: "'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive", letterSpacing: '0.5px', color: '#1a1a2e', boxSizing: 'border-box', background: '#fefefe' }} />
+            style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '1px solid #bbb', fontSize: '20px', fontFamily: "'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive", letterSpacing: '0.5px', color: 'var(--bg-card)', boxSizing: 'border-box', background: '#fefefe' }} />
           {signatureName.trim() && (
-            <div style={{ fontSize: 11, color: '#888', marginTop: 4, textAlign: 'right' }}>Electronic signature</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4, textAlign: 'right' }}>Electronic signature</div>
           )}
         </div>
 
         {/* Care recipient contact info */}
         <div style={{ background: '#f0f7ff', border: '1px solid #bbdefb', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
-          <div style={{ fontWeight: 600, fontSize: '14px', color: '#1565c0', marginBottom: '8px' }}>
+          <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--color-info)', marginBottom: '8px' }}>
             📧 How we'll reach {firstName}
           </div>
-          <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px 0' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' }}>
             This information will be used to contact {firstName} directly and verify their consent to receiving care visits arranged through InPlace.
             They'll have a chance to confirm, ask questions, or flag any concerns. An email address is required to send the verification notification.
           </p>
 
           <div style={{ marginBottom: '12px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
-              {firstName}'s email address <span style={{ color: '#c62828', fontWeight: 700 }}>*</span>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+              {firstName}'s email address <span style={{ color: 'var(--color-error)', fontWeight: 700 }}>*</span>
             </label>
             <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)}
               placeholder="e.g. mom@email.com"
@@ -357,27 +357,27 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           </div>
 
           <div>
-            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
-              <span>{firstName}'s phone number <span style={{ fontWeight: 400, color: '#999' }}>(optional — for consent verification & emergency contact)</span></span>
-              <button type="button" onClick={() => { setIntlPhone(!intlPhone); setRecipientPhone(''); }} style={{ background: 'none', border: 'none', color: '#1b6b5a', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+              <span>{firstName}'s phone number <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional — for consent verification & emergency contact)</span></span>
+              <button type="button" onClick={() => { setIntlPhone(!intlPhone); setRecipientPhone(''); }} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                 {intlPhone ? 'US number' : 'International'}
               </button>
             </label>
             <input type="tel" value={recipientPhone} onChange={(e) => setRecipientPhone(formatPhone(e.target.value, intlPhone))}
               placeholder={intlPhone ? '+44 20 7946 0958' : '(555) 123-4567'}
               style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box' }} />
-            {intlPhone && <div style={{ fontSize: 11, color: '#e8724a', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
+            {intlPhone && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
           </div>
         </div>
 
         {!recipientEmail.trim() && (agreed && signatureName.trim() && relationship) && (
-          <div style={{ fontSize: '12px', color: '#c62828', marginBottom: '8px' }}>An email address is required to send the verification notification.</div>
+          <div style={{ fontSize: '12px', color: 'var(--color-error)', marginBottom: '8px' }}>An email address is required to send the verification notification.</div>
         )}
         <button onClick={handleAttest} disabled={loading || !agreed || !signatureName.trim() || !relationship || !recipientEmail.trim()}
           style={{
             padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
-            background: (agreed && signatureName.trim() && relationship && recipientEmail.trim()) ? '#1b6b5a' : '#ccc',
-            color: '#fff', transition: 'background 0.2s',
+            background: (agreed && signatureName.trim() && relationship && recipientEmail.trim()) ? 'var(--role-color)' : 'var(--border-light)',
+            color: 'var(--text-on-primary)', transition: 'background 0.2s',
           }}>
           {loading ? 'Submitting...' : 'Sign & Continue \u2192'}
         </button>
@@ -394,13 +394,13 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
 
     // Response labels
     const responseLabels = {
-      yes_aware: { text: "Yes, I'm aware", color: '#2e7d32', icon: '\u2705' },
-      have_questions: { text: "I have questions", color: '#e8724a', icon: '\u2753' },
-      did_not_authorize: { text: "I did not authorize this", color: '#c62828', icon: '\u{1F6A8}' },
+      yes_aware: { text: "Yes, I'm aware", color: 'var(--color-success)', icon: '\u2705' },
+      have_questions: { text: "I have questions", color: 'var(--accent-color)', icon: '\u2753' },
+      did_not_authorize: { text: "I did not authorize this", color: 'var(--color-error)', icon: '\u{1F6A8}' },
     };
 
     return (
-      <div style={{ background: '#fff', border: '2px solid #1b6b5a', borderRadius: '12px', padding: '24px', marginTop: '16px' }}>
+      <div style={{ background: 'var(--bg-surface)', border: '2px solid #1b6b5a', borderRadius: '12px', padding: '24px', marginTop: '16px' }}>
         {/* Step indicators */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '20px' }}>
           {['Attestation', 'Outreach', 'Review'].map((step, i) => {
@@ -410,37 +410,37 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
               <div key={step} style={{ flex: 1, textAlign: 'center' }}>
                 <div style={{
                   height: '4px', borderRadius: '2px', marginBottom: '6px',
-                  background: isComplete ? '#1b6b5a' : isActive ? '#e8724a' : '#e0e0e0',
+                  background: isComplete ? 'var(--role-color)' : isActive ? 'var(--accent-color)' : 'var(--border-light)',
                 }} />
-                <span style={{ fontSize: '11px', fontWeight: 600, color: isComplete ? '#1b6b5a' : isActive ? '#e8724a' : '#999' }}>{step}</span>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: isComplete ? 'var(--role-color)' : isActive ? 'var(--accent-color)' : 'var(--text-muted)' }}>{step}</span>
               </div>
             );
           })}
         </div>
 
-        {error && <div style={{ background: '#fce4ec', color: '#c62828', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
-        {success && <div style={{ background: '#e8f5e9', color: '#2e7d32', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
+        {error && <div style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+        {success && <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
 
         {/* Attestation confirmed */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
           <span style={{ fontSize: '18px' }}>{'\u2705'}</span>
-          <span style={{ fontWeight: 600, color: '#1b6b5a', fontSize: '14px' }}>Attestation signed by {attestation?.signatureName || signatureName}</span>
+          <span style={{ fontWeight: 600, color: 'var(--role-color)', fontSize: '14px' }}>Attestation signed by {attestation?.signatureName || signatureName}</span>
         </div>
 
         {/* Not yet sent outreach */}
         {!outreachSent && (
-          <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
-            <div style={{ fontWeight: 600, fontSize: '14px', color: '#E65100', marginBottom: '8px' }}>
+          <div style={{ background: 'var(--color-warning-bg)', border: '1px solid #FFE082', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+            <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--color-warning)', marginBottom: '8px' }}>
               Next: Send verification to {firstName}
             </div>
-            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px 0' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' }}>
               We'll email {firstName}{recipientEmail ? ` at ${recipientEmail}` : ''} to let them know about this care arrangement.
               They can confirm their awareness, ask questions, or let us know if something isn't right.
             </p>
             <button onClick={handleSendOutreach} disabled={loading}
               style={{
                 padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '14px', cursor: loading ? 'not-allowed' : 'pointer',
-                background: loading ? '#ccc' : '#e8724a', color: '#fff',
+                background: loading ? 'var(--border-light)' : 'var(--accent-color)', color: 'var(--text-on-primary)',
               }}>
               {loading ? 'Sending...' : '\u{1F4E7} Send Verification Email'}
             </button>
@@ -452,9 +452,9 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           <div style={{ background: '#f0f7ff', border: '1px solid #bbdefb', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <span style={{ fontSize: '16px' }}>{'\u{1F4E7}'}</span>
-              <span style={{ fontWeight: 600, fontSize: '14px', color: '#1565c0' }}>Verification email sent</span>
+              <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--color-info)' }}>Verification email sent</span>
             </div>
-            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 8px 0' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 8px 0' }}>
               Sent to <strong>{outreach.sentToEmail}</strong>
               {outreach.expiresAt && <span> — expires {new Date(outreach.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
             </p>
@@ -462,7 +462,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
             {/* Recipient response */}
             {recipientResponded ? (
               <div style={{
-                background: responseLabels[outreach.recipientResponse]?.color === '#c62828' ? '#fce4ec' : '#e8f5e9',
+                background: responseLabels[outreach.recipientResponse]?.color === 'var(--color-error)' ? 'var(--color-error-bg)' : 'var(--color-success-bg)',
                 borderRadius: '8px', padding: '12px', marginTop: '8px',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 600 }}>
@@ -472,26 +472,26 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
                   </span>
                 </div>
                 {outreach.recipientResponseNotes && (
-                  <div style={{ fontSize: '13px', color: '#666', marginTop: '6px', fontStyle: 'italic' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px', fontStyle: 'italic' }}>
                     "{outreach.recipientResponseNotes}"
                   </div>
                 )}
               </div>
             ) : isExpired ? (
               <div style={{ marginTop: '8px' }}>
-                <div style={{ fontSize: '13px', color: '#e8724a', marginBottom: '8px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--accent-color)', marginBottom: '8px' }}>
                   The verification link has expired. You can send a new one.
                 </div>
                 <button onClick={handleSendOutreach} disabled={loading}
                   style={{
                     padding: '8px 16px', borderRadius: '6px', border: 'none', fontWeight: 600, fontSize: '13px', cursor: 'pointer',
-                    background: '#e8724a', color: '#fff',
+                    background: 'var(--accent-color)', color: 'var(--text-on-primary)',
                   }}>
                   {loading ? 'Sending...' : 'Resend Verification'}
                 </button>
               </div>
             ) : (
-              <div style={{ fontSize: '13px', color: '#999', marginTop: '4px', fontStyle: 'italic' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', fontStyle: 'italic' }}>
                 Waiting for {firstName} to respond...
               </div>
             )}
@@ -500,8 +500,8 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
 
         {/* Admin review status */}
         <div style={{
-          background: adminStatus === 'approved' ? '#e8f5e9' : '#f5f5f5',
-          border: '1px solid ' + (adminStatus === 'approved' ? '#c8e6c9' : '#e0e0e0'),
+          background: adminStatus === 'approved' ? 'var(--color-success-bg)' : 'var(--bg-primary)',
+          border: '1px solid ' + (adminStatus === 'approved' ? 'var(--color-success-bg)' : 'var(--border-light)'),
           borderRadius: '8px', padding: '16px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -509,10 +509,10 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
               {adminStatus === 'approved' ? '\u2705' : adminStatus === 'rejected' ? '\u274C' : '\u23F3'}
             </span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: '14px', color: adminStatus === 'approved' ? '#2e7d32' : adminStatus === 'rejected' ? '#c62828' : '#666' }}>
+              <div style={{ fontWeight: 600, fontSize: '14px', color: adminStatus === 'approved' ? 'var(--color-success)' : adminStatus === 'rejected' ? 'var(--color-error)' : 'var(--text-secondary)' }}>
                 {adminStatus === 'approved' ? 'Admin Approved' : adminStatus === 'rejected' ? 'Admin Review: Not Approved' : 'Awaiting Admin Review'}
               </div>
-              <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
                 {adminStatus === 'pending'
                   ? 'Our team will review your attestation and ' + firstName + '\'s response. You\'ll be notified when the review is complete.'
                   : adminStatus === 'rejected'
