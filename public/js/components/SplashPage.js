@@ -29,7 +29,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => onNavigate('login')} style={{
-              padding: '10px 24px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+              padding: '10px 24px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
               borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
             }}>Sign In</button>
             <button onClick={() => onNavigate('register')} style={{
@@ -78,7 +78,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             fontSize: '14px', fontWeight: 600, cursor: 'pointer',
           }}>Sign In</button>
           <button onClick={() => onNavigate('demo')} style={{
-            background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: '8px',
+            background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px',
             padding: '10px 22px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
           }}>Try the Demo</button>
         </div>
@@ -106,7 +106,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             }}>Sign Up Free</button>
             <button className="splash-show-mobile-only" onClick={() => setShowStory(true)} style={{
               padding: '14px 24px', fontSize: '16px', fontWeight: 600,
-              background: '#2563eb', color: 'var(--bg-card)', border: 'none', borderRadius: '8px', cursor: 'pointer',
+              background: '#2563eb', color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px', cursor: 'pointer',
             }}>Our Story</button>
             <button onClick={() => onNavigate('demo')} style={{
               padding: '14px 32px', fontSize: '16px', fontWeight: 600,
@@ -197,7 +197,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 border: '1px solid rgba(0,0,0,0.06)',
               }}>
                 <div style={{
-                  width: 36, height: 36, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)',
+                  width: 36, height: 36, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '16px', fontWeight: 700, marginBottom: '14px',
                 }}>{item.step}</div>
@@ -614,15 +614,15 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
                     <span>Tap the <strong>Share</strong> button <span style={{ fontSize: 16 }}>{'\u2B06\uFE0E'}</span> at the bottom of your screen</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
                     <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
                     <span>Tap <strong>"Add"</strong> in the top right</span>
                   </div>
                 </div>
@@ -636,15 +636,15 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
                     <span>Tap the <strong>three dots</strong> <strong>{'\u22EE'}</strong> menu in the top right</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
                     <span>Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
+                    <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
                     <span>Tap <strong>"Install"</strong> to confirm</span>
                   </div>
                 </div>

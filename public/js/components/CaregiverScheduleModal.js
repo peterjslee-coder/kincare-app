@@ -137,7 +137,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
         <button className="modal-close" onClick={onClose}>✕</button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700 }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700 }}>
             {initials}
           </div>
           <div>

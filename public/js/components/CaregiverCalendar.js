@@ -636,7 +636,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 8 }}>
                         <button onClick={() => handleClaim(s.id)} disabled={claimingId === s.id}
                           style={{
-                            padding: '6px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+                            padding: '6px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                             borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
                             opacity: claimingId === s.id ? 0.5 : 1,
                           }}>
@@ -719,7 +719,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         })()}
                         {s.status === 'in_progress' && onLogVisit && (
                           <button onClick={() => onLogVisit({ ...s, action: 'check-out' })} style={{
-                            padding: '4px 10px', background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none',
+                            padding: '4px 10px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
                             borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 700,
                           }}>Check Out</button>
                         )}

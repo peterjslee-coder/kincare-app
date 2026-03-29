@@ -745,13 +745,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       </p>
       {noProfile && onNeedsOnboarding && (
         <button onClick={onNeedsOnboarding} style={{
-          padding: '14px 32px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+          padding: '14px 32px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
           borderRadius: '10px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
         }}>Complete Your Profile</button>
       )}
       {!noProfile && (
         <button onClick={() => window.location.reload()} style={{
-          padding: '12px 24px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+          padding: '12px 24px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
           borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
         }}>Refresh Page</button>
       )}
@@ -1137,7 +1137,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   {['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'].map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <input type="text" value={locZip} onChange={(e) => setLocZip(e.target.value)} placeholder="Zip" maxLength={10} style={{ width: '80px', padding: '4px 8px', border: '1px solid #ccc', borderRadius: '6px', fontSize: '13px' }} />
-                <button onClick={saveWorkLocation} disabled={locSaving} style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: locSaving ? 0.6 : 1 }}>{locSaving ? '...' : 'Save'}</button>
+                <button onClick={saveWorkLocation} disabled={locSaving} style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: locSaving ? 0.6 : 1 }}>{locSaving ? '...' : 'Save'}</button>
                 <button onClick={() => setEditingLocation(false)} style={{ padding: '4px 8px', background: 'none', border: '1px solid #ccc', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer' }}>Cancel</button>
               </div>
             ) : (profile.city && profile.state) ? (
@@ -1379,7 +1379,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     </div>
                   )}
                   {s.done && s.warning && (
-                    <div style={{ marginTop: '6px', padding: '8px 10px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '6px', fontSize: '12px', color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                    <div style={{ marginTop: '6px', padding: '8px 10px', background: 'var(--color-warning-bg)', border: '1px solid #f59e0b', borderRadius: '6px', fontSize: '12px', color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
                       <span style={{ fontSize: '13px', flexShrink: 0 }}>{'\u26A0\uFE0F'}</span> <span>{s.warning}</span>
                     </div>
                   )}
@@ -1483,7 +1483,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     <div style={{ flex: 1, minWidth: '180px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
                         <span className={exclusiveUrgent ? 'exclusive-urgent' : ''} style={{
-                          background: exclusiveUrgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--bg-card)',
+                          background: exclusiveUrgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--text-on-primary)',
                           padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 700,
                         }}>
                           {exclusiveRemaining !== null ? (exclusiveUrgent ? `\u23F1 ${exclusiveRemaining} min left!` : `\u2728 JUST FOR YOU \u00B7 ${exclusiveRemaining} min left`) : '\u2728 JUST FOR YOU'}
@@ -1523,7 +1523,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       <button onClick={(e) => { if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal); }} disabled={claimingJobId === job.id || profile.accountPaused}
                         title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                         style={{
-                          padding: '12px 24px', background: claimingJobId === job.id || profile.accountPaused ? 'var(--border-light)' : 'var(--color-purple-light)', color: 'var(--bg-card)', border: 'none',
+                          padding: '12px 24px', background: claimingJobId === job.id || profile.accountPaused ? 'var(--border-light)' : 'var(--color-purple-light)', color: 'var(--text-on-primary)', border: 'none',
                           borderRadius: '12px', fontSize: '15px', fontWeight: 700, cursor: claimingJobId === job.id || profile.accountPaused ? 'not-allowed' : 'pointer',
                           boxShadow: '0 2px 8px rgba(124,58,237,0.3)', whiteSpace: 'nowrap',
                         }}>{profile.accountPaused ? '❌ Account Paused' : claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
@@ -1587,7 +1587,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     </div>
                     <span style={{
                       fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
-                      background: '#e0a030', color: 'var(--bg-card)',
+                      background: '#e0a030', color: 'var(--text-on-primary)',
                     }}>
                       {'\u23F0'} Expired
                     </span>
@@ -1636,7 +1636,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     {timeLeftLabel && (
                       <span style={{
                         fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
-                        background: isUrgent ? 'var(--accent-color)' : 'var(--color-violet)', color: 'var(--bg-card)',
+                        background: isUrgent ? 'var(--accent-color)' : 'var(--color-violet)', color: 'var(--text-on-primary)',
                       }}>
                         {isUrgent ? '\u23F1' : '\u23F3'} {timeLeftLabel}
                       </span>
@@ -1803,7 +1803,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           setEarlyDepartureAcked(false);
                           setCheckOutSession(s);
                         }} style={{
-                          padding: '10px 22px', background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none',
+                          padding: '10px 22px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                           boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
                         }}>Check Out</button>
@@ -2029,7 +2029,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       <div style={{ flex: 1, minWidth: '180px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
                           {isDirectOffer && !exclusiveExpired && (
-                            <span className={exclusiveUrgent ? 'exclusive-urgent' : ''} style={{ background: exclusiveUrgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--bg-card)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
+                            <span className={exclusiveUrgent ? 'exclusive-urgent' : ''} style={{ background: exclusiveUrgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--text-on-primary)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
                               {exclusiveRemaining !== null ? (exclusiveUrgent ? `\u23F1 ${exclusiveRemaining} min left!` : `\u2728 JUST FOR YOU \u00B7 ${exclusiveRemaining} min left`) : '\u2728 JUST FOR YOU'}
                             </span>
                           )}
@@ -2083,7 +2083,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         <button onClick={(e) => { if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal); }} disabled={claimingJobId === job.id || profile.accountPaused}
                           title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                           style={{
-                            padding: '10px 20px', background: claimingJobId === job.id || profile.accountPaused ? 'var(--border-light)' : 'var(--accent-color)', color: 'var(--bg-card)', border: 'none',
+                            padding: '10px 20px', background: claimingJobId === job.id || profile.accountPaused ? 'var(--border-light)' : 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
                             borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: claimingJobId === job.id || profile.accountPaused ? 'not-allowed' : 'pointer',
                             boxShadow: '0 2px 6px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
                           }}>{profile.accountPaused ? '❌ Account Paused' : claimingJobId === job.id ? 'Accepting...' : 'Accept Job'}</button>
@@ -2402,7 +2402,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     navigator.clipboard?.writeText(referralData.referralLink || '');
                     showToast('Link copied!', 'success');
                   }} style={{
-                    padding: '8px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                    padding: '8px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                   }}>Copy</button>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Share this link — anyone who signs up through it is automatically credited to you.</div>
@@ -2442,7 +2442,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 } catch (err) { setRefMsg('Failed to send referral'); }
                 setRefSending(false);
               }} disabled={refSending} style={{
-                marginTop: 10, padding: '10px 20px', background: refSending ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--bg-card)',
+                marginTop: 10, padding: '10px 20px', background: refSending ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--text-on-primary)',
                 border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: refSending ? 'wait' : 'pointer',
               }}>{refSending ? 'Sending...' : 'Send Invite'}</button>
             </div>
@@ -2659,7 +2659,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       }} />
                       <button onClick={() => removePhoto(idx)} style={{
                         position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px',
-                        background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: '50%',
+                        background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '50%',
                         fontSize: '12px', cursor: 'pointer', lineHeight: '20px', padding: 0,
                       }}>×</button>
                     </div>
@@ -2674,7 +2674,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 cursor: 'pointer', fontSize: '13px',
               }}>Cancel</button>
               <button onClick={handleSubmitVisitLog} disabled={!logSummary.trim() || submittingLog} style={{
-                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
                 opacity: (!logSummary.trim() || submittingLog) ? 0.5 : 1,
               }}>{submittingLog ? 'Submitting...' : 'Submit Visit Log'}</button>
@@ -2851,7 +2851,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     },
                     disabled: !briefingAcked,
                     style: {
-                      padding: '10px 24px', background: briefingAcked ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--bg-card)', border: 'none',
+                      padding: '10px 24px', background: briefingAcked ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none',
                       borderRadius: 8, cursor: briefingAcked ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700,
                       transition: 'background 0.2s',
                     }
@@ -2927,7 +2927,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   },
                   disabled: !firstVisitChoice || firstVisitSubmitting,
                   style: {
-                    padding: '10px 24px', background: firstVisitChoice ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--bg-card)', border: 'none',
+                    padding: '10px 24px', background: firstVisitChoice ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none',
                     borderRadius: 8, cursor: firstVisitChoice ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700,
                   }
                 }, firstVisitSubmitting ? 'Submitting...' : 'Continue to Check In \u2192')
@@ -3149,7 +3149,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       }} />
                       <button onClick={() => removeCheckOutPhoto(idx)} style={{
                         position: 'absolute', top: -6, right: -6, width: 20, height: 20,
-                        background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: '50%',
+                        background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '50%',
                         fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>×</button>
                     </div>
@@ -3302,7 +3302,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 }
                 setCheckSubmitting(false);
               }} disabled={checkSubmitting} style={{
-                padding: '10px 24px', background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none',
+                padding: '10px 24px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 700,
                 opacity: checkSubmitting ? 0.6 : 1,
               }}>{checkSubmitting ? 'Submitting...' : 'Complete Session ✓'}</button>

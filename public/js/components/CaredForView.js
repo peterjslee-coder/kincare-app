@@ -503,7 +503,7 @@ const CaredForView = window.CaredForView = () => {
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={handleRequestCare} disabled={submitting} style={{
-                      padding: '8px 20px', background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none',
+                      padding: '8px 20px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
                       borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
                       opacity: submitting ? 0.5 : 1,
                     }}>{submitting ? 'Submitting...' : 'Request Help'}</button>
@@ -614,7 +614,7 @@ const CaredForView = window.CaredForView = () => {
                 style={{ width: '100%', minHeight: '80px', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px', resize: 'vertical', marginBottom: '8px' }}
               />
               <button onClick={handleAddNote} disabled={!newNote.trim() || saving} style={{
-                padding: '8px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+                padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
                 opacity: (!newNote.trim() || saving) ? 0.5 : 1,
               }}>{saving ? 'Saving...' : 'Save Note'}</button>
@@ -633,7 +633,7 @@ const CaredForView = window.CaredForView = () => {
                     />
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button onClick={() => handleEditNote(n.id)} disabled={saving} style={{
-                        padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+                        padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                         borderRadius: '6px', cursor: 'pointer', fontSize: '12px',
                       }}>Save</button>
                       <button onClick={() => setEditingNote(null)} style={{

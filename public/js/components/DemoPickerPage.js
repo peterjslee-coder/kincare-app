@@ -85,7 +85,7 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
           }}>Sign In</button>
           <button onClick={() => onNavigate('register')} style={{
             padding: '8px 20px', fontSize: '14px', fontWeight: 600,
-            background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+            background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
             borderRadius: '6px', cursor: 'pointer',
           }}>Sign Up</button>
         </div>

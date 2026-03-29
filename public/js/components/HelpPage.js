@@ -422,7 +422,7 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
         !showFeedback && React.createElement('button', {
           onClick: () => setShowFeedback(true),
           style: {
-            padding: '10px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+            padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
             borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
             whiteSpace: 'nowrap',
           }

@@ -412,7 +412,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             ))}
           </div>
           <button onClick={onClose} style={{
-            padding: '12px 36px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+            padding: '12px 36px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
             borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: 'pointer',
             animation: 'slideUp 0.4s ease-out 0.5s both',
           }}>Done</button>

@@ -211,12 +211,12 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
         }),
         !isEscalated && React.createElement('button', {
           onClick: () => { handleReviewFlag(f.id, 'escalated'); loadSafetyFlags(); },
-          style: { padding: '6px 14px', background: 'var(--color-error)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
+          style: { padding: '6px 14px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
         }, '\u{1F6A8} Escalate'),
         React.createElement('button', {
           onClick: () => { handleReviewFlag(f.id, 'resolved'); },
           disabled: flagPasskeyLoading,
-          style: { padding: '6px 14px', background: (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'resolved') ? '#145a4a' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 },
+          style: { padding: '6px 14px', background: (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'resolved') ? '#145a4a' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 },
         }, (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'resolved')
           ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to resolve')
           : '\u2713 Resolve'),
@@ -312,7 +312,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
                   React.createElement('button', {
                     onClick: () => sendMessage(f.id, msgTarget.userId),
                     disabled: msgSending || !msgText.trim(),
-                    style: { padding: '6px 16px', background: msgSending || !msgText.trim() ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
+                    style: { padding: '6px 16px', background: msgSending || !msgText.trim() ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
                   }, msgSending ? 'Sending...' : 'Send as InPlace Support'),
                   React.createElement('button', {
                     onClick: () => { setMsgTarget(null); setMsgText(''); },
@@ -372,7 +372,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
                 React.createElement('button', {
                   onClick: () => addNote(f.id),
                   disabled: noteSending || !noteText.trim(),
-                  style: { padding: '6px 14px', background: noteSending || !noteText.trim() ? 'var(--text-muted)' : 'var(--text-secondary)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
+                  style: { padding: '6px 14px', background: noteSending || !noteText.trim() ? 'var(--text-muted)' : 'var(--text-secondary)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' },
                 }, noteSending ? '...' : 'Add Note'),
               ),
 

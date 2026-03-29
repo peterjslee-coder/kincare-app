@@ -710,7 +710,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           <h2 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Invite Issue</h2>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{inviteError}</p>
           <a href="/" style={{
-            display: 'inline-block', padding: '12px 28px', background: 'var(--role-color)', color: 'var(--bg-card)',
+            display: 'inline-block', padding: '12px 28px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
             borderRadius: '8px', textDecoration: 'none', fontWeight: 600,
           }}>Go to InPlace</a>
         </div>
@@ -768,7 +768,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   const nextBtn = (handler, label, disabledExtra) => (
     <button onClick={handler} disabled={saving || disabledExtra} style={{
-      flex: 1, padding: '14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+      flex: 1, padding: '14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
       borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
       opacity: (saving || disabledExtra) ? 0.6 : 1,
     }}>{saving ? 'Saving...' : label}</button>
@@ -1416,7 +1416,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                         style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />}
                   <span style={{ fontSize: '13px', color: 'var(--text-secondary)', flex: 1 }}>{form.documents.find(d => d.type === 'dl_front').fileName}</span>
                   <button onClick={() => removeDocument('dl_front')} style={{
-                    background: '#fff0f0', border: '1px solid #fdd', borderRadius: '6px',
+                    background: 'var(--bg-error-light)', border: '1px solid #fdd', borderRadius: '6px',
                     padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--color-red-strong)',
                   }}>Remove</button>
                 </div>
@@ -1428,7 +1428,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     onChange={(e) => handleFileSelect('dl_front', e)} />
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button type="button" onClick={() => document.getElementById('dl_front_camera').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                     }}>&#128247; Take Photo</button>
                     <button type="button" onClick={() => document.getElementById('dl_front_gallery').click()} style={{
@@ -1452,7 +1452,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                         style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />}
                   <span style={{ fontSize: '13px', color: 'var(--text-secondary)', flex: 1 }}>{form.documents.find(d => d.type === 'dl_back').fileName}</span>
                   <button onClick={() => removeDocument('dl_back')} style={{
-                    background: '#fff0f0', border: '1px solid #fdd', borderRadius: '6px',
+                    background: 'var(--bg-error-light)', border: '1px solid #fdd', borderRadius: '6px',
                     padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--color-red-strong)',
                   }}>Remove</button>
                 </div>
@@ -1464,7 +1464,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                     onChange={(e) => handleFileSelect('dl_back', e)} />
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button type="button" onClick={() => document.getElementById('dl_back_camera').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                       borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                     }}>&#128247; Take Photo</button>
                     <button type="button" onClick={() => document.getElementById('dl_back_gallery').click()} style={{
@@ -1495,7 +1495,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   <button onClick={() => {
                     setForm(f => ({ ...f, documents: f.documents.filter((d, idx) => !(d.type === 'certification' && idx === f.documents.indexOf(doc))) }));
                   }} style={{
-                    background: '#fff0f0', border: '1px solid #fdd', borderRadius: '6px',
+                    background: 'var(--bg-error-light)', border: '1px solid #fdd', borderRadius: '6px',
                     padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--color-red-strong)',
                   }}>Remove</button>
                 </div>
@@ -1585,7 +1585,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             </div>
 
             <button onClick={handleComplete} style={{
-              width: '100%', padding: '14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+              width: '100%', padding: '14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
               borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
             }}>Go to My Dashboard</button>
           </div>

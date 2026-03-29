@@ -170,7 +170,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({ sessionId, curre
             disabled={submitting}
             style={{
               padding: '7px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-              background: 'var(--role-color)', color: 'var(--bg-card)', fontWeight: 600, fontSize: '13px',
+              background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 600, fontSize: '13px',
             }}>
             Accept ${latestPending.offered_rate}/hr
           </button>

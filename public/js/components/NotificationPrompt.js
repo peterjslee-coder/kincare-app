@@ -386,7 +386,7 @@ const NotificationSettings = window.NotificationSettings = () => {
       onClick: handleEnable,
       disabled: subscribing,
       style: {
-        background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: '8px',
+        background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px',
         padding: '10px 20px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
         marginRight: '8px',
       },
@@ -402,7 +402,7 @@ const NotificationSettings = window.NotificationSettings = () => {
     }, testSending ? 'Sending...' : 'Send Test Notification'),
 
     iosNeedInstall && React.createElement('div', {
-      style: { marginTop: '12px', padding: '14px 16px', borderRadius: '10px', background: '#fffbeb', border: '1px solid #fbbf24' },
+      style: { marginTop: '12px', padding: '14px 16px', borderRadius: '10px', background: 'var(--color-warning-bg)', border: '1px solid #fbbf24' },
     },
       React.createElement('div', { style: { fontWeight: 600, fontSize: '14px', color: '#92400e', marginBottom: '8px' } },
         'Add to Home Screen to enable notifications'
@@ -433,7 +433,7 @@ const NotificationSettings = window.NotificationSettings = () => {
     vapidReady === false && React.createElement('div', {
       style: {
         marginTop: '12px', padding: '10px 14px', borderRadius: '8px',
-        background: '#fffbeb', color: '#92400e', fontSize: '13px',
+        background: 'var(--color-warning-bg)', color: '#92400e', fontSize: '13px',
       },
     }, '⚠️ Push notification server is not fully configured. Contact the admin.'),
   );

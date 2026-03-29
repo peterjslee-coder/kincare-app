@@ -163,7 +163,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
           setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '' });
           setShowAddRule(true);
         }} style={{
-          padding: '8px 16px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+          padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
           borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
         }}>+ Add Rule</button>
       </div>
@@ -499,7 +499,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
                 cursor: 'pointer', fontSize: '13px',
               }}>Cancel</button>
               <button onClick={handleSaveRule} style={{
-                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+                padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
                 borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
               }}>{editingRule ? 'Update Rule' : 'Add Rule'}</button>
             </div>

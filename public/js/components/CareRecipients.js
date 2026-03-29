@@ -1117,9 +1117,9 @@ const CareRecipients = window.CareRecipients = () => {
                     {photoUploading ? 'Uploading...' : (selected.photo ? 'Change Photo' : 'Add Photo')}
                   </button>
                   {selected.photo && (
-                    <button onClick={() => handleRemovePhoto(selected.id)} style={{ padding: '6px 10px', background: '#fff0f0', color: 'var(--color-red-strong)', border: '1px solid #fdd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>Remove</button>
+                    <button onClick={() => handleRemovePhoto(selected.id)} style={{ padding: '6px 10px', background: 'var(--bg-error-light)', color: 'var(--color-red-strong)', border: '1px solid #fdd', borderRadius: 6, fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>Remove</button>
                   )}
-                  <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
+                  <button onClick={() => startEditRecipient(selected)} style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Edit</button>
                 </div>
               </div>
               <div className="info-grid">

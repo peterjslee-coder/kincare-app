@@ -243,7 +243,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
             disabled: docUploading,
             style: {
               padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '14px', cursor: docUploading ? 'not-allowed' : 'pointer',
-              background: docUploading ? 'var(--border-light)' : 'var(--color-indigo)', color: 'var(--bg-card)',
+              background: docUploading ? 'var(--border-light)' : 'var(--color-indigo)', color: 'var(--text-on-primary)',
             },
           }, docUploading ? 'Uploading...' : '\u{1F4CE} Choose File (PDF or image, max 5MB)'),
           React.createElement('input', {
@@ -440,7 +440,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
             <button onClick={handleSendOutreach} disabled={loading}
               style={{
                 padding: '12px 24px', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '14px', cursor: loading ? 'not-allowed' : 'pointer',
-                background: loading ? 'var(--border-light)' : 'var(--accent-color)', color: 'var(--bg-card)',
+                background: loading ? 'var(--border-light)' : 'var(--accent-color)', color: 'var(--text-on-primary)',
               }}>
               {loading ? 'Sending...' : '\u{1F4E7} Send Verification Email'}
             </button>

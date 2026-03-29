@@ -1074,7 +1074,7 @@ const InPlaceIcon = window.InPlaceIcon = ({
   fontWeight: "800",
   fontSize: "52",
   letterSpacing: "-3",
-  fill: "var(--bg-surface)"
+  fill: "var(--text-on-primary)"
 }, "iP"));
 ;
 // ─── Care Story Walkthrough ───
@@ -1157,7 +1157,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({
   return /*#__PURE__*/React.createElement("section", {
     style: {
       padding: compact ? '40px 24px' : '64px 24px',
-      background: compact ? 'var(--text-on-primary)' : 'linear-gradient(180deg, #f8faf9 0%, #fff 100%)'
+      background: compact ? 'var(--bg-card)' : 'linear-gradient(180deg, #f8faf9 0%, #fff 100%)'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2602,7 +2602,7 @@ const SplashPage = window.SplashPage = ({
       cursor: 'pointer',
       transition: 'all 0.2s',
       border: activeTab === tab.id ? '2px solid #1b6b5a' : '2px solid #e0e0e0',
-      background: activeTab === tab.id ? 'var(--role-color)' : 'var(--text-on-primary)',
+      background: activeTab === tab.id ? 'var(--role-color)' : 'var(--bg-card)',
       color: activeTab === tab.id ? 'var(--text-on-primary)' : 'var(--text-secondary)'
     }
   }, tab.label))), activeTab === 'families' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
@@ -5283,7 +5283,7 @@ const RegisterPage = window.RegisterPage = ({
       },
       onMouseLeave: e => {
         e.currentTarget.style.borderColor = 'var(--border-light)';
-        e.currentTarget.style.background = 'var(--text-on-primary)';
+        e.currentTarget.style.background = 'var(--bg-card)';
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -5638,7 +5638,7 @@ const RegisterPage = window.RegisterPage = ({
       },
       onMouseLeave: e => {
         e.currentTarget.style.borderColor = 'var(--border-light)';
-        e.currentTarget.style.background = 'var(--text-on-primary)';
+        e.currentTarget.style.background = 'var(--bg-card)';
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -5791,7 +5791,7 @@ const RegisterPage = window.RegisterPage = ({
       },
       onMouseLeave: e => {
         e.currentTarget.style.borderColor = 'var(--border-light)';
-        e.currentTarget.style.background = 'var(--text-on-primary)';
+        e.currentTarget.style.background = 'var(--bg-card)';
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -6245,7 +6245,7 @@ const RegisterPage = window.RegisterPage = ({
       padding: '14px',
       borderRadius: '10px',
       border: formData.ackNoMedical ? '2px solid #1b6b5a' : '2px solid #e0e0e0',
-      background: formData.ackNoMedical ? 'var(--bg-highlight)' : 'var(--text-on-primary)',
+      background: formData.ackNoMedical ? 'var(--bg-highlight)' : 'var(--bg-card)',
       transition: 'all 0.2s'
     }
   }, /*#__PURE__*/React.createElement("input", {
@@ -6281,7 +6281,7 @@ const RegisterPage = window.RegisterPage = ({
       padding: '14px',
       borderRadius: '10px',
       border: formData.ackBgCheck ? '2px solid #1b6b5a' : '2px solid #e0e0e0',
-      background: formData.ackBgCheck ? 'var(--bg-highlight)' : 'var(--text-on-primary)',
+      background: formData.ackBgCheck ? 'var(--bg-highlight)' : 'var(--bg-card)',
       transition: 'all 0.2s'
     }
   }, /*#__PURE__*/React.createElement("input", {
@@ -6317,7 +6317,7 @@ const RegisterPage = window.RegisterPage = ({
       padding: '14px',
       borderRadius: '10px',
       border: formData.ackPayments ? '2px solid #1b6b5a' : '2px solid #e0e0e0',
-      background: formData.ackPayments ? 'var(--bg-highlight)' : 'var(--text-on-primary)',
+      background: formData.ackPayments ? 'var(--bg-highlight)' : 'var(--bg-card)',
       transition: 'all 0.2s'
     }
   }, /*#__PURE__*/React.createElement("input", {
@@ -8258,7 +8258,7 @@ const Dashboard = window.Dashboard = ({
       style: {
         padding: '8px 20px',
         background: isNoShow ? '#ef5350' : 'var(--color-warning)',
-        color: isNoShow ? 'var(--text-on-primary)' : 'var(--text-primary)',
+        color: isNoShow ? 'var(--bg-card)' : 'var(--text-primary)',
         border: 'none',
         borderRadius: 8,
         fontWeight: 600,
@@ -8302,7 +8302,7 @@ const Dashboard = window.Dashboard = ({
           padding: '14px 16px',
           borderRadius: 12,
           border: isUrgent ? '2px solid #e8724a' : '2px solid #7b61ff',
-          background: isUrgent ? '#fff8f5' : '#f5f0ff'
+          background: isUrgent ? 'var(--bg-accent-light)' : '#f5f0ff'
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
@@ -8684,7 +8684,7 @@ const Dashboard = window.Dashboard = ({
       style: {
         fontWeight: 700,
         fontSize: 17,
-        color: 'var(--bg-card)',
+        color: 'var(--text-primary)',
         marginBottom: 4
       }
     }, hero.recipientName || 'Care Visit', " with ", hero.caregiverName), /*#__PURE__*/React.createElement("div", {
@@ -10048,7 +10048,7 @@ const Dashboard = window.Dashboard = ({
       fontWeight: 700,
       cursor: 'pointer',
       border: tipAmount === cents ? '2px solid #E65100' : '1px solid #ddd',
-      background: tipAmount === cents ? 'var(--color-warning-bg)' : 'var(--text-on-primary)',
+      background: tipAmount === cents ? 'var(--color-warning-bg)' : 'var(--bg-card)',
       color: tipAmount === cents ? 'var(--color-warning)' : 'var(--text-primary)'
     }
   }, "$", cents / 100)), /*#__PURE__*/React.createElement("button", {
@@ -10064,7 +10064,7 @@ const Dashboard = window.Dashboard = ({
       fontWeight: 600,
       cursor: 'pointer',
       border: tipAmount === 'custom' ? '2px solid #E65100' : '1px solid #ddd',
-      background: tipAmount === 'custom' ? 'var(--color-warning-bg)' : 'var(--text-on-primary)',
+      background: tipAmount === 'custom' ? 'var(--color-warning-bg)' : 'var(--bg-card)',
       color: tipAmount === 'custom' ? 'var(--color-warning)' : 'var(--text-primary)'
     }
   }, "Custom")), tipAmount === 'custom' && /*#__PURE__*/React.createElement("div", {
@@ -11143,7 +11143,7 @@ const CareProfile = window.CareProfile = ({
       padding: '6px 14px',
       borderRadius: 20,
       border: r.id === (profile === null || profile === void 0 ? void 0 : profile.id) ? '2px solid #1b6b5a' : '1px solid #d0d0d0',
-      background: r.id === (profile === null || profile === void 0 ? void 0 : profile.id) ? 'var(--role-color-light)' : 'var(--text-on-primary)',
+      background: r.id === (profile === null || profile === void 0 ? void 0 : profile.id) ? 'var(--role-color-light)' : 'var(--bg-card)',
       color: r.id === (profile === null || profile === void 0 ? void 0 : profile.id) ? 'var(--role-color)' : 'var(--text-secondary)',
       fontSize: 13,
       fontWeight: r.id === (profile === null || profile === void 0 ? void 0 : profile.id) ? 600 : 400,
@@ -11224,7 +11224,7 @@ const CareProfile = window.CareProfile = ({
     style: {
       fontSize: 20,
       fontWeight: 700,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       lineHeight: 1.2
     }
   }, profile.first_name, " ", profile.last_name, /*#__PURE__*/React.createElement("span", {
@@ -11804,7 +11804,7 @@ const CareProfile = window.CareProfile = ({
         fontSize: 10,
         fontWeight: 600,
         border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
-        background: val === r.value ? r.color : 'var(--text-on-primary)',
+        background: val === r.value ? r.color : 'var(--bg-card)',
         color: val === r.value ? r.textColor : 'var(--text-muted)',
         cursor: 'pointer',
         transition: 'all 0.15s'
@@ -12109,7 +12109,7 @@ const CareProfile = window.CareProfile = ({
       fontSize: 13,
       fontWeight: 600,
       cursor: 'pointer',
-      background: companionTab === tab.id ? 'var(--text-on-primary)' : 'transparent',
+      background: companionTab === tab.id ? 'var(--bg-card)' : 'transparent',
       color: companionTab === tab.id ? 'var(--color-info)' : 'var(--text-tertiary)',
       boxShadow: companionTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
       transition: 'all 0.2s'
@@ -12169,7 +12169,7 @@ const CareProfile = window.CareProfile = ({
       borderRadius: 8,
       border: 'none',
       background: showAddReminder ? '#E8EEF2' : 'var(--color-info)',
-      color: showAddReminder ? 'var(--text-secondary)' : 'var(--text-on-primary)',
+      color: showAddReminder ? 'var(--text-secondary)' : 'var(--bg-card)',
       fontSize: 13,
       fontWeight: 600,
       cursor: 'pointer'
@@ -12355,8 +12355,8 @@ const CareProfile = window.CareProfile = ({
         height: 36,
         borderRadius: '50%',
         border: active ? '2px solid #1A5276' : '1px solid #ccc',
-        background: active ? 'var(--color-info)' : 'var(--text-on-primary)',
-        color: active ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+        background: active ? 'var(--color-info)' : 'var(--bg-card)',
+        color: active ? 'var(--bg-card)' : 'var(--text-secondary)',
         fontSize: 13,
         fontWeight: 600,
         cursor: 'pointer',
@@ -12614,7 +12614,7 @@ const CareProfile = window.CareProfile = ({
       fontSize: 13,
       fontFamily: 'inherit',
       resize: 'vertical',
-      background: '#FFFDE7',
+      background: 'var(--color-warning-bg)',
       color: 'var(--text-primary)',
       lineHeight: 1.5,
       outline: 'none'
@@ -12900,7 +12900,7 @@ const CareProfile = window.CareProfile = ({
         padding: '8px 12px',
         borderRadius: 8,
         border: isSelected ? '1px solid #E74C3C' : '1px solid #f0f0f0',
-        background: isSelected ? '#FEF5F5' : 'var(--text-on-primary)',
+        background: isSelected ? '#FEF5F5' : 'var(--bg-card)',
         transition: 'all 0.15s'
       }
     }, /*#__PURE__*/React.createElement("input", {
@@ -13098,7 +13098,7 @@ const CareProfile = window.CareProfile = ({
           alignItems: 'center',
           gap: 10,
           borderBottom: i < MESSAGE_TYPES.length - 1 ? '1px solid #f0f0f0' : 'none',
-          background: i % 2 === 0 ? 'var(--text-on-primary)' : '#FAFCFE'
+          background: i % 2 === 0 ? 'var(--bg-card)' : '#FAFCFE'
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
@@ -13569,7 +13569,7 @@ const CareProfile = window.CareProfile = ({
       padding: '10px 14px',
       gap: 12,
       borderBottom: i < companionUsage.daily_breakdown.length - 1 ? '1px solid #f0f0f0' : 'none',
-      background: i % 2 === 0 ? 'var(--text-on-primary)' : '#FAFCFE'
+      background: i % 2 === 0 ? 'var(--bg-card)' : '#FAFCFE'
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -13673,7 +13673,7 @@ const CareProfile = window.CareProfile = ({
     style: {
       fontSize: 15,
       fontWeight: 700,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 12,
       display: 'flex',
       alignItems: 'center',
@@ -13728,7 +13728,7 @@ const CareProfile = window.CareProfile = ({
       padding: '10px 12px',
       border: permTier === t.id ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
       borderRadius: 10,
-      background: permTier === t.id ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+      background: permTier === t.id ? 'var(--color-success-bg)' : 'var(--bg-card)',
       cursor: 'pointer',
       textAlign: 'left'
     }
@@ -13871,7 +13871,7 @@ const CareProfile = window.CareProfile = ({
     style: {
       fontSize: 15,
       fontWeight: 700,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 8,
       display: 'flex',
       alignItems: 'center',
@@ -14207,7 +14207,7 @@ const Schedule = window.Schedule = () => {
   }, "\uD83D\uDCC5"), /*#__PURE__*/React.createElement("h3", {
     style: {
       margin: '0 0 8px',
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       fontSize: 18
     }
   }, "No care sessions scheduled yet"), getActiveRole() === 'caregiver' ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
@@ -14373,7 +14373,7 @@ const Schedule = window.Schedule = () => {
         minHeight: 64,
         padding: '6px',
         cursor: 'pointer',
-        background: isSelected ? 'var(--role-color)' : 'var(--text-on-primary)',
+        background: isSelected ? 'var(--role-color)' : 'var(--bg-card)',
         color: isSelected ? 'var(--text-on-primary)' : past ? 'var(--text-muted)' : 'var(--text-primary)',
         borderBottom: '1px solid #f0f0f0',
         borderRight: '1px solid #f0f0f0',
@@ -14395,7 +14395,7 @@ const Schedule = window.Schedule = () => {
         width: 6,
         height: 6,
         borderRadius: '50%',
-        background: isSelected ? 'var(--text-on-primary)' : 'var(--accent-color)',
+        background: isSelected ? 'var(--bg-card)' : 'var(--accent-color)',
         display: 'inline-block'
       }
     }), day), hasSessions && /*#__PURE__*/React.createElement("div", {
@@ -15172,7 +15172,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
     style: {
       fontSize: 18,
       fontWeight: 700,
-      color: 'var(--bg-card)'
+      color: 'var(--text-primary)'
     }
   }, "Schedule ", displayName.split(' ')[0]), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15202,7 +15202,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
     style: {
       fontSize: 14,
       fontWeight: 600,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 10
     }
   }, "Select a day"), /*#__PURE__*/React.createElement("div", {
@@ -15227,7 +15227,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
         padding: '10px 4px',
         border: isSelected ? '2px solid #1b6b5a' : isOff && isSelected ? '2px solid #e8724a' : '1px solid #e0e0e0',
         borderRadius: 10,
-        background: isSelected ? isOff ? 'var(--bg-warm)' : 'var(--color-success-bg)' : isOff ? 'var(--bg-primary)' : 'var(--text-on-primary)',
+        background: isSelected ? isOff ? 'var(--bg-warm)' : 'var(--color-success-bg)' : isOff ? 'var(--bg-primary)' : 'var(--bg-card)',
         cursor: 'pointer',
         opacity: isOff ? 0.75 : 1,
         textAlign: 'center'
@@ -15259,7 +15259,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
     style: {
       fontSize: 14,
       fontWeight: 600,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 10
     }
   }, selectedDaySlots.length > 0 ? `Available times — ${selectedDay.label} ${selectedDay.shortDate}` : `${selectedDay.label} ${selectedDay.shortDate}`), selectedDaySlots.length === 0 ? (() => {
@@ -15300,8 +15300,8 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
         fontWeight: 500,
         cursor: 'pointer',
         border: (selectedSlot === null || selectedSlot === void 0 ? void 0 : selectedSlot.start) === slot.start ? '2px solid #e8724a' : '1px solid #e0e0e0',
-        background: (selectedSlot === null || selectedSlot === void 0 ? void 0 : selectedSlot.start) === slot.start ? 'var(--bg-warm)' : 'var(--text-on-primary)',
-        color: 'var(--bg-card)'
+        background: (selectedSlot === null || selectedSlot === void 0 ? void 0 : selectedSlot.start) === slot.start ? 'var(--bg-warm)' : 'var(--bg-card)',
+        color: 'var(--text-primary)'
       }
     }, formatTime(slot.start)))) : /*#__PURE__*/React.createElement("div", {
       style: {
@@ -15327,8 +15327,8 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({
       fontWeight: 500,
       cursor: 'pointer',
       border: (selectedSlot === null || selectedSlot === void 0 ? void 0 : selectedSlot.start) === slot.start ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-      background: (selectedSlot === null || selectedSlot === void 0 ? void 0 : selectedSlot.start) === slot.start ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
-      color: 'var(--bg-card)'
+      background: (selectedSlot === null || selectedSlot === void 0 ? void 0 : selectedSlot.start) === slot.start ? 'var(--color-success-bg)' : 'var(--bg-card)',
+      color: 'var(--text-primary)'
     }
   }, formatTime(slot.start)))))), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15959,7 +15959,7 @@ const Caregivers = window.Caregivers = () => {
       style: {
         fontSize: '20px',
         fontWeight: 700,
-        color: 'var(--bg-card)'
+        color: 'var(--text-primary)'
       }
     }, privacyName(cg, isAssigned)), isAssigned && /*#__PURE__*/React.createElement("span", {
       style: {
@@ -17234,7 +17234,7 @@ const CareRecipients = window.CareRecipients = () => {
         padding: '6px 12px',
         borderRadius: '6px',
         border: carePrefs[pref.id] === opt.value ? `2px solid ${opt.color}` : '1px solid #ddd',
-        background: carePrefs[pref.id] === opt.value ? opt.color : 'var(--text-on-primary)',
+        background: carePrefs[pref.id] === opt.value ? opt.color : 'var(--bg-card)',
         color: carePrefs[pref.id] === opt.value ? opt.textColor : 'var(--text-secondary)',
         fontSize: 12,
         fontWeight: carePrefs[pref.id] === opt.value ? 600 : 500,
@@ -17411,7 +17411,7 @@ const CareRecipients = window.CareRecipients = () => {
         padding: '24px',
         borderRadius: '12px',
         border: stripeStatus === 'complete' ? '2px solid #4caf50' : '1px solid #e0e0e0',
-        background: stripeStatus === 'complete' ? 'var(--color-success-bg)' : 'var(--text-on-primary)'
+        background: stripeStatus === 'complete' ? 'var(--color-success-bg)' : 'var(--bg-card)'
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -17953,7 +17953,7 @@ const CareRecipients = window.CareRecipients = () => {
     onClick: () => handleRemovePhoto(selected.id),
     style: {
       padding: '6px 10px',
-      background: '#fff0f0',
+      background: 'var(--bg-error-light)',
       color: 'var(--color-red-strong)',
       border: '1px solid #fdd',
       borderRadius: 6,
@@ -18220,7 +18220,7 @@ const CareRecipients = window.CareRecipients = () => {
       borderRadius: '10px',
       cursor: 'pointer',
       border: formData.authorizationTier === opt.id ? `2px solid ${opt.color}` : '2px solid #e8e8e8',
-      background: formData.authorizationTier === opt.id ? opt.bg : 'var(--text-on-primary)',
+      background: formData.authorizationTier === opt.id ? opt.bg : 'var(--bg-card)',
       transition: 'all 0.2s'
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -18269,7 +18269,7 @@ const CareRecipients = window.CareRecipients = () => {
       fontSize: 22,
       border: formData.emoji === em ? '2px solid #1b6b5a' : '1px solid #ddd',
       borderRadius: 8,
-      background: formData.emoji === em ? 'var(--role-color-light)' : 'var(--text-on-primary)',
+      background: formData.emoji === em ? 'var(--role-color-light)' : 'var(--bg-card)',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
@@ -19126,7 +19126,7 @@ const ConsentVerification = window.ConsentVerification = ({
         fontSize: '20px',
         fontFamily: "'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive",
         letterSpacing: '0.5px',
-        color: 'var(--bg-card)',
+        color: 'var(--text-primary)',
         boxSizing: 'border-box',
         background: '#fefefe'
       }
@@ -20110,7 +20110,7 @@ const ConsentResponsePage = window.ConsentResponsePage = ({
         width: '100%',
         textAlign: 'left',
         cursor: 'pointer',
-        background: isSelected ? opt.color : 'var(--text-on-primary)',
+        background: isSelected ? opt.color : 'var(--bg-card)',
         border: `2px solid ${isSelected ? opt.activeColor : 'var(--border-light)'}`,
         borderRadius: '10px',
         padding: '14px 16px',
@@ -20863,7 +20863,7 @@ const Documents = window.Documents = ({
       }
     }, doc.ai_classification.summary), ((_doc$ai_classificatio3 = doc.ai_classification) === null || _doc$ai_classificatio3 === void 0 ? void 0 : _doc$ai_classificatio3.concerns) && doc.ai_classification.concerns.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
-        backgroundColor: '#fffaf0',
+        backgroundColor: 'var(--bg-warm)',
         border: '1px solid #fbd38d',
         borderRadius: '4px',
         padding: '8px',
@@ -21913,7 +21913,7 @@ const Documents = window.Documents = ({
     }
   }, concern))))), previewDocument.admin_notes && /*#__PURE__*/React.createElement("div", {
     style: {
-      backgroundColor: '#fffaf0',
+      backgroundColor: 'var(--bg-warm)',
       padding: '12px',
       borderRadius: '6px',
       marginBottom: '16px',
@@ -24564,7 +24564,7 @@ const Messages = window.Messages = () => {
       onTouchEnd: () => !selectMode && onConvTouchEnd(c.id),
       style: {
         position: 'relative',
-        background: selectMode && selectedIds.includes(c.id) ? '#f0f7ff' : 'var(--text-on-primary)',
+        background: selectMode && selectedIds.includes(c.id) ? '#f0f7ff' : 'var(--bg-card)',
         transform: isSwiping ? `translateX(${swipeOffset}px)` : 'none',
         transition: isSwiping ? 'none' : 'transform 0.2s'
       }
@@ -24581,7 +24581,7 @@ const Messages = window.Messages = () => {
         height: 22,
         borderRadius: 6,
         border: selectedIds.includes(c.id) ? 'none' : '2px solid #ccc',
-        background: selectedIds.includes(c.id) ? 'var(--role-color)' : 'var(--text-on-primary)',
+        background: selectedIds.includes(c.id) ? 'var(--role-color)' : 'var(--bg-card)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -26392,7 +26392,7 @@ const RequestCareModal = window.RequestCareModal = ({
     fontWeight: 600,
     cursor: 'pointer',
     border: selected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-    background: selected ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+    background: selected ? 'var(--color-success-bg)' : 'var(--bg-card)',
     color: selected ? 'var(--role-color)' : 'var(--text-secondary)',
     whiteSpace: 'nowrap',
     flexShrink: 0,
@@ -27086,7 +27086,7 @@ const RequestCareModal = window.RequestCareModal = ({
       padding: 12,
       border: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.name) === cg.name ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
       borderRadius: 10,
-      background: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.name) === cg.name ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+      background: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.name) === cg.name ? 'var(--color-success-bg)' : 'var(--bg-card)',
       cursor: 'pointer',
       textAlign: 'left'
     }
@@ -27100,7 +27100,7 @@ const RequestCareModal = window.RequestCareModal = ({
     style: {
       fontWeight: 600,
       fontSize: 14,
-      color: 'var(--bg-card)'
+      color: 'var(--text-primary)'
     }
   }, cg.name), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -27156,7 +27156,7 @@ const RequestCareModal = window.RequestCareModal = ({
       padding: 10,
       border: !selectedCaregiver ? '2px solid #e8724a' : '1px dashed #e8724a',
       borderRadius: 10,
-      background: !selectedCaregiver ? 'var(--bg-warm)' : 'var(--text-on-primary)',
+      background: !selectedCaregiver ? 'var(--bg-warm)' : 'var(--bg-card)',
       cursor: 'pointer',
       textAlign: 'center',
       fontSize: 13,
@@ -27752,7 +27752,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
       style: {
         fontSize: 18,
         fontWeight: 700,
-        color: 'var(--bg-card)'
+        color: 'var(--text-primary)'
       }
     }, svcLabel), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -28983,7 +28983,7 @@ const DeleteAccountSection = ({
   }, "Delete My Account"), step === 'reason' && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '16px',
-      background: '#fff8f8',
+      background: 'var(--bg-error-light)',
       borderRadius: '10px',
       border: '1px solid #fdd'
     }
@@ -29015,7 +29015,7 @@ const DeleteAccountSection = ({
       alignItems: 'center',
       gap: '8px',
       padding: '8px 10px',
-      background: reason === r.value ? '#fef0ed' : 'var(--text-on-primary)',
+      background: reason === r.value ? '#fef0ed' : 'var(--bg-card)',
       borderRadius: '6px',
       border: reason === r.value ? '1px solid #e8724a' : '1px solid #eee',
       cursor: 'pointer',
@@ -29083,7 +29083,7 @@ const DeleteAccountSection = ({
   }, "Continue"))), step === 'confirm' && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '16px',
-      background: '#fff8f8',
+      background: 'var(--bg-error-light)',
       borderRadius: '10px',
       border: '1px solid #fdd'
     }
@@ -30217,7 +30217,7 @@ const MyAccount = window.MyAccount = ({
       borderRadius: 10,
       fontSize: 13,
       fontWeight: activeTab === s.id ? 700 : 500,
-      background: activeTab === s.id ? 'var(--role-color)' : 'var(--text-on-primary)',
+      background: activeTab === s.id ? 'var(--role-color)' : 'var(--bg-card)',
       color: activeTab === s.id ? 'var(--text-on-primary)' : '#166534',
       cursor: 'pointer'
     }
@@ -32537,7 +32537,7 @@ const MyAccount = window.MyAccount = ({
           fontSize: 10,
           fontWeight: 600,
           border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
-          background: val === r.value ? r.color : 'var(--text-on-primary)',
+          background: val === r.value ? r.color : 'var(--bg-card)',
           color: val === r.value ? r.textColor : 'var(--text-muted)',
           cursor: 'pointer',
           transition: 'all 0.15s'
@@ -33447,8 +33447,8 @@ const CareTeamManage = window.CareTeamManage = ({
       },
       style: {
         padding: '6px 14px',
-        background: m.role === 'member' ? 'var(--role-color)' : 'var(--text-on-primary)',
-        color: m.role === 'member' ? 'var(--text-on-primary)' : 'var(--role-color)',
+        background: m.role === 'member' ? 'var(--role-color)' : 'var(--bg-card)',
+        color: m.role === 'member' ? 'var(--bg-card)' : 'var(--role-color)',
         border: '1px solid #1b6b5a',
         borderRadius: 8,
         fontSize: 12,
@@ -33462,8 +33462,8 @@ const CareTeamManage = window.CareTeamManage = ({
       },
       style: {
         padding: '6px 14px',
-        background: m.role === 'viewer' ? 'var(--text-secondary)' : 'var(--text-on-primary)',
-        color: m.role === 'viewer' ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+        background: m.role === 'viewer' ? 'var(--text-secondary)' : 'var(--bg-card)',
+        color: m.role === 'viewer' ? 'var(--bg-card)' : 'var(--text-secondary)',
         border: '1px solid #999',
         borderRadius: 8,
         fontSize: 12,
@@ -34072,7 +34072,7 @@ const CareTeamManage = window.CareTeamManage = ({
       fontWeight: 600,
       cursor: 'pointer',
       border: notifChannel === opt.value ? '2px solid #e8724a' : '1px solid #d0d0d0',
-      background: notifChannel === opt.value ? '#fff5f0' : 'var(--text-on-primary)',
+      background: notifChannel === opt.value ? 'var(--bg-accent-light)' : 'var(--bg-card)',
       color: notifChannel === opt.value ? 'var(--accent-color)' : 'var(--text-secondary)'
     }
   }, opt.icon, " ", opt.label)))), ['sms', 'both'].includes(notifChannel) && /*#__PURE__*/React.createElement("div", {
@@ -34723,7 +34723,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: 16,
       fontWeight: 700,
-      color: 'var(--bg-card)'
+      color: 'var(--text-primary)'
     }
   }, monthName), monthOffset !== 0 && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -34835,7 +34835,7 @@ const CaredForView = window.CaredForView = () => {
     const hasConfirmed = counts.confirmed > 0;
 
     // Determine cell background
-    let cellBg = 'var(--text-on-primary)';
+    let cellBg = 'var(--bg-card)';
     if (hasRequested && hasConfirmed) cellBg = 'linear-gradient(135deg, #fce4ec 50%, #e3f2fd 50%)';else if (hasRequested) cellBg = 'var(--color-error-bg)';else if (hasConfirmed) cellBg = 'var(--color-info-bg)';
     return /*#__PURE__*/React.createElement("div", {
       key: i,
@@ -34906,7 +34906,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: 15,
       fontWeight: 700,
-      color: 'var(--bg-card)'
+      color: 'var(--text-primary)'
     }
   }, "\uD83D\uDCCB ", selectedDateLabel), /*#__PURE__*/React.createElement("button", {
     onClick: () => setSelectedDay(null),
@@ -34942,7 +34942,7 @@ const CaredForView = window.CaredForView = () => {
       style: {
         fontWeight: 600,
         fontSize: 14,
-        color: 'var(--bg-card)'
+        color: 'var(--text-primary)'
       }
     }, formatTime12(s.scheduled_time || s.time), " \xB7 ", s.service_type || s.serviceType), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -34963,7 +34963,7 @@ const CaredForView = window.CaredForView = () => {
         borderRadius: 10,
         fontSize: 10,
         fontWeight: 600,
-        background: isRequested ? 'var(--text-on-primary)' : 'var(--color-success-bg)',
+        background: isRequested ? 'var(--bg-card)' : 'var(--color-success-bg)',
         color: isRequested ? 'var(--color-error)' : 'var(--color-success)',
         textTransform: 'capitalize'
       }
@@ -35157,7 +35157,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: 14,
       fontWeight: 700,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 10
     }
   }, "\uD83E\uDE7A Health Conditions"), careProfile.healthConditions.map((c, i) => /*#__PURE__*/React.createElement("div", {
@@ -35179,7 +35179,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: 14,
       fontWeight: 700,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 10
     }
   }, "\uD83D\uDC8A Medications"), careProfile.medications.map((m, i) => /*#__PURE__*/React.createElement("div", {
@@ -35201,7 +35201,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: 14,
       fontWeight: 700,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 10
     }
   }, "\u26A0\uFE0F Food Allergies"), careProfile.foodAllergies.map((a, i) => /*#__PURE__*/React.createElement("div", {
@@ -35223,7 +35223,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: 14,
       fontWeight: 700,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 10
     }
   }, "\u2728 Care Preferences"), /*#__PURE__*/React.createElement("div", {
@@ -35241,7 +35241,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: 14,
       fontWeight: 700,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 10
     }
   }, "\uD83D\uDC3E Pets at Home"), /*#__PURE__*/React.createElement("div", {
@@ -35259,7 +35259,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: 14,
       fontWeight: 700,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       marginBottom: 10
     }
   }, "\uD83C\uDD98 Emergency Contact"), /*#__PURE__*/React.createElement("div", {
@@ -36164,7 +36164,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
       padding: '8px',
       border: ruleForm.type === t ? '2px solid #1b6b5a' : '2px solid #ddd',
       borderRadius: '8px',
-      background: ruleForm.type === t ? t === 'available' ? 'var(--bg-highlight)' : 'var(--bg-error-subtle)' : 'var(--text-on-primary)',
+      background: ruleForm.type === t ? t === 'available' ? 'var(--bg-highlight)' : 'var(--bg-error-subtle)' : 'var(--bg-card)',
       cursor: 'pointer',
       fontSize: '13px',
       fontWeight: ruleForm.type === t ? 600 : 400
@@ -36196,7 +36196,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
       padding: '8px',
       border: ruleForm.isRecurring === rec ? '2px solid #1b6b5a' : '2px solid #ddd',
       borderRadius: '8px',
-      background: ruleForm.isRecurring === rec ? 'var(--bg-highlight)' : 'var(--text-on-primary)',
+      background: ruleForm.isRecurring === rec ? 'var(--bg-highlight)' : 'var(--bg-card)',
       cursor: 'pointer',
       fontSize: '13px',
       fontWeight: ruleForm.isRecurring === rec ? 600 : 400
@@ -36254,7 +36254,7 @@ const AvailabilityTab = window.AvailabilityTab = ({
         fontSize: '13px',
         fontWeight: sel ? 600 : 400,
         border: sel ? '2px solid #1b6b5a' : '2px solid #ddd',
-        background: sel ? 'var(--bg-highlight)' : 'var(--text-on-primary)',
+        background: sel ? 'var(--bg-highlight)' : 'var(--bg-card)',
         cursor: 'pointer',
         color: sel ? 'var(--role-color)' : 'var(--text-secondary)'
       }
@@ -36611,7 +36611,7 @@ const OfferNegotiationPanel = window.OfferNegotiationPanel = ({
         padding: '8px 12px',
         borderRadius: '10px',
         maxWidth: '85%',
-        background: isFromMe ? 'var(--color-info-bg)' : 'var(--text-on-primary)',
+        background: isFromMe ? 'var(--color-info-bg)' : 'var(--bg-card)',
         border: `1px solid ${isFromMe ? '#bbdefb' : 'var(--border-light)'}`
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -37163,7 +37163,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
     style: {
       fontSize: 16,
       fontWeight: 700,
-      color: 'var(--bg-card)'
+      color: 'var(--text-primary)'
     }
   }, formatMonth()), weekOffset !== 0 && /*#__PURE__*/React.createElement("button", {
     onClick: () => setWeekOffset(0),
@@ -37833,7 +37833,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
       style: {
         fontWeight: 600,
         fontSize: 14,
-        color: 'var(--bg-card)'
+        color: 'var(--text-primary)'
       }
     }, s.recipientName || s.recipient_name || 'Client', estCost ? `, $${Math.round(parseFloat(estCost))}` : '', shortNoticeSurcharge > 0 && /*#__PURE__*/React.createElement("span", {
       style: {
@@ -37942,7 +37942,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
       style: {
         fontWeight: 600,
         fontSize: 14,
-        color: 'var(--bg-card)'
+        color: 'var(--text-primary)'
       }
     }, name, cost > 0 ? `, $${Math.round(cost)}` : ''), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -40546,7 +40546,7 @@ const CaretakerHub = window.CaretakerHub = ({
       padding: '12px 14px',
       borderRadius: '10px',
       border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',
-      background: s.done ? '#f1f8f1' : 'var(--text-on-primary)',
+      background: s.done ? '#f1f8f1' : 'var(--bg-card)',
       cursor: s.done ? 'default' : 'pointer',
       transition: 'all 0.15s'
     }
@@ -40605,7 +40605,7 @@ const CaretakerHub = window.CaretakerHub = ({
     style: {
       marginTop: '6px',
       padding: '8px 10px',
-      background: '#fffbeb',
+      background: 'var(--color-warning-bg)',
       border: '1px solid #f59e0b',
       borderRadius: '6px',
       fontSize: '12px',
@@ -41728,7 +41728,7 @@ const CaretakerHub = window.CaretakerHub = ({
         style: {
           marginBottom: 8,
           padding: '14px 16px',
-          background: isDirectOffer && !exclusiveExpired ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : job.hasConflict ? '#fffbf0' : 'var(--text-on-primary)',
+          background: isDirectOffer && !exclusiveExpired ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : job.hasConflict ? '#fffbf0' : 'var(--bg-card)',
           borderRadius: 0,
           border: isDirectOffer && !exclusiveExpired ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : !job.hasConflict && job.matchQuality === 'great' ? '2px solid #1b6b5a' : hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
           borderTop: isDirectOffer && !exclusiveExpired ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : '1px solid #f0f0f0',
@@ -42593,7 +42593,7 @@ const CaretakerHub = window.CaretakerHub = ({
       justifyContent: 'space-between',
       cursor: 'pointer',
       padding: '14px 18px',
-      background: showReferralSection ? 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)' : 'var(--text-on-primary)',
+      background: showReferralSection ? 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)' : 'var(--bg-card)',
       border: '1px solid #c8e6c9',
       borderRadius: 12
     }
@@ -42883,7 +42883,7 @@ const CaretakerHub = window.CaretakerHub = ({
       justifyContent: 'space-between',
       cursor: 'pointer',
       padding: '14px 18px',
-      background: showTipsSection ? 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)' : 'var(--text-on-primary)',
+      background: showTipsSection ? 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)' : 'var(--bg-card)',
       border: '1px solid #FFE0B2',
       borderRadius: 12
     }
@@ -43103,7 +43103,7 @@ const CaretakerHub = window.CaretakerHub = ({
       padding: '6px 14px',
       borderRadius: '16px',
       border: logMood === m ? '2px solid #1b6b5a' : '2px solid #ddd',
-      background: logMood === m ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+      background: logMood === m ? 'var(--bg-teal-light)' : 'var(--bg-card)',
       cursor: 'pointer',
       fontSize: '12px',
       fontWeight: logMood === m ? 600 : 400,
@@ -43678,7 +43678,7 @@ const CaretakerHub = window.CaretakerHub = ({
       marginBottom: 6,
       borderRadius: 8,
       cursor: 'pointer',
-      background: firstVisitChoice === opt.key ? 'var(--color-warning-bg)' : 'var(--text-on-primary)',
+      background: firstVisitChoice === opt.key ? 'var(--color-warning-bg)' : 'var(--bg-card)',
       border: firstVisitChoice === opt.key ? '2px solid #e8724a' : '2px solid #eee'
     }
   }, React.createElement('input', {
@@ -44084,7 +44084,7 @@ const CaretakerHub = window.CaretakerHub = ({
         borderRadius: 16,
         fontSize: 12,
         border: isSelected ? `2px solid ${isPositive ? 'var(--color-success)' : 'var(--color-error)'}` : '1px solid #ddd',
-        background: isSelected ? isPositive ? 'var(--color-success-bg)' : 'var(--color-error-bg)' : 'var(--text-on-primary)',
+        background: isSelected ? isPositive ? 'var(--color-success-bg)' : 'var(--color-error-bg)' : 'var(--bg-card)',
         color: isSelected ? isPositive ? 'var(--color-success)' : 'var(--color-error)' : 'var(--text-secondary)',
         cursor: 'pointer',
         fontWeight: isSelected ? 600 : 400
@@ -44937,7 +44937,7 @@ const AreaMap = window.AreaMap = () => {
       fontSize: '12px',
       fontWeight: 600,
       border: radiusMiles === r ? '2px solid #1b6b5a' : '1px solid #ccc',
-      background: radiusMiles === r ? 'var(--role-color)' : 'var(--text-on-primary)',
+      background: radiusMiles === r ? 'var(--role-color)' : 'var(--bg-card)',
       color: radiusMiles === r ? 'var(--text-on-primary)' : 'var(--text-secondary)',
       cursor: 'pointer'
     }
@@ -45979,7 +45979,7 @@ const FindWork = window.FindWork = () => {
       style: {
         fontWeight: 700,
         fontSize: 16,
-        color: 'var(--bg-card)',
+        color: 'var(--text-primary)',
         display: 'flex',
         alignItems: 'center',
         gap: 6
@@ -46104,7 +46104,7 @@ const FindWork = window.FindWork = () => {
     style: {
       padding: '5px 14px',
       border: 'none',
-      background: viewMode === v.key ? 'var(--role-color)' : 'var(--text-on-primary)',
+      background: viewMode === v.key ? 'var(--role-color)' : 'var(--bg-card)',
       color: viewMode === v.key ? 'var(--text-on-primary)' : 'var(--text-secondary)',
       fontSize: 12,
       fontWeight: 600,
@@ -46151,7 +46151,7 @@ const FindWork = window.FindWork = () => {
       borderRadius: 8,
       border: '1px solid',
       borderColor: rangeDays === d ? 'var(--role-color)' : '#d0d0d0',
-      background: rangeDays === d ? 'var(--role-color)' : 'var(--text-on-primary)',
+      background: rangeDays === d ? 'var(--role-color)' : 'var(--bg-card)',
       color: rangeDays === d ? 'var(--text-on-primary)' : 'var(--text-secondary)',
       fontSize: 11,
       fontWeight: 600,
@@ -46252,7 +46252,7 @@ const FindWork = window.FindWork = () => {
       fontSize: 11,
       fontWeight: 600,
       border: radiusMiles === r ? '2px solid #1b6b5a' : '1px solid #ccc',
-      background: radiusMiles === r ? 'var(--role-color)' : 'var(--text-on-primary)',
+      background: radiusMiles === r ? 'var(--role-color)' : 'var(--bg-card)',
       color: radiusMiles === r ? 'var(--text-on-primary)' : 'var(--text-secondary)',
       cursor: 'pointer'
     }
@@ -46309,7 +46309,7 @@ const FindWork = window.FindWork = () => {
     style: {
       margin: 0,
       fontSize: 17,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       display: 'flex',
       alignItems: 'center',
       gap: 8
@@ -46503,7 +46503,7 @@ const FindWork = window.FindWork = () => {
       style: {
         fontWeight: 700,
         fontSize: 16,
-        color: 'var(--bg-card)',
+        color: 'var(--text-primary)',
         marginBottom: 2
       }
     }, (service || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())), /*#__PURE__*/React.createElement("div", {
@@ -46580,7 +46580,7 @@ const FindWork = window.FindWork = () => {
         marginTop: 8,
         padding: '8px 12px',
         borderLeft: '3px solid #e8724a',
-        background: '#fff8f5',
+        background: 'var(--bg-accent-light)',
         borderRadius: '0 6px 6px 0',
         fontSize: 12,
         color: 'var(--text-secondary)',
@@ -46718,7 +46718,7 @@ const FindWork = window.FindWork = () => {
     style: {
       margin: '0 0 12px',
       fontSize: 17,
-      color: 'var(--bg-card)',
+      color: 'var(--text-primary)',
       display: 'flex',
       alignItems: 'center',
       gap: 8
@@ -46928,7 +46928,7 @@ const FindWork = window.FindWork = () => {
           marginTop: 8,
           padding: '8px 12px',
           borderLeft: '3px solid #e8724a',
-          background: '#fff8f5',
+          background: 'var(--bg-accent-light)',
           borderRadius: '0 6px 6px 0',
           fontSize: 12,
           color: 'var(--text-secondary)',
@@ -49070,7 +49070,7 @@ const NotificationSettings = window.NotificationSettings = () => {
       marginTop: '12px',
       padding: '14px 16px',
       borderRadius: '10px',
-      background: '#fffbeb',
+      background: 'var(--color-warning-bg)',
       border: '1px solid #fbbf24'
     }
   }, React.createElement('div', {
@@ -49110,7 +49110,7 @@ const NotificationSettings = window.NotificationSettings = () => {
       marginTop: '12px',
       padding: '10px 14px',
       borderRadius: '8px',
-      background: '#fffbeb',
+      background: 'var(--color-warning-bg)',
       color: '#92400e',
       fontSize: '13px'
     }
@@ -51146,7 +51146,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       fontSize: '13px',
       fontWeight: 600,
       border: form.travelRadius === r ? '2px solid #1b6b5a' : '2px solid #ddd',
-      background: form.travelRadius === r ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+      background: form.travelRadius === r ? 'var(--bg-teal-light)' : 'var(--bg-card)',
       color: form.travelRadius === r ? 'var(--role-color)' : 'var(--text-secondary)',
       cursor: 'pointer'
     }
@@ -51222,7 +51222,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       fontSize: '13px',
       fontWeight: 600,
       border: form.comfortableWithPets === opt.val ? '2px solid #8B6914' : '2px solid #ddd',
-      background: form.comfortableWithPets === opt.val ? '#fef9ef' : 'var(--text-on-primary)',
+      background: form.comfortableWithPets === opt.val ? '#fef9ef' : 'var(--bg-card)',
       color: form.comfortableWithPets === opt.val ? '#8B6914' : 'var(--text-secondary)',
       cursor: 'pointer'
     }
@@ -51293,7 +51293,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       fontSize: '13px',
       fontWeight: 600,
       border: form.openToInterview === opt.val ? '2px solid #1b6b5a' : '2px solid #ddd',
-      background: form.openToInterview === opt.val ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+      background: form.openToInterview === opt.val ? 'var(--color-success-bg)' : 'var(--bg-card)',
       color: form.openToInterview === opt.val ? 'var(--role-color)' : 'var(--text-secondary)',
       cursor: 'pointer'
     }
@@ -51683,7 +51683,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
         fontSize: '13px',
         fontWeight: 600,
         border: form.needsProgramReports === opt.val ? '2px solid #1b6b5a' : '2px solid #ddd',
-        background: form.needsProgramReports === opt.val ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+        background: form.needsProgramReports === opt.val ? 'var(--bg-teal-light)' : 'var(--bg-card)',
         color: form.needsProgramReports === opt.val ? 'var(--role-color)' : 'var(--text-secondary)',
         cursor: 'pointer',
         transition: 'all 0.15s'
@@ -51750,7 +51750,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
         fontSize: '13px',
         fontWeight: 600,
         border: form.programYear === yr ? '2px solid #1b6b5a' : '2px solid #ddd',
-        background: form.programYear === yr ? 'var(--bg-teal-light)' : 'var(--text-on-primary)',
+        background: form.programYear === yr ? 'var(--bg-teal-light)' : 'var(--bg-card)',
         color: form.programYear === yr ? 'var(--role-color)' : 'var(--text-secondary)',
         cursor: 'pointer'
       }
@@ -51892,7 +51892,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
   }, form.documents.find(d => d.type === 'dl_front').fileName), /*#__PURE__*/React.createElement("button", {
     onClick: () => removeDocument('dl_front'),
     style: {
-      background: '#fff0f0',
+      background: 'var(--bg-error-light)',
       border: '1px solid #fdd',
       borderRadius: '6px',
       padding: '4px 10px',
@@ -51993,7 +51993,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
   }, form.documents.find(d => d.type === 'dl_back').fileName), /*#__PURE__*/React.createElement("button", {
     onClick: () => removeDocument('dl_back'),
     style: {
-      background: '#fff0f0',
+      background: 'var(--bg-error-light)',
       border: '1px solid #fdd',
       borderRadius: '6px',
       padding: '4px 10px',
@@ -52107,7 +52107,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       }));
     },
     style: {
-      background: '#fff0f0',
+      background: 'var(--bg-error-light)',
       border: '1px solid #fdd',
       borderRadius: '6px',
       padding: '4px 10px',
@@ -53580,7 +53580,7 @@ const AdminFinancials = window.AdminFinancials = () => {
       padding: '6px 16px',
       borderRadius: 8,
       border: '1px solid #d0d0d0',
-      background: refreshing ? 'var(--badge-muted-bg)' : 'var(--text-on-primary)',
+      background: refreshing ? 'var(--badge-muted-bg)' : 'var(--bg-card)',
       cursor: refreshing ? 'wait' : 'pointer',
       fontSize: 13,
       fontWeight: 600,
@@ -55905,7 +55905,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
       style: {
         marginBottom: 12,
         border: isEscalated ? '2px solid #b71c1c' : isPending ? `2px solid ${isAbuse ? 'var(--color-error)' : 'var(--color-warning)'}` : '1px solid #e5e7eb',
-        background: isEscalated ? 'var(--bg-error-light)' : isPending ? isAbuse ? 'var(--bg-error-subtle)' : 'var(--bg-warm)' : 'var(--text-on-primary)',
+        background: isEscalated ? 'var(--bg-error-light)' : isPending ? isAbuse ? 'var(--bg-error-subtle)' : 'var(--bg-warm)' : 'var(--bg-card)',
         position: 'relative'
       }
     },
@@ -56121,7 +56121,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
           padding: '8px 12px',
           marginBottom: 4,
           borderRadius: 8,
-          background: isFlaggedMsg ? 'var(--color-error-bg)' : 'var(--text-on-primary)',
+          background: isFlaggedMsg ? 'var(--color-error-bg)' : 'var(--bg-card)',
           border: isFlaggedMsg ? '1px solid #ef9a9a' : '1px solid #eee'
         }
       }, React.createElement('div', {
@@ -56306,7 +56306,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
           padding: '8px 12px',
           marginBottom: 4,
           borderRadius: 8,
-          background: isAdmin ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
+          background: isAdmin ? 'var(--color-success-bg)' : 'var(--bg-card)',
           border: '1px solid #eee',
           marginLeft: isAdmin ? 20 : 0,
           marginRight: isAdmin ? 0 : 20
@@ -58417,7 +58417,7 @@ const AdminPanel = window.AdminPanel = ({
       style: {
         padding: '6px 12px',
         background: isRejected ? 'var(--color-error)' : 'var(--bg-primary)',
-        color: isRejected ? 'var(--text-on-primary)' : 'var(--text-tertiary)',
+        color: isRejected ? 'var(--bg-card)' : 'var(--text-tertiary)',
         border: isRejected ? 'none' : '1px solid #ddd',
         borderRadius: 8,
         fontWeight: 600,
@@ -58505,7 +58505,7 @@ const AdminPanel = window.AdminPanel = ({
       style: {
         padding: '12px 14px',
         marginBottom: 6,
-        background: isEscalated ? 'var(--bg-error-light)' : 'var(--text-on-primary)',
+        background: isEscalated ? 'var(--bg-error-light)' : 'var(--bg-card)',
         borderRadius: 10,
         border: isEscalated ? '2px solid #b71c1c' : isSevere ? '2px solid #c62828' : '1px solid #ffcc80',
         cursor: 'pointer'
@@ -59045,7 +59045,7 @@ const AdminPanel = window.AdminPanel = ({
       border: 'none',
       fontSize: 13,
       fontWeight: peopleSubTab === st.id ? 700 : 500,
-      background: peopleSubTab === st.id ? 'var(--text-on-primary)' : 'transparent',
+      background: peopleSubTab === st.id ? 'var(--bg-card)' : 'transparent',
       color: peopleSubTab === st.id ? 'var(--role-color)' : 'var(--text-tertiary)',
       cursor: 'pointer',
       boxShadow: peopleSubTab === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
@@ -59199,7 +59199,7 @@ const AdminPanel = window.AdminPanel = ({
       key: u.id,
       style: {
         borderBottom: '1px solid #f0f0f0',
-        background: isPending ? '#fffbf5' : 'transparent',
+        background: isPending ? 'var(--bg-warm)' : 'transparent',
         borderLeft: isPending ? '4px solid #ff9800' : 'none'
       }
     }, /*#__PURE__*/React.createElement("td", {
@@ -60144,7 +60144,7 @@ const AdminPanel = window.AdminPanel = ({
       onClick: () => handleCancelInvite(inv.id),
       style: {
         padding: '4px 10px',
-        background: '#fff0f0',
+        background: 'var(--bg-error-light)',
         border: '1px solid #fdd',
         borderRadius: '6px',
         fontSize: '11px',
@@ -60622,7 +60622,7 @@ const AdminPanel = window.AdminPanel = ({
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        background: isExpanded ? 'var(--bg-primary)' : 'var(--text-on-primary)'
+        background: isExpanded ? 'var(--bg-primary)' : 'var(--bg-card)'
       }
     }, fb.mood && /*#__PURE__*/React.createElement("span", {
       style: {
@@ -60716,7 +60716,7 @@ const AdminPanel = window.AdminPanel = ({
       style: {
         marginTop: 8,
         padding: '8px 12px',
-        background: '#fff3f3',
+        background: 'var(--bg-error-light)',
         borderRadius: 8,
         border: '1px solid #fdd'
       }
@@ -60762,7 +60762,7 @@ const AdminPanel = window.AdminPanel = ({
         padding: '4px 12px',
         borderRadius: 12,
         border: fb.status === s ? '2px solid ' + (statusColors[s] || 'var(--text-muted)') : '1px solid #ddd',
-        background: fb.status === s ? (statusColors[s] || 'var(--text-muted)') + '18' : 'var(--text-on-primary)',
+        background: fb.status === s ? (statusColors[s] || 'var(--text-muted)') + '18' : 'var(--bg-card)',
         color: fb.status === s ? statusColors[s] : 'var(--text-secondary)',
         fontSize: 11,
         fontWeight: 600,
@@ -61311,7 +61311,7 @@ const AdminPanel = window.AdminPanel = ({
         marginBottom: 10,
         borderRadius: 12,
         border: '1px solid #e0e0e0',
-        background: st === 'flagged' || st === 'pending' ? '#fffbf5' : 'var(--text-on-primary)',
+        background: st === 'flagged' || st === 'pending' ? 'var(--bg-warm)' : 'var(--bg-card)',
         overflow: 'hidden'
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -61934,7 +61934,7 @@ const AdminPanel = window.AdminPanel = ({
       fontWeight: 600,
       cursor: 'pointer',
       background: secView === v ? 'var(--role-color)' : 'var(--badge-muted-bg)',
-      color: secView === v ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+      color: secView === v ? 'var(--bg-card)' : 'var(--text-secondary)',
       border: secView === v ? 'none' : '1px solid #ddd'
     }
   }, v === 'dashboard' ? 'Dashboard' : 'Audit Log')), /*#__PURE__*/React.createElement("button", {
@@ -64945,7 +64945,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
     className: "card",
     style: {
       border: intelligence ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-      background: intelligence ? '#f8fffe' : 'var(--text-on-primary)'
+      background: intelligence ? '#f8fffe' : 'var(--bg-card)'
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header",
@@ -65917,9 +65917,9 @@ const App = () => {
   useEffect(() => {
     const roleColors = {
       family: {
-        main: 'var(--role-color)',
-        light: 'var(--role-color-light)',
-        dark: 'var(--role-color-dark)'
+        main: '#1b6b5a',
+        light: '#e0f2e9',
+        dark: '#0f4238'
       },
       caregiver: {
         main: '#2e5984',
@@ -65928,7 +65928,7 @@ const App = () => {
       },
       care_for: {
         main: '#7b5ea7',
-        light: 'var(--color-purple-bg)',
+        light: '#f3e5f5',
         dark: '#4a2d7a'
       }
     };
@@ -66613,7 +66613,7 @@ const App = () => {
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        background: 'var(--text-on-primary)',
+        background: 'var(--bg-card)',
         borderRadius: 16,
         padding: '48px 40px',
         maxWidth: 420,
@@ -66676,9 +66676,9 @@ const App = () => {
   // Changes sidebar active color, role switcher accent, and other themed elements per role
   const roleColors = {
     family: {
-      main: 'var(--role-color)',
-      light: 'var(--role-color-light)',
-      dark: 'var(--role-color-dark)'
+      main: '#1b6b5a',
+      light: '#e0f2e9',
+      dark: '#0f4238'
     },
     caregiver: {
       main: '#2e5984',
@@ -66687,7 +66687,7 @@ const App = () => {
     },
     care_for: {
       main: '#7b5ea7',
-      light: 'var(--color-purple-bg)',
+      light: '#f3e5f5',
       dark: '#4a2d7a'
     }
   };
@@ -67126,11 +67126,11 @@ const App = () => {
           opacity: 0.5
         } : item.id === '_launch_kindred' ? {
           background: 'var(--color-info)',
-          color: 'var(--text-on-primary)',
+          color: 'var(--bg-card)',
           fontWeight: 600
         } : {
           background: 'var(--accent-color)',
-          color: 'var(--text-on-primary)',
+          color: 'var(--bg-card)',
           fontWeight: 600
         },
         title: item.disabled ? 'Complete your profile first' : item.id === '_launch_kindred' ? 'Open Kindred (new tab)' : ''
@@ -67174,7 +67174,7 @@ const App = () => {
       style: {
         marginLeft: 'auto',
         background: 'var(--color-error)',
-        color: 'var(--text-on-primary)',
+        color: 'var(--bg-card)',
         borderRadius: 10,
         padding: '1px 6px',
         fontSize: 10,
@@ -67454,7 +67454,7 @@ const App = () => {
       right: '50%',
       marginRight: -18,
       background: 'var(--color-error)',
-      color: 'var(--text-on-primary)',
+      color: 'var(--bg-card)',
       borderRadius: 10,
       padding: '1px 5px',
       fontSize: 9,

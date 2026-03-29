@@ -642,7 +642,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
               {/* AI Concerns */}
               {doc.ai_classification?.concerns && doc.ai_classification.concerns.length > 0 && (
                 <div style={{
-                  backgroundColor: '#fffaf0',
+                  backgroundColor: 'var(--bg-warm)',
                   border: '1px solid #fbd38d',
                   borderRadius: '4px',
                   padding: '8px',
@@ -1562,7 +1562,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
             {/* Admin Notes */}
             {previewDocument.admin_notes && (
               <div style={{
-                backgroundColor: '#fffaf0',
+                backgroundColor: 'var(--bg-warm)',
                 padding: '12px',
                 borderRadius: '6px',
                 marginBottom: '16px',

@@ -108,7 +108,7 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
               style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 }} />
           </div>
           <button onClick={fetchReport} disabled={loading} style={{
-            padding: '8px 20px', background: loading ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--bg-card)',
+            padding: '8px 20px', background: loading ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)',
             border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
             cursor: loading ? 'wait' : 'pointer', height: 38,
           }}>
@@ -138,14 +138,14 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }} className="no-print">
             <button onClick={handlePrint} style={{
-              padding: '10px 20px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+              padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
               borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <span>🖨️</span> Print / Save as PDF
             </button>
             <button onClick={() => setShowEmailForm(!showEmailForm)} style={{
-              padding: '10px 20px', background: showEmailForm ? 'var(--color-warning)' : 'var(--accent-color)', color: 'var(--bg-card)',
+              padding: '10px 20px', background: showEmailForm ? 'var(--color-warning)' : 'var(--accent-color)', color: 'var(--text-on-primary)',
               border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
@@ -171,7 +171,7 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 }} />
                 </div>
                 <button onClick={handleEmail} disabled={sending} style={{
-                  padding: '10px 20px', background: sending ? 'var(--text-muted)' : 'var(--accent-color)', color: 'var(--bg-card)',
+                  padding: '10px 20px', background: sending ? 'var(--text-muted)' : 'var(--accent-color)', color: 'var(--text-on-primary)',
                   border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
                   cursor: sending ? 'wait' : 'pointer',
                 }}>

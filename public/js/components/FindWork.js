@@ -624,7 +624,7 @@ const FindWork = window.FindWork = () => {
             </div>
 
             <button onClick={handleSaveRates} disabled={savingRates}
-              style={{ marginTop: 16, width: '100%', padding: 12, background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: savingRates ? 'wait' : 'pointer', opacity: savingRates ? 0.7 : 1 }}>
+              style={{ marginTop: 16, width: '100%', padding: 12, background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: savingRates ? 'wait' : 'pointer', opacity: savingRates ? 0.7 : 1 }}>
               {savingRates ? 'Saving...' : 'Save Rates'}
             </button>
           </div>
@@ -705,7 +705,7 @@ const FindWork = window.FindWork = () => {
             window.__accountTab = 'payments';
             window.__navigateTo && window.__navigateTo('account');
           }} style={{
-            padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none',
+            padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
             borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
           }}>Complete Setup</button>
         </div>
@@ -845,7 +845,7 @@ const FindWork = window.FindWork = () => {
               Open Requests
               {filteredRequests.length > 0 && (
                 <span style={{
-                  padding: '2px 10px', background: 'var(--color-error)', color: 'var(--bg-card)', borderRadius: 12,
+                  padding: '2px 10px', background: 'var(--color-error)', color: 'var(--text-on-primary)', borderRadius: 12,
                   fontSize: 12, fontWeight: 700, marginLeft: 4,
                 }}>{filteredRequests.length}</span>
               )}
@@ -906,7 +906,7 @@ const FindWork = window.FindWork = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
                       {activeOffer && (
                         <span className={exUrgent ? 'exclusive-urgent' : ''} style={{
-                          background: exUrgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--bg-card)', padding: '2px 10px',
+                          background: exUrgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--text-on-primary)', padding: '2px 10px',
                           borderRadius: 12, fontSize: 11, fontWeight: 700,
                         }}>
                           {exUrgent ? '\u23F1' : '\u2728'} {exRemain !== null ? (exUrgent ? `${exRemain} min left!` : `JUST FOR YOU \u00B7 ${exRemain} min`) : 'JUST FOR YOU'}
@@ -994,7 +994,7 @@ const FindWork = window.FindWork = () => {
                     {s.careSummary && (
                       <div style={{
                         marginTop: 8, padding: '8px 12px', borderLeft: '3px solid #e8724a',
-                        background: '#fff8f5', borderRadius: '0 6px 6px 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4,
+                        background: 'var(--bg-accent-light)', borderRadius: '0 6px 6px 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4,
                       }}>
                         <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--accent-color)', marginBottom: 3 }}>Care Notes</div>
                         {s.careSummary.length >= 200 ? s.careSummary + '...' : s.careSummary}
@@ -1012,7 +1012,7 @@ const FindWork = window.FindWork = () => {
                           disabled={claimingId === s.id || accountPaused}
                           title={accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                           style={{
-                            width: '100%', padding: 14, background: accountPaused ? 'var(--border-light)' : 'var(--accent-color)', color: 'var(--bg-card)',
+                            width: '100%', padding: 14, background: accountPaused ? 'var(--border-light)' : 'var(--accent-color)', color: 'var(--text-on-primary)',
                             border: 'none', borderRadius: 10, fontSize: 16, fontWeight: 700,
                             cursor: claimingId === s.id || accountPaused ? 'not-allowed' : 'pointer', opacity: claimingId === s.id || accountPaused ? 0.6 : 1,
                             boxShadow: '0 2px 6px rgba(232,114,74,0.3)',
@@ -1075,7 +1075,7 @@ const FindWork = window.FindWork = () => {
             Your Upcoming Sessions
             {upcomingSessions.length > 0 && (
               <span style={{
-                padding: '2px 10px', background: 'var(--role-color)', color: 'var(--bg-card)', borderRadius: 12,
+                padding: '2px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: 12,
                 fontSize: 12, fontWeight: 700, marginLeft: 4,
               }}>{upcomingSessions.length}</span>
             )}
@@ -1178,7 +1178,7 @@ const FindWork = window.FindWork = () => {
                     {careSummary && (
                       <div style={{
                         marginTop: 8, padding: '8px 12px', borderLeft: '3px solid #e8724a',
-                        background: '#fff8f5', borderRadius: '0 6px 6px 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4,
+                        background: 'var(--bg-accent-light)', borderRadius: '0 6px 6px 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4,
                       }}>
                         <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--accent-color)', marginBottom: 3 }}>Care Notes</div>
                         {careSummary.length >= 200 ? careSummary + '...' : careSummary}
@@ -1236,7 +1236,7 @@ const FindWork = window.FindWork = () => {
                       Keep Session
                     </button>
                     <button onClick={() => handleCancelSession(cancellingId)} disabled={cancelLoading}
-                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: cancelLoading ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--bg-card)', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'wait' : 'pointer' }}>
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: cancelLoading ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'wait' : 'pointer' }}>
                       {cancelLoading ? 'Cancelling...' : 'Cancel Session'}
                     </button>
                   </div>
@@ -1283,7 +1283,7 @@ const FindWork = window.FindWork = () => {
               <button onClick={handlePropose} disabled={proposalLoading || !proposalDate || !proposalTime}
                 style={{
                   flex: 2, padding: 12, borderRadius: 10, border: 'none',
-                  background: 'var(--role-color)', color: 'var(--bg-card)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                  background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
                   opacity: (proposalLoading || !proposalDate || !proposalTime) ? 0.6 : 1,
                 }}>
                 {proposalLoading ? 'Sending...' : 'Send Proposal'}

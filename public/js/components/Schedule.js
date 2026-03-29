@@ -355,7 +355,7 @@ const Schedule = window.Schedule = () => {
                         </div>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
-                        style={{ marginTop: 10, padding: '6px 14px', background: 'var(--role-color)', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ marginTop: 10, padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         View Full Details
                       </button>
                     </div>

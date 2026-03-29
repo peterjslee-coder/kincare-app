@@ -77,7 +77,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
             generate();
           }} disabled={loading} style={{
             padding: '10px 20px', borderRadius: 10, border: 'none',
-            background: 'var(--role-color)', color: 'var(--bg-card)', fontWeight: 600, fontSize: 14,
+            background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 600, fontSize: 14,
             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
           }}>
             {React.createElement(window.IPAiBadge || 'span', { size: 'sm', style: { background: 'rgba(255,255,255,0.2)', color: 'var(--text-on-primary)' } })}
@@ -197,7 +197,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
                         setEditingFamilyNote(false);
                         if (typeof showToast === 'function') showToast('Notes saved — iPAi will incorporate these on next regeneration', 'success');
                       } catch { if (typeof showToast === 'function') showToast('Failed to save notes', 'error'); }
-                    }} style={{ padding: '6px 14px', background: '#3949ab', color: 'var(--bg-card)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                    }} style={{ padding: '6px 14px', background: '#3949ab', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                       Save Notes
                     </button>
                     <button onClick={() => setEditingFamilyNote(false)} style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>

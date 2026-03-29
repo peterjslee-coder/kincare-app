@@ -255,7 +255,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                     placeholder="e.g. Sarah, Maria Jones..."
                     style={{ flex: 1, padding: '10px 12px', border: '1px solid #ddd', borderRadius: 8, fontSize: 14 }} />
                   <button onClick={handleRefSearch} disabled={refSearching || !refSearch.trim()} style={{
-                    padding: '10px 16px', background: refSearching ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--bg-card)',
+                    padding: '10px 16px', background: refSearching ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--text-on-primary)',
                     border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: refSearching ? 'wait' : 'pointer',
                   }}>{refSearching ? '...' : 'Search'}</button>
                 </div>
@@ -315,7 +315,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                       } catch (e) { console.error('Claim referral error:', e); }
                       setRefClaiming(false);
                     }} disabled={refClaiming || !refCode.trim()} style={{
-                      padding: '10px 16px', background: refClaiming ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--bg-card)',
+                      padding: '10px 16px', background: refClaiming ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--text-on-primary)',
                       border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: refClaiming ? 'wait' : 'pointer',
                     }}>{refClaiming ? '...' : 'Apply'}</button>
                   </div>
