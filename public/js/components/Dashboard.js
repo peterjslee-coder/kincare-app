@@ -1007,69 +1007,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
-      {parent && (
-        <div className="betty-card" style={{ cursor: 'pointer', position: 'relative' }}>
-          <div onClick={() => onNavigate && onNavigate('care-profile')}>
-            {parent.photo
-              ? <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={parent.photo} alt={parent.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
-              : <div style={{ fontSize: 40 }}>{parent.emoji || '🌷'}</div>}
-            <div className="betty-name">{parent.name}</div>
-            <div className="betty-info">
-              {(() => {
-                const myLabel = careTeams.find(t => t.my_relationship_label)?.my_relationship_label;
-                return myLabel ? `${myLabel} · ` : '';
-              })()}
-              Living in {parent.location}
-            </div>
-            {parent.healthConditions && parent.healthConditions.length > 0 && (
-              <div style={{ marginTop: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
-                {parent.healthConditions.join(' · ')}
-              </div>
-            )}
-            <div style={{ position: 'absolute', right: 16, top: 24, color: 'rgba(255,255,255,0.5)', fontSize: 18 }}>→</div>
-          </div>
-          {/* Care team nested inside Betty card */}
-          {!isDemo && careTeams.length > 0 && (() => {
-            const team = careTeams[0];
-            const members = team.members || [];
-            const pendingCount = team.pendingInvites || 0;
-            const shown = members.slice(0, 4);
-            const overflow = (members.length + pendingCount) - shown.length - pendingCount;
-            const colors = ['var(--accent-color)', '#4a90d9', 'var(--color-violet)', '#2ecc71'];
-            return (
-            <div onClick={(e) => { e.stopPropagation(); onNavigate && onNavigate('care-team'); }}
-              style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ display: 'flex' }}>
-                  {shown.map((m, i) => {
-                    const initials = `${(m.firstName || '')[0] || ''}${(m.lastName || '')[0] || ''}`.toUpperCase();
-                    return m.avatarUrl ? (
-                      <img key={i} src={m.avatarUrl} alt={initials} style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, objectFit: 'cover', zIndex: shown.length - i }} />
-                    ) : (
-                      <div key={i} style={{ width: 28, height: 28, borderRadius: '50%', background: colors[i % colors.length], border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-on-primary)', fontWeight: 600, zIndex: shown.length - i }}>
-                        {initials}
-                      </div>
-                    );
-                  })}
-                  {pendingCount > 0 && Array.from({ length: Math.min(pendingCount, 2) }).map((_, i) => (
-                    <div key={'p' + i} style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '2px solid #0f4238', marginLeft: -8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 600, zIndex: 0 }}>
-                      ?
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-on-primary)' }}>{team.name || 'Care Team'}</div>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{team.memberCount || 0} member{(team.memberCount || 0) !== 1 ? 's' : ''}{pendingCount > 0 ? ` · ${pendingCount} pending` : ''}</div>
-                </div>
-              </div>
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>→</span>
-            </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* Imminent Session Hero — within 24h, countdown + shimmer, right under profile card */}
+      {/* Imminent Session Hero — within 24h, countdown + shimmer, right under proposals */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
         const nowDisplay = TimezoneHelper.getNow(tz); // for display only (getHours etc.)
@@ -1175,85 +1113,69 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
-      {/* Just Finished — recently completed sessions (faded, expandable) */}
+      {/* Open Requests — unclaimed jobs the family posted */}
       {(() => {
-        const completed = data?.recentlyCompleted || [];
-        if (completed.length === 0) return null;
-        const showAll = finishedExpanded || completed.length <= 2;
-        const visible = showAll ? completed.slice(0, 5) : completed.slice(0, 2);
+        const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
+        const openReqs = upcoming.filter(s => ['open', 'requested'].includes(s.status) && !s.caregiverName);
+        if (openReqs.length === 0) return null;
+        const showAll = awaitingExpanded || openReqs.length <= 2;
+        const visibleReqs = showAll ? openReqs : openReqs.slice(0, 2);
         return (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              Just Finished ({completed.length})
+              Awaiting Caregiver ({openReqs.length})
             </div>
             <div style={{ position: 'relative' }}>
-              {visible.map((s, idx) => {
-                const svcLabel = (s.serviceType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                const fadeOpacity = idx === 0 ? 0.85 : idx === 1 ? 0.65 : 0.5;
+              {visibleReqs.map((s, idx) => {
+                const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
+                const timeLabel = TimezoneHelper.formatTime(s.time);
                 return (
-                  <div key={s.id || idx} onClick={() => setVisitDetailSessionId(s.id)}
-                    style={{
-                      marginBottom: 8, padding: '12px 16px', cursor: 'pointer', borderRadius: 12,
-                      border: '2px solid var(--border-teal-light)', background: 'var(--bg-card)',
-                      boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                      opacity: fadeOpacity, transition: 'opacity 0.3s',
-                    }}>
+                  <div key={s.id || idx} onClick={() => {
+                    if (s.id) setVisitDetailSessionId(s.id);
+                  }} style={{
+                    marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
+                    border: '2px dashed #e8724a', background: 'var(--bg-warm)',
+                  }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)' }}>
                           {s.recipientName || 'Care Visit'}
-                          {s.caregiverName ? ` with ${s.caregiverName}` : ''}
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                          {TimezoneHelper.getDateLabel((s.date || '').split('T')[0], upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ)} · {svcLabel} · {s.durationHours || 2}h
+                          {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
+                          {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
+                          {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
                         </div>
-                        {s.visitSummary && (
-                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
-                            "{s.visitSummary.length > 80 ? s.visitSummary.slice(0, 80) + '...' : s.visitSummary}"
-                          </div>
-                        )}
-                        {s.conditionTags && s.conditionTags.length > 0 && (
-                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                            {s.conditionTags.map((tag, i) => (
-                              <span key={i} style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500 }}>{tag}</span>
-                            ))}
-                          </div>
-                        )}
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }}>No caregiver yet — waiting for someone to accept</div>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                        {s.hasReview ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            {[1,2,3,4,5].map(star => (
-                              <span key={star} style={{ fontSize: 14, color: star <= (s.reviewRating || 0) ? '#f59e0b' : 'var(--border-light)' }}>{'\u2605'}</span>
-                            ))}
-                          </div>
-                        ) : s.caregiverId ? (
-                          <button onClick={(e) => { e.stopPropagation(); setReviewSession(s); setReviewRating(0); setReviewComment(''); }}
-                            style={{ padding: '6px 14px', borderRadius: 10, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                            {'\u2605'} Leave Review
-                          </button>
-                        ) : (
-                          <span style={{ padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>Completed</span>
-                        )}
-                        <span style={{ fontSize: 12, color: 'var(--role-color)', fontWeight: 600 }}>View Details {'\u2192'}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                        <span style={{
+                          padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: 'var(--color-warning-bg)', color: 'var(--color-warning)', textTransform: 'capitalize', whiteSpace: 'nowrap',
+                        }}>Open</span>
+                        <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
+                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                          Cancel
+                        </button>
                       </div>
                     </div>
                   </div>
                 );
               })}
+              {/* Gradient fade + "Show more" when collapsed with 3+ items */}
               {!showAll && (
-                <div onClick={() => setFinishedExpanded(true)} style={{
+                <div onClick={() => setAwaitingExpanded(true)} style={{
                   position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, cursor: 'pointer',
                   background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
                   display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4,
                 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>
-                    + {completed.length - 2} more &mdash; tap to expand
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-color)' }}>
+                    + {openReqs.length - 2} more &mdash; tap to expand
                   </span>
                 </div>
               )}
-              {showAll && completed.length > 2 && (
-                <div onClick={() => setFinishedExpanded(false)} style={{
+              {showAll && openReqs.length > 2 && (
+                <div onClick={() => setAwaitingExpanded(false)} style={{
                   textAlign: 'center', padding: '4px 0', cursor: 'pointer',
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>Show less</span>
@@ -1263,6 +1185,68 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           </div>
         );
       })()}
+
+      {parent && (
+        <div className="betty-card" style={{ cursor: 'pointer', position: 'relative' }}>
+          <div onClick={() => onNavigate && onNavigate('care-profile')}>
+            {parent.photo
+              ? <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={parent.photo} alt={parent.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+              : <div style={{ fontSize: 40 }}>{parent.emoji || '🌷'}</div>}
+            <div className="betty-name">{parent.name}</div>
+            <div className="betty-info">
+              {(() => {
+                const myLabel = careTeams.find(t => t.my_relationship_label)?.my_relationship_label;
+                return myLabel ? `${myLabel} · ` : '';
+              })()}
+              Living in {parent.location}
+            </div>
+            {parent.healthConditions && parent.healthConditions.length > 0 && (
+              <div style={{ marginTop: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
+                {parent.healthConditions.join(' · ')}
+              </div>
+            )}
+            <div style={{ position: 'absolute', right: 16, top: 24, color: 'rgba(255,255,255,0.5)', fontSize: 18 }}>→</div>
+          </div>
+          {/* Care team nested inside Betty card */}
+          {!isDemo && careTeams.length > 0 && (() => {
+            const team = careTeams[0];
+            const members = team.members || [];
+            const pendingCount = team.pendingInvites || 0;
+            const shown = members.slice(0, 4);
+            const overflow = (members.length + pendingCount) - shown.length - pendingCount;
+            const colors = ['var(--accent-color)', '#4a90d9', 'var(--color-violet)', '#2ecc71'];
+            return (
+            <div onClick={(e) => { e.stopPropagation(); onNavigate && onNavigate('care-team'); }}
+              style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex' }}>
+                  {shown.map((m, i) => {
+                    const initials = `${(m.firstName || '')[0] || ''}${(m.lastName || '')[0] || ''}`.toUpperCase();
+                    return m.avatarUrl ? (
+                      <img key={i} src={m.avatarUrl} alt={initials} style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, objectFit: 'cover', zIndex: shown.length - i }} />
+                    ) : (
+                      <div key={i} style={{ width: 28, height: 28, borderRadius: '50%', background: colors[i % colors.length], border: '2px solid #0f4238', marginLeft: i > 0 ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-on-primary)', fontWeight: 600, zIndex: shown.length - i }}>
+                        {initials}
+                      </div>
+                    );
+                  })}
+                  {pendingCount > 0 && Array.from({ length: Math.min(pendingCount, 2) }).map((_, i) => (
+                    <div key={'p' + i} style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '2px solid #0f4238', marginLeft: -8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 600, zIndex: 0 }}>
+                      ?
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-on-primary)' }}>{team.name || 'Care Team'}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{team.memberCount || 0} member{(team.memberCount || 0) !== 1 ? 's' : ''}{pendingCount > 0 ? ` · ${pendingCount} pending` : ''}</div>
+                </div>
+              </div>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>→</span>
+            </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Next Up — up to 10 sessions within 2 weeks, collapsed to 2 cards with fade */}
       {(() => {
@@ -1462,69 +1446,85 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
-      {/* Open Requests — unclaimed jobs the family posted */}
+      {/* Recently Completed — recently completed sessions (faded, expandable) */}
       {(() => {
-        const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
-        const openReqs = upcoming.filter(s => ['open', 'requested'].includes(s.status) && !s.caregiverName);
-        if (openReqs.length === 0) return null;
-        const showAll = awaitingExpanded || openReqs.length <= 2;
-        const visibleReqs = showAll ? openReqs : openReqs.slice(0, 2);
+        const completed = data?.recentlyCompleted || [];
+        if (completed.length === 0) return null;
+        const showAll = finishedExpanded || completed.length <= 2;
+        const visible = showAll ? completed.slice(0, 5) : completed.slice(0, 2);
         return (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              Awaiting Caregiver ({openReqs.length})
+              Recently Completed ({completed.length})
             </div>
             <div style={{ position: 'relative' }}>
-              {visibleReqs.map((s, idx) => {
-                const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
-                const timeLabel = TimezoneHelper.formatTime(s.time);
+              {visible.map((s, idx) => {
+                const svcLabel = (s.serviceType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                const fadeOpacity = idx === 0 ? 1.0 : idx === 1 ? 0.85 : 0.7;
                 return (
-                  <div key={s.id || idx} onClick={() => {
-                    if (s.id) setVisitDetailSessionId(s.id);
-                  }} style={{
-                    marginBottom: 8, padding: '14px 16px', cursor: 'pointer', borderRadius: 12,
-                    border: '2px dashed #e8724a', background: 'var(--bg-warm)',
-                  }}>
+                  <div key={s.id || idx} onClick={() => setVisitDetailSessionId(s.id)}
+                    style={{
+                      marginBottom: 8, padding: '12px 16px', cursor: 'pointer', borderRadius: 12,
+                      border: '2px solid var(--border-teal-light)', background: 'var(--bg-card)',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                      opacity: fadeOpacity, transition: 'opacity 0.3s',
+                    }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)' }}>
                           {s.recipientName || 'Care Visit'}
+                          {s.caregiverName ? ` with ${s.caregiverName}` : ''}
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                          {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
-                          {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
-                          {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
+                          {TimezoneHelper.getDateLabel((s.date || '').split('T')[0], upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ)} · {svcLabel} · {s.durationHours || 2}h
                         </div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }}>No caregiver yet — waiting for someone to accept</div>
+                        {s.visitSummary && (
+                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
+                            "{s.visitSummary.length > 80 ? s.visitSummary.slice(0, 80) + '...' : s.visitSummary}"
+                          </div>
+                        )}
+                        {s.conditionTags && s.conditionTags.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                            {s.conditionTags.map((tag, i) => (
+                              <span key={i} style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500 }}>{tag}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                        <span style={{
-                          padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                          background: 'var(--color-warning-bg)', color: 'var(--color-warning)', textTransform: 'capitalize', whiteSpace: 'nowrap',
-                        }}>Open</span>
-                        <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
-                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                          Cancel
-                        </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                        {s.hasReview ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            {[1,2,3,4,5].map(star => (
+                              <span key={star} style={{ fontSize: 14, color: star <= (s.reviewRating || 0) ? '#f59e0b' : 'var(--border-light)' }}>{'\u2605'}</span>
+                            ))}
+                          </div>
+                        ) : s.caregiverId ? (
+                          <button onClick={(e) => { e.stopPropagation(); setReviewSession(s); setReviewRating(0); setReviewComment(''); }}
+                            style={{ padding: '6px 14px', borderRadius: 10, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            {'\u2605'} Leave Review
+                          </button>
+                        ) : (
+                          <span style={{ padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>Completed</span>
+                        )}
+                        <span style={{ fontSize: 12, color: 'var(--role-color)', fontWeight: 600 }}>View Details {'\u2192'}</span>
                       </div>
                     </div>
                   </div>
                 );
               })}
-              {/* Gradient fade + "Show more" when collapsed with 3+ items */}
               {!showAll && (
-                <div onClick={() => setAwaitingExpanded(true)} style={{
+                <div onClick={() => setFinishedExpanded(true)} style={{
                   position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, cursor: 'pointer',
                   background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
                   display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4,
                 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-color)' }}>
-                    + {openReqs.length - 2} more &mdash; tap to expand
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>
+                    + {completed.length - 2} more &mdash; tap to expand
                   </span>
                 </div>
               )}
-              {showAll && openReqs.length > 2 && (
-                <div onClick={() => setAwaitingExpanded(false)} style={{
+              {showAll && completed.length > 2 && (
+                <div onClick={() => setFinishedExpanded(false)} style={{
                   textAlign: 'center', padding: '4px 0', cursor: 'pointer',
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>Show less</span>

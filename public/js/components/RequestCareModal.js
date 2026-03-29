@@ -10,7 +10,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     }
     return '';
   });
-  const [time, setTime] = useState('');
+  const [time, setTime] = useState('08:00');
+  const [expandedHour, setExpandedHour] = useState(null); // which hour pill is expanded to show :15/:30/:45
+  const timeScrollRef = useRef(null);
   const [duration, setDuration] = useState('');
   const [instructions, setInstructions] = useState('');
   const [recurrence, setRecurrence] = useState('none');
@@ -101,6 +103,25 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     };
     fetchData();
   }, []);
+
+  // Adjust default time if 8am is in the past for today, and auto-scroll time picker
+  useEffect(() => {
+    if (!date) return;
+    const opts = getTimeOptions();
+    // If current default isn't in the available options, pick the first available
+    if (time && !opts.find(o => o.val === time)) {
+      setTime(opts.length > 0 ? opts[0].val : '');
+    }
+    // Scroll to the selected time pill after render
+    setTimeout(() => {
+      if (timeScrollRef.current) {
+        const selected = timeScrollRef.current.querySelector('[data-time-selected="true"]');
+        if (selected) {
+          selected.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+      }
+    }, 50);
+  }, [date, time]);
 
   // Fetch visit counts for the selected care recipient (for repeat caregiver nudge)
   useEffect(() => {
@@ -539,21 +560,72 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               )}
             </div>
 
-            {/* Time pills — only show if date is selected */}
+            {/* Time pills — scrollable with expandable 15-min sub-pills */}
             {date && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Start time</div>
                 {getTimeOptions().length === 0 ? (
                   <div style={{ padding: '10px 14px', background: 'var(--color-warning-bg)', border: '1px solid #ffe082', borderRadius: 8, fontSize: 13, color: 'var(--text-brown)' }}>
-                    ⏰ No times available for today — please select a future date above.
+                    {'\u23F0'} No times available for today — please select a future date above.
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-                    {getTimeOptions().map(opt => (
-                      <button key={opt.val} type="button" onClick={() => setTime(opt.val)} style={pill(time === opt.val)}>
-                        {opt.label}
-                      </button>
-                    ))}
+                  <div ref={timeScrollRef} style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, scrollBehavior: 'smooth' }}>
+                    {getTimeOptions().map(opt => {
+                      const hourNum = parseInt(opt.val.split(':')[0]);
+                      const isHourSelected = time && time.startsWith(opt.val.split(':')[0] + ':');
+                      const isExactMatch = time === opt.val;
+                      const isExpanded = expandedHour === hourNum;
+                      return (
+                        <div key={opt.val} style={{ display: 'flex', gap: 3, flexShrink: 0 }} data-time-selected={isHourSelected ? 'true' : 'false'}>
+                          <button type="button" onClick={() => {
+                            if (isExpanded) {
+                              setExpandedHour(null);
+                              setTime(opt.val);
+                            } else {
+                              setExpandedHour(hourNum);
+                              if (!isHourSelected) setTime(opt.val);
+                            }
+                          }} style={{
+                            ...pill(isHourSelected),
+                            borderRadius: isExpanded ? '20px 8px 8px 20px' : 20,
+                            paddingRight: isExpanded ? 10 : 14,
+                          }}>
+                            {opt.label}
+                          </button>
+                          {isExpanded && [15, 30, 45].map(mins => {
+                            const subVal = `${String(hourNum).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
+                            const isSubSelected = time === subVal;
+                            const ampm = hourNum >= 12 ? 'p' : 'a';
+                            const dh = hourNum > 12 ? hourNum - 12 : hourNum === 0 ? 12 : hourNum;
+                            return (
+                              <button key={subVal} type="button" onClick={() => { setTime(subVal); }}
+                                style={{
+                                  padding: '6px 8px', borderRadius: mins === 45 ? '8px 20px 20px 8px' : '8px', fontSize: 11, fontWeight: 600,
+                                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s',
+                                  border: isSubSelected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                                  background: isSubSelected ? 'var(--color-success-bg)' : 'var(--bg-surface)',
+                                  color: isSubSelected ? 'var(--role-color)' : 'var(--text-muted)',
+                                  minWidth: 36,
+                                }}>
+                                :{String(mins).padStart(2,'0')}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {time && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-tertiary)' }}>
+                    {(() => {
+                      const h = parseInt(time.split(':')[0]);
+                      const m = parseInt(time.split(':')[1]);
+                      const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+                      const ampm = h >= 12 ? 'PM' : 'AM';
+                      return `Selected: ${dh}:${String(m).padStart(2,'0')} ${ampm}`;
+                    })()}
+                    {expandedHour !== null && <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>(tap hour again to collapse)</span>}
                   </div>
                 )}
               </div>

@@ -8514,6 +8514,274 @@ const Dashboard = window.Dashboard = ({
         }
       }, "Accept New Time")));
     }));
+  })(), (_upcoming$2 => {
+    const tz = ((_upcoming$2 = upcoming[0]) === null || _upcoming$2 === void 0 ? void 0 : _upcoming$2.timezone) || TimezoneHelper.DEFAULT_TZ;
+    const nowDisplay = TimezoneHelper.getNow(tz); // for display only (getHours etc.)
+    const nowMs = TimezoneHelper.realNowMs(); // for countdown comparisons
+    // Find soonest confirmed/in_progress session with a caregiver
+    const confirmed = upcoming.filter(s => s.caregiverName && ['confirmed', 'in_progress'].includes(s.status));
+    const sorted = [...confirmed].sort((a, b) => {
+      const ak = (a.date || '').split('T')[0] + (a.time || '');
+      const bk = (b.date || '').split('T')[0] + (b.time || '');
+      return ak.localeCompare(bk);
+    });
+    const hero = sorted[0];
+    if (!hero) {
+      if (imminentId) setImminentId(null);
+      return null;
+    }
+    const sDate = (hero.date || '').split('T')[0];
+    const sessionDT = TimezoneHelper.buildDateTime(sDate, hero.time || '00:00', tz);
+    const msUntil = sessionDT.getTime() - nowMs;
+    const isActive = hero.status === 'in_progress';
+    // Show hero if within 24h OR currently in progress
+    if (!isActive && msUntil > 24 * 3600000) {
+      if (imminentId) setImminentId(null);
+      return null;
+    }
+    if (imminentId !== hero.id) setTimeout(() => setImminentId(hero.id), 0);
+
+    // Build countdown string
+    let countdownStr = '';
+    let countdownColor = 'var(--role-color)';
+    if (isActive) {
+      // Show remaining time for in-progress
+      let startMs;
+      if (hero.checkInTime) {
+        startMs = new Date(hero.checkInTime).getTime();
+      } else {
+        startMs = sessionDT.getTime();
+      }
+      const endMs = startMs + (hero.durationHours || 2) * 3600000;
+      const leftMs = endMs - Date.now();
+      if (leftMs > 0) {
+        const totalSec = Math.floor(leftMs / 1000);
+        const hrs = Math.floor(totalSec / 3600);
+        const mins = Math.floor(totalSec % 3600 / 60);
+        countdownStr = hrs > 0 ? `${hrs}h ${mins}m remaining` : `${mins}m remaining`;
+      } else {
+        countdownStr = 'Expected end time passed';
+        countdownColor = 'var(--color-error)';
+      }
+    } else if (msUntil <= 0) {
+      countdownStr = 'Starting now — awaiting check-in';
+      countdownColor = 'var(--accent-color)';
+    } else {
+      const totalSec = Math.floor(msUntil / 1000);
+      const hrs = Math.floor(totalSec / 3600);
+      const mins = Math.floor(totalSec % 3600 / 60);
+      if (hrs > 0) {
+        countdownStr = `${hrs}h ${mins}m`;
+      } else {
+        countdownStr = `${mins}m`;
+      }
+      countdownColor = hrs < 1 ? 'var(--accent-color)' : hrs < 3 ? 'var(--accent-color)' : 'var(--role-color)';
+    }
+    const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
+    const timeLabel = TimezoneHelper.formatTime(hero.time);
+    const bgGradient = isActive ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : msUntil <= 3600000 ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)' : 'linear-gradient(135deg, var(--bg-highlight) 0%, var(--bg-card) 100%)';
+    const borderColor = isActive ? 'var(--color-warning)' : msUntil <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
+    const shouldShimmer = !isActive && msUntil <= 24 * 3600000;
+    return /*#__PURE__*/React.createElement("div", {
+      className: shouldShimmer ? 'next-up-hero-shimmer' : '',
+      onClick: () => hero.id && setVisitDetailSessionId(hero.id),
+      style: {
+        marginBottom: 16,
+        padding: '18px 20px',
+        cursor: 'pointer',
+        borderRadius: 14,
+        border: `3px solid ${borderColor}`,
+        background: bgGradient,
+        boxShadow: `0 4px 16px ${isActive ? 'rgba(245, 127, 23, 0.15)' : msUntil <= 3600000 ? 'rgba(232, 114, 74, 0.18)' : 'rgba(27, 107, 90, 0.1)'}`,
+        position: 'relative',
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        color: isActive ? 'var(--color-warning)' : 'var(--accent-color)'
+      }
+    }, isActive ? 'In Progress Now' : 'Coming Up'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        fontWeight: 700,
+        color: countdownColor,
+        background: isActive ? 'var(--color-warning-bg)' : countdownColor === 'var(--accent-color)' ? 'var(--color-warning-bg)' : 'var(--color-success-bg)',
+        padding: '4px 12px',
+        borderRadius: 20,
+        fontVariantNumeric: 'tabular-nums'
+      }
+    }, isActive ? countdownStr : msUntil <= 0 ? countdownStr : `in ${countdownStr}`)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 17,
+        color: 'var(--text-primary)',
+        marginBottom: 4
+      }
+    }, hero.recipientName || 'Care Visit', " with ", hero.caregiverName), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        color: 'var(--text-secondary)'
+      }
+    }, dayLabel, timeLabel ? ` at ${timeLabel}` : '', hero.durationHours ? ` \u2022 ${hero.durationHours}hr` : '', hero.serviceType ? ` \u2022 ${formatServiceType(hero.serviceType)}` : ''), /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'absolute',
+        right: 16,
+        top: '50%',
+        transform: 'translateY(-50%)',
+        color: borderColor,
+        opacity: 0.3,
+        fontSize: 20
+      }
+    }, "\u2192"));
+  })(), (_upcoming$3 => {
+    const tz = ((_upcoming$3 = upcoming[0]) === null || _upcoming$3 === void 0 ? void 0 : _upcoming$3.timezone) || TimezoneHelper.DEFAULT_TZ;
+    const openReqs = upcoming.filter(s => ['open', 'requested'].includes(s.status) && !s.caregiverName);
+    if (openReqs.length === 0) return null;
+    const showAll = awaitingExpanded || openReqs.length <= 2;
+    const visibleReqs = showAll ? openReqs : openReqs.slice(0, 2);
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: 'var(--text-secondary)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        marginBottom: 10
+      }
+    }, "Awaiting Caregiver (", openReqs.length, ")"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'relative'
+      }
+    }, visibleReqs.map((s, idx) => {
+      const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
+      const timeLabel = TimezoneHelper.formatTime(s.time);
+      return /*#__PURE__*/React.createElement("div", {
+        key: s.id || idx,
+        onClick: () => {
+          if (s.id) setVisitDetailSessionId(s.id);
+        },
+        style: {
+          marginBottom: 8,
+          padding: '14px 16px',
+          cursor: 'pointer',
+          borderRadius: 12,
+          border: '2px dashed #e8724a',
+          background: 'var(--bg-warm)'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontWeight: 600,
+          fontSize: 15,
+          color: 'var(--text-primary)'
+        }
+      }, s.recipientName || 'Care Visit'), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: 'var(--text-secondary)',
+          marginTop: 2
+        }
+      }, dayLabel, timeLabel ? ` at ${timeLabel}` : '', s.durationHours ? ` \u2022 ${s.durationHours}hr` : '', s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          fontWeight: 600,
+          color: 'var(--text-secondary)',
+          marginTop: 4
+        }
+      }, "No caregiver yet \u2014 waiting for someone to accept")), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 6
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          padding: '4px 10px',
+          borderRadius: 10,
+          fontSize: 11,
+          fontWeight: 600,
+          background: 'var(--color-warning-bg)',
+          color: 'var(--color-warning)',
+          textTransform: 'capitalize',
+          whiteSpace: 'nowrap'
+        }
+      }, "Open"), /*#__PURE__*/React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          setCancellingId(s.id);
+        },
+        style: {
+          padding: '3px 8px',
+          borderRadius: 6,
+          border: '1px solid var(--border-color)',
+          background: 'var(--bg-surface)',
+          color: 'var(--color-error)',
+          fontSize: 10,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "Cancel"))));
+    }), !showAll && /*#__PURE__*/React.createElement("div", {
+      onClick: () => setAwaitingExpanded(true),
+      style: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 64,
+        cursor: 'pointer',
+        background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        paddingBottom: 4
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600,
+        color: 'var(--accent-color)'
+      }
+    }, "+ ", openReqs.length - 2, " more \u2014 tap to expand")), showAll && openReqs.length > 2 && /*#__PURE__*/React.createElement("div", {
+      onClick: () => setAwaitingExpanded(false),
+      style: {
+        textAlign: 'center',
+        padding: '4px 0',
+        cursor: 'pointer'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600,
+        color: 'var(--text-tertiary)'
+      }
+    }, "Show less"))));
   })(), parent && /*#__PURE__*/React.createElement("div", {
     className: "betty-card",
     style: {
@@ -8663,312 +8931,7 @@ const Dashboard = window.Dashboard = ({
         fontSize: 14
       }
     }, "\u2192"));
-  })()), (_upcoming$2 => {
-    const tz = ((_upcoming$2 = upcoming[0]) === null || _upcoming$2 === void 0 ? void 0 : _upcoming$2.timezone) || TimezoneHelper.DEFAULT_TZ;
-    const nowDisplay = TimezoneHelper.getNow(tz); // for display only (getHours etc.)
-    const nowMs = TimezoneHelper.realNowMs(); // for countdown comparisons
-    // Find soonest confirmed/in_progress session with a caregiver
-    const confirmed = upcoming.filter(s => s.caregiverName && ['confirmed', 'in_progress'].includes(s.status));
-    const sorted = [...confirmed].sort((a, b) => {
-      const ak = (a.date || '').split('T')[0] + (a.time || '');
-      const bk = (b.date || '').split('T')[0] + (b.time || '');
-      return ak.localeCompare(bk);
-    });
-    const hero = sorted[0];
-    if (!hero) {
-      if (imminentId) setImminentId(null);
-      return null;
-    }
-    const sDate = (hero.date || '').split('T')[0];
-    const sessionDT = TimezoneHelper.buildDateTime(sDate, hero.time || '00:00', tz);
-    const msUntil = sessionDT.getTime() - nowMs;
-    const isActive = hero.status === 'in_progress';
-    // Show hero if within 24h OR currently in progress
-    if (!isActive && msUntil > 24 * 3600000) {
-      if (imminentId) setImminentId(null);
-      return null;
-    }
-    if (imminentId !== hero.id) setTimeout(() => setImminentId(hero.id), 0);
-
-    // Build countdown string
-    let countdownStr = '';
-    let countdownColor = 'var(--role-color)';
-    if (isActive) {
-      // Show remaining time for in-progress
-      let startMs;
-      if (hero.checkInTime) {
-        startMs = new Date(hero.checkInTime).getTime();
-      } else {
-        startMs = sessionDT.getTime();
-      }
-      const endMs = startMs + (hero.durationHours || 2) * 3600000;
-      const leftMs = endMs - Date.now();
-      if (leftMs > 0) {
-        const totalSec = Math.floor(leftMs / 1000);
-        const hrs = Math.floor(totalSec / 3600);
-        const mins = Math.floor(totalSec % 3600 / 60);
-        countdownStr = hrs > 0 ? `${hrs}h ${mins}m remaining` : `${mins}m remaining`;
-      } else {
-        countdownStr = 'Expected end time passed';
-        countdownColor = 'var(--color-error)';
-      }
-    } else if (msUntil <= 0) {
-      countdownStr = 'Starting now — awaiting check-in';
-      countdownColor = 'var(--accent-color)';
-    } else {
-      const totalSec = Math.floor(msUntil / 1000);
-      const hrs = Math.floor(totalSec / 3600);
-      const mins = Math.floor(totalSec % 3600 / 60);
-      if (hrs > 0) {
-        countdownStr = `${hrs}h ${mins}m`;
-      } else {
-        countdownStr = `${mins}m`;
-      }
-      countdownColor = hrs < 1 ? 'var(--accent-color)' : hrs < 3 ? 'var(--accent-color)' : 'var(--role-color)';
-    }
-    const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
-    const timeLabel = TimezoneHelper.formatTime(hero.time);
-    const bgGradient = isActive ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : msUntil <= 3600000 ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)' : 'linear-gradient(135deg, var(--bg-highlight) 0%, var(--bg-card) 100%)';
-    const borderColor = isActive ? 'var(--color-warning)' : msUntil <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
-    const shouldShimmer = !isActive && msUntil <= 24 * 3600000;
-    return /*#__PURE__*/React.createElement("div", {
-      className: shouldShimmer ? 'next-up-hero-shimmer' : '',
-      onClick: () => hero.id && setVisitDetailSessionId(hero.id),
-      style: {
-        marginBottom: 16,
-        padding: '18px 20px',
-        cursor: 'pointer',
-        borderRadius: 14,
-        border: `3px solid ${borderColor}`,
-        background: bgGradient,
-        boxShadow: `0 4px 16px ${isActive ? 'rgba(245, 127, 23, 0.15)' : msUntil <= 3600000 ? 'rgba(232, 114, 74, 0.18)' : 'rgba(27, 107, 90, 0.1)'}`,
-        position: 'relative',
-        overflow: 'hidden'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-        color: isActive ? 'var(--color-warning)' : 'var(--accent-color)'
-      }
-    }, isActive ? 'In Progress Now' : 'Coming Up'), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 14,
-        fontWeight: 700,
-        color: countdownColor,
-        background: isActive ? 'var(--color-warning-bg)' : countdownColor === 'var(--accent-color)' ? 'var(--color-warning-bg)' : 'var(--color-success-bg)',
-        padding: '4px 12px',
-        borderRadius: 20,
-        fontVariantNumeric: 'tabular-nums'
-      }
-    }, isActive ? countdownStr : msUntil <= 0 ? countdownStr : `in ${countdownStr}`)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontWeight: 700,
-        fontSize: 17,
-        color: 'var(--text-primary)',
-        marginBottom: 4
-      }
-    }, hero.recipientName || 'Care Visit', " with ", hero.caregiverName), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 14,
-        color: 'var(--text-secondary)'
-      }
-    }, dayLabel, timeLabel ? ` at ${timeLabel}` : '', hero.durationHours ? ` \u2022 ${hero.durationHours}hr` : '', hero.serviceType ? ` \u2022 ${formatServiceType(hero.serviceType)}` : ''), /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: 'absolute',
-        right: 16,
-        top: '50%',
-        transform: 'translateY(-50%)',
-        color: borderColor,
-        opacity: 0.3,
-        fontSize: 20
-      }
-    }, "\u2192"));
-  })(), (() => {
-    const completed = (data === null || data === void 0 ? void 0 : data.recentlyCompleted) || [];
-    if (completed.length === 0) return null;
-    const showAll = finishedExpanded || completed.length <= 2;
-    const visible = showAll ? completed.slice(0, 5) : completed.slice(0, 2);
-    return /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginBottom: 16
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 13,
-        fontWeight: 700,
-        color: 'var(--text-secondary)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-        marginBottom: 10
-      }
-    }, "Just Finished (", completed.length, ")"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: 'relative'
-      }
-    }, visible.map((s, idx) => {
-      var _upcoming$3;
-      const svcLabel = (s.serviceType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const fadeOpacity = idx === 0 ? 0.85 : idx === 1 ? 0.65 : 0.5;
-      return /*#__PURE__*/React.createElement("div", {
-        key: s.id || idx,
-        onClick: () => setVisitDetailSessionId(s.id),
-        style: {
-          marginBottom: 8,
-          padding: '12px 16px',
-          cursor: 'pointer',
-          borderRadius: 12,
-          border: '2px solid var(--border-teal-light)',
-          background: 'var(--bg-card)',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-          opacity: fadeOpacity,
-          transition: 'opacity 0.3s'
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 12
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          flex: 1
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontWeight: 600,
-          fontSize: 15,
-          color: 'var(--text-primary)'
-        }
-      }, s.recipientName || 'Care Visit', s.caregiverName ? ` with ${s.caregiverName}` : ''), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 13,
-          color: 'var(--text-secondary)',
-          marginTop: 2
-        }
-      }, TimezoneHelper.getDateLabel((s.date || '').split('T')[0], ((_upcoming$3 = upcoming[0]) === null || _upcoming$3 === void 0 ? void 0 : _upcoming$3.timezone) || TimezoneHelper.DEFAULT_TZ), " \xB7 ", svcLabel, " \xB7 ", s.durationHours || 2, "h"), s.visitSummary && /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 13,
-          color: 'var(--text-secondary)',
-          marginTop: 4,
-          fontStyle: 'italic'
-        }
-      }, "\"", s.visitSummary.length > 80 ? s.visitSummary.slice(0, 80) + '...' : s.visitSummary, "\""), s.conditionTags && s.conditionTags.length > 0 && /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          gap: 4,
-          flexWrap: 'wrap',
-          marginTop: 4
-        }
-      }, s.conditionTags.map((tag, i) => /*#__PURE__*/React.createElement("span", {
-        key: i,
-        style: {
-          background: 'var(--color-success-bg)',
-          color: 'var(--color-success)',
-          padding: '2px 8px',
-          borderRadius: 10,
-          fontSize: 11,
-          fontWeight: 500
-        }
-      }, tag)))), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          gap: 4
-        }
-      }, s.hasReview ? /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2
-        }
-      }, [1, 2, 3, 4, 5].map(star => /*#__PURE__*/React.createElement("span", {
-        key: star,
-        style: {
-          fontSize: 14,
-          color: star <= (s.reviewRating || 0) ? '#f59e0b' : 'var(--border-light)'
-        }
-      }, '\u2605'))) : s.caregiverId ? /*#__PURE__*/React.createElement("button", {
-        onClick: e => {
-          e.stopPropagation();
-          setReviewSession(s);
-          setReviewRating(0);
-          setReviewComment('');
-        },
-        style: {
-          padding: '6px 14px',
-          borderRadius: 10,
-          border: 'none',
-          background: 'var(--role-color)',
-          color: 'var(--text-on-primary)',
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: 'pointer',
-          whiteSpace: 'nowrap'
-        }
-      }, '\u2605', " Leave Review") : /*#__PURE__*/React.createElement("span", {
-        style: {
-          padding: '4px 10px',
-          borderRadius: 10,
-          fontSize: 11,
-          fontWeight: 600,
-          background: 'var(--color-success-bg)',
-          color: 'var(--color-success)'
-        }
-      }, "Completed"), /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 12,
-          color: 'var(--role-color)',
-          fontWeight: 600
-        }
-      }, "View Details ", '\u2192'))));
-    }), !showAll && /*#__PURE__*/React.createElement("div", {
-      onClick: () => setFinishedExpanded(true),
-      style: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 64,
-        cursor: 'pointer',
-        background: 'linear-gradient(transparent 0%, var(--bg-primary) 100%)',
-        display: 'flex',
-        alignItems: 'flex-end',
-        justifyContent: 'center',
-        paddingBottom: 4
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 600,
-        color: 'var(--text-tertiary)'
-      }
-    }, "+ ", completed.length - 2, " more \u2014 tap to expand")), showAll && completed.length > 2 && /*#__PURE__*/React.createElement("div", {
-      onClick: () => setFinishedExpanded(false),
-      style: {
-        textAlign: 'center',
-        padding: '4px 0',
-        cursor: 'pointer'
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 600,
-        color: 'var(--text-tertiary)'
-      }
-    }, "Show less"))));
-  })(), ((_upcoming$4, _data$careRecipients, _data$careRecipients2) => {
+  })()), ((_upcoming$4, _data$careRecipients, _data$careRecipients2) => {
     const tz = ((_upcoming$4 = upcoming[0]) === null || _upcoming$4 === void 0 ? void 0 : _upcoming$4.timezone) || TimezoneHelper.DEFAULT_TZ;
     const nowMs = TimezoneHelper.realNowMs();
     const todayStr = TimezoneHelper.getToday(tz);
@@ -9326,12 +9289,11 @@ const Dashboard = window.Dashboard = ({
         color: 'var(--text-muted)'
       }
     }, "Collapse"))));
-  })(), (_upcoming$5 => {
-    const tz = ((_upcoming$5 = upcoming[0]) === null || _upcoming$5 === void 0 ? void 0 : _upcoming$5.timezone) || TimezoneHelper.DEFAULT_TZ;
-    const openReqs = upcoming.filter(s => ['open', 'requested'].includes(s.status) && !s.caregiverName);
-    if (openReqs.length === 0) return null;
-    const showAll = awaitingExpanded || openReqs.length <= 2;
-    const visibleReqs = showAll ? openReqs : openReqs.slice(0, 2);
+  })(), (() => {
+    const completed = (data === null || data === void 0 ? void 0 : data.recentlyCompleted) || [];
+    if (completed.length === 0) return null;
+    const showAll = finishedExpanded || completed.length <= 2;
+    const visible = showAll ? completed.slice(0, 5) : completed.slice(0, 2);
     return /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 16
@@ -9345,25 +9307,27 @@ const Dashboard = window.Dashboard = ({
         letterSpacing: '0.5px',
         marginBottom: 10
       }
-    }, "Awaiting Caregiver (", openReqs.length, ")"), /*#__PURE__*/React.createElement("div", {
+    }, "Recently Completed (", completed.length, ")"), /*#__PURE__*/React.createElement("div", {
       style: {
         position: 'relative'
       }
-    }, visibleReqs.map((s, idx) => {
-      const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
-      const timeLabel = TimezoneHelper.formatTime(s.time);
+    }, visible.map((s, idx) => {
+      var _upcoming$5;
+      const svcLabel = (s.serviceType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const fadeOpacity = idx === 0 ? 1.0 : idx === 1 ? 0.85 : 0.7;
       return /*#__PURE__*/React.createElement("div", {
         key: s.id || idx,
-        onClick: () => {
-          if (s.id) setVisitDetailSessionId(s.id);
-        },
+        onClick: () => setVisitDetailSessionId(s.id),
         style: {
           marginBottom: 8,
-          padding: '14px 16px',
+          padding: '12px 16px',
           cursor: 'pointer',
           borderRadius: 12,
-          border: '2px dashed #e8724a',
-          background: 'var(--bg-warm)'
+          border: '2px solid var(--border-teal-light)',
+          background: 'var(--bg-card)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+          opacity: fadeOpacity,
+          transition: 'opacity 0.3s'
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
@@ -9382,55 +9346,91 @@ const Dashboard = window.Dashboard = ({
           fontSize: 15,
           color: 'var(--text-primary)'
         }
-      }, s.recipientName || 'Care Visit'), /*#__PURE__*/React.createElement("div", {
+      }, s.recipientName || 'Care Visit', s.caregiverName ? ` with ${s.caregiverName}` : ''), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 13,
           color: 'var(--text-secondary)',
           marginTop: 2
         }
-      }, dayLabel, timeLabel ? ` at ${timeLabel}` : '', s.durationHours ? ` \u2022 ${s.durationHours}hr` : '', s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''), /*#__PURE__*/React.createElement("div", {
+      }, TimezoneHelper.getDateLabel((s.date || '').split('T')[0], ((_upcoming$5 = upcoming[0]) === null || _upcoming$5 === void 0 ? void 0 : _upcoming$5.timezone) || TimezoneHelper.DEFAULT_TZ), " \xB7 ", svcLabel, " \xB7 ", s.durationHours || 2, "h"), s.visitSummary && /*#__PURE__*/React.createElement("div", {
         style: {
-          fontSize: 12,
-          fontWeight: 600,
+          fontSize: 13,
           color: 'var(--text-secondary)',
+          marginTop: 4,
+          fontStyle: 'italic'
+        }
+      }, "\"", s.visitSummary.length > 80 ? s.visitSummary.slice(0, 80) + '...' : s.visitSummary, "\""), s.conditionTags && s.conditionTags.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 4,
+          flexWrap: 'wrap',
           marginTop: 4
         }
-      }, "No caregiver yet \u2014 waiting for someone to accept")), /*#__PURE__*/React.createElement("div", {
+      }, s.conditionTags.map((tag, i) => /*#__PURE__*/React.createElement("span", {
+        key: i,
+        style: {
+          background: 'var(--color-success-bg)',
+          color: 'var(--color-success)',
+          padding: '2px 8px',
+          borderRadius: 10,
+          fontSize: 11,
+          fontWeight: 500
+        }
+      }, tag)))), /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'flex-end',
-          gap: 6
+          gap: 4
         }
-      }, /*#__PURE__*/React.createElement("span", {
+      }, s.hasReview ? /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2
+        }
+      }, [1, 2, 3, 4, 5].map(star => /*#__PURE__*/React.createElement("span", {
+        key: star,
+        style: {
+          fontSize: 14,
+          color: star <= (s.reviewRating || 0) ? '#f59e0b' : 'var(--border-light)'
+        }
+      }, '\u2605'))) : s.caregiverId ? /*#__PURE__*/React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          setReviewSession(s);
+          setReviewRating(0);
+          setReviewComment('');
+        },
+        style: {
+          padding: '6px 14px',
+          borderRadius: 10,
+          border: 'none',
+          background: 'var(--role-color)',
+          color: 'var(--text-on-primary)',
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap'
+        }
+      }, '\u2605', " Leave Review") : /*#__PURE__*/React.createElement("span", {
         style: {
           padding: '4px 10px',
           borderRadius: 10,
           fontSize: 11,
           fontWeight: 600,
-          background: 'var(--color-warning-bg)',
-          color: 'var(--color-warning)',
-          textTransform: 'capitalize',
-          whiteSpace: 'nowrap'
+          background: 'var(--color-success-bg)',
+          color: 'var(--color-success)'
         }
-      }, "Open"), /*#__PURE__*/React.createElement("button", {
-        onClick: e => {
-          e.stopPropagation();
-          setCancellingId(s.id);
-        },
+      }, "Completed"), /*#__PURE__*/React.createElement("span", {
         style: {
-          padding: '3px 8px',
-          borderRadius: 6,
-          border: '1px solid var(--border-color)',
-          background: 'var(--bg-surface)',
-          color: 'var(--color-error)',
-          fontSize: 10,
-          fontWeight: 600,
-          cursor: 'pointer'
+          fontSize: 12,
+          color: 'var(--role-color)',
+          fontWeight: 600
         }
-      }, "Cancel"))));
+      }, "View Details ", '\u2192'))));
     }), !showAll && /*#__PURE__*/React.createElement("div", {
-      onClick: () => setAwaitingExpanded(true),
+      onClick: () => setFinishedExpanded(true),
       style: {
         position: 'absolute',
         bottom: 0,
@@ -9448,10 +9448,10 @@ const Dashboard = window.Dashboard = ({
       style: {
         fontSize: 12,
         fontWeight: 600,
-        color: 'var(--accent-color)'
+        color: 'var(--text-tertiary)'
       }
-    }, "+ ", openReqs.length - 2, " more \u2014 tap to expand")), showAll && openReqs.length > 2 && /*#__PURE__*/React.createElement("div", {
-      onClick: () => setAwaitingExpanded(false),
+    }, "+ ", completed.length - 2, " more \u2014 tap to expand")), showAll && completed.length > 2 && /*#__PURE__*/React.createElement("div", {
+      onClick: () => setFinishedExpanded(false),
       style: {
         textAlign: 'center',
         padding: '4px 0',
@@ -26102,7 +26102,9 @@ const RequestCareModal = window.RequestCareModal = ({
     }
     return '';
   });
-  const [time, setTime] = useState('');
+  const [time, setTime] = useState('08:00');
+  const [expandedHour, setExpandedHour] = useState(null); // which hour pill is expanded to show :15/:30/:45
+  const timeScrollRef = useRef(null);
   const [duration, setDuration] = useState('');
   const [instructions, setInstructions] = useState('');
   const [recurrence, setRecurrence] = useState('none');
@@ -26203,6 +26205,29 @@ const RequestCareModal = window.RequestCareModal = ({
     };
     fetchData();
   }, []);
+
+  // Adjust default time if 8am is in the past for today, and auto-scroll time picker
+  useEffect(() => {
+    if (!date) return;
+    const opts = getTimeOptions();
+    // If current default isn't in the available options, pick the first available
+    if (time && !opts.find(o => o.val === time)) {
+      setTime(opts.length > 0 ? opts[0].val : '');
+    }
+    // Scroll to the selected time pill after render
+    setTimeout(() => {
+      if (timeScrollRef.current) {
+        const selected = timeScrollRef.current.querySelector('[data-time-selected="true"]');
+        if (selected) {
+          selected.scrollIntoView({
+            behavior: 'smooth',
+            inline: 'center',
+            block: 'nearest'
+          });
+        }
+      }
+    }, 50);
+  }, [date, time]);
 
   // Fetch visit counts for the selected care recipient (for repeat caregiver nudge)
   useEffect(() => {
@@ -26976,19 +27001,89 @@ const RequestCareModal = window.RequestCareModal = ({
       fontSize: 13,
       color: 'var(--text-brown)'
     }
-  }, "\u23F0 No times available for today \u2014 please select a future date above.") : /*#__PURE__*/React.createElement("div", {
+  }, '\u23F0', " No times available for today \u2014 please select a future date above.") : /*#__PURE__*/React.createElement("div", {
+    ref: timeScrollRef,
     style: {
       display: 'flex',
       gap: 6,
       overflowX: 'auto',
-      paddingBottom: 4
+      paddingBottom: 4,
+      scrollBehavior: 'smooth'
     }
-  }, getTimeOptions().map(opt => /*#__PURE__*/React.createElement("button", {
-    key: opt.val,
-    type: "button",
-    onClick: () => setTime(opt.val),
-    style: pill(time === opt.val)
-  }, opt.label)))), time && /*#__PURE__*/React.createElement("div", {
+  }, getTimeOptions().map(opt => {
+    const hourNum = parseInt(opt.val.split(':')[0]);
+    const isHourSelected = time && time.startsWith(opt.val.split(':')[0] + ':');
+    const isExactMatch = time === opt.val;
+    const isExpanded = expandedHour === hourNum;
+    return /*#__PURE__*/React.createElement("div", {
+      key: opt.val,
+      style: {
+        display: 'flex',
+        gap: 3,
+        flexShrink: 0
+      },
+      "data-time-selected": isHourSelected ? 'true' : 'false'
+    }, /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => {
+        if (isExpanded) {
+          setExpandedHour(null);
+          setTime(opt.val);
+        } else {
+          setExpandedHour(hourNum);
+          if (!isHourSelected) setTime(opt.val);
+        }
+      },
+      style: {
+        ...pill(isHourSelected),
+        borderRadius: isExpanded ? '20px 8px 8px 20px' : 20,
+        paddingRight: isExpanded ? 10 : 14
+      }
+    }, opt.label), isExpanded && [15, 30, 45].map(mins => {
+      const subVal = `${String(hourNum).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+      const isSubSelected = time === subVal;
+      const ampm = hourNum >= 12 ? 'p' : 'a';
+      const dh = hourNum > 12 ? hourNum - 12 : hourNum === 0 ? 12 : hourNum;
+      return /*#__PURE__*/React.createElement("button", {
+        key: subVal,
+        type: "button",
+        onClick: () => {
+          setTime(subVal);
+        },
+        style: {
+          padding: '6px 8px',
+          borderRadius: mins === 45 ? '8px 20px 20px 8px' : '8px',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+          transition: 'all 0.15s',
+          border: isSubSelected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+          background: isSubSelected ? 'var(--color-success-bg)' : 'var(--bg-surface)',
+          color: isSubSelected ? 'var(--role-color)' : 'var(--text-muted)',
+          minWidth: 36
+        }
+      }, ":", String(mins).padStart(2, '0'));
+    }));
+  })), time && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6,
+      fontSize: 12,
+      color: 'var(--text-tertiary)'
+    }
+  }, (() => {
+    const h = parseInt(time.split(':')[0]);
+    const m = parseInt(time.split(':')[1]);
+    const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    return `Selected: ${dh}:${String(m).padStart(2, '0')} ${ampm}`;
+  })(), expandedHour !== null && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      color: 'var(--text-muted)'
+    }
+  }, "(tap hour again to collapse)"))), time && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16
     }
