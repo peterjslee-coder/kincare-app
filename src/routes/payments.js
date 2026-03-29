@@ -871,9 +871,10 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     surchargeCents = Math.round(costResult.surcharge * 100);
   }
 
-  // Platform fee: 20% of caregiver pay + 25% of short-notice surcharge — added ON TOP, family pays
-  // Tip is NOT subject to platform fee — 100% goes to caregiver
-  let platformFeeCents = Math.round(caregiverPayCents * PLATFORM_FEE_PERCENT / 100);
+  // Platform fee: 20% of all caregiver compensation (pay + tip) + 25% of short-notice surcharge
+  // Tips are compensation — without this, families could game the system with low rates + big tips.
+  // Caregiver still gets exact amounts; the 20% on tips is added ON TOP for the family.
+  let platformFeeCents = Math.round((caregiverPayCents + tipCents) * PLATFORM_FEE_PERCENT / 100);
   if (surchargeCents > 0) {
     platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
   }
