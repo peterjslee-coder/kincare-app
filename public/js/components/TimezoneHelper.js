@@ -127,9 +127,24 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
     return Math.round((targetDate - todayDate) / 86400000);
   }
 
+  /**
+   * Get the real current UTC epoch (milliseconds).
+   * Use this for all time-until / countdown comparisons.
+   *
+   * getNow(tz) is ONLY safe for display (getHours, getMinutes, etc.)
+   * because it re-parses the formatted ET time in the browser's local timezone,
+   * which shifts the epoch when the viewer isn't in the care timezone.
+   * buildDateTime() returns correct UTC epochs, so comparisons must use
+   * realNowMs() — NOT getNow().getTime().
+   */
+  function realNowMs() {
+    return Date.now();
+  }
+
   return {
     DEFAULT_TZ,
     getNow,
+    realNowMs,
     getToday,
     buildDateTime,
     parseDate,

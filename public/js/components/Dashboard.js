@@ -995,7 +995,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {/* Imminent Session Hero — within 24h, countdown + shimmer, right under profile card */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
-        const now = TimezoneHelper.getNow(tz);
+        const nowDisplay = TimezoneHelper.getNow(tz); // for display only (getHours etc.)
+        const nowMs = TimezoneHelper.realNowMs(); // for countdown comparisons
         // Find soonest confirmed/in_progress session with a caregiver
         const confirmed = upcoming.filter(s => s.caregiverName && ['confirmed', 'in_progress'].includes(s.status));
         const sorted = [...confirmed].sort((a, b) => {
@@ -1007,7 +1008,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         if (!hero) { if (imminentId) setImminentId(null); return null; }
         const sDate = (hero.date || '').split('T')[0];
         const sessionDT = TimezoneHelper.buildDateTime(sDate, hero.time || '00:00', tz);
-        const msUntil = sessionDT - now;
+        const msUntil = sessionDT.getTime() - nowMs;
         const isActive = hero.status === 'in_progress';
         // Show hero if within 24h OR currently in progress
         if (!isActive && msUntil > 24 * 3600000) { if (imminentId) setImminentId(null); return null; }
@@ -1189,10 +1190,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {/* Next Up — up to 10 sessions within 2 weeks, collapsed to 2 cards with fade */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
-        const now = TimezoneHelper.getNow(tz);
+        const nowMs = TimezoneHelper.realNowMs();
         const todayStr = TimezoneHelper.getToday(tz);
         const todayLocal = TimezoneHelper.parseDate(todayStr);
-        const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 3600000);
+        const twoWeeksOut = new Date(nowMs + 14 * 24 * 3600000);
 
         // Sort all upcoming by date+time — exclude unclaimed open requests (shown separately below)
         // Also exclude the imminent hero session (already shown above Betty card)
@@ -1283,7 +1284,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               // Urgency: how soon is this session?
               const sDate = (s.date || '').split('T')[0];
               const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz);
-              const minsUntil = (sessionDT - now) / 60000;
+              const minsUntil = (sessionDT.getTime() - nowMs) / 60000;
               const isImminent = !isActive && s.status === 'confirmed' && minsUntil <= 60 && minsUntil > -120; // within 1 hour or started <2hr ago
               const isSoon = !isActive && !isImminent && s.status === 'confirmed' && minsUntil <= 180; // within 3 hours
               const isSeekingCaregiver = !s.caregiverName;

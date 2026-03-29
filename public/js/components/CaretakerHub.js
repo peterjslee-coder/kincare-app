@@ -899,14 +899,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const readyToCheckIn = sessions.filter(s => {
     if (s.status !== 'confirmed') return false;
     const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-    const etNow = TimezoneHelper.getNow(tz);
     const etDate = TimezoneHelper.getToday(tz);
     const sessionDate = (s.date || s.scheduled_date || '').split('T')[0];
     if (sessionDate !== etDate) return false;
     const sTime = s.time || s.scheduled_time;
     if (!sTime) return false;
     const sessionStartET = TimezoneHelper.buildDateTime(sessionDate, sTime, tz);
-    const minsUntil = (sessionStartET - etNow) / 60000;
+    const minsUntil = (sessionStartET.getTime() - TimezoneHelper.realNowMs()) / 60000;
     return minsUntil <= 15 || profile.earlyCheckInAllowed;
   });
 
@@ -915,20 +914,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     if (s.status === 'completed') return false;
     if (s.status === 'in_progress') return true;
     const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-    const now = TimezoneHelper.getNow(tz);
     const sDate = (s.date || s.scheduled_date || '').split('T')[0];
     const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
-    const minsUntil = (sessionDT - now) / 60000;
+    const minsUntil = (sessionDT.getTime() - TimezoneHelper.realNowMs()) / 60000;
     return minsUntil < 24 * 60;
   });
 
   const scheduledSessions = sessions.filter(s => {
     if (s.status === 'completed' || s.status === 'in_progress') return false;
     const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-    const now = TimezoneHelper.getNow(tz);
     const sDate = (s.date || s.scheduled_date || '').split('T')[0];
     const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
-    const minsUntil = (sessionDT - now) / 60000;
+    const minsUntil = (sessionDT.getTime() - TimezoneHelper.realNowMs()) / 60000;
     return minsUntil >= 24 * 60;
   });
 
@@ -1695,9 +1692,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const isActive = s.status === 'in_progress';
               const sDate = (s.date || s.scheduled_date || '').split('T')[0];
               const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-              const etNow = TimezoneHelper.getNow(tz);
               const sessionStartET = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
-              const minsUntil = (sessionStartET - etNow) / 60000;
+              const minsUntil = (sessionStartET.getTime() - TimezoneHelper.realNowMs()) / 60000;
               const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
               const timeLabel = TimezoneHelper.formatTime(s.time || s.scheduled_time);
               const duration = s.durationHours || s.duration_hours;
