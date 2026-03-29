@@ -303,7 +303,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.56.5";
+const APP_VERSION = "1.56.6";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -895,10 +895,13 @@ async function start() {
   })();
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n  InPlace API v0.9.0 running on port ${PORT}\n`);
+    console.log(`\n  InPlace v${APP_VERSION} running on port ${PORT}\n`);
     console.log(`  WebSocket server ready`);
     const { isSmsConfigured } = require("./utils/sms");
     console.log(`  SMS notifications: ${isSmsConfigured() ? "Twilio configured ✓" : "Twilio not configured (SMS reminders will be skipped)"}`);
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || process.env.stripe_webhook_secret || "";
+    const baseUrl = process.env.BASE_URL || process.env.base_url || "https://yourinplace.com";
+    console.log(`  Stripe webhook: ${baseUrl}/api/payments/webhook ${webhookSecret ? "(secret configured ✓)" : "⚠️  NO WEBHOOK SECRET — configure STRIPE_WEBHOOK_SECRET in Railway"}`);
   });
 }
 

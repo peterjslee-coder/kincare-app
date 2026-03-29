@@ -1058,6 +1058,25 @@ async function initializeDatabase() {
     if (killed.changes > 0) console.log(`  ✅ Killed bogus $15.60 payment record for Cary session`);
   } catch (e) { /* already killed */ }
 
+  // ─── v1.56.6 — One-time: complete Cary's $0.70 payment (webhook never fired) ───
+  // Pete confirmed payment went through Stripe. Webhook at /api/payments/webhook was never
+  // called by Stripe — likely not configured in Stripe Dashboard. This manually does what
+  // the checkout.session.completed webhook handler would have done.
+  try {
+    const sessionId = '8126e816-6f95-4986-94cb-eb7ab511c949';
+    const fixedPayment = await db.prepare(`
+      UPDATE payments SET status = 'completed', updated_at = NOW()
+      WHERE session_id = ? AND status = 'processing'
+    `).run(sessionId);
+    if (fixedPayment.changes > 0) {
+      await db.prepare(`
+        UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW()
+        WHERE id = ?
+      `).run(sessionId);
+      console.log(`  ✅ Manually completed Cary's $0.70 payment (webhook never fired)`);
+    }
+  } catch (e) { /* already completed */ }
+
   // ─── v1.50.55 — Rewrite FAQ articles with accurate content ───
   try {
     const faqVersion = await db.prepare("SELECT answer FROM help_articles WHERE question = 'Does InPlace cost anything?' AND is_published = 1").get();
