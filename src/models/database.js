@@ -1026,6 +1026,27 @@ async function initializeDatabase() {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
   }
 
+  // ─── v1.56.3 — One-time: clear old test sessions stuck in pending review/payment ───
+  try {
+    const cleared = await db.prepare(`
+      UPDATE care_sessions
+      SET payment_status = 'waived', review_required = CASE WHEN review_completed = 0 THEN 0 ELSE review_required END
+      WHERE id IN (
+        '794cc55d-3ff5-46d9-bea4-b336cb3be817',
+        '70c832e1-1dad-4417-aeb1-1cc192095224',
+        '95f6638f-81ec-47b9-bd3a-9f8500e4e602',
+        '0e124ae6-da52-4897-988f-67b4aed10b6b',
+        'be7f31c6-0ea0-4b7f-95d4-218c335a5621',
+        '9ec4a286-2071-4213-9a90-e9d46a80ee07',
+        'e5aa7dd0-5076-40f1-a3de-d07c35c897be',
+        'c987b517-543a-4e09-8e0c-2bff108f0f71',
+        '657794ce-8bc9-48fd-97c7-fc85824f7d84'
+      )
+      AND (payment_status IS NULL OR payment_status = 'pending')
+    `).run();
+    if (cleared.changes > 0) console.log(`  ✅ Cleared ${cleared.changes} old test sessions from pending review/payment`);
+  } catch (e) { /* already cleared */ }
+
   // ─── v1.50.55 — Rewrite FAQ articles with accurate content ───
   try {
     const faqVersion = await db.prepare("SELECT answer FROM help_articles WHERE question = 'Does InPlace cost anything?' AND is_published = 1").get();
