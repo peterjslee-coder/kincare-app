@@ -216,6 +216,27 @@ router.get("/stats", async (req, res) => {
       GROUP BY cs.status
     `).all();
 
+    // v1.53 — Enhanced stats for new admin dashboard
+    let openTickets = { count: 0 }, safetyFlags = { count: 0 }, avgRating = { avg: 0, total: 0 }, revenueMtd = { total: 0 };
+    try {
+      openTickets = await db.prepare("SELECT COUNT(*) as count FROM admin_tickets WHERE status IN ('open', 'in_progress')").get() || { count: 0 };
+    } catch (e) { /* table may not exist yet */ }
+    try {
+      safetyFlags = await db.prepare("SELECT COUNT(*) as count FROM safety_flags WHERE status IN ('pending', 'open', 'investigating')").get() || { count: 0 };
+    } catch (e) { /* */ }
+    try {
+      avgRating = await db.prepare("SELECT ROUND(AVG(rating), 1) as avg, COUNT(*) as total FROM reviews").get() || { avg: 0, total: 0 };
+    } catch (e) { /* */ }
+    try {
+      revenueMtd = await db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'completed' AND created_at >= date_trunc('month', NOW())").get() || { total: 0 };
+    } catch (e) { /* */ }
+
+    // Visits this week
+    let visitsThisWeek = { count: 0 };
+    try {
+      visitsThisWeek = await db.prepare("SELECT COUNT(*) as count FROM care_sessions WHERE scheduled_date >= date_trunc('week', NOW())::date::text AND status NOT IN ('cancelled')").get() || { count: 0 };
+    } catch (e) { /* */ }
+
     res.json({
       totalUsers: parseInt(users.count),
       totalWaitlist: parseInt(waitlist.count),
@@ -224,6 +245,13 @@ router.get("/stats", async (req, res) => {
       signupTrend: recentSignups,
       waitlistTrend,
       sessionsByStatus,
+      // v1.53 additions
+      openTickets: parseInt(openTickets.count || 0),
+      safetyFlags: parseInt(safetyFlags.count || 0),
+      avgRating: parseFloat(avgRating.avg || 0),
+      totalReviews: parseInt(avgRating.total || 0),
+      revenueMtd: parseFloat(revenueMtd.total || 0),
+      visitsThisWeek: parseInt(visitsThisWeek.count || 0),
     });
   } catch (err) {
     console.error("Admin stats error:", err);
@@ -239,7 +267,7 @@ router.get("/users", async (req, res) => {
 
     // Build query dynamically
     let sql = `
-      SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, is_admin, is_tester, is_active, companion_access, created_at, updated_at
+      SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, is_admin, admin_role, admin_notes, is_tester, is_active, companion_access, created_at, updated_at
       FROM users WHERE 1=1
     `;
     const params = [];
@@ -293,6 +321,171 @@ router.get("/users", async (req, res) => {
   } catch (err) {
     console.error("Admin users error:", err);
     res.status(500).json({ error: "Failed to load users" });
+  }
+});
+
+// ─── GET /api/admin/users/:id/detail — Person detail with journey stage ───
+router.get("/users/:id/detail", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.params.id;
+
+    // Core user data
+    const user = await db.prepare(`
+      SELECT id, email, role, first_name, last_name, phone, avatar_url, email_verified, is_demo,
+        is_admin, admin_role, admin_notes, is_tester, is_active, companion_access, created_at, updated_at
+      FROM users WHERE id = ?
+    `).get(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Caregiver profile (if applicable)
+    let caregiverProfile = null;
+    try {
+      caregiverProfile = await db.prepare(`
+        SELECT cp.*, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.user_id = ?
+      `).get(userId);
+    } catch (e) { /* */ }
+
+    // Session counts
+    const sessionStats = await db.prepare(`
+      SELECT
+        COUNT(*) as total,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+        COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled,
+        COUNT(CASE WHEN status IN ('open', 'requested', 'confirmed', 'pending') THEN 1 END) as upcoming
+      FROM care_sessions
+      WHERE family_user_id = ? OR caregiver_id = (SELECT id FROM caregiver_profiles WHERE user_id = ?)
+    `).get(userId, userId);
+
+    // Lifetime revenue (payments involving this user)
+    let lifetimeRevenue = { total: 0 };
+    try {
+      lifetimeRevenue = await db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) as total FROM payments
+        WHERE (family_user_id = ? OR caregiver_id = (SELECT id FROM caregiver_profiles WHERE user_id = ?))
+        AND status = 'completed'
+      `).get(userId, userId) || { total: 0 };
+    } catch (e) { /* */ }
+
+    // Reviews (given and received)
+    let reviewStats = { given: 0, received: 0, avgReceived: 0 };
+    try {
+      const given = await db.prepare("SELECT COUNT(*) as count FROM reviews WHERE family_user_id = ?").get(userId);
+      const received = await db.prepare(`
+        SELECT COUNT(*) as count, ROUND(AVG(rating), 1) as avg FROM reviews
+        WHERE caregiver_id = (SELECT id FROM caregiver_profiles WHERE user_id = ?)
+      `).get(userId);
+      reviewStats = { given: parseInt(given?.count || 0), received: parseInt(received?.count || 0), avgReceived: parseFloat(received?.avg || 0) };
+    } catch (e) { /* */ }
+
+    // Care team membership
+    let careTeams = [];
+    try {
+      careTeams = await db.prepare(`
+        SELECT ct.id, ct.name, ctm.role as team_role,
+          cr.first_name || ' ' || cr.last_name as recipient_name
+        FROM care_team_members ctm
+        JOIN care_teams ct ON ctm.care_team_id = ct.id
+        JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+        WHERE ctm.user_id = ?
+      `).all(userId);
+    } catch (e) { /* */ }
+
+    // Related tickets
+    let tickets = [];
+    try {
+      tickets = await db.prepare(`
+        SELECT id, subject, status, priority, category, created_at
+        FROM admin_tickets
+        WHERE reporter_user_id = ? OR related_user_id = ?
+        ORDER BY created_at DESC LIMIT 10
+      `).all(userId, userId);
+    } catch (e) { /* */ }
+
+    // Safety flags involving this user
+    let safetyFlags = [];
+    try {
+      safetyFlags = await db.prepare(`
+        SELECT id, flag_type, description, status, severity, created_at
+        FROM safety_flags
+        WHERE reporter_user_id = ? OR flagged_user_id = ? OR caregiver_user_id = ?
+        ORDER BY created_at DESC LIMIT 10
+      `).all(userId, userId, userId);
+    } catch (e) { /* */ }
+
+    // Last active (most recent activity_feed, message, or session)
+    let lastActive = user.updated_at;
+    try {
+      const lastMsg = await db.prepare("SELECT MAX(created_at) as ts FROM messages WHERE sender_id = ?").get(userId);
+      const lastActivity = await db.prepare("SELECT MAX(created_at) as ts FROM activity_feed WHERE family_user_id = ?").get(userId);
+      const candidates = [user.updated_at, lastMsg?.ts, lastActivity?.ts].filter(Boolean);
+      lastActive = candidates.sort().pop() || user.created_at;
+    } catch (e) { /* */ }
+
+    // ─── Compute Customer Journey Stage ───
+    // Signup → Verified → Team Built → First Visit → Active → Churned
+    let journeyStage = 'signup';
+    let journeySteps = { signup: true, verified: false, team_built: false, first_visit: false, active: false };
+
+    if (user.email_verified) {
+      journeySteps.verified = true;
+      journeyStage = 'verified';
+    }
+    if (careTeams.length > 0) {
+      journeySteps.team_built = true;
+      journeyStage = 'team_built';
+    }
+    if ((sessionStats?.completed || 0) > 0) {
+      journeySteps.first_visit = true;
+      journeyStage = 'first_visit';
+    }
+    if ((sessionStats?.completed || 0) >= 3) {
+      journeySteps.active = true;
+      journeyStage = 'active';
+    }
+    // Churn check: no activity in 30 days and had previous sessions
+    if (journeySteps.first_visit && lastActive) {
+      const daysSinceLast = (Date.now() - new Date(lastActive).getTime()) / (1000 * 86400);
+      if (daysSinceLast > 30) journeyStage = 'churned';
+    }
+
+    res.json({
+      user,
+      caregiverProfile,
+      sessionStats,
+      lifetimeRevenue: parseFloat(lifetimeRevenue?.total || 0),
+      reviewStats,
+      careTeams,
+      tickets,
+      safetyFlags,
+      lastActive,
+      journeyStage,
+      journeySteps,
+    });
+  } catch (err) {
+    console.error("Admin user detail error:", err);
+    res.status(500).json({ error: "Failed to load user detail" });
+  }
+});
+
+// ─── PUT /api/admin/users/:id/admin-notes — Update admin sticky notes ───
+router.put("/users/:id/admin-notes", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { notes } = req.body;
+    await db.prepare("UPDATE users SET admin_notes = ?, updated_at = NOW() WHERE id = ?").run(notes || null, req.params.id);
+
+    // Audit
+    try {
+      await db.prepare(
+        "INSERT INTO admin_audit_log (id, admin_user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(uuid(), req.user.id, 'admin_notes_updated', 'user', req.params.id, JSON.stringify({ preview: (notes || '').slice(0, 100) }));
+    } catch (e) { /* */ }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin notes error:", err);
+    res.status(500).json({ error: "Failed to update admin notes" });
   }
 });
 

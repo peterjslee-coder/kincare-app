@@ -33,6 +33,16 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [feedbackFilter, setFeedbackFilter] = useState({ category: '', status: '' });
   const [expandedFeedback, setExpandedFeedback] = useState(null);
   const [feedbackEditNotes, setFeedbackEditNotes] = useState('');
+  // Tickets tab state
+  const [tickets, setTickets] = useState([]);
+  const [ticketCount, setTicketCount] = useState(0);
+  const [ticketLoading, setTicketLoading] = useState(false);
+  const [ticketFilter, setTicketFilter] = useState({ status: '', category: '', priority: '' });
+  const [ticketCounts, setTicketCounts] = useState({});
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [ticketComments, setTicketComments] = useState([]);
+  const [newTicketComment, setNewTicketComment] = useState('');
+
   // Background checks
   const [bgCheckCandidates, setBgCheckCandidates] = useState([]);
   const [bgCheckLoading, setBgCheckLoading] = useState(false);
@@ -68,6 +78,67 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       }
     } catch {}
     setSafetyLoading(false);
+  };
+
+  const loadTickets = async () => {
+    setTicketLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (ticketFilter.status) params.set('status', ticketFilter.status);
+      if (ticketFilter.category) params.set('category', ticketFilter.category);
+      if (ticketFilter.priority) params.set('priority', ticketFilter.priority);
+      const res = await apiFetch(`/api/admin/tickets?${params.toString()}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setTickets(data.tickets || []);
+        // Build counts map
+        const cm = {};
+        (data.counts || []).forEach(c => { cm[c.status] = c.count; });
+        setTicketCounts(cm);
+        setTicketCount((cm.open || 0) + (cm.in_progress || 0));
+      }
+    } catch (err) { console.error('Load tickets error:', err); }
+    setTicketLoading(false);
+  };
+
+  const loadTicketDetail = async (id) => {
+    try {
+      const res = await apiFetch(`/api/admin/tickets/${id}`);
+      if (res?.ok) {
+        const data = await res.json();
+        setSelectedTicket(data.ticket);
+        setTicketComments(data.comments || []);
+      }
+    } catch (err) { console.error('Load ticket detail error:', err); }
+  };
+
+  const updateTicket = async (id, updates) => {
+    try {
+      const res = await apiFetch(`/api/admin/tickets/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+      if (res?.ok) {
+        showToast('Ticket updated', 'success');
+        loadTickets();
+        if (selectedTicket?.id === id) loadTicketDetail(id);
+      }
+    } catch (err) { showToast('Failed to update ticket', 'error'); }
+  };
+
+  const addTicketComment = async (ticketId) => {
+    if (!newTicketComment.trim()) return;
+    try {
+      const res = await apiFetch(`/api/admin/tickets/${ticketId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ content: newTicketComment, isInternal: true }),
+      });
+      if (res?.ok) {
+        setNewTicketComment('');
+        loadTicketDetail(ticketId);
+        showToast('Comment added', 'success');
+      }
+    } catch (err) { showToast('Failed to add comment', 'error'); }
   };
 
   // Safety flag passkey state
@@ -532,6 +603,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         setBgCheckActionItems(d.bgCheckActionItems || []);
       }
     }).catch(() => {});
+    // Fetch ticket counts for badge
+    apiFetch('/api/admin/tickets?limit=1').then(r => r?.ok ? r.json() : null).then(d => {
+      if (d?.counts) {
+        const cm = {};
+        d.counts.forEach(c => { cm[c.status] = c.count; });
+        setTicketCounts(cm);
+        setTicketCount((cm.open || 0) + (cm.in_progress || 0));
+      }
+    }).catch(() => {});
     // Fetch current user for settings tab
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
   }, []);
@@ -545,6 +625,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     if (activeTab === 'onboarding') loadOnboardingEvents();
     if (activeTab === 'authorizations') loadAuthorizations();
     if (activeTab === 'customerservice') loadCsReviews();
+    if (activeTab === 'tickets') loadTickets();
     if (activeTab === 'security') { loadSecDashboard(); loadSecAuditLog(); }
     if (activeTab === 'sessions') { loadNoShowSessions(); loadPausedCaregivers(); }
     if (activeTab === 'safety') loadSafetyFlags();
@@ -562,6 +643,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   useEffect(() => {
     if (activeTab === 'people') loadUsers();
   }, [userRoleFilter, userDemoFilter]);
+
+  // Auto-reload tickets when filters change
+  useEffect(() => {
+    if (activeTab === 'tickets') loadTickets();
+  }, [ticketFilter]);
 
   // Auto-trigger search when switching to people tab with pre-filled email (e.g. from waitlist Invite button)
   useEffect(() => {
@@ -1127,16 +1213,19 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       { id: 'people', label: 'People', icon: '👥', badge: pendingApprovals.length || null },
       { id: 'sessions', label: 'Sessions', icon: '📅', badge: pausedCaregivers.length || null },
     ]},
+    { label: 'Customer Service', tabs: [
+      { id: 'tickets', label: 'Tickets', icon: '🎫', badge: ticketCount || null },
+      { id: 'customerservice', label: 'Support', icon: '🛎️' },
+      { id: 'feedback', label: 'Feedback', icon: '💬', badge: newFeedbackCount || null },
+    ]},
     { label: 'Trust & Safety', tabs: [
       { id: 'authorizations', label: 'Auth', icon: '\u{1F512}', badge: consentAlerts.length || null },
       { id: 'bgchecks', label: 'BG Checks', icon: '🔍', badge: checkrAlertCount || null },
       { id: 'safety', label: 'Safety Flags', icon: '🚨', badge: safetyFlagCount || null },
-      { id: 'customerservice', label: 'Support', icon: '🛎️' },
       { id: 'security', label: 'Security', icon: '🛡️' },
       { id: 'blocked', label: 'Blocked', icon: '🚫' },
     ]},
     { label: 'Content & Config', tabs: [
-      { id: 'feedback', label: 'Feedback', icon: '💬', badge: newFeedbackCount || null },
       { id: 'help', label: 'Help/FAQ', icon: '❓' },
       { id: 'financials', label: 'Financials', icon: '💰' },
       { id: 'costs', label: 'Costs', icon: '💵' },
@@ -2638,6 +2727,177 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Tickets Tab ─── */}
+      {activeTab === 'tickets' && (
+        <div>
+          {/* Header row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Tickets</h2>
+            <div style={{ display: 'flex', gap: 8, fontSize: 13 }}>
+              <span style={{ padding: '4px 10px', borderRadius: 12, background: '#ef5350', color: '#fff' }}>Open {ticketCounts.open || 0}</span>
+              <span style={{ padding: '4px 10px', borderRadius: 12, background: '#ff9800', color: '#fff' }}>In Progress {ticketCounts.in_progress || 0}</span>
+              <span style={{ padding: '4px 10px', borderRadius: 12, background: '#4caf50', color: '#fff' }}>Resolved {ticketCounts.resolved || 0}</span>
+              <span style={{ padding: '4px 10px', borderRadius: 12, background: '#9e9e9e', color: '#fff' }}>Closed {ticketCounts.closed || 0}</span>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+            <select value={ticketFilter.status} onChange={e => setTicketFilter(f => ({ ...f, status: e.target.value }))}
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }}>
+              <option value="">All Statuses</option>
+              <option value="open">Open</option>
+              <option value="in_progress">In Progress</option>
+              <option value="resolved">Resolved</option>
+              <option value="closed">Closed</option>
+            </select>
+            <select value={ticketFilter.priority} onChange={e => setTicketFilter(f => ({ ...f, priority: e.target.value }))}
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }}>
+              <option value="">All Priorities</option>
+              <option value="urgent">Urgent</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+            <select value={ticketFilter.category} onChange={e => setTicketFilter(f => ({ ...f, category: e.target.value }))}
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }}>
+              <option value="">All Categories</option>
+              <option value="visit_issue">Visit Issue</option>
+              <option value="billing">Billing</option>
+              <option value="onboarding">Onboarding</option>
+              <option value="matching">Matching</option>
+              <option value="technical">Technical</option>
+              <option value="safety">Safety</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+
+          {/* Ticket detail overlay */}
+          {selectedTicket && (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 10, padding: 20, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedTicket.subject}</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                    {selectedTicket.reporter_name || 'Unknown'} · {selectedTicket.source} · {new Date(selectedTicket.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <button onClick={() => { setSelectedTicket(null); setTicketComments([]); }}
+                  style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+              </div>
+              {selectedTicket.description && (
+                <p style={{ fontSize: 14, color: 'var(--text-primary)', margin: '0 0 12px', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{selectedTicket.description}</p>
+              )}
+              {/* Status/priority controls */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                <select value={selectedTicket.status} onChange={e => updateTicket(selectedTicket.id, { status: e.target.value })}
+                  style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12 }}>
+                  <option value="open">Open</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="closed">Closed</option>
+                </select>
+                <select value={selectedTicket.priority} onChange={e => updateTicket(selectedTicket.id, { priority: e.target.value })}
+                  style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12 }}>
+                  <option value="urgent">Urgent</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+                <select value={selectedTicket.category} onChange={e => updateTicket(selectedTicket.id, { category: e.target.value })}
+                  style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12 }}>
+                  <option value="visit_issue">Visit Issue</option>
+                  <option value="billing">Billing</option>
+                  <option value="onboarding">Onboarding</option>
+                  <option value="matching">Matching</option>
+                  <option value="technical">Technical</option>
+                  <option value="safety">Safety</option>
+                  <option value="general">General</option>
+                </select>
+              </div>
+              {/* Comments */}
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 12 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-secondary)' }}>Comments ({ticketComments.length})</h4>
+                {ticketComments.map(c => (
+                  <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>{c.author_name}</strong>
+                      {c.admin_role && <span style={{ marginLeft: 4, fontSize: 11, color: 'var(--role-color)' }}>({c.admin_role})</span>}
+                      {c.is_internal ? <span style={{ marginLeft: 4, fontSize: 11, color: '#ff9800' }}>internal</span> : null}
+                      <span style={{ marginLeft: 8 }}>{new Date(c.created_at).toLocaleString()}</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>{c.content}</p>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <input value={newTicketComment} onChange={e => setNewTicketComment(e.target.value)}
+                    placeholder="Add internal comment..."
+                    style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addTicketComment(selectedTicket.id); } }} />
+                  <button onClick={() => addTicketComment(selectedTicket.id)}
+                    style={{ padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Send</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Ticket list */}
+          {ticketLoading ? (
+            <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 32 }}>Loading tickets...</p>
+          ) : tickets.length === 0 ? (
+            <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 32 }}>No tickets found</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--border-color)' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 6px', color: 'var(--text-secondary)', fontWeight: 600 }}>Status</th>
+                    <th style={{ textAlign: 'left', padding: '8px 6px', color: 'var(--text-secondary)', fontWeight: 600 }}>Priority</th>
+                    <th style={{ textAlign: 'left', padding: '8px 6px', color: 'var(--text-secondary)', fontWeight: 600 }}>Subject</th>
+                    <th style={{ textAlign: 'left', padding: '8px 6px', color: 'var(--text-secondary)', fontWeight: 600 }}>Reporter</th>
+                    <th style={{ textAlign: 'left', padding: '8px 6px', color: 'var(--text-secondary)', fontWeight: 600 }}>Category</th>
+                    <th style={{ textAlign: 'left', padding: '8px 6px', color: 'var(--text-secondary)', fontWeight: 600 }}>Age</th>
+                    <th style={{ textAlign: 'left', padding: '8px 6px', color: 'var(--text-secondary)', fontWeight: 600 }}>Assigned</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tickets.map(t => {
+                    const statusColors = { open: '#ef5350', in_progress: '#ff9800', resolved: '#4caf50', closed: '#9e9e9e' };
+                    const priorityColors = { urgent: '#d32f2f', high: '#ef5350', medium: '#ff9800', low: '#4caf50' };
+                    const age = Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000);
+                    const ageStr = age === 0 ? 'Today' : age === 1 ? '1d' : `${age}d`;
+                    return (
+                      <tr key={t.id} onClick={() => loadTicketDetail(t.id)}
+                        style={{ borderBottom: '1px solid var(--border-color)', cursor: 'pointer', transition: 'background 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <td style={{ padding: '10px 6px' }}>
+                          <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, color: '#fff', background: statusColors[t.status] || '#999' }}>
+                            {t.status?.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 6px' }}>
+                          <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, color: '#fff', background: priorityColors[t.priority] || '#999' }}>
+                            {t.priority}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 6px', color: 'var(--text-primary)', fontWeight: 500, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {t.subject}
+                        </td>
+                        <td style={{ padding: '10px 6px', color: 'var(--text-secondary)' }}>{t.reporter_name || '—'}</td>
+                        <td style={{ padding: '10px 6px', color: 'var(--text-secondary)' }}>{t.category?.replace('_', ' ')}</td>
+                        <td style={{ padding: '10px 6px', color: age > 3 ? '#ef5350' : 'var(--text-secondary)', fontWeight: age > 3 ? 600 : 400 }}>{ageStr}</td>
+                        <td style={{ padding: '10px 6px', color: 'var(--text-secondary)' }}>{t.assigned_name || '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

@@ -279,6 +279,7 @@ app.use("/api/availability", require("./routes/availability"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/admin/financials", require("./routes/financials"));
 app.use("/api/admin/treasury", require("./routes/treasury"));
+app.use("/api/admin/tickets", require("./routes/tickets"));
 app.use("/api/costs", require("./routes/costs"));
 app.use("/api/platform-invites", require("./routes/platformInvites"));
 app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
@@ -302,7 +303,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.52.8";
+const APP_VERSION = "1.53.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

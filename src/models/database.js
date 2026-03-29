@@ -260,7 +260,7 @@ async function initializeDatabase() {
     `ALTER TABLE availability ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'available'`,
     `ALTER TABLE availability ADD COLUMN IF NOT EXISTS note TEXT`,
     // Auto-promote Pete's real account to admin
-    `UPDATE users SET is_admin = 1 WHERE email = 'peterjslee@gmail.com'`,
+    `UPDATE users SET is_admin = 1, admin_role = 'god' WHERE email = 'peterjslee@gmail.com'`,
     // Backfill is_demo flag for demo accounts that were seeded before the column existed
     `UPDATE users SET is_demo = 1 WHERE email IN ('pete@inplace.care', 'david.lee@inplace.care', 'susan.lee@inplace.care', 'maria@inplace.care', 'betty@inplace.care')`,
     // Caregiver profile: Checkr background check fields
@@ -941,6 +941,51 @@ async function initializeDatabase() {
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS fail_count INTEGER DEFAULT 0`,
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ`,
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_failure_at TIMESTAMPTZ`,
+
+    // ─── v1.53.0 — Admin rebuild: tickets, role levels, geolocation ───
+
+    // Tickets table — replaces/upgrades the feedback pipeline
+    `CREATE TABLE IF NOT EXISTS admin_tickets (
+      id TEXT PRIMARY KEY,
+      subject TEXT NOT NULL,
+      description TEXT,
+      category TEXT NOT NULL DEFAULT 'general',
+      priority TEXT NOT NULL DEFAULT 'medium',
+      status TEXT NOT NULL DEFAULT 'open',
+      reporter_user_id TEXT REFERENCES users(id),
+      assigned_to TEXT REFERENCES users(id),
+      related_session_id TEXT REFERENCES care_sessions(id),
+      related_user_id TEXT REFERENCES users(id),
+      related_safety_flag_id TEXT,
+      source TEXT DEFAULT 'user',
+      admin_notes TEXT,
+      resolved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+
+    // Ticket comments/thread
+    `CREATE TABLE IF NOT EXISTS admin_ticket_comments (
+      id TEXT PRIMARY KEY,
+      ticket_id TEXT NOT NULL REFERENCES admin_tickets(id) ON DELETE CASCADE,
+      author_id TEXT NOT NULL REFERENCES users(id),
+      content TEXT NOT NULL,
+      is_internal INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+
+    // Admin role level on users (god, ops, cs, view — null = not admin)
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_role TEXT`,
+
+    // Admin sticky notes on users
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_notes TEXT`,
+
+    // Visit geolocation — check-in/out coordinates
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_lat REAL`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_lng REAL`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_out_lat REAL`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_out_lng REAL`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_distance_ft REAL`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

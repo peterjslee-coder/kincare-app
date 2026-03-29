@@ -54922,6 +54922,17 @@ const HelpPage = window.HelpPage = ({
       };
       let res;
       if (currentUser) {
+        // Also create a ticket so it shows up in admin ticket queue
+        try {
+          await apiFetch('/api/admin/tickets/submit', {
+            method: 'POST',
+            body: JSON.stringify({
+              subject: fbCategory === 'bug' ? 'Bug Report' : fbCategory === 'feature' ? 'Feature Request' : fbCategory === 'complaint' ? 'Complaint' : 'Feedback',
+              description: fbDescription.trim(),
+              category: fbCategory === 'bug' ? 'technical' : fbCategory === 'complaint' ? 'general' : fbCategory === 'feature' ? 'general' : 'general'
+            })
+          });
+        } catch (ticketErr) {/* ticket creation is best-effort; feedback still goes through */}
         res = await apiFetch('/api/feedback', {
           method: 'POST',
           body: JSON.stringify(payload)
@@ -55684,7 +55695,109 @@ const HelpPage = window.HelpPage = ({
       background: 'var(--color-info-bg)',
       borderRadius: 8
     }
-  }, React.createElement('strong', null, 'Admin: '), d.admin_notes))))));
+  }, React.createElement('strong', null, 'Admin: '), d.admin_notes))))),
+  // ─── My Support Requests (tickets) ───
+  currentUser && React.createElement(MyTickets, {
+    currentUser
+  }));
+};
+
+// Sub-component: Shows user's submitted tickets
+const MyTickets = ({
+  currentUser
+}) => {
+  const [tickets, setTickets] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    apiFetch('/api/admin/tickets/mine').then(async r => {
+      if (r !== null && r !== void 0 && r.ok) {
+        const d = await r.json();
+        setTickets(d.tickets || []);
+      }
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+  if (loading || tickets.length === 0) return null;
+  const statusColors = {
+    open: {
+      bg: 'var(--color-warning-bg)',
+      color: 'var(--color-warning)'
+    },
+    in_progress: {
+      bg: 'var(--color-info-bg)',
+      color: 'var(--color-info)'
+    },
+    resolved: {
+      bg: 'var(--color-success-bg)',
+      color: 'var(--color-success)'
+    },
+    closed: {
+      bg: 'var(--badge-muted-bg)',
+      color: 'var(--text-muted)'
+    }
+  };
+  return React.createElement('div', {
+    style: {
+      marginTop: 32,
+      padding: 24,
+      background: 'var(--bg-surface)',
+      borderRadius: 14,
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      border: '1px solid var(--border-color)'
+    }
+  }, React.createElement('h3', {
+    style: {
+      margin: '0 0 12px',
+      fontSize: 18,
+      fontWeight: 700,
+      color: 'var(--text-primary)'
+    }
+  }, 'My Support Requests'), ...tickets.map(t => {
+    const sc = statusColors[t.status] || statusColors.open;
+    return React.createElement('div', {
+      key: t.id,
+      style: {
+        padding: 12,
+        marginBottom: 8,
+        background: 'var(--bg-card)',
+        borderRadius: 10,
+        border: '1px solid var(--border-color)'
+      }
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }
+    }, React.createElement('span', {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        color: 'var(--text-primary)'
+      }
+    }, t.subject), React.createElement('span', {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        padding: '2px 8px',
+        borderRadius: 10,
+        background: sc.bg,
+        color: sc.color
+      }
+    }, (t.status || '').replace('_', ' ').toUpperCase())), t.description && React.createElement('div', {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        marginTop: 4,
+        lineHeight: 1.4
+      }
+    }, t.description.length > 120 ? t.description.slice(0, 120) + '...' : t.description), React.createElement('div', {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-tertiary)',
+        marginTop: 4
+      }
+    }, `${t.category} — submitted ${new Date(t.created_at).toLocaleDateString()}` + (t.assigned_name ? ` — assigned to ${t.assigned_name}` : '')));
+  }));
 };
 ;
 // ─── Safety Flags Tab — Evidence Thread UI ───
@@ -56490,6 +56603,20 @@ const AdminPanel = window.AdminPanel = ({
   });
   const [expandedFeedback, setExpandedFeedback] = useState(null);
   const [feedbackEditNotes, setFeedbackEditNotes] = useState('');
+  // Tickets tab state
+  const [tickets, setTickets] = useState([]);
+  const [ticketCount, setTicketCount] = useState(0);
+  const [ticketLoading, setTicketLoading] = useState(false);
+  const [ticketFilter, setTicketFilter] = useState({
+    status: '',
+    category: '',
+    priority: ''
+  });
+  const [ticketCounts, setTicketCounts] = useState({});
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [ticketComments, setTicketComments] = useState([]);
+  const [newTicketComment, setNewTicketComment] = useState('');
+
   // Background checks
   const [bgCheckCandidates, setBgCheckCandidates] = useState([]);
   const [bgCheckLoading, setBgCheckLoading] = useState(false);
@@ -56523,6 +56650,76 @@ const AdminPanel = window.AdminPanel = ({
       }
     } catch {}
     setSafetyLoading(false);
+  };
+  const loadTickets = async () => {
+    setTicketLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (ticketFilter.status) params.set('status', ticketFilter.status);
+      if (ticketFilter.category) params.set('category', ticketFilter.category);
+      if (ticketFilter.priority) params.set('priority', ticketFilter.priority);
+      const res = await apiFetch(`/api/admin/tickets?${params.toString()}`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setTickets(data.tickets || []);
+        // Build counts map
+        const cm = {};
+        (data.counts || []).forEach(c => {
+          cm[c.status] = c.count;
+        });
+        setTicketCounts(cm);
+        setTicketCount((cm.open || 0) + (cm.in_progress || 0));
+      }
+    } catch (err) {
+      console.error('Load tickets error:', err);
+    }
+    setTicketLoading(false);
+  };
+  const loadTicketDetail = async id => {
+    try {
+      const res = await apiFetch(`/api/admin/tickets/${id}`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setSelectedTicket(data.ticket);
+        setTicketComments(data.comments || []);
+      }
+    } catch (err) {
+      console.error('Load ticket detail error:', err);
+    }
+  };
+  const updateTicket = async (id, updates) => {
+    try {
+      const res = await apiFetch(`/api/admin/tickets/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates)
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast('Ticket updated', 'success');
+        loadTickets();
+        if ((selectedTicket === null || selectedTicket === void 0 ? void 0 : selectedTicket.id) === id) loadTicketDetail(id);
+      }
+    } catch (err) {
+      showToast('Failed to update ticket', 'error');
+    }
+  };
+  const addTicketComment = async ticketId => {
+    if (!newTicketComment.trim()) return;
+    try {
+      const res = await apiFetch(`/api/admin/tickets/${ticketId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          content: newTicketComment,
+          isInternal: true
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        setNewTicketComment('');
+        loadTicketDetail(ticketId);
+        showToast('Comment added', 'success');
+      }
+    } catch (err) {
+      showToast('Failed to add comment', 'error');
+    }
   };
 
   // Safety flag passkey state
@@ -57061,6 +57258,17 @@ const AdminPanel = window.AdminPanel = ({
         setBgCheckActionItems(d.bgCheckActionItems || []);
       }
     }).catch(() => {});
+    // Fetch ticket counts for badge
+    apiFetch('/api/admin/tickets?limit=1').then(r => r !== null && r !== void 0 && r.ok ? r.json() : null).then(d => {
+      if (d !== null && d !== void 0 && d.counts) {
+        const cm = {};
+        d.counts.forEach(c => {
+          cm[c.status] = c.count;
+        });
+        setTicketCounts(cm);
+        setTicketCount((cm.open || 0) + (cm.in_progress || 0));
+      }
+    }).catch(() => {});
     // Fetch current user for settings tab
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
   }, []);
@@ -57078,6 +57286,7 @@ const AdminPanel = window.AdminPanel = ({
     if (activeTab === 'onboarding') loadOnboardingEvents();
     if (activeTab === 'authorizations') loadAuthorizations();
     if (activeTab === 'customerservice') loadCsReviews();
+    if (activeTab === 'tickets') loadTickets();
     if (activeTab === 'security') {
       loadSecDashboard();
       loadSecAuditLog();
@@ -57103,6 +57312,11 @@ const AdminPanel = window.AdminPanel = ({
   useEffect(() => {
     if (activeTab === 'people') loadUsers();
   }, [userRoleFilter, userDemoFilter]);
+
+  // Auto-reload tickets when filters change
+  useEffect(() => {
+    if (activeTab === 'tickets') loadTickets();
+  }, [ticketFilter]);
 
   // Auto-trigger search when switching to people tab with pre-filled email (e.g. from waitlist Invite button)
   useEffect(() => {
@@ -57815,6 +58029,23 @@ const AdminPanel = window.AdminPanel = ({
       badge: pausedCaregivers.length || null
     }]
   }, {
+    label: 'Customer Service',
+    tabs: [{
+      id: 'tickets',
+      label: 'Tickets',
+      icon: '🎫',
+      badge: ticketCount || null
+    }, {
+      id: 'customerservice',
+      label: 'Support',
+      icon: '🛎️'
+    }, {
+      id: 'feedback',
+      label: 'Feedback',
+      icon: '💬',
+      badge: newFeedbackCount || null
+    }]
+  }, {
     label: 'Trust & Safety',
     tabs: [{
       id: 'authorizations',
@@ -57832,10 +58063,6 @@ const AdminPanel = window.AdminPanel = ({
       icon: '🚨',
       badge: safetyFlagCount || null
     }, {
-      id: 'customerservice',
-      label: 'Support',
-      icon: '🛎️'
-    }, {
       id: 'security',
       label: 'Security',
       icon: '🛡️'
@@ -57847,11 +58074,6 @@ const AdminPanel = window.AdminPanel = ({
   }, {
     label: 'Content & Config',
     tabs: [{
-      id: 'feedback',
-      label: 'Feedback',
-      icon: '💬',
-      badge: newFeedbackCount || null
-    }, {
       id: 'help',
       label: 'Help/FAQ',
       icon: '❓'
@@ -61210,7 +61432,514 @@ const AdminPanel = window.AdminPanel = ({
         color: 'var(--text-secondary)'
       }
     }, e.error_message || '—'));
-  }))))))), activeTab === 'customerservice' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+  }))))))), activeTab === 'tickets' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+      flexWrap: 'wrap',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: 18,
+      fontWeight: 700,
+      margin: 0
+    }
+  }, "Tickets"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      padding: '4px 10px',
+      borderRadius: 12,
+      background: '#ef5350',
+      color: '#fff'
+    }
+  }, "Open ", ticketCounts.open || 0), /*#__PURE__*/React.createElement("span", {
+    style: {
+      padding: '4px 10px',
+      borderRadius: 12,
+      background: '#ff9800',
+      color: '#fff'
+    }
+  }, "In Progress ", ticketCounts.in_progress || 0), /*#__PURE__*/React.createElement("span", {
+    style: {
+      padding: '4px 10px',
+      borderRadius: 12,
+      background: '#4caf50',
+      color: '#fff'
+    }
+  }, "Resolved ", ticketCounts.resolved || 0), /*#__PURE__*/React.createElement("span", {
+    style: {
+      padding: '4px 10px',
+      borderRadius: 12,
+      background: '#9e9e9e',
+      color: '#fff'
+    }
+  }, "Closed ", ticketCounts.closed || 0))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginBottom: 16,
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("select", {
+    value: ticketFilter.status,
+    onChange: e => setTicketFilter(f => ({
+      ...f,
+      status: e.target.value
+    })),
+    style: {
+      padding: '6px 10px',
+      borderRadius: 6,
+      border: '1px solid var(--border-color)',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)',
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "All Statuses"), /*#__PURE__*/React.createElement("option", {
+    value: "open"
+  }, "Open"), /*#__PURE__*/React.createElement("option", {
+    value: "in_progress"
+  }, "In Progress"), /*#__PURE__*/React.createElement("option", {
+    value: "resolved"
+  }, "Resolved"), /*#__PURE__*/React.createElement("option", {
+    value: "closed"
+  }, "Closed")), /*#__PURE__*/React.createElement("select", {
+    value: ticketFilter.priority,
+    onChange: e => setTicketFilter(f => ({
+      ...f,
+      priority: e.target.value
+    })),
+    style: {
+      padding: '6px 10px',
+      borderRadius: 6,
+      border: '1px solid var(--border-color)',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)',
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "All Priorities"), /*#__PURE__*/React.createElement("option", {
+    value: "urgent"
+  }, "Urgent"), /*#__PURE__*/React.createElement("option", {
+    value: "high"
+  }, "High"), /*#__PURE__*/React.createElement("option", {
+    value: "medium"
+  }, "Medium"), /*#__PURE__*/React.createElement("option", {
+    value: "low"
+  }, "Low")), /*#__PURE__*/React.createElement("select", {
+    value: ticketFilter.category,
+    onChange: e => setTicketFilter(f => ({
+      ...f,
+      category: e.target.value
+    })),
+    style: {
+      padding: '6px 10px',
+      borderRadius: 6,
+      border: '1px solid var(--border-color)',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)',
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "All Categories"), /*#__PURE__*/React.createElement("option", {
+    value: "visit_issue"
+  }, "Visit Issue"), /*#__PURE__*/React.createElement("option", {
+    value: "billing"
+  }, "Billing"), /*#__PURE__*/React.createElement("option", {
+    value: "onboarding"
+  }, "Onboarding"), /*#__PURE__*/React.createElement("option", {
+    value: "matching"
+  }, "Matching"), /*#__PURE__*/React.createElement("option", {
+    value: "technical"
+  }, "Technical"), /*#__PURE__*/React.createElement("option", {
+    value: "safety"
+  }, "Safety"), /*#__PURE__*/React.createElement("option", {
+    value: "general"
+  }, "General"))), selectedTicket && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border-color)',
+      borderRadius: 10,
+      padding: 20,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: 0,
+      fontSize: 16,
+      fontWeight: 700,
+      color: 'var(--text-primary)'
+    }
+  }, selectedTicket.subject), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '4px 0 0',
+      fontSize: 12,
+      color: 'var(--text-secondary)'
+    }
+  }, selectedTicket.reporter_name || 'Unknown', " \xB7 ", selectedTicket.source, " \xB7 ", new Date(selectedTicket.created_at).toLocaleDateString())), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setSelectedTicket(null);
+      setTicketComments([]);
+    },
+    style: {
+      background: 'none',
+      border: 'none',
+      fontSize: 18,
+      cursor: 'pointer',
+      color: 'var(--text-secondary)'
+    }
+  }, "\u2715")), selectedTicket.description && /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 14,
+      color: 'var(--text-primary)',
+      margin: '0 0 12px',
+      lineHeight: 1.5,
+      whiteSpace: 'pre-wrap'
+    }
+  }, selectedTicket.description), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginBottom: 12,
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("select", {
+    value: selectedTicket.status,
+    onChange: e => updateTicket(selectedTicket.id, {
+      status: e.target.value
+    }),
+    style: {
+      padding: '4px 8px',
+      borderRadius: 6,
+      border: '1px solid var(--border-color)',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)',
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "open"
+  }, "Open"), /*#__PURE__*/React.createElement("option", {
+    value: "in_progress"
+  }, "In Progress"), /*#__PURE__*/React.createElement("option", {
+    value: "resolved"
+  }, "Resolved"), /*#__PURE__*/React.createElement("option", {
+    value: "closed"
+  }, "Closed")), /*#__PURE__*/React.createElement("select", {
+    value: selectedTicket.priority,
+    onChange: e => updateTicket(selectedTicket.id, {
+      priority: e.target.value
+    }),
+    style: {
+      padding: '4px 8px',
+      borderRadius: 6,
+      border: '1px solid var(--border-color)',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)',
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "urgent"
+  }, "Urgent"), /*#__PURE__*/React.createElement("option", {
+    value: "high"
+  }, "High"), /*#__PURE__*/React.createElement("option", {
+    value: "medium"
+  }, "Medium"), /*#__PURE__*/React.createElement("option", {
+    value: "low"
+  }, "Low")), /*#__PURE__*/React.createElement("select", {
+    value: selectedTicket.category,
+    onChange: e => updateTicket(selectedTicket.id, {
+      category: e.target.value
+    }),
+    style: {
+      padding: '4px 8px',
+      borderRadius: 6,
+      border: '1px solid var(--border-color)',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)',
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "visit_issue"
+  }, "Visit Issue"), /*#__PURE__*/React.createElement("option", {
+    value: "billing"
+  }, "Billing"), /*#__PURE__*/React.createElement("option", {
+    value: "onboarding"
+  }, "Onboarding"), /*#__PURE__*/React.createElement("option", {
+    value: "matching"
+  }, "Matching"), /*#__PURE__*/React.createElement("option", {
+    value: "technical"
+  }, "Technical"), /*#__PURE__*/React.createElement("option", {
+    value: "safety"
+  }, "Safety"), /*#__PURE__*/React.createElement("option", {
+    value: "general"
+  }, "General"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: '1px solid var(--border-color)',
+      paddingTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("h4", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      marginBottom: 8,
+      color: 'var(--text-secondary)'
+    }
+  }, "Comments (", ticketComments.length, ")"), ticketComments.map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.id,
+    style: {
+      padding: '8px 0',
+      borderBottom: '1px solid var(--border-color)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: 'var(--text-primary)'
+    }
+  }, c.author_name), c.admin_role && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 4,
+      fontSize: 11,
+      color: 'var(--role-color)'
+    }
+  }, "(", c.admin_role, ")"), c.is_internal ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 4,
+      fontSize: 11,
+      color: '#ff9800'
+    }
+  }, "internal") : null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8
+    }
+  }, new Date(c.created_at).toLocaleString())), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      fontSize: 13,
+      color: 'var(--text-primary)',
+      whiteSpace: 'pre-wrap'
+    }
+  }, c.content))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: newTicketComment,
+    onChange: e => setNewTicketComment(e.target.value),
+    placeholder: "Add internal comment...",
+    style: {
+      flex: 1,
+      padding: '8px 10px',
+      borderRadius: 6,
+      border: '1px solid var(--border-color)',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)',
+      fontSize: 13
+    },
+    onKeyDown: e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        addTicketComment(selectedTicket.id);
+      }
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => addTicketComment(selectedTicket.id),
+    style: {
+      padding: '8px 14px',
+      borderRadius: 6,
+      border: 'none',
+      background: 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Send")))), ticketLoading ? /*#__PURE__*/React.createElement("p", {
+    style: {
+      textAlign: 'center',
+      color: 'var(--text-secondary)',
+      padding: 32
+    }
+  }, "Loading tickets...") : tickets.length === 0 ? /*#__PURE__*/React.createElement("p", {
+    style: {
+      textAlign: 'center',
+      color: 'var(--text-secondary)',
+      padding: 32
+    }
+  }, "No tickets found") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: 'auto'
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      borderBottom: '2px solid var(--border-color)'
+    }
+  }, /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '8px 6px',
+      color: 'var(--text-secondary)',
+      fontWeight: 600
+    }
+  }, "Status"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '8px 6px',
+      color: 'var(--text-secondary)',
+      fontWeight: 600
+    }
+  }, "Priority"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '8px 6px',
+      color: 'var(--text-secondary)',
+      fontWeight: 600
+    }
+  }, "Subject"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '8px 6px',
+      color: 'var(--text-secondary)',
+      fontWeight: 600
+    }
+  }, "Reporter"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '8px 6px',
+      color: 'var(--text-secondary)',
+      fontWeight: 600
+    }
+  }, "Category"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '8px 6px',
+      color: 'var(--text-secondary)',
+      fontWeight: 600
+    }
+  }, "Age"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: 'left',
+      padding: '8px 6px',
+      color: 'var(--text-secondary)',
+      fontWeight: 600
+    }
+  }, "Assigned"))), /*#__PURE__*/React.createElement("tbody", null, tickets.map(t => {
+    var _t$status, _t$category;
+    const statusColors = {
+      open: '#ef5350',
+      in_progress: '#ff9800',
+      resolved: '#4caf50',
+      closed: '#9e9e9e'
+    };
+    const priorityColors = {
+      urgent: '#d32f2f',
+      high: '#ef5350',
+      medium: '#ff9800',
+      low: '#4caf50'
+    };
+    const age = Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000);
+    const ageStr = age === 0 ? 'Today' : age === 1 ? '1d' : `${age}d`;
+    return /*#__PURE__*/React.createElement("tr", {
+      key: t.id,
+      onClick: () => loadTicketDetail(t.id),
+      style: {
+        borderBottom: '1px solid var(--border-color)',
+        cursor: 'pointer',
+        transition: 'background 0.15s'
+      },
+      onMouseEnter: e => e.currentTarget.style.background = 'var(--bg-hover)',
+      onMouseLeave: e => e.currentTarget.style.background = 'transparent'
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 6px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: 'inline-block',
+        padding: '2px 8px',
+        borderRadius: 10,
+        fontSize: 11,
+        fontWeight: 600,
+        color: '#fff',
+        background: statusColors[t.status] || '#999'
+      }
+    }, (_t$status = t.status) === null || _t$status === void 0 ? void 0 : _t$status.replace('_', ' '))), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 6px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: 'inline-block',
+        padding: '2px 8px',
+        borderRadius: 10,
+        fontSize: 11,
+        fontWeight: 600,
+        color: '#fff',
+        background: priorityColors[t.priority] || '#999'
+      }
+    }, t.priority)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 6px',
+        color: 'var(--text-primary)',
+        fontWeight: 500,
+        maxWidth: 260,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, t.subject), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 6px',
+        color: 'var(--text-secondary)'
+      }
+    }, t.reporter_name || '—'), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 6px',
+        color: 'var(--text-secondary)'
+      }
+    }, (_t$category = t.category) === null || _t$category === void 0 ? void 0 : _t$category.replace('_', ' ')), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 6px',
+        color: age > 3 ? '#ef5350' : 'var(--text-secondary)',
+        fontWeight: age > 3 ? 600 : 400
+      }
+    }, ageStr), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '10px 6px',
+        color: 'var(--text-secondary)'
+      }
+    }, t.assigned_name || '—'));
+  }))))), activeTab === 'customerservice' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
     style: {
       fontSize: 18,
       fontWeight: 700,

@@ -150,6 +150,17 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
       };
       let res;
       if (currentUser) {
+        // Also create a ticket so it shows up in admin ticket queue
+        try {
+          await apiFetch('/api/admin/tickets/submit', {
+            method: 'POST',
+            body: JSON.stringify({
+              subject: fbCategory === 'bug' ? 'Bug Report' : fbCategory === 'feature' ? 'Feature Request' : fbCategory === 'complaint' ? 'Complaint' : 'Feedback',
+              description: fbDescription.trim(),
+              category: fbCategory === 'bug' ? 'technical' : fbCategory === 'complaint' ? 'general' : fbCategory === 'feature' ? 'general' : 'general',
+            }),
+          });
+        } catch (ticketErr) { /* ticket creation is best-effort; feedback still goes through */ }
         res = await apiFetch('/api/feedback', { method: 'POST', body: JSON.stringify(payload) });
       } else {
         res = await fetch('/api/feedback/anonymous', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -598,6 +609,56 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
           )
         ))
       )
-    )
+    ),
+
+    // ─── My Support Requests (tickets) ───
+    currentUser && React.createElement(MyTickets, { currentUser })
+  );
+};
+
+// Sub-component: Shows user's submitted tickets
+const MyTickets = ({ currentUser }) => {
+  const [tickets, setTickets] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    apiFetch('/api/admin/tickets/mine').then(async r => {
+      if (r?.ok) { const d = await r.json(); setTickets(d.tickets || []); }
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  if (loading || tickets.length === 0) return null;
+
+  const statusColors = {
+    open: { bg: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
+    in_progress: { bg: 'var(--color-info-bg)', color: 'var(--color-info)' },
+    resolved: { bg: 'var(--color-success-bg)', color: 'var(--color-success)' },
+    closed: { bg: 'var(--badge-muted-bg)', color: 'var(--text-muted)' },
+  };
+
+  return React.createElement('div', { style: { marginTop: 32, padding: 24, background: 'var(--bg-surface)', borderRadius: 14, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid var(--border-color)' } },
+    React.createElement('h3', { style: { margin: '0 0 12px', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' } }, 'My Support Requests'),
+    ...tickets.map(t => {
+      const sc = statusColors[t.status] || statusColors.open;
+      return React.createElement('div', {
+        key: t.id,
+        style: { padding: 12, marginBottom: 8, background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)' }
+      },
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+          React.createElement('span', { style: { fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' } }, t.subject),
+          React.createElement('span', { style: {
+            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+            background: sc.bg, color: sc.color,
+          } }, (t.status || '').replace('_', ' ').toUpperCase())
+        ),
+        t.description && React.createElement('div', { style: { fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.4 } },
+          t.description.length > 120 ? t.description.slice(0, 120) + '...' : t.description
+        ),
+        React.createElement('div', { style: { fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 } },
+          `${t.category} — submitted ${new Date(t.created_at).toLocaleDateString()}`
+          + (t.assigned_name ? ` — assigned to ${t.assigned_name}` : '')
+        )
+      );
+    })
   );
 };
