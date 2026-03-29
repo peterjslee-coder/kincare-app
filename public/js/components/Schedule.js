@@ -251,7 +251,7 @@ const Schedule = window.Schedule = () => {
             return (
               <div key={dateStr} onClick={() => setSelectedDate(isSelected ? null : dateStr)} style={{
                 minHeight: 64, padding: '6px', cursor: 'pointer',
-                background: isSelected ? 'var(--role-color)' : 'var(--bg-card)',
+                background: isSelected ? 'var(--role-color)' : isToday ? 'rgba(59, 130, 246, 0.1)' : 'var(--bg-card)',
                 color: isSelected ? 'var(--text-on-primary)' : past ? 'var(--text-muted)' : 'var(--text-primary)',
                 borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0',
                 position: 'relative', transition: 'background 0.15s',
@@ -260,11 +260,8 @@ const Schedule = window.Schedule = () => {
                 <div style={{
                   fontSize: 14, fontWeight: isToday ? 800 : 500,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  color: isSelected ? undefined : isToday ? '#3b82f6' : undefined,
                 }}>
-                  {isToday && <span style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: isSelected ? 'var(--bg-card)' : 'var(--accent-color)', display: 'inline-block',
-                  }}></span>}
                   {day}
                 </div>
                 {/* Session dots — one per session, max 5 visible */}
