@@ -26344,6 +26344,7 @@ const RequestCareModal = window.RequestCareModal = ({
             durationHours: duration
           });
           if (cgId) params.set('caregiverId', cgId);
+          if (proposedRate && parseFloat(proposedRate) > 0) params.set('proposedRate', proposedRate);
           const res = await apiFetch(`/api/sessions/cost-preview?${params}`);
           if (res !== null && res !== void 0 && res.ok) setCostPreview(await res.json());
         } catch (err) {
@@ -26352,7 +26353,7 @@ const RequestCareModal = window.RequestCareModal = ({
       };
       fetchCost();
     }
-  }, [step, selectedCaregiver]);
+  }, [step, selectedCaregiver, proposedRate]);
 
   // ─── Date helpers ───
   const tz = typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.DEFAULT_TZ || 'America/New_York' : 'America/New_York';

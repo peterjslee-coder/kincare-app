@@ -301,13 +301,14 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           const cgId = selectedCaregiver?.caregiverId || '';
           const params = new URLSearchParams({ scheduledDate: date, scheduledTime: time, durationHours: duration });
           if (cgId) params.set('caregiverId', cgId);
+          if (proposedRate && parseFloat(proposedRate) > 0) params.set('proposedRate', proposedRate);
           const res = await apiFetch(`/api/sessions/cost-preview?${params}`);
           if (res?.ok) setCostPreview(await res.json());
         } catch (err) { console.error('Cost preview error:', err); }
       };
       fetchCost();
     }
-  }, [step, selectedCaregiver]);
+  }, [step, selectedCaregiver, proposedRate]);
 
   // ─── Date helpers ───
   const tz = typeof TimezoneHelper !== 'undefined' ? (TimezoneHelper.DEFAULT_TZ || 'America/New_York') : 'America/New_York';

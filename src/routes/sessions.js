@@ -623,10 +623,15 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     }
   }
 
-  // Estimate cost using caregiver's tiered rates (or service-type defaults)
+  // Estimate cost — proposed rate (family's offer) ALWAYS wins when set.
+  // Caregiver profile rates are only used as defaults when no offer is made.
   let costRates = { base: 28 };
   let overnightMinHours = 6;
-  if (bookCaregiverId) {
+  if (proposedRate && parseFloat(proposedRate) > 0) {
+    // Family set a rate — use it for ALL tiers (the offer is the offer)
+    const rate = parseFloat(proposedRate);
+    costRates = { daytime: rate, nighttime: rate, overnight: rate, base: rate };
+  } else if (bookCaregiverId) {
     const cgProfile = await db.prepare(
       "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight, min_overnight_hours FROM caregiver_profiles WHERE id = ?"
     ).get(bookCaregiverId);
@@ -679,9 +684,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
 
     for (const sessionDate of dates) {
       const id = uuid();
-      const finalCost = proposedRate && parseFloat(proposedRate) > 0
-        ? parseFloat(proposedRate) * durationHours
-        : estimatedCost;
+      // costResult already uses proposedRate when set (see rate logic above)
+      const finalCost = estimatedCost;
 
       const isExclusive = directOffer && bookCaregiverId;
       await tx.prepare(`
@@ -901,7 +905,7 @@ async function getPlatformFeePercent(db) {
 // Calculate cost breakdown without creating a session (for live preview in booking UI)
 // Returns caregiver payout + family total (with platform markup)
 router.get("/cost-preview", async (req, res) => {
-  const { caregiverId, scheduledDate, scheduledTime, durationHours = 2 } = req.query;
+  const { caregiverId, scheduledDate, scheduledTime, durationHours = 2, proposedRate } = req.query;
 
   if (!scheduledDate || !scheduledTime) {
     return res.status(400).json({ error: "scheduledDate and scheduledTime are required" });
@@ -911,7 +915,11 @@ router.get("/cost-preview", async (req, res) => {
   let costRates = { base: 28 };
   let overnightMinHours = 6;
 
-  if (caregiverId) {
+  // Proposed rate (family's offer) ALWAYS wins — same rule everywhere
+  const offeredRate = parseFloat(proposedRate) || 0;
+  if (offeredRate > 0) {
+    costRates = { daytime: offeredRate, nighttime: offeredRate, overnight: offeredRate, base: offeredRate };
+  } else if (caregiverId) {
     const cgProfile = await db.prepare(
       "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight, min_overnight_hours FROM caregiver_profiles WHERE id = ?"
     ).get(caregiverId);
@@ -1841,15 +1849,19 @@ router.get("/:id", async (req, res) => {
     ? await db.prepare("SELECT * FROM visit_photos WHERE visit_log_id = ?").all(visitLog.id)
     : [];
 
-  // Cost breakdown — use stored surcharge (not re-calculated from current time)
+  // Cost breakdown — proposed_rate (family's offer) ALWAYS wins when stored on session.
+  // Caregiver profile rates are only used when no proposed rate was set.
   let costBreakdown = null;
   if (session.scheduled_date && session.scheduled_time) {
-    const rates = {
-      daytime: session.rate_daytime || session.hourly_rate || 28,
-      nighttime: session.rate_nighttime || session.hourly_rate || 28,
-      overnight: session.rate_overnight || session.hourly_rate || 28,
-      base: session.hourly_rate || 28,
-    };
+    const proposedRate = parseFloat(session.proposed_rate) || 0;
+    const rates = proposedRate > 0
+      ? { daytime: proposedRate, nighttime: proposedRate, overnight: proposedRate, base: proposedRate }
+      : {
+          daytime: session.rate_daytime || session.hourly_rate || 28,
+          nighttime: session.rate_nighttime || session.hourly_rate || 28,
+          overnight: session.rate_overnight || session.hourly_rate || 28,
+          base: session.hourly_rate || 28,
+        };
     // Use the stored surcharge to determine if session was short-notice at booking time
     const storedSurcharge = parseFloat(session.short_notice_surcharge) || 0;
     const shortNotice = storedSurcharge > 0;
