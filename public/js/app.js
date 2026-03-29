@@ -827,6 +827,8 @@ const App = () => {
     }).catch(() => {});
     setCurrentPage('dashboard');
     setAppState('app');
+    // Start proactive auth token refresh (keeps user logged in across app restarts)
+    if (typeof startProactiveRefresh === 'function') startProactiveRefresh();
     // Re-sync push subscription if already granted (doesn't prompt — needs user gesture for new)
     if (typeof subscribeToPush === 'function' && 'Notification' in window && Notification.permission === 'granted') {
       subscribeToPush().catch(() => {});

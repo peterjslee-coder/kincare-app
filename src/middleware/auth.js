@@ -18,7 +18,7 @@ function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, roles, role: roles[0] },
     JWT_SECRET,
-    { expiresIn: "15m" }
+    { expiresIn: "7d" }
   );
 }
 
@@ -149,7 +149,7 @@ function setAuthCookie(res, token) {
     httpOnly: true,
     secure: isProduction,
     sameSite: "lax",
-    maxAge: 15 * 60 * 1000, // 15 minutes (matches JWT expiry)
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches JWT expiry)
     path: "/",
   });
 }

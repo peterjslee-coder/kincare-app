@@ -71,6 +71,53 @@ const getCsrfToken = window.getCsrfToken = () => {
 
 // Track whether a refresh is already in flight (prevent thundering herd)
 let _refreshPromise = null;
+let _proactiveRefreshTimer = null;
+
+// Proactive token refresh — silently renew the JWT before it expires
+// so the user never sees a logout. Fires once per day (well within 7d expiry).
+const startProactiveRefresh = window.startProactiveRefresh = () => {
+  if (_proactiveRefreshTimer) clearInterval(_proactiveRefreshTimer);
+  const REFRESH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+  _proactiveRefreshTimer = setInterval(async () => {
+    try {
+      const res = await fetch(API_BASE + '/api/auth/refresh', {
+        method: 'POST', credentials: 'same-origin',
+        headers: getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.token) setAuthToken(data.token);
+        console.log('Auth: proactive token refresh succeeded');
+      }
+    } catch (e) {
+      console.warn('Auth: proactive refresh failed:', e.message);
+    }
+  }, REFRESH_INTERVAL);
+  // Also refresh immediately on visibility change (app comes to foreground)
+  document.addEventListener('visibilitychange', _onVisibilityRefresh);
+};
+
+// When app returns to foreground after being backgrounded, refresh the token
+// This covers the Android case where the app was suspended for hours
+let _lastVisibilityRefresh = 0;
+const _onVisibilityRefresh = async () => {
+  if (document.visibilityState !== 'visible') return;
+  const now = Date.now();
+  // Don't refresh more than once per hour
+  if (now - _lastVisibilityRefresh < 60 * 60 * 1000) return;
+  _lastVisibilityRefresh = now;
+  try {
+    const res = await fetch(API_BASE + '/api/auth/refresh', {
+      method: 'POST', credentials: 'same-origin',
+      headers: getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {},
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.token) setAuthToken(data.token);
+      console.log('Auth: visibility refresh succeeded');
+    }
+  } catch (e) { /* silent */ }
+};
 
 const apiFetch = window.apiFetch = async (url, options = {}) => {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
