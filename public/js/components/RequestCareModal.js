@@ -930,9 +930,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <button className="btn btn-primary" disabled={!step1Complete} onClick={() => setStep(2)} style={{ width: '100%' }}>
                 Next
               </button>
-              {!step1Complete && (serviceType || date || time || duration) && (
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 6 }}>
-                  {!serviceType ? 'Select a care type' : (serviceType === 'other' && !otherCareText.trim()) ? 'Describe the care type' : !date ? 'Pick a date' : !time ? 'Pick a start time' : 'Select a duration'}
+              {!step1Complete && (
+                <div style={{ fontSize: 12, color: '#e67e22', textAlign: 'center', marginTop: 8, fontWeight: 600, padding: '6px 10px', background: 'rgba(230,126,34,0.1)', borderRadius: 8 }}>
+                  {!serviceType ? '\u261D Select a care type above, or choose "Other" and leave instructions for the caregiver' : (serviceType === 'other' && !otherCareText.trim()) ? 'Describe the care type above' : !date ? 'Pick a date' : !time ? 'Pick a start time' : !duration ? 'Select a duration' : 'Complete all fields above'}
                 </div>
               )}
             </div>
