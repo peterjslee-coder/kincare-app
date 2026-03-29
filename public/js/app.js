@@ -831,6 +831,10 @@ const App = () => {
     if (typeof subscribeToPush === 'function' && 'Notification' in window && Notification.permission === 'granted') {
       subscribeToPush().catch(() => {});
     }
+    // Initialize native push token refresh listener (catches FCM/APNS token rotation)
+    if (typeof initNativeTokenRefresh === 'function' && window.Capacitor?.isNativePlatform?.()) {
+      initNativeTokenRefresh();
+    }
     // Start periodic push health check (every 30 min) to keep subscriptions fresh
     if (typeof checkPushHealth === 'function') {
       // Clear any existing timer (handles re-login without refresh)

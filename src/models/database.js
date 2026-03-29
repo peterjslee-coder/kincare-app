@@ -936,6 +936,11 @@ async function initializeDatabase() {
 
     // v1.51.81 — Server-side message archive (was localStorage-only, lost on login)
     `ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
+
+    // v1.51.82 — Push reliability: track consecutive failures to auto-remove dead tokens
+    `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS fail_count INTEGER DEFAULT 0`,
+    `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ`,
+    `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_failure_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

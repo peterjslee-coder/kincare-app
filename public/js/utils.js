@@ -552,11 +552,19 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
       // Also set up notification received/action listeners
       PushNotifications.addListener('pushNotificationReceived', (notification) => {
         console.log('NativePush: notification received in foreground:', notification.title);
+        // Show in-app toast for foreground notifications
+        if (window.useToast) {
+          try { window.__showToast?.(notification.title || 'New notification', 'info'); } catch {}
+        }
       });
 
       PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
         console.log('NativePush: notification tapped:', action.notification?.title);
-        // Could navigate to specific page based on action.notification.data
+        const data = action.notification?.data;
+        if (data?.page) {
+          // Navigate to the relevant page when notification is tapped
+          window.__navigateTo?.(data.page);
+        }
       });
 
       // Trigger the registration
@@ -574,6 +582,50 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
   } catch (err) {
     console.error('NativePush: error:', err);
     return null;
+  }
+};
+
+// ─── Native push token refresh handler ───
+// FCM/APNS may rotate the device token at any time. This listener catches
+// the new token and re-registers it with the server. Should be called once
+// on app startup (after login) — separate from the initial subscribe flow.
+const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
+  try {
+    const PushNotifications = window.Capacitor?.Plugins?.PushNotifications;
+    if (!PushNotifications) return;
+
+    // Remove any existing listener to avoid duplicates, then re-add
+    PushNotifications.removeAllListeners().then(() => {
+      // Re-register the core listeners
+      PushNotifications.addListener('registration', async (token) => {
+        console.log('NativePush: token refreshed', token.value?.substring(0, 20) + '...');
+        try {
+          const platform = window.Capacitor.getPlatform();
+          await apiFetch('/api/push/subscribe-native', {
+            method: 'POST',
+            body: JSON.stringify({ token: token.value, platform }),
+          });
+          console.log('NativePush: refreshed token saved to server');
+        } catch (err) {
+          console.error('NativePush: failed to save refreshed token:', err);
+        }
+      });
+
+      PushNotifications.addListener('registrationError', (err) => {
+        console.error('NativePush: registration error during refresh:', err);
+      });
+
+      PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        console.log('NativePush: foreground notification:', notification.title);
+      });
+
+      PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+        const data = action.notification?.data;
+        if (data?.page) window.__navigateTo?.(data.page);
+      });
+    }).catch(() => {});
+  } catch (err) {
+    console.warn('NativePush: token refresh init error:', err);
   }
 };
 

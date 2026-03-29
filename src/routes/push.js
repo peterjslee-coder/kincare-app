@@ -332,22 +332,51 @@ async function _sendNativePush(subscriptionObj, notificationPayload) {
         Object.entries(parsed.data).map(([k, v]) => [k, String(v)])
       ) : {},
       android: {
+        priority: "high", // wake device from doze mode
         notification: {
           icon: "ic_notification",
           color: "#1b6b5a",
+          channelId: "inplace_default",
         },
       },
     };
     await admin.messaging().send(message);
     return true;
   } catch (err) {
+    // Permanent token failures → mark for cleanup
     if (err.code === "messaging/registration-token-not-registered" ||
-        err.code === "messaging/invalid-registration-token") {
-      throw { statusCode: 410, message: err.message }; // token expired — trigger cleanup
+        err.code === "messaging/invalid-registration-token" ||
+        err.code === "messaging/mismatched-credential") {
+      throw { statusCode: 410, message: err.message };
     }
+    // Transient failures → throw for retry
     throw err;
   }
 }
+
+// Retry helper: exponential backoff with jitter (max 3 attempts)
+async function _sendWithRetry(fn, maxRetries = 2) {
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const code = err.statusCode || err.code;
+      // Don't retry permanent failures
+      if (code === 403 || code === 404 || code === 410 || code === 401) throw err;
+      // Don't retry last attempt
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 4000) + Math.random() * 500;
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+// Max consecutive failures before auto-removing a subscription
+const MAX_FAIL_COUNT = 5;
 
 // ─── Utility: Send push to a user ───
 // Used internally by other routes (sessions, messages, etc.)
@@ -372,7 +401,7 @@ async function sendPushToUser(userId, payload, eventType) {
   try {
     const db = await getDb();
     const subs = await db.prepare(
-      "SELECT id, subscription_json FROM push_subscriptions WHERE user_id = ?"
+      "SELECT id, subscription_json, fail_count FROM push_subscriptions WHERE user_id = ?"
     ).all(userId);
 
     if (subs.length === 0) return; // no subscriptions for this user
@@ -398,36 +427,59 @@ async function sendPushToUser(userId, payload, eventType) {
 
     let sent = 0;
     let removed = 0;
+    let failed = 0;
     for (const sub of subs) {
       try {
         const subObj = JSON.parse(sub.subscription_json);
 
-        if (subObj.type === "native") {
-          // Native FCM/APNS token — send via Firebase Admin SDK
-          const delivered = await _sendNativePush(subObj, notificationPayload);
-          if (delivered) sent++;
-        } else if (webpush) {
-          // Standard Web Push subscription
-          await webpush.sendNotification(subObj, notificationPayload);
-          sent++;
+        await _sendWithRetry(async () => {
+          if (subObj.type === "native") {
+            // Native FCM/APNS token — send via Firebase Admin SDK
+            const delivered = await _sendNativePush(subObj, notificationPayload);
+            if (!delivered) throw new Error("Native push not configured");
+          } else if (webpush) {
+            // Standard Web Push subscription — set TTL for reliability
+            await webpush.sendNotification(subObj, notificationPayload, { TTL: 86400 }); // 24h TTL
+          } else {
+            throw new Error("Web push not configured");
+          }
+        });
+
+        sent++;
+        // Reset fail_count on success
+        if (sub.fail_count > 0) {
+          await db.prepare("UPDATE push_subscriptions SET fail_count = 0, last_success_at = NOW() WHERE id = ?").run(sub.id);
+        } else {
+          await db.prepare("UPDATE push_subscriptions SET last_success_at = NOW() WHERE id = ?").run(sub.id);
         }
       } catch (err) {
         const code = err.statusCode || err.code;
-        if (code === 403 || code === 404 || code === 410) {
-          // Subscription expired or invalid — clean up
+        if (code === 403 || code === 404 || code === 410 || code === 401) {
+          // Subscription permanently invalid — remove immediately
           await db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(sub.id);
           removed++;
-          console.log(`  Push: removed stale subscription (${code}) for user ${userId}`);
+          console.log(`  Push: removed dead subscription (${code}) for user ${userId}`);
         } else {
-          console.error(`Push delivery error (user ${userId}):`, err.statusCode || err.code, err.message);
+          // Transient failure — increment fail_count
+          const newFailCount = (sub.fail_count || 0) + 1;
+          if (newFailCount >= MAX_FAIL_COUNT) {
+            // Too many consecutive failures — give up on this subscription
+            await db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(sub.id);
+            removed++;
+            console.log(`  Push: removed subscription after ${MAX_FAIL_COUNT} consecutive failures for user ${userId}`);
+          } else {
+            await db.prepare("UPDATE push_subscriptions SET fail_count = ?, last_failure_at = NOW() WHERE id = ?").run(newFailCount, sub.id);
+            console.warn(`  Push: delivery failed (attempt ${newFailCount}/${MAX_FAIL_COUNT}, user ${userId}):`, code || err.message);
+          }
+          failed++;
         }
       }
     }
 
-    if (sent > 0 || removed > 0) {
-      console.log(`  Push: sent ${sent}/${subs.length} to user ${userId}${removed ? ` (${removed} stale removed)` : ""}`);
+    if (sent > 0 || removed > 0 || failed > 0) {
+      console.log(`  Push: sent ${sent}/${subs.length} to user ${userId}${removed ? `, ${removed} removed` : ""}${failed ? `, ${failed} failed` : ""}`);
     }
-    return { sent, failed: subs.length - sent, removed };
+    return { sent, failed, removed };
   } catch (err) {
     console.error("Push notification error:", err.message);
     return { sent: 0, failed: 0, removed: 0, error: err.message };
