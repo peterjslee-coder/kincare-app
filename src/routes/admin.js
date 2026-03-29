@@ -185,36 +185,43 @@ router.get("/stats", async (req, res) => {
   try {
     const db = await getDb();
 
-    const [users, waitlist, sessions, caregivers, recentSignups] = await Promise.all([
-      db.prepare("SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0").get(),
-      db.prepare("SELECT COUNT(*) as count FROM waitlist").get(),
-      db.prepare("SELECT COUNT(*) as count FROM care_sessions cs WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id IN (cs.family_id, cs.caregiver_id) AND COALESCE(u.is_demo, 0) = 1)").get(),
-      db.prepare("SELECT COUNT(*) as count FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE COALESCE(u.is_demo, 0) = 0").get(),
-      // Signups per day for last 30 days
-      db.prepare(`
+    // Wrap each core query individually so one failure doesn't crash the whole endpoint
+    let users = { count: 0 }, waitlist = { count: 0 }, sessions = { count: 0 }, caregivers = { count: 0 }, recentSignups = [];
+    try { users = await db.prepare("SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0").get() || { count: 0 }; } catch (e) { console.error("Stats: users query failed:", e.message); }
+    try { waitlist = await db.prepare("SELECT COUNT(*) as count FROM waitlist").get() || { count: 0 }; } catch (e) { console.error("Stats: waitlist query failed:", e.message); }
+    try { sessions = await db.prepare("SELECT COUNT(*) as count FROM care_sessions cs WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id IN (cs.family_id, cs.caregiver_id) AND COALESCE(u.is_demo, 0) = 1)").get() || { count: 0 }; } catch (e) { console.error("Stats: sessions query failed:", e.message); }
+    try { caregivers = await db.prepare("SELECT COUNT(*) as count FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE COALESCE(u.is_demo, 0) = 0").get() || { count: 0 }; } catch (e) { console.error("Stats: caregivers query failed:", e.message); }
+    try {
+      recentSignups = await db.prepare(`
         SELECT DATE(created_at) as date, COUNT(*) as count
         FROM users WHERE COALESCE(is_demo, 0) = 0
         AND created_at > NOW() - INTERVAL '30 days'
         GROUP BY DATE(created_at)
         ORDER BY date ASC
-      `).all(),
-    ]);
+      `).all() || [];
+    } catch (e) { console.error("Stats: recentSignups query failed:", e.message); }
 
     // Waitlist signups per day for last 30 days
-    const waitlistTrend = await db.prepare(`
-      SELECT DATE(created_at) as date, COUNT(*) as count
-      FROM waitlist
-      WHERE created_at > NOW() - INTERVAL '30 days'
-      GROUP BY DATE(created_at)
-      ORDER BY date ASC
-    `).all();
+    let waitlistTrend = [];
+    try {
+      waitlistTrend = await db.prepare(`
+        SELECT DATE(created_at) as date, COUNT(*) as count
+        FROM waitlist
+        WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at)
+        ORDER BY date ASC
+      `).all() || [];
+    } catch (e) { console.error("Stats: waitlistTrend query failed:", e.message); }
 
     // Sessions by status (excluding demo user sessions)
-    const sessionsByStatus = await db.prepare(`
-      SELECT cs.status, COUNT(*) as count FROM care_sessions cs
-      WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id IN (cs.family_id, cs.caregiver_id) AND COALESCE(u.is_demo, 0) = 1)
-      GROUP BY cs.status
-    `).all();
+    let sessionsByStatus = [];
+    try {
+      sessionsByStatus = await db.prepare(`
+        SELECT cs.status, COUNT(*) as count FROM care_sessions cs
+        WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id IN (cs.family_id, cs.caregiver_id) AND COALESCE(u.is_demo, 0) = 1)
+        GROUP BY cs.status
+      `).all() || [];
+    } catch (e) { console.error("Stats: sessionsByStatus query failed:", e.message); }
 
     // v1.53 — Enhanced stats for new admin dashboard
     let openTickets = { count: 0 }, safetyFlags = { count: 0 }, avgRating = { avg: 0, total: 0 }, revenueMtd = { total: 0 };

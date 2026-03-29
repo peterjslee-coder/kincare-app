@@ -56565,11 +56565,14 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
 const AdminPanel = window.AdminPanel = ({
   currentUser
 }) => {
-  var _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu;
+  var _tabGroups$flatMap$fi, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user2, _userDrawer$tickets, _userDrawer$safetyFla;
   const {
     showToast
   } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userDrawer, setUserDrawer] = useState(null);
+  const [userDrawerLoading, setUserDrawerLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [usersTotal, setUsersTotal] = useState(0);
@@ -56616,6 +56619,7 @@ const AdminPanel = window.AdminPanel = ({
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [ticketComments, setTicketComments] = useState([]);
   const [newTicketComment, setNewTicketComment] = useState('');
+  const [adminUsers, setAdminUsers] = useState([]);
 
   // Background checks
   const [bgCheckCandidates, setBgCheckCandidates] = useState([]);
@@ -56719,6 +56723,45 @@ const AdminPanel = window.AdminPanel = ({
       }
     } catch (err) {
       showToast('Failed to add comment', 'error');
+    }
+  };
+  const loadUserDetail = async userId => {
+    setUserDrawerLoading(true);
+    setUserDrawer(null);
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/detail`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setUserDrawer(data);
+      }
+    } catch (err) {
+      console.error('Load user detail error:', err);
+    }
+    setUserDrawerLoading(false);
+  };
+  const saveAdminNotes = async (userId, notes) => {
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/admin-notes`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          admin_notes: notes
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        var _userDrawer$user;
+        showToast('Notes saved', 'success');
+        if ((userDrawer === null || userDrawer === void 0 || (_userDrawer$user = userDrawer.user) === null || _userDrawer$user === void 0 ? void 0 : _userDrawer$user.id) === userId) {
+          setUserDrawer(prev => ({
+            ...prev,
+            user: {
+              ...prev.user,
+              admin_notes: notes
+            }
+          }));
+        }
+      }
+    } catch (err) {
+      showToast('Failed to save notes', 'error');
     }
   };
 
@@ -57257,6 +57300,10 @@ const AdminPanel = window.AdminPanel = ({
         setCheckrAlertCount(d.checkrAlerts || 0);
         setBgCheckActionItems(d.bgCheckActionItems || []);
       }
+    }).catch(() => {});
+    // Fetch admin users for ticket assignment
+    apiFetch('/api/admin/users?role=&demo=all&search=').then(r => r !== null && r !== void 0 && r.ok ? r.json() : null).then(d => {
+      if (d !== null && d !== void 0 && d.users) setAdminUsers(d.users.filter(u => u.admin_role));
     }).catch(() => {});
     // Fetch ticket counts for badge
     apiFetch('/api/admin/tickets?limit=1').then(r => r !== null && r !== void 0 && r.ok ? r.json() : null).then(d => {
@@ -58099,79 +58146,253 @@ const AdminPanel = window.AdminPanel = ({
       icon: '⚙️'
     }]
   }];
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  const activeTabLabel = ((_tabGroups$flatMap$fi = tabGroups.flatMap(g => g.tabs).find(t => t.id === activeTab)) === null || _tabGroups$flatMap$fi === void 0 ? void 0 : _tabGroups$flatMap$fi.label) || 'Dashboard';
+  return /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: '16px',
-      gap: '12px'
+      height: 'calc(100vh - 60px)',
+      overflow: 'hidden',
+      margin: '-16px -16px 0',
+      position: 'relative'
+    }
+  }, sidebarOpen && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setSidebarOpen(false),
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.45)',
+      zIndex: 199,
+      display: window.innerWidth <= 768 ? 'block' : 'none'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 240,
+      minWidth: 240,
+      background: '#1a1a2e',
+      color: '#fff',
+      display: 'flex',
+      flexDirection: 'column',
+      flexShrink: 0,
+      zIndex: 200,
+      transition: 'transform 0.28s cubic-bezier(.4,0,.2,1)',
+      ...(window.innerWidth <= 768 ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        boxShadow: sidebarOpen ? '4px 0 20px rgba(0,0,0,0.2)' : 'none'
+      } : {})
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      flex: '1 1 0',
+      padding: '16px 18px',
+      borderBottom: '1px solid rgba(255,255,255,0.07)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 17,
+      fontWeight: 700,
+      letterSpacing: -0.3
+    }
+  }, "in", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: '#4ecdc4'
+    }
+  }, "Place")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'inline-block',
+      padding: '2px 9px',
+      borderRadius: 20,
+      fontSize: 9,
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      background: 'linear-gradient(135deg, #e8724a, #d85a2b)',
+      color: '#fff'
+    }
+  }, (currentUser === null || currentUser === void 0 ? void 0 : currentUser.admin_role) || 'Admin')), window.innerWidth <= 768 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSidebarOpen(false),
+    style: {
+      background: 'none',
+      border: 'none',
+      color: 'rgba(255,255,255,0.5)',
+      fontSize: 22,
+      cursor: 'pointer',
+      padding: '2px 6px',
+      borderRadius: 6
+    }
+  }, "\xD7")), /*#__PURE__*/React.createElement("nav", {
+    style: {
+      flex: 1,
+      overflowY: 'auto',
+      padding: '8px 0',
+      scrollbarWidth: 'thin',
+      scrollbarColor: 'rgba(255,255,255,0.1) transparent'
+    }
+  }, tabGroups.map(group => /*#__PURE__*/React.createElement("div", {
+    key: group.label,
+    style: {
+      padding: '0 10px',
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      color: 'rgba(255,255,255,0.28)',
+      padding: '14px 10px 5px'
+    }
+  }, group.label), group.tabs.map(tab => /*#__PURE__*/React.createElement("div", {
+    key: tab.id,
+    onClick: () => {
+      setActiveTab(tab.id);
+      setSidebarOpen(false);
+    },
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      padding: '8px 10px',
+      borderRadius: 8,
+      cursor: 'pointer',
+      fontSize: 13,
+      position: 'relative',
+      userSelect: 'none',
+      background: activeTab === tab.id ? 'rgba(78,205,196,0.12)' : 'transparent',
+      color: activeTab === tab.id ? '#4ecdc4' : 'rgba(255,255,255,0.55)',
+      fontWeight: activeTab === tab.id ? 600 : 400,
+      transition: 'all 0.12s'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 20,
+      textAlign: 'center',
+      fontSize: 14,
+      flexShrink: 0
+    }
+  }, tab.icon), /*#__PURE__*/React.createElement("span", {
+    style: {
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    }
+  }, tab.label), tab.badge ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: 'absolute',
+      right: 8,
+      background: '#e8724a',
+      color: '#fff',
+      fontSize: 9,
+      fontWeight: 700,
+      padding: '1px 6px',
+      borderRadius: 10,
+      minWidth: 17,
+      textAlign: 'center'
+    }
+  }, tab.badge) : null))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '14px 18px',
+      borderTop: '1px solid rgba(255,255,255,0.07)',
+      fontSize: 10,
+      color: 'rgba(255,255,255,0.3)'
+    }
+  }, "v", window.APP_VERSION || '', " \xB7 ", (currentUser === null || currentUser === void 0 ? void 0 : currentUser.first_name) || 'Admin')), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
       minWidth: 0
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: '8px',
-      marginBottom: '4px',
-      flexWrap: 'wrap'
+      justifyContent: 'space-between',
+      padding: '10px 20px',
+      background: 'var(--bg-card)',
+      borderBottom: '1px solid var(--border-color)',
+      flexShrink: 0,
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSidebarOpen(true),
+    style: {
+      display: window.innerWidth <= 768 ? 'block' : 'none',
+      background: 'none',
+      border: 'none',
+      fontSize: 22,
+      cursor: 'pointer',
+      color: 'var(--text-primary)',
+      padding: 4,
+      borderRadius: 6
+    }
+  }, "\u2630"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: 'var(--text-secondary)'
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      background: 'var(--role-color)',
-      color: 'var(--text-on-primary)',
-      padding: '4px 10px',
-      borderRadius: '6px',
-      fontSize: '13px',
-      fontWeight: 700,
-      letterSpacing: '0.5px',
-      flexShrink: 0
-    }
-  }, "ADMIN"), /*#__PURE__*/React.createElement("h1", {
-    className: "greeting",
+      color: 'var(--role-color)',
+      cursor: 'pointer'
+    },
+    onClick: () => setActiveTab('overview')
+  }, "Admin"), /*#__PURE__*/React.createElement("span", null, " \u203A "), /*#__PURE__*/React.createElement("strong", {
     style: {
-      margin: 0,
-      fontSize: '22px',
-      lineHeight: '1.3'
+      color: 'var(--text-primary)'
     }
-  }, "Platform Dashboard")), /*#__PURE__*/React.createElement("div", {
+  }, activeTabLabel))), /*#__PURE__*/React.createElement("div", {
     style: {
-      color: 'var(--text-secondary)',
-      fontSize: '13px',
       display: 'flex',
       alignItems: 'center',
-      gap: '8px'
+      gap: 10,
+      flexShrink: 0
     }
-  }, "Manage users, approvals, and platform operations", /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '11px',
-      color: 'var(--text-muted)',
-      fontWeight: 600
-    }
-  }, "v", window.APP_VERSION || ''))), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (window.__navigateTo) window.__navigateTo('account');
     },
     style: {
-      padding: '8px 16px',
-      background: 'var(--bg-surface)',
-      color: 'var(--role-color)',
-      border: '2px solid #1b6b5a',
-      borderRadius: '8px',
-      fontSize: '13px',
-      fontWeight: 600,
+      padding: '6px 12px',
+      background: 'none',
+      color: 'var(--text-secondary)',
+      border: '1px solid var(--border-color)',
+      borderRadius: 8,
+      fontSize: 12,
+      fontWeight: 500,
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      gap: '6px',
-      whiteSpace: 'nowrap',
-      flexShrink: 0
+      gap: 4
     }
-  }, "\u2699\uFE0F My Account")), (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 || bgCheckActionItems.length > 0 || safetyFlagCount > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "\u2699\uFE0F Account"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      overflowY: 'auto',
+      padding: 20,
+      WebkitOverflowScrolling: 'touch'
+    }
+  }, (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0 || bgCheckActionItems.length > 0 || safetyFlagCount > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16,
       padding: 16,
@@ -58894,7 +59115,7 @@ const AdminPanel = window.AdminPanel = ({
         color: 'var(--text-tertiary)'
       }
     }, "(", p.role, ")")))));
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), activeTab === 'people' && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       marginBottom: 16
@@ -58915,331 +59136,505 @@ const AdminPanel = window.AdminPanel = ({
     onChange: e => setUserSearch(e.target.value),
     onKeyDown: e => {
       if (e.key === 'Enter') {
-        if (activeTab !== 'people') setActiveTab('people');
         setPeopleSubTab('users');
         loadUsers();
       }
     },
     style: {
       width: '100%',
-      padding: '14px 16px 14px 44px',
-      border: '2px solid #e0e0e0',
-      borderRadius: 12,
-      fontSize: 15,
+      padding: '12px 16px 12px 44px',
+      border: '1px solid var(--border-color)',
+      borderRadius: 10,
+      fontSize: 14,
       background: 'var(--bg-surface)',
       outline: 'none',
       transition: 'border-color 0.2s',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      color: 'var(--text-primary)'
     },
     onFocus: e => {
       e.target.style.borderColor = 'var(--role-color)';
     },
     onBlur: e => {
-      e.target.style.borderColor = 'var(--border-light)';
+      e.target.style.borderColor = 'var(--border-color)';
     }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      position: 'absolute',
-      right: 16,
-      top: '50%',
-      transform: 'translateY(-50%)',
-      fontSize: 12,
-      color: 'var(--text-muted)'
-    }
-  }, "searches users, waitlist & invites")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 20
-    }
-  }, tabGroups.map(group => /*#__PURE__*/React.createElement("div", {
-    key: group.label,
-    style: {
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: 'uppercase',
-      letterSpacing: '1px',
-      color: 'var(--text-muted)',
-      marginBottom: 6,
-      paddingLeft: 4
-    }
-  }, group.label), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(3, 1fr)',
-      gap: 8
-    }
-  }, group.tabs.map(tab => /*#__PURE__*/React.createElement("button", {
-    key: tab.id,
-    onClick: () => setActiveTab(tab.id),
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 5,
-      padding: '10px 6px',
-      border: 'none',
-      borderRadius: 10,
-      cursor: 'pointer',
-      background: activeTab === tab.id ? 'var(--role-color)' : 'var(--badge-muted-bg)',
-      color: activeTab === tab.id ? 'var(--text-on-primary)' : 'var(--text-secondary)',
-      fontSize: 13,
-      fontWeight: 600,
-      transition: 'all 0.15s',
-      position: 'relative',
-      boxShadow: activeTab === tab.id ? '0 2px 8px rgba(27,107,90,0.3)' : 'none',
-      whiteSpace: 'nowrap'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 15
-    }
-  }, tab.icon), tab.label, tab.badge ? /*#__PURE__*/React.createElement("span", {
-    style: {
-      position: 'absolute',
-      top: -4,
-      right: -4,
-      background: 'var(--color-warning)',
-      color: 'var(--text-on-primary)',
-      fontSize: 10,
-      fontWeight: 700,
-      borderRadius: 10,
-      padding: '1px 6px',
-      minWidth: 18,
-      textAlign: 'center'
-    }
-  }, tab.badge) : null)))))), activeTab === 'overview' && stats && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    className: "stats-grid"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "stat-card"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 24
-    }
-  }, "\uD83D\uDC65"), /*#__PURE__*/React.createElement("div", {
-    className: "stat-number"
-  }, stats.totalUsers), /*#__PURE__*/React.createElement("div", {
-    className: "stat-label"
-  }, "Registered Users")), /*#__PURE__*/React.createElement("div", {
-    className: "stat-card"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 24
-    }
-  }, "\uD83D\uDCCB"), /*#__PURE__*/React.createElement("div", {
-    className: "stat-number"
-  }, stats.totalWaitlist), /*#__PURE__*/React.createElement("div", {
-    className: "stat-label"
-  }, "Waitlist Signups")), /*#__PURE__*/React.createElement("div", {
-    className: "stat-card"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 24
-    }
-  }, "\uD83D\uDCC5"), /*#__PURE__*/React.createElement("div", {
-    className: "stat-number"
-  }, stats.totalSessions), /*#__PURE__*/React.createElement("div", {
-    className: "stat-label"
-  }, "Care Sessions")), /*#__PURE__*/React.createElement("div", {
-    className: "stat-card"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 24
-    }
-  }, "\uD83E\uDD1D"), /*#__PURE__*/React.createElement("div", {
-    className: "stat-number"
-  }, stats.totalCaregivers), /*#__PURE__*/React.createElement("div", {
-    className: "stat-label"
-  }, "Caregivers"))), stats.signupTrend && stats.signupTrend.length > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      marginBottom: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "card-header"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "card-icon"
-  }, "\uD83D\uDCC8"), "User Signups (Last 30 Days)"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    viewBox: `0 0 ${Math.max(stats.signupTrend.length * 40, 200)} 120`,
-    style: {
-      width: '100%',
-      height: '120px'
-    }
-  }, stats.signupTrend.map((d, i) => {
-    const maxCount = Math.max(...stats.signupTrend.map(s => s.count), 1);
-    const barH = d.count / maxCount * 80;
-    const x = i * 40 + 10;
-    return /*#__PURE__*/React.createElement("g", {
-      key: i
-    }, /*#__PURE__*/React.createElement("rect", {
-      x: x,
-      y: 100 - barH,
-      width: "24",
-      height: barH,
-      rx: "4",
-      fill: "var(--role-color)",
-      opacity: "0.85"
-    }), /*#__PURE__*/React.createElement("text", {
-      x: x + 12,
-      y: 96 - barH,
-      textAnchor: "middle",
-      fontSize: "10",
-      fill: "var(--text-primary)",
-      fontWeight: "600"
-    }, d.count), /*#__PURE__*/React.createElement("text", {
-      x: x + 12,
-      y: 115,
-      textAnchor: "middle",
-      fontSize: "8",
-      fill: "var(--text-muted)"
-    }, (parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric'
-    })));
-  })))), stats.waitlistTrend && stats.waitlistTrend.length > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      marginBottom: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "card-header"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "card-icon"
-  }, "\uD83D\uDCCB"), "Waitlist Signups (Last 30 Days)"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    viewBox: `0 0 ${Math.max(stats.waitlistTrend.length * 40, 200)} 120`,
-    style: {
-      width: '100%',
-      height: '120px'
-    }
-  }, stats.waitlistTrend.map((d, i) => {
-    const maxCount = Math.max(...stats.waitlistTrend.map(s => s.count), 1);
-    const barH = d.count / maxCount * 80;
-    const x = i * 40 + 10;
-    return /*#__PURE__*/React.createElement("g", {
-      key: i
-    }, /*#__PURE__*/React.createElement("rect", {
-      x: x,
-      y: 100 - barH,
-      width: "24",
-      height: barH,
-      rx: "4",
-      fill: "var(--accent-color)",
-      opacity: "0.85"
-    }), /*#__PURE__*/React.createElement("text", {
-      x: x + 12,
-      y: 96 - barH,
-      textAnchor: "middle",
-      fontSize: "10",
-      fill: "var(--text-primary)",
-      fontWeight: "600"
-    }, d.count), /*#__PURE__*/React.createElement("text", {
-      x: x + 12,
-      y: 115,
-      textAnchor: "middle",
-      fontSize: "8",
-      fill: "var(--text-muted)"
-    }, (parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric'
-    })));
-  })))), stats.sessionsByStatus && stats.sessionsByStatus.length > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "card"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "card-header"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "card-icon"
-  }, "\uD83D\uDCC5"), "Sessions by Status"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: '12px',
-      flexWrap: 'wrap',
-      padding: '12px 0'
-    }
-  }, stats.sessionsByStatus.map((s, i) => /*#__PURE__*/React.createElement("div", {
-    key: i,
-    style: {
-      padding: '12px 20px',
-      background: 'var(--bg-primary)',
-      borderRadius: '8px',
-      textAlign: 'center',
-      flex: '1 1 100px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '24px',
-      fontWeight: 700,
-      color: 'var(--role-color)'
-    }
-  }, s.count), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: 'var(--text-secondary)',
-      textTransform: 'capitalize'
-    }
-  }, s.status))))), /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      marginTop: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "card-header"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "card-icon"
-  }, "\uD83C\uDF10"), "Site Analytics"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '12px 0'
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: '14px',
-      color: 'var(--text-secondary)',
-      marginBottom: '12px'
-    }
-  }, "Detailed site traffic, page views, referrers, and visitor geography are tracked via Plausible Analytics."), /*#__PURE__*/React.createElement("a", {
-    href: "https://plausible.io/yourinplace.com",
-    target: "_blank",
-    rel: "noopener noreferrer",
-    style: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '10px 20px',
-      background: 'var(--role-color)',
-      color: 'var(--text-on-primary)',
-      borderRadius: '8px',
-      textDecoration: 'none',
-      fontSize: '14px',
-      fontWeight: 600
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width: "16",
-    height: "16",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "2",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"
-  }), /*#__PURE__*/React.createElement("polyline", {
-    points: "15 3 21 3 21 9"
-  }), /*#__PURE__*/React.createElement("line", {
-    x1: "10",
-    y1: "14",
-    x2: "21",
-    y2: "3"
-  })), "Open Plausible Dashboard")))), activeTab === 'people' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  })), activeTab === 'overview' && stats && (() => {
+    // Build attention items dynamically
+    const attentionItems = [];
+    // Pending user approvals
+    pendingApprovals.forEach(u => attentionItems.push({
+      icon: '👤',
+      color: '#1565c0',
+      pill: 'Review',
+      pillBg: '#e3f2fd',
+      pillColor: '#1565c0',
+      title: `New signup — ${u.first_name} ${u.last_name}`,
+      sub: `${u.role} · ${u.email} · ${new Date(u.created_at).toLocaleDateString()}`,
+      action: () => {
+        setActiveTab('people');
+      }
+    }));
+    // Paused caregivers
+    pausedCaregivers.forEach(cg => attentionItems.push({
+      icon: '🛑',
+      color: '#c62828',
+      pill: 'Paused',
+      pillBg: '#ffebee',
+      pillColor: '#c62828',
+      title: `Paused caregiver — ${cg.first_name} ${cg.last_name}`,
+      sub: `No-show · needs review`,
+      action: () => {
+        setActiveTab('sessions');
+      }
+    }));
+    // Consent alerts
+    consentAlerts.forEach(a => attentionItems.push({
+      icon: '🔒',
+      color: '#f57f17',
+      pill: 'Consent',
+      pillBg: '#fff8e1',
+      pillColor: '#f57f17',
+      title: `Consent pending — ${a.first_name || 'User'} ${a.last_name || ''}`,
+      sub: `Authorization required`,
+      action: () => {
+        setActiveTab('authorizations');
+      }
+    }));
+    // Safety flags
+    if (safetyFlagCount > 0) attentionItems.push({
+      icon: '🚨',
+      color: '#c62828',
+      pill: `${safetyFlagCount} flag${safetyFlagCount > 1 ? 's' : ''}`,
+      pillBg: '#ffebee',
+      pillColor: '#c62828',
+      title: `Safety flags need review`,
+      sub: `${safetyFlagCount} pending or escalated`,
+      action: () => {
+        setActiveTab('safety');
+      }
+    });
+    // BG check alerts
+    if (checkrAlertCount > 0) attentionItems.push({
+      icon: '🔍',
+      color: '#f57f17',
+      pill: `${checkrAlertCount} alert${checkrAlertCount > 1 ? 's' : ''}`,
+      pillBg: '#fff8e1',
+      pillColor: '#f57f17',
+      title: `Background check alerts`,
+      sub: `${checkrAlertCount} need attention`,
+      action: () => {
+        setActiveTab('bgchecks');
+      }
+    });
+    // Open tickets
+    if (ticketCount > 0) attentionItems.push({
+      icon: '🎫',
+      color: '#e8724a',
+      pill: `${ticketCount} open`,
+      pillBg: '#fff3e0',
+      pillColor: '#e65100',
+      title: `Open support tickets`,
+      sub: `${ticketCounts.open || 0} open · ${ticketCounts.in_progress || 0} in progress`,
+      action: () => {
+        setActiveTab('tickets');
+      }
+    });
+    // New feedback
+    if (newFeedbackCount > 0) attentionItems.push({
+      icon: '💬',
+      color: '#1565c0',
+      pill: `${newFeedbackCount} new`,
+      pillBg: '#e3f2fd',
+      pillColor: '#1565c0',
+      title: `New user feedback`,
+      sub: `${newFeedbackCount} unread submission${newFeedbackCount > 1 ? 's' : ''}`,
+      action: () => {
+        setActiveTab('feedback');
+      }
+    });
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+        gap: 10,
+        marginBottom: 16
+      }
+    }, [{
+      label: 'Active Users',
+      value: stats.totalUsers,
+      icon: '👥',
+      change: null,
+      onClick: () => setActiveTab('people')
+    }, {
+      label: 'Visits / Week',
+      value: stats.visitsThisWeek || 0,
+      icon: '📋',
+      change: null,
+      onClick: () => setActiveTab('sessions')
+    }, {
+      label: 'Open Tickets',
+      value: stats.openTickets || 0,
+      icon: '🎫',
+      color: (stats.openTickets || 0) > 0 ? '#e8724a' : null,
+      onClick: () => setActiveTab('tickets')
+    }, {
+      label: 'Revenue MTD',
+      value: `$${(stats.revenueMtd || 0).toLocaleString()}`,
+      icon: '💰',
+      onClick: () => setActiveTab('financials')
+    }, {
+      label: 'Safety Flags',
+      value: stats.safetyFlags || 0,
+      icon: '🚨',
+      color: (stats.safetyFlags || 0) > 0 ? '#c62828' : null,
+      onClick: () => setActiveTab('safety')
+    }, {
+      label: 'Avg Rating',
+      value: `${stats.avgRating || '—'} ⭐`,
+      icon: '⭐',
+      sub: `${stats.totalReviews || 0} reviews`,
+      onClick: () => setActiveTab('customerservice')
+    }, {
+      label: 'Caregivers',
+      value: stats.totalCaregivers,
+      icon: '🤝',
+      onClick: () => setActiveTab('people')
+    }, {
+      label: 'Waitlist',
+      value: stats.totalWaitlist,
+      icon: '📋',
+      onClick: () => setActiveTab('people')
+    }].map((s, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      onClick: s.onClick,
+      style: {
+        background: 'var(--bg-card)',
+        borderRadius: 10,
+        border: '1px solid var(--border-color)',
+        padding: '12px 14px',
+        cursor: 'pointer',
+        transition: 'all 0.12s'
+      },
+      onMouseEnter: e => {
+        e.currentTarget.style.borderColor = 'var(--role-color)';
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+      },
+      onMouseLeave: e => {
+        e.currentTarget.style.borderColor = 'var(--border-color)';
+        e.currentTarget.style.boxShadow = 'none';
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4
+      }
+    }, s.label), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 20,
+        fontWeight: 700,
+        marginTop: 2,
+        color: s.color || 'var(--text-primary)'
+      }
+    }, s.value), s.sub && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        marginTop: 2
+      }
+    }, s.sub)))), attentionItems.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: 'var(--bg-card)',
+        borderRadius: 12,
+        border: '1px solid var(--border-color)',
+        marginBottom: 16,
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '14px 18px',
+        borderBottom: '1px solid var(--border-color)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        margin: 0,
+        color: 'var(--text-primary)'
+      }
+    }, "\uD83D\uDD25 Needs Attention"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)'
+      }
+    }, attentionItems.length, " item", attentionItems.length !== 1 ? 's' : '')), /*#__PURE__*/React.createElement("div", null, attentionItems.map((item, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      onClick: item.action,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 18px',
+        cursor: 'pointer',
+        borderBottom: i < attentionItems.length - 1 ? '1px solid var(--border-color)' : 'none',
+        transition: 'background 0.1s'
+      },
+      onMouseEnter: e => e.currentTarget.style.background = 'var(--bg-surface)',
+      onMouseLeave: e => e.currentTarget.style.background = 'transparent'
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16,
+        flexShrink: 0
+      }
+    }, item.icon), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 600,
+        color: 'var(--text-primary)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }
+    }, item.title), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)',
+        marginTop: 1
+      }
+    }, item.sub)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '2px 9px',
+        borderRadius: 20,
+        fontSize: 10,
+        fontWeight: 600,
+        background: item.pillBg,
+        color: item.pillColor,
+        flexShrink: 0
+      }
+    }, item.pill), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-muted)',
+        fontSize: 16,
+        flexShrink: 0
+      }
+    }, "\u203A"))))), attentionItems.length === 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: '#e8f5e9',
+        borderRadius: 12,
+        border: '1px solid #c8e6c9',
+        padding: '20px 18px',
+        marginBottom: 16,
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 28,
+        marginBottom: 4
+      }
+    }, "\u2705"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        color: '#2e7d32'
+      }
+    }, "All clear"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#388e3c',
+        marginTop: 2
+      }
+    }, "No items need your attention right now")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+        gap: 8,
+        marginBottom: 16
+      }
+    }, [{
+      icon: '👤',
+      label: 'Find Person',
+      action: () => setActiveTab('people')
+    }, {
+      icon: '🎫',
+      label: 'Tickets',
+      action: () => setActiveTab('tickets')
+    }, {
+      icon: '📋',
+      label: 'Visits',
+      action: () => setActiveTab('sessions')
+    }, {
+      icon: '💬',
+      label: 'Feedback',
+      action: () => setActiveTab('feedback')
+    }, {
+      icon: '🛡️',
+      label: 'Safety',
+      action: () => setActiveTab('safety')
+    }, {
+      icon: '💰',
+      label: 'Financials',
+      action: () => setActiveTab('financials')
+    }, {
+      icon: '⚙️',
+      label: 'Settings',
+      action: () => setActiveTab('settings')
+    }, {
+      icon: '🌐',
+      label: 'Analytics',
+      action: () => window.open('https://plausible.io/yourinplace.com', '_blank')
+    }].map((q, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      onClick: q.action,
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 4,
+        padding: '14px 8px',
+        background: 'var(--bg-card)',
+        borderRadius: 10,
+        border: '1px solid var(--border-color)',
+        cursor: 'pointer',
+        fontSize: 11,
+        fontWeight: 500,
+        color: 'var(--text-secondary)',
+        textAlign: 'center',
+        transition: 'all 0.12s'
+      },
+      onMouseEnter: e => {
+        e.currentTarget.style.borderColor = 'var(--role-color)';
+        e.currentTarget.style.background = 'var(--bg-surface)';
+      },
+      onMouseLeave: e => {
+        e.currentTarget.style.borderColor = 'var(--border-color)';
+        e.currentTarget.style.background = 'var(--bg-card)';
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 22
+      }
+    }, q.icon), q.label))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: window.innerWidth > 768 ? '1fr 1fr' : '1fr',
+        gap: 14
+      }
+    }, stats.sessionsByStatus && stats.sessionsByStatus.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: 'var(--bg-card)',
+        borderRadius: 12,
+        border: '1px solid var(--border-color)',
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '14px 18px',
+        borderBottom: '1px solid var(--border-color)'
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        margin: 0
+      }
+    }, "\uD83D\uDCC5 Sessions")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: 16,
+        display: 'flex',
+        gap: 10,
+        flexWrap: 'wrap'
+      }
+    }, stats.sessionsByStatus.map((s, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        padding: '10px 16px',
+        background: 'var(--bg-surface)',
+        borderRadius: 8,
+        textAlign: 'center',
+        flex: '1 1 70px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 18,
+        fontWeight: 700,
+        color: 'var(--role-color)'
+      }
+    }, s.count), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        textTransform: 'capitalize'
+      }
+    }, s.status))))), stats.signupTrend && stats.signupTrend.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: 'var(--bg-card)',
+        borderRadius: 12,
+        border: '1px solid var(--border-color)',
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '14px 18px',
+        borderBottom: '1px solid var(--border-color)'
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        margin: 0
+      }
+    }, "\uD83D\uDCC8 Signups (30d)")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: 16
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      viewBox: `0 0 ${Math.max(stats.signupTrend.length * 40, 200)} 100`,
+      style: {
+        width: '100%',
+        height: 80
+      }
+    }, stats.signupTrend.map((d, i) => {
+      const maxCount = Math.max(...stats.signupTrend.map(s => s.count), 1);
+      const barH = d.count / maxCount * 65;
+      const x = i * 40 + 10;
+      return /*#__PURE__*/React.createElement("g", {
+        key: i
+      }, /*#__PURE__*/React.createElement("rect", {
+        x: x,
+        y: 80 - barH,
+        width: "24",
+        height: barH,
+        rx: "4",
+        fill: "var(--role-color)",
+        opacity: "0.85"
+      }), /*#__PURE__*/React.createElement("text", {
+        x: x + 12,
+        y: 76 - barH,
+        textAnchor: "middle",
+        fontSize: "9",
+        fill: "var(--text-primary)",
+        fontWeight: "600"
+      }, d.count), /*#__PURE__*/React.createElement("text", {
+        x: x + 12,
+        y: 95,
+        textAnchor: "middle",
+        fontSize: "7",
+        fill: "var(--text-muted)"
+      }, (parseTimestamp(d.date) || new Date(0)).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      })));
+    }))))));
+  })(), activeTab === 'people' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 4,
@@ -59420,10 +59815,13 @@ const AdminPanel = window.AdminPanel = ({
     const isPending = pendingApprovals.some(p => p.id === u.id);
     return /*#__PURE__*/React.createElement("tr", {
       key: u.id,
+      onClick: () => loadUserDetail(u.id),
       style: {
         borderBottom: '1px solid #f0f0f0',
         background: isPending ? 'var(--bg-warm)' : 'transparent',
-        borderLeft: isPending ? '4px solid #ff9800' : 'none'
+        borderLeft: isPending ? '4px solid #ff9800' : 'none',
+        cursor: 'pointer',
+        transition: 'background 0.1s'
       }
     }, /*#__PURE__*/React.createElement("td", {
       style: {
@@ -61690,7 +62088,25 @@ const AdminPanel = window.AdminPanel = ({
     value: "safety"
   }, "Safety"), /*#__PURE__*/React.createElement("option", {
     value: "general"
-  }, "General"))), /*#__PURE__*/React.createElement("div", {
+  }, "General")), /*#__PURE__*/React.createElement("select", {
+    value: selectedTicket.assigned_to || '',
+    onChange: e => updateTicket(selectedTicket.id, {
+      assigned_to: e.target.value || null
+    }),
+    style: {
+      padding: '4px 8px',
+      borderRadius: 6,
+      border: '1px solid var(--border-color)',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)',
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "Unassigned"), adminUsers.map(a => /*#__PURE__*/React.createElement("option", {
+    key: a.id,
+    value: a.id
+  }, a.first_name, " ", a.last_name, " (", a.admin_role, ")")))), /*#__PURE__*/React.createElement("div", {
     style: {
       borderTop: '1px solid var(--border-color)',
       paddingTop: 12
@@ -65553,7 +65969,371 @@ const AdminPanel = window.AdminPanel = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, adminMsgSending ? 'Sending...' : 'Send as InPlace Support')))));
+  }, adminMsgSending ? 'Sending...' : 'Send as InPlace Support')))))), (userDrawer || userDrawerLoading) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    onClick: () => {
+      setUserDrawer(null);
+      setUserDrawerLoading(false);
+    },
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.4)',
+      zIndex: 300
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      top: 0,
+      right: 0,
+      width: window.innerWidth <= 768 ? '100%' : 480,
+      maxWidth: '100%',
+      height: '100vh',
+      background: 'var(--bg-card)',
+      boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
+      zIndex: 301,
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '18px 20px',
+      borderBottom: '1px solid var(--border-color)',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      position: 'sticky',
+      top: 0,
+      background: 'var(--bg-card)',
+      zIndex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", null, userDrawer !== null && userDrawer !== void 0 && userDrawer.user ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: 0,
+      fontSize: 18,
+      fontWeight: 700,
+      color: 'var(--text-primary)'
+    }
+  }, userDrawer.user.first_name, " ", userDrawer.user.last_name), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '4px 0 0',
+      fontSize: 12,
+      color: 'var(--text-secondary)'
+    }
+  }, userDrawer.user.email, " \xB7 ", userDrawer.user.role)) : /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: 0,
+      fontSize: 18,
+      color: 'var(--text-secondary)'
+    }
+  }, "Loading...")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setUserDrawer(null);
+      setUserDrawerLoading(false);
+    },
+    style: {
+      background: 'none',
+      border: 'none',
+      fontSize: 22,
+      cursor: 'pointer',
+      color: 'var(--text-secondary)',
+      padding: '2px 8px',
+      borderRadius: 6
+    }
+  }, "\u2715")), userDrawerLoading && !userDrawer && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 40,
+      textAlign: 'center',
+      color: 'var(--text-secondary)'
+    }
+  }, "Loading user details..."), userDrawer && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '18px 20px'
+    }
+  }, userDrawer.journeyStage && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 2,
+      marginBottom: 16
+    }
+  }, ['signup', 'verified', 'team_built', 'first_visit', 'active'].map(step => {
+    const steps = userDrawer.journeySteps || {};
+    const current = userDrawer.journeyStage;
+    const order = ['signup', 'verified', 'team_built', 'first_visit', 'active'];
+    const ci = order.indexOf(current);
+    const si = order.indexOf(step);
+    const isDone = si < ci;
+    const isNow = si === ci;
+    const labels = {
+      signup: 'Signup',
+      verified: 'Verified',
+      team_built: 'Team',
+      first_visit: '1st Visit',
+      active: 'Active'
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      key: step,
+      style: {
+        flex: 1,
+        textAlign: 'center',
+        padding: '8px 4px',
+        borderRadius: 6,
+        fontSize: 10,
+        fontWeight: isNow ? 700 : 500,
+        background: isNow ? 'var(--role-color)' : isDone ? '#e8f5e9' : 'var(--bg-surface)',
+        color: isNow ? 'var(--text-on-primary)' : isDone ? '#2e7d32' : 'var(--text-muted)'
+      }
+    }, labels[step]);
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("h4", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      color: 'var(--text-secondary)',
+      marginBottom: 8,
+      paddingBottom: 6,
+      borderBottom: '1px solid var(--border-color)'
+    }
+  }, "Stats"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, "Completed Visits"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: 'var(--text-primary)'
+    }
+  }, ((_userDrawer$sessionSt = userDrawer.sessionStats) === null || _userDrawer$sessionSt === void 0 ? void 0 : _userDrawer$sessionSt.completed) || 0)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, "No-shows"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: 'var(--text-primary)'
+    }
+  }, ((_userDrawer$sessionSt2 = userDrawer.sessionStats) === null || _userDrawer$sessionSt2 === void 0 ? void 0 : _userDrawer$sessionSt2.no_shows) || 0)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, "Lifetime Revenue"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: 'var(--text-primary)'
+    }
+  }, "$", userDrawer.lifetimeRevenue || '0.00')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, "Avg Rating"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: 'var(--text-primary)'
+    }
+  }, (_userDrawer$reviewSta = userDrawer.reviewStats) !== null && _userDrawer$reviewSta !== void 0 && _userDrawer$reviewSta.avg_rating ? Number(userDrawer.reviewStats.avg_rating).toFixed(1) : '—', " (", ((_userDrawer$reviewSta2 = userDrawer.reviewStats) === null || _userDrawer$reviewSta2 === void 0 ? void 0 : _userDrawer$reviewSta2.total_reviews) || 0, ")")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, "Care Teams"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: 'var(--text-primary)'
+    }
+  }, ((_userDrawer$careTeams = userDrawer.careTeams) === null || _userDrawer$careTeams === void 0 ? void 0 : _userDrawer$careTeams.length) || 0)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, "Last Active"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: 'var(--text-primary)'
+    }
+  }, userDrawer.lastActive ? new Date(userDrawer.lastActive).toLocaleDateString() : '—')))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("h4", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      color: 'var(--text-secondary)',
+      marginBottom: 8,
+      paddingBottom: 6,
+      borderBottom: '1px solid var(--border-color)'
+    }
+  }, "Admin Notes"), /*#__PURE__*/React.createElement("textarea", {
+    defaultValue: ((_userDrawer$user2 = userDrawer.user) === null || _userDrawer$user2 === void 0 ? void 0 : _userDrawer$user2.admin_notes) || '',
+    onBlur: e => {
+      var _userDrawer$user3;
+      if (e.target.value !== (((_userDrawer$user3 = userDrawer.user) === null || _userDrawer$user3 === void 0 ? void 0 : _userDrawer$user3.admin_notes) || '')) saveAdminNotes(userDrawer.user.id, e.target.value);
+    },
+    placeholder: "Sticky notes about this user...",
+    style: {
+      width: '100%',
+      minHeight: 60,
+      padding: 10,
+      border: '1px solid var(--border-color)',
+      borderRadius: 8,
+      fontSize: 12,
+      fontFamily: 'inherit',
+      background: '#fff8e1',
+      color: 'var(--text-primary)',
+      boxSizing: 'border-box',
+      resize: 'vertical'
+    }
+  })), ((_userDrawer$tickets = userDrawer.tickets) === null || _userDrawer$tickets === void 0 ? void 0 : _userDrawer$tickets.length) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("h4", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      color: 'var(--text-secondary)',
+      marginBottom: 8,
+      paddingBottom: 6,
+      borderBottom: '1px solid var(--border-color)'
+    }
+  }, "Tickets (", userDrawer.tickets.length, ")"), userDrawer.tickets.map(t => {
+    var _t$status2;
+    return /*#__PURE__*/React.createElement("div", {
+      key: t.id,
+      style: {
+        padding: '8px 0',
+        borderBottom: '1px solid var(--border-color)',
+        cursor: 'pointer'
+      },
+      onClick: () => {
+        setUserDrawer(null);
+        setActiveTab('tickets');
+        setTimeout(() => loadTicketDetail(t.id), 200);
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 500,
+        color: 'var(--text-primary)'
+      }
+    }, t.subject), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-secondary)',
+        marginTop: 2
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '1px 6px',
+        borderRadius: 8,
+        fontSize: 10,
+        fontWeight: 600,
+        color: '#fff',
+        background: t.status === 'open' ? '#ef5350' : t.status === 'in_progress' ? '#ff9800' : t.status === 'resolved' ? '#4caf50' : '#9e9e9e'
+      }
+    }, (_t$status2 = t.status) === null || _t$status2 === void 0 ? void 0 : _t$status2.replace('_', ' ')), /*#__PURE__*/React.createElement("span", {
+      style: {
+        marginLeft: 8
+      }
+    }, new Date(t.created_at).toLocaleDateString())));
+  })), ((_userDrawer$safetyFla = userDrawer.safetyFlags) === null || _userDrawer$safetyFla === void 0 ? void 0 : _userDrawer$safetyFla.length) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("h4", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      color: '#c62828',
+      marginBottom: 8,
+      paddingBottom: 6,
+      borderBottom: '1px solid var(--border-color)'
+    }
+  }, "Safety Flags (", userDrawer.safetyFlags.length, ")"), userDrawer.safetyFlags.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id,
+    style: {
+      padding: '8px 0',
+      borderBottom: '1px solid var(--border-color)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: 'var(--text-primary)'
+    }
+  }, f.category || 'Flag'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-secondary)',
+      marginTop: 2
+    }
+  }, f.status, " \xB7 ", new Date(f.created_at).toLocaleDateString())))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      var _userDrawer$user4;
+      setUserDrawer(null);
+      setActiveTab('people');
+      setUserSearch((_userDrawer$user4 = userDrawer.user) === null || _userDrawer$user4 === void 0 ? void 0 : _userDrawer$user4.email);
+    },
+    style: {
+      padding: '6px 12px',
+      background: 'var(--bg-surface)',
+      color: 'var(--text-secondary)',
+      border: '1px solid var(--border-color)',
+      borderRadius: 8,
+      fontSize: 12,
+      cursor: 'pointer'
+    }
+  }, "\uD83D\uDC64 View in People"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      var _userDrawer$user5, _userDrawer$user6, _userDrawer$user7;
+      setAdminMsgTarget({
+        id: (_userDrawer$user5 = userDrawer.user) === null || _userDrawer$user5 === void 0 ? void 0 : _userDrawer$user5.id,
+        first_name: (_userDrawer$user6 = userDrawer.user) === null || _userDrawer$user6 === void 0 ? void 0 : _userDrawer$user6.first_name,
+        last_name: (_userDrawer$user7 = userDrawer.user) === null || _userDrawer$user7 === void 0 ? void 0 : _userDrawer$user7.last_name
+      });
+    },
+    style: {
+      padding: '6px 12px',
+      background: 'var(--bg-surface)',
+      color: 'var(--text-secondary)',
+      border: '1px solid var(--border-color)',
+      borderRadius: 8,
+      fontSize: 12,
+      cursor: 'pointer'
+    }
+  }, "\uD83D\uDCAC Message"))))));
 };
 ;
 const IPAiBadge = window.IPAiBadge = ({
