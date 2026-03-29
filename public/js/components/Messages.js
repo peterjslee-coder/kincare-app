@@ -20,9 +20,7 @@ const Messages = window.Messages = () => {
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [sentRequests, setSentRequests] = useState([]);
-  const [archivedIds, setArchivedIds] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('msg_archived') || '[]'); } catch { return []; }
-  });
+  const [archivedIds, setArchivedIds] = useState([]);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const messagesEndRef = useRef(null);
@@ -69,10 +67,12 @@ const Messages = window.Messages = () => {
       const res = await apiFetch('/api/messages/conversations');
       if (res?.ok) {
         const data = await res.json();
-        setConversations(data.conversations || []);
+        const allConvs = data.conversations || [];
+        setConversations(allConvs);
+        setArchivedIds(allConvs.filter(c => c.archivedAt).map(c => c.id));
         if (data.messagingLimited) setMessagingLimited(true);
-        if (!isMobile && !activeConvId && data.conversations?.length > 0) {
-          const first = data.conversations[0];
+        if (!isMobile && !activeConvId && allConvs.length > 0) {
+          const first = allConvs.find(c => !c.archivedAt) || allConvs[0];
           setActiveConvId(first.id);
           setActiveConvType(first.type || 'direct');
           fetchMessages(first.id);
@@ -154,33 +154,36 @@ const Messages = window.Messages = () => {
     } catch { showToast('Failed to send request', 'error'); }
   };
 
-  // Archive a conversation (swipe to archive)
-  const handleArchive = (convId) => {
-    const updated = [...archivedIds, convId];
-    setArchivedIds(updated);
-    localStorage.setItem('msg_archived', JSON.stringify(updated));
+  // Archive a conversation (swipe to archive) — persisted server-side
+  const handleArchive = async (convId) => {
+    setArchivedIds(prev => [...prev, convId]);
     if (activeConvId === convId) { setActiveConvId(null); setMessages([]); }
     showToast('Conversation archived', 'success');
+    try { await apiFetch(`/api/messages/conversations/${convId}/archive`, { method: 'PUT' }); }
+    catch { /* optimistic update already applied */ }
   };
 
   // Multi-select archive
-  const handleArchiveSelected = () => {
+  const handleArchiveSelected = async () => {
     if (selectedIds.length === 0) return;
-    const updated = [...new Set([...archivedIds, ...selectedIds])];
-    setArchivedIds(updated);
-    localStorage.setItem('msg_archived', JSON.stringify(updated));
+    setArchivedIds(prev => [...new Set([...prev, ...selectedIds])]);
     if (selectedIds.includes(activeConvId)) { setActiveConvId(null); setMessages([]); }
     showToast(`${selectedIds.length} conversation${selectedIds.length > 1 ? 's' : ''} archived`, 'success');
+    const toArchive = [...selectedIds];
     setSelectedIds([]);
     setSelectMode(false);
+    for (const id of toArchive) {
+      try { await apiFetch(`/api/messages/conversations/${id}/archive`, { method: 'PUT' }); }
+      catch { /* optimistic */ }
+    }
   };
 
-  // Unarchive a conversation
-  const handleUnarchive = (convId) => {
-    const updated = archivedIds.filter(id => id !== convId);
-    setArchivedIds(updated);
-    localStorage.setItem('msg_archived', JSON.stringify(updated));
+  // Unarchive a conversation — persisted server-side
+  const handleUnarchive = async (convId) => {
+    setArchivedIds(prev => prev.filter(id => id !== convId));
     showToast('Conversation restored', 'success');
+    try { await apiFetch(`/api/messages/conversations/${convId}/unarchive`, { method: 'PUT' }); }
+    catch { /* optimistic update already applied */ }
   };
 
   // Delete a conversation (permanent, server-side)
@@ -196,7 +199,7 @@ const Messages = window.Messages = () => {
         setConversations(prev => prev.filter(c => c.id !== convId));
         const updatedArchived = archivedIds.filter(id => id !== convId);
         setArchivedIds(updatedArchived);
-        localStorage.setItem('msg_archived', JSON.stringify(updatedArchived));
+        // archived_at cleaned up server-side when conversation is deleted
         if (activeConvId === convId) { setActiveConvId(null); setMessages([]); }
         showToast('Conversation deleted', 'success');
       } else {
@@ -219,9 +222,7 @@ const Messages = window.Messages = () => {
     }
     if (deleted > 0) {
       setConversations(prev => prev.filter(c => !selectedIds.includes(c.id)));
-      const updatedArchived = archivedIds.filter(id => !selectedIds.includes(id));
-      setArchivedIds(updatedArchived);
-      localStorage.setItem('msg_archived', JSON.stringify(updatedArchived));
+      setArchivedIds(prev => prev.filter(id => !selectedIds.includes(id)));
       if (selectedIds.includes(activeConvId)) { setActiveConvId(null); setMessages([]); }
       showToast(`${deleted} conversation${deleted > 1 ? 's' : ''} deleted`, 'success');
     }
@@ -384,9 +385,9 @@ const Messages = window.Messages = () => {
       // Auto-unarchive if message arrives in an archived conversation
       setArchivedIds(prev => {
         if (prev.includes(msg.conversationId)) {
-          const updated = prev.filter(id => id !== msg.conversationId);
-          localStorage.setItem('msg_archived', JSON.stringify(updated));
-          return updated;
+          // New message received — auto-unarchive the conversation
+          apiFetch(`/api/messages/conversations/${msg.conversationId}/unarchive`, { method: 'PUT' }).catch(() => {});
+          return prev.filter(id => id !== msg.conversationId);
         }
         return prev;
       });

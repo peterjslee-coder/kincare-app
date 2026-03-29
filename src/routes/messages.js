@@ -39,7 +39,7 @@ router.get("/conversations", async (req, res) => {
   // Get conversations from the conversations table (new model)
   const convRows = await db.prepare(`
     SELECT c.id, c.type, c.name, c.care_team_id, c.created_at,
-      cm.last_read_at
+      cm.last_read_at, cm.archived_at
     FROM conversation_members cm
     JOIN conversations c ON cm.conversation_id = c.id
     WHERE cm.user_id = ?
@@ -100,6 +100,7 @@ router.get("/conversations", async (req, res) => {
       lastMessage: lastMsg?.content || null,
       lastMessageAt: lastMsg?.created_at || conv.created_at,
       unreadCount: parseInt(unreadRow?.count || 0),
+      archivedAt: conv.archived_at || null,
     });
   }
 
@@ -824,6 +825,41 @@ router.post("/:messageId/reactions", async (req, res) => {
   }
 
   res.json({ reactions: reactionData, action });
+});
+
+// ─── PUT /api/messages/conversations/:id/archive ─── Archive a conversation for this user
+router.put("/conversations/:id/archive", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+  const convId = req.params.id;
+  try {
+    const result = await db.prepare(
+      "UPDATE conversation_members SET archived_at = NOW() WHERE conversation_id = ? AND user_id = ? AND archived_at IS NULL"
+    ).run(convId, userId);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "Not a member or already archived" });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Messages] Archive conversation error:", err);
+    res.status(500).json({ error: "Failed to archive conversation" });
+  }
+});
+
+// ─── PUT /api/messages/conversations/:id/unarchive ─── Unarchive a conversation for this user
+router.put("/conversations/:id/unarchive", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+  const convId = req.params.id;
+  try {
+    await db.prepare(
+      "UPDATE conversation_members SET archived_at = NULL WHERE conversation_id = ? AND user_id = ?"
+    ).run(convId, userId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Messages] Unarchive conversation error:", err);
+    res.status(500).json({ error: "Failed to unarchive conversation" });
+  }
 });
 
 // ─── DELETE /api/messages/conversations/:id ─── Delete a conversation and all its messages

@@ -933,6 +933,9 @@ async function initializeDatabase() {
 
     // v1.51.66 — Billing contact on care teams (delegate payment to a team member)
     `ALTER TABLE care_teams ADD COLUMN IF NOT EXISTS billing_user_id TEXT REFERENCES users(id)`,
+
+    // v1.51.81 — Server-side message archive (was localStorage-only, lost on login)
+    `ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
