@@ -80,6 +80,47 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object;
+        const paymentType = session.metadata?.type;
+
+        // Handle manual payment (no care session attached)
+        if (paymentType === "manual_payment") {
+          const fromUserId = session.metadata?.from_user_id;
+          const caregiverId = session.metadata?.caregiver_id;
+          const note = session.metadata?.note;
+
+          try {
+            // Create manual_payments record
+            const manualPaymentId = uuid();
+            const amountCents = session.amount_total; // Stripe returns in cents
+            await db.prepare(`
+              INSERT INTO manual_payments (id, from_user_id, to_caregiver_id, amount_cents, note, stripe_session_id, stripe_payment_intent_id, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', NOW())
+            `).run(
+              manualPaymentId, fromUserId, caregiverId, amountCents, note || null, session.id, session.payment_intent
+            );
+
+            // Get caregiver and family user info for notification
+            const caregiver = await db.prepare("SELECT cp.user_id, u.first_name, u.last_name FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.id = ?").get(caregiverId);
+            const familyUser = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(fromUserId);
+
+            // Send push notification to caregiver
+            if (caregiver?.user_id) {
+              const { sendPushToUser } = require("./push");
+              sendPushToUser(caregiver.user_id, {
+                title: `You received a payment`,
+                body: `You received $${(amountCents / 100).toFixed(2)} from ${familyUser?.first_name || 'a family'}${note ? `: "${note}"` : ''}`,
+                data: { type: 'manual_payment_received', caregiverId, page: 'earnings' },
+              }, 'manual_payment_received').catch(() => {});
+            }
+
+            console.log(`💳 Manual payment of $${(amountCents / 100).toFixed(2)} completed from user ${fromUserId} to caregiver ${caregiverId}`);
+          } catch (err) {
+            console.error("Manual payment webhook error:", err.message);
+          }
+          break;
+        }
+
+        // Handle regular care session payment
         const sessionId = session.metadata?.inplace_session_id;
         if (!sessionId) break;
 
@@ -1249,5 +1290,112 @@ async function processOverduePayments(pushFn) {
 }
 
 router.processOverduePayments = processOverduePayments;
+
+// ─── DELETE /api/payments/family/methods/:pmId ───
+// Remove a saved payment method from a family user's Stripe customer
+router.delete("/family/methods/:pmId", requireRole("family"), async (req, res) => {
+  const db = await getDb();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured." });
+  }
+
+  const user = await db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(req.user.id);
+  if (!user?.stripe_customer_id) {
+    return res.status(404).json({ error: "No Stripe customer found" });
+  }
+
+  try {
+    // Verify the payment method belongs to this customer
+    const pm = await stripe.paymentMethods.retrieve(req.params.pmId);
+    if (pm.customer !== user.stripe_customer_id) {
+      return res.status(403).json({ error: "This payment method does not belong to you" });
+    }
+
+    // Detach the payment method
+    await stripe.paymentMethods.detach(req.params.pmId);
+    res.json({ success: true, message: "Payment method removed" });
+  } catch (err) {
+    console.error("Payment method deletion error:", err);
+    if (err.type === 'StripeInvalidRequestError') {
+      return res.status(404).json({ error: "Payment method not found" });
+    }
+    res.status(500).json({ error: "Failed to remove payment method" });
+  }
+});
+
+// ─── POST /api/payments/manual ───
+// Create a checkout session for a manual payment to a caregiver (no session attached)
+router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req, res) => {
+  const db = await getDb();
+  let stripe;
+  try { stripe = getStripe(); } catch {
+    return res.status(503).json({ error: "Payment system is not configured yet.", notConfigured: true });
+  }
+
+  const { caregiverId, amount, note } = req.body;
+  if (!caregiverId || !amount) {
+    return res.status(400).json({ error: "caregiverId and amount are required" });
+  }
+
+  if (amount <= 0) {
+    return res.status(400).json({ error: "Amount must be greater than 0" });
+  }
+
+  try {
+    // Get caregiver profile with Stripe account
+    const caregiver = await db.prepare(
+      "SELECT cp.*, u.first_name, u.last_name FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.id = ?"
+    ).get(caregiverId);
+
+    if (!caregiver) {
+      return res.status(404).json({ error: "Caregiver not found" });
+    }
+
+    if (!caregiver.stripe_account_id) {
+      return res.status(400).json({ error: "Caregiver has not set up payment account yet" });
+    }
+
+    // Get family user name
+    const familyUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const amountCents = Math.round(amount * 100);
+
+    // Create checkout session
+    const checkoutSession = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card", "us_bank_account"],
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: `Payment to ${caregiver.first_name} ${caregiver.last_name}`,
+            description: note || "Manual payment",
+          },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      }],
+      payment_intent_data: {
+        application_fee_amount: 0, // No platform fee for manual payments
+        transfer_data: {
+          destination: caregiver.stripe_account_id,
+        },
+      },
+      success_url: `${BASE_URL}/#payment-success?type=manual`,
+      cancel_url: `${BASE_URL}/#payment-cancel?type=manual`,
+      metadata: {
+        type: "manual_payment",
+        caregiver_id: caregiverId,
+        from_user_id: req.user.id,
+        note: note || "",
+      },
+    });
+
+    res.json({ checkoutUrl: checkoutSession.url, sessionId: checkoutSession.id });
+  } catch (err) {
+    console.error("Manual payment checkout error:", err);
+    res.status(500).json({ error: "Failed to create checkout session" });
+  }
+});
 
 module.exports = router;

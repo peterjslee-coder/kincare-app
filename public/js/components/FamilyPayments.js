@@ -6,18 +6,57 @@ const FamilyPayments = window.FamilyPayments = () => {
   const [stripeStatus, setStripeStatus] = useState(null); // null | 'not_setup' | 'pending' | 'complete'
   const [methods, setMethods] = useState([]); // all saved payment methods
   const [setupLoading, setSetupLoading] = useState(false);
+  const [paymentsEnabled, setPaymentsEnabled] = useState(true);
+  const [caregivers, setCaregivers] = useState([]);
+  const [sendPaymentState, setSendPaymentState] = useState({ caregiverId: '', amount: '', note: '' });
+  const [sendPaymentLoading, setSendPaymentLoading] = useState(false);
+  const [removingMethodId, setRemovingMethodId] = useState(null);
 
   useEffect(() => {
+    // Check if payments are enabled
+    apiFetch('/api/payments/status').then(async r => {
+      if (r?.ok) {
+        const d = await r.json();
+        setPaymentsEnabled(d.paymentsEnabled !== false);
+      }
+    }).catch(() => setPaymentsEnabled(false));
+
     // Fetch payment method status
     apiFetch('/api/payments/family/status').then(async r => {
       if (r?.ok) {
         const d = await r.json();
         setStripeStatus(d.status || 'not_setup');
-        setMethods(d.methods || (d.card ? [d.card] : []));
+        // Filter out placeholder Link methods (no real last4 and no email)
+        const validMethods = (d.methods || (d.card ? [d.card] : [])).filter(m =>
+          !(m.isLink && !m.email && (!m.last4 || m.last4 === '0000' || m.last4 === '****'))
+        );
+        setMethods(validMethods);
       } else {
         setStripeStatus('not_setup');
       }
     }).catch(() => setStripeStatus('not_setup'));
+
+    // Fetch caregivers for Send Payment feature
+    apiFetch('/api/care-teams').then(async r => {
+      if (r?.ok) {
+        const data = await r.json();
+        const teams = data.careTeams || [];
+        const allCaregivers = [];
+        teams.forEach(team => {
+          if (team.members) {
+            team.members.forEach(member => {
+              if (member.role === 'caregiver' || member.isCareGiver) {
+                allCaregivers.push({
+                  id: member.id,
+                  name: `${member.firstName || member.first_name} ${member.lastName || member.last_name}`,
+                });
+              }
+            });
+          }
+        });
+        setCaregivers(allCaregivers);
+      }
+    }).catch(() => setCaregivers([]));
 
     // Fetch payment history
     const fetchHistory = async () => {
@@ -44,6 +83,13 @@ const FamilyPayments = window.FamilyPayments = () => {
       if (res?.ok) {
         const d = await res.json();
         if (d.url) window.location.href = d.url;
+      } else if (res?.status === 503) {
+        const err = await res.json();
+        if (err.paymentsDisabled) {
+          if (typeof showToast === 'function') showToast('Payments are currently paused by admin', 'warning');
+        } else {
+          if (typeof showToast === 'function') showToast('Unable to start Stripe setup', 'error');
+        }
       } else {
         if (typeof showToast === 'function') showToast('Unable to start Stripe setup', 'error');
       }
@@ -51,6 +97,59 @@ const FamilyPayments = window.FamilyPayments = () => {
       if (typeof showToast === 'function') showToast('Unable to connect to Stripe', 'error');
     }
     setSetupLoading(false);
+  };
+
+  const handleRemovePaymentMethod = async (pmId) => {
+    if (!window.confirm('Remove this payment method? You can add it again anytime.')) return;
+    setRemovingMethodId(pmId);
+    try {
+      const res = await apiFetch(`/api/payments/family/methods/${pmId}`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      });
+      if (res?.ok) {
+        setMethods(methods.filter(m => m.id !== pmId));
+        if (typeof showToast === 'function') showToast('Payment method removed', 'success');
+      } else {
+        if (typeof showToast === 'function') showToast('Unable to remove payment method', 'error');
+      }
+    } catch {
+      if (typeof showToast === 'function') showToast('Unable to remove payment method', 'error');
+    }
+    setRemovingMethodId(null);
+  };
+
+  const handleSendPayment = async () => {
+    if (!sendPaymentState.caregiverId || !sendPaymentState.amount) {
+      if (typeof showToast === 'function') showToast('Please select a caregiver and enter an amount', 'warning');
+      return;
+    }
+    setSendPaymentLoading(true);
+    try {
+      const res = await apiFetch('/api/payments/manual', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caregiverId: sendPaymentState.caregiverId,
+          amount: parseFloat(sendPaymentState.amount),
+          note: sendPaymentState.note || '',
+        }),
+      });
+      if (res?.ok) {
+        const d = await res.json();
+        if (d.checkoutUrl) window.location.href = d.checkoutUrl;
+      } else if (res?.status === 503) {
+        const err = await res.json();
+        if (err.paymentsDisabled) {
+          if (typeof showToast === 'function') showToast('Payments are currently paused by admin', 'warning');
+        } else {
+          if (typeof showToast === 'function') showToast('Unable to send payment', 'error');
+        }
+      } else {
+        if (typeof showToast === 'function') showToast('Unable to send payment', 'error');
+      }
+    } catch {
+      if (typeof showToast === 'function') showToast('Unable to send payment', 'error');
+    }
+    setSendPaymentLoading(false);
   };
 
   const formatDate = (d) => {
@@ -95,6 +194,21 @@ const FamilyPayments = window.FamilyPayments = () => {
 
   return (
     <div>
+      {/* Payments Paused Banner */}
+      {!paymentsEnabled && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%)',
+          border: '1px solid #ffc107', marginBottom: '16px', borderRadius: '8px',
+          padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px'
+        }}>
+          <div style={{ fontSize: '20px' }}>⏸️</div>
+          <div>
+            <div style={{ fontWeight: 600, color: '#856404', marginBottom: '2px' }}>Payments are currently paused</div>
+            <div style={{ fontSize: '13px', color: '#856404' }}>Payment methods and transactions are view-only. Payment methods are temporarily unavailable.</div>
+          </div>
+        </div>
+      )}
+
       {/* Payment Methods Card */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -122,34 +236,87 @@ const FamilyPayments = window.FamilyPayments = () => {
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{m.email ? `Linked to ${m.email}` : 'Your card is saved securely via Stripe Link'}</div>
                       )}
                     </div>
+                    {paymentsEnabled && (
+                      <button onClick={() => handleRemovePaymentMethod(m.id)} disabled={removingMethodId === m.id}
+                        style={{
+                          background: 'transparent', border: 'none', color: 'var(--color-error)', cursor: 'pointer',
+                          fontSize: '13px', fontWeight: 600, padding: '4px 8px', textDecoration: 'underline'
+                        }}>
+                        {removingMethodId === m.id ? 'Removing...' : 'Remove'}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             )}
             <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>Your payment method is connected. You can pay caregivers securely through InPlace.</p>
-            <button onClick={handleStripeSetup} disabled={setupLoading}
-              style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <button onClick={handleStripeSetup} disabled={setupLoading || !paymentsEnabled}
+              style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: paymentsEnabled ? 'var(--role-color)' : 'var(--text-tertiary)', border: paymentsEnabled ? '1px solid #1b6b5a' : '1px solid #ccc', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: paymentsEnabled ? 'pointer' : 'not-allowed', opacity: paymentsEnabled ? 1 : 0.6 }}>
               {setupLoading ? 'Loading...' : 'Add Payment Method'}
             </button>
           </div>
         ) : stripeStatus === 'pending' ? (
           <div>
             <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>Your Stripe setup is in progress. Some information may still be needed.</p>
-            <button onClick={handleStripeSetup} disabled={setupLoading}
-              style={{ padding: '8px 16px', background: '#635bff', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              {setupLoading ? 'Loading...' : 'Continue Stripe Setup'}
+            <button onClick={handleStripeSetup} disabled={setupLoading || !paymentsEnabled}
+              style={{ padding: '8px 16px', background: paymentsEnabled ? '#635bff' : '#999', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: paymentsEnabled ? 'pointer' : 'not-allowed' }}>
+              {setupLoading ? 'Loading...' : paymentsEnabled ? 'Continue Stripe Setup' : 'Payments Paused'}
             </button>
           </div>
         ) : (
           <div>
             <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>Add a payment method so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe.</p>
-            <button onClick={handleStripeSetup} disabled={setupLoading}
-              style={{ padding: '8px 16px', background: '#635bff', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              {setupLoading ? 'Loading...' : 'Set Up Payments with Stripe'}
+            <button onClick={handleStripeSetup} disabled={setupLoading || !paymentsEnabled}
+              style={{ padding: '8px 16px', background: paymentsEnabled ? '#635bff' : '#999', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: paymentsEnabled ? 'pointer' : 'not-allowed' }}>
+              {setupLoading ? 'Loading...' : paymentsEnabled ? 'Set Up Payments with Stripe' : 'Payments Paused'}
             </button>
           </div>
         )}
       </div>
+
+      {/* Send Payment Card */}
+      {caregivers.length > 0 && (
+        <div className="card" style={{ marginBottom: '20px' }}>
+          <h3 style={{ margin: '0 0 14px', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {'\uD83D\uDCB5'} Send Payment
+          </h3>
+          <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Send a direct payment to a caregiver without a care session. Perfect for tips, bonuses, or one-time payments.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* Caregiver selector */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>Select Caregiver</label>
+              <select value={sendPaymentState.caregiverId} onChange={(e) => setSendPaymentState({ ...sendPaymentState, caregiverId: e.target.value })} disabled={!paymentsEnabled || sendPaymentLoading}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+                <option value="">Choose a caregiver...</option>
+                {caregivers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            {/* Amount input */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>Amount (USD)</label>
+              <input type="number" value={sendPaymentState.amount} onChange={(e) => setSendPaymentState({ ...sendPaymentState, amount: e.target.value })} placeholder="25.00" disabled={!paymentsEnabled || sendPaymentLoading}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
+            </div>
+            {/* Note input */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-secondary)' }}>Note (optional)</label>
+              <input type="text" value={sendPaymentState.note} onChange={(e) => setSendPaymentState({ ...sendPaymentState, note: e.target.value })} placeholder="e.g., Thank you for going above and beyond" disabled={!paymentsEnabled || sendPaymentLoading}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
+            </div>
+            {/* Send button */}
+            <button onClick={handleSendPayment} disabled={!paymentsEnabled || sendPaymentLoading || !sendPaymentState.caregiverId || !sendPaymentState.amount}
+              style={{
+                padding: '10px 16px', background: paymentsEnabled && sendPaymentState.caregiverId && sendPaymentState.amount ? '#1b6b5a' : '#ccc',
+                color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                cursor: (paymentsEnabled && sendPaymentState.caregiverId && sendPaymentState.amount) ? 'pointer' : 'not-allowed'
+              }}>
+              {sendPaymentLoading ? 'Processing...' : 'Send Payment'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ACH Savings Banner */}
       <div className="card" style={{

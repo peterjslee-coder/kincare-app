@@ -995,6 +995,18 @@ async function initializeDatabase() {
     `ALTER TABLE payments ADD COLUMN IF NOT EXISTS auto_charged INTEGER DEFAULT 0`,
     // ─── v1.54.7 — Private-only requests ───
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS private_only INTEGER DEFAULT 0`,
+    // ─── v1.55.0 — Manual payments (Send Payment feature) ───
+    `CREATE TABLE IF NOT EXISTS manual_payments (
+      id TEXT PRIMARY KEY,
+      from_user_id TEXT NOT NULL REFERENCES users(id),
+      to_caregiver_id TEXT NOT NULL REFERENCES caregiver_profiles(id),
+      amount_cents INTEGER NOT NULL,
+      note TEXT,
+      stripe_session_id TEXT,
+      stripe_payment_intent_id TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
